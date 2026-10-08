@@ -31,6 +31,7 @@
     day: today(),
     cache: {},      // month -> {events, subs, at}
     track: {},      // dealId -> {sz,tp,bg,dj,gl,note,d,u}
+    portal: {},     // dealId -> ügyfélportál összefoglaló {st,done,total,flags,info,dl,locked}
     tf: 'all', tq: '',
     loading: false,
     err: ''
@@ -57,6 +58,7 @@
       S.cache[m] = { events: j.data.events || [], subs: j.data.subs || {}, at: j.data.at };
       const tr = j.data.track || {};
       S.cache[m].events.forEach(e => { S.track[e.id] = tr[e.id] || {}; });
+      Object.assign(S.portal, j.data.portal || {});
       return S.cache[m];
     } catch (e) {
       S.err = e.message || String(e);
@@ -333,6 +335,16 @@
 
   /* ------------------------------------------------------------ követés */
   const SIGNED = (C.signed || []).map(norm);
+  /* ügyfélportál (portal-panel.js): címkék, „Adatlap” oszlop, részletező */
+  const PORTAL = !!(C.portal && C.portal.on && window.CPPortal);
+  if (PORTAL) window.CPPortal.onChange = async () => {
+    const [from, to] = monthRange(S.month);
+    try {
+      const r = await fetch(C.ajax + '?action=cp_panel_track&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to, { credentials: 'same-origin' });
+      const j = await r.json();
+      if (j.success) { Object.assign(S.portal, j.data.portal || {}); if (S.trackDraw && S.tab === 'kovetes') S.trackDraw(); }
+    } catch (x) { /* csendben */ }
+  };
   const BGSET = new Set((C.bgs || []).map(b => norm(b.name)));
   const DJ = [['', '–'], ['ok', '✓ Rendben'], ['8', '8 napos'], ['30', '30 napos']];
   const HX = [['', '–'], ['0', 'Nem volt']].concat(Array.from({ length: 16 }, (_, i) => { const v = String((i + 1) / 2); return [v, '+' + v.replace('.', ',') + ' óra']; }));
@@ -382,9 +394,12 @@
     if (!bgOk) miss.push(clash ? 'Háttér-ütközés' : 'Háttér');
     if (!djOk) miss.push('Díjbekérő');
     if (after && !gl) miss.push('Galéria');
+    const pt = S.portal[e.id];
+    const ad = !pt || pt.done >= pt.total;
+    if (!ad && !after) miss.push('Adatlap');
     const preMiss = miss.filter(x => x !== 'Galéria').length;
     const st = !miss.length ? 'done' : (preMiss && dleft <= 7) ? 'urgent' : 'todo';
-    return { t, sz, szAuto: t.sz == null && autoSz, tp, bk, bgOk, clash, dj, djOk, paidAuto, gl, after, dleft, miss, st };
+    return { t, sz, szAuto: t.sz == null && autoSz, tp, bk, bgOk, clash, dj, djOk, paidAuto, gl, after, dleft, miss, st, pt, ad };
   }
 
   function trackEvents() {
@@ -397,7 +412,7 @@
     const head = el('div', { class: 'cpx-head' });
     head.appendChild(monthNav(render));
     const tools = el('div', { class: 'cpx-trk-tools' });
-    tools.innerHTML = '<div class="seg sm" id="tk-f">' + [['all', 'Mind'], ['todo', 'Hiányos'], ['urgent', 'Sürgős'], ['done', 'Kész']].map(x => '<button data-v="' + x[0] + '" class="' + (S.tf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+    tools.innerHTML = '<div class="seg sm" id="tk-f">' + [['all', 'Mind'], ['todo', 'Hiányos'], ['urgent', 'Sürgős'], ['done', 'Kész']].concat(PORTAL ? [['adatlap', 'Adatlap hiányos']] : []).map(x => '<button data-v="' + x[0] + '" class="' + (S.tf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
       '<input type="search" id="tk-q" placeholder="Keresés: név, háttér…" value="' + esc(S.tq) + '">' +
       '<button class="cpx-btn ghost" id="tk-csv" title="Letöltés Excelhez (CSV)">Excel export</button>';
     head.appendChild(tools);
@@ -413,7 +428,7 @@
       const clashes = bgClashes(S.month);
       const rows = all.map(e => ({ e, k: chk(e, clashes) }));
       const q = norm(S.tq);
-      const vis = rows.filter(r => (S.tf === 'all' || (S.tf === 'done' ? r.k.st === 'done' : S.tf === 'urgent' ? r.k.st === 'urgent' : r.k.st !== 'done')) &&
+      const vis = rows.filter(r => (S.tf === 'all' || (S.tf === 'adatlap' ? (r.k.pt && !r.k.ad) : S.tf === 'done' ? r.k.st === 'done' : S.tf === 'urgent' ? r.k.st === 'urgent' : r.k.st !== 'done')) &&
         (!q || norm(who(r.e) + ' ' + r.e.title + ' ' + r.e.bg + ' ' + (r.k.t.note || '')).includes(q)));
       const n = rows.length, done = rows.filter(r => r.k.st === 'done').length, urg = rows.filter(r => r.k.st === 'urgent').length;
       kp.innerHTML = kpi('Szerződéses rendezvény', n) + kpi('Minden megvan', done) + kpi('Hiányos', n - done) + kpi('Sürgős (7 napon belül)', urg);
@@ -421,10 +436,10 @@
       let h = '<table class="cpx-trk"><thead><tr><th>Dátum</th><th>Megrendelő</th>' +
         '<th>Szerződés<small>' + cnt(r => r.k.sz) + '</small></th><th>Template<small>' + cnt(r => r.k.tp) + '</small></th>' +
         '<th>Háttér<small>' + cnt(r => r.k.bgOk) + '</small></th><th>Díjbekérő<small>' + cnt(r => r.k.djOk) + '</small></th>' +
-        '<th>Galéria<small>' + cnt(r => r.k.gl) + '</small></th><th>Hosszabbítás<small>utólag</small></th><th>Állapot</th></tr></thead><tbody>';
+        '<th>Galéria<small>' + cnt(r => r.k.gl) + '</small></th><th>Hosszabbítás<small>utólag</small></th>' + (PORTAL ? '<th>Adatlap<small>' + cnt(r => r.k.pt && r.k.ad) + '</small></th>' : '') + '<th>Állapot</th></tr></thead><tbody>';
       let lastD = '', g = 1;
       vis.forEach(r => { if (r.e.date !== lastD) { g = 1 - g; lastD = r.e.date; } h += rowHtml(r.e, r.k, g); });
-      if (!vis.length) h += '<tr><td colspan="9" class="cpx-empty">' + (n ? 'Nincs a szűrésnek megfelelő rendezvény.' : 'Ebben a hónapban még nincs szerződéses rendezvény.') + '</td></tr>';
+      if (!vis.length) h += '<tr><td colspan="' + (PORTAL ? 10 : 9) + '" class="cpx-empty">' + (n ? 'Nincs a szűrésnek megfelelő rendezvény.' : 'Ebben a hónapban még nincs szerződéses rendezvény.') + '</td></tr>';
       h += '</tbody></table>';
       wrap.innerHTML = h;
     };
@@ -438,6 +453,7 @@
       const e = find(tr.dataset.id);
       if (!e) return;
       if (ev.target.closest('[data-note]')) { noteModal(e); return; }
+      if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(e.id, who(e) + ' – ' + huDate(e.date)); return; }
       if (ev.target.closest('[data-pick]')) { bgPicker(e); return; }
       if (!b || b.tagName === 'SELECT') return;
       const f = b.dataset.f, k = chk(e);
@@ -501,6 +517,7 @@
       '<td class="td-c" data-l="Díjbekérő">' + djSel + '</td>' +
       '<td class="td-c" data-l="Galéria">' + tick('gl', k.gl, k.after ? '' : 'later', k.after ? '' : 'A rendezvény után esedékes') + '</td>' +
       '<td class="td-c" data-l="Hosszabbítás"><select class="tsel hx ' + (hxOf(e) ? 'set' : '') + (k.after ? '' : ' later') + '" data-f="hx" aria-label="Hosszabbítás">' + HXO.map(o => '<option value="' + o[0] + '"' + (hxOf(e) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></td>' +
+      (PORTAL ? '<td class="td-c td-pp" data-l="Adatlap">' + window.CPPortal.cell(k.pt) + '</td>' : '') +
       '<td class="td-s" data-l="Állapot"><span class="stc ' + k.st + '">' + esc(stTxt) + '</span></td></tr>';
   }
 
@@ -669,6 +686,8 @@
         const tr = j.data.track || {};
         let changed = false;
         c.events.forEach(e => { const nv = tr[e.id] || {}; if (JSON.stringify(nv) !== JSON.stringify(S.track[e.id] || {})) { S.track[e.id] = nv; changed = true; } });
+        const pt = j.data.portal || {};
+        c.events.forEach(e => { const nv = pt[e.id]; if (JSON.stringify(nv || null) !== JSON.stringify(S.portal[e.id] || null)) { if (nv) S.portal[e.id] = nv; else delete S.portal[e.id]; changed = true; } });
         if (changed && S.trackDraw) S.trackDraw();
       } catch (x) { /* csendben */ }
     }, 60000);
@@ -876,11 +895,12 @@
       ['Háttér', e.bg],
       ['Helyszín', e.loc ? esc(e.loc) + (maps ? ' <a href="' + maps + '" target="_blank" rel="noopener">térkép ↗</a>' : '') : '', true],
       ['Kapcsolattartó', e.contact ? [e.contact.name, tel ? '<a href="tel:' + esc(tel) + '">' + esc(e.contact.phone) + '</a>' : '', e.contact.email].filter(Boolean).map((x, i) => i === 1 ? x : esc(x)).join(' · ') : '', true]
-    ].concat((e.extra || []).map(x => [x[0], x[1]]));
+    ].concat(PORTAL ? window.CPPortal.info(S.portal[e.id]) : []).concat((e.extra || []).map(x => [x[0], x[1]]));
     return '<article class="wcard ' + e.state + '"><header><b>' + esc(e.title || ('Deal #' + e.id)) + '</b>' + stateBadge(e) +
       '<a class="smlink noprint" href="' + esc(C.sm + e.id + '/detail') + '" target="_blank" rel="noopener">Salesmate ↗</a></header>' +
       (e.state === 'booked' ? prepLine(e) : '') +
       (trk(e).note ? '<p class="note">📝 ' + esc(trk(e).note) + '</p>' : '') +
+      (PORTAL ? window.CPPortal.flags(S.portal[e.id], 'munkalap') : '') +
       '<dl>' + rows.filter(r => r[1]).map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + (r[2] ? r[1] : esc(r[1])) + '</dd>').join('') + '</dl>' +
       (e.note ? '<p class="note">' + esc(e.note) + '</p>' : '') + '</article>';
   }
@@ -979,7 +999,7 @@ async function elLoad(m, force) {
 		try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); }
 		if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Hiba a lekérdezésben.');
 		const d = j.data;
-		d.store = d.store || {}; d.hx = d.hx || {}; d.links = d.links || {}; d.geo = d.geo || {}; d.cal = d.cal || {}; d.geoc = d.geoc || {};
+		d.store = d.store || {}; d.portal = d.portal || {}; d.hx = d.hx || {}; d.links = d.links || {}; d.geo = d.geo || {}; d.cal = d.cal || {}; d.geoc = d.geoc || {};
 		EL.cache[m] = d;
 		EL.kez = d.kez || EL.kez;
 		return d;
@@ -1331,7 +1351,7 @@ function elRowHtml(L, g, locked) {
 	let who;
 	if (first) {
 		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="' + esc(C.sm + d.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(d.who) + '</a>') + '</div>' +
-			'<small>' + esc(sub) + '</small>' + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
+			'<small>' + esc(sub) + '</small>' + (PORTAL && !d.manual ? window.CPPortal.flags(((EL.cache[S.month] || {}).portal || {})[d.id], 'elszamolas') : '') + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
 			'<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button><button type="button" class="el-a" data-act="link" title="Kezelői adatlap linkjének másolása">Link ⧉</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="add" title="Még egy kezelő ehhez a rendezvényhez">+ kezelő</button>' +
 			(d.manual ? '<button type="button" class="el-a" data-act="medit">✎ tétel</button><button type="button" class="el-a" data-act="mdel">törlés</button>' : '')) + '</div>';
 	} else {

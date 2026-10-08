@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Crazy Foglaltsági Panel
- * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal.
- * Version: 1.7.2
+ * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap).
+ * Version: 1.8.0
  * Author: Crazyphoto / EventCrazy
  * Requires PHP: 7.4
  * Text Domain: crazy-panel
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '1.7.2');
+define('CP_PANEL_VER', '1.8.0');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -462,6 +462,7 @@ function cp_panel_ajax_data() {
 		'mode'   => $cached['mode'],
 		'subs'   => (object) $sub_out,
 		'track'  => (object) array_intersect_key(cp_panel_track_all(), array_flip(array_map('strval', wp_list_pluck($cached['events'], 'id')))),
+		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(wp_list_pluck($cached['events'], 'id')) : new stdClass(),
 	));
 }
 
@@ -550,7 +551,7 @@ function cp_panel_ajax_track() {
 		$from = preg_replace('/[^0-9-]/', '', wp_unslash($_REQUEST['from']));
 		$to = preg_replace('/[^0-9-]/', '', wp_unslash($_REQUEST['to']));
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) { wp_send_json_error(array('msg' => 'Hibás dátum.'), 400); }
-		wp_send_json_success(array('track' => (object) cp_panel_track_range($from, $to)));
+		wp_send_json_success(array('track' => (object) cp_panel_track_range($from, $to), 'portal' => function_exists('cp_portal_panel_map_range') ? cp_portal_panel_map_range($from, $to) : new stdClass()));
 	}
 	$id = isset($_POST['id']) ? preg_replace('/[^0-9]/', '', wp_unslash($_POST['id'])) : '';
 	$f = isset($_POST['f']) ? sanitize_key(wp_unslash($_POST['f'])) : '';
@@ -634,10 +635,12 @@ function cp_panel_render_app() {
 		'hxSm'       => $o['f_hx'] !== '',
 		'el'          => cp_el_cfg(),
 		'hxInt'      => (bool) preg_match('/^int/i', (string) $o['f_hx']),
+		'portal'     => function_exists('cp_portal_panel_cfg') ? cp_portal_panel_cfg() : array('on' => false),
 	);
 	cp_panel_head('Crazy panel');
 	echo '<body><div id="cpx-app"></div>';
 	echo '<script>window.CPX=' . wp_json_encode($cfg) . ';</script>';
+	if (!empty($cfg['portal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/portal-panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
 	echo '</body></html>';
 }
@@ -838,6 +841,8 @@ function cp_panel_ajax_setstage() {
 	if ($prev !== '') { $tr['sp'] = $prev; } else { unset($tr['sp']); }
 	update_option($key, $tr, false);
 	cp_panel_flush_cache();
+	// ügyfélportál: a „Szerződés aláírva” szakaszba lépéskor létrejön (a válasz elküldése után, hogy a panel ne várjon)
+	if ($dir === 'sign' && function_exists('cp_portal_defer')) { cp_portal_defer(function () use ($id) { cp_portal_on_stage($id, '', 'panel'); }); }
 	wp_send_json_success(array('id' => $id, 'stage' => $now, 'changed' => true, 'track' => (object) $tr));
 }
 
@@ -1740,6 +1745,7 @@ function cp_el_ajax_data() {
 		'cal' => (object) $calOut,
 		'geoc' => (object) $geoc,
 		'calSync' => get_option('cp_el_cal_at', null),
+		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(array_keys($ids)) : new stdClass(),
 	));
 }
 
@@ -2632,6 +2638,7 @@ function cp_el_render_form($tok) {
 	echo '<section class="cpk-ev"><small>Rendezvény</small><h1>' . esc_html($ev['who']) . '</h1>';
 	foreach ($meta as $line) { echo '<p>' . esc_html($line) . '</p>'; }
 	echo '</section>';
+	if (function_exists('cp_portal_info_block')) { echo cp_portal_info_block((string) $id); }
 	echo '<form class="cpk-card" id="cpk-f" novalidate>';
 	if (count($list) > 1) {
 		echo '<div class="cpk-who"><span class="cpk-l">Ki vagy?</span><div class="cpk-seg" id="cpk-who">';
@@ -3396,3 +3403,8 @@ function cp_el_img_route() {
 	echo file_get_contents($file);
 	exit;
 }
+
+/* =====================================================================
+ * ÜGYFÉLPORTÁL (v1.8) – portal.php és a portal-*.php fájlok
+ * ===================================================================== */
+require_once __DIR__ . '/portal.php';
