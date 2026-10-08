@@ -1,6 +1,6 @@
 # Crazy panel (eventcrazy.hu)
 
-Pillanatkép a `wp-content/plugins/crazy-panel/` mappáról, a Crazy Claude-híd
+Az eventcrazy.hu `wp-content/plugins/crazy-panel/` mappája (a Crazy Claude-híd `crazy-bridge/v1` végpontjain át szinkronizálva).
 (`crazy-bridge/v1`) REST-végpontjain keresztül letöltve.
 
 | Fájl | Méret | sha256 |
