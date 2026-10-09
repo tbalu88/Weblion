@@ -107,6 +107,8 @@ const OWN_LAY = {
 };
 const OWN_SETS = [['wed', 'Esküvő'], ['corp', 'Céges / party'], ['bday', 'Szülinap']];
 const OWN_FONTS = [['serif', 'Klasszikus'], ['script', 'Kézírásos'], ['sans', 'Modern']];
+/* fotóablak-keret: a panel rajzolja pontosan az ablakok szélére (az AI-tól függetlenül, mindig a helyén) */
+const OWN_WF = [['none', 'Nincs'], ['gold', 'Arany vonal'], ['goldmat', 'Arany + passzpartu'], ['line', 'Vonal'], ['double', 'Dupla vonal'], ['mat', 'Passzpartu']];
 /* sorok: [elem, alapvonal a blokk tetejétől] (k = 1 méretben), h = a blokk magassága */
 function ownLines(set, font, col) {
 	const L = (o, b) => [Object.assign({ c: col }, o), b];
@@ -129,6 +131,7 @@ function ownDesign(e) {
 	top += Math.max(0, (z.y1 - top) - B.h * k) / 2;
 	const text = B.l.map(r => Object.assign({}, r[0], { x: z.cx, y: Math.round(top + r[1] * k), s: Math.round(r[0].s * k), m: r[0].t === 'amp' ? 0 : z.m }));
 	const V = { label: lay.label, ov: e.ov, slots: lay.slots.map(x => x.slice()), text };
+	if (e.wf && e.wf !== 'none') { V.wf = e.wf; V.wc = e.wc || '#3A3A3A'; V.wk = lay.half ? 0.75 : 1; }
 	if (lay.half) { V.half = 1; V.order = lay.order; }
 	if (logo) V.logo = logo;
 	return { name: e.name, set, own: e.own, thumb: e.thumb || '', thumbUrl: e.thumbUrl || '', meta: e, vars: [V] };
@@ -143,7 +146,7 @@ const st = {
 	logo: null, logoProc: null, logoDeal: '', textsFrom: '', ls: 100, ldx: 0, ldy: 0, lwhite: false, keepName: false,
 	own: null, mode: 'punch',                        /* előnézet: lyukasztva | mintafotóval */
 	deal: null,
-	ai: { lay: '1x', set: 'wed', font: 'serif', color: '#4A4237', prompt: '', busy: false, draft: null, n: 0, left: -1 }
+	ai: { lay: '1x', set: 'wed', font: 'serif', color: '#4A4237', wf: 'gold', wc: '#3A3A3A', prompt: '', busy: false, draft: null, dirty: false, n: 0, left: -1 }
 };
 Object.keys(SETS).forEach(k => { st.vals[k] = SETS[k].v.slice(); });
 const cur = () => D[st.di].vars[st.vi];
@@ -347,9 +350,54 @@ function compose(g, A, mode) {
 	}
 	g.drawImage(ov, 0, 0, L.W, L.H);
 	if (L.single) g.drawImage(ov, L.W, 0, L.W, L.H);
+	if (V.wf) winFrames(g, V, L.holes);
 	if (logoActive()) { const src = st.logoProc || st.logo; logoRects(V, L).forEach(r => g.drawImage(src, r.x, r.y, r.w, r.h)); }
 	textGroups(V, L).forEach(T => drawTexts(g, adjust(T, st.ts / 100, st.tdx, st.tdy)));
 	g.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/* fotóablak-keret: oldalanként annyira kintebb, amennyi hely van (szomszédos ablakoknál a rés feléig) */
+function winFrames(g, V, hs) {
+	const k = V.wk || 1, st0 = V.wf;
+	const room = (s, side) => {
+		let r = 60 * k;
+		hs.forEach(o => {
+			if (o === s) return;
+			const ovY = o[1] < s[1] + s[3] && o[1] + o[3] > s[1], ovX = o[0] < s[0] + s[2] && o[0] + o[2] > s[0];
+			if (side === 0 && ovY && o[0] + o[2] <= s[0]) r = Math.min(r, (s[0] - o[0] - o[2]) / 2);
+			if (side === 2 && ovY && o[0] >= s[0] + s[2]) r = Math.min(r, (o[0] - s[0] - s[2]) / 2);
+			if (side === 1 && ovX && o[1] + o[3] <= s[1]) r = Math.min(r, (s[1] - o[1] - o[3]) / 2);
+			if (side === 3 && ovX && o[1] >= s[1] + s[3]) r = Math.min(r, (o[1] - s[1] - s[3]) / 2);
+		});
+		return r;
+	};
+	/* a téglalap oldalanként d-vel kintebb, de legfeljebb (hely - tartalék) */
+	const grow = (s, R, d, keep) => { const o = R.map(r => Math.max(1, Math.min(d, r - keep))); return [s[0] - o[0], s[1] - o[1], s[2] + o[0] + o[2], s[3] + o[1] + o[3]]; };
+	const stroke = (r, lw, col) => { g.lineWidth = lw; g.strokeStyle = col; g.strokeRect(r[0], r[1], r[2], r[3]); };
+	const gold = r => { const gr = g.createLinearGradient(r[0], r[1], r[0] + r[2], r[1] + r[3]); [[0, '#A87A28'], [0.25, '#E9CF84'], [0.45, '#B8862F'], [0.7, '#F3DC92'], [1, '#A87A28']].forEach(x => gr.addColorStop(x[0], x[1])); return gr; };
+	g.save();
+	hs.forEach(s => {
+		const R = [0, 1, 2, 3].map(i => room(s, i));
+		if (st0 === 'goldmat' || st0 === 'mat') {
+			const lw = (st0 === 'mat' ? 2.5 : 6) * k, m = grow(s, R, 24 * k, lw / 2 + 1);
+			g.save();
+			g.shadowColor = 'rgba(0,0,0,.16)'; g.shadowBlur = 10; g.shadowOffsetY = 2;
+			g.beginPath(); g.rect(m[0], m[1], m[2], m[3]); g.rect(s[0], s[1], s[2], s[3]);
+			g.fillStyle = '#FFFFFF'; g.fill('evenodd');
+			g.restore();
+			const r = [m[0] + lw / 2, m[1] + lw / 2, m[2] - lw, m[3] - lw];
+			stroke(r, lw, st0 === 'mat' ? V.wc : gold(r));
+			if (st0 === 'goldmat') stroke(grow(s, R, 3 * k, 1), 1.5 * k, gold(m));
+		} else if (st0 === 'gold') {
+			const lw = 7 * k, r = grow(s, R, 2 + lw / 2, lw / 2 + 1); stroke(r, lw, gold(r));
+		} else if (st0 === 'line') {
+			const lw = 4 * k; stroke(grow(s, R, 2 + lw / 2, lw / 2 + 1), lw, V.wc);
+		} else if (st0 === 'double') {
+			stroke(grow(s, R, 3 * k, 2), 2 * k, V.wc);
+			stroke(grow(s, R, 12 * k, 3 * k), 4 * k, V.wc);
+		}
+	});
+	g.restore();
 }
 
 /* ------------------------------------------------------------ PNG 300 dpi (pHYs blokk) */
@@ -505,7 +553,9 @@ const AI_TPL = '<details class="sb-card sb-ai" data-ai><summary class="sb-lbl">�
 	'<div class="sb-f"><span>Felirat típusa</span><div class="sb-seg" data-as>' + segBtns('data-asv', OWN_SETS) + '</div></div>' +
 	'<div class="sb-f"><span>Betűstílus</span><div class="sb-seg" data-af>' + segBtns('data-afv', OWN_FONTS) + '</div></div>' +
 	'<label class="sb-f sb-ai-col"><span>Felirat színe</span><input type="color" data-ac></label>' +
-	'<small class="cpx-muted">Ezek a vázlatra élőben, a mentett stílusba mentéskor kerülnek.</small>' +
+	'<div class="sb-f"><span>Fotóablak kerete (a panel rajzolja, pontosan az ablak szélére)</span><div class="sb-seg" data-awf>' + segBtns('data-awfv', OWN_WF) + '</div></div>' +
+	'<label class="sb-f sb-ai-col" data-awcwrap><span>Ablakkeret színe</span><input type="color" data-awc></label>' +
+	'<small class="cpx-muted">Ezek a kiválasztott egyedi stílusra élőben hatnak; mentett stílusnál a „Beállítások mentése” rögzíti őket.</small>' +
 	'</div></div>' +
 	'<div class="sb-ai-draft" data-aidraft hidden><b>Kész a vázlat</b> – nézd meg lent az előnézetben (mintafotóval is). Ha tetszik, mentsd el:' +
 	'<div class="sb-ai-save"><input type="text" data-ain maxlength="40" placeholder="Stílus neve, pl. Pünkösdi rózsa"><button type="button" class="cpx-btn" data-aisave>Mentés új stílusként az „Egyedi” kategóriába</button><button type="button" class="sb-link danger" data-aidrop>vázlat elvetése</button></div></div>' +
@@ -721,6 +771,7 @@ function pick(i) {
 	const prev = D[st.di].set;
 	st.di = i; st.vi = 0;
 	resetTune(); resetLogoPos();
+	aiFromDesign(D[i]);
 	if (D[i].set !== prev && D[i].set === 'wed') st.fs = 0;
 	renderPicker(); renderVars(); syncInputs(); syncAi(); changed();
 }
@@ -761,6 +812,7 @@ function onInput(ev) {
 	if (t.hasAttribute('data-ls')) { st.ls = +t.value; syncTune(); changed(); return; }
 	if (t.hasAttribute('data-aip')) { st.ai.prompt = t.value; return; }
 	if (t.hasAttribute('data-ac')) { st.ai.color = t.value; aiRestyle(); return; }
+	if (t.hasAttribute('data-awc')) { st.ai.wc = t.value; aiRestyle(); return; }
 }
 function onChange(ev) {
 	const t = ev.target;
@@ -878,20 +930,41 @@ function syncAi() {
 	qa('[data-as] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-asv') === a.set));
 	qa('[data-af] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-afv') === a.font));
 	const c = q('[data-ac]'); if (c.value.toLowerCase() !== a.color.toLowerCase()) c.value = a.color;
+	qa('[data-awf] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-awfv') === a.wf));
+	const wc = q('[data-awc]'); if (wc.value.toLowerCase() !== a.wc.toLowerCase()) wc.value = a.wc;
+	q('[data-awcwrap]').hidden = !/^(line|double|mat)$/.test(a.wf);
 	const p = q('[data-aip]'); if (p.value !== a.prompt && document.activeElement !== p) p.value = a.prompt;
 	q('[data-aidraft]').hidden = draftIdx() < 0;
 	const own = q('[data-aiown]'), sv = d && d.own && d.own !== 'draft' ? d : null;
 	own.hidden = !sv;
-	own.innerHTML = sv ? 'Kiválasztva: <b>' + esc(sv.name) + '</b> (egyedi stílus)' + (sv.meta && sv.meta.prompt ? ' · <button type="button" class="sb-link" data-aireuse>prompt és beállítások átvétele</button>' : '') + ' · <button type="button" class="sb-link danger" data-aidel>stílus törlése</button>' : '';
+	own.innerHTML = sv ? 'Kiválasztva: <b>' + esc(sv.name) + '</b> (egyedi stílus)' + (a.dirty ? ' · <button type="button" class="cpx-btn sm" data-aiupd>Beállítások mentése a stílusba</button>' : '') + (sv.meta && sv.meta.prompt ? ' · <button type="button" class="sb-link" data-aireuse>prompt átvétele új generáláshoz</button>' : '') + ' · <button type="button" class="sb-link danger" data-aidel>stílus törlése</button>' : '';
 }
 /* a vázlat / mentés felirat-beállításai élőben a vázlatra */
 function aiRestyle() {
+	const i = D[st.di] && D[st.di].own ? st.di : draftIdx();
+	if (i >= 0) {
+		const m = Object.assign({}, D[i].meta, { set: st.ai.set, font: st.ai.font, color: st.ai.color, wf: st.ai.wf, wc: st.ai.wc });
+		D[i] = ownDesign(m);
+		if (D[i].own !== 'draft') st.ai.dirty = true;
+		if (st.di === i) { renderVars(); syncInputs(); changed(); }
+	}
 	syncAi();
-	const i = draftIdx();
-	if (i < 0) return;
-	const m = Object.assign({}, D[i].meta, { set: st.ai.set, font: st.ai.font, color: st.ai.color });
-	D[i] = ownDesign(m);
-	if (st.di === i) { renderVars(); syncInputs(); changed(); }
+}
+/* egyedi stílus kiválasztásakor a kártya az ő beállításait mutatja */
+function aiFromDesign(d) {
+	const m = d && d.own && d.meta;
+	if (!m) return;
+	Object.assign(st.ai, { set: m.set || 'wed', font: m.font || 'serif', color: m.color || '#4A4237', wf: m.wf || 'none', wc: m.wc || '#3A3A3A', dirty: false });
+}
+async function aiUpdate() {
+	const d = D[st.di];
+	if (!d || !d.own || d.own === 'draft') return;
+	const m = d.meta;
+	try {
+		await post('cp_sb_own_upd', { id: d.own, set: m.set, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '' });
+		st.ai.dirty = false; syncAi();
+		aiMsg('✓ A(z) „' + d.name + '” stílus beállításai elmentve.', 'ok');
+	} catch (e) { aiMsg('Nem sikerült menteni: ' + e.message, 'err'); }
 }
 /* vázlat (szürke fotóablakok) és maszk (átlátszó = az AI festheti) 1024×1536-ban */
 function aiSketch(lay) {
@@ -899,8 +972,12 @@ function aiSketch(lay) {
 	const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
 	const im = mk(), g = im.getContext('2d');
 	g.fillStyle = '#F6F3EE'; g.fillRect(0, 0, W, H);
-	g.fillStyle = '#8C8C8C';
-	L.slots.forEach(s => g.fillRect(Math.round(s[0] * k) + 3, Math.round(s[1] * k) + 3, Math.round(s[2] * k) - 6, Math.round(s[3] * k) - 6));
+	/* fotóablak: szürke mező, körülötte vékony sötét keretvonal – ehhez igazítsa az AI a díszítést */
+	L.slots.forEach(s => {
+		const x = Math.round(s[0] * k), y = Math.round(s[1] * k), w = Math.round(s[2] * k), h = Math.round(s[3] * k);
+		g.fillStyle = '#8C8C8C'; g.fillRect(x + 3, y + 3, w - 6, h - 6);
+		g.lineWidth = 3; g.strokeStyle = '#3A3A3A'; g.strokeRect(x - 6, y - 6, w + 12, h + 12);
+	});
 	const mask = mk(), h = mask.getContext('2d');
 	h.fillStyle = '#000';
 	L.slots.forEach(s => h.fillRect(Math.round(s[0] * k), Math.round(s[1] * k), Math.round(s[2] * k), Math.round(s[3] * k)));
@@ -937,7 +1014,7 @@ async function aiGenerate() {
 		const f = await aiFinish(r.img, lay);
 		const key = 'ai-vazlat-' + (++a.n);
 		cache[key] = Promise.resolve(f.img);
-		const m = { name: 'AI vázlat (nem mentett)', own: 'draft', layout: lay, set: a.set, font: a.font, color: a.color, prompt, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' };
+		const m = { name: 'AI vázlat (nem mentett)', own: 'draft', layout: lay, set: a.set, font: a.font, color: a.color, wf: a.wf, wc: a.wc, prompt, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' };
 		const old = draftIdx(), d = ownDesign(m);
 		if (old >= 0) { if (D[old].meta && D[old].meta.ov) delete cache[D[old].meta.ov]; D[old] = d; } else D.push(d);
 		a.draft = m; a.left = r.left;
@@ -963,7 +1040,7 @@ async function aiSave() {
 	const b = q('[data-aisave]'); b.disabled = true;
 	const m = D[i].meta;
 	try {
-		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, set: m.set, layout: m.layout, font: m.font, color: m.color, prompt: m.prompt || '' });
+		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, set: m.set, layout: m.layout, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '', prompt: m.prompt || '' });
 		cache[e.file] = cache[m.ov];
 		const j = draftIdx(); if (j < 0) return;
 		D[j] = ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }));
@@ -998,13 +1075,15 @@ function aiClick(t) {
 	if ((b = t.closest('[data-alv]'))) { st.ai.lay = b.getAttribute('data-alv'); syncAi(); return true; }
 	if ((b = t.closest('[data-asv]'))) { st.ai.set = b.getAttribute('data-asv'); aiRestyle(); return true; }
 	if ((b = t.closest('[data-afv]'))) { st.ai.font = b.getAttribute('data-afv'); aiRestyle(); return true; }
+	if ((b = t.closest('[data-awfv]'))) { st.ai.wf = b.getAttribute('data-awfv'); aiRestyle(); return true; }
+	if (t.closest('[data-aiupd]')) { aiUpdate(); return true; }
 	if (t.closest('[data-aigo]')) { aiGenerate(); return true; }
 	if (t.closest('[data-aisave]')) { aiSave(); return true; }
 	if (t.closest('[data-aidrop]')) { st.ai.draft = null; dropDesign(draftIdx()); aiMsg(''); return true; }
 	if (t.closest('[data-aidel]')) { aiDel(); return true; }
 	if (t.closest('[data-aireuse]')) {
 		const m = D[st.di] && D[st.di].meta;
-		if (m) { Object.assign(st.ai, { prompt: m.prompt || '', lay: OWN_LAY[m.layout] ? m.layout : st.ai.lay, set: m.set || st.ai.set, font: m.font || st.ai.font, color: m.color || st.ai.color }); q('[data-aip]').value = st.ai.prompt; aiRestyle(); }
+		if (m) { Object.assign(st.ai, { prompt: m.prompt || '', lay: OWN_LAY[m.layout] ? m.layout : st.ai.lay }); q('[data-aip]').value = st.ai.prompt; syncAi(); q('[data-aip]').focus(); }
 		return true;
 	}
 	return false;

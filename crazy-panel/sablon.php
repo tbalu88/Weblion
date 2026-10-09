@@ -6,7 +6,7 @@
  *   cp_sb_img   crazyphoto.hu sablon- és mintakép, helyi gyorsítótárból (a canvas-exporthoz azonos domain kell)
  *   cp_sb_deal  egy deal adatai: az ügyfél választása (megjegyzés mező), a csatolt sablonkép linkje, dátum
  *   cp_sb_ai    egyedi keretgrafika OpenAI képszerkesztővel (csak a panelbe belépett csapatnak; a kulcs a szerveren marad)
- *   cp_sb_own_save / cp_sb_own_del   a jól sikerült keret mentése / törlése az „Egyedi” kategóriában
+ *   cp_sb_own_save / cp_sb_own_upd / cp_sb_own_del   a jól sikerült keret mentése / beállításai / törlése az „Egyedi” kategóriában
  *
  * Betöltő: a crazy-panel.php végén egyetlen require_once. Front-end: assets/sablon.js + assets/sablon.css
  */
@@ -215,8 +215,10 @@ function cp_sb_ajax_ai() {
 
 	$full = 'Design only the decorative background / frame artwork of a printed photo-booth template, portrait orientation (4x6 inch print, 2:3). '
 		. 'Layout: ' . cp_sb_ai_layout_hint($lay) . '. '
-		. 'The flat grey rectangles are the photo windows: they are protected by the mask, keep them exactly where they are and empty, '
-		. 'do not draw inside them, and let the decoration frame them neatly around their edges. '
+		. 'The flat grey rectangles outlined with a thin dark line are the photo windows. They are protected by the mask: keep them exactly where they are, '
+		. 'same size and position, empty, and never draw inside or across them. Compose the whole artwork around these exact windows: '
+		. 'every window must get its own clearly visible, emphasised frame that follows its outline precisely (for example an elegant thin gold or ornamental border hugging the window edge, with decorative corners), '
+		. 'and all decoration must start from the window edges outward, never overlapping them. Leave a clean, even margin between neighbouring windows. '
 		. 'Keep the area below the photo windows (the bottom part of the image) calm, light and low-detail, with decoration only near its edges, '
 		. 'because names, a date and possibly a logo will be added there later. '
 		. 'Absolutely no text, letters, numbers, monograms, logos, watermarks, people or faces. Print quality, crisp, flat front view, no mockup, no perspective, no shadows of a physical card. '
@@ -234,15 +236,21 @@ function cp_sb_ajax_ai() {
 	}
 	$body .= '--' . $bd . "--\r\n";
 
-	if (function_exists('set_time_limit')) { @set_time_limit(200); }
-	$r = wp_remote_post('https://api.openai.com/v1/images/edits', array(
-		'timeout' => 180,
-		'headers' => array('Authorization' => 'Bearer ' . $key, 'Content-Type' => 'multipart/form-data; boundary=' . $bd),
-		'body'    => $body,
-	));
-	if (is_wp_error($r)) { cp_el_err('Az OpenAI nem válaszolt: ' . $r->get_error_message(), 502); }
-	$code = (int) wp_remote_retrieve_response_code($r);
-	$j = json_decode((string) wp_remote_retrieve_body($r), true);
+	if (function_exists('set_time_limit')) { @set_time_limit(380); }
+	/* input_fidelity=high: a vázlat elrendezését (fotóablakok helyét) jobban megtartja; ha a modell nem ismeri, nélküle újra */
+	$fid = '--' . $bd . "\r\nContent-Disposition: form-data; name=\"input_fidelity\"\r\n\r\nhigh\r\n";
+	foreach (array($fid . $body, $body) as $try => $b) {
+		$r = wp_remote_post('https://api.openai.com/v1/images/edits', array(
+			'timeout' => 180,
+			'headers' => array('Authorization' => 'Bearer ' . $key, 'Content-Type' => 'multipart/form-data; boundary=' . $bd),
+			'body'    => $b,
+		));
+		if (is_wp_error($r)) { cp_el_err('Az OpenAI nem válaszolt: ' . $r->get_error_message(), 502); }
+		$code = (int) wp_remote_retrieve_response_code($r);
+		$j = json_decode((string) wp_remote_retrieve_body($r), true);
+		if ($try === 0 && $code === 400 && is_array($j) && isset($j['error']['message']) && stripos((string) $j['error']['message'], 'fidelity') !== false) { continue; }
+		break;
+	}
 	if ($code !== 200 || empty($j['data'][0]['b64_json'])) {
 		$m = is_array($j) && isset($j['error']['message']) ? (string) $j['error']['message'] : 'HTTP ' . $code;
 		cp_el_err('OpenAI hiba: ' . mb_substr($m, 0, 300), 502);
@@ -275,6 +283,7 @@ function cp_sb_ajax_own_save() {
 	$font = isset($_POST['font']) ? sanitize_key(wp_unslash($_POST['font'])) : 'serif';
 	if (!in_array($font, array('serif', 'script', 'sans'), true)) { $font = 'serif'; }
 	$col = isset($_POST['color']) ? sanitize_hex_color(wp_unslash($_POST['color'])) : '';
+	list($wf, $wc) = cp_sb_req_wf();
 	foreach ($list as $e) {
 		if (isset($e['name']) && mb_strtolower($e['name']) === mb_strtolower($name)) { cp_el_err('Már van ilyen nevű egyedi stílus – adj más nevet.'); }
 	}
@@ -293,6 +302,8 @@ function cp_sb_ajax_own_save() {
 		'layout' => cp_sb_req_layout(),
 		'font'   => $font,
 		'color'  => $col ? $col : '#4A4237',
+		'wf'     => $wf,
+		'wc'     => $wc,
 		'file'   => $base . '.png',
 		'thumb'  => $base . '-thumb.png',
 		'prompt' => isset($_POST['prompt']) ? mb_substr(sanitize_textarea_field(wp_unslash($_POST['prompt'])), 0, 1200) : '',
@@ -301,6 +312,36 @@ function cp_sb_ajax_own_save() {
 	$list[] = $e;
 	update_option(CP_SB_OWN, $list, false);
 	wp_send_json_success($e);
+}
+
+/* ablakkeret-stílus a kérésből: [stílus, szín] */
+function cp_sb_req_wf() {
+	$wf = isset($_POST['wf']) ? sanitize_key(wp_unslash($_POST['wf'])) : 'none';
+	if (!in_array($wf, array('none', 'gold', 'goldmat', 'line', 'double', 'mat'), true)) { $wf = 'none'; }
+	$wc = isset($_POST['wc']) ? sanitize_hex_color(wp_unslash($_POST['wc'])) : '';
+	return array($wf, $wc ? $wc : '#3A3A3A');
+}
+
+/* mentett egyedi stílus felirat- és ablakkeret-beállításainak frissítése (a kép nem változik) */
+add_action('wp_ajax_nopriv_cp_sb_own_upd', 'cp_sb_ajax_own_upd');
+add_action('wp_ajax_cp_sb_own_upd', 'cp_sb_ajax_own_upd');
+function cp_sb_ajax_own_upd() {
+	cp_el_auth();
+	$id = isset($_POST['id']) ? preg_replace('/[^a-z0-9]/', '', (string) wp_unslash($_POST['id'])) : '';
+	$list = cp_sb_own_list();
+	foreach ($list as $i => $e) {
+		if ($id === '' || !isset($e['id']) || $e['id'] !== $id) { continue; }
+		$set = isset($_POST['set']) ? sanitize_key(wp_unslash($_POST['set'])) : $e['set'];
+		if (in_array($set, array('wed', 'corp', 'bday'), true)) { $list[$i]['set'] = $set; }
+		$font = isset($_POST['font']) ? sanitize_key(wp_unslash($_POST['font'])) : $e['font'];
+		if (in_array($font, array('serif', 'script', 'sans'), true)) { $list[$i]['font'] = $font; }
+		$col = isset($_POST['color']) ? sanitize_hex_color(wp_unslash($_POST['color'])) : '';
+		if ($col) { $list[$i]['color'] = $col; }
+		list($list[$i]['wf'], $list[$i]['wc']) = cp_sb_req_wf();
+		update_option(CP_SB_OWN, $list, false);
+		wp_send_json_success($list[$i]);
+	}
+	cp_el_err('Ez a stílus már nincs meg.');
 }
 
 add_action('wp_ajax_nopriv_cp_sb_own_del', 'cp_sb_ajax_own_del');
