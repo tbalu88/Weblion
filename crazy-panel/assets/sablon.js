@@ -123,8 +123,17 @@ function ownLines(set, font, col) {
 	return { h: 170, l: [L({ t: 'a', s: 90, f: CINZEL, w: '700', up: 1, nl }, 90), L({ t: 'bc', s: 34, f: SANS, w: '600', up: 1 }, 156)] };
 }
 /* egy egyedi sablon (D-elem) a mentett / vázlat adataiból: { name, set, layout, font, color, ov, thumb|thumbUrl, own } */
+/* feltöltött saját keret, a saját átlátszó ablakaival: a felirat-zóna a legalsó ablak alatt */
+const okSlots = a => Array.isArray(a) && a.length > 0 && a.length <= 12 && a.every(x => Array.isArray(x) && x.length === 4 && x.every(n => isFinite(n)));
+function layFor(e) {
+	if (e.layout !== 'custom' || !okSlots(e.slots)) return OWN_LAY[e.layout] || OWN_LAY['1x'];
+	const bottom = Math.max.apply(null, e.slots.map(s => s[1] + s[3]));
+	let y0 = Math.min(1700, bottom + 40);
+	if (1760 - y0 < 170) y0 = 1590;   /* nincs elég hely: alulra kerül, onnan húzható */
+	return { label: 'Saját ablakok', slots: e.slots, tz: { cx: 600, y0, y1: 1760, m: 980, k: 1 } };
+}
 function ownDesign(e) {
-	const lay = OWN_LAY[e.layout] || OWN_LAY['1x'], z = lay.tz, k = z.k, set = e.set || 'wed';
+	const lay = layFor(e), z = lay.tz, k = z.k, set = e.set || 'wed';
 	const B = ownLines(set, e.font, e.color || '#4A4237');
 	let top = z.y0, logo = null;
 	if (set !== 'wed') { const lw = z.m * 0.62, lh = 130 * k; logo = [z.cx - lw / 2, z.y0 + 10 * k, lw, lh]; top = z.y0 + lh + 30 * k; }
@@ -136,7 +145,7 @@ function ownDesign(e) {
 	if (logo) V.logo = logo;
 	return { name: e.name, set, own: e.own, thumb: e.thumb || '', thumbUrl: e.thumbUrl || '', meta: e, vars: [V] };
 }
-(SB.own || []).forEach(e => { if (e && e.file && OWN_LAY[e.layout]) D.push(ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }))); });
+(SB.own || []).forEach(e => { if (e && e.file && (OWN_LAY[e.layout] || (e.layout === 'custom' && okSlots(e.slots)))) D.push(ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }))); });
 
 /* ------------------------------------------------------------ állapot (fülváltáskor megmarad) */
 const st = {
@@ -543,12 +552,14 @@ const segBtns = (attr, list) => list.map(x => '<button type="button" ' + attr + 
 const nudge = n => '<div class="sb-nudge" data-nudge="' + n + '"><button type="button" data-d="u" title="Fel" aria-label="Fel">↑</button><button type="button" data-d="d" title="Le" aria-label="Le">↓</button><button type="button" data-d="l" title="Balra" aria-label="Balra">←</button><button type="button" data-d="r" title="Jobbra" aria-label="Jobbra">→</button><small>Shift = nagyobb lépés · vagy húzd a képen</small></div>';
 
 /* egyedi keret AI-val – kártya a sablonválasztó alatt (csak a panelben, a csapatnak) */
-const AI_TPL = '<details class="sb-card sb-ai" data-ai><summary class="sb-lbl">✨ Egyedi keret AI-val<small>Az AI csak a díszítő hátteret / keretet rajzolja meg (álló, 10×15). A fotóablakokat a panel hagyja szabadon, a neveket, a dátumot és a logót a panel teszi rá, mint eddig.</small></summary>' +
+const AI_TPL = '<details class="sb-card sb-ai" data-ai><summary class="sb-lbl">✨ Egyedi keret – AI-val vagy saját fájlból<small>Az AI csak a díszítő hátteret / keretet rajzolja meg (álló, 10×15). A fotóablakokat a panel hagyja szabadon, a neveket, a dátumot és a logót a panel teszi rá, mint eddig.</small></summary>' +
 	'<p class="sb-warn" data-aino hidden>Az OpenAI kulcs nincs beállítva – WordPress admin → Beállítások → Foglaltsági panel → „Sablonkészítő – egyedi keret AI-val”.</p>' +
 	'<div class="sb-ai-grid"><div>' +
 	'<div class="sb-f"><span>Elrendezés (fotóablakok)</span><div class="sb-seg" data-al>' + segBtns('data-alv', Object.keys(OWN_LAY).map(k => [k, OWN_LAY[k].label + (OWN_LAY[k].half ? ' (dupla)' : '')])) + '</div></div>' +
 	'<label class="sb-f"><span>Milyen legyen a keret?</span><textarea data-aip rows="4" maxlength="1200" placeholder="pl. elegáns arany-fehér pünkösdi rózsás akvarell keret, zöld levelekkel, sok levegővel"></textarea></label>' +
 	'<div class="sb-ai-go"><button type="button" class="cpx-btn" data-aigo>Keret generálása</button><small data-aiinfo>Kb. 30–90 másodperc.</small></div>' +
+	'<div class="sb-ai-upl"><span>vagy</span><label class="sb-up sm"><input type="file" accept="image/png,image/jpeg,image/webp" data-aiup hidden><span>Saját keret feltöltése (PNG / JPG)</span></label>' +
+	'<small>Álló 10×15-ös kép (pl. 1200×1800 px). Ha a PNG-ben átlátszó fotóablakok vannak, azokat használjuk; ha nincs, a fent kiválasztott elrendezés ablakait vágjuk bele.</small></div>' +
 	'</div><div>' +
 	'<div class="sb-f"><span>Felirat típusa</span><div class="sb-seg" data-as>' + segBtns('data-asv', OWN_SETS) + '</div></div>' +
 	'<div class="sb-f"><span>Betűstílus</span><div class="sb-seg" data-af>' + segBtns('data-afv', OWN_FONTS) + '</div></div>' +
@@ -825,6 +836,7 @@ function onChange(ev) {
 			.catch(e => msg(e.message, 'err'));
 		return;
 	}
+	if (t.hasAttribute('data-aiup')) { const f = t.files && t.files[0]; t.value = ''; if (f) aiUpload(f); return; }
 	if (t.hasAttribute('data-photo')) {
 		const f = t.files && t.files[0]; if (!f) return;
 		const u = URL.createObjectURL(f), i = new Image();
@@ -998,6 +1010,56 @@ async function aiFinish(url, lay) {
 	const png = c.toDataURL('image/png'), thumb = t.toDataURL('image/png');
 	return { png, thumb, img: await loadUrl(png) };
 }
+/* vázlat (nem mentett egyedi stílus) a kész, lyukasztott keretképből */
+function setDraft(f, m) {
+	const a = st.ai, key = 'ai-vazlat-' + (++a.n);
+	cache[key] = Promise.resolve(f.img);
+	Object.assign(m, { own: 'draft', set: a.set, font: a.font, color: a.color, wf: a.wf, wc: a.wc, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' });
+	const old = draftIdx(), d = ownDesign(m);
+	if (old >= 0) { if (D[old].meta && D[old].meta.ov) delete cache[D[old].meta.ov]; D[old] = d; } else D.push(d);
+	a.draft = m;
+	st.cat = 'own'; st.mode = 'photo';
+	pick(draftIdx());
+	renderCats();
+	if (alive() && !q('[data-ain]').value) q('[data-ain]').focus();
+}
+/* saját keret feltöltése: álló 1200×1800-ra (kitöltve, középre vágva); átlátszó ablakok felismerése */
+async function aiUpload(file) {
+	const u = URL.createObjectURL(file);
+	try {
+		const src = await loadUrl(u).catch(() => { throw new Error('Ez a fájl nem kép (PNG, JPG vagy WebP kell).'); });
+		const iw = src.naturalWidth, ih = src.naturalHeight;
+		if (iw < 300 || ih < 300) throw new Error('Túl kicsi a kép (legalább 1200×1800 px ajánlott).');
+		const c = document.createElement('canvas'); c.width = 1200; c.height = 1800;
+		const g = c.getContext('2d');
+		g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+		const land = iw > ih;
+		if (land) { g.translate(1200, 0); g.rotate(Math.PI / 2); cover(g, src, [0, 0, 1800, 1200]); g.setTransform(1, 0, 0, 1, 0, 0); }   /* fekvő kép: elforgatva */
+		else cover(g, src, [0, 0, 1200, 1800]);
+		const r = (land ? iw / ih : ih / iw), warn = [];
+		if (Math.abs(r - 1.5) > 0.08) warn.push('a kép nem 2:3 arányú, ezért a széleiből levágtunk');
+		if (land) warn.push('a fekvő képet álló helyzetbe forgattuk');
+		if (Math.min(iw, ih) < 1000) warn.push('kis felbontás (' + iw + '×' + ih + ') – nyomtatásban életlen lehet');
+		const probe = await loadUrl(c.toDataURL('image/png'));
+		const det = holes(probe, '').map(s => s.map(Math.round));
+		let m;
+		if (det.length) {
+			m = { name: 'Saját keret (nem mentett)', layout: 'custom', slots: det, prompt: '' };
+			st.ai.wf = 'none';   /* a saját keretnek már van ablakkerete */
+		} else {
+			m = { name: 'Saját keret (nem mentett)', layout: st.ai.lay, prompt: '' };
+			const L = OWN_LAY[st.ai.lay];
+			L.slots.forEach(s => g.clearRect(s[0], s[1], s[2], s[3]));
+		}
+		const t = document.createElement('canvas'); t.width = 240; t.height = 360;
+		t.getContext('2d').drawImage(c, 0, 0, 240, 360);
+		const png = c.toDataURL('image/png');
+		setDraft({ png, thumb: t.toDataURL('image/png'), img: await loadUrl(png) }, m);
+		aiMsg('✓ Feltöltve – ' + (det.length ? det.length + ' átlátszó fotóablakot találtam a képen, azokat használom' : 'nem volt átlátszó ablak, a(z) „' + OWN_LAY[st.ai.lay].label + '” elrendezés ablakait vágtam bele (fent másik elrendezést választva töltsd fel újra, ha más kell)') + '.' + (warn.length ? ' Figyelem: ' + warn.join('; ') + '.' : '') + ' Ha tetszik, add meg a nevét és mentsd el.', warn.length ? '' : 'ok');
+	} catch (e) {
+		aiMsg('Nem sikerült: ' + e.message, 'err');
+	} finally { URL.revokeObjectURL(u); }
+}
 async function aiGenerate() {
 	const a = st.ai, lay = a.lay, prompt = (q('[data-aip]').value || '').trim();
 	a.prompt = prompt;
@@ -1012,17 +1074,9 @@ async function aiGenerate() {
 		const sk = aiSketch(lay);
 		const r = await post('cp_sb_ai', { prompt, layout: lay, image: sk.image, mask: sk.mask });
 		const f = await aiFinish(r.img, lay);
-		const key = 'ai-vazlat-' + (++a.n);
-		cache[key] = Promise.resolve(f.img);
-		const m = { name: 'AI vázlat (nem mentett)', own: 'draft', layout: lay, set: a.set, font: a.font, color: a.color, wf: a.wf, wc: a.wc, prompt, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' };
-		const old = draftIdx(), d = ownDesign(m);
-		if (old >= 0) { if (D[old].meta && D[old].meta.ov) delete cache[D[old].meta.ov]; D[old] = d; } else D.push(d);
-		a.draft = m; a.left = r.left;
-		st.cat = 'own'; st.mode = 'photo';
-		pick(draftIdx());
-		renderCats();
+		a.left = r.left;
+		setDraft(f, { name: 'AI vázlat (nem mentett)', layout: lay, prompt });
 		aiMsg('✓ Kész a vázlat' + (r.left >= 0 ? ' (ma még ' + r.left + ' generálás fér bele)' : '') + '. Ha nem tetszik, írj át a leíráson és generáld újra.', 'ok');
-		if (alive() && !q('[data-ain]').value) q('[data-ain]').focus();
 	} catch (e) {
 		aiMsg('Nem sikerült: ' + e.message, 'err');
 	} finally {
@@ -1040,7 +1094,7 @@ async function aiSave() {
 	const b = q('[data-aisave]'); b.disabled = true;
 	const m = D[i].meta;
 	try {
-		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, set: m.set, layout: m.layout, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '', prompt: m.prompt || '' });
+		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, set: m.set, layout: m.layout, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '', slots: m.layout === 'custom' ? JSON.stringify(m.slots) : '', prompt: m.prompt || '' });
 		cache[e.file] = cache[m.ov];
 		const j = draftIdx(); if (j < 0) return;
 		D[j] = ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }));

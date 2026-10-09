@@ -5,6 +5,7 @@
  *
  *   cp_sb_img   crazyphoto.hu sablon- és mintakép, helyi gyorsítótárból (a canvas-exporthoz azonos domain kell)
  *   cp_sb_deal  egy deal adatai: az ügyfél választása (megjegyzés mező), a csatolt sablonkép linkje, dátum
+ *   (a saját, feltöltött keret is ide kerül: a panel méretezi, felismeri / kivágja az ablakokat, majd cp_sb_own_save)
  *   cp_sb_ai    egyedi keretgrafika OpenAI képszerkesztővel (csak a panelbe belépett csapatnak; a kulcs a szerveren marad)
  *   cp_sb_own_save / cp_sb_own_upd / cp_sb_own_del   a jól sikerült keret mentése / beállításai / törlése az „Egyedi” kategóriában
  *
@@ -180,6 +181,20 @@ function cp_sb_req_layout() {
 	return in_array($l, explode(',', CP_SB_LAYOUTS), true) ? $l : '1x';
 }
 
+/* feltöltött saját keret felismert fotóablakai: legfeljebb 12 [x, y, w, h] a 1200×1800-as lapon */
+function cp_sb_req_slots() {
+	$a = json_decode(isset($_POST['slots']) ? (string) wp_unslash($_POST['slots']) : '', true);
+	if (!is_array($a) || !$a || count($a) > 12) { return null; }
+	$out = array();
+	foreach ($a as $r) {
+		if (!is_array($r) || count($r) !== 4) { return null; }
+		$r = array_map('intval', array_values($r));
+		if ($r[2] < 20 || $r[3] < 20 || $r[0] < -40 || $r[1] < -40 || $r[0] + $r[2] > 1240 || $r[1] + $r[3] > 1840) { return null; }
+		$out[] = $r;
+	}
+	return $out;
+}
+
 function cp_sb_ai_layout_hint($lay) {
 	$h = array(
 		'1x'    => 'one large photo window in the upper part',
@@ -284,6 +299,12 @@ function cp_sb_ajax_own_save() {
 	if (!in_array($font, array('serif', 'script', 'sans'), true)) { $font = 'serif'; }
 	$col = isset($_POST['color']) ? sanitize_hex_color(wp_unslash($_POST['color'])) : '';
 	list($wf, $wc) = cp_sb_req_wf();
+	$slots = null;
+	$lay = isset($_POST['layout']) && $_POST['layout'] === 'custom' ? 'custom' : cp_sb_req_layout();
+	if ($lay === 'custom') {
+		$slots = cp_sb_req_slots();
+		if ($slots === null) { cp_el_err('Hibás fotóablak-adatok.'); }
+	}
 	foreach ($list as $e) {
 		if (isset($e['name']) && mb_strtolower($e['name']) === mb_strtolower($name)) { cp_el_err('Már van ilyen nevű egyedi stílus – adj más nevet.'); }
 	}
@@ -299,7 +320,8 @@ function cp_sb_ajax_own_save() {
 		'id'     => $id,
 		'name'   => $name,
 		'set'    => $set,
-		'layout' => cp_sb_req_layout(),
+		'layout' => $lay,
+		'slots'  => $slots,
 		'font'   => $font,
 		'color'  => $col ? $col : '#4A4237',
 		'wf'     => $wf,
