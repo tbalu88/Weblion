@@ -551,3 +551,66 @@ a{color:var(--o)}
 .pp-ul{margin:0;padding-left:18px;font-size:13px}
 .pp-ul.bad{color:var(--full)}
 @media print{.td-pp .pp-cell{background:none}}
+
+/* ------------------------------------------------------------ Ákos tárca (v1.9) */
+.tw-badge{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;width:100%;text-align:left;border-radius:16px;padding:12px 16px;margin:0 0 12px;border:1.5px solid;cursor:pointer;font:inherit;color:inherit}
+.tw-badge.pos{background:var(--okb);border-color:#BFE3CF;color:#1E6B47}
+.tw-badge.neg{background:var(--fullb);border-color:#F1C7C2;color:#8E2A22}
+.tw-badge.ld{background:#fff;border-color:var(--li);color:var(--mu);cursor:default;font-size:14px}
+.tw-badge:hover{filter:brightness(.98)}
+.tw-badge .tw-b-l{font:800 12px "Plus Jakarta Sans",sans-serif;text-transform:uppercase;letter-spacing:.05em}
+.tw-badge>b{font:800 24px "Plus Jakarta Sans",sans-serif}
+.tw-badge .tw-b-s{font-weight:700;font-size:14px}
+.tw-badge .tw-b-d{flex-basis:100%;font-size:13px;color:var(--ink);opacity:.85;margin-top:2px}
+.tw-h{font:800 22px "Plus Jakarta Sans",sans-serif;margin:0}
+.tw-h small{font-size:13px;font-weight:600;color:var(--mu);margin-left:6px}
+.kpi.tw-pos b{color:var(--ok)}
+.kpi.tw-neg b{color:var(--full)}
+.tw-aam h3 small{font-size:12.5px;font-weight:500}
+.tw-aamwrap{overflow:auto;border:1px solid var(--li);border-radius:14px}
+.tw-at td{vertical-align:middle}
+.tw-at small{display:block}
+.tw-acts{white-space:nowrap;text-align:right}
+.tw-wrap{max-height:calc(100vh - 120px)}
+.tw-t td.tw-a.pos{color:var(--ok);font-weight:700}
+.tw-t td.tw-a.neg{color:var(--full);font-weight:700}
+.tw-t td.tw-run{color:var(--mu)}
+.tw-t td.tw-run.neg{color:var(--full);font-weight:700}
+.tw-t td.tw-tt{min-width:220px}
+.tw-t td.tw-nn{min-width:140px;max-width:260px;color:var(--mu)}
+.tw-t tr.tw-m td{background:#F4F1EC;border-top:2px solid var(--li);font:800 13px "Plus Jakarta Sans",sans-serif;padding:7px 10px}
+.tw-t tr.tw-m .tw-ml{position:sticky;left:10px}
+.tw-t tr.tw-m .tw-mr{float:right;font-weight:600;color:var(--mu)}
+.tw-src{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;background:#EEF0F5;color:#2B3242}
+.tw-src.el{background:#E8EEFB;color:#2F5E9E}
+.tw-src.aam{background:var(--okb);color:#1E6B47}
+.tw-sz{display:inline-block;font-size:11px;font-weight:700;color:var(--ok);white-space:nowrap}
+.tw-grid{margin-top:12px}
+.cpx-btn.tw-del{margin-left:auto;color:var(--full);border-color:#F1C7C2}
+.tw-payh{margin:12px 0 0;font-size:13px}
+@media (max-width:760px){.tw-wrap{max-height:none}.tw-badge>b{font-size:20px}}
+@media print{.tw-badge,.tw-aam .tw-acts,.tw-t .tw-acts{display:none!important}}
+.tw-at small.tw-pm{color:#8A5A10;font-weight:600}
+/* v1.9.6: jobban elkülönülő tárca-oszlopok */
+.tw-t th{border-left:1px solid rgba(255,255,255,.14)}
+.tw-t th:first-child{border-left:0}
+.tw-t tr:not(.tw-m) td{border-left:1px solid #E9E3DA}
+.tw-t tr:not(.tw-m) td:first-child{border-left:0}
+.tw-t tr:not(.tw-m) td.td-d{font-weight:700;color:var(--ink);white-space:nowrap}
+.tw-t tr:not(.tw-m) td.tw-a.pos{background:#E8F5EE}
+.tw-t tr:not(.tw-m) td.tw-a.neg{background:#FCEBE9}
+.tw-t tr:not(.tw-m) td.tw-run{background:#EAF0FA;color:#22365C;font-weight:700}
+.tw-t tr:not(.tw-m) td.tw-run.neg{background:#FCEBE9;color:var(--full)}
+.tw-t tr:not(.tw-m) td.tw-k{background:#FFF6E6;color:#6B4A12;font-weight:600}
+.tw-t tr:not(.tw-m) td.tw-tt{color:var(--ink)}
+.tw-t tr:not(.tw-m) td.tw-nn{background:#F7F7F9}
+.tw-t tbody tr:not(.tw-m):hover td{filter:brightness(.97)}
+.tw-chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:#ECEDEF;color:#3D4250}
+.tw-chip.c1{background:#E1EAFB;color:#22477F}
+.tw-chip.c2{background:#DDF2E6;color:#1E6B47}
+.tw-chip.c3{background:#D9F1EE;color:#14615B}
+.tw-chip.c4{background:#FDE8D2;color:#8A4B0F}
+.tw-chip.c5{background:#ECE2FA;color:#5B3696}
+.tw-chip.c6{background:#EFE5D8;color:#6B4A2B}
+.tw-chip.c7{background:#FAE1EC;color:#8C2A5A}
+.tw-chip.c8{background:#DCEFF9;color:#1D5B7A}

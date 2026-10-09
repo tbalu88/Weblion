@@ -36,7 +36,7 @@
     loading: false,
     err: ''
   };
-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas'].includes(S.tab)) S.tab = 'naptar';
+  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].includes(S.tab)) S.tab = 'naptar';
   const d0 = new Date();
   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
 
@@ -100,7 +100,7 @@
     const top = el('header', { class: 'cpx-top' });
     top.innerHTML = '<div class="cpx-logo">Crazy<span>panel</span></div>' +
       '<nav class="cpx-tabs">' +
-      tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') +
+      tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') +
       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">Frissítés</button>' +
       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '">Kilépés</a></div>';
@@ -120,6 +120,7 @@
     const s = document.getElementById('cpx-status');
     if (!s) return;
 	if (S.tab === 'elszamolas') { elStatus(s); return; }
+	if (S.tab === 'tarca') { twStatus(s); return; }
     if (S.loading) { s.textContent = 'Betöltés…'; s.className = 'cpx-status'; return; }
     if (S.err) { s.textContent = S.err; s.className = 'cpx-status err'; return; }
     const c = S.cache[S.month];
@@ -129,21 +130,36 @@
   function go(tab) {
     S.tab = tab;
     history.replaceState(null, '', '#' + tab);
+	if (tab === 'tarca' || tab === 'elszamolas') setTimeout(() => twTick(true), 50);
     document.querySelectorAll('.cpx-tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     closeModal();
     render();
   }
 
   async function refresh() {
+	if (S.tab === 'tarca') { twMonths().forEach(m => { delete EL.cache[m]; }); try { await Promise.all([twLoad(true), twEnsureEl()]); } catch (e) { /* állapotsor */ } render(); return; }
 	if (S.tab === 'elszamolas') { try { await elLoad(S.month, true); } catch (e) { /* állapotsor */ } render(); return; }
     const ms = new Set([S.month, monthKey(S.day)]);
     for (const m of ms) { try { await load(m, true); } catch (e) { /* status */ } }
     render();
   }
 
+  /* Sablonkészítő (assets/sablon.js) – a panel adatai felé */
+  const SBX = {
+    take: () => { const id = S.sbDeal || ''; S.sbDeal = ''; return id; },
+    load: m => load(m),
+    events: () => { const seen = {}, out = []; Object.keys(S.cache).forEach(m => ((S.cache[m] || {}).events || []).forEach(e => { if (!seen[e.id]) { seen[e.id] = 1; out.push(e); } })); return out.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))); },
+    who: e => who(e),
+    huDate: d => huDate(d),
+    tp: id => (S.track[id] || {}).tp === '1',
+    markTp: async id => { let ev = null; eachEv(id, x => { if (!ev) ev = x; }); if (!ev) throw new Error('Ez a rendezvény nincs betöltve a panelen – pipáld a Követés fülön.'); await setTrack(ev, 'tp', '1'); return (S.track[id] || {}).tp === '1'; },
+    toast: t => toast(t)
+  };
   async function render() {
     const main = document.getElementById('cpx-main');
+	if (S.tab === 'tarca') { pollTrack(false); elPoll(false); viewTw(main); renderStatus(); return; }
 	if (S.tab === 'elszamolas') { pollTrack(false); viewEl(main); renderStatus(); return; }
+	if (S.tab === 'sablon') { pollTrack(false); elPoll(false); if (window.CPSablon) window.CPSablon.view(main, SBX); else main.innerHTML = '<div class="cpx-empty err">A Sablonkészítő nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	elPoll(false);
     const m = S.tab === 'munkalap' || S.tab === 'ellenorzes' ? monthKey(S.day) : S.month;
     if (!S.cache[m]) {
@@ -453,6 +469,7 @@
       const e = find(tr.dataset.id);
       if (!e) return;
       if (ev.target.closest('[data-note]')) { noteModal(e); return; }
+      if (ev.target.closest('[data-sb]')) { S.sbDeal = e.id; go('sablon'); return; }
       if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(e.id, who(e) + ' – ' + huDate(e.date)); return; }
       if (ev.target.closest('[data-pick]')) { bgPicker(e); return; }
       if (!b || b.tagName === 'SELECT') return;
@@ -512,7 +529,7 @@
       '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="' + esc(C.sm + e.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(who(e)) + '</a>' +
       '<button type="button" class="nt ' + (k.t.note ? 'has' : '') + '" data-note title="' + esc(k.t.note || 'Megjegyzés hozzáadása') + '">' + (k.t.note ? '📝' : '+ megj.') + '</button></div><small>' + esc(sub) + (norm(e.stage) === 'szerződés kiküldve' ? ' · <span class="mut">szerződés kiküldve</span>' : '') + '</small>' + (k.t.note ? '<small class="ntx">' + esc(k.t.note) + '</small>' : '') + '</td>' +
       '<td class="td-c" data-l="Szerződés">' + tick('sz', k.sz, k.szAuto ? 'auto' : '', k.szAuto ? 'Salesmate szerint aláírva (' + e.stage + ')' : '') + '</td>' +
-      '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + '</td>' +
+      '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + (window.CPSablon ? '<button type="button" class="sbgo" data-sb title="Sablon elkészítése a Sablonkészítőben (lyukasztott PNG)">✎ sablon</button>' : '') + '</td>' +
       '<td class="td-bg" data-l="Háttér">' + bgCell + '</td>' +
       '<td class="td-c" data-l="Díjbekérő">' + djSel + '</td>' +
       '<td class="td-c" data-l="Galéria">' + tick('gl', k.gl, k.after ? '' : 'later', k.after ? '' : 'A rendezvény után esedékes') + '</td>' +
@@ -1137,6 +1154,11 @@ function viewEl(main) {
 		'<button class="cpx-btn ghost" id="el-csv" title="Letöltés Excelhez (CSV)">Excel export</button>';
 	head.appendChild(tools);
 	main.appendChild(head);
+	const twb = el('div', { id: 'el-tw' });
+	main.appendChild(twb);
+	twb.addEventListener('click', e => { if (e.target.closest('[data-tw-go]')) go('tarca'); });
+	if (!TW.data) twLoad().then(twBadgeDraw, twBadgeDraw);
+	twEnsureEl().then(twBadgeDraw);
 	const kp = el('div', { class: 'cpx-kpis', id: 'el-kpi' });
 	main.appendChild(kp);
 	main.appendChild(el('p', { class: 'cpx-help' }, 'Kezelői elszámolás: minden rendezvény a hónapban (Salesmate, napok szerint), soronként egy kezelő. A <b>fő kezelő</b> és az <b>egész órás óraszám</b> oda-vissza szinkronban van a Salesmate-tel (Gépkezelő asszisztens, Rendelkezésreállás hossza). Egy rendezvényhez a <b>+ kezelő</b> gombbal több kezelő is felvehető. A <b>hosszabbítás</b> ugyanaz, mint a Követés fülön. A kiszállás: Budapest fix díj, vidéken km × 2 × Ft/km + raktárba jutási támogatás. A <b>Link</b> gombbal másolható a kezelő adatlapja (parkolás, jatt, papír, elégedettség, megjegyzés, fotó) – amit ott kitölt, azonnal ide kerül. A sorra kattintva (✎) minden részlet szerkeszthető. A narancs <b>Ma</b> vonal alatti sorok még nem zajlottak le, ezért az összegük csak becsült. A <b>Kezelőnként</b> kártyán nyomtatható kimutatás készíthető, és ott zárható le a hónap. A <b>lezajlott</b> rendezvényeknél a kezelő, az óraszám, a helyszín és az időpont a <b>Google Naptárból</b> jön (📅), a jövőbelieknél a Salesmate-ből.'));
@@ -1176,6 +1198,7 @@ function viewEl(main) {
 		const totAll = all.reduce((s, L) => s + L.tot, 0);
 		const open = all.filter(L => !L.paid).reduce((s, L) => s + L.tot, 0);
 		kp.innerHTML = kpi('Rendezvény a hónapban', deals.size) + kpi('Sor kezelő nélkül', noKez) + kpi('Kezelői bér összesen', ft(totAll)) + kpi('Még nem fizetett', ft(open));
+		twBadgeDraw();
 		let nh = '';
 		if (locked) {
 			const lt = c.lock.t ? new Date(c.lock.t * 1000) : null;
@@ -1333,16 +1356,17 @@ function elRowHtml(L, g, locked) {
 	// adatlap: parkolás/jatt, papír, elégedettség, gép, megjegyzés, korrekció, fotók – egy oszlopban
 	const ph = Array.isArray(row.ph) ? row.ph.length : 0;
 	const pha = Array.isArray(row.pha) ? row.pha.length : 0;
+	const phs = Array.isArray(row.phs) ? row.phs.length : 0;
 	const pj = L.pk + L.jt;
 	const chips = [], tip = [];
 	if (pj) { chips.push('<span class="el-chip">P/J ' + ft(pj) + '</span>'); tip.push('Parkolás: ' + ft(L.pk) + ', jatt: ' + ft(L.jt)); }
-	if (elHas(row.pa)) { chips.push('<span class="el-chip">📄 ' + esc(row.pa) + '</span>'); tip.push('Papír: ' + row.pa + ' db'); }
+	if (elHas(row.pa) || row.pt) { chips.push('<span class="el-chip">📄 ' + esc([row.pa, row.pt].filter(x => elHas(x)).join(' · ')) + '</span>'); tip.push('Papír: ' + (elHas(row.pa) ? row.pa + ' db' : '–') + (row.pt ? ' (' + row.pt + ')' : '')); }
 	if (row.sa) { chips.push('<span class="el-sat ' + satCls(row.sa) + '">' + esc(row.sa) + '</span>'); tip.push('Elégedettség: ' + row.sa); }
 	if (gmBad(row.gm)) { chips.push('<span class="el-chip ' + (norm(row.gm) === norm(GMO[GMO.length - 1]) ? 'bad' : 'mid') + '">Gép: ' + esc(row.gm) + '</span>'); tip.push('Gép: ' + row.gm + (row.gmn ? ' – ' + row.gmn : '')); }
 	else if (row.gm) tip.push('Gép rendben');
 	if (row.no) { chips.push('<span class="el-chip">💬 megj.</span>'); tip.push('Megjegyzés: ' + row.no); }
 	if (L.corr) { chips.push('<span class="el-chip">korr. ' + elFt(L.corr) + '</span>'); tip.push('Korrekció: ' + elFt(L.corr) + (row.cn ? ' – ' + row.cn : '')); }
-	if (ph || pha) { chips.push('<span class="el-chip ph">📷 ' + (ph + pha) + '</span>'); tip.push([pha ? pha + ' setup fotó' : '', ph ? ph + ' parkolás fotó' : ''].filter(Boolean).join(', ')); }
+	if (ph || pha || phs) { chips.push('<span class="el-chip ph">📷 ' + (ph + pha + phs) + '</span>'); tip.push([pha ? pha + ' setup fotó' : '', phs ? phs + ' nyomtatási statisztika' : '', ph ? ph + ' parkolás fotó' : ''].filter(Boolean).join(', ')); }
 	if (row.fu) tip.push('Kitöltve: ' + new Date(row.fu * 1000).toLocaleString('hu-HU'));
 	const adat = chips.length ? '<div class="el-chips">' + chips.join('') + '</div>' : (L.past && !row.fu ? '<span class="bad">nincs kitöltve</span>' : '<span class="mu">–</span>');
 	const sub = [L.useCal && L.win ? elWinTxt(L.win) : (L.win && !d.time ? elWinTxt(L.win) : d.time), d.svc].filter(Boolean).join(' · ');
@@ -1531,7 +1555,7 @@ function elPoll(on) {
 		const ae = document.activeElement;
 		if (ae && /^(SELECT|INPUT|TEXTAREA)$/.test(ae.tagName) || !document.getElementById('cpx-modal').hidden) return;
 		try { await elLoad(S.month); if (EL.draw && S.tab === 'elszamolas') EL.draw(); } catch (e) { /* állapotsorban látszik */ }
-	}, 90000);
+	}, 30000);
 }
 
 /* ---- részletek */
@@ -1559,6 +1583,7 @@ function elDetail(L) {
 		(d.loc && !(L.geo && L.geo.manual) ? '<div class="el-geo-re"><button type="button" class="cpx-btn ghost sm" id="ed-geo">Távolság újraszámolása</button></div>' : '') + '</div>' +
 		'<h4>Kezelői adatok <small class="cpx-muted">' + (row.fu ? '– a kezelő kitöltötte: ' + esc(new Date(row.fu * 1000).toLocaleString('hu-HU')) : '– a kezelő még nem töltötte ki') + '</small></h4><div class="el-grid">' +
 		inp('ed-pk', 'Parkolás (Ft)', row.pk, '0') + inp('ed-jt', 'Jatt (Ft)', row.jt, '0') + inp('ed-pa', 'Papírfogyasztás (db)', row.pa, '') +
+		'<label>Nyomtató típusa<select id="ed-pt"><option value="">–</option>' + EL_PRN.map(s => '<option' + (norm(row.pt) === norm(s) ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
 		'<label>Ügyfél elégedettség<select id="ed-sa"><option value="">–</option>' + SAT.map(s => '<option' + (norm(row.sa) === norm(s) ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
 		'<label>Hosszabbítás a kezelő szerint<select id="ed-rhx">' + HX8.map(o => '<option value="' + o[0] + '"' + (String(row.rhx == null ? '' : row.rhx) === o[0] ? ' selected' : '') + '>' + (o[0] === '' ? '– (a rendezvényé)' : o[1]) + '</option>').join('') + '</select></label>' +
 		'<label>Gép működése<select id="ed-gm"><option value="">–</option>' + GMO.map(s => '<option' + (norm(row.gm) === norm(s) ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
@@ -1566,6 +1591,7 @@ function elDetail(L) {
 		'<div class="wide el-svs"><span>Szolgáltatás (eszköz)</span>' + DEVS.map(x => '<label class="chk"><input type="checkbox" data-sv value="' + esc(x) + '"' + (svSel.includes(norm(x)) ? ' checked' : '') + '> ' + esc(x) + '</label>').join('') + '</div>' +
 		'<label class="wide">Megjegyzés<textarea id="ed-no" rows="3" maxlength="600">' + esc(row.no || '') + '</textarea></label></div>' +
 		'<div class="el-phs"><b>Setup / aktivitás fotó(k)</b>' + (ELC.pumble ? ' <small class="cpx-muted">– a Pumble csatornába is bekerül (az egymás után feltöltöttek egy üzenetben, kb. 45 mp múlva)</small>' : '') + '<div class="el-ths" id="ed-thsa">' + thumbs(row.pha, 'a') + '</div><label class="cpx-btn ghost sm el-upl">+ Fotó feltöltése<input type="file" id="ed-filea" accept="image/*" multiple hidden></label> <small id="ed-upmsga" class="cpx-muted"></small></div>' +
+		'<div class="el-phs"><b>Nyomtatási statisztika</b><div class="el-ths" id="ed-thss">' + thumbs(row.phs, 's') + '</div><label class="cpx-btn ghost sm el-upl">+ Fotó feltöltése<input type="file" id="ed-files" accept="image/*" multiple hidden></label> <small id="ed-upmsgs" class="cpx-muted"></small></div>' +
 		'<div class="el-phs"><b>Parkolás fotó(k)</b><div class="el-ths" id="ed-ths">' + thumbs(row.ph, '') + '</div><label class="cpx-btn ghost sm el-upl">+ Fotó feltöltése<input type="file" id="ed-file" accept="image/*" multiple hidden></label> <small id="ed-upmsg" class="cpx-muted"></small></div>' +
 		'<h4>Számítás</h4><table class="cpx-price">' +
 		'<tr><td>Munkadíj' + (L.hN ? ' (' + String(L.h).replace('.', ',') + ' ó × ' + ft(elNum(R.rate)) + ' + pakolás ' + ft(L.pack) + (L.hxN ? ' + hosszabbítás ' + String(L.hx).replace('.', ',') + ' ó × ' + ft(elNum(R.hxr)) : '') + ')' : '') + (L.minA ? ' – minimum' : '') + '</td><td>' + ft(L.munka) + '</td></tr>' +
@@ -1597,16 +1623,18 @@ function elDetail(L) {
 		row.ph = nl && Array.isArray(nl.row.ph) ? nl.row.ph : [];
 		row.pha = nl && Array.isArray(nl.row.pha) ? nl.row.pha : [];
 		q('#ed-ths').innerHTML = thumbs(row.ph, '');
+		row.phs = nl && Array.isArray(nl.row.phs) ? nl.row.phs : [];
 		q('#ed-thsa').innerHTML = thumbs(row.pha, 'a');
+		q('#ed-thss').innerHTML = thumbs(row.phs, 's');
 	};
-	['#ed-ths', '#ed-thsa'].forEach(sel => q(sel).addEventListener('click', async ev => {
+	['#ed-ths', '#ed-thsa', '#ed-thss'].forEach(sel => q(sel).addEventListener('click', async ev => {
 		const b = ev.target.closest('[data-phdel]');
 		if (!b) return;
 		ev.preventDefault();
 		if (!confirm('Törlöd ezt a fotót?')) return;
 		try { refreshThumbs(await elPost({ action: 'cp_el_phdel', id: d.id, i: row.i, n: b.dataset.phdel, cat: b.dataset.cat || '' })); } catch (e) { alert(e.message); }
 	}));
-	[['#ed-file', '#ed-upmsg', ''], ['#ed-filea', '#ed-upmsga', 'a']].forEach(([fsel, msel, cat]) => q(fsel).addEventListener('change', async ev => {
+	[['#ed-file', '#ed-upmsg', ''], ['#ed-filea', '#ed-upmsga', 'a'], ['#ed-files', '#ed-upmsgs', 's']].forEach(([fsel, msel, cat]) => q(fsel).addEventListener('change', async ev => {
 		const files = Array.from(ev.target.files || []);
 		ev.target.value = '';
 		const msg = q(msel);
@@ -1627,7 +1655,7 @@ function elDetail(L) {
 		else set('h', v('#ed-h').replace(',', '.'), row.i === 'r0' ? L.h : row.h);
 		set('p', v('#ed-p'), row.p); set('c', v('#ed-c').replace('−', '-'), row.c); set('cn', v('#ed-cn'), row.cn);
 		set('kx', v('#ed-kx'), row.kx); set('km', v('#ed-km'), st.km);
-		set('pk', v('#ed-pk'), row.pk); set('jt', v('#ed-jt'), row.jt); set('pa', v('#ed-pa'), row.pa);
+		set('pk', v('#ed-pk'), row.pk); set('jt', v('#ed-jt'), row.jt); set('pa', v('#ed-pa'), row.pa); set('pt', q('#ed-pt').value, row.pt);
 		set('sa', q('#ed-sa').value, row.sa); set('no', v('#ed-no'), row.no);
 		set('rhx', q('#ed-rhx').value, row.rhx); set('gm', q('#ed-gm').value, row.gm); set('gmn', v('#ed-gmn'), row.gmn);
 		set('sv', Array.from(dlg.querySelectorAll('[data-sv]')).filter(x => x.checked).map(x => x.value).join(', '), row.sv);
@@ -1675,6 +1703,10 @@ function payModal(lines, name) {
 	const upd = () => { q('#py-tot').textContent = ft(sel().reduce((s, L) => s + L.tot, 0)); };
 	dlg.querySelectorAll('[data-n]').forEach(x => x.addEventListener('change', upd));
 	q('#py-who').addEventListener('change', e => { q('#py-ow').hidden = e.target.value !== '__other'; });
+	const twPm = () => { if (norm(q('#py-who').value) === norm((TW.data && TW.data.payer) || 'Ákos')) q('#py-m').value = 'keszpenz'; };
+	q('#py-who').addEventListener('change', twPm);
+	twPm();
+	q('.el-paytot').insertAdjacentHTML('beforebegin', '<p class="cpx-muted tw-payh">Ha ' + esc((TW.data && TW.data.payer) || 'Ákos') + ' fizeti, és nem átutalással, az összeg magától levonódik a tárcájából (Tárca fül).</p>');
 	upd();
 	q('#py-go').onclick = async () => {
 		const ls = sel();
@@ -1694,6 +1726,7 @@ async function elPay(lines, undo, payer, date, meth) {
 		const res = await elPost({ action: 'cp_el_pay', items: lines.map(L => L.d.id + '|' + L.row.i + '|' + Math.round(L.tot)), undo: undo ? '1' : '', payer: payer || '', pdate: date || '', pmeth: meth || '', ym: S.month });
 		Object.keys(res.stores || {}).forEach(id => elApply(id, { store: res.stores[id] }));
 		toast(undo ? 'Kifizetés visszavonva' : 'Kifizetve: ' + ft(lines.reduce((s, L) => s + L.tot, 0)));
+		twLoad(true).then(twBadgeDraw, twBadgeDraw);
 	} catch (e) { alert('Nem sikerült: ' + e.message); }
 	if (EL.draw) EL.draw();
 }
@@ -1765,7 +1798,8 @@ function elStatement(key) {
 }
 
 /* ---- változásnapló (v1.5) */
-const EL_FL = { k: 'Kezelő', h: 'Óraszám', p: 'Pakolás', kx: 'Kiszállás (kézi)', c: 'Korrekció', cn: 'Korrekció oka', pk: 'Parkolás', jt: 'Jatt', pa: 'Papír', sa: 'Elégedettség', no: 'Megjegyzés', ok: 'Ellenőrizve', rhx: 'Hosszabbítás (kezelő)', sv: 'Szolgáltatás', gm: 'Gép működése', gmn: 'Gép megjegyzés', km: 'Km', hx: 'Hosszabbítás', pay: 'Kifizetés', row: 'Kezelő-sor', ko: 'Kezelő (kézi, a naptár helyett)', hc: 'Óraszám (kézi, a naptár helyett)' };
+const EL_PRN = ['DS620', 'RX1', 'QW410', 'Kodak'];
+const EL_FL = { k: 'Kezelő', h: 'Óraszám', p: 'Pakolás', kx: 'Kiszállás (kézi)', c: 'Korrekció', cn: 'Korrekció oka', pk: 'Parkolás', jt: 'Jatt', pa: 'Papír', pt: 'Nyomtató', sa: 'Elégedettség', no: 'Megjegyzés', ok: 'Ellenőrizve', rhx: 'Hosszabbítás (kezelő)', sv: 'Szolgáltatás', gm: 'Gép működése', gmn: 'Gép megjegyzés', km: 'Km', hx: 'Hosszabbítás', pay: 'Kifizetés', row: 'Kezelő-sor', ko: 'Kezelő (kézi, a naptár helyett)', hc: 'Óraszám (kézi, a naptár helyett)' };
 function elHistHtml(st, row) {
 	const lg = (Array.isArray(st.lg) ? st.lg : []).filter(x => x.i === row.i || !x.i || x.f === 'row');
 	if (!lg.length) return '<h4>Előzmények</h4><p class="cpx-muted">Még nincs rögzített változás. A napló az 1.5-ös verziótól rögzíti a panelben és a kezelői adatlapon végzett módosításokat (a Salesmate-ben közvetlenül végzett változásokat nem).</p>';
@@ -1893,10 +1927,10 @@ async function elManualDel(d) {
 /* ---- export */
 function elCsv() {
 	const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-	const lines = [['Dátum', 'Kezelő', 'Ügyfél', 'Helyszín', 'Szolgáltatás', 'Óraszám', 'Óradíj', 'Raktár pakolás', 'Hosszabbítás (óra)', 'Munkadíj', 'Település / km', 'Kiszállási díj', 'Parkolás', 'Jatt', 'Korrekció', 'Összesen', 'Papír fogyasztás', 'Ügyfél elégedettség', 'Szolgáltatás (eszköz)', 'Gép működése', 'Gép megjegyzés', 'Megjegyzés', 'Ellenőrizve', 'Fizetve', 'Ki fizette', 'Kifizetett összeg', 'Salesmate', 'Fizetés módja'].map(q).join(';')];
+	const lines = [['Dátum', 'Kezelő', 'Ügyfél', 'Helyszín', 'Szolgáltatás', 'Óraszám', 'Óradíj', 'Raktár pakolás', 'Hosszabbítás (óra)', 'Munkadíj', 'Település / km', 'Kiszállási díj', 'Parkolás', 'Jatt', 'Korrekció', 'Összesen', 'Papír fogyasztás', 'Nyomtató típusa', 'Ügyfél elégedettség', 'Szolgáltatás (eszköz)', 'Gép működése', 'Gép megjegyzés', 'Megjegyzés', 'Ellenőrizve', 'Fizetve', 'Ki fizette', 'Kifizetett összeg', 'Salesmate', 'Fizetés módja'].map(q).join(';')];
 	elLines(S.month).forEach(L => {
 		const r = L.row;
-		lines.push([L.d.date.replace(/-/g, '.') + '.', elKezName(L), L.d.who, L.d.loc, L.d.svc, String(L.h).replace('.', ','), elNum(L.R.rate), L.pack, String(L.hx || '').replace('.', ','), Math.round(L.munka), L.kiszTxt, Math.round(L.kisz), L.pk || '', L.jt || '', L.corr || '', Math.round(L.tot), r.pa || '', r.sa || '', r.sv || '', r.gm || '', r.gmn || '', [r.no, r.cn].filter(Boolean).join(' | '), L.ok ? 'igen' : '', r.pd || '', r.pb || '', r.pv || '', L.d.manual ? 'kézi tétel' : C.sm + L.d.id + '/detail', r.pm === 'keszpenz' ? 'készpénz' : r.pm === 'atutalas' ? 'átutalás' : ''].map(q).join(';'));
+		lines.push([L.d.date.replace(/-/g, '.') + '.', elKezName(L), L.d.who, L.d.loc, L.d.svc, String(L.h).replace('.', ','), elNum(L.R.rate), L.pack, String(L.hx || '').replace('.', ','), Math.round(L.munka), L.kiszTxt, Math.round(L.kisz), L.pk || '', L.jt || '', L.corr || '', Math.round(L.tot), r.pa || '', r.pt || '', r.sa || '', r.sv || '', r.gm || '', r.gmn || '', [r.no, r.cn].filter(Boolean).join(' | '), L.ok ? 'igen' : '', r.pd || '', r.pb || '', r.pv || '', L.d.manual ? 'kézi tétel' : C.sm + L.d.id + '/detail', r.pm === 'keszpenz' ? 'készpénz' : r.pm === 'atutalas' ? 'átutalás' : ''].map(q).join(';'));
 	});
 	const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
 	const a = el('a', { href: URL.createObjectURL(blob), download: 'kezeloi-elszamolas-' + S.month + '.csv' });
@@ -1904,7 +1938,420 @@ function elCsv() {
 	setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-/* ------------------------------------------------------------ start */
+/* ------------------------------------------------------------ Ákos tárca (v1.9) */
+	const TW = { data: null, loading: null, err: '', m: '', c: '', q: '', draw: null };
+	const TW_MS = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
+	const twSign = n => (n > 0 ? '+' : n < 0 ? '−' : '') + ft(Math.abs(n));
+	const twDot = s => String(s || '').slice(5).replace('-', '.') + '.';
+	const twNum = v => { const x = parseInt(String(v == null ? '' : v).replace(/ft/ig, '').replace(/[\s.]/g, ''), 10); return isFinite(x) ? x : 0; };
+	const twCatCls = c => {
+		const m = { 'bér': 1, 'aam befiz': 2, 'tulaj. befiz': 3, 'furgon': 4, 'parkolás': 5, 'raktár': 6, 'raktár/felszerelés': 6, 'ákos törlesztő': 7, 'eszköz bérbeadás': 8, 'egyenleg': 0 };
+		const k = norm(c);
+		if (k in m) return 'c' + m[k];
+		let h = 0;
+		for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) % 997;
+		return 'c' + (1 + h % 8);
+	};
+	const twMonthLbl = m => m.slice(0, 4) + '. ' + HU_MONTHS[+m.slice(5) - 1];
+
+	async function twLoad(force) {
+		if (TW.loading && !force) return TW.loading;
+		const p = (async () => {
+			const r = await fetch(C.ajax + '?action=cp_tw_data&t=' + encodeURIComponent(C.t) + (force ? '&refresh=1' : ''), { credentials: 'same-origin' });
+			let j;
+			try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); }
+			if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Hiba a tárca betöltésekor.');
+			TW.data = j.data;
+			TW.at = Date.now();
+			TW.err = '';
+			if (S.tab === 'tarca') setTimeout(renderStatus, 0);
+			return j.data;
+		})();
+		TW.loading = p;
+		try { return await p; } catch (e) { TW.err = e.message || String(e); throw e; } finally { if (TW.loading === p) TW.loading = null; }
+	}
+
+	async function twPost(data) {
+		const d = await elPost(data);
+		TW.data = d;
+		TW.err = '';
+		return d;
+	}
+
+	/* előző + aktuális hónap – ezekből becsüljük a még kifizetetlen béreket */
+	function twMonths() {
+		const d = new Date();
+		d.setDate(1);
+		d.setMonth(d.getMonth() - 1);
+		return [d.getFullYear() + '-' + pad(d.getMonth() + 1), monthKey(today())];
+	}
+	async function twEnsureEl() {
+		for (const m of twMonths()) {
+			if (EL.cache[m]) continue;
+			const [from, to] = monthRange(m);
+			try {
+				const r = await fetch(C.ajax + '?action=cp_el_data&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to, { credentials: 'same-origin' });
+				const j = await r.json();
+				if (j && j.success && !EL.cache[m]) {
+					const x = j.data;
+					['store', 'portal', 'hx', 'links', 'geo', 'cal', 'geoc'].forEach(k => { x[k] = x[k] || {}; });
+					EL.cache[m] = x;
+					if (x.kez) EL.kez = x.kez;
+				}
+			} catch (e) { /* a becslés enélkül is működik */ }
+		}
+	}
+	function twUnpaid() {
+		let sum = 0, n = 0;
+		const ms = twMonths().filter(m => EL.cache[m]);
+		ms.forEach(m => elLines(m).forEach(L => { if (L.past && !L.paid && L.tot > 0) { sum += L.tot; n++; } }));
+		return { sum, n, ms };
+	}
+	function twCalc() {
+		const d = TW.data;
+		if (!d) return null;
+		const u = twUnpaid();
+		const bal = +d.bal || 0, aam = +d.aamOpen || 0;
+		return { bal, aam, aamN: (d.aam || []).length, unpaid: u.sum, unpaidN: u.n, ms: u.ms, exp: bal + aam - u.sum, live: !!d.live };
+	}
+	const twMsTxt = ms => ms.length ? ms.map(m => TW_MS[+m.slice(5) - 1]).join('–') : 'nincs betöltve';
+
+	/* ---- egyenleg-sáv az Elszámolás fülön */
+	function twBadgeHtml() {
+		const x = twCalc();
+		if (!x) return '<div class="tw-badge ld">' + (TW.err ? 'Ákos tárca: ' + esc(TW.err) : 'Ákos tárca betöltése…') + '</div>';
+		const neg = x.exp < 0;
+		return '<button type="button" class="tw-badge ' + (neg ? 'neg' : 'pos') + '" data-tw-go title="Megnyitás a Tárca fülön">' +
+			'<span class="tw-b-l">Ákos tárca · várható egyenleg</span><b>' + twSign(x.exp) + '</b>' +
+			'<span class="tw-b-s">' + (neg ? 'Ákosnak még ' + ft(-x.exp) + ' kell a kezelők kifizetéséhez' : 'Van fedezet a kifizetetlen bérekre') + '</span>' +
+			'<span class="tw-b-d">Most a tárcában: <b>' + elFt(x.bal) + '</b> · kifizetetlen, lezajlott bérek (' + esc(twMsTxt(x.ms)) + '): <b>−' + ft(x.unpaid) + '</b> · kezelőknél lévő AAM-készpénz: <b>+' + ft(x.aam) + '</b>' + (x.live ? '' : ' · <b>a táblázat importja még nem futott</b>') + '</span></button>';
+	}
+	function twBadgeDraw() {
+		const b = document.getElementById('el-tw');
+		if (b) b.innerHTML = twBadgeHtml();
+	}
+	function twStatus(s) {
+		if (TW.err) { s.textContent = TW.err; s.className = 'cpx-status err'; return; }
+		const d = TW.data;
+		if (d && TW.at) { const t = new Date(TW.at); s.textContent = 'Frissítve: ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds()) + ' · 30 mp-enként magától'; s.className = 'cpx-status'; }
+		else { s.textContent = TW.loading ? 'Betöltés…' : ''; s.className = 'cpx-status'; }
+	}
+
+	/* ---- tételek futó egyenleggel (régi → új) */
+	function twRows() {
+		const d = TW.data;
+		const all = (d.ledger || []).map(x => Object.assign({}, x)).concat((d.derived || []).map(x => Object.assign({}, x, { src: 'el' })));
+		if (all.some(x => x.ref || (x.refs && x.refs.length))) {
+			const info = {};
+			Object.keys(EL.cache).forEach(m => elLines(m).forEach(L => { info[L.d.id + '|' + L.row.i] = { k: elKezName(L), who: L.d.who, date: L.d.date }; }));
+			all.forEach(x => {
+				if (x.ref && info[x.ref] && info[x.ref].k) { x.t = x.t.replace(/^Kezelő/, info[x.ref].k); x.k = info[x.ref].k; }
+				const ws = (x.refs || []).map(r => info[r]).filter(Boolean);
+				if (ws.length) x.t = x.k + ' bér – ' + ws.map(w => w.who + ' (' + twDot(w.date) + ')').join(', ');
+			});
+		}
+		all.forEach(x => { x.a = +x.a || 0; x.o = +x.o || 0; });
+		all.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.o - b.o));
+		let run = 0;
+		all.forEach(x => { run += x.a; x.run = run; });
+		return all;
+	}
+
+	/* ---- nézet */
+	function viewTw(main) {
+		if (!TW.data) {
+			main.innerHTML = '<div class="cpx-empty">Ákos tárca betöltése…</div>';
+			Promise.all([twLoad(), twEnsureEl()]).then(() => { if (S.tab === 'tarca') viewTw(main); })
+				.catch(() => { if (S.tab !== 'tarca') return; main.innerHTML = '<div class="cpx-empty err">' + esc(TW.err) + '<br><button class="cpx-btn" id="tw-retry">Újra</button></div>'; main.querySelector('#tw-retry').onclick = () => viewTw(main); });
+			return;
+		}
+		main.innerHTML = '';
+		const head = el('div', { class: 'cpx-head' });
+		head.appendChild(el('h2', { class: 'tw-h' }, 'Ákos tárca <small>készpénz</small>'));
+		const tools = el('div', { class: 'cpx-trk-tools' });
+		tools.innerHTML = '<select id="tw-m" class="el-sel" aria-label="Hónap"></select><select id="tw-c" class="el-sel" aria-label="Kategória"></select>' +
+			'<input type="search" id="tw-q" placeholder="Keresés: név, megnevezés…" value="' + esc(TW.q) + '">' +
+			'<button class="cpx-btn sm" id="tw-in">+ Bevétel</button><button class="cpx-btn ghost sm" id="tw-out">− Kiadás</button>' +
+			'<button class="cpx-btn ghost sm" id="tw-csv" title="Letöltés Excelhez (CSV)">Excel export</button><button class="cpx-btn ghost sm" id="tw-set">Beállítások</button>';
+		head.appendChild(tools);
+		main.appendChild(head);
+		const kp = el('div', { class: 'cpx-kpis' });
+		main.appendChild(kp);
+		const note = el('div');
+		main.appendChild(note);
+		const aam = el('div', { class: 'cpx-card tw-aam' });
+		main.appendChild(aam);
+		const wrap = el('div', { class: 'el-wrap tw-wrap' });
+		main.appendChild(wrap);
+		main.appendChild(el('p', { class: 'cpx-help' }, 'Ákos készpénzes tárcája. Az egyenleg három forrásból áll: a <b>kézi tételekből</b> (+ Bevétel / − Kiadás), az <b>Elszámolás fül kifizetéseiből</b> (ha Ákos fizette, és nem átutalással – ezek itt nem szerkeszthetők, a kifizetést az Elszámolás fülön lehet visszavonni), valamint a <b>tárcába került AAM-befizetésekből</b>. A „Kezelőknél lévő AAM-befizetések” a Salesmate-ből jönnek (Szerződés EV/KFT = EV és Választott fizetési mód = Helyszínen készpénz, lezajlott rendezvény – a Beállításokban kérhető, hogy az üres fizetési módú EV-s dealek is ide kerüljenek) – amikor a kezelő leadja a pénzt Ákosnak, nyomd meg a „Tárcába került” gombot. A <b>várható egyenleg</b> = tárca + kezelőknél lévő AAM-készpénz − a még ki nem fizetett, már lezajlott kezelői bérek (előző és aktuális hónap, az Elszámolás fül alapján). Ha negatív, Ákosnak pénz kell a bérekhez.'));
+		const mSel = tools.querySelector('#tw-m'), cSel = tools.querySelector('#tw-c');
+
+		const draw = () => {
+			const d = TW.data;
+			if (!d) return;
+			const x = twCalc();
+			const rows = twRows();
+			const months = Array.from(new Set(rows.map(r => r.d.slice(0, 7)))).sort().reverse();
+			if (TW.m && !months.includes(TW.m)) TW.m = '';
+			mSel.innerHTML = '<option value="">Minden hónap</option>' + months.map(m => '<option value="' + m + '"' + (TW.m === m ? ' selected' : '') + '>' + esc(twMonthLbl(m)) + '</option>').join('');
+			const cats = Array.from(new Set(rows.map(r => r.c))).sort((a, b) => a.localeCompare(b, 'hu'));
+			if (TW.c && !cats.includes(TW.c)) TW.c = '';
+			cSel.innerHTML = '<option value="">Minden kategória</option>' + cats.map(c => '<option' + (TW.c === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+			kp.innerHTML = kpi('Most a tárcában', elFt(x.bal)) + kpi('Kezelőknél lévő AAM (' + x.aamN + ' db)', '+' + ft(x.aam)) + kpi('Kifizetetlen bérek (' + twMsTxt(x.ms) + ')', '−' + ft(x.unpaid)) +
+				'<div class="kpi ' + (x.exp < 0 ? 'tw-neg' : 'tw-pos') + '"><b>' + esc(twSign(x.exp)) + '</b><span>Várható egyenleg</span></div>';
+			let nh = '';
+			if (!x.live) nh += '<div class="el-lockbar">A 2026-os táblázat importja még nem futott – addig az Elszámolás kifizetései nem számítanak bele a tárcába.</div>';
+			if (x.exp < 0) nh += '<div class="el-alert">⚠ Ákosnak még ' + ft(-x.exp) + ' kell a kezelők kifizetéséhez (várható egyenleg).</div>';
+			if (d.aamErr) nh += '<div class="el-lockbar">Az AAM-lista most nem frissült a Salesmate-ből: ' + esc(d.aamErr) + '</div>';
+			note.innerHTML = nh;
+
+			const al = d.aam || [];
+			aam.innerHTML = '<h3>Kezelőknél lévő AAM-befizetések <small class="cpx-muted">(Salesmate: ' + (d.aamMode === 'loose' ? 'EV, helyszíni készpénz vagy üres fizetési mód' : 'EV + helyszínen készpénz') + ', ' + esc(String(d.aamFrom || '').replace(/-/g, '.')) + '. óta: ' + (+d.aamTotal || 0) + ' deal, ebből ' + Math.max(0, (+d.aamTotal || 0) - al.length) + ' már rendezve)</small></h3>' +
+				(al.length ? '<div class="tw-aamwrap"><table class="el-t tw-at"><thead><tr><th>Dátum</th><th>Ügyfél</th><th>Kezelő</th><th class="r">Csomag</th><th class="r">Kiszállás</th><th class="r">Várható</th><th></th></tr></thead><tbody>' +
+					al.map((a, n) => {
+						const kz = kezBySm(a.gk);
+						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="' + esc(C.sm + a.id + '/detail') + '" target="_blank" rel="noopener">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
+							'<td class="r">' + ft(a.val) + '</td><td class="r">' + (a.kd ? ft(a.kd) : '–') + '</td><td class="r"><b>' + ft(a.val + a.kd) + '</b></td>' +
+							'<td class="tw-acts"><button class="cpx-btn sm" data-aam="' + n + '">Tárcába került ✓</button> <button class="cpx-btn ghost sm" data-skip="' + n + '" title="Kivétel a listából (pl. mégsem készpénzben fizetett)">Nem kell</button></td></tr>';
+					}).join('') + '</tbody></table></div>'
+					: '<p class="cpx-muted">Nincs függő AAM-befizetés – minden helyszíni készpénzes EV-s rendezvény pénze a tárcában van.</p>');
+
+			const q = norm(TW.q);
+			const vis = rows.filter(r => (!TW.m || r.d.slice(0, 7) === TW.m) && (!TW.c || r.c === TW.c) &&
+				(!q || norm(r.d + ' ' + r.t + ' ' + (r.k || '') + ' ' + (r.n || '') + ' ' + r.c).includes(q))).reverse();
+			const mt = {};
+			vis.forEach(r => { const t = mt[r.d.slice(0, 7)] = mt[r.d.slice(0, 7)] || { i: 0, o: 0 }; if (r.a > 0) t.i += r.a; else t.o += r.a; });
+			let h = '<table class="el-t tw-t"><thead><tr><th class="c-d">Dátum</th><th class="r">Összeg</th><th class="r">Egyenleg</th><th>Kategória</th><th>Kezelő</th><th>Megnevezés</th><th>Megjegyzés</th><th></th></tr></thead><tbody>';
+			let lastM = '';
+			vis.forEach(r => {
+				const m = r.d.slice(0, 7);
+				if (m !== lastM) { lastM = m; h += '<tr class="tw-m"><td colspan="8"><span class="tw-ml">' + esc(twMonthLbl(m)) + '</span><span class="tw-mr">be: +' + ft(mt[m].i) + ' · ki: −' + ft(-mt[m].o) + '</span></td></tr>'; }
+				const src = r.src === 'el' ? '<span class="tw-src el" title="Az Elszámolás fülön rögzített kifizetés">Elszámolás</span>' : r.src === 'aam' ? '<span class="tw-src aam" title="Salesmate AAM-befizetés">AAM</span>' : '';
+				h += '<tr><td class="td-d">' + twDot(r.d) + '</td><td class="r tw-a ' + (r.a < 0 ? 'neg' : 'pos') + '">' + esc(twSign(r.a)) + '</td><td class="r tw-run' + (r.run < 0 ? ' neg' : '') + '">' + esc(elFt(r.run)) + '</td>' +
+					'<td class="tw-cat"><span class="tw-chip ' + twCatCls(r.c) + '">' + esc(r.c) + '</span></td><td class="tw-k">' + esc(r.k || '') + '</td><td class="tw-tt">' + esc(r.t) + src + '</td><td class="tw-nn">' + esc(r.n || '') + (r.sz ? ' <span class="tw-sz" title="Számla / bizonylat leadva">✓ számla</span>' : '') + '</td>' +
+					'<td class="tw-acts">' + (r.src === 'el' ? '<button class="cpx-btn ghost sm" data-goel="' + esc(r.em || r.d) + '" title="Megnyitás az Elszámolás fülön">→</button>' : '<button class="cpx-btn ghost sm" data-ed="' + esc(r.id) + '" aria-label="Szerkesztés">✎</button>') + '</td></tr>';
+			});
+			if (!vis.length) h += '<tr><td colspan="8" class="cpx-empty">' + (rows.length ? 'Nincs a szűrésnek megfelelő tétel.' : 'Még nincs tétel a tárcában.') + '</td></tr>';
+			h += '</tbody></table>';
+			const sl = wrap.scrollLeft, stp = wrap.scrollTop;
+			wrap.innerHTML = h;
+			wrap.scrollLeft = sl; wrap.scrollTop = stp;
+		};
+		TW.draw = draw;
+
+		mSel.addEventListener('change', e => { TW.m = e.target.value; draw(); });
+		cSel.addEventListener('change', e => { TW.c = e.target.value; draw(); });
+		tools.querySelector('#tw-q').addEventListener('input', e => { TW.q = e.target.value; draw(); });
+		tools.querySelector('#tw-in').addEventListener('click', () => twEntryModal(null, 1));
+		tools.querySelector('#tw-out').addEventListener('click', () => twEntryModal(null, -1));
+		tools.querySelector('#tw-csv').addEventListener('click', twCsv);
+		tools.querySelector('#tw-set').addEventListener('click', twSetModal);
+		wrap.addEventListener('click', ev => {
+			const ed = ev.target.closest('[data-ed]');
+			if (ed) { const r = (TW.data.ledger || []).find(x => x.id === ed.dataset.ed); if (r) twEntryModal(r); return; }
+			const ge = ev.target.closest('[data-goel]');
+			if (ge) { S.month = ge.dataset.goel.slice(0, 7); go('elszamolas'); }
+		});
+		aam.addEventListener('click', ev => {
+			const a = ev.target.closest('[data-aam]');
+			if (a) { const x = (TW.data.aam || [])[+a.dataset.aam]; if (x) twAamModal(x); return; }
+			const s = ev.target.closest('[data-skip]');
+			if (s) {
+				const x = (TW.data.aam || [])[+s.dataset.skip];
+				if (x && confirm('Kiveszed a listából?\n' + x.who + ' (' + twDot(x.date) + ')\nPl. ha mégsem készpénzben fizetett. A Beállításokban visszaállítható.')) twAct({ action: 'cp_tw_aam', deal: x.id, skip: '1' }, 'Kivéve a listából');
+			}
+		});
+		draw();
+		twEnsureEl().then(() => { if (S.tab === 'tarca' && TW.draw === draw) draw(); });
+	}
+
+	async function twAct(data, msg) {
+		try { await twPost(data); if (msg) toast(msg); } catch (e) { alert('Nem sikerült: ' + e.message); }
+		if (TW.draw && S.tab === 'tarca') TW.draw();
+		twBadgeDraw();
+	}
+
+	const twKezList = id => {
+		const names = [];
+		elKez().forEach(k => { if (k.name && !names.includes(k.name)) names.push(k.name); });
+		((TW.data && TW.data.ledger) || []).forEach(x => { if (x.k && !names.includes(x.k)) names.push(x.k); });
+		names.sort((a, b) => a.localeCompare(b, 'hu'));
+		return '<datalist id="' + id + '">' + names.map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist>';
+	};
+
+	/* ---- új / szerkesztett tétel */
+	function twEntryModal(x, sign) {
+		const d = TW.data;
+		const dlg = document.getElementById('cpx-modal');
+		const isNew = !x;
+		const cur = x ? Object.assign({}, x) : { d: today(), a: '', c: sign > 0 ? 'Tulaj. befiz' : 'bér', k: '', t: '', n: '', sz: '' };
+		let sg = x ? (+x.a < 0 ? -1 : 1) : sign;
+		const cats = (d.cats || []).slice();
+		(d.ledger || []).forEach(x => { if (x.c && !cats.includes(x.c)) cats.push(x.c); });
+		if (cur.c && !cats.includes(cur.c)) cats.push(cur.c);
+		dlg.innerHTML = '<div class="cpx-sheet narrow"><div class="cpx-sheet-h"><h3>' + (isNew ? 'Új tétel – Ákos tárca' : 'Tétel szerkesztése') + '</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
+			'<div class="seg" id="tw-sg"><button type="button" data-s="1">+ Bevétel (be a tárcába)</button><button type="button" data-s="-1">− Kiadás (ki a tárcából)</button></div>' +
+			'<div class="el-grid tw-grid">' +
+			'<label>Dátum<input type="date" id="tw-d" value="' + esc(cur.d) + '"></label>' +
+			'<label>Összeg (Ft)<input id="tw-a" inputmode="numeric" autocomplete="off" value="' + (cur.a === '' ? '' : esc(Math.abs(+cur.a))) + '" placeholder="pl. 25000"></label>' +
+			'<label>Kategória<select id="tw-c">' + cats.map(c => '<option' + (c === cur.c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '<option value="__new">+ Új kategória…</option></select></label>' +
+			'<label>Kezelő / személy <small>(bármilyen név beírható)</small><input id="tw-k" list="tw-kl" maxlength="60" value="' + esc(cur.k || '') + '"></label>' +
+			'<label class="wide">Megnevezés<input id="tw-t" maxlength="200" value="' + esc(cur.t || '') + '" placeholder="pl. Furgon tankolás, Balázs befizetés kezelő bérekre"></label>' +
+			'<label class="wide">Megjegyzés<input id="tw-n" maxlength="300" value="' + esc(cur.n || '') + '"></label>' +
+			'<label class="chk wide"><input type="checkbox" id="tw-sz"' + (cur.sz ? ' checked' : '') + '> Számla / bizonylat leadva</label>' +
+			'</div>' + twKezList('tw-kl') +
+			(x && x.src === 'aam' ? '<p class="cpx-muted">Salesmate AAM-befizetésből rögzítve. Ha törlöd, a deal visszakerül a „Kezelőknél” listába.</p>' : '') +
+			(isNew ? '<p class="cpx-muted">A kezelői béreket az Elszámolás fülön fizesd ki (Ákos + Készpénz) – azok maguktól levonódnak innen. Ide a többi mozgás jön: befizetés a tárcába, tankolás, parkolás, raktár, törlesztés stb.</p>' : '') +
+			'<div class="cpx-sheet-f"><button class="cpx-btn" id="tw-go">Mentés</button><button class="cpx-btn ghost" data-close>Mégse</button>' + (isNew ? '' : '<button class="cpx-btn ghost tw-del" id="tw-del">Törlés</button>') + '</div></div>';
+		dlg.hidden = false;
+		const q = s => dlg.querySelector(s);
+		const setSg = v => { sg = v; dlg.querySelectorAll('#tw-sg [data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === sg)); };
+		setSg(sg);
+		dlg.querySelectorAll('#tw-sg [data-s]').forEach(b => b.addEventListener('click', () => setSg(+b.dataset.s)));
+		let lastCat = cur.c;
+		q('#tw-c').addEventListener('change', e => {
+			const sel = e.target;
+			if (sel.value === '__new') {
+				const n = (prompt('Új kategória neve:') || '').trim().slice(0, 40);
+				if (!n || n === '__new') { sel.value = lastCat; return; }
+				let o = Array.from(sel.options).find(x => x.value === n);
+				if (!o) { o = document.createElement('option'); o.value = n; o.textContent = n; sel.insertBefore(o, sel.querySelector('option[value="__new"]')); }
+				sel.value = n;
+				toast('Új kategória: ' + n + ' – nézd meg, hogy bevétel vagy kiadás legyen');
+			}
+			lastCat = sel.value;
+			const s = (d.catSign || {})[sel.value];
+			if (isNew && s) setSg(s);
+		});
+		q('#tw-go').onclick = async () => {
+			const a = Math.abs(twNum(q('#tw-a').value));
+			if (!a) { alert('Add meg az összeget.'); return; }
+			if (!q('#tw-d').value) { alert('Add meg a dátumot.'); return; }
+			if (!q('#tw-t').value.trim()) { alert('Add meg a megnevezést.'); return; }
+			const btn = q('#tw-go');
+			btn.disabled = true;
+			try {
+				await twPost({ action: 'cp_tw_save', id: isNew ? '' : x.id, d: q('#tw-d').value, a: String(sg * a), c: q('#tw-c').value, k: q('#tw-k').value.trim(), tt: q('#tw-t').value.trim(), n: q('#tw-n').value.trim(), sz: q('#tw-sz').checked ? '1' : '' });
+				closeModal();
+				toast(isNew ? 'Tétel rögzítve: ' + twSign(sg * a) : 'Tétel mentve');
+			} catch (e) { btn.disabled = false; alert('Nem sikerült: ' + e.message); return; }
+			if (TW.draw && S.tab === 'tarca') TW.draw();
+			twBadgeDraw();
+		};
+		if (!isNew) q('#tw-del').onclick = async () => {
+			if (!confirm('Törlöd ezt a tételt?\n' + x.t + ' (' + twSign(+x.a) + ')')) return;
+			try { await twPost({ action: 'cp_tw_del', id: x.id }); closeModal(); toast('Tétel törölve'); } catch (e) { alert('Nem sikerült: ' + e.message); return; }
+			if (TW.draw && S.tab === 'tarca') TW.draw();
+			twBadgeDraw();
+		};
+	}
+
+	/* ---- AAM: a kezelő leadta a pénzt */
+	function twAamModal(x) {
+		const dlg = document.getElementById('cpx-modal');
+		const kz = kezBySm(x.gk);
+		dlg.innerHTML = '<div class="cpx-sheet narrow"><div class="cpx-sheet-h"><h3>AAM-befizetés a tárcába</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
+			'<p><b>' + esc(x.who) + '</b> – rendezvény: ' + esc(x.date.replace(/-/g, '.')) + '.<br><span class="cpx-muted">Csomag (deal értéke): ' + ft(x.val) + (x.kd ? ' · kiszállási díj: ' + ft(x.kd) : '') + '</span></p>' +
+			'<div class="el-grid"><label>Tárcába került<input type="date" id="ta-d" value="' + today() + '"></label>' +
+			'<label>Átadott összeg (Ft)<input id="ta-a" inputmode="numeric" autocomplete="off" value="' + (x.val + x.kd) + '"></label>' +
+			'<label>Ki hozta<input id="ta-k" list="tw-kl2" maxlength="60" value="' + esc(kz ? kz.name : (x.gk || '')) + '"></label>' +
+			'<label class="wide">Megjegyzés<input id="ta-n" maxlength="300" placeholder="pl. + 3500 visszajáró"></label></div>' + twKezList('tw-kl2') +
+			'<p class="cpx-muted">Az összeget írd át, ha a kezelő mást adott le (pl. kiszállás nélkül, visszajáróval).</p>' +
+			'<div class="cpx-sheet-f"><button class="cpx-btn" id="ta-go">Tárcába került ✓</button><button class="cpx-btn ghost" data-close>Mégse</button></div></div>';
+		dlg.hidden = false;
+		const q = s => dlg.querySelector(s);
+		q('#ta-go').onclick = async () => {
+			const a = Math.abs(twNum(q('#ta-a').value));
+			if (!a || !q('#ta-d').value) { alert('Add meg a dátumot és az összeget.'); return; }
+			q('#ta-go').disabled = true;
+			try {
+				await twPost({ action: 'cp_tw_aam', deal: x.id, ed: x.date, who: x.who, d: q('#ta-d').value, a: String(a), k: q('#ta-k').value.trim(), n: q('#ta-n').value.trim() });
+				closeModal();
+				toast('AAM a tárcában: +' + ft(a));
+			} catch (e) { q('#ta-go').disabled = false; alert('Nem sikerült: ' + e.message); return; }
+			if (TW.draw && S.tab === 'tarca') TW.draw();
+			twBadgeDraw();
+		};
+	}
+
+	/* ---- beállítások + Google-táblázat tükör */
+	function twSetModal() {
+		const d = TW.data;
+		const dlg = document.getElementById('cpx-modal');
+		const f = '=IMPORTDATA("' + d.feed + '")';
+		dlg.innerHTML = '<div class="cpx-sheet narrow"><div class="cpx-sheet-h"><h3>Tárca – beállítások</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
+			'<h4>Mi számít bele a tárcába?</h4><p class="cpx-muted">• kézi tételek (bevétel / kiadás) és a 2026-os táblázatból importált sorok<br>• az Elszámolás fül kifizetései, ha <b>' + esc(d.payer) + '</b> fizette, és nem átutalással' + (d.liveFrom ? ' (' + esc(d.liveFrom.replace(/-/g, '.')) + '. napi vagy későbbi kifizetési dátummal)' : '') + '<br>• a „Tárcába került” AAM-befizetések (Salesmate: Választott fizetési mód = ' + esc(d.payVal) + ', Szerződés EV/KFT = ' + esc(d.evVal) + ')</p>' +
+			'<div class="el-grid">' + (d.live ? '<label>Elszámolás-kifizetések ettől a kifizetési naptól<input type="date" id="ts-live" value="' + esc(d.liveFrom || '') + '"></label>' : '') + '<label>AAM-dealek figyelése ettől a rendezvénydátumtól<input type="date" id="ts-from" value="' + esc(d.aamFrom) + '"></label><label>Mi számít AAM-befizetésnek?<select id="ts-mode"><option value="strict"' + (d.aamMode !== 'loose' ? ' selected' : '') + '>EV + Helyszínen készpénz</option><option value="loose"' + (d.aamMode === 'loose' ? ' selected' : '') + '>EV + Helyszínen készpénz vagy üres fizetési mód</option></select></label></div>' +
+			(Object.keys(d.aamStats || {}).length ? '<p class="cpx-muted">EV-s rendezvények ' + esc(String(d.aamFrom).replace(/-/g, '.')) + '. óta, „Választott fizetési mód” szerint: ' + Object.keys(d.aamStats).map(k => esc(k) + ': ' + d.aamStats[k]).join(' · ') + '</p>' : '') +
+			(d.skipped ? '<p><button class="cpx-btn ghost sm" id="ts-unskip">„Nem kell”-lel kivett AAM-dealek visszaállítása (' + d.skipped + ')</button></p>' : '') +
+			'<h4>Google-táblázat tükör</h4><p class="cpx-muted">Írd be ezt a képletet egy üres munkalap A1 cellájába – a Google-táblázat magától frissül a panel adataiból (kb. óránként). A link titkos: akinek megvan, látja a tárcát.</p>' +
+			'<div class="el-link"><input readonly id="ts-feed" value="' + esc(f) + '"></div>' +
+			'<p><button class="cpx-btn ghost sm" id="ts-copy">Képlet másolása</button> <button class="cpx-btn ghost sm" id="ts-newkey">Új link (a régi megszűnik)</button></p>' +
+			'<div class="cpx-sheet-f"><button class="cpx-btn" id="ts-go">Mentés</button><button class="cpx-btn ghost" data-close>Bezárás</button></div></div>';
+		dlg.hidden = false;
+		const q = s => dlg.querySelector(s);
+		const after = () => { if (TW.draw && S.tab === 'tarca') TW.draw(); twBadgeDraw(); };
+		q('#ts-copy').onclick = () => { const i = q('#ts-feed'); i.select(); try { navigator.clipboard.writeText(i.value).then(() => toast('Képlet a vágólapon'), () => document.execCommand('copy')); } catch (e) { document.execCommand('copy'); toast('Képlet a vágólapon'); } };
+		q('#ts-newkey').onclick = async () => {
+			if (!confirm('Új linket készítesz? A régi képlet ezután nem működik.')) return;
+			try { await twPost({ action: 'cp_tw_cfg', newkey: '1' }); closeModal(); twSetModal(); toast('Új link kész'); } catch (e) { alert('Nem sikerült: ' + e.message); }
+		};
+		if (q('#ts-unskip')) q('#ts-unskip').onclick = async () => {
+			try { await twPost({ action: 'cp_tw_cfg', unskip: '1' }); closeModal(); toast('Visszaállítva'); } catch (e) { alert('Nem sikerült: ' + e.message); return; }
+			after();
+		};
+		q('#ts-go').onclick = async () => {
+			try { await twPost({ action: 'cp_tw_cfg', aam_from: q('#ts-from').value, aam_mode: q('#ts-mode').value, live_from: q('#ts-live') ? q('#ts-live').value : '' }); closeModal(); toast('Mentve'); } catch (e) { alert('Nem sikerült: ' + e.message); return; }
+			after();
+		};
+	}
+
+	function twCsv() {
+		if (!TW.data) return;
+		const qq = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+		const lbl = { el: 'Elszámolás', aam: 'Salesmate AAM', import: 'Táblázat (import)', kezi: 'Kézi' };
+		const lines = [['Dátum', 'Összeg', 'Tárca egyenleg', 'Kategória', 'Kezelő', 'Megnevezés', 'Megjegyzés', 'Számla leadva', 'Forrás'].map(qq).join(';')];
+		twRows().forEach(r => lines.push([r.d.replace(/-/g, '.') + '.', r.a, r.run, r.c, r.k || '', r.t, r.n || '', r.sz ? 'igen' : '', lbl[r.src] || r.src || ''].map(qq).join(';')));
+		const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+		const a = el('a', { href: URL.createObjectURL(blob), download: 'akos-tarca-' + today() + '.csv' });
+		document.body.appendChild(a); a.click();
+		setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+	}
+
+/* ------------------------------------------------------------ Tárca + Elszámolás automatikus frissítés (v1.9.7) */
+	const TW_POLL_MS = 30000;
+	async function twRefreshEl(skip) {
+		for (const m of twMonths()) {
+			if (m === skip) continue;
+			const [from, to] = monthRange(m);
+			try {
+				const r = await fetch(C.ajax + '?action=cp_el_data&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to, { credentials: 'same-origin' });
+				const j = await r.json();
+				if (j && j.success) {
+					const x = j.data;
+					['store', 'portal', 'hx', 'links', 'geo', 'cal', 'geoc'].forEach(k => { x[k] = x[k] || {}; });
+					EL.cache[m] = x;
+					if (x.kez) EL.kez = x.kez;
+				}
+			} catch (e) { /* a következő körben újra */ }
+		}
+	}
+	const twBusy = () => { const ae = document.activeElement; return !!(ae && /^(SELECT|INPUT|TEXTAREA)$/.test(ae.tagName) && ae.id !== 'tw-q') || !document.getElementById('cpx-modal').hidden; };
+	let twTicking = false;
+	async function twTick(now) {
+		if (twTicking || document.hidden || (S.tab !== 'tarca' && S.tab !== 'elszamolas')) return;
+		if (!now && twBusy()) return;
+		twTicking = true;
+		try { await Promise.all([twLoad(), twRefreshEl(S.tab === 'elszamolas' ? S.month : '')]); } catch (e) { /* állapotsor */ }
+		twTicking = false;
+		if (S.tab === 'tarca' && TW.draw && !twBusy()) TW.draw();
+		if (S.tab === 'elszamolas') twBadgeDraw();
+		renderStatus();
+	}
+	setInterval(() => twTick(false), TW_POLL_MS);
+	document.addEventListener('visibilitychange', () => { if (!document.hidden) twTick(false); });
+
+	/* ------------------------------------------------------------ start */
   shell();
   render();
 })();
