@@ -9,6 +9,8 @@
  *   - egyedi keret AI-val (OpenAI, csak a panelben): álló vázlat + maszk → díszítő keret, a fotóablakokat
  *     a panel lyukasztja ki, a feliratot / logót a panel teszi rá; mentés az „Egyedi” kategóriába
  * A panel.js hívja: window.CPSablon.view(main, ctx)
+ * Ügyfél-mód (CPX.sb.client, az ügyfélportál /rendezvenyem/sablon oldala – assets/portal-sablon.js): nincs dealválasztó,
+ *   AI, saját keret, PNG/JPG-letöltés; „Sablon mentése” → ctx.save({snap, logo, preview}); ctx.deal / ctx.saved / ctx.logoUrl
  *   ctx: { take(), load(m), events(), who(e), huDate(ymd), tp(id), markTp(id), toast(t) }
  * FIGYELEM: a sablonlista (D) a crazyphoto.hu/valaszthato-foto-templatek/ oldal kódjának másolata –
  * új sablonnál / koordináta-módosításnál mindkét helyen frissíteni kell.
@@ -17,6 +19,7 @@
 'use strict';
 const C = window.CPX || {};
 const SB = C.sb || {};
+const CLIENT = !!SB.client;   /* ügyfélportál: csak választás + felirat + logó, mentés a portálra */
 const IMG = f => (SB.img || ((C.ajax || '/wp-admin/admin-ajax.php') + '?action=cp_sb_img&f=')) + encodeURIComponent(f);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => (n < 10 ? '0' : '') + n;
@@ -38,7 +41,7 @@ const SETS = {
 	corp: { l: ['Cégnév', 'Második sor', 'Dátum'], v: ['Crazy Kft.', 'Évzáró parti', '2026.12.18.'] },
 	ny: { l: ['Felirat', 'Második sor', 'Dátum'], v: ['Boldog Új Évet!', 'Szilveszter', '2026.12.31.'] }
 };
-const CATS = [['all', 'Összes'], ['wed', 'Esküvő'], ['party', 'Céges & party'], ['own', 'Egyedi']];
+const CATS = [['all', 'Összes'], ['wed', 'Esküvő'], ['party', 'Céges & party'], ['own', 'Egyedi']].filter(c => !(CLIENT && c[0] === 'own'));
 function stack(cx, y1, yA, y2, yD, size, ampSize, dateSize, maxW, col, dcol) { return [{ t: 'a', x: cx, y: y1, s: size, f: SERIF, w: '400', c: col, m: maxW, up: 1, g: 'n' }, { t: 'amp', x: cx, y: yA, s: ampSize, f: SERIF, w: 'italic 400', c: col, g: 'n' }, { t: 'b', x: cx, y: y2, s: size, f: SERIF, w: '400', c: col, m: maxW, up: 1, g: 'n' }, { t: 'c', x: cx, y: yD, s: dateSize, f: DSERIF, w: '500', c: dcol || col, m: maxW }]; }
 function andStack(cx, y1, size, col, acol, dcol, maxW) { const r = size / 100; return [{ t: 'a', x: cx, y: y1, s: size, f: SERIF, w: '400', c: col, m: maxW, up: 1, g: 'n' }, { t: 'and', x: cx, y: Math.round(y1 + 60 * r), s: Math.round(60 * r), f: SCRIPT, w: '400', c: acol, g: 'n' }, { t: 'b', x: cx, y: Math.round(y1 + 140 * r), s: size, f: SERIF, w: '400', c: col, m: maxW, up: 1, g: 'n' }, { t: 'c', x: cx, y: Math.round(y1 + 205 * r), s: Math.round(40 * r), f: DSERIF, w: '500', c: dcol, m: maxW }]; }
 function pairLine(cx, y, size, col, maxW, dy, dsize, dcol, opt) { const p = { t: 'pair', x: cx, y: y, s: size, f: SERIF, w: '400', c: col, m: maxW, as: 0.72 }; for (const k in opt) p[k] = opt[k]; return [p, { t: 'c', x: cx, y: y + dy, s: dsize, f: DSERIF, w: '500', c: dcol, m: maxW }]; }
@@ -837,6 +840,7 @@ function onClick(ev) {
 	if (t.closest('[data-lreset]')) { resetLogoPos(); syncTune(); changed(); return; }
 	if (t.closest('[data-logodel]')) { st.logo = null; st.logoProc = null; resetLogoPos(); q('[data-logo]').value = ''; saveLogo(); syncInputs(); changed(); return; }
 	if (aiClick(t)) return;
+	if (t.closest('[data-sbsave]')) { clientSave(); return; }
 	if (t.closest('[data-png]')) { exportPng(); return; }
 	if (t.closest('[data-jpg]')) { exportJpg(); return; }
 	if (t.closest('[data-tp]')) { markTp(); return; }
@@ -1193,7 +1197,50 @@ function view(main, ctx) {
 	loadMonths();
 	const pend = X.take ? X.take() : '';
 	if (pend) loadDeal(pend);
+	if (CLIENT) clientStart();
 	fontsReady().then(() => { schedule(); lazyFonts(); });
+}
+
+/* ------------------------------------------------------------ ügyfél-mód (ügyfélportál) */
+async function clientStart() {
+	R.classList.add('sb-client');
+	st.mode = 'photo';   /* az ügyfél mintafotókkal látja, hogyan fog kinézni */
+	q('.sb-out').insertAdjacentHTML('afterbegin', '<div class="sb-save-wrap"><button type="button" class="cpx-btn sb-dl" data-sbsave' + (X.locked ? ' disabled' : '') + '>Sablon mentése</button><small class="sb-oinfo">A mentéssel elküldöd nekünk – a nyomtatható változatot a csapatunk készíti el.</small></div>');
+	const d = X.deal || null;
+	if (!d) return;
+	st.deal = { id: String(d.id), title: d.title || '', date: d.date || '', note: '', img: '', loading: false, parsed: null, src: '' };
+	if (X.saved && X.saved.d) { restore(X.saved); st.deal.src = 'saved'; }
+	else {
+		const set = D[st.di].set;
+		st.vals[set] = ['', '', ''];
+		if (d.date) vals()[2] = dotDate(d.date);
+	}
+	st.textsFrom = st.deal.id;
+	if (X.logoUrl) {
+		await new Promise(res => { const i = new Image(); i.onload = () => { st.logo = i; st.logoProc = st.lwhite ? whiteCut(i) : null; st.logoDeal = st.deal.id; res(); }; i.onerror = () => res(); i.src = X.logoUrl; });
+	}
+	if (!inCat(D[st.di])) st.cat = 'all';
+	if (alive()) { drawAllUi(); schedule(); }
+}
+async function clientSave() {
+	if (!X.save || X.locked) return;
+	const b = q('[data-sbsave]'), label = b.textContent;
+	b.disabled = true; b.textContent = 'Mentés…';
+	try {
+		await fontsReady();
+		const B = await build();
+		B.phs = st.own ? [st.own] : (await Promise.all(photos().map(img))).filter(Boolean);
+		const c = document.createElement('canvas'); c.width = B.L.OW; c.height = B.L.OH;
+		compose(c.getContext('2d'), B, 'photo');
+		const k = Math.min(1, 900 / Math.max(c.width, c.height));
+		const c2 = document.createElement('canvas'); c2.width = Math.round(c.width * k); c2.height = Math.round(c.height * k);
+		c2.getContext('2d').drawImage(c, 0, 0, c2.width, c2.height);
+		const src = st.logo && logoOn() ? String(st.logo.src || '') : '';
+		await X.save({ snap: snapshot(), logo: src === '' ? '' : (/^data:/.test(src) ? src : 'keep'), preview: c2.toDataURL('image/jpeg', 0.85) });
+		msg('✓ Elmentve – megkaptuk a sablonodat. Később is módosíthatod a határidőig.', 'ok');
+	} catch (e) {
+		msg('Nem sikerült menteni: ' + e.message, 'err');
+	} finally { b.disabled = false; b.textContent = label; }
 }
 
 window.CPSablon = { view: view, parseNote: parseNote, _st: st, _D: D };

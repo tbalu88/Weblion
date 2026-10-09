@@ -14,11 +14,14 @@ function cp_portal_admin_save() {
 	$o = cp_portal_opts();
 	$msg = array();
 	$mode = isset($in['mode']) ? (string) $in['mode'] : 'off';
-	$o['mode'] = in_array($mode, array('off', 'selected', 'all'), true) ? $mode : 'off';
+	$o['mode'] = $mode === 'on' ? 'on' : 'off';
+	$o['auto_create'] = empty($in['auto_create']) ? 0 : 1;
+	$o['auto_scope'] = isset($in['auto_scope']) && $in['auto_scope'] === 'all' ? 'all' : 'selected';
+	$o['sent_stage_write'] = empty($in['sent_stage_write']) ? 0 : 1;
 	$o['deals'] = implode("\n", array_keys(cp_portal_parse_ids(isset($in['deals']) ? $in['deals'] : '')));
 	$bu = esc_url_raw(trim(isset($in['base_url']) ? (string) $in['base_url'] : ''), array('https', 'http'));
 	if ($bu !== '' && wp_parse_url($bu, PHP_URL_HOST)) { $o['base_url'] = untrailingslashit($bu); } else { $msg[] = 'A portál címe érvénytelen, nem mentettem.'; }
-	foreach (array('trigger_stage', 'sm_f_venue', 'sm_f_status', 'pumble_mention', 'mail_from_name') as $k) {
+	foreach (array('trigger_stage', 'sent_stage', 'sm_f_venue', 'sm_f_status', 'pumble_mention', 'mail_from_name') as $k) {
 		$o[$k] = isset($in[$k]) ? sanitize_text_field($in[$k]) : '';
 	}
 	$o['sm_status_labels'] = isset($in['sm_status_labels']) ? sanitize_textarea_field($in['sm_status_labels']) : '';
@@ -73,7 +76,7 @@ function cp_portal_admin_page() {
 	$err = get_option('cp_portal_db_error', null);
 	echo '<h2>Állapot</h2><table class="widefat striped" style="max-width:900px"><tbody>';
 	cp_portal_admin_row('Adatbázis', cp_portal_db_ready() ? '✓ táblák rendben (séma v' . esc_html(CP_PORTAL_DB_VER) . ')' : '<b style="color:#b32d2e">hiányzó táblák: ' . esc_html(implode(', ', $missing)) . '</b>' . ($err ? '<br><small>' . esc_html(wp_json_encode($err)) . '</small>' : ''));
-	cp_portal_admin_row('Mód', array('off' => '<b>Kikapcsolva</b> – nem jön létre új portál, nem mennek ki levelek', 'selected' => '<b>Kiválasztott dealek</b>', 'all' => '<b>Mindenki</b>')[cp_portal_mode()]);
+	cp_portal_admin_row('Mód', cp_portal_mode() === 'on' ? '<b>Bekapcsolva</b> – a panelből kiküldhető' . (!empty($o['auto_create']) ? '; automatikus létrehozás is (' . ($o['auto_scope'] === 'all' ? 'mindenki' : 'kiválasztott dealek') . ')' : '; automatikus létrehozás kikapcsolva') : '<b>Kikapcsolva</b> – nem jön létre új portál, nem mennek ki levelek');
 	cp_portal_admin_row('Ütemezés', 'értesítések: ' . esc_html($fmt(wp_next_scheduled('cp_portal_tick'))) . ' · tartalék: ' . esc_html($fmt(wp_next_scheduled('cp_portal_hourly'))) . ' · adattörlés: ' . esc_html($fmt(wp_next_scheduled('cp_portal_daily'))) . '<br>utolsó futás: ' . esc_html($fmt(get_option('cp_portal_tick_last'))) . ' · DISABLE_WP_CRON: ' . (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON ? 'be (szerver-cron kell)' : 'ki (WP-Cron, látogatáskor fut)'));
 	$wl = get_option('cp_portal_webhook_last', null);
 	$sl = get_option('cp_portal_scan_last', null);
@@ -87,11 +90,13 @@ function cp_portal_admin_page() {
 	echo '<form method="post">';
 	wp_nonce_field('cp_portal_save');
 	echo '<h2>Bekapcsolás</h2><table class="form-table">';
-	$radio = function ($v, $l) use ($o) { return '<label style="display:block;margin:4px 0"><input type="radio" name="mode" value="' . esc_attr($v) . '"' . checked($o['mode'], $v, false) . '> ' . $l . '</label>'; };
-	cp_portal_admin_row2('Mód', $radio('off', '<b>Kikapcsolva</b> – a meglévő adatok megmaradnak, új portál és levél nincs') . $radio('selected', '<b>Kiválasztott dealek</b> – csak az alábbi listán szereplők (a panel portál-részletezőjéből is felvehető)') . $radio('all', '<b>Mindenki</b> – minden deal, amely a trigger-szakaszba lép'));
-	cp_portal_admin_row2('Kiválasztott dealek', '<textarea name="deals" rows="4" class="large-text code" placeholder="Salesmate deal-azonosítók, soronként">' . esc_textarea($o['deals']) . '</textarea>');
+	$radio = function ($v, $l) use ($o) { return '<label style="display:block;margin:4px 0"><input type="radio" name="mode" value="' . esc_attr($v) . '"' . checked(cp_portal_mode(), $v, false) . '> ' . $l . '</label>'; };
+	cp_portal_admin_row2('Mód', $radio('off', '<b>Kikapcsolva</b> – a meglévő adatok és portálok megmaradnak, új portál és levél nincs') . $radio('on', '<b>Bekapcsolva</b> – a panelben a dealnél (Követés fül, „Adatlap” cella) az „Ügyfélportál kiküldése” gombbal küldhető ki, a szerződés előtt'));
+	cp_portal_admin_row2('„Adatlap kiküldve” szakasz', '<input name="sent_stage" class="regular-text" value="' . esc_attr($o['sent_stage']) . '"> <label><input type="checkbox" name="sent_stage_write" value="1"' . checked(!empty($o['sent_stage_write']), true, false) . '> kiküldéskor a deal ide kerül a Salesmate-ben</label><p class="description">Pontosan a Salesmate-beli szakasz neve (a „' . esc_html($p['pipeline']) . '” pipeline-ban). Csak ajánlati szakaszból („' . esc_html(implode('”, „', cp_panel_lines($p['pending_stages']))) . '”) lép előre; aláírt szerződésnél nem nyúl hozzá.</p>');
+	cp_portal_admin_row2('Automatikus létrehozás', '<label><input type="checkbox" name="auto_create" value="1"' . checked(!empty($o['auto_create']), true, false) . '> a régi működés: portál a trigger-szakasznál (webhook, óránkénti tartalék, panel „Szerződés” pipa)</label><br><label><input type="radio" name="auto_scope" value="selected"' . checked($o['auto_scope'] !== 'all', true, false) . '> csak a kiválasztott dealeknél</label> <label><input type="radio" name="auto_scope" value="all"' . checked($o['auto_scope'], 'all', false) . '> mindenkinél</label><p class="description">Alapból kikapcsolva: a portál a panelből, kézzel megy ki a szerződés előtt.</p>');
+	cp_portal_admin_row2('Kiválasztott dealek', '<textarea name="deals" rows="3" class="large-text code" placeholder="Salesmate deal-azonosítók, soronként (csak az automatikus létrehozáshoz)">' . esc_textarea($o['deals']) . '</textarea>');
 	cp_portal_admin_row2('Portál címe', '<input name="base_url" class="regular-text" value="' . esc_attr($o['base_url']) . '"><p class="description">Alapból <code>https://portal.eventcrazy.hu</code>. Amíg az aldomain nincs kész, tesztelhető útvonallal is, pl. <code>' . esc_html(home_url('/ugyfelportal')) . '</code>.</p>');
-	cp_portal_admin_row2('Trigger-szakasz', '<input name="trigger_stage" class="regular-text" value="' . esc_attr($o['trigger_stage']) . '"><p class="description">Ebbe a Salesmate-szakaszba lépéskor jön létre a portál (a „' . esc_html($p['pipeline']) . '” pipeline-ban). A 2. fázisban „Szerződés kiküldve”-re állítható.</p>');
+	cp_portal_admin_row2('Trigger-szakasz', '<input name="trigger_stage" class="regular-text" value="' . esc_attr($o['trigger_stage']) . '"><p class="description">Csak az automatikus létrehozáshoz: ebbe a Salesmate-szakaszba lépéskor jön létre a portál (a „' . esc_html($p['pipeline']) . '” pipeline-ban).</p>');
 	echo '</table>';
 
 	echo '<h2>Salesmate</h2><table class="form-table">';

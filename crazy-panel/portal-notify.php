@@ -127,3 +127,14 @@ function cp_portal_pumble_late_change($portal, $logs) {
 	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
 	return cp_portal_pumble($t);
 }
+
+/* „Mehet a szerződés” – a szerződéshez szükséges adatok megérkeztek (vagy módosultak a jelzés óta) */
+function cp_portal_pumble_contract($portal, $first = true) {
+	$cd = cp_portal_contract_data($portal, cp_portal_answers($portal->id));
+	$who = '';
+	foreach ($cd['groups'] as $g) { if ($g[1]) { $who = $g[1][0][1]; break; } }
+	$t = ($first ? '📝 Mehet a szerződés – ' : '📝 Módosultak a szerződés adatai – ') . cp_portal_pumble_head($portal) . "\n";
+	$t .= ($cd['type'] === 'ceg' ? 'Cég: ' : ($cd['type'] === 'magan' ? 'Magánszemély: ' : '')) . $who . "\n";
+	$t .= 'Szerződés adatai (másolás): ' . cp_portal_panel_url($portal->deal_id);
+	return cp_portal_pumble($t);
+}

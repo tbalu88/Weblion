@@ -19,10 +19,14 @@ define('CP_PORTAL_KEEP_PORTAL_YEARS', 5);  // portál alapadat, helyszín, érte
 
 function cp_portal_defaults() {
 	return array(
-		'mode'          => 'off',      // off | selected | all
-		'deals'         => '',         // 'selected' módban: deal-azonosítók soronként
+		'mode'          => 'off',      // off | on – kikapcsolva nem jön létre portál és nem megy ki levél
+		'auto_create'   => 0,          // automatikus létrehozás a trigger-szakasznál (webhook, óránkénti tartalék, panel-szakaszváltás)
+		'auto_scope'    => 'selected', // selected | all – automatikus létrehozásnál
+		'deals'         => '',         // automatikus létrehozásnál ('selected'): deal-azonosítók soronként
 		'base_url'      => 'https://portal.eventcrazy.hu',
 		'trigger_stage' => 'Szerződés aláírva',
+		'sent_stage'    => 'Adatlap kiküldve', // a „Ügyfélportál kiküldése” után ide kerül a deal a Salesmate-ben
+		'sent_stage_write' => 1,
 		'webhook_key'   => '',
 		'cron_fallback' => 1,
 		'sm_f_venue'    => '',         // üres = a panel „Helyszín” mezője (f_loc)
@@ -49,9 +53,10 @@ function cp_portal_opts() {
 	return $o;
 }
 
+/* off | on (a v1.8-as „selected” és „all” érték is bekapcsolt állapotot jelent) */
 function cp_portal_mode() {
 	$o = cp_portal_opts();
-	return in_array($o['mode'], array('off', 'selected', 'all'), true) ? $o['mode'] : 'off';
+	return in_array($o['mode'], array('on', 'selected', 'all'), true) ? 'on' : 'off';
 }
 
 function cp_portal_selected_deals() {
@@ -64,12 +69,18 @@ function cp_portal_selected_deals() {
 	return $out;
 }
 
-/* a deal kaphat-e automatikusan portált (webhook / óránkénti tartalék / panel szakaszváltás) */
+/* a deal kaphat-e AUTOMATIKUSAN portált (webhook / óránkénti tartalék / panel szakaszváltás) – alapból nem */
 function cp_portal_deal_allowed($deal_id) {
-	$m = cp_portal_mode();
-	if ($m === 'all') { return true; }
-	if ($m === 'selected') { $s = cp_portal_selected_deals(); return isset($s[(string) $deal_id]); }
-	return false;
+	$o = cp_portal_opts();
+	if (cp_portal_mode() !== 'on' || empty($o['auto_create'])) { return false; }
+	if ($o['auto_scope'] === 'all') { return true; }
+	$s = cp_portal_selected_deals();
+	return isset($s[(string) $deal_id]);
+}
+
+function cp_portal_sent_stage() {
+	$o = cp_portal_opts();
+	return trim((string) $o['sent_stage']);
 }
 
 function cp_portal_base() {
@@ -94,10 +105,12 @@ function cp_portal_panel_url($deal_id = '') {
 }
 
 /* ------------------------------------------------------------ mezők
- * Egyetlen hely, ahol a kérdések élnek. A „required” átírásával egy kérdés opcionálissá tehető,
- * a required_done maximuma ebből számolódik (cp_portal_required_total()).
- * q = kérdés-azonosító: a helyszín neve/címe és a terem együtt EGY kötelező kérdés,
- *     így a 8 kötelező mezőből 7 kötelező kérdés lesz (ahogy a specifikáció számol).
+ * Egyetlen hely, ahol a kérdések élnek. A „required” átírásával egy kérdés opcionálissá tehető.
+ * stage: a = szerződéshez szükséges adatok (azonnal kötelező)
+ *        b = a rendezvény részletei (a határidőig: rendezvény − 5 nap)
+ *        c = háttér és fotósablon (nem kötelező, a határidőig módosítható)
+ * q = kérdés-azonosító (több mező is tartozhat egy kérdéshez); show_if = array(mező, érték):
+ *     csak akkor látszik és akkor kötelező, ha a másik mező értéke ez (magánszemély / cég).
  */
 
 function cp_portal_fields() {
@@ -105,31 +118,88 @@ function cp_portal_fields() {
 	if ($f !== null) { return $f; }
 	$yn = array('yes' => 'Igen', 'no' => 'Nem', 'unknown' => 'Nem tudom');
 	$f = array(
+		/* ---------------- a) szerződéshez szükséges adatok */
+		'client_type' => array(
+			'stage' => 'a', 'q' => 'client', 'qlabel' => 'Megrendelő adatai', 'section' => 'megrendelo', 'required' => true,
+			'label' => 'Kinek a nevére szóljon a szerződés?',
+			'kind' => 'enum', 'options' => array('magan' => 'Magánszemélyként rendelek', 'ceg' => 'Cégként rendelek'),
+		),
+		'client_private' => array(
+			'stage' => 'a', 'q' => 'client', 'qlabel' => 'Megrendelő adatai', 'section' => 'megrendelo', 'required' => true, 'show_if' => array('client_type', 'magan'),
+			'label' => 'Megrendelő (magánszemély)',
+			'parts' => array(
+				'name'    => array('label' => 'Teljes név', 'kind' => 'text', 'max' => 120, 'req' => true),
+				'address' => array('label' => 'Lakcím', 'kind' => 'text', 'max' => 200, 'req' => true, 'ph' => 'irányítószám, település, utca, házszám'),
+				'phone'   => array('label' => 'Telefonszám', 'kind' => 'tel', 'max' => 30, 'req' => true, 'ph' => '+36 30 123 4567'),
+				'email'   => array('label' => 'E-mail-cím', 'kind' => 'email', 'max' => 190, 'req' => true),
+				'billing' => array('label' => 'Eltérő számlázási adatok (nem kötelező)', 'kind' => 'textarea', 'max' => 500, 'ph' => 'Ha a számla más névre / címre szóljon: név, cím, adószám'),
+			),
+		),
+		'client_company' => array(
+			'stage' => 'a', 'q' => 'client', 'qlabel' => 'Megrendelő adatai', 'section' => 'megrendelo', 'required' => true, 'show_if' => array('client_type', 'ceg'),
+			'label' => 'Megrendelő (cég)',
+			'parts' => array(
+				'company'       => array('label' => 'Cégnév', 'kind' => 'text', 'max' => 200, 'req' => true),
+				'seat'          => array('label' => 'Székhely', 'kind' => 'text', 'max' => 200, 'req' => true, 'ph' => 'irányítószám, település, utca, házszám'),
+				'tax'           => array('label' => 'Adószám', 'kind' => 'tax', 'max' => 20, 'req' => true, 'ph' => '12345678-1-12'),
+				'reg'           => array('label' => 'Cégjegyzékszám', 'kind' => 'reg', 'max' => 30, 'req' => true, 'ph' => '01-09-123456'),
+				'signer_name'   => array('label' => 'Aláíró neve', 'kind' => 'text', 'max' => 120, 'req' => true),
+				'signer_title'  => array('label' => 'Aláíró beosztása', 'kind' => 'text', 'max' => 120, 'req' => true, 'ph' => 'pl. ügyvezető'),
+				'billing_email' => array('label' => 'Számlázási e-mail-cím', 'kind' => 'email', 'max' => 190, 'req' => true),
+				'contact_name'  => array('label' => 'Kapcsolattartó neve', 'kind' => 'text', 'max' => 120, 'req' => true),
+				'contact_phone' => array('label' => 'Kapcsolattartó telefonszáma', 'kind' => 'tel', 'max' => 30, 'req' => true, 'ph' => '+36 30 123 4567'),
+				'contact_email' => array('label' => 'Kapcsolattartó e-mail-címe', 'kind' => 'email', 'max' => 190, 'req' => true),
+				'po'            => array('label' => 'Megrendelésszám / PO (nem kötelező)', 'kind' => 'text', 'max' => 60),
+			),
+		),
+		'event_date' => array(
+			'stage' => 'a', 'q' => 'event_date', 'qlabel' => 'A rendezvény dátuma', 'section' => 'rendezveny', 'required' => true,
+			'label' => 'A rendezvény dátuma',
+			'help' => 'A foglalás alapján kitöltöttük – ha eltér, írd át.',
+			'kind' => 'date',
+		),
 		'venue_address' => array(
-			'q' => 'venue', 'qlabel' => 'Helyszín (név, cím, terem)', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'a', 'q' => 'venue', 'qlabel' => 'Helyszín neve és címe', 'section' => 'rendezveny', 'required' => true,
 			'label' => 'Hol lesz a rendezvény?',
 			'parts' => array(
 				'name'    => array('label' => 'Helyszín neve', 'kind' => 'text', 'max' => 200, 'req' => true, 'ph' => 'pl. Hotel Aurora, Duna-parti rendezvényterem'),
 				'address' => array('label' => 'Pontos cím', 'kind' => 'text', 'max' => 200, 'req' => true, 'ph' => 'irányítószám, település, utca, házszám'),
 			),
 		),
+		'schedule' => array(
+			'stage' => 'a', 'q' => 'schedule', 'qlabel' => 'Kezdés és a szolgáltatás vége', 'section' => 'rendezveny', 'required' => true,
+			'label' => 'Mettől meddig kéritek a szolgáltatást?',
+			'help' => 'A foglalás alapján kitöltöttük, ha változott, írd át.',
+			'note' => 'Ha a helyszínen meggondoljátok magatokat, a szolgáltatás ott is hosszabbítható.',
+			'parts' => array(
+				'start' => array('label' => 'A gép indulása', 'kind' => 'time', 'req' => true),
+				'end'   => array('label' => 'Szolgáltatás vége', 'kind' => 'time', 'req' => true),
+			),
+		),
+		'services' => array(
+			'stage' => 'a', 'q' => 'services', 'qlabel' => 'Megrendelt szolgáltatások', 'section' => 'rendezveny', 'required' => true,
+			'label' => 'Milyen szolgáltatásokat rendeltek?',
+			'help' => 'A foglalás alapján kitöltöttük – ha eltér, írd át.',
+			'kind' => 'text', 'max' => 300, 'ph' => 'pl. Szelfigép, Medium Party csomag',
+		),
+		/* ---------------- b) a rendezvény részletei (határidőig) */
 		'venue_room' => array(
-			'q' => 'venue', 'qlabel' => 'Helyszín (név, cím, terem)', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'room', 'qlabel' => 'Terem / pontos hely', 'section' => 'helyszin', 'required' => true,
 			'label' => 'Melyik teremben / hol pontosan áll majd a gép?',
 			'kind' => 'text', 'max' => 200, 'ph' => 'pl. Nagyterem, a bejárattól jobbra',
 		),
 		'location_type' => array(
-			'q' => 'location_type', 'qlabel' => 'Beltér vagy kültér', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'location_type', 'qlabel' => 'Beltér vagy kültér', 'section' => 'helyszin', 'required' => true,
 			'label' => 'Beltéren vagy kültéren lesz a gép?',
 			'kind' => 'enum', 'options' => array('indoor' => 'Beltéren', 'outdoor_covered' => 'Kültéren, fedett helyen', 'outdoor_open' => 'Kültéren, fedetlen helyen'),
 		),
 		'power_within_10m' => array(
-			'q' => 'power', 'qlabel' => 'Áram 10 méteren belül', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'power', 'qlabel' => 'Áram 10 méteren belül', 'section' => 'helyszin', 'required' => true,
 			'label' => 'Van konnektor a gép helyétől 10 méteren belül?',
 			'kind' => 'enum', 'options' => $yn,
 		),
 		'space_ok' => array(
-			'q' => 'space', 'qlabel' => 'Elég hely a gépnek', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'space', 'qlabel' => 'Elég hely a gépnek', 'section' => 'helyszin', 'required' => true,
 			'label' => 'Van elég szabad hely a gépnek és a vendégeknek?',
 			'help' => 'Ha nem vagy biztos benne, válaszd a „Nem tudom” lehetőséget, és egyeztetünk.',
 			'parts' => array(
@@ -137,7 +207,7 @@ function cp_portal_fields() {
 			),
 		),
 		'access_route' => array(
-			'q' => 'access', 'qlabel' => 'Bejutás (lift / lépcső)', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'access', 'qlabel' => 'Bejutás (lift / lépcső)', 'section' => 'helyszin', 'required' => true,
 			'label' => 'Hogyan jutunk be a géppel?',
 			'parts' => array(
 				'type'   => array('label' => '', 'kind' => 'enum', 'req' => true, 'options' => array('ground' => 'Földszint vagy akadálymentes', 'lift' => 'Lifttel', 'stairs_only' => 'Csak lépcsőn')),
@@ -146,25 +216,20 @@ function cp_portal_fields() {
 			),
 		),
 		'onsite_contact' => array(
-			'q' => 'contact', 'qlabel' => 'Helyszíni kapcsolattartó', 'section' => 'kapcsolat', 'required' => true,
+			'stage' => 'b', 'q' => 'contact', 'qlabel' => 'Helyszíni kapcsolattartó', 'section' => 'kapcsolat', 'required' => true,
 			'label' => 'Kit hívhat a kollégánk a helyszínen?',
 			'parts' => array(
 				'name'  => array('label' => 'Név', 'kind' => 'text', 'max' => 120, 'req' => true),
 				'phone' => array('label' => 'Telefonszám', 'kind' => 'tel', 'max' => 30, 'req' => true, 'ph' => '+36 30 123 4567'),
 			),
 		),
-		'schedule' => array(
-			'q' => 'schedule', 'qlabel' => 'Menetrend (érkezés, kezdés, vége)', 'section' => 'kapcsolat', 'required' => true,
-			'label' => 'Menetrend',
-			'help' => 'A kezdést és a végét a foglalás alapján kitöltöttük, ha változott, írd át.',
-			'parts' => array(
-				'arrival' => array('label' => 'Legkorábban mikor érkezhetünk építeni?', 'kind' => 'time', 'req' => true),
-				'start'   => array('label' => 'A gép indulása', 'kind' => 'time', 'req' => true),
-				'end'     => array('label' => 'A gép zárása', 'kind' => 'time', 'req' => true),
-			),
+		'arrival' => array(
+			'stage' => 'b', 'q' => 'arrival', 'qlabel' => 'Érkezés (építés)', 'section' => 'kapcsolat', 'required' => true,
+			'label' => 'Legkorábban mikor érkezhetünk építeni?',
+			'kind' => 'time',
 		),
 		'vehicle_access' => array(
-			'q' => 'vehicle_access', 'qlabel' => 'Behajtás', 'section' => 'opcionalis', 'required' => false,
+			'stage' => 'b', 'q' => 'vehicle_access', 'qlabel' => 'Behajtás', 'section' => 'opcionalis', 'required' => false,
 			'label' => 'Be lehet állni autóval a bejárathoz pakolni?',
 			'parts' => array(
 				'type'   => array('label' => '', 'kind' => 'enum', 'options' => array('free' => 'Igen, szabadon', 'permit_needed' => 'Behajtási engedély kell', 'unknown' => 'Nem tudom')),
@@ -173,7 +238,7 @@ function cp_portal_fields() {
 			),
 		),
 		'parking' => array(
-			'q' => 'parking', 'qlabel' => 'Parkolás', 'section' => 'opcionalis', 'required' => false,
+			'stage' => 'b', 'q' => 'parking', 'qlabel' => 'Parkolás', 'section' => 'opcionalis', 'required' => false,
 			'label' => 'Hol tudunk parkolni a rendezvény alatt?',
 			'parts' => array(
 				'type' => array('label' => '', 'kind' => 'enum', 'options' => array('free' => 'Ingyenes parkoló', 'paid' => 'Fizetős parkolás', 'none' => 'Nincs parkolási lehetőség')),
@@ -181,7 +246,7 @@ function cp_portal_fields() {
 			),
 		),
 		'guests_type_dress' => array(
-			'q' => 'guests', 'qlabel' => 'Vendégek, rendezvény jellege', 'section' => 'opcionalis', 'required' => false,
+			'stage' => 'b', 'q' => 'guests', 'qlabel' => 'Vendégek, rendezvény jellege', 'section' => 'opcionalis', 'required' => false,
 			'label' => 'Vendégek és a rendezvény jellege',
 			'parts' => array(
 				'guests'     => array('label' => 'Várható létszám (fő)', 'kind' => 'int', 'min' => 1, 'max' => 5000),
@@ -190,12 +255,24 @@ function cp_portal_fields() {
 			),
 		),
 		'special_request' => array(
-			'q' => 'special', 'qlabel' => 'Különleges kérés', 'section' => 'opcionalis', 'required' => false,
+			'stage' => 'b', 'q' => 'special', 'qlabel' => 'Különleges kérés', 'section' => 'opcionalis', 'required' => false,
 			'label' => 'Van bármi, amit még tudnunk kell?',
 			'kind' => 'textarea', 'max' => 2000, 'ph' => 'Kérés, meglepetés, időzítés, bármi…',
 		),
+		/* ---------------- c) háttér és fotósablon (nem kötelező) */
+		'background' => array(
+			'stage' => 'c', 'q' => 'background', 'qlabel' => 'Háttér', 'section' => 'extra', 'required' => false,
+			'label' => 'Melyik hátteret kéritek?',
+			'help' => 'Csak az aznap még szabad hátterek látszanak. A választás kérés: a szerződés aláírásával válik foglalássá.',
+			'kind' => 'bg',
+		),
+		'photo_template' => array(
+			'stage' => 'c', 'q' => 'template', 'qlabel' => 'Fotósablon', 'section' => 'extra', 'required' => false,
+			'label' => 'Fotósablon (a kinyomtatott fotók kerete)',
+			'kind' => 'sablon',
+		),
 		'retention_consent' => array(
-			'q' => 'consent', 'qlabel' => 'Adatmegőrzés', 'section' => 'vege', 'required' => false,
+			'stage' => 'c', 'q' => 'consent', 'qlabel' => 'Adatmegőrzés', 'section' => 'vege', 'required' => false,
 			'label' => 'Megőrizhetitek az adatlapot (és később a logót, sablont) a következő rendezvényünkhöz, legfeljebb 3 évig.',
 			'kind' => 'consent',
 		),
@@ -205,32 +282,56 @@ function cp_portal_fields() {
 
 function cp_portal_sections() {
 	return array(
-		'helyszin'   => 'A helyszín',
-		'kapcsolat'  => 'Kapcsolattartó és menetrend',
-		'opcionalis' => 'Ha tudod, ezeket is írd meg (nem kötelező)',
-		'vege'       => '',
+		'megrendelo' => array('a', 'A megrendelő'),
+		'rendezveny' => array('a', 'A rendezvény'),
+		'helyszin'   => array('b', 'A helyszín'),
+		'kapcsolat'  => array('b', 'Helyszíni kapcsolattartó és érkezés'),
+		'opcionalis' => array('b', 'Ha tudod, ezeket is írd meg (nem kötelező)'),
+		'extra'      => array('c', 'Háttér és fotósablon (nem kötelező)'),
+		'vege'       => array('c', ''),
 	);
 }
 
-/* kötelező kérdések: q => címke */
-function cp_portal_required_questions() {
+function cp_portal_stage_titles() {
+	return array(
+		'a' => array('1. Szerződéshez szükséges adatok', 'Ezekből készül a szerződés – kérjük, minél előbb töltsd ki.'),
+		'b' => array('2. A rendezvény részletei', 'Ráér a határidőig – hogy a kollégánk mindenre felkészülten érkezzen.'),
+		'c' => array('3. Háttér és fotósablon', 'Nem kötelező, a határidőig bármikor módosíthatod.'),
+	);
+}
+
+/* látszik-e (és kötelező-e) a mező a többi válasz alapján (magánszemély / cég) */
+function cp_portal_field_active($f, $answers) {
+	if (empty($f['show_if'])) { return true; }
+	$v = isset($answers[$f['show_if'][0]]) ? $answers[$f['show_if'][0]] : '';
+	return is_scalar($v) && (string) $v === $f['show_if'][1];
+}
+
+/* A v1 portálok (a szerződés aláírása után, automatikusan jöttek létre) a szerződéses lépcsőt nem kérik kötelezően. */
+function cp_portal_stage_required($stage, $flow) {
+	return !($stage === 'a' && $flow === 'v1');
+}
+
+/* kötelező kérdések: q => címke ($stage: a | b | null = mind) */
+function cp_portal_required_questions($stage = null, $flow = 'v2') {
 	$out = array();
 	foreach (cp_portal_fields() as $k => $f) {
-		if (!empty($f['required'])) { $out[$f['q']] = $f['qlabel']; }
+		if (empty($f['required']) || ($stage !== null && $f['stage'] !== $stage) || !cp_portal_stage_required($f['stage'], $flow)) { continue; }
+		$out[$f['q']] = $f['qlabel'];
 	}
 	return $out;
 }
 
-function cp_portal_required_total() {
-	return count(cp_portal_required_questions());
+function cp_portal_required_total($stage = null, $flow = 'v2') {
+	return count(cp_portal_required_questions($stage, $flow));
 }
 
 /* hiányzó kötelező kérdések a válaszok alapján: q => címke */
-function cp_portal_missing($answers) {
-	$miss = cp_portal_required_questions();
+function cp_portal_missing($answers, $stage = null, $flow = 'v2') {
+	$miss = cp_portal_required_questions($stage, $flow);
 	$byq = array();
 	foreach (cp_portal_fields() as $k => $f) {
-		if (empty($f['required'])) { continue; }
+		if (!isset($miss[$f['q']]) || !cp_portal_field_active($f, $answers)) { continue; }
 		$ok = isset($answers[$k]) && !cp_portal_is_empty_value($answers[$k]);
 		$byq[$f['q']] = isset($byq[$f['q']]) ? ($byq[$f['q']] && $ok) : $ok;
 	}
@@ -290,12 +391,39 @@ function cp_portal_clean_part($p, $raw, $label) {
 		$v = is_scalar($raw) ? trim((string) $raw) : '';
 		if ($v === '') { return ''; }
 		if (preg_match('/^(\d{1,2})[:.](\d{2})$/', $v, $m)) { $v = sprintf('%02d:%02d', $m[1], $m[2]); }
-		return cp_portal_time_ok($v) ? $v : new WP_Error('invalid', $label . ': ÓÓ:PP formában add meg (pl. 18:30).');
+		return cp_portal_time_ok($v) ? $v : new WP_Error('invalid', ($label !== '' ? $label . ': ' : '') . 'ÓÓ:PP formában add meg (pl. 18:30).');
+	}
+	if ($kind === 'date') {
+		$v = is_scalar($raw) ? trim((string) $raw) : '';
+		if ($v === '') { return ''; }
+		if (preg_match('/^(\d{4})[.\-\/]\s?(\d{1,2})[.\-\/]\s?(\d{1,2})\.?$/', $v, $m)) { $v = sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]); }
+		if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) { return new WP_Error('invalid', 'A dátumot ÉÉÉÉ-HH-NN formában add meg.'); }
+		return $v;
 	}
 	if ($kind === 'tel') {
 		$v = cp_portal_clean_text($raw, $p['max']);
 		if ($v === '') { return ''; }
-		return cp_portal_phone_ok($v) ? $v : new WP_Error('invalid', 'A telefonszám nem tűnik helyesnek. Magyar számnál +36 vagy 06 kezdettel, külföldinél + és országkód.');
+		return cp_portal_phone_ok($v) ? $v : new WP_Error('invalid', ($label !== '' ? $label . ': ' : '') . 'a telefonszám nem tűnik helyesnek. Magyar számnál +36 vagy 06 kezdettel, külföldinél + és országkód.');
+	}
+	if ($kind === 'email') {
+		$v = cp_portal_clean_text($raw, $p['max']);
+		if ($v === '') { return ''; }
+		return is_email($v) ? $v : new WP_Error('invalid', ($label !== '' ? $label . ': ' : '') . 'az e-mail-cím nem tűnik helyesnek.');
+	}
+	if ($kind === 'tax') {
+		$v = strtoupper(preg_replace('/\s+/', '', cp_portal_clean_text($raw, 30)));
+		if ($v === '') { return ''; }
+		if (preg_match('/^(\d{8})-?(\d)-?(\d{2})$/', $v, $m)) { return $m[1] . '-' . $m[2] . '-' . $m[3]; }
+		if (preg_match('/^[A-Z]{2}[0-9A-Z]{2,13}$/', $v)) { return $v; }  // uniós közösségi adószám (külföldi cég)
+		return new WP_Error('invalid', 'Adószám: 12345678-1-12 formában add meg (külföldi cégnél a közösségi adószámot).');
+	}
+	if ($kind === 'reg') {
+		$v = cp_portal_clean_text($raw, 30);
+		if ($v === '') { return ''; }
+		$n = preg_replace('/[\s.]/', '', $v);
+		if (preg_match('/^(\d{2})-?(\d{2})-?(\d{6})$/', $n, $m)) { return $m[1] . '-' . $m[2] . '-' . $m[3]; }
+		if (mb_strlen($n) >= 5) { return $v; }  // külföldi / más nyilvántartási szám
+		return new WP_Error('invalid', 'Cégjegyzékszám: 01-09-123456 formában add meg.');
 	}
 	// text, textarea
 	$max = isset($p['max']) ? (int) $p['max'] : 200;
@@ -303,22 +431,35 @@ function cp_portal_clean_part($p, $raw, $label) {
 	return cp_portal_clean_text($raw, $max);
 }
 
-/* Egy mező értékének validálása.
+/* Egy mező értékének validálása. $answers: a többi mentett válasz (az összefüggő ellenőrzésekhez).
  * Visszatér: array('value' => tiszta érték vagy null (= törlés)) vagy WP_Error. */
-function cp_portal_validate($key, $raw) {
+function cp_portal_validate($key, $raw, $answers = array()) {
 	$fields = cp_portal_fields();
 	if (!isset($fields[$key])) { return new WP_Error('unknown', 'Ismeretlen mező.'); }
 	$f = $fields[$key];
+	$kind = isset($f['kind']) ? $f['kind'] : '';
 
-	if (isset($f['kind']) && $f['kind'] === 'consent') {
+	if ($kind === 'consent') {
 		$given = is_array($raw) ? !empty($raw['given']) : !empty($raw);
 		return array('value' => array('given' => (bool) $given, 'at' => gmdate('c')));
 	}
+	if ($kind === 'sablon') {
+		return new WP_Error('invalid', 'A fotósablon a sablonkészítőben menthető.');
+	}
+	if ($kind === 'bg') {
+		$v = is_scalar($raw) ? trim((string) $raw) : '';
+		return array('value' => $v === '' ? null : mb_substr($v, 0, 80));  // a szabad hátterek ellenőrzése a mentésnél (cp_portal_bg_check)
+	}
 
 	if (!isset($f['parts'])) {
-		$p = array('kind' => $f['kind'] === 'textarea' ? 'text' : $f['kind'], 'max' => isset($f['max']) ? $f['max'] : 200, 'options' => isset($f['options']) ? $f['options'] : array());
+		$p = array('kind' => $kind === 'textarea' ? 'text' : $kind, 'max' => isset($f['max']) ? $f['max'] : 200, 'options' => isset($f['options']) ? $f['options'] : array());
 		$v = cp_portal_clean_part($p, is_array($raw) ? '' : $raw, '');
 		if (is_wp_error($v)) { return $v; }
+		if ($key === 'arrival' && $v !== '' && isset($answers['schedule']['start']) && cp_portal_time_ok($answers['schedule']['start'])) {
+			if (cp_portal_minutes($v) > cp_portal_minutes($answers['schedule']['start'])) {
+				return new WP_Error('invalid', 'Az érkezés nem lehet később, mint a gép indulása (' . $answers['schedule']['start'] . ').');
+			}
+		}
 		return array('value' => $v === '' ? null : $v);
 	}
 
@@ -339,20 +480,23 @@ function cp_portal_validate($key, $raw) {
 	foreach ($f['parts'] as $pk => $p) {
 		$need = !empty($p['req']) || (!empty($p['show_if']) && (string) $out[$p['show_if'][0]] === $p['show_if'][1]);
 		if ($need && $out[$pk] === '') {
-			$e = new WP_Error('invalid', rtrim($p['label'] !== '' ? $p['label'] : $f['label'], '?') . ': ezt is add meg.');
+			$e = new WP_Error('invalid', rtrim(preg_replace('/\s*\(nem kötelező\)$/u', '', $p['label'] !== '' ? $p['label'] : $f['label']), '?') . ': ezt is add meg.');
 			$e->add_data(array('part' => $pk));
 			return $e;
 		}
 	}
 
 	if ($key === 'schedule') {
-		$a = cp_portal_minutes($out['arrival']);
 		$s = cp_portal_minutes($out['start']);
 		$e = cp_portal_minutes($out['end']);
 		// éjfélen átnyúló zárás (pl. 20:00 → 01:00): reggel 6-ig a vége a következő napra esik
 		if ($e <= $s && $e <= 6 * 60 && $s >= 12 * 60) { $e += 1440; }
-		if ($a > $s) { $er = new WP_Error('invalid', 'Az érkezés nem lehet később, mint a gép indulása.'); $er->add_data(array('part' => 'arrival')); return $er; }
-		if ($s >= $e) { $er = new WP_Error('invalid', 'A zárásnak később kell lennie, mint az indulásnak.'); $er->add_data(array('part' => 'end')); return $er; }
+		if ($s >= $e) { $er = new WP_Error('invalid', 'A szolgáltatás végének később kell lennie, mint az indulásnak.'); $er->add_data(array('part' => 'end')); return $er; }
+		if (isset($answers['arrival']) && cp_portal_time_ok($answers['arrival']) && cp_portal_minutes($answers['arrival']) > $s) {
+			$er = new WP_Error('invalid', 'A gép indulása nem lehet korábban, mint a megadott érkezés (' . $answers['arrival'] . ') – azt is írd át.');
+			$er->add_data(array('part' => 'start'));
+			return $er;
+		}
 	}
 	if ($key === 'guests_type_dress' && $out['guests'] === '' && $out['type'] === '' && $out['dress_code'] === '') {
 		return array('value' => null);
@@ -366,8 +510,8 @@ function cp_portal_validate($key, $raw) {
 function cp_portal_schema() {
 	$out = array();
 	foreach (cp_portal_fields() as $k => $f) {
-		$x = array('key' => $k, 'label' => $f['label'], 'q' => $f['q'], 'qlabel' => $f['qlabel'], 'section' => $f['section'], 'required' => !empty($f['required']));
-		foreach (array('kind', 'options', 'max', 'parts', 'help', 'ph') as $a) { if (isset($f[$a])) { $x[$a] = $f[$a]; } }
+		$x = array('key' => $k, 'label' => $f['label'], 'q' => $f['q'], 'qlabel' => $f['qlabel'], 'section' => $f['section'], 'stage' => $f['stage'], 'required' => !empty($f['required']));
+		foreach (array('kind', 'options', 'max', 'parts', 'help', 'ph', 'show_if', 'note') as $a) { if (isset($f[$a])) { $x[$a] = $f[$a]; } }
 		$out[] = $x;
 	}
 	return $out;

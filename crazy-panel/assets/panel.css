@@ -614,3 +614,26 @@ a{color:var(--o)}
 .tw-chip.c6{background:#EFE5D8;color:#6B4A2B}
 .tw-chip.c7{background:#FAE1EC;color:#8C2A5A}
 .tw-chip.c8{background:#DCEFF9;color:#1D5B7A}
+/* v1.12: ügyfélportál – kiküldés, szerződés adatai, fotósablon */
+.pp-cell.send{background:#EEF4FF;color:#2F4A7A}
+.pp-cell i.sb{font-style:normal}
+.pp-send{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin:6px 0 4px}
+.pp-send label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mu)}
+.pp-send select{height:38px;border:1.5px solid var(--li);border-radius:9px;padding:0 9px;font-size:14px;background:#fff;color:var(--ink)}
+.pp-con{border:1.5px solid var(--li);border-radius:14px;padding:12px 14px;margin:14px 0 6px;background:#FCFBF9}
+.pp-con-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pp-con-h h4{margin:0}
+.pp-con-h h4 small{font:600 12px Inter,sans-serif;color:var(--mu);background:#F1EDE7;border-radius:999px;padding:1px 8px;margin-left:4px}
+.pp-con-st{margin:6px 0 4px}
+.pp-cg{margin:10px 0 0}
+.pp-cgh{font:800 12px "Plus Jakarta Sans",sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu);margin-bottom:4px}
+.pp-cr{display:grid;grid-template-columns:150px 1fr 32px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--li);font-size:14px}
+.pp-cr span{color:var(--mu);font-size:13px}
+.pp-cr b{font-weight:600;word-break:break-word}
+.pp-cp{border:0;background:#F1EDE7;border-radius:8px;height:28px;cursor:pointer;font-size:14px}
+.pp-cp:hover{background:#E7E2DA}
+@media (max-width:560px){.pp-cr{grid-template-columns:1fr 32px}.pp-cr span{grid-column:1/-1}}
+.pp-sb{display:flex;gap:12px;align-items:flex-start}
+.pp-sb img{width:140px;border-radius:8px;border:1px solid var(--li);background:#fff}
+.pp-sb p{margin:0 0 8px;font-size:13px}
+.pp-note{color:var(--mu);font-size:12px}

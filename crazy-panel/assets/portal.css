@@ -62,15 +62,47 @@
 .cpp-done{text-align:center;margin-top:20px}
 .cpp-btn{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:54px;padding:0 22px;border:0;border-radius:999px;background:var(--g);font:800 17px "Plus Jakarta Sans",sans-serif;color:var(--ink);cursor:pointer}
 .cpp-btn:disabled{opacity:.6;cursor:default}
-#cpp-result{margin-top:14px;text-align:left}
-#cpp-result.cpp-ok{background:var(--okb);color:#1D6B47;border-radius:12px;padding:12px 14px;font-weight:600}
-#cpp-result.cpp-bad{background:var(--badb);color:#8E2A22;border-radius:12px;padding:12px 14px}
-#cpp-result p{margin:0 0 4px;font-weight:700}
-#cpp-result ul{margin:0;padding-left:20px}
-#cpp-result a{color:#8E2A22}
+.cpp-result{margin-top:14px;text-align:left}
+.cpp-result.cpp-ok{background:var(--okb);color:#1D6B47;border-radius:12px;padding:12px 14px;font-weight:600}
+.cpp-result.cpp-bad{background:var(--badb);color:#8E2A22;border-radius:12px;padding:12px 14px}
+.cpp-result p{margin:0 0 4px;font-weight:700}
+.cpp-result ul{margin:0;padding-left:20px}
+.cpp-result a{color:#8E2A22}
 .cpp-foot{text-align:center;color:var(--mu);font-size:14px;margin:22px 0 0}
 form.locked .cpp-field{background:#FBFAF8}
 @media (min-width:640px){.cpp-main{padding-top:28px}.cpp-hero h1{font-size:32px}.cpp-btn{width:auto;min-width:280px}}
+
+/* v2: lépcsők, megrendelő, háttér, fotósablon */
+.cpp-stage{margin:28px 0 0}
+.cpp-stage-h{border-left:4px solid var(--o);padding:2px 0 2px 12px;margin:0 2px 6px}
+.cpp-stage-h h2{font:800 21px/1.25 "Plus Jakarta Sans",sans-serif;margin:0}
+.cpp-stage-h p{margin:4px 0 0;color:var(--mu);font-size:14.5px}
+.cpp-sec h3{font:800 16px "Plus Jakarta Sans",sans-serif;margin:18px 2px 10px;color:var(--ink)}
+.cpp-prog+.cpp-prog{margin-top:12px}
+.cpp-ready{display:inline-block;margin-left:8px;background:var(--okb);color:#1D6B47;border-radius:999px;padding:1px 9px;font-size:12.5px;font-weight:700}
+.cpp-note{margin:10px 0 0;color:var(--mu);font-size:14px;background:#F6F3EE;border-radius:10px;padding:8px 11px}
+.cpp-contract{margin-top:12px}
+.cpp-btn.ghost{background:#fff;border:1.5px solid var(--o);color:#B85A1C;text-decoration:none;min-height:46px;font-size:15.5px}
+.cpp-bgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.cpp-bg{position:relative;cursor:pointer}
+.cpp-bg input{position:absolute;opacity:0;width:1px;height:1px}
+.cpp-bg span{display:flex;flex-direction:column;border:1.5px solid var(--li);border-radius:12px;overflow:hidden;background:#fff;height:100%}
+.cpp-bg i{display:block;aspect-ratio:1/1;background:#EEE9E1 center/cover no-repeat;font-style:normal}
+.cpp-bg i.ph{display:flex;align-items:center;justify-content:center;font:800 26px "Plus Jakarta Sans",sans-serif;color:var(--mu)}
+.cpp-bg b{font-size:13px;font-weight:600;padding:6px 7px;line-height:1.25}
+.cpp-bg small{font-size:11.5px;color:var(--bad);padding:0 7px 6px}
+.cpp-bg input:checked+span{border-color:var(--o);box-shadow:0 0 0 2px var(--o)}
+.cpp-bg input:focus-visible+span{box-shadow:0 0 0 3px rgba(232,137,74,.4)}
+.cpp-bg.taken span{opacity:.7}
+.cpp-sb{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.cpp-sb-prev{max-width:220px;width:100%;border-radius:10px;border:1px solid var(--li);background:#fff}
+.cpp-sbpage .cpp-top{position:sticky;top:0;z-index:30}
+.cpp-sbmain{max-width:1200px}
+.cpp-sbhead{max-width:760px;margin:0 0 14px}
+.cpp-sbhead a{color:#B85A1C;font-weight:600;text-decoration:none}
+.cpp-sbhead h1{font:800 26px "Plus Jakarta Sans",sans-serif;margin:8px 0 4px}
+.cpp-sbhead p{margin:0;color:var(--mu)}
+.sb-save-wrap{display:flex;flex-direction:column;gap:6px}
 
 /* ------------------------------------------------ „Helyszíni infó” (kezelői adatlap) */
 .cpp-info{background:#fff;border:1px solid #E7E2DA;border-radius:18px;padding:16px;margin:0 0 16px;font:15px/1.5 Inter,system-ui,sans-serif;color:#1A1F2B}
@@ -87,3 +119,7 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-flag.bad{background:var(--badb);color:#8E2A22}
 .cpp-flag.warn{background:var(--warnb);color:#6E4A00}
 .cpp-flag.info{background:var(--infob);color:var(--info)}
+
+/* ügyfélportál – sablonkészítő ügyfél-módban (a panel sablon.js-e, a csapatnak szóló részek nélkül) */
+.sb-client .sb-deal,.sb-client .sb-ai,.sb-client [data-png],.sb-client [data-jpg],.sb-client [data-tp],.sb-client [data-oinfo],.sb-client .sb-holes,.sb-client .sb-pick-top small{display:none!important}
+.sb-client .sb-save-wrap .sb-oinfo{display:block}

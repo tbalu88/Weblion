@@ -70,6 +70,12 @@ function cp_portal_route() {
 		cp_portal_render_message('Belépés a személyes linkkel', 'Az adatlapot az e-mailben kapott személyes linkkel tudod megnyitni. Ha nem találod a levelet, keresd az irodát, és küldünk újat.', array('status' => 401));
 		exit;
 	}
+	if ($sub === '/rendezvenyem/sablon') {
+		$s = cp_portal_session();
+		if (!$s) { wp_redirect(cp_portal_url('/rendezvenyem'), 302); exit; }
+		cp_portal_render_sablon_page($s['portal'], $s['token']);
+		exit;
+	}
 	if ($sub === '/kilepes') {
 		cp_portal_cookie_clear();
 		cp_portal_render_message('Kiléptél', 'Ezen az eszközön kiléptél a portálról. Újra belépni az e-mailben kapott linkkel tudsz.');

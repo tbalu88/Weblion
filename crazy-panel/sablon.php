@@ -80,7 +80,8 @@ function cp_sb_send($f, $path = '', $body = null) {
 add_action('wp_ajax_nopriv_cp_sb_img', 'cp_sb_ajax_img');
 add_action('wp_ajax_cp_sb_img', 'cp_sb_ajax_img');
 function cp_sb_ajax_img() {
-	if (!cp_panel_authed()) { status_header(403); exit; }
+	/* a panel, vagy az ügyfélportál sablonkészítője (érvényes portál-munkamenettel) */
+	if (!cp_panel_authed() && !(function_exists('cp_portal_session') && cp_portal_session())) { status_header(403); exit; }
 	$f = isset($_GET['f']) ? (string) wp_unslash($_GET['f']) : '';
 	if (!preg_match('/^(sablon|minta|egyedi)-[a-z0-9-]{1,80}\.(webp|png|jpe?g)$/', $f)) { status_header(400); exit; }
 	$path = cp_sb_dir() . '/' . $f;

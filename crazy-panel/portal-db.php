@@ -29,6 +29,7 @@ function cp_portal_db_install() {
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   deal_id varchar(20) NOT NULL,
   status varchar(10) NOT NULL DEFAULT 'aktiv',
+  flow varchar(4) NOT NULL DEFAULT 'v1',
   event_date date DEFAULT NULL,
   sm longtext NULL,
   sm_synced_at datetime NULL,
@@ -67,6 +68,10 @@ function cp_portal_db_install() {
   completed_at datetime NULL,
   changed_late_at datetime NULL,
   late_notified_log bigint(20) unsigned NOT NULL DEFAULT 0,
+  contract_done tinyint(3) unsigned NOT NULL DEFAULT 0,
+  contract_ready_at datetime NULL,
+  contract_changed_at datetime NULL,
+  contract_notified_log bigint(20) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY  (portal_id)
 ) $c;";
 	$sql[] = "CREATE TABLE " . cp_portal_t('notifications') . " (
@@ -102,12 +107,30 @@ function cp_portal_db_install() {
   KEY created_at (created_at),
   KEY portal_id (portal_id)
 ) $c;";
+	$prev = (string) get_option('cp_portal_db_ver');
 	foreach ($sql as $q) { dbDelta($q); }
 	$missing = cp_portal_db_missing_tables();
+	if (!$missing && $prev !== '' && version_compare($prev, '2', '<')) { cp_portal_db_migrate_2(); }
 	if (!$missing) {
 		update_option('cp_portal_db_ver', CP_PORTAL_DB_VER, true);
 	} else {
 		update_option('cp_portal_db_error', array('t' => time(), 'missing' => $missing, 'err' => $wpdb->last_error), false);
+	}
+}
+
+/* v2: a menetrend érkezés része külön mezőbe költözik (a régi „schedule” {arrival,start,end} → „arrival” + „schedule” {start,end}) */
+function cp_portal_db_migrate_2() {
+	global $wpdb;
+	$A = cp_portal_t('form_answers');
+	foreach ((array) $wpdb->get_results("SELECT portal_id, value, updated_by, updated_at FROM $A WHERE field_key = 'schedule'") as $r) {
+		$v = json_decode($r->value, true);
+		if (!is_array($v) || !isset($v['arrival'])) { continue; }
+		$arr = (string) $v['arrival'];
+		unset($v['arrival']);
+		$wpdb->update($A, array('value' => wp_json_encode($v)), array('portal_id' => (int) $r->portal_id, 'field_key' => 'schedule'));
+		if ($arr !== '' && !$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $A WHERE portal_id = %d AND field_key = 'arrival'", (int) $r->portal_id))) {
+			$wpdb->insert($A, array('portal_id' => (int) $r->portal_id, 'field_key' => 'arrival', 'value' => wp_json_encode($arr), 'updated_by' => $r->updated_by, 'updated_at' => $r->updated_at));
+		}
 	}
 }
 

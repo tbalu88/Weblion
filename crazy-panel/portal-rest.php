@@ -3,6 +3,8 @@
  *   GET   /wp-json/crazy/v1/portal/form                 mezők, válaszok, határidő, zárolás
  *   PATCH /wp-json/crazy/v1/portal/form/{field_key}     egy mező mentése (POST is elfogadott)
  *   POST  /wp-json/crazy/v1/portal/form/complete        „Kész” gomb
+ *   POST  /wp-json/crazy/v1/portal/form/contract        „Mehet a szerződés” – a szerződéshez szükséges adatok beküldése
+ *   POST  /wp-json/crazy/v1/portal/sablon               a fotósablon mentése (portal-sablon.php)
  *   POST  /wp-json/crazy/v1/salesmate/deal-stage?key=…  Salesmate-webhook (szakaszváltás)
  * Az ügyféloldali végpontok a portál sütijével azonosítanak; írásnál X-CP-Nonce fejléc is kell. */
 
@@ -10,6 +12,16 @@ if (!defined('ABSPATH')) { exit; }
 
 add_action('rest_api_init', 'cp_portal_rest_routes');
 function cp_portal_rest_routes() {
+	register_rest_route('crazy/v1', '/portal/form/contract', array(
+		'methods' => 'POST',
+		'permission_callback' => 'cp_portal_rest_perm_write',
+		'callback' => 'cp_portal_rest_contract',
+	));
+	register_rest_route('crazy/v1', '/portal/sablon', array(
+		'methods' => 'POST',
+		'permission_callback' => 'cp_portal_rest_perm_write',
+		'callback' => 'cp_portal_rest_sablon_save',
+	));
 	register_rest_route('crazy/v1', '/portal/form/complete', array(
 		'methods' => 'POST',
 		'permission_callback' => 'cp_portal_rest_perm_write',
@@ -86,6 +98,20 @@ function cp_portal_rest_complete() {
 		$list = array();
 		foreach ($r['missing'] as $q => $label) { $list[] = array('q' => $q, 'label' => $label); }
 		return new WP_REST_Response(array('ok' => false, 'code' => 'missing', 'message' => 'Még hiányzik néhány kötelező válasz.', 'missing' => $list), 422);
+	}
+	return $r;
+}
+
+function cp_portal_rest_contract() {
+	$s = cp_portal_session();
+	if (cp_portal_locked($s['portal'])) {
+		return new WP_REST_Response(array('ok' => false, 'code' => 'locked', 'message' => 'A határidő lejárt, az adatlap már nem módosítható.'), 423);
+	}
+	$r = cp_portal_contract_submit($s['portal'], 'ugyfel');
+	if (empty($r['ok'])) {
+		$list = array();
+		foreach ($r['missing'] as $q => $label) { $list[] = array('q' => $q, 'label' => $label); }
+		return new WP_REST_Response(array('ok' => false, 'code' => 'missing', 'message' => 'A szerződéshez még hiányzik néhány adat.', 'missing' => $list), 422);
 	}
 	return $r;
 }

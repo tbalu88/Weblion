@@ -13,7 +13,7 @@
   var retryT = null, retryMs = 3000;
 
   function $all(root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
-  function fieldEls() { return $all(form, '[data-field]'); }
+  function fieldEls() { return $all(form, '[data-field]').filter(function (f) { return f.getAttribute('data-kind') !== 'sablon'; }); }
   function byKey(k) { return form.querySelector('[data-field="' + k + '"]'); }
 
   /* ---------------------------------------------------- olvasás / beírás */
@@ -79,11 +79,26 @@
     var p = part ? fd.querySelector('[data-part="' + part + '"]') : null;
     if (p) p.classList.add('bad');
   }
+  /* két sáv: 1. szerződéshez (a), 2. részletek (b = összes − a) */
   function progress(b) {
     if (!b || b.required_done == null) return;
-    var d = document.getElementById('cpp-done'), bar = document.getElementById('cpp-bar');
-    if (d) d.textContent = b.required_done;
-    if (bar) bar.style.width = Math.round(b.required_done / (b.required_total || C.total || 7) * 100) + '%';
+    var ca = b.contract_total || 0, cd = b.contract_done || 0;
+    var bt = (b.required_total || 0) - ca, bd = Math.max(0, (b.required_done || 0) - cd);
+    var set = function (id, d, t) {
+      var e = document.getElementById('cpp-done-' + id), bar = document.getElementById('cpp-bar-' + id);
+      if (e) e.textContent = d;
+      if (bar) bar.style.width = (t ? Math.round(d / t * 100) : 0) + '%';
+    };
+    if (b.contract_total != null) set('a', cd, ca);
+    set('b', bd, bt);
+  }
+  /* magánszemély / cég: a hozzá tartozó mezőcsoport látszik */
+  function showFields() {
+    $all(form, '[data-show-if-field]').forEach(function (fd) {
+      var x = fd.getAttribute('data-show-if-field').split('=');
+      var src = byKey(x[0]);
+      fd.hidden = !src || read(src) !== x[1];
+    });
   }
   function banner(msg) {
     var st = document.getElementById('cpp-status');
@@ -131,8 +146,9 @@
     clearTimeout(s.timer); s.timer = null;
     if (locked) return Promise.resolve();
     var v = read(fd), j = JSON.stringify(v);
-    if (!force && j === s.saved) return Promise.resolve();
-    if (s.saved === null && (blank(v) || j === s.initial)) return Promise.resolve();   // üres, vagy csak az előtöltés van benne: nincs mit menteni
+    // force: true = újraküldés (függő mentés); 'accept' = a gombnyomás az előtöltött (foglalás szerinti) értéket is jóváhagyja
+    if (force !== true && j === s.saved) return Promise.resolve();
+    if (s.saved === null && (blank(v) || (j === s.initial && force !== 'accept'))) return Promise.resolve();   // üres, vagy csak az előtöltés van benne: nincs mit menteni
     if (s.busy) { s.again = true; return s.wait; }
     s.busy = true;
     pendingPut(key, v);
@@ -198,6 +214,7 @@
     var fd = e.target.closest('[data-field]');
     if (!fd) return;
     showIf(fd);
+    showFields();
     if (e.target.type === 'radio' || e.target.type === 'checkbox') {
       if (fd.getAttribute('data-kind') === 'object' && incomplete(fd)) { mark(fd, '', ''); return; }
       save(fd);
@@ -228,49 +245,61 @@
     });
   })();
 
-  /* ---------------------------------------------------- „Kész” */
-  var done = document.getElementById('cpp-complete');
-  var out = document.getElementById('cpp-result');
-  if (done) done.addEventListener('click', function () {
-    if (locked) return;
-    done.disabled = true;
-    out.className = ''; out.textContent = 'Mentés…';
-    Promise.all(fieldEls().map(function (fd) { return save(fd); })).then(function () {
-      return fetch(C.rest + '/complete', { method: 'POST', credentials: 'same-origin', headers: { 'X-CP-Nonce': C.nonce } });
-    }).then(function (r) {
-      return r.json().then(function (b) { return { r: r, b: b || {} }; }, function () { return { r: r, b: {} }; });
-    }).then(function (x) {
-      done.disabled = false;
-      $all(form, '.cpp-field.miss').forEach(function (f) { f.classList.remove('miss'); });
-      if (x.r.ok && x.b.ok) {
-        progress(x.b);
-        out.className = 'cpp-ok';
-        out.textContent = 'Köszönjük! Megkaptuk az adatlapot' + (x.b.first ? ', és küldtünk egy visszaigazolást e-mailben.' : '.');
-        return;
-      }
-      if (x.r.status === 423) { lockUI(x.b.message); out.textContent = ''; return; }
-      if (x.b.code === 'missing') {
-        out.className = 'cpp-bad';
-        out.innerHTML = '';
-        var p = document.createElement('p'); p.textContent = 'Még hiányzik:'; out.appendChild(p);
-        var ul = document.createElement('ul');
-        (x.b.missing || []).forEach(function (m) {
-          var fd = form.querySelector('[data-q="' + m.q + '"].req');
-          if (fd) fd.classList.add('miss');
-          var li = document.createElement('li'), a = document.createElement('a');
-          a.href = fd ? '#' + fd.id : '#'; a.textContent = m.label;
-          a.addEventListener('click', function (ev) { if (fd) { ev.preventDefault(); fd.scrollIntoView({ behavior: 'smooth', block: 'center' }); var i = fd.querySelector('input,textarea'); if (i) setTimeout(function () { i.focus({ preventScroll: true }); }, 400); } });
-          li.appendChild(a); ul.appendChild(li);
-        });
-        out.appendChild(ul);
-        return;
-      }
-      out.className = 'cpp-bad';
-      out.textContent = x.b.message || 'Nem sikerült – próbáld újra pár perc múlva.';
-    }, function () {
-      done.disabled = false;
-      out.className = 'cpp-bad';
-      out.textContent = 'Nincs kapcsolat – a válaszaid megmaradnak, próbáld újra, ha visszajött a net.';
+  /* ---------------------------------------------------- „Mehet a szerződés” és „Kész” */
+  function submitter(btnId, outId, path, fields, okText) {
+    var btn = document.getElementById(btnId), out = document.getElementById(outId);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (locked) return;
+      btn.disabled = true;
+      out.className = 'cpp-result'; out.textContent = 'Mentés…';
+      Promise.all(fields().filter(function (fd) { return !fd.hidden; }).map(function (fd) { return save(fd, 'accept'); })).then(function () {
+        return fetch(C.rest + '/' + path, { method: 'POST', credentials: 'same-origin', headers: { 'X-CP-Nonce': C.nonce } });
+      }).then(function (r) {
+        return r.json().then(function (b) { return { r: r, b: b || {} }; }, function () { return { r: r, b: {} }; });
+      }).then(function (x) {
+        btn.disabled = false;
+        $all(form, '.cpp-field.miss').forEach(function (f) { f.classList.remove('miss'); });
+        if (x.r.ok && x.b.ok) {
+          progress(x.b);
+          out.className = 'cpp-result cpp-ok';
+          out.textContent = okText(x.b);
+          return;
+        }
+        if (x.r.status === 423) { lockUI(x.b.message); out.textContent = ''; return; }
+        if (x.b.code === 'missing') {
+          out.className = 'cpp-result cpp-bad';
+          out.innerHTML = '';
+          var p = document.createElement('p'); p.textContent = x.b.message || 'Még hiányzik:'; out.appendChild(p);
+          var ul = document.createElement('ul');
+          (x.b.missing || []).forEach(function (m) {
+            var fd = $all(form, '[data-q="' + m.q + '"].req').filter(function (f) { return !f.hidden; })[0] || null;
+            if (fd) fd.classList.add('miss');
+            var li = document.createElement('li'), a = document.createElement('a');
+            a.href = fd ? '#' + fd.id : '#'; a.textContent = m.label;
+            a.addEventListener('click', function (ev) { if (fd) { ev.preventDefault(); fd.scrollIntoView({ behavior: 'smooth', block: 'center' }); var i = fd.querySelector('input,textarea'); if (i) setTimeout(function () { i.focus({ preventScroll: true }); }, 400); } });
+            li.appendChild(a); ul.appendChild(li);
+          });
+          out.appendChild(ul);
+          return;
+        }
+        out.className = 'cpp-result cpp-bad';
+        out.textContent = x.b.message || 'Nem sikerült – próbáld újra pár perc múlva.';
+      }, function () {
+        btn.disabled = false;
+        out.className = 'cpp-result cpp-bad';
+        out.textContent = 'Nincs kapcsolat – a válaszaid megmaradnak, próbáld újra, ha visszajött a net.';
+      });
     });
+  }
+  var stageA = function () { return fieldEls().filter(function (fd) { return fd.closest('[data-stage="a"]'); }); };
+  submitter('cpp-contract', 'cpp-contract-result', 'contract', stageA, function (b) {
+    var r = document.getElementById('cpp-ready'); if (r) r.hidden = false;
+    return b.first ? 'Köszönjük! Megkaptuk a szerződéshez szükséges adatokat – hamarosan küldjük a szerződést. A 2. részt ráér a határidőig kitölteni.' :
+      b.changed ? 'Köszönjük, jeleztük a kollégáknak, hogy módosultak az adatok.' : 'Köszönjük, az adatok már nálunk vannak.';
   });
+  submitter('cpp-complete', 'cpp-result', 'complete', fieldEls, function (b) {
+    return 'Köszönjük! Megkaptuk az adatlapot' + (b.first ? ', és küldtünk egy visszaigazolást e-mailben.' : '.');
+  });
+  showFields();
 })();

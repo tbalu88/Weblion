@@ -54,6 +54,8 @@ function cp_portal_sm_snapshot($deal_id) {
 		'start'    => cp_portal_time_ok($start) ? $start : '',
 		'hours'    => is_numeric($hours) ? (float) $hours : 0,
 		'package'  => $package,
+		'selfie'   => $sp,
+		'spin'     => $spin,
 		'venue'    => cp_panel_str(cp_panel_get($d, $p['f_loc'])),
 		'guests'   => cp_panel_str(cp_panel_get($d, $p['f_guests'])),
 		'owner'    => cp_panel_str(cp_panel_get($d, 'owner')),
@@ -82,13 +84,13 @@ function cp_portal_sm_refresh($portal, $max_age = 300) {
 
 /* ------------------------------------------------------------ portál létrehozása */
 
-/* Szakaszváltás jelzése (webhook, óránkénti tartalék, panel „Szerződés” pipa).
+/* Szakaszváltás jelzése (webhook, óránkénti tartalék, panel „Szerződés” pipa) – csak ha az automatikus létrehozás be van kapcsolva.
  * Idempotens: ugyanarra a dealre második portál nem jön létre. */
 function cp_portal_on_stage($deal_id, $stage = '', $source = '') {
 	$deal_id = (string) $deal_id;
 	if (!cp_portal_db_ready()) { return 'db'; }
 	if (cp_portal_mode() === 'off') { return 'off'; }
-	if (!cp_portal_deal_allowed($deal_id)) { return 'not_selected'; }
+	if (!cp_portal_deal_allowed($deal_id)) { return 'auto_off'; }  // az automatikus létrehozás alapból ki van kapcsolva
 	if (cp_portal_get_by_deal($deal_id)) { return 'exists'; }
 	$snap = cp_portal_sm_snapshot($deal_id);
 	if (is_wp_error($snap)) { cp_portal_error_add($deal_id, 'létrehozás', $snap->get_error_message()); return 'sm_error'; }
@@ -100,7 +102,7 @@ function cp_portal_on_stage($deal_id, $stage = '', $source = '') {
 
 /* Portál létrehozása (a panelből kézzel is: a szakaszt ott nem nézzük).
  * Visszatér: a portál vagy WP_Error. */
-function cp_portal_create($deal_id, $snap = null, $source = 'panel') {
+function cp_portal_create($deal_id, $snap = null, $source = 'panel', $flow = 'v1', $welcome = true) {
 	global $wpdb;
 	if (!cp_portal_db_ready()) { return new WP_Error('db', 'A portál táblái még nem jöttek létre.'); }
 	$deal_id = (string) $deal_id;
@@ -117,8 +119,8 @@ function cp_portal_create($deal_id, $snap = null, $source = 'panel') {
 
 	$now = cp_portal_db_now();
 	$wpdb->query($wpdb->prepare(
-		'INSERT IGNORE INTO ' . cp_portal_t('portals') . ' (deal_id, status, event_date, sm, sm_synced_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-		$deal_id, 'aktiv', $snap['date'], wp_json_encode($snap), $now, $now, $now
+		'INSERT IGNORE INTO ' . cp_portal_t('portals') . ' (deal_id, status, flow, event_date, sm, sm_synced_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+		$deal_id, 'aktiv', $flow === 'v2' ? 'v2' : 'v1', $snap['date'], wp_json_encode($snap), $now, $now, $now
 	));
 	$created = (int) $wpdb->rows_affected === 1;
 	$portal = cp_portal_get_by_deal($deal_id);
@@ -128,12 +130,71 @@ function cp_portal_create($deal_id, $snap = null, $source = 'panel') {
 	cp_portal_state_put($portal->id, array('required_done' => 0, 'status' => 'hianyos'));
 	cp_portal_sm_queue($deal_id, 'status', 'hianyos');
 	update_option('cp_portal_created_last', array('t' => time(), 'deal' => $deal_id, 'src' => (string) $source), false);
+	if (!$welcome) { return $portal; }
 	if ($snap['email'] === '') {
 		cp_portal_error_add($deal_id, 'üdvözlő levél', 'A deal kapcsolattartójának nincs e-mail-címe a Salesmate-ben – a linket a panelből lehet kimásolni.');
 	} else {
 		cp_portal_notify_once($portal, 'welcome', 'email', function () use ($portal) { return cp_portal_send_client_mail($portal, 'welcome'); });
 	}
 	return $portal;
+}
+
+/* ------------------------------------------------------------ kézi kiküldés (a szerződés előtt)
+ * A panel „Ügyfélportál kiküldése” gombja: létrehozza a portált (ha még nincs), elküldi a meghívó levelet
+ * (újraküldésnél új linkkel), és a dealt a Salesmate-ben az „Adatlap kiküldve” szakaszba teszi – csak előre,
+ * ajánlati szakaszból; aláírt szerződésnél a szakaszhoz nem nyúl. $type: '' | magan | ceg (előre beállított megrendelőtípus).
+ * Visszatér: array(portal, to, stage, stage_msg, created) vagy WP_Error. */
+function cp_portal_send($deal_id, $type = '') {
+	if (!cp_portal_db_ready()) { return new WP_Error('db', 'A portál táblái még nem jöttek létre.'); }
+	if (cp_portal_mode() !== 'on') { return new WP_Error('off', 'Az ügyfélportál ki van kapcsolva (WP admin → Beállítások → Ügyfélportál).'); }
+	$deal_id = (string) $deal_id;
+	$snap = cp_portal_sm_snapshot($deal_id);
+	if (is_wp_error($snap)) { return $snap; }
+	if ($snap['email'] === '') { return new WP_Error('no_email', 'A deal kapcsolattartójának nincs e-mail-címe a Salesmate-ben – előbb ott add meg.'); }
+	$portal = cp_portal_get_by_deal($deal_id);
+	$created = false;
+	if (!$portal) {
+		$portal = cp_portal_create($deal_id, $snap, 'panel', 'v2', false);
+		if (is_wp_error($portal)) { return $portal; }
+		$created = true;
+	} else {
+		cp_portal_update($portal->id, array('sm' => $snap, 'sm_synced_at' => cp_portal_db_now()));
+		$portal = cp_portal_get($portal->id);
+	}
+	if (in_array($type, array('magan', 'ceg'), true)) {
+		$ans = cp_portal_answers($portal->id);
+		if (empty($ans['client_type'])) { cp_portal_save_field($portal, 'client_type', $type, 'iroda'); }
+	}
+	$to = cp_portal_send_client_mail($portal, 'invite');
+	if (is_wp_error($to)) { return $to; }
+	cp_portal_notify_log($portal, 'invite', 'email', 'ok: ' . $to);
+	if ($created) { cp_portal_notify_log($portal, 'welcome', 'email', 'meghívó (kézi kiküldés)'); }
+
+	// Salesmate: „Adatlap kiküldve” szakasz (csak ajánlati szakaszból előre)
+	$o = cp_portal_opts();
+	$p = cp_panel_opts();
+	$target = cp_portal_sent_stage();
+	$cur = (string) $snap['stage'];
+	$stage_msg = '';
+	if (!empty($o['sent_stage_write']) && $target !== '' && cp_panel_lc($cur) !== cp_panel_lc($target)) {
+		$pending = array_map('cp_panel_lc', cp_panel_lines($p['pending_stages']));
+		if ($snap['status'] === 'won' || !in_array(cp_panel_lc($cur), $pending, true)) {
+			$stage_msg = 'A Salesmate-szakasz marad („' . $cur . '”), mert már nem ajánlati szakasz.';
+		} else {
+			$body = array('stage' => $target);
+			if ($snap['pipeline'] !== '') { $body['pipeline'] = $snap['pipeline']; }
+			$put = cp_sm_put_deal($deal_id, $body);
+			if (is_wp_error($put)) {
+				$stage_msg = 'A Salesmate-szakaszt nem sikerült átállítani („' . $target . '”): ' . $put->get_error_message();
+				cp_portal_error_add($deal_id, 'szakaszváltás', $put->get_error_message());
+			} else {
+				$cur = $target;
+				$stage_msg = 'Salesmate-szakasz: ' . $target;
+				if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+			}
+		}
+	}
+	return array('portal' => cp_portal_get($portal->id), 'to' => $to, 'stage' => $cur, 'stage_msg' => $stage_msg, 'created' => $created);
 }
 
 /* ------------------------------------------------------------ visszaírás, újrapróbálkozással
@@ -146,6 +207,7 @@ function cp_portal_sm_queue($deal_id, $kind, $payload) {
 	if ($kind === 'status' && trim((string) $o['sm_f_status']) === '') { return; }
 	if ($kind === 'note' && empty($o['sm_notes'])) { return; }
 	if ($kind === 'venue' && cp_portal_sm_venue_field() === '') { return; }
+	if ($kind === 'bg') { $p = cp_panel_opts(); if (empty($p['bg_write']) || $p['f_bg'] === '') { return; } }
 	$q = get_option('cp_portal_smq', array());
 	if (!is_array($q)) { $q = array(); }
 	$k = $deal_id . '|' . $kind . ($kind === 'note' ? '|' . md5((string) $payload) : '');
@@ -175,6 +237,12 @@ function cp_portal_sm_do($job) {
 	$o = cp_portal_opts();
 	if ($job['kind'] === 'venue') {
 		return cp_sm_put_deal($job['deal'], array(cp_portal_sm_venue_field() => (string) $job['payload']));
+	}
+	if ($job['kind'] === 'bg') {
+		$p = cp_panel_opts();
+		$r = cp_sm_put_deal($job['deal'], array($p['f_bg'] => (string) $job['payload']));
+		if (!is_wp_error($r) && function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+		return $r;
 	}
 	if ($job['kind'] === 'status') {
 		return cp_sm_put_deal($job['deal'], array(trim((string) $o['sm_f_status']) => cp_portal_sm_status_value((string) $job['payload'])));
@@ -256,7 +324,7 @@ function cp_portal_shutdown() {
  * vannak és még nincs portáljuk, létrehoz legfeljebb 10-et futásonként. */
 function cp_portal_hourly_scan() {
 	$o = cp_portal_opts();
-	if (cp_portal_mode() === 'off' || empty($o['cron_fallback']) || !cp_portal_db_ready()) { return; }
+	if (cp_portal_mode() === 'off' || empty($o['auto_create']) || empty($o['cron_fallback']) || !cp_portal_db_ready()) { return; }
 	$from = cp_portal_today();
 	$to = cp_portal_ymd_add($from, 365);
 	$info = null;

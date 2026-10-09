@@ -2,7 +2,7 @@
 /* Ügyfélportál – Crazy panel oldali AJAX (a panel közös jelszavas belépésével és CSRF-kulcsával: cp_el_auth)
  *   cp_portal_p_get     portál-részletező adatai egy dealhez
  *   cp_portal_p_save    irodai szerkesztés (updated_by = iroda; határidő után „módosítva”)
- *   cp_portal_p_create  portál bekapcsolása / létrehozása egy dealhez (dealenkénti kapcsoló)
+ *   cp_portal_p_send    „Ügyfélportál kiküldése”: létrehozás + meghívó levél + Salesmate „Adatlap kiküldve” (újraküldés is)
  *   cp_portal_p_link    link: új másolása | újraküldése e-mailben | visszavonása
  *   cp_portal_p_errors  hibalista (Salesmate-visszaírás, értesítések), törlés */
 
@@ -22,6 +22,8 @@ function cp_portal_panel_cfg() {
 		'mode' => cp_portal_mode(),
 		'schema' => cp_portal_schema(),
 		'total' => cp_portal_required_total(),
+		'sentStage' => cp_portal_sent_stage(),
+		'sbFile' => admin_url('admin-ajax.php') . '?action=cp_portal_sb_file&f=',
 		'open' => isset($_GET['portal']) ? preg_replace('/[^0-9]/', '', (string) wp_unslash($_GET['portal'])) : '',
 		'errors' => count(cp_portal_errors()),
 	);
@@ -33,6 +35,7 @@ function cp_portal_p_detail($deal_id) {
 		'id' => $deal_id,
 		'mode' => cp_portal_mode(),
 		'selected' => isset(cp_portal_selected_deals()[$deal_id]),
+		'sentStage' => cp_portal_sent_stage(),
 		'portal' => null,
 		'errors' => array_slice(cp_portal_errors($deal_id), 0, 20),
 	);
@@ -54,8 +57,17 @@ function cp_portal_p_detail($deal_id) {
 	}
 	$notes = array();
 	foreach (cp_portal_notifications($portal->id) as $n) { $notes[] = array('type' => $n->type, 'ch' => $n->channel, 't' => cp_portal_db_ts($n->sent_at), 'r' => $n->result); }
+	$flow = cp_portal_flow($portal);
+	$tpl = isset($answers['photo_template']) && is_array($answers['photo_template']) ? $answers['photo_template'] : null;
 	$out['portal'] = array(
 		'pid' => (int) $portal->id,
+		'flow' => $flow,
+		'contract' => array_merge(cp_portal_contract_data($portal, $answers), array(
+			'done' => (int) $st->contract_done, 'total' => cp_portal_required_total('a', $flow === 'v1' ? 'v2' : $flow),
+			'missing' => array_values(cp_portal_missing($answers, 'a', 'v2')),
+			'ready' => cp_portal_db_ts($st->contract_ready_at), 'changed' => cp_portal_db_ts($st->contract_changed_at),
+		)),
+		'sablon' => $tpl ? array('name' => isset($tpl['name']) ? $tpl['name'] : '', 'at' => isset($tpl['at']) ? (int) $tpl['at'] : 0, 'snap' => isset($tpl['snap']) ? $tpl['snap'] : null, 'preview' => !empty($tpl['preview']) ? $tpl['preview'] : '', 'logo' => !empty($tpl['logo']) ? $tpl['logo'] : '') : null,
 		'status' => $portal->status,
 		'event_date' => $portal->event_date,
 		'created' => cp_portal_db_ts($portal->created_at),
@@ -63,8 +75,8 @@ function cp_portal_p_detail($deal_id) {
 		'answers' => (object) $answers,
 		'meta' => (object) $meta,
 		'prefill' => cp_portal_prefill($portal),
-		'state' => array('st' => $st->status, 'done' => (int) $st->required_done, 'total' => cp_portal_required_total(), 'completed' => cp_portal_db_ts($st->completed_at), 'late' => cp_portal_db_ts($st->changed_late_at)),
-		'missing' => array_values(cp_portal_missing($answers)),
+		'state' => array('st' => $st->status, 'done' => (int) $st->required_done, 'total' => cp_portal_required_total(null, $flow), 'completed' => cp_portal_db_ts($st->completed_at), 'late' => cp_portal_db_ts($st->changed_late_at)),
+		'missing' => array_values(cp_portal_missing($answers, null, $flow)),
 		'deadline' => $di ? array('text' => $di['text'], 'late' => $di['late'], 'passed' => time() >= $di['deadline']) : null,
 		'locked' => cp_portal_locked($portal),
 		'flags' => cp_portal_flags_build($portal, $answers, $st),
@@ -96,24 +108,18 @@ function cp_portal_ajax_p_save() {
 	wp_send_json_success(cp_portal_p_detail($id));
 }
 
-add_action('wp_ajax_nopriv_cp_portal_p_create', 'cp_portal_ajax_p_create');
-add_action('wp_ajax_cp_portal_p_create', 'cp_portal_ajax_p_create');
-function cp_portal_ajax_p_create() {
+add_action('wp_ajax_nopriv_cp_portal_p_send', 'cp_portal_ajax_p_send');
+add_action('wp_ajax_cp_portal_p_send', 'cp_portal_ajax_p_send');
+add_action('wp_ajax_nopriv_cp_portal_p_create', 'cp_portal_ajax_p_send');
+add_action('wp_ajax_cp_portal_p_create', 'cp_portal_ajax_p_send');
+function cp_portal_ajax_p_send() {
 	cp_el_auth();
 	$id = cp_portal_p_deal_id();
-	if (cp_portal_mode() === 'off') { cp_el_err('Az ügyfélportál ki van kapcsolva (WP admin → Beállítások → Ügyfélportál).', 409); }
-	if (cp_portal_mode() === 'selected') {
-		// dealenkénti kapcsoló: felvesszük a kiválasztottak közé
-		$o = get_option(CP_PORTAL_OPT, array());
-		if (!is_array($o)) { $o = array(); }
-		$sel = cp_portal_selected_deals();
-		$sel[$id] = 1;
-		$o['deals'] = implode("\n", array_keys($sel));
-		update_option(CP_PORTAL_OPT, $o, false);
-	}
-	$r = cp_portal_create($id, null, 'panel');
+	$type = isset($_POST['type']) ? sanitize_key(wp_unslash($_POST['type'])) : '';
+	$r = cp_portal_send($id, $type);
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 400); }
-	wp_send_json_success(cp_portal_p_detail($id));
+	$msg = ($r['created'] ? 'Ügyfélportál kiküldve: ' : 'Ügyfélportál újraküldve: ') . $r['to'] . ($r['stage_msg'] !== '' ? ' · ' . $r['stage_msg'] : '');
+	wp_send_json_success(array_merge(cp_portal_p_detail($id), array('msg' => $msg, 'stage' => $r['stage'])));
 }
 
 add_action('wp_ajax_nopriv_cp_portal_p_link', 'cp_portal_ajax_p_link');

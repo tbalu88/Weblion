@@ -1,7 +1,15 @@
 <?php
-/* Ügyfélportál – adatlap: mentés mezőnként, állapot (required_done, hianyos/kesz/modositva), zárolás */
+/* Ügyfélportál – adatlap: mentés mezőnként, állapot, zárolás, szerződéses lépcső
+ *   a) szerződéshez szükséges adatok – azonnal kötelező; „Mehet a szerződés” jelzés a panelen + Pumble
+ *   b) a rendezvény részletei – a határidőig (rendezvény − 5 nap; késői szerződésnél a meglévő szabály)
+ *   c) háttér és fotósablon – nem kötelező, a határidőig módosítható */
 
 if (!defined('ABSPATH')) { exit; }
+
+/* v1 = a szerződés aláírása után automatikusan jött létre; v2 = kézzel kiküldve, a szerződés előtt */
+function cp_portal_flow($portal) {
+	return isset($portal->flow) && $portal->flow === 'v2' ? 'v2' : 'v1';
+}
 
 /* le van-e zárva az ügyfél előtt (határidő után, vagy lezárt portál) */
 function cp_portal_locked($portal) {
@@ -22,62 +30,102 @@ function cp_portal_status_label($st) {
 
 /* az állapot újraszámolása; ha változott, Salesmate-visszaírás a sorba */
 function cp_portal_recompute($portal, $extra = array()) {
+	$flow = cp_portal_flow($portal);
 	$answers = cp_portal_answers($portal->id);
-	$total = cp_portal_required_total();
-	$done = $total - count(cp_portal_missing($answers));
+	$total = cp_portal_required_total(null, $flow);
+	$done = $total - count(cp_portal_missing($answers, null, $flow));
+	$ctotal = cp_portal_required_total('a', $flow);
+	$cdone = $ctotal - count(cp_portal_missing($answers, 'a', $flow));
 	$st = cp_portal_state($portal->id);
 	$changed_late = !empty($extra['changed_late_at']) || !empty($st->changed_late_at);
 	$status = cp_portal_status_of($done, $total, $changed_late);
-	$data = array_merge(array('required_done' => $done, 'status' => $status), $extra);
+	$data = array_merge(array('required_done' => $done, 'status' => $status, 'contract_done' => $cdone), $extra);
 	cp_portal_state_put($portal->id, $data);
 	if ($status !== $st->status) {
 		cp_portal_sm_queue($portal->deal_id, 'status', $status);
 	}
-	return array('required_done' => $done, 'required_total' => $total, 'status' => $status);
+	return array('required_done' => $done, 'required_total' => $total, 'status' => $status, 'contract_done' => $cdone, 'contract_total' => $ctotal);
 }
 
 /* Egy mező mentése. $by: ugyfel | iroda | rendszer
  * Visszatér: array(value, required_done, required_total, status, saved_at) vagy WP_Error. */
 function cp_portal_save_field($portal, $key, $raw, $by) {
-	$v = cp_portal_validate($key, $raw);
+	$rows = cp_portal_answer_rows($portal->id);
+	$answers = array();
+	foreach ($rows as $k => $r) { $answers[$k] = $r['value']; }
+	$v = cp_portal_validate($key, $raw, $answers);
 	if (is_wp_error($v)) { return $v; }
 	$new = $v['value'];
 	if ($by === 'ugyfel' && cp_portal_locked($portal)) {
 		return new WP_Error('locked', 'A határidő lejárt, az adatlap már nem módosítható. Változás esetén írj nekünk.', array('status' => 423));
 	}
-	$rows = cp_portal_answer_rows($portal->id);
-	$old = isset($rows[$key]) ? $rows[$key]['value'] : null;
+	$old = isset($answers[$key]) ? $answers[$key] : null;
 	if ($key === 'retention_consent' && $old !== null && $new !== null && !empty($old['given']) === !empty($new['given'])) {
 		$new = $old; // a hozzájárulás időpontja csak tényleges változáskor frissül
+	}
+	if ($key === 'background' && $new !== null && $new !== $old) {
+		$chk = cp_portal_bg_check($portal, $new);
+		if (is_wp_error($chk)) { return $chk; }
+		$new = $chk;
 	}
 	$saved_at = time();
 	if (wp_json_encode($old) === wp_json_encode($new)) {
 		$st = cp_portal_state($portal->id);
-		return array('value' => $new, 'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(), 'status' => $st->status, 'saved_at' => $saved_at, 'unchanged' => true);
+		return array('value' => $new, 'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(null, cp_portal_flow($portal)), 'status' => $st->status, 'saved_at' => $saved_at, 'unchanged' => true);
 	}
 	cp_portal_answer_put($portal->id, $key, $new, $by);
 	$log_id = cp_portal_log_add($portal->id, $key, $old, $new, $by);
 
+	$fields = cp_portal_fields();
 	$extra = array();
 	$di = cp_portal_deadline_info($portal);
 	if ($di && time() >= $di['deadline'] && $key !== 'retention_consent') {
 		// határidő utáni módosítás → „módosítva” állapot, MÓDOSÍTVA címke, late_change Pumble a következő futáskor
 		$extra['changed_late_at'] = cp_portal_db_now();
 	}
+	$st = cp_portal_state($portal->id);
+	if ($fields[$key]['stage'] === 'a' && !empty($st->contract_ready_at)) {
+		// a „mehet a szerződés” jelzés után módosult szerződéses adat
+		$extra['contract_changed_at'] = cp_portal_db_now();
+	}
 	$res = cp_portal_recompute($portal, $extra);
 
 	if ($key === 'venue_address' || $key === 'venue_room') {
 		cp_portal_sm_queue($portal->deal_id, 'venue', cp_portal_venue_text(cp_portal_answers($portal->id)));
 	}
+	if ($key === 'background') {
+		cp_portal_sm_queue($portal->deal_id, 'bg', (string) $new);
+	}
 	return array_merge($res, array('value' => $new, 'saved_at' => $saved_at, 'log_id' => $log_id));
+}
+
+/* „Mehet a szerződés”: a szerződéshez szükséges adatok beküldése (ügyfél gombja, vagy az óránkénti tartalék).
+ * Első alkalommal, illetve ha a jelzés óta módosult valami, Pumble-értesítés megy a portál webhookjára. */
+function cp_portal_contract_submit($portal, $by = 'ugyfel') {
+	$flow = cp_portal_flow($portal);
+	$answers = cp_portal_answers($portal->id);
+	$miss = cp_portal_missing($answers, 'a', $flow === 'v1' ? 'v2' : $flow);
+	if ($miss) { return array('ok' => false, 'missing' => $miss); }
+	$st = cp_portal_state($portal->id);
+	$first = empty($st->contract_ready_at);
+	$changed = !$first && !empty($st->contract_changed_at);
+	if ($first || $changed) {
+		cp_portal_state_put($portal->id, array('contract_ready_at' => cp_portal_db_now(), 'contract_changed_at' => null));
+		$type = $first ? 'contract_ready' : 'contract_update:' . time();
+		cp_portal_notify_once($portal, $type, 'pumble', function () use ($portal, $first) { return cp_portal_pumble_contract($portal, $first); });
+	}
+	$res = cp_portal_recompute($portal);
+	return array_merge($res, array('ok' => true, 'first' => $first, 'changed' => $changed));
 }
 
 /* „Kész” gomb: csak akkor sikeres, ha minden kötelező megvan */
 function cp_portal_complete($portal) {
+	$flow = cp_portal_flow($portal);
 	$answers = cp_portal_answers($portal->id);
-	$miss = cp_portal_missing($answers);
+	$miss = cp_portal_missing($answers, null, $flow);
 	if ($miss) { return array('ok' => false, 'missing' => $miss); }
 	$st = cp_portal_state($portal->id);
+	if ($flow === 'v2' && empty($st->contract_ready_at)) { cp_portal_contract_submit($portal); }
 	$first = empty($st->completed_at);
 	$res = cp_portal_recompute($portal, array('completed_at' => cp_portal_db_now()));
 	if ($first) {
@@ -98,6 +146,7 @@ function cp_portal_venue_text($answers) {
 
 /* a /form válasz (és az oldalba ágyazott kezdőadat) */
 function cp_portal_form_payload($portal) {
+	$flow = cp_portal_flow($portal);
 	$rows = cp_portal_answer_rows($portal->id);
 	$answers = array();
 	$meta = array();
@@ -108,14 +157,18 @@ function cp_portal_form_payload($portal) {
 		'answers' => (object) $answers,
 		'meta' => (object) $meta,
 		'prefill' => cp_portal_prefill($portal),
-		'missing' => (object) cp_portal_missing($answers),
-		'state' => array('required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(), 'status' => $st->status, 'completed_at' => cp_portal_db_ts($st->completed_at)),
+		'missing' => (object) cp_portal_missing($answers, null, $flow),
+		'flow' => $flow,
+		'state' => array(
+			'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(null, $flow), 'status' => $st->status, 'completed_at' => cp_portal_db_ts($st->completed_at),
+			'contract_done' => (int) $st->contract_done, 'contract_total' => cp_portal_required_total('a', $flow), 'contract_ready_at' => cp_portal_db_ts($st->contract_ready_at), 'contract_changed_at' => cp_portal_db_ts($st->contract_changed_at),
+		),
 		'deadline' => $di ? array('ts' => $di['deadline'], 'text' => $di['text'], 'late' => $di['late']) : null,
 		'locked' => cp_portal_locked($portal),
 	);
 }
 
-/* előtöltés a Salesmate-ből: kezdés és zárás (a mentéssel válik válasszá) */
+/* előtöltés a Salesmate-ből (a mentéssel válik válasszá): dátum, kezdés és vége, szolgáltatás, a kapcsolattartó adatai */
 function cp_portal_prefill($portal) {
 	$sm = $portal->sm;
 	$out = array();
@@ -128,6 +181,15 @@ function cp_portal_prefill($portal) {
 			$sch['end'] = sprintf('%02d:%02d', floor($e / 60), $e % 60);
 		}
 		$out['schedule'] = $sch;
+	}
+	if (!empty($portal->event_date)) { $out['event_date'] = (string) $portal->event_date; }
+	if (!empty($sm['package'])) { $out['services'] = (string) $sm['package']; }
+	$name = isset($sm['name']) ? (string) $sm['name'] : '';
+	$email = isset($sm['email']) ? (string) $sm['email'] : '';
+	$phone = isset($sm['phone']) ? (string) $sm['phone'] : '';
+	if ($name !== '' || $email !== '' || $phone !== '') {
+		$out['client_private'] = array_filter(array('name' => $name, 'email' => $email, 'phone' => $phone));
+		$out['client_company'] = array_filter(array('contact_name' => $name, 'contact_email' => $email, 'contact_phone' => $phone, 'billing_email' => $email));
 	}
 	return (object) $out;
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Crazy Foglaltsági Panel
  * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap), sablonkészítő (lyukasztott PNG a fotós szoftvernek).
- * Version: 1.11.0
+ * Version: 1.12.0
  * Author: Crazyphoto / EventCrazy
  * Requires PHP: 7.4
  * Text Domain: crazy-panel
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '1.11.0');
+define('CP_PANEL_VER', '1.12.0');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -380,6 +380,8 @@ function cp_panel_normalize($rows) {
 	$o = cp_panel_opts();
 	$booked = array_map('mb_strtolower', cp_panel_lines($o['booked_stages']));
 	$pending = array_map('mb_strtolower', cp_panel_lines($o['pending_stages']));
+	// ügyfélportál: az „Adatlap kiküldve” szakasz (a szerződés előtt) ajánlatként látszik
+	if (function_exists('cp_portal_sent_stage') && cp_portal_sent_stage() !== '') { $pending[] = mb_strtolower(cp_portal_sent_stage()); }
 	$pipeline = mb_strtolower(trim($o['pipeline']));
 	$extra = cp_panel_extra_fields();
 	$out = array();
@@ -1629,6 +1631,7 @@ function cp_el_norm_one($r) {
 function cp_el_normalize($rows, $from, $to) {
 	$o = cp_el_opts();
 	$skip = array_map('cp_panel_lc', cp_panel_lines($o['skip_stages']));
+	if (function_exists('cp_portal_sent_stage') && cp_portal_sent_stage() !== '') { $skip[] = cp_panel_lc(cp_portal_sent_stage()); }  // a szerződés előtt még nincs elszámolás
 	$out = array();
 	$seen = array();
 	foreach ((array) $rows as $r) {

@@ -41,8 +41,10 @@ function cp_portal_flags_build($portal, $answers, $state) {
 	if ($state && !empty($state->changed_late_at)) {
 		$add('modositva', 'MÓDOSÍTVA ' . wp_date('m.d. H:i', cp_portal_db_ts($state->changed_late_at), cp_portal_tz()), 'warn', array('adatlap', 'munkalap'));
 	}
+	$flow = function_exists('cp_portal_flow') ? cp_portal_flow($portal) : 'v1';
 	$done = $state ? (int) $state->required_done : 0;
-	if ($done < cp_portal_required_total()) { $add('hianyos', 'ADATLAP HIÁNYOS (' . $done . '/' . cp_portal_required_total() . ')', 'bad', $all); }
+	$tot = cp_portal_required_total(null, $flow);
+	if ($done < $tot) { $add('hianyos', 'ADATLAP HIÁNYOS (' . $done . '/' . $tot . ')', 'bad', $all); }
 	return $out;
 }
 
@@ -67,7 +69,8 @@ function cp_portal_info($portal, $answers) {
 	$c = $a('onsite_contact');
 	$i['contact'] = is_array($c) ? array('name' => isset($c['name']) ? $c['name'] : '', 'phone' => isset($c['phone']) ? $c['phone'] : '', 'tel' => isset($c['phone']) ? preg_replace('/[^\d+]/', '', $c['phone']) : '') : null;
 	$s = $a('schedule');
-	$i['schedule'] = is_array($s) ? array('arrival' => isset($s['arrival']) ? $s['arrival'] : '', 'start' => isset($s['start']) ? $s['start'] : '', 'end' => isset($s['end']) ? $s['end'] : '') : null;
+	$arr = is_string($a('arrival')) ? $a('arrival') : (is_array($s) && isset($s['arrival']) ? $s['arrival'] : '');
+	$i['schedule'] = (is_array($s) || $arr !== '') ? array('arrival' => $arr, 'start' => is_array($s) && isset($s['start']) ? $s['start'] : '', 'end' => is_array($s) && isset($s['end']) ? $s['end'] : '') : null;
 	$p = $a('parking');
 	$i['parking'] = is_array($p) && !empty($p['type']) ? $opt('parking', $p['type'], 'type') . (!empty($p['note']) ? ' – ' . $p['note'] : '') : '';
 	$v = $a('vehicle_access');
@@ -105,7 +108,7 @@ function cp_portal_info_block($deal_id) {
 		$rows[] = array('Kapcsolattartó', esc_html($i['contact']['name']) . ($i['contact']['tel'] !== '' ? ' · <a href="tel:' . esc_attr($i['contact']['tel']) . '">' . esc_html($i['contact']['phone']) . '</a>' : ''));
 	}
 	if ($i['schedule']) {
-		$rows[] = array('Menetrend', esc_html(implode(' · ', array_filter(array($i['schedule']['arrival'] !== '' ? 'érkezés ' . $i['schedule']['arrival'] : '', $i['schedule']['start'] !== '' ? 'indulás ' . $i['schedule']['start'] : '', $i['schedule']['end'] !== '' ? 'zárás ' . $i['schedule']['end'] : '')))));
+		$rows[] = array('Menetrend', esc_html(implode(' · ', array_filter(array($i['schedule']['arrival'] !== '' ? 'érkezés ' . $i['schedule']['arrival'] : '', $i['schedule']['start'] !== '' ? 'indulás ' . $i['schedule']['start'] : '', $i['schedule']['end'] !== '' ? 'vége ' . $i['schedule']['end'] : '')))));
 	}
 	if ($i['vehicle'] !== '') { $rows[] = array('Behajtás', esc_html($i['vehicle'])); }
 	if ($i['parking'] !== '') { $rows[] = array('Parkolás', esc_html($i['parking'])); }
@@ -136,10 +139,18 @@ function cp_portal_panel_map($deal_ids) {
 		$a = isset($ans[(int) $p->id]) ? $ans[(int) $p->id] : array();
 		$st = isset($sts[(int) $p->id]) ? $sts[(int) $p->id] : cp_portal_state($p->id);
 		$di = cp_portal_deadline_info($p);
+		$flow = cp_portal_flow($p);
 		$out[(string) $did] = array(
 			'st' => $st->status,
+			'flow' => $flow,
 			'done' => (int) $st->required_done,
-			'total' => cp_portal_required_total(),
+			'total' => cp_portal_required_total(null, $flow),
+			'cd' => (int) $st->contract_done,
+			'ct' => cp_portal_required_total('a', $flow),
+			'cready' => cp_portal_db_ts($st->contract_ready_at),
+			'cchanged' => cp_portal_db_ts($st->contract_changed_at),
+			'sb' => !empty($a['photo_template']),
+			'bg' => isset($a['background']) && is_string($a['background']) ? $a['background'] : '',
 			'flags' => cp_portal_flags_build($p, $a, $st),
 			'info' => cp_portal_info($p, $a),
 			'dl' => $di ? $di['text'] : '',
@@ -155,4 +166,65 @@ function cp_portal_panel_map_range($from, $to) {
 	if (!cp_portal_db_ready()) { return new stdClass(); }
 	$ids = (array) $wpdb->get_col($wpdb->prepare('SELECT deal_id FROM ' . cp_portal_t('portals') . ' WHERE event_date BETWEEN %s AND %s', $from, $to));
 	return cp_portal_panel_map($ids);
+}
+
+/* ------------------------------------------------------------ „Szerződés adatai” (panel: másolás a Word / Google Docs szerződésbe)
+ * array('type' => magan|ceg|'', 'groups' => array(array('cím', array(array('címke', 'érték'), …)), …), 'text' => formázott blokk, 'missing' => …) */
+function cp_portal_contract_data($portal, $answers) {
+	$g = function ($k, $sub = null) use ($answers) {
+		if (!isset($answers[$k])) { return ''; }
+		$v = $answers[$k];
+		if ($sub !== null) { return is_array($v) && isset($v[$sub]) ? trim((string) $v[$sub]) : ''; }
+		return is_scalar($v) ? trim((string) $v) : '';
+	};
+	$type = $g('client_type');
+	$groups = array();
+	if ($type === 'ceg') {
+		$signer = trim($g('client_company', 'signer_name') . ($g('client_company', 'signer_title') !== '' ? ', ' . $g('client_company', 'signer_title') : ''));
+		$groups[] = array('Megbízó (cég)', array(
+			array('Cégnév', $g('client_company', 'company')),
+			array('Székhely', $g('client_company', 'seat')),
+			array('Cégjegyzékszám', $g('client_company', 'reg')),
+			array('Adószám', $g('client_company', 'tax')),
+			array('Képviseli', $signer),
+			array('Számlázási e-mail', $g('client_company', 'billing_email')),
+			array('Megrendelésszám', $g('client_company', 'po')),
+		));
+		$groups[] = array('Kapcsolattartó a megbízó részéről', array(
+			array('Név', $g('client_company', 'contact_name')),
+			array('Tel.', $g('client_company', 'contact_phone')),
+			array('E-mail', $g('client_company', 'contact_email')),
+		));
+	} elseif ($type === 'magan') {
+		$groups[] = array('Megbízó (magánszemély)', array(
+			array('Név', $g('client_private', 'name')),
+			array('Lakcím', $g('client_private', 'address')),
+			array('Telefon', $g('client_private', 'phone')),
+			array('E-mail', $g('client_private', 'email')),
+			array('Eltérő számlázási adatok', $g('client_private', 'billing')),
+		));
+		$groups[] = array('Kapcsolattartó a megbízó részéről', array(
+			array('Név', $g('client_private', 'name')),
+			array('Tel.', $g('client_private', 'phone')),
+		));
+	}
+	$date = $g('event_date') !== '' ? $g('event_date') : (string) $portal->event_date;
+	$time = $g('schedule', 'start') !== '' ? $g('schedule', 'start') . '–' . $g('schedule', 'end') : '';
+	$venue = trim($g('venue_address', 'name') . ($g('venue_address', 'address') !== '' ? ', ' . $g('venue_address', 'address') : ''), ', ');
+	$groups[] = array('A megbízás tárgya', array(
+		array('Szolgáltatás', $g('services')),
+		array('Helyszín', $venue),
+		array('Dátum és időpont', trim(cp_portal_hu_date($date, false) . ($time !== '' ? ' ' . $time : ''))),
+		array('Háttér', $g('background')),
+	));
+	// üres, nem kötelező sorok elhagyása; a szöveges blokk a szerződés sorrendjében
+	$lines = array();
+	foreach ($groups as $i => $gr) {
+		$groups[$i][1] = array_values(array_filter($gr[1], function ($r) { return $r[1] !== ''; }));
+		if (!$groups[$i][1]) { continue; }
+		$lines[] = $gr[0];
+		foreach ($groups[$i][1] as $r) { $lines[] = $r[0] . ': ' . $r[1]; }
+		$lines[] = '';
+	}
+	return array('type' => $type, 'groups' => $groups, 'text' => trim(implode("\n", $lines)));
 }

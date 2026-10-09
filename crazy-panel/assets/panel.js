@@ -353,6 +353,7 @@
   const SIGNED = (C.signed || []).map(norm);
   /* ügyfélportál (portal-panel.js): címkék, „Adatlap” oszlop, részletező */
   const PORTAL = !!(C.portal && C.portal.on && window.CPPortal);
+  if (PORTAL) window.CPPortal.openSablon = id => { S.sbDeal = String(id); go('sablon'); };
   if (PORTAL) window.CPPortal.onChange = async () => {
     const [from, to] = monthRange(S.month);
     try {
@@ -422,13 +423,18 @@
     const c = S.cache[S.month];
     return c ? c.events.filter(e => e.state === 'booked') : [];
   }
+  /* ajánlati szakaszban lévők (ügyfélportál: innen küldhető ki a szerződés előtt) */
+  function pendEvents() {
+    const c = S.cache[S.month];
+    return c ? c.events.filter(e => e.state !== 'booked') : [];
+  }
 
   function viewTrack(main) {
     main.innerHTML = '';
     const head = el('div', { class: 'cpx-head' });
     head.appendChild(monthNav(render));
     const tools = el('div', { class: 'cpx-trk-tools' });
-    tools.innerHTML = '<div class="seg sm" id="tk-f">' + [['all', 'Mind'], ['todo', 'Hiányos'], ['urgent', 'Sürgős'], ['done', 'Kész']].concat(PORTAL ? [['adatlap', 'Adatlap hiányos']] : []).map(x => '<button data-v="' + x[0] + '" class="' + (S.tf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+    tools.innerHTML = '<div class="seg sm" id="tk-f">' + [['all', 'Mind'], ['todo', 'Hiányos'], ['urgent', 'Sürgős'], ['done', 'Kész']].concat(PORTAL ? [['adatlap', 'Adatlap hiányos'], ['ajanlat', 'Ajánlatban – portál kiküldése']] : []).map(x => '<button data-v="' + x[0] + '" class="' + (S.tf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
       '<input type="search" id="tk-q" placeholder="Keresés: név, háttér…" value="' + esc(S.tq) + '">' +
       '<button class="cpx-btn ghost" id="tk-csv" title="Letöltés Excelhez (CSV)">Excel export</button>';
     head.appendChild(tools);
@@ -444,7 +450,9 @@
       const clashes = bgClashes(S.month);
       const rows = all.map(e => ({ e, k: chk(e, clashes) }));
       const q = norm(S.tq);
-      const vis = rows.filter(r => (S.tf === 'all' || (S.tf === 'adatlap' ? (r.k.pt && !r.k.ad) : S.tf === 'done' ? r.k.st === 'done' : S.tf === 'urgent' ? r.k.st === 'urgent' : r.k.st !== 'done')) &&
+      const pend = S.tf === 'ajanlat';
+      const pool = pend ? pendEvents().map(e => ({ e, k: chk(e, clashes) })) : rows;
+      const vis = pool.filter(r => (pend || S.tf === 'all' || (S.tf === 'adatlap' ? (r.k.pt && !r.k.ad) : S.tf === 'done' ? r.k.st === 'done' : S.tf === 'urgent' ? r.k.st === 'urgent' : r.k.st !== 'done')) &&
         (!q || norm(who(r.e) + ' ' + r.e.title + ' ' + r.e.bg + ' ' + (r.k.t.note || '')).includes(q)));
       const n = rows.length, done = rows.filter(r => r.k.st === 'done').length, urg = rows.filter(r => r.k.st === 'urgent').length;
       kp.innerHTML = kpi('Szerződéses rendezvény', n) + kpi('Minden megvan', done) + kpi('Hiányos', n - done) + kpi('Sürgős (7 napon belül)', urg);
@@ -455,13 +463,14 @@
         '<th>Galéria<small>' + cnt(r => r.k.gl) + '</small></th><th>Hosszabbítás<small>utólag</small></th>' + (PORTAL ? '<th>Adatlap<small>' + cnt(r => r.k.pt && r.k.ad) + '</small></th>' : '') + '<th>Állapot</th></tr></thead><tbody>';
       let lastD = '', g = 1;
       vis.forEach(r => { if (r.e.date !== lastD) { g = 1 - g; lastD = r.e.date; } h += rowHtml(r.e, r.k, g); });
-      if (!vis.length) h += '<tr><td colspan="' + (PORTAL ? 10 : 9) + '" class="cpx-empty">' + (n ? 'Nincs a szűrésnek megfelelő rendezvény.' : 'Ebben a hónapban még nincs szerződéses rendezvény.') + '</td></tr>';
+      if (!vis.length) h += '<tr><td colspan="' + (PORTAL ? 10 : 9) + '" class="cpx-empty">' + (pend ? 'Ebben a hónapban nincs ajánlati szakaszban lévő rendezvény.' : n ? 'Nincs a szűrésnek megfelelő rendezvény.' : 'Ebben a hónapban még nincs szerződéses rendezvény.') + '</td></tr>';
+      if (pend) h += '<tr><td colspan="' + (PORTAL ? 10 : 9) + '" class="cpx-help">Ajánlati szakaszban lévő rendezvények (' + esc((C.portal && C.portal.sentStage) ? 'a „' + C.portal.sentStage + '” szakasz is' : '') + '). Az <b>Adatlap</b> oszlopra kattintva küldhető ki az ügyfélportál a szerződés előtt.</td></tr>';
       h += '</tbody></table>';
       wrap.innerHTML = h;
     };
     S.trackDraw = draw;
 
-    const find = id => trackEvents().find(e => e.id === id);
+    const find = id => trackEvents().concat(pendEvents()).find(e => e.id === id);
     wrap.addEventListener('click', ev => {
       const b = ev.target.closest('[data-f]');
       const tr = ev.target.closest('tr[data-id]');
@@ -470,7 +479,7 @@
       if (!e) return;
       if (ev.target.closest('[data-note]')) { noteModal(e); return; }
       if (ev.target.closest('[data-sb]')) { S.sbDeal = e.id; go('sablon'); return; }
-      if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(e.id, who(e) + ' – ' + huDate(e.date)); return; }
+      if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(e.id, who(e) + ' – ' + huDate(e.date), e); return; }
       if (ev.target.closest('[data-pick]')) { bgPicker(e); return; }
       if (!b || b.tagName === 'SELECT') return;
       const f = b.dataset.f, k = chk(e);
@@ -534,7 +543,7 @@
       '<td class="td-c" data-l="Díjbekérő">' + djSel + '</td>' +
       '<td class="td-c" data-l="Galéria">' + tick('gl', k.gl, k.after ? '' : 'later', k.after ? '' : 'A rendezvény után esedékes') + '</td>' +
       '<td class="td-c" data-l="Hosszabbítás"><select class="tsel hx ' + (hxOf(e) ? 'set' : '') + (k.after ? '' : ' later') + '" data-f="hx" aria-label="Hosszabbítás">' + HXO.map(o => '<option value="' + o[0] + '"' + (hxOf(e) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></td>' +
-      (PORTAL ? '<td class="td-c td-pp" data-l="Adatlap">' + window.CPPortal.cell(k.pt) + '</td>' : '') +
+      (PORTAL ? '<td class="td-c td-pp" data-l="Adatlap">' + window.CPPortal.cell(k.pt, e) + '</td>' : '') +
       '<td class="td-s" data-l="Állapot"><span class="stc ' + k.st + '">' + esc(stTxt) + '</span></td></tr>';
   }
 

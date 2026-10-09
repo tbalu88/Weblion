@@ -40,7 +40,7 @@ function cp_portal_tick() {
 	cp_portal_smq_run();
 	global $wpdb;
 	$from = cp_portal_ymd_add(cp_portal_today(), -2);
-	$to = cp_portal_ymd_add(cp_portal_today(), 60);
+	$to = cp_portal_ymd_add(cp_portal_today(), 400);  // a szerződés előtt kiküldött portálok rendezvénye messze is lehet
 	$portals = (array) $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cp_portal_t('portals') . " WHERE status = 'aktiv' AND event_date BETWEEN %s AND %s ORDER BY event_date", $from, $to));
 	$send = cp_portal_mode() !== 'off';
 	$now = time();
@@ -51,6 +51,13 @@ function cp_portal_tick() {
 		$st = cp_portal_state($p->id);
 		$created = cp_portal_db_ts($p->created_at);
 		$missing = cp_portal_missing(cp_portal_answers($p->id));
+
+		// „Mehet a szerződés” tartalék: a szerződéses adatok kész, de a gombot nem nyomták meg (vagy módosultak a jelzés óta),
+		// és 30 perce nem változott semmi → a rendszer jelzi (Pumble)
+		if (cp_portal_flow($p) === 'v2' && !cp_portal_missing(cp_portal_answers($p->id), 'a', 'v2')) {
+			$quiet = cp_portal_db_ts($wpdb->get_var($wpdb->prepare('SELECT MAX(updated_at) FROM ' . cp_portal_t('form_answers') . ' WHERE portal_id = %d', (int) $p->id))) <= $now - 30 * MINUTE_IN_SECONDS;
+			if ($quiet && (empty($st->contract_ready_at) || !empty($st->contract_changed_at))) { cp_portal_contract_submit($p, 'rendszer'); }
+		}
 
 		// zárolás jelölése a panelnek
 		if ($now >= $di['deadline'] && empty($st->locked_at)) { cp_portal_state_put($p->id, array('locked_at' => cp_portal_db_now($di['deadline']))); }
@@ -147,6 +154,7 @@ function cp_portal_retention($today = null) {
 
 		// 2) adatlap törlése (helyszín és hozzájárulás marad); a naplóban az értékek helyére „törölve”
 		if ($form_due) {
+			if (isset($answers['photo_template']) && function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete($answers['photo_template']); }
 			$in = implode(',', array_fill(0, count($keep), '%s'));
 			$args = array_merge(array($pid), $keep);
 			$d = (int) $wpdb->query($wpdb->prepare("DELETE FROM $A WHERE portal_id = %d AND field_key NOT IN ($in) AND field_key <> 'onsite_contact'", $args));
@@ -169,6 +177,8 @@ function cp_portal_retention($today = null) {
 	$old = (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $P WHERE event_date < %s", $cut5y));
 	foreach ($old as $pid) {
 		$pid = (int) $pid;
+		$oa = cp_portal_answers($pid);
+		if (isset($oa['photo_template']) && function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete($oa['photo_template']); }
 		foreach (array('form_answers', 'form_state', 'notifications', 'log', 'access_tokens', 'access_log') as $t) {
 			$wpdb->delete(cp_portal_t($t), array('portal_id' => $pid));
 		}

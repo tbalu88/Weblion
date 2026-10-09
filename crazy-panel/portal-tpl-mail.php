@@ -14,6 +14,17 @@ function cp_portal_mail_render($type, $v) {
 	$p = function ($t) { return '<p style="margin:0 0 14px">' . $t . '</p>'; };
 
 	switch ($type) {
+		case 'invite':
+			$subject = 'Ügyfélportál – adatok a szerződéshez · ' . $date;
+			$body = $p(esc_html($hello)) .
+				$p('Köszönjük, hogy minket választottatok! A rendezvényhez (' . esc_html($date) . ') megnyitottuk az ügyfélportált. Két lépésben kérünk adatokat:') .
+				'<ol style="margin:0 0 14px;padding-left:20px">' .
+				'<li style="margin:4px 0"><b>A szerződéshez szükséges adatok</b> (megrendelő, helyszín, időpont, szolgáltatás) – kérjük, <b>minél előbb</b>, ezekből készítjük el a szerződést.</li>' .
+				'<li style="margin:4px 0"><b>A rendezvény részletei</b> (terem, bejutás, áram, helyszíni kapcsolattartó…) – ' . ($dl !== '' ? 'ráér eddig: <b>' . esc_html($dl) . '</b>.' : 'ráér a rendezvény előtti határidőig.') . '</li>' .
+				'</ol>' .
+				$p('Ha szeretnétek, a portálon hátteret is választhattok, és elkészíthetitek a fotósablont. A válaszok azonnal mentődnek, bármikor visszatérhettek folytatni.');
+			$button = 'Ügyfélportál megnyitása';
+			break;
 		case 'welcome':
 			$subject = 'Rendezvény-adatlap – ' . $date;
 			$body = $p(esc_html($hello)) .
