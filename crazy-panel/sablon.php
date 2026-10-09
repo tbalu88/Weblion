@@ -141,7 +141,7 @@ function cp_sb_ajax_deal() {
 
 /* ---------------------------------------------------------------------
  * Egyedi keret AI-val (OpenAI képszerkesztés maszkkal)
- * A panel álló 1024×1536-os vázlatot küld (szürke téglalap = fotóablak) és egy maszkot
+ * A panel álló 1024×1536-os (fekvő elrendezésnél 1536×1024-es) vázlatot küld (szürke téglalap = fotóablak) és egy maszkot
  * (átlátszó = ezt festheti az AI, átlátszatlan = fotóablak, maradjon). Az AI csak a díszítő
  * hátteret / keretet készíti; a lyukasztást, a feliratokat és a logót a panel teszi rá, mint eddig.
  * A kulcs csak a szerveren van, a hívás csak a panelbe belépett csapatnak (közös jelszó + CSRF) megy.
@@ -149,7 +149,7 @@ function cp_sb_ajax_deal() {
 
 define('CP_SB_OWN', 'cp_sb_own');   /* mentett egyedi stílusok listája */
 define('CP_SB_OWN_MAX', 60);
-define('CP_SB_LAYOUTS', 'csik3,1x,2x,4x');
+define('CP_SB_LAYOUTS', 'csik3,1x,2x,4x,f1x,f2x,f3x,f4x');   /* f… = fekvő */
 
 function cp_sb_ai_key() {
 	$o = cp_panel_opts();
@@ -189,7 +189,7 @@ function cp_sb_req_slots() {
 	foreach ($a as $r) {
 		if (!is_array($r) || count($r) !== 4) { return null; }
 		$r = array_map('intval', array_values($r));
-		if ($r[2] < 20 || $r[3] < 20 || $r[0] < -40 || $r[1] < -40 || $r[0] + $r[2] > 1240 || $r[1] + $r[3] > 1840) { return null; }
+		if ($r[2] < 20 || $r[3] < 20 || $r[0] < -40 || $r[1] < -40 || $r[0] + $r[2] > 1840 || $r[1] + $r[3] > 1840) { return null; }
 		$out[] = $r;
 	}
 	return $out;
@@ -200,6 +200,10 @@ function cp_sb_ai_layout_hint($lay) {
 		'1x'    => 'one large photo window in the upper part',
 		'2x'    => 'two photo windows stacked vertically',
 		'4x'    => 'four photo windows in a 2x2 grid',
+		'f1x'   => 'one large photo window on the left, free space on the right',
+		'f2x'   => 'two photo windows side by side in the upper part',
+		'f3x'   => 'three photo windows side by side in the upper part',
+		'f4x'   => 'four photo windows in a 2x2 grid on the left, free space on the right',
 		'csik3' => 'two identical narrow vertical photo strips side by side, each with three photo windows; the sheet is cut in half vertically, so decorate both halves the same way and keep the vertical centre line clean',
 	);
 	return isset($h[$lay]) ? $h[$lay] : $h['1x'];
@@ -219,7 +223,9 @@ function cp_sb_ajax_ai() {
 	$img = cp_sb_png_in('image', 4 * MB_IN_BYTES);
 	$mask = cp_sb_png_in('mask', 4 * MB_IN_BYTES);
 	if ($img === '' || $mask === '') { cp_el_err('Hiányzó vagy hibás vázlat / maszk.'); }
-	if (cp_sb_png_size($img) !== array(1024, 1536) || cp_sb_png_size($mask) !== array(1024, 1536)) { cp_el_err('A vázlat és a maszk 1024×1536-os PNG legyen.'); }
+	$land = $lay[0] === 'f';
+	$dim = $land ? array(1536, 1024) : array(1024, 1536);
+	if (cp_sb_png_size($img) !== $dim || cp_sb_png_size($mask) !== $dim) { cp_el_err('A vázlat és a maszk ' . $dim[0] . '×' . $dim[1] . '-es PNG legyen.'); }
 
 	/* napi keret (költségvédelem) */
 	$lim = isset($o['ai_daily']) ? max(0, (int) $o['ai_daily']) : 30;
@@ -228,13 +234,13 @@ function cp_sb_ajax_ai() {
 	if ($lim > 0 && $n >= $lim) { cp_el_err('Elérted a mai AI-generálási keretet (' . $lim . ' db). Az admin beállításokban emelhető.', 429); }
 	set_transient($ck, $n + 1, DAY_IN_SECONDS + HOUR_IN_SECONDS);
 
-	$full = 'Design only the decorative background / frame artwork of a printed photo-booth template, portrait orientation (4x6 inch print, 2:3). '
+	$full = 'Design only the decorative background / frame artwork of a printed photo-booth template, ' . ($land ? 'landscape orientation (6x4 inch print, 3:2)' : 'portrait orientation (4x6 inch print, 2:3)') . '. '
 		. 'Layout: ' . cp_sb_ai_layout_hint($lay) . '. '
 		. 'The flat grey rectangles outlined with a thin dark line are the photo windows. They are protected by the mask: keep them exactly where they are, '
 		. 'same size and position, empty, and never draw inside or across them. Compose the whole artwork around these exact windows: '
 		. 'every window must get its own clearly visible, emphasised frame that follows its outline precisely (for example an elegant thin gold or ornamental border hugging the window edge, with decorative corners), '
 		. 'and all decoration must start from the window edges outward, never overlapping them. Leave a clean, even margin between neighbouring windows. '
-		. 'Keep the area below the photo windows (the bottom part of the image) calm, light and low-detail, with decoration only near its edges, '
+		. 'Keep the free area ' . (in_array($lay, array('f1x', 'f4x'), true) ? 'to the right of the photo windows' : 'below the photo windows (the bottom part of the image)') . ' calm, light and low-detail, with decoration only near its edges, '
 		. 'because names, a date and possibly a logo will be added there later. '
 		. 'Absolutely no text, letters, numbers, monograms, logos, watermarks, people or faces. Print quality, crisp, flat front view, no mockup, no perspective, no shadows of a physical card. '
 		. 'Style requested by the designer (may be in Hungarian): ' . $prompt;
@@ -243,7 +249,7 @@ function cp_sb_ajax_ai() {
 	$quality = isset($o['ai_quality']) && in_array($o['ai_quality'], array('low', 'medium', 'high', 'auto'), true) ? $o['ai_quality'] : 'medium';
 	$bd = 'cpsb' . wp_generate_password(24, false, false);
 	$body = '';
-	foreach (array('model' => $model, 'prompt' => $full, 'size' => '1024x1536', 'quality' => $quality, 'n' => '1') as $k => $v) {
+	foreach (array('model' => $model, 'prompt' => $full, 'size' => $dim[0] . 'x' . $dim[1], 'quality' => $quality, 'n' => '1') as $k => $v) {
 		$body .= '--' . $bd . "\r\nContent-Disposition: form-data; name=\"" . $k . "\"\r\n\r\n" . $v . "\r\n";
 	}
 	foreach (array('image' => $img, 'mask' => $mask) as $k => $v) {
@@ -290,7 +296,9 @@ function cp_sb_ajax_own_save() {
 	$png = cp_sb_png_in('png', 12 * MB_IN_BYTES);
 	$th = cp_sb_png_in('thumb', MB_IN_BYTES);
 	if ($png === '' || $th === '') { cp_el_err('Hiányzó vagy hibás kép.'); }
-	if (cp_sb_png_size($png) !== array(1200, 1800)) { cp_el_err('A keret 1200×1800-as PNG legyen.'); }
+	$psz = cp_sb_png_size($png);
+	if ($psz !== array(1200, 1800) && $psz !== array(1800, 1200)) { cp_el_err('A keret 1200×1800-as (álló) vagy 1800×1200-as (fekvő) PNG legyen.'); }
+	$or = $psz[0] > $psz[1] ? 'l' : 'p';
 	$list = cp_sb_own_list();
 	if (count($list) >= CP_SB_OWN_MAX) { cp_el_err('Legfeljebb ' . CP_SB_OWN_MAX . ' egyedi stílus menthető – törölj egy régit.'); }
 	$set = isset($_POST['set']) ? sanitize_key(wp_unslash($_POST['set'])) : 'wed';
@@ -304,6 +312,8 @@ function cp_sb_ajax_own_save() {
 	if ($lay === 'custom') {
 		$slots = cp_sb_req_slots();
 		if ($slots === null) { cp_el_err('Hibás fotóablak-adatok.'); }
+	} elseif (($lay[0] === 'f') !== ($or === 'l')) {
+		cp_el_err('Az elrendezés és a kép tájolása nem egyezik.');
 	}
 	foreach ($list as $e) {
 		if (isset($e['name']) && mb_strtolower($e['name']) === mb_strtolower($name)) { cp_el_err('Már van ilyen nevű egyedi stílus – adj más nevet.'); }
@@ -322,6 +332,8 @@ function cp_sb_ajax_own_save() {
 		'set'    => $set,
 		'layout' => $lay,
 		'slots'  => $slots,
+		'or'     => $or,
+		'cat'    => cp_sb_req_cat(),
 		'font'   => $font,
 		'color'  => $col ? $col : '#4A4237',
 		'wf'     => $wf,
@@ -334,6 +346,12 @@ function cp_sb_ajax_own_save() {
 	$list[] = $e;
 	update_option(CP_SB_OWN, $list, false);
 	wp_send_json_success($e);
+}
+
+/* melyik fülön jelenjen meg a sablonválasztóban: Egyedi / Esküvő / Céges & party */
+function cp_sb_req_cat($def = 'own') {
+	$c = isset($_POST['cat']) ? sanitize_key(wp_unslash($_POST['cat'])) : $def;
+	return in_array($c, array('own', 'wed', 'party'), true) ? $c : $def;
 }
 
 /* ablakkeret-stílus a kérésből: [stílus, szín] */
@@ -360,6 +378,7 @@ function cp_sb_ajax_own_upd() {
 		$col = isset($_POST['color']) ? sanitize_hex_color(wp_unslash($_POST['color'])) : '';
 		if ($col) { $list[$i]['color'] = $col; }
 		list($list[$i]['wf'], $list[$i]['wc']) = cp_sb_req_wf();
+		$list[$i]['cat'] = cp_sb_req_cat(isset($e['cat']) ? $e['cat'] : 'own');
 		update_option(CP_SB_OWN, $list, false);
 		wp_send_json_success($list[$i]);
 	}

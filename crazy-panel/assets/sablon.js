@@ -97,15 +97,27 @@ const D = [
 ];
 
 /* ------------------------------------------------------------ egyedi (AI-val készült) keretek
- * Álló 1200×1800-as lap, rögzített fotóablakokkal (slots) és felirat-zónával (tz).
+ * Álló 1200×1800-as vagy fekvő 1800×1200-as lap (or: 'p' / 'l'), rögzített fotóablakokkal (slots) és felirat-zónával (tz).
  * Az AI csak a díszítő hátteret festi; a felirat, a logó és a lyukasztás a panelé, mint a többi sablonnál. */
 const OWN_LAY = {
 	'1x': { label: '1 kép', slots: [[90, 90, 1020, 1230]], tz: { cx: 600, y0: 1360, y1: 1740, m: 980, k: 1 } },
 	'2x': { label: '2 kép', slots: [[90, 90, 1020, 600], [90, 720, 1020, 600]], tz: { cx: 600, y0: 1360, y1: 1740, m: 980, k: 1 } },
 	'4x': { label: '4 kép', slots: [[90, 90, 495, 600], [615, 90, 495, 600], [90, 720, 495, 600], [615, 720, 495, 600]], tz: { cx: 600, y0: 1360, y1: 1740, m: 980, k: 1 } },
-	'csik3': { label: '3 képes csík', half: 1, order: 'col', slots: [[60, 70, 480, 380], [60, 480, 480, 380], [60, 890, 480, 380], [660, 70, 480, 380], [660, 480, 480, 380], [660, 890, 480, 380]], tz: { cx: 300, y0: 1310, y1: 1740, m: 470, k: 0.68 } }
+	'csik3': { label: '3 képes csík', half: 1, order: 'col', slots: [[60, 70, 480, 380], [60, 480, 480, 380], [60, 890, 480, 380], [660, 70, 480, 380], [660, 480, 480, 380], [660, 890, 480, 380]], tz: { cx: 300, y0: 1310, y1: 1740, m: 470, k: 0.68 } },
+	'f1x': { label: 'Fekvő, 1 kép', or: 'l', slots: [[80, 80, 1140, 1040]], tz: { cx: 1500, y0: 280, y1: 920, m: 500, k: 0.8 } },
+	'f2x': { label: 'Fekvő, 2 kép', or: 'l', slots: [[80, 80, 800, 640], [920, 80, 800, 640]], tz: { cx: 900, y0: 780, y1: 1150, m: 1300, k: 0.9 } },
+	'f3x': { label: 'Fekvő, 3 kép', or: 'l', slots: [[80, 80, 520, 680], [640, 80, 520, 680], [1200, 80, 520, 680]], tz: { cx: 900, y0: 820, y1: 1150, m: 1300, k: 0.85 } },
+	'f4x': { label: 'Fekvő, 4 kép', or: 'l', slots: [[80, 80, 540, 500], [660, 80, 540, 500], [80, 620, 540, 500], [660, 620, 540, 500]], tz: { cx: 1500, y0: 250, y1: 950, m: 500, k: 0.75 } }
 };
+const layOr = lay => (OWN_LAY[lay] && OWN_LAY[lay].or) || 'p';
+const sheet = or => (or === 'l' ? [1800, 1200] : [1200, 1800]);
+/* ha a feltöltött kép tájolása nem egyezik a választott elrendezésével: a megfelelő párja */
+const LAY_PAIR = { '1x': 'f1x', '2x': 'f2x', '4x': 'f4x', 'csik3': 'f3x', 'f1x': '1x', 'f2x': '2x', 'f3x': 'csik3', 'f4x': '4x' };
 const OWN_SETS = [['wed', 'Esküvő'], ['corp', 'Céges / party'], ['bday', 'Szülinap']];
+/* melyik fülön jelenjen meg a mentett saját sablon */
+const OWN_CATS = [['own', 'Egyedi'], ['wed', 'Esküvő'], ['party', 'Céges & party']];
+const okCat = c => (c === 'wed' || c === 'party' ? c : 'own');
+const catName = c => OWN_CATS.find(x => x[0] === okCat(c))[1];
 const OWN_FONTS = [['serif', 'Klasszikus'], ['script', 'Kézírásos'], ['sans', 'Modern']];
 /* fotóablak-keret: a panel rajzolja pontosan az ablakok szélére (az AI-tól függetlenül, mindig a helyén) */
 const OWN_WF = [['none', 'Nincs'], ['gold', 'Arany vonal'], ['goldmat', 'Arany + passzpartu'], ['line', 'Vonal'], ['double', 'Dupla vonal'], ['mat', 'Passzpartu']];
@@ -127,7 +139,14 @@ function ownLines(set, font, col) {
 const okSlots = a => Array.isArray(a) && a.length > 0 && a.length <= 12 && a.every(x => Array.isArray(x) && x.length === 4 && x.every(n => isFinite(n)));
 function layFor(e) {
 	if (e.layout !== 'custom' || !okSlots(e.slots)) return OWN_LAY[e.layout] || OWN_LAY['1x'];
-	const bottom = Math.max.apply(null, e.slots.map(s => s[1] + s[3]));
+	const bottom = Math.max.apply(null, e.slots.map(s => s[1] + s[3])), right = Math.max.apply(null, e.slots.map(s => s[0] + s[2]));
+	if (e.or === 'l') {
+		let tz;
+		if (1200 - bottom >= 220) tz = { cx: 900, y0: bottom + 30, y1: 1160, m: 1300, k: 0.9 };
+		else if (1800 - right >= 380) { const w = 1800 - right; tz = { cx: right + w / 2, y0: 150, y1: 1050, m: w - 60, k: Math.min(1, w / 600) }; }
+		else tz = { cx: 900, y0: 990, y1: 1170, m: 1300, k: 0.7 };   /* nincs elég hely: alulra kerül, onnan húzható */
+		return { label: 'Saját ablakok (fekvő)', or: 'l', slots: e.slots, tz };
+	}
 	let y0 = Math.min(1700, bottom + 40);
 	if (1760 - y0 < 170) y0 = 1590;   /* nincs elég hely: alulra kerül, onnan húzható */
 	return { label: 'Saját ablakok', slots: e.slots, tz: { cx: 600, y0, y1: 1760, m: 980, k: 1 } };
@@ -143,7 +162,7 @@ function ownDesign(e) {
 	if (e.wf && e.wf !== 'none') { V.wf = e.wf; V.wc = e.wc || '#3A3A3A'; V.wk = lay.half ? 0.75 : 1; }
 	if (lay.half) { V.half = 1; V.order = lay.order; }
 	if (logo) V.logo = logo;
-	return { name: e.name, set, own: e.own, thumb: e.thumb || '', thumbUrl: e.thumbUrl || '', meta: e, vars: [V] };
+	return { name: e.name, set, own: e.own, ocat: e.own === 'draft' ? 'own' : okCat(e.cat), thumb: e.thumb || '', thumbUrl: e.thumbUrl || '', meta: e, vars: [V] };
 }
 (SB.own || []).forEach(e => { if (e && e.file && (OWN_LAY[e.layout] || (e.layout === 'custom' && okSlots(e.slots)))) D.push(ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }))); });
 
@@ -155,7 +174,7 @@ const st = {
 	logo: null, logoProc: null, logoDeal: '', textsFrom: '', ls: 100, ldx: 0, ldy: 0, lwhite: false, keepName: false,
 	own: null, mode: 'punch',                        /* előnézet: lyukasztva | mintafotóval */
 	deal: null,
-	ai: { lay: '1x', set: 'wed', font: 'serif', color: '#4A4237', wf: 'gold', wc: '#3A3A3A', prompt: '', busy: false, draft: null, dirty: false, n: 0, left: -1 }
+	ai: { lay: '1x', cat: 'own', set: 'wed', font: 'serif', color: '#4A4237', wf: 'gold', wc: '#3A3A3A', prompt: '', busy: false, draft: null, dirty: false, n: 0, left: -1 }
 };
 Object.keys(SETS).forEach(k => { st.vals[k] = SETS[k].v.slice(); });
 const cur = () => D[st.di].vars[st.vi];
@@ -552,15 +571,16 @@ const segBtns = (attr, list) => list.map(x => '<button type="button" ' + attr + 
 const nudge = n => '<div class="sb-nudge" data-nudge="' + n + '"><button type="button" data-d="u" title="Fel" aria-label="Fel">↑</button><button type="button" data-d="d" title="Le" aria-label="Le">↓</button><button type="button" data-d="l" title="Balra" aria-label="Balra">←</button><button type="button" data-d="r" title="Jobbra" aria-label="Jobbra">→</button><small>Shift = nagyobb lépés · vagy húzd a képen</small></div>';
 
 /* egyedi keret AI-val – kártya a sablonválasztó alatt (csak a panelben, a csapatnak) */
-const AI_TPL = '<details class="sb-card sb-ai" data-ai><summary class="sb-lbl">✨ Egyedi keret – AI-val vagy saját fájlból<small>Az AI csak a díszítő hátteret / keretet rajzolja meg (álló, 10×15). A fotóablakokat a panel hagyja szabadon, a neveket, a dátumot és a logót a panel teszi rá, mint eddig.</small></summary>' +
+const AI_TPL = '<details class="sb-card sb-ai" data-ai><summary class="sb-lbl">✨ Egyedi keret – AI-val vagy saját fájlból<small>Az AI csak a díszítő hátteret / keretet rajzolja meg (álló vagy fekvő 10×15, az elrendezés szerint). A fotóablakokat a panel hagyja szabadon, a neveket, a dátumot és a logót a panel teszi rá, mint eddig.</small></summary>' +
 	'<p class="sb-warn" data-aino hidden>Az OpenAI kulcs nincs beállítva – WordPress admin → Beállítások → Foglaltsági panel → „Sablonkészítő – egyedi keret AI-val”.</p>' +
 	'<div class="sb-ai-grid"><div>' +
 	'<div class="sb-f"><span>Elrendezés (fotóablakok)</span><div class="sb-seg" data-al>' + segBtns('data-alv', Object.keys(OWN_LAY).map(k => [k, OWN_LAY[k].label + (OWN_LAY[k].half ? ' (dupla)' : '')])) + '</div></div>' +
 	'<label class="sb-f"><span>Milyen legyen a keret?</span><textarea data-aip rows="4" maxlength="1200" placeholder="pl. elegáns arany-fehér pünkösdi rózsás akvarell keret, zöld levelekkel, sok levegővel"></textarea></label>' +
 	'<div class="sb-ai-go"><button type="button" class="cpx-btn" data-aigo>Keret generálása</button><small data-aiinfo>Kb. 30–90 másodperc.</small></div>' +
 	'<div class="sb-ai-upl"><span>vagy</span><label class="sb-up sm"><input type="file" accept="image/png,image/jpeg,image/webp" data-aiup hidden><span>Saját keret feltöltése (PNG / JPG)</span></label>' +
-	'<small>Álló 10×15-ös kép (pl. 1200×1800 px). Ha a PNG-ben átlátszó fotóablakok vannak, azokat használjuk; ha nincs, a fent kiválasztott elrendezés ablakait vágjuk bele.</small></div>' +
+	'<small>Álló vagy fekvő 10×15-ös kép (1200×1800 / 1800×1200 px) – a tájolást a képből ismerjük fel. Ha a PNG-ben átlátszó fotóablakok vannak, azokat használjuk; ha nincs, a fent kiválasztott (vagy a tájolásnak megfelelő) elrendezés ablakait vágjuk bele.</small></div>' +
 	'</div><div>' +
+	'<div class="sb-f"><span>Kategória (melyik fülön jelenjen meg mentés után)</span><div class="sb-seg" data-acat>' + segBtns('data-acatv', OWN_CATS) + '</div></div>' +
 	'<div class="sb-f"><span>Felirat típusa</span><div class="sb-seg" data-as>' + segBtns('data-asv', OWN_SETS) + '</div></div>' +
 	'<div class="sb-f"><span>Betűstílus</span><div class="sb-seg" data-af>' + segBtns('data-afv', OWN_FONTS) + '</div></div>' +
 	'<label class="sb-f sb-ai-col"><span>Felirat színe</span><input type="color" data-ac></label>' +
@@ -606,10 +626,10 @@ const TPL = '<div class="sb">' +
 function msg(t, kind) { if (!alive()) return; const m = q('[data-msg]'); m.hidden = !t; m.textContent = t || ''; m.className = 'sb-msg' + (kind ? ' ' + kind : ''); }
 
 function renderCats() { qa('[data-cats] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-c') === st.cat)); }
-function inCat(d) { return st.cat === 'all' || (st.cat === 'own' ? !!d.own : !d.own && (st.cat === 'wed' ? d.set === 'wed' : d.set !== 'wed')); }
+function inCat(d) { return st.cat === 'all' || (d.own ? d.ocat === st.cat : st.cat !== 'own' && (st.cat === 'wed' ? d.set === 'wed' : d.set !== 'wed')); }
 function renderPicker() {
 	const p = st.deal && st.deal.parsed;
-	const none = st.cat === 'own' && !D.some(d => d.own);
+	const none = st.cat === 'own' && !D.some(d => d.own && inCat(d));
 	q('[data-designs]').innerHTML = (none ? '<p class="cpx-muted sb-empty">Még nincs egyedi stílus – készíts egyet lent az AI-keretkészítővel, és mentsd el.</p>' : '') + D.map((d, i) => '<button type="button" class="sb-d' + (i === st.di ? ' on' : '') + '" data-di="' + i + '"' + (inCat(d) ? '' : ' hidden') + '><span class="i" style="background-image:url(' + esc(d.thumbUrl || IMG(d.thumb)) + ')"></span>' + esc(d.name) + (p && lc(p.design) === lc(d.name) ? ' <b class="sb-star" title="Ezt választotta az ügyfél">★</b>' : '') + '</button>').join('');
 }
 function renderVars() {
@@ -939,6 +959,7 @@ function syncAi() {
 	q('[data-aino]').hidden = !!SB.ai;
 	q('[data-aigo]').disabled = !SB.ai || a.busy;
 	qa('[data-al] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-alv') === a.lay));
+	qa('[data-acat] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-acatv') === a.cat));
 	qa('[data-as] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-asv') === a.set));
 	qa('[data-af] button').forEach(b => b.classList.toggle('on', b.getAttribute('data-afv') === a.font));
 	const c = q('[data-ac]'); if (c.value.toLowerCase() !== a.color.toLowerCase()) c.value = a.color;
@@ -955,7 +976,7 @@ function syncAi() {
 function aiRestyle() {
 	const i = D[st.di] && D[st.di].own ? st.di : draftIdx();
 	if (i >= 0) {
-		const m = Object.assign({}, D[i].meta, { set: st.ai.set, font: st.ai.font, color: st.ai.color, wf: st.ai.wf, wc: st.ai.wc });
+		const m = Object.assign({}, D[i].meta, { set: st.ai.set, font: st.ai.font, color: st.ai.color, wf: st.ai.wf, wc: st.ai.wc, cat: st.ai.cat });
 		D[i] = ownDesign(m);
 		if (D[i].own !== 'draft') st.ai.dirty = true;
 		if (st.di === i) { renderVars(); syncInputs(); changed(); }
@@ -966,21 +987,23 @@ function aiRestyle() {
 function aiFromDesign(d) {
 	const m = d && d.own && d.meta;
 	if (!m) return;
-	Object.assign(st.ai, { set: m.set || 'wed', font: m.font || 'serif', color: m.color || '#4A4237', wf: m.wf || 'none', wc: m.wc || '#3A3A3A', dirty: false });
+	Object.assign(st.ai, { cat: okCat(m.cat), set: m.set || 'wed', font: m.font || 'serif', color: m.color || '#4A4237', wf: m.wf || 'none', wc: m.wc || '#3A3A3A', dirty: false });
 }
 async function aiUpdate() {
 	const d = D[st.di];
 	if (!d || !d.own || d.own === 'draft') return;
 	const m = d.meta;
 	try {
-		await post('cp_sb_own_upd', { id: d.own, set: m.set, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '' });
-		st.ai.dirty = false; syncAi();
-		aiMsg('✓ A(z) „' + d.name + '” stílus beállításai elmentve.', 'ok');
+		await post('cp_sb_own_upd', { id: d.own, cat: okCat(m.cat), set: m.set, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '' });
+		st.ai.dirty = false;
+		if (st.cat !== 'all' && st.cat !== d.ocat) st.cat = d.ocat;   /* maradjon látható a választóban */
+		renderCats(); renderPicker(); syncAi();
+		aiMsg('✓ A(z) „' + d.name + '” stílus beállításai elmentve (kategória: ' + catName(d.ocat) + ').', 'ok');
 	} catch (e) { aiMsg('Nem sikerült menteni: ' + e.message, 'err'); }
 }
-/* vázlat (szürke fotóablakok) és maszk (átlátszó = az AI festheti) 1024×1536-ban */
+/* vázlat (szürke fotóablakok) és maszk (átlátszó = az AI festheti) 1024×1536-ban (fekvőnél 1536×1024) */
 function aiSketch(lay) {
-	const W = 1024, H = 1536, k = W / 1200, L = OWN_LAY[lay];
+	const L = OWN_LAY[lay], land = L.or === 'l', W = land ? 1536 : 1024, H = land ? 1024 : 1536, k = W / sheet(L.or)[0];
 	const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
 	const im = mk(), g = im.getContext('2d');
 	g.fillStyle = '#F6F3EE'; g.fillRect(0, 0, W, H);
@@ -996,25 +1019,29 @@ function aiSketch(lay) {
 	return { image: im.toDataURL('image/png'), mask: mask.toDataURL('image/png') };
 }
 const loadUrl = u => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('A kapott kép nem olvasható.')); i.src = u; });
-/* AI-kép → 1200×1800, csíknál a bal fél tükör nélküli másolata a jobb félre, fotóablakok kilyukasztva */
+/* kész keretkép (canvas) → PNG + bélyegkép */
+async function packSheet(c) {
+	const t = document.createElement('canvas'); t.width = c.width / 5; t.height = c.height / 5;
+	t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+	const png = c.toDataURL('image/png');
+	return { png, thumb: t.toDataURL('image/png'), img: await loadUrl(png) };
+}
+/* AI-kép → 1200×1800 / 1800×1200, csíknál a bal fél másolata a jobb félre, fotóablakok kilyukasztva */
 async function aiFinish(url, lay) {
-	const src = await loadUrl(url), L = OWN_LAY[lay], iw = src.naturalWidth, ih = src.naturalHeight;
-	const c = document.createElement('canvas'); c.width = 1200; c.height = 1800;
+	const src = await loadUrl(url), L = OWN_LAY[lay], iw = src.naturalWidth, ih = src.naturalHeight, S = sheet(L.or);
+	const c = document.createElement('canvas'); c.width = S[0]; c.height = S[1];
 	const g = c.getContext('2d');
 	g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-	g.drawImage(src, 0, 0, 1200, 1800);
-	if (L.half) g.drawImage(src, 0, 0, iw / 2, ih, 600, 0, 600, 1800);   /* a két csík legyen egyforma */
+	g.drawImage(src, 0, 0, S[0], S[1]);
+	if (L.half) g.drawImage(src, 0, 0, iw / 2, ih, S[0] / 2, 0, S[0] / 2, S[1]);   /* a két csík legyen egyforma */
 	L.slots.forEach(s => g.clearRect(s[0], s[1], s[2], s[3]));
-	const t = document.createElement('canvas'); t.width = 240; t.height = 360;
-	t.getContext('2d').drawImage(c, 0, 0, 240, 360);
-	const png = c.toDataURL('image/png'), thumb = t.toDataURL('image/png');
-	return { png, thumb, img: await loadUrl(png) };
+	return packSheet(c);
 }
 /* vázlat (nem mentett egyedi stílus) a kész, lyukasztott keretképből */
 function setDraft(f, m) {
 	const a = st.ai, key = 'ai-vazlat-' + (++a.n);
 	cache[key] = Promise.resolve(f.img);
-	Object.assign(m, { own: 'draft', set: a.set, font: a.font, color: a.color, wf: a.wf, wc: a.wc, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' });
+	Object.assign(m, { own: 'draft', cat: a.cat, set: a.set, font: a.font, color: a.color, wf: a.wf, wc: a.wc, ov: key, thumbUrl: f.thumb, png: f.png, thumb: '' });
 	const old = draftIdx(), d = ownDesign(m);
 	if (old >= 0) { if (D[old].meta && D[old].meta.ov) delete cache[D[old].meta.ov]; D[old] = d; } else D.push(d);
 	a.draft = m;
@@ -1023,39 +1050,34 @@ function setDraft(f, m) {
 	renderCats();
 	if (alive() && !q('[data-ain]').value) q('[data-ain]').focus();
 }
-/* saját keret feltöltése: álló 1200×1800-ra (kitöltve, középre vágva); átlátszó ablakok felismerése */
+/* saját keret feltöltése: a kép tájolása szerint álló 1200×1800-ra vagy fekvő 1800×1200-ra (kitöltve, középre vágva); átlátszó ablakok felismerése */
 async function aiUpload(file) {
 	const u = URL.createObjectURL(file);
 	try {
 		const src = await loadUrl(u).catch(() => { throw new Error('Ez a fájl nem kép (PNG, JPG vagy WebP kell).'); });
 		const iw = src.naturalWidth, ih = src.naturalHeight;
 		if (iw < 300 || ih < 300) throw new Error('Túl kicsi a kép (legalább 1200×1800 px ajánlott).');
-		const c = document.createElement('canvas'); c.width = 1200; c.height = 1800;
+		const or = iw > ih ? 'l' : 'p', S = sheet(or);
+		const c = document.createElement('canvas'); c.width = S[0]; c.height = S[1];
 		const g = c.getContext('2d');
 		g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-		const land = iw > ih;
-		if (land) { g.translate(1200, 0); g.rotate(Math.PI / 2); cover(g, src, [0, 0, 1800, 1200]); g.setTransform(1, 0, 0, 1, 0, 0); }   /* fekvő kép: elforgatva */
-		else cover(g, src, [0, 0, 1200, 1800]);
-		const r = (land ? iw / ih : ih / iw), warn = [];
+		cover(g, src, [0, 0, S[0], S[1]]);
+		const r = Math.max(iw, ih) / Math.min(iw, ih), warn = [];
 		if (Math.abs(r - 1.5) > 0.08) warn.push('a kép nem 2:3 arányú, ezért a széleiből levágtunk');
-		if (land) warn.push('a fekvő képet álló helyzetbe forgattuk');
 		if (Math.min(iw, ih) < 1000) warn.push('kis felbontás (' + iw + '×' + ih + ') – nyomtatásban életlen lehet');
 		const probe = await loadUrl(c.toDataURL('image/png'));
 		const det = holes(probe, '').map(s => s.map(Math.round));
-		let m;
+		let m, lay = st.ai.lay;
 		if (det.length) {
-			m = { name: 'Saját keret (nem mentett)', layout: 'custom', slots: det, prompt: '' };
+			m = { name: 'Saját keret (nem mentett)', layout: 'custom', or, slots: det, prompt: '' };
 			st.ai.wf = 'none';   /* a saját keretnek már van ablakkerete */
 		} else {
-			m = { name: 'Saját keret (nem mentett)', layout: st.ai.lay, prompt: '' };
-			const L = OWN_LAY[st.ai.lay];
-			L.slots.forEach(s => g.clearRect(s[0], s[1], s[2], s[3]));
+			if (layOr(lay) !== or) { lay = LAY_PAIR[lay] || (or === 'l' ? 'f1x' : '1x'); st.ai.lay = lay; }
+			m = { name: 'Saját keret (nem mentett)', layout: lay, or, prompt: '' };
+			OWN_LAY[lay].slots.forEach(s => g.clearRect(s[0], s[1], s[2], s[3]));
 		}
-		const t = document.createElement('canvas'); t.width = 240; t.height = 360;
-		t.getContext('2d').drawImage(c, 0, 0, 240, 360);
-		const png = c.toDataURL('image/png');
-		setDraft({ png, thumb: t.toDataURL('image/png'), img: await loadUrl(png) }, m);
-		aiMsg('✓ Feltöltve – ' + (det.length ? det.length + ' átlátszó fotóablakot találtam a képen, azokat használom' : 'nem volt átlátszó ablak, a(z) „' + OWN_LAY[st.ai.lay].label + '” elrendezés ablakait vágtam bele (fent másik elrendezést választva töltsd fel újra, ha más kell)') + '.' + (warn.length ? ' Figyelem: ' + warn.join('; ') + '.' : '') + ' Ha tetszik, add meg a nevét és mentsd el.', warn.length ? '' : 'ok');
+		setDraft(await packSheet(c), m);
+		aiMsg('✓ Feltöltve (' + (or === 'l' ? 'fekvő, 15×10' : 'álló, 10×15') + ') – ' + (det.length ? det.length + ' átlátszó fotóablakot találtam a képen, azokat használom' : 'nem volt átlátszó ablak, a(z) „' + OWN_LAY[lay].label + '” elrendezés ablakait vágtam bele (fent másik elrendezést választva töltsd fel újra, ha más kell)') + '.' + (warn.length ? ' Figyelem: ' + warn.join('; ') + '.' : '') + ' Ha tetszik, add meg a nevét és mentsd el.', warn.length ? '' : 'ok');
 	} catch (e) {
 		aiMsg('Nem sikerült: ' + e.message, 'err');
 	} finally { URL.revokeObjectURL(u); }
@@ -1094,14 +1116,15 @@ async function aiSave() {
 	const b = q('[data-aisave]'); b.disabled = true;
 	const m = D[i].meta;
 	try {
-		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, set: m.set, layout: m.layout, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '', slots: m.layout === 'custom' ? JSON.stringify(m.slots) : '', prompt: m.prompt || '' });
+		const e = await post('cp_sb_own_save', { name, png: m.png, thumb: m.thumbUrl, cat: okCat(m.cat), set: m.set, layout: m.layout, font: m.font, color: m.color, wf: m.wf || 'none', wc: m.wc || '', slots: m.layout === 'custom' ? JSON.stringify(m.slots) : '', prompt: m.prompt || '' });
 		cache[e.file] = cache[m.ov];
 		const j = draftIdx(); if (j < 0) return;
 		D[j] = ownDesign(Object.assign({}, e, { ov: e.file, own: e.id }));
 		st.ai.draft = null;
 		if (alive()) q('[data-ain]').value = '';
-		renderPicker(); renderVars(); syncInputs(); syncAi(); changed();
-		aiMsg('✓ Elmentve: „' + e.name + '” – mostantól az „Egyedi” kategóriában választható.', 'ok');
+		st.cat = okCat(e.cat);
+		renderCats(); renderPicker(); renderVars(); syncInputs(); syncAi(); changed();
+		aiMsg('✓ Elmentve: „' + e.name + '” – mostantól a(z) „' + catName(e.cat) + '” kategóriában választható.', 'ok');
 	} catch (e) { aiMsg('Nem sikerült menteni: ' + e.message, 'err'); }
 	if (alive()) b.disabled = false;
 }
@@ -1127,6 +1150,7 @@ async function aiDel() {
 function aiClick(t) {
 	let b;
 	if ((b = t.closest('[data-alv]'))) { st.ai.lay = b.getAttribute('data-alv'); syncAi(); return true; }
+	if ((b = t.closest('[data-acatv]'))) { st.ai.cat = b.getAttribute('data-acatv'); aiRestyle(); renderPicker(); return true; }
 	if ((b = t.closest('[data-asv]'))) { st.ai.set = b.getAttribute('data-asv'); aiRestyle(); return true; }
 	if ((b = t.closest('[data-afv]'))) { st.ai.font = b.getAttribute('data-afv'); aiRestyle(); return true; }
 	if ((b = t.closest('[data-awfv]'))) { st.ai.wf = b.getAttribute('data-awfv'); aiRestyle(); return true; }
