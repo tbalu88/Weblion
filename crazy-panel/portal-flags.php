@@ -42,6 +42,9 @@ function cp_portal_flags_build($portal, $answers, $state) {
 		$du = cp_portal_duration_info($portal, $answers);
 		if ($du['diff']) { $add('idotartam', 'IDŐTARTAM: ' . mb_strtoupper(cp_portal_hours_text($du['chosen'])) . ' (CSOMAG: ' . mb_strtoupper(cp_portal_hours_text($du['pkg'])) . ')', 'warn', $all); }
 	}
+	if ($g('template_mode') === 'custom') {
+		$add('egyedi_sablon', 'EGYEDI SABLON · ' . mb_strtoupper(cp_portal_custom_tpl_fee($g('client_type'))), 'warn', $all);
+	}
 	if (function_exists('cp_portal_guests_info')) {
 		$gi = cp_portal_guests_info($portal, $answers);
 		if ($gi['diff']) { $add('letszam', 'LÉTSZÁM: ' . $gi['chosen'] . ' FŐ (AJÁNLAT: ' . $gi['orig'] . ' FŐ)', $gi['diff'] > 0 ? 'warn' : 'info', $all); }
@@ -157,7 +160,7 @@ function cp_portal_panel_map($deal_ids) {
 			'ct' => cp_portal_required_total('a', $flow),
 			'cready' => cp_portal_db_ts($st->contract_ready_at),
 			'cchanged' => cp_portal_db_ts($st->contract_changed_at),
-			'sb' => !empty($a['photo_template']),
+			'sb' => !empty($a['photo_template']) || (isset($a['template_mode']) && $a['template_mode'] === 'custom'),
 			'bg' => isset($a['background']) && is_string($a['background']) ? $a['background'] : '',
 			'flags' => cp_portal_flags_build($p, $a, $st),
 			'info' => cp_portal_info($p, $a),
@@ -231,6 +234,7 @@ function cp_portal_contract_data($portal, $answers) {
 	));
 	$gi = function_exists('cp_portal_guests_info') ? cp_portal_guests_info($portal, $answers) : null;
 	if ($gi && $gi['diff']) { $groups[count($groups) - 1][1][] = array('Létszám', $gi['chosen'] . ' fő – ELTÉR az ajánlatkéréstől (' . $gi['orig'] . ' fő)'); }
+	if ($g('template_mode') === 'custom') { $groups[count($groups) - 1][1][] = array('Egyedi fotósablon', cp_portal_custom_tpl_fee($type)); }
 	// üres, nem kötelező sorok elhagyása; a szöveges blokk a szerződés sorrendjében
 	$lines = array();
 	foreach ($groups as $i => $gr) {

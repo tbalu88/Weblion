@@ -5,6 +5,7 @@
  *   POST  /wp-json/crazy/v1/portal/form/complete        „Kész” gomb
  *   POST  /wp-json/crazy/v1/portal/form/contract        „Mehet a szerződés” – a szerződéshez szükséges adatok beküldése
  *   POST  /wp-json/crazy/v1/portal/sablon               a fotósablon mentése (portal-sablon.php)
+ *   POST  /wp-json/crazy/v1/portal/template-logo        logó az egyedi sablonhoz (portal-sablon.php)
  *   POST  /wp-json/crazy/v1/salesmate/deal-stage?key=…  Salesmate-webhook (szakaszváltás)
  * Az ügyféloldali végpontok a portál sütijével azonosítanak; írásnál X-CP-Nonce fejléc is kell. */
 
@@ -21,6 +22,11 @@ function cp_portal_rest_routes() {
 		'methods' => 'POST',
 		'permission_callback' => 'cp_portal_rest_perm_write',
 		'callback' => 'cp_portal_rest_sablon_save',
+	));
+	register_rest_route('crazy/v1', '/portal/template-logo', array(
+		'methods' => 'POST',
+		'permission_callback' => 'cp_portal_rest_perm_write',
+		'callback' => 'cp_portal_rest_template_logo',
 	));
 	register_rest_route('crazy/v1', '/portal/form/complete', array(
 		'methods' => 'POST',

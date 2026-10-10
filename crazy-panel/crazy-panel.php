@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Crazy Foglaltsági Panel
  * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap), sablonkészítő (lyukasztott PNG a fotós szoftvernek).
- * Version: 1.13.3
+ * Version: 1.14.0
  * Author: Crazyphoto / EventCrazy
  * Requires PHP: 7.4
  * Text Domain: crazy-panel
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '1.13.3');
+define('CP_PANEL_VER', '1.14.0');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');

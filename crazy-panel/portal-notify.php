@@ -138,6 +138,18 @@ function cp_portal_pumble_guests($portal, $gi) {
 	return $r;
 }
 
+/* az ügyfél egyedi fotósablont kér (díjköteles) – a leírás és a logó a panelen */
+function cp_portal_pumble_custom_tpl($portal) {
+	$a = cp_portal_answers($portal->id);
+	$ct = isset($a['client_type']) && is_string($a['client_type']) ? $a['client_type'] : '';
+	$t = '🎨 Egyedi fotósablont kér – ' . cp_portal_pumble_head($portal) . "\n";
+	$t .= 'Díj: ' . cp_portal_custom_tpl_fee($ct) . ' · a leírás és a logó a portál adatlapján' . "\n";
+	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$r = cp_portal_pumble($t);
+	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: egyedi sablon', $r->get_error_message()); }
+	return $r;
+}
+
 /* „Mehet a szerződés” – a szerződéshez szükséges adatok megérkeztek (vagy módosultak a jelzés óta) */
 function cp_portal_pumble_contract($portal, $first = true) {
 	$cd = cp_portal_contract_data($portal, cp_portal_answers($portal->id));

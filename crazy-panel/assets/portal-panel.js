@@ -158,7 +158,13 @@
 
   /* ---------------------------------------------------- fotósablon */
   function sablonHtml(p) {
-    const s = p.sablon;
+    const s = p.sablon, c = p.custom;
+    if (c) {
+      return '<h4>Egyedi fotósablont kér <small class="cpx-muted">– díja ' + esc(c.fee) + '</small></h4>' +
+        '<div class="pp-sb">' + (c.logo ? '<a href="' + esc(sbUrl(c.logo)) + '" target="_blank" rel="noopener" download="' + esc(c.logoName || 'logo') + '"><img src="' + esc(sbUrl(c.logo)) + '" alt="Az ügyfél logója" loading="lazy"></a>' : '') +
+        '<div><p style="white-space:pre-line">' + (c.brief ? esc(c.brief) : '<span class="cpx-muted">Még nem írta le, mit szeretne.</span>') + '</p>' +
+        (c.logo ? '<p class="cpx-muted">Logó: ' + esc(c.logoName) + ' – kattints a képre a letöltéshez.</p>' : '<p class="cpx-muted">Logót nem töltött fel.</p>') + '</div></div>';
+    }
     if (!s) return '<h4>Fotósablon</h4><p class="cpx-muted">Az ügyfél még nem mentett sablont.</p>';
     return '<h4>Fotósablon <small class="cpx-muted">– az ügyfél mentette: ' + esc(dt(s.at)) + (s.name ? ' · ' + esc(s.name) : '') + '</small></h4>' +
       '<div class="pp-sb">' + (s.preview ? '<a href="' + esc(sbUrl(s.preview)) + '" target="_blank" rel="noopener"><img src="' + esc(sbUrl(s.preview)) + '" alt="Sablon-előnézet" loading="lazy"></a>' : '') +

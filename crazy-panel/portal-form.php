@@ -90,6 +90,10 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 	}
 	$res = cp_portal_recompute($portal, $extra);
 
+	if ($key === 'template_mode' && $new === 'custom' && $old !== 'custom' && $by === 'ugyfel') {
+		$pp = $portal;
+		cp_portal_defer(function () use ($pp) { cp_portal_pumble_custom_tpl($pp); });
+	}
 	if ($key === 'guests_type_dress') {
 		$og = is_array($old) && isset($old['guests']) ? (int) $old['guests'] : 0;
 		$gi = cp_portal_guests_info($portal, cp_portal_answers($portal->id));

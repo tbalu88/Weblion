@@ -26,8 +26,8 @@ function cp_portal_sb_file_url($f) {
 
 function cp_portal_sb_files_delete($val) {
 	if (!is_array($val)) { return; }
-	foreach (array('logo', 'preview') as $k) {
-		if (!empty($val[$k]) && preg_match('/^p\d+-[a-z0-9]{12}-(logo|prev)\.(png|jpg)$/', $val[$k])) { @unlink(cp_portal_sb_dir() . '/' . $val[$k]); }
+	foreach (array('logo', 'preview', 'file') as $k) {
+		if (!empty($val[$k]) && preg_match('/^p\d+-[a-z0-9]{12}-(logo|prev|clogo)\.(png|jpg)$/', $val[$k])) { @unlink(cp_portal_sb_dir() . '/' . $val[$k]); }
 	}
 }
 
@@ -135,6 +135,7 @@ function cp_portal_rest_sablon_save(WP_REST_Request $req) {
 		cp_portal_sb_files_delete($del);
 	}
 	cp_portal_answer_put($portal->id, 'photo_template', $val, 'ugyfel');
+	if (!isset($answers['template_mode'])) { cp_portal_answer_put($portal->id, 'template_mode', 'own', 'ugyfel'); }
 	cp_portal_log_add($portal->id, 'photo_template', $old ? $old['name'] : null, $val['name'], 'ugyfel');
 	$extra = array();
 	$di = cp_portal_deadline_info($portal);
@@ -143,13 +144,67 @@ function cp_portal_rest_sablon_save(WP_REST_Request $req) {
 	return array('ok' => true, 'at' => $val['at'], 'preview' => cp_portal_sb_file_url($val['preview']));
 }
 
+/* ------------------------------------------------------------ logó az egyedi sablonhoz (REST, multipart „logo” mező; „remove=1” törli)
+ * Biztonság: csak PNG / JPG / WebP; a fájl tartalmát (nem a nevét / típusát) vizsgáljuk, majd a WP képszerkesztőjével
+ * (Imagick / GD) újrakódoljuk – a mentett fájl egy frissen rajzolt kép, így beágyazott kód nem juthat át.
+ * Véletlen név, rögzített .png / .jpg kiterjesztés, a mappa közvetlenül nem érhető el (.htaccess), csak a jogosultságot
+ * ellenőrző admin-ajax végponton keresztül, nosniff fejléccel. */
+
+function cp_portal_rest_template_logo(WP_REST_Request $req) {
+	$s = cp_portal_session();
+	$portal = $s['portal'];
+	if (cp_portal_locked($portal)) {
+		return new WP_REST_Response(array('ok' => false, 'message' => 'A határidő lejárt, a logó már nem módosítható.'), 423);
+	}
+	$answers = cp_portal_answers($portal->id);
+	$old = isset($answers['template_logo']) && is_array($answers['template_logo']) ? $answers['template_logo'] : null;
+	if ($req->get_param('remove')) {
+		if ($old) {
+			cp_portal_sb_files_delete($old);
+			cp_portal_answer_put($portal->id, 'template_logo', null, 'ugyfel');
+			cp_portal_log_add($portal->id, 'template_logo', $old['name'], null, 'ugyfel');
+		}
+		return array('ok' => true, 'removed' => true);
+	}
+	$files = $req->get_file_params();
+	$up = isset($files['logo']) && is_array($files['logo']) ? $files['logo'] : null;
+	$bad = function ($m, $code = 400) { return new WP_REST_Response(array('ok' => false, 'message' => $m), $code); };
+	if (!$up || !empty($up['error']) || empty($up['tmp_name']) || !is_uploaded_file($up['tmp_name'])) { return $bad('A feltöltés nem sikerült – próbáld újra.'); }
+	if ((int) $up['size'] > 10 * MB_IN_BYTES) { return $bad('A fájl túl nagy (legfeljebb 10 MB).'); }
+	$head = (string) @file_get_contents($up['tmp_name'], false, null, 0, 16);
+	$info = @getimagesize($up['tmp_name']);
+	$types = array(IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'png');
+	if (!cp_sb_is_img($head) || !$info || !isset($types[$info[2]]) || $info[0] < 16 || $info[1] < 16 || $info[0] * $info[1] > 60000000) {
+		return $bad('Csak PNG, JPG vagy WebP képet tudunk fogadni.');
+	}
+	$ext = $types[$info[2]];
+	$ed = wp_get_image_editor($up['tmp_name']);
+	if (is_wp_error($ed)) { return $bad('A képet nem sikerült feldolgozni – próbáld PNG vagy JPG formátumban.'); }
+	$sz = $ed->get_size();
+	if ($sz['width'] > 3000 || $sz['height'] > 3000) { $ed->resize(3000, 3000, false); }
+	$name = 'p' . (int) $portal->id . '-' . strtolower(wp_generate_password(12, false, false)) . '-clogo.' . $ext;
+	$saved = $ed->save(cp_portal_sb_dir() . '/' . $name, $ext === 'png' ? 'image/png' : 'image/jpeg');
+	if (is_wp_error($saved) || empty($saved['path']) || basename($saved['path']) !== $name) {
+		if (!is_wp_error($saved) && !empty($saved['path'])) { @unlink($saved['path']); }
+		return $bad('A logót nem sikerült elmenteni.', 500);
+	}
+	$orig = sanitize_file_name(wp_basename((string) $up['name']));
+	$val = array('file' => $name, 'name' => mb_substr($orig !== '' ? $orig : 'logo.' . $ext, 0, 80), 'at' => time());
+	if ($old) { cp_portal_sb_files_delete($old); }
+	cp_portal_answer_put($portal->id, 'template_logo', $val, 'ugyfel');
+	cp_portal_log_add($portal->id, 'template_logo', $old ? $old['name'] : null, $val['name'], 'ugyfel');
+	$di = cp_portal_deadline_info($portal);
+	cp_portal_recompute($portal, $di && time() >= $di['deadline'] ? array('changed_late_at' => cp_portal_db_now()) : array());
+	return array('ok' => true, 'url' => cp_portal_sb_file_url($name), 'name' => $val['name']);
+}
+
 /* ------------------------------------------------------------ fájlok kiszolgálása */
 
 add_action('wp_ajax_nopriv_cp_portal_sb_file', 'cp_portal_ajax_sb_file');
 add_action('wp_ajax_cp_portal_sb_file', 'cp_portal_ajax_sb_file');
 function cp_portal_ajax_sb_file() {
 	$f = isset($_GET['f']) ? (string) wp_unslash($_GET['f']) : '';
-	if (!preg_match('/^p(\d+)-[a-z0-9]{12}-(logo|prev)\.(png|jpg)$/', $f, $m)) { status_header(400); exit; }
+	if (!preg_match('/^p(\d+)-[a-z0-9]{12}-(logo|prev|clogo)\.(png|jpg)$/', $f, $m)) { status_header(400); exit; }
 	$ok = cp_panel_authed();
 	if (!$ok) {
 		$s = cp_portal_session();

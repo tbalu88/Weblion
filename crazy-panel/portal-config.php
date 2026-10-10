@@ -12,6 +12,7 @@ define('CP_PORTAL_COOKIE', 'cp_portal_s');
 define('CP_PORTAL_COOKIE_DAYS', 30);
 define('CP_PORTAL_KEEP_FORM_DAYS', 30);    // adatlap: rendezvény + 30 nap
 define('CP_PORTAL_KEEP_CONSENT_YEARS', 3); // hozzájárulással: rendezvény + 3 év
+define('CP_PORTAL_CUSTOM_TPL_FEE', 5000);   // egyedi fotósablon díja (Ft; cégnek + ÁFA)
 define('CP_PORTAL_KEEP_ACCESS_DAYS', 183); // belépési napló, lejárt tokenek: 6 hónap
 define('CP_PORTAL_KEEP_PORTAL_YEARS', 5);  // portál alapadat, helyszín, értesítésnapló: 5 év
 
@@ -267,10 +268,21 @@ function cp_portal_fields() {
 			'help' => 'Csak az aznap még szabad hátterek látszanak. A választás kérés: a szerződés kiküldésével válik foglalássá.',
 			'kind' => 'bg',
 		),
-		'photo_template' => array(
+		'template_mode' => array(
 			'stage' => 'c', 'q' => 'template', 'qlabel' => 'Fotósablon', 'section' => 'extra', 'required' => false,
 			'label' => 'Fotósablon (a kinyomtatott fotók kerete)',
+			'kind' => 'enum', 'options' => array('own' => 'Elkészítem a saját sablonom', 'custom' => 'Egyedi sablont szeretnék gyártatni'),
+		),
+		// sub = a fenti kérdés folytatása (nincs saját sorszáma)
+		'photo_template' => array(
+			'stage' => 'c', 'q' => 'template', 'qlabel' => 'Saját fotósablon', 'section' => 'extra', 'required' => false, 'sub' => true, 'show_if' => array('template_mode', 'own'),
+			'label' => 'A saját sablonod',
 			'kind' => 'sablon',
+		),
+		'template_custom' => array(
+			'stage' => 'c', 'q' => 'template', 'qlabel' => 'Egyedi sablon kérése', 'section' => 'extra', 'required' => false, 'sub' => true, 'show_if' => array('template_mode', 'custom'),
+			'label' => 'Írd le, mit szeretnél az egyedi sablonon',
+			'kind' => 'textarea', 'max' => 2000, 'ph' => 'Feliratok (nevek, dátum, szlogen), színek, stílus, hangulat, esetleg egy minta linkje…',
 		),
 		'retention_consent' => array(
 			'stage' => 'c', 'q' => 'consent', 'qlabel' => 'Adatmegőrzés', 'section' => 'vege', 'required' => false,
@@ -299,6 +311,12 @@ function cp_portal_stage_titles() {
 		'b' => array('2. A rendezvény részletei', 'Ráér a határidőig – hogy a kollégánk mindenre felkészülten érkezzen.'),
 		'c' => array('3. Háttér és fotósablon', 'Nem kötelező, a határidőig bármikor módosíthatod.'),
 	);
+}
+
+/* az egyedi fotósablon díja a megrendelő típusa szerint (magan | ceg | ismeretlen) */
+function cp_portal_custom_tpl_fee($type) {
+	$ft = number_format(CP_PORTAL_CUSTOM_TPL_FEE, 0, ',', ' ') . ' Ft';
+	return $type === 'ceg' ? $ft . ' + ÁFA' : ($type === 'magan' ? $ft : $ft . ' (cégeknek + ÁFA)');
 }
 
 /* látszik-e (és kötelező-e) a mező a többi válasz alapján (magánszemély / cég) */
@@ -524,7 +542,7 @@ function cp_portal_schema() {
 	$out = array();
 	foreach (cp_portal_fields() as $k => $f) {
 		$x = array('key' => $k, 'label' => $f['label'], 'q' => $f['q'], 'qlabel' => $f['qlabel'], 'section' => $f['section'], 'stage' => $f['stage'], 'required' => !empty($f['required']));
-		foreach (array('kind', 'options', 'max', 'parts', 'help', 'ph', 'show_if', 'note') as $a) { if (isset($f[$a])) { $x[$a] = $f[$a]; } }
+		foreach (array('kind', 'options', 'max', 'parts', 'help', 'ph', 'show_if', 'note', 'sub') as $a) { if (isset($f[$a])) { $x[$a] = $f[$a]; } }
 		$out[] = $x;
 	}
 	return $out;

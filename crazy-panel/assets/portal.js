@@ -206,7 +206,7 @@
 
   form.addEventListener('input', function (e) {
     var fd = e.target.closest('[data-field]');
-    if (!fd || e.target.type === 'radio' || e.target.type === 'checkbox') return;
+    if (!fd || e.target.type === 'file' || e.target.type === 'radio' || e.target.type === 'checkbox') return;
     mark(fd, '', '');
     if (fd.getAttribute('data-field') === 'schedule') {
       if (e.target.closest('[data-part="start"]')) autoEnd(fd);
@@ -260,6 +260,45 @@
     box.textContent = t;
     box.classList.toggle('diff', n > o);
   }
+  /* egyedi sablon: a díj a megrendelő típusa szerint (magánszemély / cég + ÁFA) */
+  function tplFee() {
+    var p = form.querySelector('[data-tpl-fee]'), ct = byKey('client_type');
+    if (!p || !C.fees) return;
+    var v = ct ? read(ct) : '';
+    p.textContent = C.fees[v] || C.fees[''];
+  }
+  /* logó feltöltése az egyedi sablonhoz (a szerver ellenőrzi és újrakódolja) */
+  function logoUp(inp, remove) {
+    var box = inp.closest('[data-logo-up]'), errEl = box.querySelector('[data-logo-err]'), cur = box.querySelector('.cpp-logo-cur');
+    var btn = box.querySelector('.cpp-logo-btn span'), fd = new FormData();
+    var showErr = function (m) { errEl.textContent = m || ''; errEl.hidden = !m; };
+    if (remove) fd.append('remove', '1');
+    else {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      if (f.size > 10 * 1024 * 1024) { showErr('A fájl túl nagy (legfeljebb 10 MB).'); inp.value = ''; return; }
+      if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { showErr('Csak PNG, JPG vagy WebP képet tudunk fogadni. Vektoros logót e-mailben küldj el.'); inp.value = ''; return; }
+      fd.append('logo', f);
+    }
+    showErr('');
+    if (btn) btn.textContent = remove ? 'Törlés…' : 'Feltöltés…';
+    fetch(C.logoRest, { method: 'POST', credentials: 'same-origin', headers: { 'X-CP-Nonce': C.nonce }, body: fd })
+      .then(function (r) { return r.json().then(function (b) { return { r: r, b: b }; }, function () { return { r: r, b: {} }; }); })
+      .then(function (x) {
+        if (x.r.status === 423) { lockUI(x.b.message); return; }
+        if (!x.r.ok || !x.b.ok) { showErr(x.b.message || 'A feltöltés nem sikerült – próbáld újra.'); return; }
+        if (x.b.removed) { cur.hidden = true; }
+        else { cur.querySelector('img').src = x.b.url; cur.querySelector('span').textContent = x.b.name; cur.hidden = false; }
+      }, function () { showErr('Nincs kapcsolat – próbáld újra.'); })
+      .then(function () { inp.value = ''; if (btn) btn.textContent = cur.hidden ? 'Logó feltöltése' : 'Másik logó feltöltése'; });
+  }
+  form.addEventListener('click', function (e) {
+    var d = e.target.closest('[data-logo-del]');
+    if (!d) return;
+    e.preventDefault();
+    var box = d.closest('[data-logo-up]'), inp = box.querySelector('input[type=file]');
+    if (inp) logoUp(inp, true);
+  });
   /* a kezdés + a foglalt csomag óraszáma → a szolgáltatás vége (amíg az ügyfél kézzel át nem írja) */
   function autoEnd(fd) {
     var box = fd.querySelector('.cpp-dur'), si = fd.querySelector('[data-part="start"] input'), ei = fd.querySelector('[data-part="end"] input');
@@ -278,6 +317,8 @@
     var fd = e.target.closest('[data-field]');
     if (!fd) return;
     if (e.target.hasAttribute('data-same-as-client')) { sameAsClient(fd, e.target); return; }
+    if (e.target.type === 'file') { logoUp(e.target); return; }
+    if (fd.getAttribute('data-field') === 'client_type') tplFee();
     if (fd.getAttribute('data-field') === 'schedule' && e.target.closest('[data-part="start"]')) autoEnd(fd);
     if (fd.getAttribute('data-field') === 'schedule') duration(fd);
     showIf(fd);

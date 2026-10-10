@@ -68,6 +68,12 @@ function cp_portal_p_detail($deal_id) {
 			'ready' => cp_portal_db_ts($st->contract_ready_at), 'changed' => cp_portal_db_ts($st->contract_changed_at),
 		)),
 		'sablon' => $tpl ? array('name' => isset($tpl['name']) ? $tpl['name'] : '', 'at' => isset($tpl['at']) ? (int) $tpl['at'] : 0, 'snap' => isset($tpl['snap']) ? $tpl['snap'] : null, 'preview' => !empty($tpl['preview']) ? $tpl['preview'] : '', 'logo' => !empty($tpl['logo']) ? $tpl['logo'] : '') : null,
+		'custom' => isset($answers['template_mode']) && $answers['template_mode'] === 'custom' ? array(
+			'brief' => isset($answers['template_custom']) && is_string($answers['template_custom']) ? $answers['template_custom'] : '',
+			'logo' => isset($answers['template_logo']['file']) ? $answers['template_logo']['file'] : '',
+			'logoName' => isset($answers['template_logo']['name']) ? $answers['template_logo']['name'] : '',
+			'fee' => cp_portal_custom_tpl_fee(isset($answers['client_type']) && is_string($answers['client_type']) ? $answers['client_type'] : ''),
+		) : null,
 		'status' => $portal->status,
 		'event_date' => $portal->event_date,
 		'created' => cp_portal_db_ts($portal->created_at),

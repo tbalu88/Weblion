@@ -111,8 +111,9 @@ function cp_portal_render_form_page($portal, $tok) {
 				$val = array_key_exists($k, $answers) ? $answers[$k] : (isset($prefill[$k]) ? $prefill[$k] : null);
 				if (is_object($val)) { $val = (array) $val; }
 				$req = !empty($f['required']) && cp_portal_stage_required($f['stage'], $flow);
-				if (!isset($f['kind']) || $f['kind'] !== 'consent') { $qn++; }
-				$html .= cp_portal_field_html($k, $f, $val, $locked, array_key_exists($k, $answers), $req, $answers, $portal, $no . '.' . $qn);
+				$sub = !empty($f['sub']) || (isset($f['kind']) && $f['kind'] === 'consent');
+				if (!$sub) { $qn++; }
+				$html .= cp_portal_field_html($k, $f, $val, $locked, array_key_exists($k, $answers), $req, $answers, $portal, $sub ? '' : $no . '.' . $qn);
 			}
 			if ($html === '') { continue; }
 			if ($si[1] !== '') { $secn++; }
@@ -136,6 +137,8 @@ function cp_portal_render_form_page($portal, $tok) {
 	echo '</main>';
 	$cfg = array(
 		'rest' => wp_make_link_relative(rest_url('crazy/v1/portal/form')),
+		'logoRest' => wp_make_link_relative(rest_url('crazy/v1/portal/template-logo')),
+		'fees' => array('magan' => cp_portal_tpl_fee_text('magan'), 'ceg' => cp_portal_tpl_fee_text('ceg'), '' => cp_portal_tpl_fee_text('')),
 		'nonce' => cp_portal_nonce($tok),
 		'locked' => $locked,
 		'pid' => (int) $portal->id,
@@ -151,9 +154,9 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 	$kind = isset($f['parts']) ? 'object' : $f['kind'];
 	$sif = '';
 	if (!empty($f['show_if'])) {
-		$sif = ' data-show-if-field="' . esc_attr($f['show_if'][0] . '=' . $f['show_if'][1]) . '"' . (cp_portal_field_active($f, $answers, $portal) ? '' : ' hidden');
+		$sif = ' data-show-if-field="' . esc_attr($f['show_if'][0] . '=' . $f['show_if'][1]) . '"' . (cp_portal_field_active($f, $answers + (array) cp_portal_prefill($portal), $portal) ? '' : ' hidden');
 	}
-	$h = '<div class="cpp-field' . ($req ? ' req' : '') . '" id="f-' . esc_attr($k) . '" data-field="' . esc_attr($k) . '" data-kind="' . esc_attr($kind) . '" data-q="' . esc_attr($f['q']) . '"' . $sif . '>';
+	$h = '<div class="cpp-field' . ($req ? ' req' : '') . (!empty($f['sub']) ? ' sub' : '') . '" id="f-' . esc_attr($k) . '" data-field="' . esc_attr($k) . '" data-kind="' . esc_attr($kind) . '" data-q="' . esc_attr($f['q']) . '"' . $sif . '>';
 	if ($kind === 'consent') {
 		$on = is_array($val) && !empty($val['given']);
 		$h .= '<label class="cpp-consent"><input type="checkbox" data-part=""' . ($on ? ' checked' : '') . $dis . '><span>' . esc_html($f['label']) . '</span></label>';
@@ -198,6 +201,11 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 			$h .= '<p class="cpp-dur' . ($du['diff'] ? ' diff' : '') . '" data-pkg-hours="' . esc_attr($du['pkg']) . '">' . esc_html(cp_portal_duration_text($du)) . '</p>';
 		}
 	}
+	if ($k === 'template_mode') {
+		$ct = isset($answers['client_type']) && is_string($answers['client_type']) ? $answers['client_type'] : '';
+		$h .= '<p class="cpp-note" data-tpl-fee>' . esc_html(cp_portal_tpl_fee_text($ct)) . '</p>';
+	}
+	if ($k === 'template_custom') { $h .= cp_portal_tpl_logo_html($portal, $answers, $locked); }
 	if ($k === 'guests_type_dress') {
 		$gi = cp_portal_guests_info($portal, $answers);
 		if ($gi['orig'] > 0) {
@@ -261,6 +269,24 @@ function cp_portal_duration_text($du) {
 	$t = 'A foglalásod szerint ' . cp_portal_hours_adj($du['pkg']) . ' csomagot kértél.';
 	if ($du['diff']) { $t .= ' A megadott időtartam ' . cp_portal_hours_text($du['chosen']) . ' – ez eltér a csomagtól, a kollégáink egyeztetnek veled a különbözetről.'; }
 	return $t;
+}
+
+function cp_portal_tpl_fee_text($type) {
+	return 'Egyedi sablon: a grafikusunk a leírásod alapján elkészíti, és jóváhagyásra elküldi. Díja ' . cp_portal_custom_tpl_fee($type) . '.';
+}
+
+/* logó az egyedi sablonhoz: feltöltés a szerverre (PNG/JPG/WebP, újrakódolva – lásd portal-sablon.php) */
+function cp_portal_tpl_logo_html($portal, $answers, $locked) {
+	$lg = isset($answers['template_logo']) && is_array($answers['template_logo']) ? $answers['template_logo'] : null;
+	$h = '<div class="cpp-logo" data-logo-up><span class="cpp-pl">Logó (ha van)</span><div class="cpp-logo-cur"' . ($lg ? '' : ' hidden') . '>';
+	$h .= '<img alt="A feltöltött logó" src="' . ($lg ? esc_url(cp_portal_sb_file_url($lg['file'])) : '') . '"><span>' . ($lg ? esc_html($lg['name']) : '') . '</span>';
+	if (!$locked) { $h .= '<button type="button" class="cpp-link" data-logo-del>Törlés</button>'; }
+	$h .= '</div>';
+	if (!$locked) {
+		$h .= '<label class="cpp-btn ghost cpp-logo-btn"><span>' . ($lg ? 'Másik logó feltöltése' : 'Logó feltöltése') . '</span><input type="file" accept="image/png,image/jpeg,image/webp" hidden></label>';
+		$h .= '<p class="cpp-note">PNG, JPG vagy WebP kép, legfeljebb 10 MB (átlátszó hátterű PNG a legjobb). Vektoros logót (AI, EPS, SVG, PDF) e-mailben küldj el.</p>';
+	}
+	return $h . '<p class="cpp-ferr" data-logo-err hidden></p></div>';
 }
 
 /* az ajánlatkérés létszáma és az eltérés jelzése (a JS élőben frissíti – a szövegek ott is szerepelnek) */

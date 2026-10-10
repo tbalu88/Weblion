@@ -154,7 +154,7 @@ function cp_portal_retention($today = null) {
 
 		// 2) adatlap törlése (helyszín és hozzájárulás marad); a naplóban az értékek helyére „törölve”
 		if ($form_due) {
-			if (isset($answers['photo_template']) && function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete($answers['photo_template']); }
+			if (function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete(isset($answers['photo_template']) ? $answers['photo_template'] : null); cp_portal_sb_files_delete(isset($answers['template_logo']) ? $answers['template_logo'] : null); }
 			$in = implode(',', array_fill(0, count($keep), '%s'));
 			$args = array_merge(array($pid), $keep);
 			$d = (int) $wpdb->query($wpdb->prepare("DELETE FROM $A WHERE portal_id = %d AND field_key NOT IN ($in) AND field_key <> 'onsite_contact'", $args));
@@ -178,7 +178,7 @@ function cp_portal_retention($today = null) {
 	foreach ($old as $pid) {
 		$pid = (int) $pid;
 		$oa = cp_portal_answers($pid);
-		if (isset($oa['photo_template']) && function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete($oa['photo_template']); }
+		if (function_exists('cp_portal_sb_files_delete')) { cp_portal_sb_files_delete(isset($oa['photo_template']) ? $oa['photo_template'] : null); cp_portal_sb_files_delete(isset($oa['template_logo']) ? $oa['template_logo'] : null); }
 		foreach (array('form_answers', 'form_state', 'notifications', 'log', 'access_tokens', 'access_log') as $t) {
 			$wpdb->delete(cp_portal_t($t), array('portal_id' => $pid));
 		}

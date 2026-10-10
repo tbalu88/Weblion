@@ -112,6 +112,7 @@ function cp_portal_db_install() {
 	$missing = cp_portal_db_missing_tables();
 	if (!$missing && $prev !== '' && version_compare($prev, '2', '<')) { cp_portal_db_migrate_2(); }
 	if (!$missing && $prev !== '' && version_compare($prev, '4', '<')) { $GLOBALS['cp_portal_recompute_all'] = true; }  // a kötelező kérdések köre változott (v3; v4: helyigény csak szelfigépnél)
+	if (!$missing && $prev !== '' && version_compare($prev, '5', '<')) { cp_portal_db_migrate_5(); }
 	if (!$missing) {
 		update_option('cp_portal_db_ver', CP_PORTAL_DB_VER, true);
 	} else {
@@ -132,6 +133,16 @@ function cp_portal_db_migrate_2() {
 		if ($arr !== '' && !$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $A WHERE portal_id = %d AND field_key = 'arrival'", (int) $r->portal_id))) {
 			$wpdb->insert($A, array('portal_id' => (int) $r->portal_id, 'field_key' => 'arrival', 'value' => wp_json_encode($arr), 'updated_by' => $r->updated_by, 'updated_at' => $r->updated_at));
 		}
+	}
+}
+
+/* v5: a 3.1.2 választós lett (saját / egyedi sablon) – aki már mentett saját sablont, annál „saját” */
+function cp_portal_db_migrate_5() {
+	global $wpdb;
+	$A = cp_portal_t('form_answers');
+	foreach ((array) $wpdb->get_results("SELECT portal_id, updated_by, updated_at FROM $A WHERE field_key = 'photo_template'") as $r) {
+		if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $A WHERE portal_id = %d AND field_key = 'template_mode'", (int) $r->portal_id))) { continue; }
+		$wpdb->insert($A, array('portal_id' => (int) $r->portal_id, 'field_key' => 'template_mode', 'value' => wp_json_encode('own'), 'updated_by' => $r->updated_by, 'updated_at' => $r->updated_at));
 	}
 }
 

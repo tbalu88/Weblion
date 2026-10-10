@@ -140,3 +140,13 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-same{display:flex;gap:10px;align-items:center;margin:0 0 12px;font-weight:600;cursor:pointer}
 .cpp-same input{width:20px;height:20px;accent-color:var(--o);flex:none}
 .cpp-bgwarn{margin:10px 0 0;background:var(--warnb);color:#6E4A00;border-radius:10px;padding:8px 11px;font-size:14px}
+/* a kérdés folytatása (pl. 3.1.2 saját / egyedi sablon) */
+.cpp-field.sub{margin-top:-6px;border-top-left-radius:6px;border-top-right-radius:6px;border-left:4px solid var(--o)}
+.cpp-logo{margin-top:14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.cpp-logo .cpp-pl{margin:0}
+.cpp-logo-cur{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cpp-logo-cur img{max-width:140px;max-height:90px;border-radius:8px;border:1px solid var(--li);background:repeating-conic-gradient(#F1EDE6 0 25%,#fff 0 50%) 0 0/14px 14px;padding:4px}
+.cpp-logo-cur span{font-size:14px;color:var(--mu);word-break:break-all}
+.cpp-logo-btn{width:auto;cursor:pointer}
+.cpp-logo .cpp-note{margin:0}
+.cpp-link{background:none;border:0;padding:0;color:var(--bad);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
