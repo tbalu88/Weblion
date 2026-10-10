@@ -1,0 +1,45 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -1,8 +1,8 @@
+ <?php
+ /**
+  * Plugin Name: Crazy Foglaltsági Panel
+- * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap), sablonkészítő (lyukasztott PNG a fotós szoftvernek).
+- * Version: 1.14.0
++ * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap), sablonkészítő (lyukasztott PNG a fotós szoftvernek), statisztikák (megkeresések, aláírt dealek, hirdetési költség, GA4).
++ * Version: 1.15.0
+  * Author: Crazyphoto / EventCrazy
+  * Requires PHP: 7.4
+  * Text Domain: crazy-panel
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.14.0');
++define('CP_PANEL_VER', '1.15.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -668,12 +668,14 @@
+ 		'hxInt'      => (bool) preg_match('/^int/i', (string) $o['f_hx']),
+ 		'portal'     => function_exists('cp_portal_panel_cfg') ? cp_portal_panel_cfg() : array('on' => false),
+ 		'sb'         => function_exists('cp_sb_cfg') ? cp_sb_cfg() : array(),
++		'st'         => function_exists('cp_st_cfg') ? cp_st_cfg() : array('on' => false),
+ 	);
+ 	cp_panel_head('Crazy panel');
+ 	echo '<body><div id="cpx-app"></div>';
+ 	echo '<script>window.CPX=' . wp_json_encode($cfg) . ';</script>';
+ 	if (!empty($cfg['portal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/portal-panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
++	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '</body></html>';
+ }
+@@ -3486,6 +3488,7 @@
+  * ===================================================================== */
+ require_once __DIR__ . '/portal.php';
+ require_once __DIR__ . '/sablon.php';
++require_once __DIR__ . '/stat.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

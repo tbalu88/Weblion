@@ -1,0 +1,44 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -36,7 +36,7 @@
+     loading: false,
+     err: ''
+   };
+-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].includes(S.tab)) S.tab = 'naptar';
++  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon', 'stat'].includes(S.tab)) S.tab = 'naptar';
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -100,7 +100,7 @@
+     const top = el('header', { class: 'cpx-top' });
+     top.innerHTML = '<div class="cpx-logo">Crazy<span>panel</span></div>' +
+       '<nav class="cpx-tabs">' +
+-      tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') +
++      tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + tabBtn('stat', 'Statisztikák') +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">Frissítés</button>' +
+       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '">Kilépés</a></div>';
+@@ -121,6 +121,7 @@
+     if (!s) return;
+ 	if (S.tab === 'elszamolas') { elStatus(s); return; }
+ 	if (S.tab === 'tarca') { twStatus(s); return; }
++	if (S.tab === 'stat') { if (window.CPStat) window.CPStat.status(s); return; }
+     if (S.loading) { s.textContent = 'Betöltés…'; s.className = 'cpx-status'; return; }
+     if (S.err) { s.textContent = S.err; s.className = 'cpx-status err'; return; }
+     const c = S.cache[S.month];
+@@ -139,6 +140,7 @@
+   async function refresh() {
+ 	if (S.tab === 'tarca') { twMonths().forEach(m => { delete EL.cache[m]; }); try { await Promise.all([twLoad(true), twEnsureEl()]); } catch (e) { /* állapotsor */ } render(); return; }
+ 	if (S.tab === 'elszamolas') { try { await elLoad(S.month, true); } catch (e) { /* állapotsor */ } render(); return; }
++	if (S.tab === 'stat') { if (window.CPStat) await window.CPStat.refresh(); return; }
+     const ms = new Set([S.month, monthKey(S.day)]);
+     for (const m of ms) { try { await load(m, true); } catch (e) { /* status */ } }
+     render();
+@@ -159,6 +161,7 @@
+     const main = document.getElementById('cpx-main');
+ 	if (S.tab === 'tarca') { pollTrack(false); elPoll(false); viewTw(main); renderStatus(); return; }
+ 	if (S.tab === 'elszamolas') { pollTrack(false); viewEl(main); renderStatus(); return; }
++	if (S.tab === 'stat') { pollTrack(false); elPoll(false); if (window.CPStat) window.CPStat.view(main); else main.innerHTML = '<div class="cpx-empty err">A Statisztikák nem töltődtek be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'sablon') { pollTrack(false); elPoll(false); if (window.CPSablon) window.CPSablon.view(main, SBX); else main.innerHTML = '<div class="cpx-empty err">A Sablonkészítő nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	elPoll(false);
+     const m = S.tab === 'munkalap' || S.tab === 'ellenorzes' ? monthKey(S.day) : S.month;
