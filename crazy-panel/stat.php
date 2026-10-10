@@ -43,6 +43,7 @@ function cp_st_defaults() {
 		'meta_act'    => '',
 		'meta_ver'    => 'v24.0',
 		'ga_prop'     => '',
+		'svc_alias'   => "Szelfigép = Fotóautomata\nSzelfi gép = Fotóautomata\nSzelfi = Fotóautomata",
 		'rules'       => "source:facebook => meta\nsource:instagram => meta\nsource:meta => meta\nsource:linkedin => linkedin\ntag:linkedin => linkedin\nutm:facebook => meta\nutm:fb => meta\nutm:ig => meta\nutm:instagram => meta\nutm:meta => meta\nutm:linkedin => linkedin\nutm:google => google\nsource:google => google\nsource:referral => referral\nsource:ajánl => referral\nsource:ads => ads\nsource:crazyphoto => organic\nsource:eventcrazy => organic\nsource:spinner => organic\nsource:web => organic",
 	);
 }
@@ -347,7 +348,8 @@ function cp_st_map_deal($r, $now) {
 	$kind = ($spin !== '' && $sp !== '') ? 'both' : ($spin !== '' ? 'spin' : ($sp !== '' ? 'selfie' : ''));
 	if ($kind === '' && $svc !== '') {
 		$s = mb_strtolower($svc);
-		$kind = (strpos($s, 'spinner') !== false && strpos($s, 'fotó') !== false) ? 'both' : (strpos($s, 'spinner') !== false ? 'spin' : (strpos($s, 'fotóautomata') !== false ? 'selfie' : ''));
+		$self = strpos($s, 'fotóautomata') !== false || strpos($s, 'szelfi') !== false;
+		$kind = (strpos($s, 'spinner') !== false && ($self || strpos($s, 'fotó') !== false)) ? 'both' : (strpos($s, 'spinner') !== false ? 'spin' : ($self ? 'selfie' : ''));
 	}
 	$clts = cp_st_ts(cp_panel_get($r, 'closedDate'));
 	$status = cp_panel_str(cp_panel_get($r, 'status'));
@@ -1086,7 +1088,51 @@ function cp_st_load() {
 		if ($r['ev_type'] !== null && strpos((string) $r['ev_type'], '<') === 0) { $r['ev_type'] = ''; }
 	}
 	unset($r);
+	cp_st_svc_unify($rows);
 	return $rows;
+}
+
+/* „Szelfigép = Fotóautomata” soronként → kisbetűs név => egységes név */
+function cp_st_svc_aliases() {
+	$out = array();
+	foreach (cp_st_lines(cp_st_opts()['svc_alias']) as $l) {
+		$p = explode('=', $l, 2);
+		if (count($p) !== 2 || trim($p[0]) === '' || trim($p[1]) === '') { continue; }
+		$out[cp_panel_lc(trim($p[0]))] = trim($p[1]);
+	}
+	return $out;
+}
+
+/* ugyanaz a szolgáltatás egy néven: álnevek + kis/nagybetű („AI karikatúra” = „AI Karikatúra”, a gyakoribb írásmód marad) */
+function cp_st_svc_unify(&$rows) {
+	$al = cp_st_svc_aliases();
+	$key = function ($x) use ($al) {
+		$k = cp_panel_lc(preg_replace('/\s+/u', ' ', trim($x)));
+		return isset($al[$k]) ? cp_panel_lc($al[$k]) : $k;
+	};
+	$split = function ($svc) { return array_values(array_filter(array_map('trim', preg_split('/\s*[,&+]\s*/u', $svc)), 'strlen')); };
+	/* írásmódok számlálása kulcsonként; az álnév célja mindig nyer */
+	$cnt = array();
+	foreach ($rows as $r) {
+		foreach (array_merge($r['svcs'], $r['svc'] !== '' ? $split($r['svc']) : array()) as $x) {
+			$x = preg_replace('/\s+/u', ' ', trim($x));
+			$cnt[$key($x)][$x] = (isset($cnt[$key($x)][$x]) ? $cnt[$key($x)][$x] : 0) + 1;
+		}
+	}
+	$name = array();
+	foreach ($cnt as $k => $v) { uksort($v, function ($a, $b) use ($v) { return $v[$b] - $v[$a] ?: strcmp($a, $b); }); $name[$k] = key($v); }
+	foreach ($al as $t) { $name[cp_panel_lc($t)] = $t; }
+	foreach ($rows as &$r) {
+		$u = array();
+		foreach ($r['svcs'] as $x) { $n = $name[$key($x)]; if (!in_array($n, $u, true)) { $u[] = $n; } }
+		$r['svcs'] = $u;
+		if ($r['svc'] !== '') {
+			$u = array();
+			foreach ($split($r['svc']) as $x) { $n = $name[$key($x)]; if (!in_array($n, $u, true)) { $u[] = $n; } }
+			$r['svc'] = implode(' + ', $u);
+		}
+	}
+	unset($r);
 }
 
 function cp_st_in($d, $f, $t) {
@@ -1476,7 +1522,7 @@ function cp_st_admin_save() {
 	foreach (array('f_svc', 'f_ctype', 'c_evtype', 'c_ad') as $k) { if (isset($in[$k])) { $o[$k] = preg_replace('/[^A-Za-z0-9_]/', '', $in[$k]); } }
 	foreach (array('ctype_biz', 'ctype_priv', 'offer_from', 'busy_re', 'meta_ver') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_text_field($in[$k]); } }
 	if (@preg_match('/' . str_replace('/', '\/', $o['busy_re']) . '/iu', '') === false) { $o['busy_re'] = cp_st_defaults()['busy_re']; }
-	foreach (array('f_req', 'rules') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
+	foreach (array('f_req', 'rules', 'svc_alias') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
 	if (isset($in['paper_ft'])) { $o['paper_ft'] = max(0, (int) $in['paper_ft']); }
 	foreach (array('ai_pack_ft', 'ai_pack_cr', 'ai_cr_img') as $k) { if (isset($in[$k])) { $o[$k] = max(0, (int) $in[$k]); } }
 	if (isset($in['ai_re'])) { $o['ai_re'] = sanitize_text_field($in['ai_re']); if (@preg_match('/' . str_replace('/', '\/', $o['ai_re']) . '/iu', '') === false) { $o['ai_re'] = cp_st_defaults()['ai_re']; } }
@@ -1562,6 +1608,7 @@ function cp_st_admin_page() {
 	echo '</table><h2>Mezők és szabályok</h2><table class="form-table">';
 	cp_panel_row('Szolgáltatás (deal)', '<input name="f_svc" value="' . esc_attr($o['f_svc']) . '">');
 	cp_panel_row('Kért szolgáltatások (deal, többválasztós)', '<textarea name="f_req" rows="2" class="regular-text">' . esc_textarea($o['f_req']) . '</textarea>');
+	cp_panel_row('Szolgáltatás-álnevek', '<textarea name="svc_alias" rows="3" class="regular-text">' . esc_textarea($o['svc_alias']) . '</textarea><p class="description">Soronként: <code>régi név = egységes név</code>. A statisztikában ezek egy szolgáltatásként számítanak. A csak kis/nagybetűben eltérő neveket (pl. „AI karikatúra” / „AI Karikatúra”) magától összevonja.</p>');
 	cp_panel_row('Céges / magán (deal)', '<input name="f_ctype" value="' . esc_attr($o['f_ctype']) . '"> céges érték: <input name="ctype_biz" value="' . esc_attr($o['ctype_biz']) . '" class="small-text"> magán érték: <input name="ctype_priv" value="' . esc_attr($o['ctype_priv']) . '" class="small-text">');
 	cp_panel_row('Rendezvénytípus (kontakt)', '<input name="c_evtype" value="' . esc_attr($o['c_evtype']) . '"> hirdetés neve (kontakt): <input name="c_ad" value="' . esc_attr($o['c_ad']) . '">');
 	cp_panel_row('Ajánlat szakasz', '<input name="offer_from" value="' . esc_attr($o['offer_from']) . '" class="regular-text"><p class="description">Az ennél későbbi szakaszba jutott (vagy aláírt) deal „ajánlatig jutott”.</p>');

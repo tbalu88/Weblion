@@ -10,6 +10,7 @@ A fül a panel többi füléhez hasonlóan a közös panel-jelszóval érhető e
 - **Új deal**: aláírt szerződés („Szerződés aláírva” vagy későbbi szakasz, illetve Won), az aláírás napja szerint.
   - Aláírás napja: a szinkron óta az első észlelés órája; korábbra az ügyfélportál létrehozása, ennek hiányában a Won lezárás dátuma.
   - A szinkron előtt aláírt, még nyitott dealeknél, ahol egyik sem ismert, nem becsülünk: ezek nem számítanak bele.
+- **Szolgáltatás**: a Salesmate szolgáltatásmezői; az azonos szolgáltatás eltérő nevei (pl. Szelfigép = Fotóautomata) a Crazy statisztikák → „Szolgáltatás-álnevek” mezőben vonhatók össze, a csak kis/nagybetűben eltérő neveket a panel magától egyesíti.
 - **Céges / magán**: a „Szerződés EV/KFT” mező (KFT = céges, EV = magán).
 - A hét hétfőn kezdődik, a pénznem HUF.
 
