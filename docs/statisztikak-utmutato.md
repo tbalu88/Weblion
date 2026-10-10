@@ -1,7 +1,7 @@
 # Crazy panel – Statisztikák fül: beállítási útmutató
 
 A fül a panel többi füléhez hasonlóan a közös panel-jelszóval érhető el. A titkos adatokat
-(Meta-token, GA4 JSON-kulcs, Google Ads-szkript kulcsa) **csak a WordPress adminban** lehet megadni:
+(Meta-token, Windsor API-kulcs, GA4 JSON-kulcs, Google Ads-szkript kulcsa) **csak a WordPress adminban** lehet megadni:
 **Beállítások → Crazy statisztikák**. Ezek titkosítva tárolódnak, és sehol nem jelennek meg újra.
 
 ## Definíciók
@@ -63,8 +63,19 @@ A WP-Cron csak látogatáskor fut. Pleskben:
 
 ## 5. LinkedIn
 
+### Automatikusan: Windsor.ai (ajánlott)
+
+1. windsor.ai → a LinkedIn Ads összekötése (a 559891788-as hirdetési fiók), majd az API-kulcs kimásolása (onboard.windsor.ai → API key).
+2. WordPress admin → Crazy statisztikák → **LinkedIn hirdetések (Windsor.ai)**: API-kulcs beillesztése (csak írható, titkosítva tárolódik), fiók(ok) vesszővel, **EUR/HUF árfolyam** → **Mentés** → **Lekérés most**.
+   - Naponta egyszer fut a szinkronnal együtt: az utolsó 30 nap újraíródik, az első sikeres körben ~400 nap előzmény töltődik be.
+   - Lekért mezők: dátum, fiók, kampánycsoport, kampány, költés, megjelenés, kattintás, one-click lead, pénznem.
+   - A fiók EUR-ban költ: az eredeti összeg és pénznem tárolódik, a forintösszeg a beállított árfolyamon számolódik. Az árfolyam módosításakor a korábbi napok is újraszámolódnak.
+   - A költés a **linkedin** csatornához számít. A Statisztikák fül **Hirdetési platformok** kártyáján: költés (Ft és €), megjelenés, kattintás, CTR, lead, CPL a kiválasztott nap / hét / hónap szerint.
+
+### Kézzel
+
 A Statisztikák fül alján, a **LinkedIn – kézi költség** kártyán adható meg kampányonként vagy havonta (kezdet, vége, összeg).
-Az összeg arányosan oszlik el a napokra. A jelenlegi kampány december 10-ig fut.
+Az összeg arányosan oszlik el a napokra. Azokon a napokon, ahol már van Windsor.ai-adat, a kézi tétel nem számít bele (nincs dupla költés).
 
 ## 6. Forrás minden leadnél – Make-forgatókönyvek
 

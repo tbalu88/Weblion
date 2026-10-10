@@ -161,6 +161,7 @@
 
 		h += '<div class="st-grid">';
 		h += cardCpl(d, L);
+		h += cardAds(d, L);
 		h += cardLead(d);
 		h += cardReact(d, L);
 		h += cardRoas(d, L);
@@ -291,7 +292,7 @@
 		const m = [];
 		if (d.miss.includes('cost_google')) m.push('Google Ads (a szkript még nem küldött adatot)');
 		if (d.miss.includes('cost_meta')) m.push('Meta (nincs megadva token / hirdetési fiók)');
-		if (d.miss.includes('cost_linkedin')) m.push('LinkedIn (nincs kézi tétel)');
+		if (d.miss.includes('cost_linkedin')) m.push('LinkedIn (nincs Windsor.ai-kulcs / adat és kézi tétel sem)');
 		return m.length ? miss('Hiányzó költségadat: ' + m.join(', ') + '. Ezeknél a csatornáknál a költségmutató nem számolható.') : '';
 	}
 
@@ -315,6 +316,24 @@
 		b += '<tr class="tot"><td>Összesen</td><td class="r">' + num(tl) + '</td><td class="r">' + ft(ts) + '</td><td class="r">' + (ts && tl ? ft(ts / tl) : '–') + '</td></tr></tbody></table></div>';
 		if (!rows.length) b = '<div class="st-sub">Ebben az időszakban nem volt megkeresés.</div>';
 		return card('1. Költség / megkeresés csatornánként', 'a periódusban beérkezett megkeresések', b + costMiss(d) + srcMiss(d));
+	}
+
+	/* platformonkénti hirdetési mutatók a kiválasztott időszakra (lead = a platform saját konverziója; LinkedIn: one-click lead) */
+	function cardAds(d, L) {
+		const sd = d.spendDetail || {};
+		const ks = ['google', 'meta', 'linkedin'].filter(k => sd[k]);
+		if (!ks.length) return card('Hirdetési platformok', '', '<div class="st-sub">Ebben az időszakban nincs hirdetési adat.</div>' + costMiss(d), true);
+		const dec = n => n == null ? '–' : (Math.round(n * 10) / 10).toString().replace('.', ',');
+		const eur = n => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+		let b = '<div class="st-tw"><table class="st-t"><thead><tr><th>Platform</th><th class="r">Költés</th><th class="r">Megjelenés</th><th class="r">Kattintás</th><th class="r">CTR</th><th class="r">Lead</th><th class="r">CPL</th></tr></thead><tbody>';
+		ks.forEach(k => {
+			const x = sd[k];
+			b += '<tr><td>' + chName(L, k) + '</td><td class="r">' + ft(x.spend) + (x.eur ? '<br><small class="st-sub">' + eur(x.eur) + '</small>' : '') + '</td><td class="r">' + num(x.impr) + '</td><td class="r">' + num(x.clicks) + '</td><td class="r">' + (x.impr ? dec(x.clicks / x.impr * 100) + '%' : '–') + '</td><td class="r">' + dec(x.conv) + '</td><td class="r">' + (x.conv ? ft(x.spend / x.conv) : '–') + '</td></tr>';
+		});
+		b += '</tbody></table></div>';
+		const li = d.sync && d.sync.li;
+		b += '<div class="st-sub" style="margin-top:8px">Lead = a hirdetési rendszer saját lead-konverziója (LinkedIn: one-click lead űrlap), nem a Salesmate-megkeresés. CPL = költés / lead.' + (li && sd.linkedin && sd.linkedin.eur ? ' A LinkedIn EUR-ban költ, forintra ' + dec(li.rate) + ' Ft/EUR árfolyamon számolva.' : '') + '</div>';
+		return card('Hirdetési platformok', 'költés, megjelenés, kattintás, lead a kiválasztott időszakban', b + costMiss(d), true);
 	}
 
 	function cardLead(d) {
@@ -437,7 +456,7 @@
 			'<label>Megjelenés<input name="impr" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<label>Konverzió<input name="conv" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<button class="cpx-btn" type="submit">Mentés</button></form>';
-		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el. A kampány december 10-ig fut.</div>';
+		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el. A kampány december 10-ig fut.' + (d.sync && d.sync.li && d.sync.li.on ? ' A Windsor.ai-ból lekért napokon a kézi tétel nem számít bele (nincs dupla költés).' : '') + '</div>';
 		if (list.length) b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Időszak</th><th>Megnevezés</th><th class="r">Költés</th><th class="r">Katt.</th><th></th></tr></thead><tbody>' + list.map(e => '<tr><td>' + dshort(e.from) + '–' + dshort(e.to) + '</td><td>' + esc(e.name) + '</td><td class="r">' + ft(e.amount) + '</td><td class="r">' + (e.clicks || '–') + '</td><td class="r"><button class="cpx-btn ghost sm" data-li-ed="' + esc(e.id) + '" aria-label="Szerkesztés">✎</button> <button class="cpx-btn ghost sm" data-li-del="' + esc(e.id) + '" aria-label="Törlés">×</button></td></tr>').join('') + '</tbody></table></div>';
 		return card('LinkedIn – kézi költség', '', b, true);
 	}
@@ -480,7 +499,7 @@
 			it('Salesmate', y.err ? false : !!y.last, y.err ? esc(y.err) : 'utolsó szinkron: ' + t(y.last) + ' · ' + num(y.deals) + ' deal') +
 			it('Google Ads', y.gads.at ? true : null, y.gads.at ? 'utolsó adat: ' + t(y.gads.at) : (y.gads.on ? 'kulcs kész, a szkript még nem küldött adatot' : 'nincs beállítva')) +
 			it('Meta', y.meta.err ? false : (y.meta.ok ? true : null), y.meta.err ? esc(y.meta.err) : (y.meta.ok ? 'utolsó lekérés: ' + t(y.meta.ok) : (y.meta.on ? 'beállítva, lekérésre vár' : 'nincs beállítva'))) +
-			it('LinkedIn', sp.linkedin ? true : null, sp.linkedin ? 'kézi tételek: ' + dshort(sp.linkedin.f) + '–' + dshort(sp.linkedin.t) : 'nincs kézi tétel') +
+			it('LinkedIn', y.li && y.li.err ? false : (y.li && y.li.ok ? true : (sp.linkedin ? true : null)), y.li && y.li.err ? esc(y.li.err) : (y.li && y.li.ok ? 'Windsor.ai, utolsó lekérés: ' + t(y.li.ok) : (y.li && y.li.on ? 'Windsor.ai beállítva, lekérésre vár' : (sp.linkedin ? 'kézi tételek: ' + dshort(sp.linkedin.f) + '–' + dshort(sp.linkedin.t) : 'nincs beállítva')))) +
 			it('GA4', y.ga ? true : null, y.ga ? 'összekötve' : 'nincs beállítva') +
 			'</div>';
 		if (C.st && C.st.admin) b += '<div class="st-sub" style="margin-top:8px">A kulcsokat és tokeneket a WordPress adminban lehet megadni: Beállítások → Crazy statisztikák (csak adminnak).</div>';
