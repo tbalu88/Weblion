@@ -1798,3 +1798,6 @@ add_action('init', function () {
 	$src = $wpdb->get_results("SELECT DATE_FORMAT(x.created_d, '%Y-%m') m, x.source, IFNULL(k.utm_source, '') us, IFNULL(k.utm_medium, '') um, COUNT(*) n FROM $d x LEFT JOIN $c k ON k.id = x.contact_id WHERE x.created_d >= DATE_SUB(CURDATE(), INTERVAL 13 MONTH) GROUP BY m, x.source, us, um ORDER BY m, n DESC", ARRAY_A);
 	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top, 'lead_src' => $src), false);
 });
+
+/* az egyszeri riport-adatgyűjtés ideiglenes adatának törlése */
+add_action('init', function () { if (get_option('cp_st_report_tmp') !== false) { delete_option('cp_st_report_tmp'); } });
