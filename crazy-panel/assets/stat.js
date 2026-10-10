@@ -150,7 +150,7 @@
 			kpiTile('Aláírt dealérték', k.cur.value, k.prev.value, k.yoy.value, true) +
 			kpiTile('Hirdetési költés', k.cur.spend, k.prev.spend, k.yoy.spend, true, true) +
 			kpiTile('Költség / megkeresés', cpl(k.cur.spend, k.cur.leads), cpl(k.prev.spend, k.prev.leads), cpl(k.yoy.spend, k.yoy.leads), true, true) +
-			kpiTile('Megtérülés (ROAS)', k.cur.spend ? k.cur.value / k.cur.spend : null, k.prev.spend ? k.prev.value / k.prev.spend : null, k.yoy.spend ? k.yoy.value / k.yoy.spend : null, false, false, v => v == null ? '–' : (Math.round(v * 10) / 10).toString().replace('.', ',') + '×') +
+			kpiTile('Aláírt érték / hirdetési költés', k.cur.spend ? k.cur.value / k.cur.spend : null, k.prev.spend ? k.prev.value / k.prev.spend : null, k.yoy.spend ? k.yoy.value / k.yoy.spend : null, false, false, v => v == null ? '–' : (Math.round(v * 10) / 10).toString().replace('.', ',') + '×') +
 			'</div>';
 		if (k.cur.nonhuf) h += '<div class="st-note">' + k.cur.nonhuf + ' nem forintos deal értéke nincs az összegben.</div>';
 
@@ -188,7 +188,7 @@
 		const box = document.getElementById('st-trend');
 		if (!box || !S.data) return;
 		const tr = S.data.trend;
-		const W = 760, H = 230, pl = 34, pr = 8, pt = 10, pb = 26;
+		const W = Math.max(300, Math.min(1200, box.clientWidth || 760)), H = W < 500 ? 200 : 230, pl = 30, pr = 6, pt = 10, pb = 24;
 		const n = tr.length;
 		const max = Math.max(1, ...tr.map(x => Math.max(x.l, x.w, S.yoy ? x.ly : 0, S.yoy ? x.wy : 0)));
 		const step = niceStep(max);
@@ -300,6 +300,7 @@
 		const t = [];
 		if (c.nosource) t.push(c.nosource + ' megkeresésnél nincs forrás');
 		if (c.ads) t.push(c.ads + ' megkeresés csak „Ads” forrású (nem tudni, melyik hirdetési rendszer)');
+		if (c.n && c.utm < c.n) t.push('UTM csak ' + c.utm + ' / ' + c.n + ' megkeresésnél van (a kontakt UTM-mezőit az űrlapok nemrég kezdték tölteni) – UTM nélkül a webes megkeresés „Organikus / weboldal” lesz, akkor is, ha hirdetésből jött');
 		return t.length ? miss(t.join('; ') + '. Ezek külön sorban szerepelnek, becslés nélkül.') : '';
 	}
 
@@ -337,7 +338,7 @@
 			b += '<div class="st-bars" style="margin:10px 0">' + [[1, '1 órán belül'], [4, '4 órán belül'], [24, '24 órán belül']].map(w => '<div class="st-bar"><span class="t">' + w[1] + '</span><span class="b"><span class="g" style="width:' + (x.within[w[0]] / x.n * 100) + '%"></span></span><span class="v">' + pct(x.within[w[0]], x.n) + '</span></div>').join('') + '</div>';
 			if (x.ch.length) b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Csatorna</th><th class="r">Mért</th><th class="r">Medián</th></tr></thead><tbody>' + x.ch.map(r => '<tr><td>' + chName(L, r.k) + '</td><td class="r">' + r.n + '</td><td class="r">' + hrs(r.med) + '</td></tr>').join('') + '</tbody></table></div>';
 		}
-		b += miss('Az első kimenő e-mail a Salesmate API-n nem kérhető le visszamenőleg: a panel ' + (x.mailFrom ? 'a szinkron indulása (' + esc(x.mailFrom.slice(0, 10).replace(/-/g, '.')) + '.) óta' : 'a szinkron indulásától') + ' óránként figyeli a kontakt „utolsó küldött e-mail” idejét (az automatikus e-mailek is beszámíthatnak). Korábbra csak a lezárt hívások / aktivitások számítanak.');
+		b += miss('Az első kimenő e-mail a Salesmate API-n nem kérhető le visszamenőleg: a panel ' + (x.mailFrom ? 'a szinkron indulása (' + esc(x.mailFrom.slice(0, 10).replace(/-/g, '.')) + '.) óta' : 'a szinkron indulásától') + ' óránként figyeli a kontakt „utolsó küldött e-mail” idejét (az automatikus e-mailek is beszámíthatnak). Korábbra csak a lezárt aktivitások és a rögzített hívások számítanak – az aktivitásokat a Salesmate-ben ritkán zárjátok le, ezért ott kevés a mérhető adat.');
 		return card('3. Reakcióidő', 'megkeresés → első kimenő e-mail, hívás vagy aktivitás', b);
 	}
 
@@ -390,7 +391,7 @@
 		if (!c.top.length) b = '<div class="st-sub">Nincs aláírt rendezvény ebben az időszakban.</div>';
 		else {
 			b = '<div class="st-sub" style="margin-bottom:6px">Kapacitás: ' + c.capSelfie + ' fotóautomata, ' + c.capSpin + ' spinner · teltházas nap: <b>' + c.full + '</b></div>';
-			b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Nap</th><th class="r">Fotóautomata</th><th class="r">Spinner</th><th class="r">Rendezvény</th></tr></thead><tbody>' + c.top.map(x => '<tr><td>' + dshort(x.d) + '</td><td class="r' + (x.selfie >= c.capSelfie ? ' st-bad' : '') + '">' + x.selfie + ' / ' + c.capSelfie + '</td><td class="r' + (x.spin >= c.capSpin ? ' st-bad' : '') + '">' + x.spin + ' / ' + c.capSpin + '</td><td class="r">' + x.n + '</td></tr>').join('') + '</tbody></table></div>';
+			b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Nap</th><th class="r">Fotóautomata</th><th class="r">Spinner</th><th class="r">Egyéb</th><th class="r">Rendezvény</th></tr></thead><tbody>' + c.top.map(x => '<tr><td>' + dshort(x.d) + '</td><td class="r' + (x.selfie >= c.capSelfie ? ' st-bad' : '') + '">' + x.selfie + ' / ' + c.capSelfie + '</td><td class="r' + (x.spin >= c.capSpin ? ' st-bad' : '') + '">' + x.spin + ' / ' + c.capSpin + '</td><td class="r">' + (x.other || 0) + '</td><td class="r">' + x.n + '</td></tr>').join('') + '</tbody></table></div>';
 		}
 		b += d.miss.includes('busy') ? miss('Foglaltság miatt elutasított megkeresés nem mérhető: a Salesmate-ben nincs ilyen elvesztési ok. Vegyél fel egy „Foglalt – nincs szabad gép” okot (Beállítások → Deal → Lost reasons), és azt jelöld elvesztéskor.') : '<div class="st-sub" style="margin-top:8px">Foglaltság miatt elutasított megkeresés: <b>' + c.busy + '</b></div>';
 		return card('7. Kapacitás', 'foglalt gépek a csúcsnapokon (rendezvénydátum szerint)', b);
@@ -485,6 +486,9 @@
 		if (C.st && C.st.admin) b += '<div class="st-sub" style="margin-top:8px">A kulcsokat és tokeneket a WordPress adminban lehet megadni: Beállítások → Crazy statisztikák (csak adminnak).</div>';
 		return card('Adatforrások', '', b, true);
 	}
+
+	let rz = 0;
+	window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (document.getElementById('st-trend')) drawTrend(); }, 200); });
 
 	window.CPStat = { view, status, refresh: () => reload(true) };
 })();

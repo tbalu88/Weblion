@@ -1066,7 +1066,7 @@ function cp_st_load() {
 	$a = cp_st_t('acts');
 	$rows = $wpdb->get_results("SELECT x.id, x.created_at, x.created_d, x.status, x.stage, x.closed_stage, x.signed_d, x.signed_src, x.source, x.tags, x.svc, x.svc_req, x.value, x.currency, x.event_d, x.ctype, x.kind, x.lost_reason, x.first_mail_at,
 		k.utm_source, k.utm_medium, k.utm_campaign, k.ev_type, k.ad_name, k.company, (k.id IS NOT NULL) AS has_contact,
-		(SELECT MIN(t.done_at) FROM $a t WHERE t.deal_id = x.id AND t.done_at IS NOT NULL AND t.done_at >= x.created_at) AS first_act_at
+		(SELECT MIN(CASE WHEN t.done_at IS NOT NULL AND t.done_at >= x.created_at THEN t.done_at WHEN t.type = 'Call' AND t.created_at >= x.created_at THEN t.created_at END) FROM $a t WHERE t.deal_id = x.id) AS first_act_at
 		FROM $d x LEFT JOIN $c k ON k.id = x.contact_id", ARRAY_A);
 	$rules = cp_st_rules();
 	$o = cp_st_opts();
@@ -1082,6 +1082,8 @@ function cp_st_load() {
 		$r['h'] = $r['created_at'] ? (int) (new DateTime($r['created_at'] . ' UTC'))->setTimezone(cp_st_tz())->format('G') : 0;
 		$r['wd'] = (int) (new DateTime($r['created_d'], cp_st_tz()))->format('N');
 		$r['svcs'] = $r['svc_req'] !== '' ? explode('|', $r['svc_req']) : array();
+		/* űrlap-tesztadat (pl. „<test lead: dummy data …>”) nem rendezvénytípus */
+		if ($r['ev_type'] !== null && strpos((string) $r['ev_type'], '<') === 0) { $r['ev_type'] = ''; }
 	}
 	unset($r);
 	return $rows;
@@ -1167,11 +1169,12 @@ function cp_st_compute($gran, $anchor) {
 	$P = array_values(array_filter($rows, function ($r) use ($f, $cur_t) { return cp_st_in($r['created_d'], $f, $cur_t); }));
 	$W = array_values(array_filter($rows, function ($r) use ($f, $cur_t) { return cp_st_in($r['signed_d'], $f, $cur_t); }));
 	$sp = cp_st_spend($f, $cur_t);
-	$any = cp_st_spend_any();
 
 	/* 1) + 4) csatornánként: megkeresés, költség/megkeresés, aláírt, költség/aláírt, ROAS */
 	$ch = array();
-	foreach (array_keys($labels) as $k) { $ch[$k] = array('k' => $k, 'leads' => 0, 'won' => 0, 'value' => 0, 'cohort_won' => 0, 'spend' => isset($sp[$k]) ? round($sp[$k]) : null); }
+	$any = cp_st_spend_any();
+	/* költés csak ott, ahonnan valaha jött költségadat – a hiányzó adat nem 0 Ft */
+	foreach (array_keys($labels) as $k) { $ch[$k] = array('k' => $k, 'leads' => 0, 'won' => 0, 'value' => 0, 'cohort_won' => 0, 'spend' => (isset($sp[$k]) && !empty($any[$k])) ? round($sp[$k]) : null); }
 	foreach ($P as $r) { $ch[$r['ch']]['leads']++; if (!empty($r['signed_d'])) { $ch[$r['ch']]['cohort_won']++; } }
 	foreach ($W as $r) { $ch[$r['ch']]['won']++; if ($r['huf']) { $ch[$r['ch']]['value'] += $r['value']; } }
 	$out['channels'] = array_values(array_filter($ch, function ($c) { return $c['leads'] || $c['won'] || $c['spend']; }));
@@ -1274,13 +1277,15 @@ function cp_st_compute($gran, $anchor) {
 	$days = array();
 	foreach ($rows as $r) {
 		if (!cp_st_in($r['event_d'], $f, $t) || empty($r['signed_d'])) { continue; }
-		if (!isset($days[$r['event_d']])) { $days[$r['event_d']] = array('d' => $r['event_d'], 'selfie' => 0, 'spin' => 0, 'n' => 0); }
+		if (!isset($days[$r['event_d']])) { $days[$r['event_d']] = array('d' => $r['event_d'], 'selfie' => 0, 'spin' => 0, 'other' => 0, 'n' => 0); }
 		$days[$r['event_d']]['n']++;
+		/* a gépfoglaltság csak a fotóautomatára és a spinnerre értelmezett; a többi szolgáltatás „egyéb” */
 		if ($r['kind'] === 'spin') { $days[$r['event_d']]['spin']++; }
 		elseif ($r['kind'] === 'both') { $days[$r['event_d']]['spin']++; $days[$r['event_d']]['selfie']++; }
-		else { $days[$r['event_d']]['selfie']++; }
+		elseif ($r['kind'] === 'selfie') { $days[$r['event_d']]['selfie']++; }
+		else { $days[$r['event_d']]['other']++; }
 	}
-	usort($days, function ($a, $b) { return ($b['selfie'] + $b['spin']) - ($a['selfie'] + $a['spin']) ?: strcmp($a['d'], $b['d']); });
+	usort($days, function ($a, $b) use ($p) { $x = $a['selfie'] / max(1, (int) $p['cap_selfie']) + $a['spin'] / max(1, (int) $p['cap_spin']); $y = $b['selfie'] / max(1, (int) $p['cap_selfie']) + $b['spin'] / max(1, (int) $p['cap_spin']); return $y <=> $x ?: ($b['n'] - $a['n']) ?: strcmp($a['d'], $b['d']); });
 	$o = cp_st_opts();
 	$busy = 0; $busy_any = 0;
 	$re = '/' . str_replace('/', '\/', $o['busy_re']) . '/iu';

@@ -87,7 +87,22 @@ A webes űrlapok (eventcrazy.hu, crazyphoto.hu) a kontakt UTM-mezőit már tölt
 - Google Ads: a fiókszintű követési sablonba: `{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign={campaignid}&utm_term={keyword}`
 - Meta: a hirdetés URL-paraméterei közé: `utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}&utm_content={{ad.name}}`
 
-## 7. Hiányzó adatok, amiket érdemes rögzíteni
+## 7. Fedezet
+
+Fedezet = dealérték − az Elszámolás fülön kifizetett kezelői összegek (bér, km, parkolás, jatt) − papír − AI-képek.
+
+- **Papír**: darabszám (Elszámolás → Papírfogyasztás) × egységár (WP admin, jelenleg 55 Ft/db).
+- **AI karikatúra / AI fotózás**: 58 800 Ft / 10 000 kredit × 10 kredit = **5,88 Ft / kép**.
+  A képek száma szintén a „Papírfogyasztás (db)” mező; ha az AI-képek száma ettől eltér, külön mezőt érdemes felvenni az Elszámolásban.
+- Csak a teljesen kifizetett (minden kezelő kifizetve) rendezvények számítanak.
+
+## 8. Két oldal: eventcrazy.hu és crazyphoto.hu
+
+- A Salesmate-be mindkét oldal megkeresései beérkeznek (Source: „Eventcrazy.hu” / „Crazyphoto.hu”), minden mutatóban benne vannak.
+- GA4: mindkét tulajdon megadható (soronként `Név = property ID`); a fül oldalanként és összesítve mutatja.
+- Meta: több hirdetési fiók adható meg vesszővel; Google Ads: ugyanaz a szkript mindkét fiókban futhat. A fiókok adatai külön tárolódnak.
+
+## 9. Hiányzó adatok, amiket érdemes rögzíteni
 
 - **Foglaltság miatti elutasítás**: Salesmate → Beállítások → Deal → *Lost reasons* → új ok: **„Foglalt – nincs szabad gép”**.
   Ezt kell kiválasztani, ha foglaltság miatt utasítotok el egy megkeresést.
