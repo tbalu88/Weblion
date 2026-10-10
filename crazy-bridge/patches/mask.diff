@@ -1,0 +1,42 @@
+--- a/crazy-bridge.php
++++ b/crazy-bridge.php
+@@ -496,13 +496,28 @@
+ 	return $out;
+ }
+ 
++/* titkosnak tűnő kulcsnév (a teljes opció nevét is ide adjuk, ha az opció egyetlen szöveg) */
++function cb_mask_key($k) {
++	return $k !== '' && (bool) preg_match('/secret|token|pass|hash|webhook|_url$|^url$|key|kulcs|private|credential|signature|^sig$|salt|cookie|session|bearer|auth/i', $k);
++}
++
++/* a kulcsnévtől függetlenül titoknak tűnő érték (API-kulcs, token, privát kulcs, webhook) */
++function cb_mask_val($s) {
++	if (strlen($s) < 16) { return false; }
++	if (preg_match('/^\s*(sk-[A-Za-z0-9_-]{16,}|sk-(proj|ant|live|test)-|rk_(live|test)_|pk_live_|EAA[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|ya29\.|1\/\/0[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|xox[abprs]-|glpat-|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.)/', $s)) { return true; }
++	if (stripos($s, 'PRIVATE KEY') !== false || stripos($s, '"private_key"') !== false) { return true; }
++	if (preg_match('#https?://[^\s"\']*(webhook|hooks?\.|/hook/|token=|key=|secret=|sig=)#i', $s)) { return true; }
++	return false;
++}
++
+ function cb_mask($v, $k = '') {
++	if (is_object($v)) { $v = get_object_vars($v); }
+ 	if (is_array($v)) {
+ 		$o = array();
+-		foreach ($v as $kk => $vv) { $o[$kk] = cb_mask($vv, (string) $kk); }
++		foreach ($v as $kk => $vv) { $o[$kk] = cb_mask($vv, is_int($kk) ? $k : (string) $kk); }
+ 		return $o;
+ 	}
+-	if (is_string($v) && $v !== '' && preg_match('/secret|token|pass|hash|webhook|_url$|^url$|api_?key|feed_key|kulcs/i', $k)) {
++	if (is_string($v) && $v !== '' && (cb_mask_key($k) || cb_mask_val($v))) {
+ 		return '•••(' . strlen($v) . ' karakter)';
+ 	}
+ 	return $v;
+@@ -514,7 +529,7 @@
+ 		return new WP_Error('cb_opt', 'Csak cp_ vagy crazy_ kezdetű beállítás olvasható (a híd sajátja nem).', array('status' => 403));
+ 	}
+ 	$v = get_option($name, null);
+-	return array('name' => $name, 'exists' => $v !== null, 'value' => cb_mask($v));
++	return array('name' => $name, 'exists' => $v !== null, 'value' => cb_mask($v, is_array($v) || is_object($v) ? '' : $name));
+ }
+ 
+ /* ------------------------------------------------------------ beállítási oldal: Eszközök → Claude-híd */
