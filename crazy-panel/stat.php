@@ -1801,3 +1801,5 @@ add_action('init', function () {
 
 /* az egyszeri riport-adatgyűjtés ideiglenes adatának törlése */
 add_action('init', function () { if (get_option('cp_st_report_tmp') !== false) { delete_option('cp_st_report_tmp'); } });
+
+add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) { delete_option('cp_st_adsdump_tmp'); } });
