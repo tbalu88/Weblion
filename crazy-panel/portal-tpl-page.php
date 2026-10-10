@@ -107,6 +107,7 @@ function cp_portal_render_form_page($portal, $tok) {
 			foreach ($fields as $k => $f) {
 				if ($f['section'] !== $sec) { continue; }
 				if ($k === 'background' && !cp_portal_bg_enabled($portal)) { continue; }
+				if (!cp_portal_field_svc_ok($f, $portal)) { continue; }  // pl. a helyigény csak szelfigépnél
 				$val = array_key_exists($k, $answers) ? $answers[$k] : (isset($prefill[$k]) ? $prefill[$k] : null);
 				if (is_object($val)) { $val = (array) $val; }
 				$req = !empty($f['required']) && cp_portal_stage_required($f['stage'], $flow);
@@ -150,7 +151,7 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 	$kind = isset($f['parts']) ? 'object' : $f['kind'];
 	$sif = '';
 	if (!empty($f['show_if'])) {
-		$sif = ' data-show-if-field="' . esc_attr($f['show_if'][0] . '=' . $f['show_if'][1]) . '"' . (cp_portal_field_active($f, $answers) ? '' : ' hidden');
+		$sif = ' data-show-if-field="' . esc_attr($f['show_if'][0] . '=' . $f['show_if'][1]) . '"' . (cp_portal_field_active($f, $answers, $portal) ? '' : ' hidden');
 	}
 	$h = '<div class="cpp-field' . ($req ? ' req' : '') . '" id="f-' . esc_attr($k) . '" data-field="' . esc_attr($k) . '" data-kind="' . esc_attr($kind) . '" data-q="' . esc_attr($f['q']) . '"' . $sif . '>';
 	if ($kind === 'consent') {
@@ -195,6 +196,12 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 		$du = cp_portal_duration_info($portal, $answers);
 		if ($du['pkg'] > 0) {
 			$h .= '<p class="cpp-dur' . ($du['diff'] ? ' diff' : '') . '" data-pkg-hours="' . esc_attr($du['pkg']) . '">' . esc_html(cp_portal_duration_text($du)) . '</p>';
+		}
+	}
+	if ($k === 'guests_type_dress') {
+		$gi = cp_portal_guests_info($portal, $answers);
+		if ($gi['orig'] > 0) {
+			$h .= '<p class="cpp-dur' . ($gi['diff'] > 0 ? ' diff' : '') . '" data-orig-guests="' . esc_attr($gi['orig']) . '">' . esc_html(cp_portal_guests_text($gi)) . '</p>';
 		}
 	}
 	if (!empty($f['note'])) { $h .= '<p class="cpp-note">' . esc_html($f['note']) . '</p>'; }
@@ -256,9 +263,16 @@ function cp_portal_duration_text($du) {
 	return $t;
 }
 
-/* sematikus helyigény-ábra felülnézetből: háttérszerkezet 213 cm, előtte a vendégek, a gép legalább 1,5 m-re a háttértől */
+/* az ajánlatkérés létszáma és az eltérés jelzése (a JS élőben frissíti – a szövegek ott is szerepelnek) */
+function cp_portal_guests_text($gi) {
+	if ($gi['diff'] > 0) { return 'A megadott létszám ' . $gi['chosen'] . ' fő – ez több, mint az ajánlatkérésben szereplő ' . $gi['orig'] . ' fő. Magasabb létszám esetén felárat számolhatunk fel, és új ajánlatot küldünk; a kollégáink hamarosan jelentkeznek.'; }
+	if ($gi['diff'] < 0) { return 'A megadott létszám ' . $gi['chosen'] . ' fő – ez eltér az ajánlatkérésben szereplő ' . $gi['orig'] . ' főtől. A kollégáink szükség esetén egyeztetnek veled.'; }
+	return 'Az ajánlatkérésben ' . $gi['orig'] . ' fő szerepelt. Magasabb létszám esetén felárat számolhatunk fel, és új ajánlatot küldünk.';
+}
+
+/* sematikus helyigény-ábra felülnézetből: háttérszerkezet 213 cm, előtte a vendégek, a szelfigép legalább 1,5 m-re a háttértől */
 function cp_portal_space_svg() {
-	return '<div class="cpp-space"><svg viewBox="0 0 320 250" role="img" aria-label="Helyigény felülnézetből: 213 cm széles háttér, előtte a vendégek, a gép legalább 1,5 méterre a háttértől">' .
+	return '<div class="cpp-space"><svg viewBox="0 0 320 250" role="img" aria-label="Helyigény felülnézetből: 213 cm széles háttér, előtte a vendégek, a szelfigép legalább 1,5 méterre a háttértől">' .
 		'<rect x="40" y="20" width="240" height="210" rx="10" fill="#F6F3EE" stroke="#C9C3B8" stroke-dasharray="5 4"/>' .
 		'<rect x="54" y="34" width="212" height="14" rx="3" fill="#E8894A"/>' .
 		'<text x="160" y="30" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#5B6275">háttér · 213 cm</text>' .
@@ -266,10 +280,10 @@ function cp_portal_space_svg() {
 		'<circle cx="110" cy="80" r="9"/><circle cx="140" cy="76" r="9"/><circle cx="170" cy="78" r="9"/><circle cx="200" cy="82" r="9"/>' .
 		'<circle cx="125" cy="104" r="9"/><circle cx="185" cy="104" r="9"/></g>' .
 		'<text x="160" y="132" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#5B6275">vendégek</text>' .
-		'<rect x="135" y="176" width="50" height="34" rx="6" fill="#141C33"/>' .
-		'<text x="160" y="197" text-anchor="middle" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#fff">gép</text>' .
+		'<rect x="124" y="176" width="72" height="34" rx="6" fill="#141C33"/>' .
+		'<text x="160" y="197" text-anchor="middle" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#fff">szelfigép</text>' .
 		'<line x1="292" y1="48" x2="292" y2="176" stroke="#5B6275" stroke-width="1.5"/>' .
 		'<path d="M288 54 L292 48 L296 54 M288 170 L292 176 L296 170" fill="none" stroke="#5B6275" stroke-width="1.5"/>' .
 		'<text x="300" y="116" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#141C33" transform="rotate(90 300 116)" text-anchor="middle">min. 1,5 m</text>' .
-		'</svg><p>Felülnézet: a háttérszerkezet 213 cm széles, előtte állnak a vendégek, a gépnek legalább 1,5 m kell a háttértől. Összesen nagyjából 6 m² szabad, fedett terület kell.</p></div>';
+		'</svg><p>Felülnézet: a háttérszerkezet 213 cm széles, előtte állnak a vendégek, a szelfigépnek legalább 1,5 m kell a háttértől. Összesen nagyjából 6 m² szabad, fedett terület kell.</p></div>';
 }

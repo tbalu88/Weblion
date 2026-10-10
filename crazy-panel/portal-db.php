@@ -111,7 +111,7 @@ function cp_portal_db_install() {
 	foreach ($sql as $q) { dbDelta($q); }
 	$missing = cp_portal_db_missing_tables();
 	if (!$missing && $prev !== '' && version_compare($prev, '2', '<')) { cp_portal_db_migrate_2(); }
-	if (!$missing && $prev !== '' && version_compare($prev, '3', '<')) { $GLOBALS['cp_portal_recompute_all'] = true; }  // a kötelező kérdések köre változott (v3)
+	if (!$missing && $prev !== '' && version_compare($prev, '4', '<')) { $GLOBALS['cp_portal_recompute_all'] = true; }  // a kötelező kérdések köre változott (v3; v4: helyigény csak szelfigépnél)
 	if (!$missing) {
 		update_option('cp_portal_db_ver', CP_PORTAL_DB_VER, true);
 	} else {

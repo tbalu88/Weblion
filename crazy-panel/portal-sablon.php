@@ -64,7 +64,7 @@ function cp_portal_render_sablon_page($portal, $tok) {
 	$ps = array(
 		'rest' => wp_make_link_relative(rest_url('crazy/v1/portal/sablon')),
 		'nonce' => cp_portal_nonce($tok),
-		'back' => cp_portal_url('/rendezvenyem'),
+		'back' => cp_portal_url('/rendezvenyem') . '#f-photo_template',
 		'locked' => $locked,
 		'deal' => array('id' => (string) $portal->deal_id, 'title' => isset($sm['who']) ? $sm['who'] : '', 'date' => (string) $portal->event_date, 'note' => ''),
 		'saved' => $val && !empty($val['snap']) ? $val['snap'] : null,

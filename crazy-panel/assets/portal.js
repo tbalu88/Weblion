@@ -213,6 +213,7 @@
       else if (e.target.closest('[data-part="end"]') && e.target.value === '') fd.removeAttribute('data-auto-end');  // kitörölte: újra automatikus
       duration(fd);
     }
+    if (fd.getAttribute('data-field') === 'guests_type_dress') guests(fd);
     if (fd.getAttribute('data-field') === 'onsite_contact') { var sc = fd.querySelector('[data-same-as-client]'); if (sc) sc.checked = false; }
     if (fd.getAttribute('data-kind') === 'object' && incomplete(fd)) return;  // amíg a mezőben dolgozik, nem szólunk a hiányzó részért
     later(fd, 800);
@@ -246,6 +247,18 @@
     }
     box.textContent = t;
     box.classList.toggle('diff', diff);
+  }
+  /* a megadott létszám vs. az ajánlatkérésben szereplő (Salesmate) – magasabbnál felár / új ajánlat */
+  function guests(fd) {
+    var box = fd.querySelector('[data-orig-guests]'), inp = fd.querySelector('[data-part="guests"] input');
+    if (!box || !inp) return;
+    var o = parseInt(box.getAttribute('data-orig-guests'), 10) || 0, n = parseInt(inp.value, 10) || 0;
+    var more = 'Magasabb létszám esetén felárat számolhatunk fel, és új ajánlatot küldünk', t;
+    if (n > o) t = 'A megadott létszám ' + n + ' fő – ez több, mint az ajánlatkérésben szereplő ' + o + ' fő. ' + more + '; a kollégáink hamarosan jelentkeznek.';
+    else if (n > 0 && n < o) t = 'A megadott létszám ' + n + ' fő – ez eltér az ajánlatkérésben szereplő ' + o + ' főtől. A kollégáink szükség esetén egyeztetnek veled.';
+    else t = 'Az ajánlatkérésben ' + o + ' fő szerepelt. ' + more + '.';
+    box.textContent = t;
+    box.classList.toggle('diff', n > o);
   }
   /* a kezdés + a foglalt csomag óraszáma → a szolgáltatás vége (amíg az ügyfél kézzel át nem írja) */
   function autoEnd(fd) {

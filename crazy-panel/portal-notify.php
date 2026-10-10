@@ -73,7 +73,7 @@ function cp_portal_send_client_mail($portal, $type, $force = false) {
 	if (is_wp_error($link)) { return $link; }
 	require_once __DIR__ . '/portal-tpl-mail.php';
 	$di = cp_portal_deadline_info($portal);
-	$miss = cp_portal_missing(cp_portal_answers($portal->id));
+	$miss = cp_portal_missing(cp_portal_answers($portal->id), null, 'v2', $portal);
 	$m = cp_portal_mail_render($type, array(
 		'name' => isset($portal->sm['name']) ? $portal->sm['name'] : '',
 		'event_date' => cp_portal_hu_date($portal->event_date, false),
@@ -126,6 +126,16 @@ function cp_portal_pumble_late_change($portal, $logs) {
 	$t .= implode("\n", array_values(array_unique($lines))) . "\n";
 	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
 	return cp_portal_pumble($t);
+}
+
+/* a megadott létszám eltér az ajánlatkérésben (Salesmate) szereplőtől – magasabbnál felár / új ajánlat lehet */
+function cp_portal_pumble_guests($portal, $gi) {
+	$t = '👥 Létszám eltér az ajánlatkéréstől – ' . cp_portal_pumble_head($portal) . "\n";
+	$t .= 'Megadott: ' . $gi['chosen'] . ' fő · ajánlatkérésben: ' . $gi['orig'] . ' fő' . ($gi['diff'] > 0 ? ' → felár / új ajánlat?' : '') . "\n";
+	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$r = cp_portal_pumble($t);
+	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: létszám', $r->get_error_message()); }
+	return $r;
 }
 
 /* „Mehet a szerződés” – a szerződéshez szükséges adatok megérkeztek (vagy módosultak a jelzés óta) */

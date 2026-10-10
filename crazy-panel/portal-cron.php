@@ -50,7 +50,7 @@ function cp_portal_tick() {
 		if (!$di) { continue; }
 		$st = cp_portal_state($p->id);
 		$created = cp_portal_db_ts($p->created_at);
-		$missing = cp_portal_missing(cp_portal_answers($p->id));
+		$missing = cp_portal_missing(cp_portal_answers($p->id), null, 'v2', $p);
 
 		// „Mehet a szerződés” tartalék: a szerződéses adatok kész, de a gombot nem nyomták meg (vagy módosultak a jelzés óta),
 		// és 30 perce nem változott semmi → a rendszer jelzi (Pumble)

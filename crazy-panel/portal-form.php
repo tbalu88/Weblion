@@ -33,9 +33,9 @@ function cp_portal_recompute($portal, $extra = array()) {
 	$flow = cp_portal_flow($portal);
 	$answers = cp_portal_answers($portal->id);
 	$total = cp_portal_required_total(null, $flow);
-	$done = $total - count(cp_portal_missing($answers, null, $flow));
+	$done = $total - count(cp_portal_missing($answers, null, $flow, $portal));
 	$ctotal = cp_portal_required_total('a', $flow);
-	$cdone = $ctotal - count(cp_portal_missing($answers, 'a', $flow));
+	$cdone = $ctotal - count(cp_portal_missing($answers, 'a', $flow, $portal));
 	$st = cp_portal_state($portal->id);
 	$changed_late = !empty($extra['changed_late_at']) || !empty($st->changed_late_at);
 	$status = cp_portal_status_of($done, $total, $changed_late);
@@ -90,6 +90,14 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 	}
 	$res = cp_portal_recompute($portal, $extra);
 
+	if ($key === 'guests_type_dress') {
+		$og = is_array($old) && isset($old['guests']) ? (int) $old['guests'] : 0;
+		$gi = cp_portal_guests_info($portal, cp_portal_answers($portal->id));
+		if ($by === 'ugyfel' && $gi['diff'] && $gi['chosen'] !== $og) {
+			$pp = $portal;
+			cp_portal_defer(function () use ($pp, $gi) { cp_portal_pumble_guests($pp, $gi); });
+		}
+	}
 	if ($key === 'venue_address' || $key === 'venue_room') {
 		cp_portal_sm_queue($portal->deal_id, 'venue', cp_portal_venue_text(cp_portal_answers($portal->id)));
 	}
@@ -122,7 +130,7 @@ function cp_portal_contract_submit($portal, $by = 'ugyfel') {
 function cp_portal_complete($portal) {
 	$flow = cp_portal_flow($portal);
 	$answers = cp_portal_answers($portal->id);
-	$miss = cp_portal_missing($answers, null, $flow);
+	$miss = cp_portal_missing($answers, null, $flow, $portal);
 	if ($miss) { return array('ok' => false, 'missing' => $miss); }
 	$st = cp_portal_state($portal->id);
 	if ($flow === 'v2' && empty($st->contract_ready_at)) { cp_portal_contract_submit($portal); }
@@ -157,7 +165,7 @@ function cp_portal_form_payload($portal) {
 		'answers' => (object) $answers,
 		'meta' => (object) $meta,
 		'prefill' => cp_portal_prefill($portal),
-		'missing' => (object) cp_portal_missing($answers, null, $flow),
+		'missing' => (object) cp_portal_missing($answers, null, $flow, $portal),
 		'flow' => $flow,
 		'state' => array(
 			'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(null, $flow), 'status' => $st->status, 'completed_at' => cp_portal_db_ts($st->completed_at),
@@ -190,7 +198,25 @@ function cp_portal_prefill($portal) {
 		$out['client_private'] = array_filter(array('name' => $name, 'email' => $email, 'phone' => $phone));
 		$out['client_company'] = array_filter(array('contact_name' => $name, 'contact_email' => $email, 'contact_phone' => $phone, 'billing_email' => $email));
 	}
+	$gu = cp_portal_orig_guests($portal);
+	if ($gu > 0) { $out['guests_type_dress'] = array('guests' => $gu); }
 	return (object) $out;
+}
+
+/* ------------------------------------------------------------ létszám: az ajánlatkérésben (Salesmate) szereplő vs. a megadott */
+
+function cp_portal_orig_guests($portal) {
+	$g = isset($portal->sm['guests']) ? preg_replace('/[^0-9]/', '', (string) $portal->sm['guests']) : '';
+	$g = (int) $g;
+	return $g > 0 && $g <= 5000 ? $g : 0;
+}
+
+/* diff: 0 nincs eltérés, 1 több, -1 kevesebb */
+function cp_portal_guests_info($portal, $answers) {
+	$orig = cp_portal_orig_guests($portal);
+	$chosen = isset($answers['guests_type_dress']['guests']) ? (int) $answers['guests_type_dress']['guests'] : 0;
+	$diff = $orig > 0 && $chosen > 0 && $chosen !== $orig ? ($chosen > $orig ? 1 : -1) : 0;
+	return array('orig' => $orig, 'chosen' => $chosen, 'diff' => $diff);
 }
 
 /* ------------------------------------------------------------ időtartam: a foglalt csomag óraszáma vs. a megadott menetrend */

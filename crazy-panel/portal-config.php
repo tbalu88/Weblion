@@ -110,6 +110,7 @@ function cp_portal_panel_url($deal_id = '') {
  * stage: a = szerződéshez szükséges adatok (azonnal kötelező)
  *        b = a rendezvény részletei (a határidőig: rendezvény − 5 nap)
  *        c = háttér és fotósablon (nem kötelező, a határidőig módosítható)
+ * svc = 'selfie': csak szelfigépes (fotobox, greenbox) szolgáltatásnál kérdezzük; csak 360 Spinnernél rejtett és teljesítettnek számít
  * q = kérdés-azonosító (több mező is tartozhat egy kérdéshez); show_if = array(mező, érték):
  *     csak akkor látszik és akkor kötelező, ha a másik mező értéke ez (magánszemély / cég).
  */
@@ -199,8 +200,8 @@ function cp_portal_fields() {
 			'kind' => 'enum', 'options' => $yn,
 		),
 		'space_ok' => array(
-			'stage' => 'b', 'q' => 'space', 'qlabel' => 'Elég hely a gépnek', 'section' => 'helyszin', 'required' => true,
-			'label' => 'Van elég szabad hely a gépnek és a vendégeknek?',
+			'stage' => 'b', 'q' => 'space', 'qlabel' => 'Elég hely a szelfigépnek', 'section' => 'helyszin', 'required' => true, 'svc' => 'selfie',
+			'label' => 'Van elég szabad hely a szelfigépnek és a vendégeknek?',
 			'help' => 'Ha nem vagy biztos benne, válaszd a „Nem tudom” lehetőséget, és egyeztetünk.',
 			'parts' => array(
 				'answer' => array('label' => '', 'kind' => 'enum', 'req' => true, 'options' => $yn),
@@ -301,10 +302,17 @@ function cp_portal_stage_titles() {
 }
 
 /* látszik-e (és kötelező-e) a mező a többi válasz alapján (magánszemély / cég) */
-function cp_portal_field_active($f, $answers) {
+function cp_portal_field_active($f, $answers, $portal = null) {
+	if (!cp_portal_field_svc_ok($f, $portal)) { return false; }
 	if (empty($f['show_if'])) { return true; }
 	$v = isset($answers[$f['show_if'][0]]) ? $answers[$f['show_if'][0]] : '';
 	return is_scalar($v) && (string) $v === $f['show_if'][1];
+}
+
+/* a szolgáltatáshoz kötött mező (svc) releváns-e ennél a portálnál; portál nélkül (pl. összesítők) mindig igen */
+function cp_portal_field_svc_ok($f, $portal) {
+	if (empty($f['svc']) || !$portal || !function_exists('cp_portal_bg_enabled')) { return true; }
+	return $f['svc'] !== 'selfie' || cp_portal_bg_enabled($portal);
 }
 
 /* A v1 portálok (a szerződés aláírása után, automatikusan jöttek létre) a szerződéses lépcsőt nem kérik kötelezően. */
@@ -327,11 +335,13 @@ function cp_portal_required_total($stage = null, $flow = 'v2') {
 }
 
 /* hiányzó kötelező kérdések a válaszok alapján: q => címke */
-function cp_portal_missing($answers, $stage = null, $flow = 'v2') {
+function cp_portal_missing($answers, $stage = null, $flow = 'v2', $portal = null) {
 	$miss = cp_portal_required_questions($stage, $flow);
 	$byq = array();
 	foreach (cp_portal_fields() as $k => $f) {
-		if (!isset($miss[$f['q']]) || !cp_portal_field_active($f, $answers)) { continue; }
+		if (!isset($miss[$f['q']])) { continue; }
+		if (!cp_portal_field_svc_ok($f, $portal)) { $byq[$f['q']] = true; continue; }  // ennél a szolgáltatásnál nem kérdezzük
+		if (!cp_portal_field_active($f, $answers)) { continue; }
 		$ok = isset($answers[$k]) && !cp_portal_is_empty_value($answers[$k]);
 		$byq[$f['q']] = isset($byq[$f['q']]) ? ($byq[$f['q']] && $ok) : $ok;
 	}

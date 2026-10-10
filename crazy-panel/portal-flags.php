@@ -42,6 +42,10 @@ function cp_portal_flags_build($portal, $answers, $state) {
 		$du = cp_portal_duration_info($portal, $answers);
 		if ($du['diff']) { $add('idotartam', 'IDŐTARTAM: ' . mb_strtoupper(cp_portal_hours_text($du['chosen'])) . ' (CSOMAG: ' . mb_strtoupper(cp_portal_hours_text($du['pkg'])) . ')', 'warn', $all); }
 	}
+	if (function_exists('cp_portal_guests_info')) {
+		$gi = cp_portal_guests_info($portal, $answers);
+		if ($gi['diff']) { $add('letszam', 'LÉTSZÁM: ' . $gi['chosen'] . ' FŐ (AJÁNLAT: ' . $gi['orig'] . ' FŐ)', $gi['diff'] > 0 ? 'warn' : 'info', $all); }
+	}
 	if ($state && !empty($state->changed_late_at)) {
 		$add('modositva', 'MÓDOSÍTVA ' . wp_date('m.d. H:i', cp_portal_db_ts($state->changed_late_at), cp_portal_tz()), 'warn', array('adatlap', 'munkalap'));
 	}
@@ -225,6 +229,8 @@ function cp_portal_contract_data($portal, $answers) {
 		array('Időtartam', $dur),
 		array('Háttér', $g('background')),
 	));
+	$gi = function_exists('cp_portal_guests_info') ? cp_portal_guests_info($portal, $answers) : null;
+	if ($gi && $gi['diff']) { $groups[count($groups) - 1][1][] = array('Létszám', $gi['chosen'] . ' fő – ELTÉR az ajánlatkéréstől (' . $gi['orig'] . ' fő)'); }
 	// üres, nem kötelező sorok elhagyása; a szöveges blokk a szerződés sorrendjében
 	$lines = array();
 	foreach ($groups as $i => $gr) {

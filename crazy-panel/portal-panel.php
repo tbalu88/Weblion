@@ -76,7 +76,7 @@ function cp_portal_p_detail($deal_id) {
 		'meta' => (object) $meta,
 		'prefill' => cp_portal_prefill($portal),
 		'state' => array('st' => $st->status, 'done' => (int) $st->required_done, 'total' => cp_portal_required_total(null, $flow), 'completed' => cp_portal_db_ts($st->completed_at), 'late' => cp_portal_db_ts($st->changed_late_at)),
-		'missing' => array_values(cp_portal_missing($answers, null, $flow)),
+		'missing' => array_values(cp_portal_missing($answers, null, $flow, $portal)),
 		'deadline' => $di ? array('text' => $di['text'], 'late' => $di['late'], 'passed' => time() >= $di['deadline']) : null,
 		'locked' => cp_portal_locked($portal),
 		'flags' => cp_portal_flags_build($portal, $answers, $st),
