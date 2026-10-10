@@ -1794,5 +1794,7 @@ add_action('init', function () {
 	$t = cp_st_t('ads');
 	$r = $wpdb->get_results("SELECT channel, IF(LOCATE(':', campaign_id) > 0, SUBSTRING_INDEX(campaign_id, ':', 1), '(nincs)') acct, DATE_FORMAT(d, '%Y-%m') m, COUNT(*) n, COUNT(DISTINCT campaign_id) camps, ROUND(SUM(spend)) s, SUM(clicks) c, SUM(impressions) i, MAX(updated_at) u FROM $t WHERE d >= DATE_SUB(CURDATE(), INTERVAL 14 MONTH) GROUP BY channel, acct, m ORDER BY channel, acct, m", ARRAY_A);
 	$top = $wpdb->get_results("SELECT d, campaign_id, campaign_name, spend, clicks, impressions FROM $t WHERE channel = 'google' ORDER BY spend DESC LIMIT 15", ARRAY_A);
-	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top), false);
+	$d = cp_st_t('deals'); $c = cp_st_t('contacts');
+	$src = $wpdb->get_results("SELECT DATE_FORMAT(x.created_d, '%Y-%m') m, x.source, IFNULL(k.utm_source, '') us, IFNULL(k.utm_medium, '') um, COUNT(*) n FROM $d x LEFT JOIN $c k ON k.id = x.contact_id WHERE x.created_d >= DATE_SUB(CURDATE(), INTERVAL 13 MONTH) GROUP BY m, x.source, us, um ORDER BY m, n DESC", ARRAY_A);
+	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top, 'lead_src' => $src), false);
 });
