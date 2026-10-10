@@ -211,9 +211,19 @@ function cp_portal_orig_guests($portal) {
 	return $g > 0 && $g <= 5000 ? $g : 0;
 }
 
-/* diff: 0 nincs eltérés, 1 több, -1 kevesebb */
+/* nyomtatós szolgáltatás-e (szelfigép, selfie stand, AI fotózás, AI karikatúra, greenbox) – csak ezeknél számít a létszám.
+ * Ha a Salesmate-ből semmi nem derül ki a szolgáltatásról, igennek vesszük. */
+function cp_portal_has_print($portal) {
+	$sm = $portal->sm;
+	if (isset($sm['selfie']) && trim((string) $sm['selfie']) !== '') { return true; }
+	$pkg = isset($sm['package']) ? (string) $sm['package'] : '';
+	if (preg_match('/szelfi|selfie|green|fotobox|karikat|(^|[^\p{L}])ai([^\p{L}]|$)/iu', $pkg)) { return true; }
+	return $pkg === '' && (!isset($sm['spin']) || trim((string) $sm['spin']) === '');
+}
+
+/* diff: 0 nincs eltérés, 1 több, -1 kevesebb; nem nyomtatós szolgáltatásnál nincs összevetés */
 function cp_portal_guests_info($portal, $answers) {
-	$orig = cp_portal_orig_guests($portal);
+	$orig = cp_portal_has_print($portal) ? cp_portal_orig_guests($portal) : 0;
 	$chosen = isset($answers['guests_type_dress']['guests']) ? (int) $answers['guests_type_dress']['guests'] : 0;
 	$diff = $orig > 0 && $chosen > 0 && $chosen !== $orig ? ($chosen > $orig ? 1 : -1) : 0;
 	return array('orig' => $orig, 'chosen' => $chosen, 'diff' => $diff);

@@ -24,7 +24,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PORTAL_VER', '2.1.2');
+define('CP_PORTAL_VER', '2.1.3');
 define('CP_PORTAL_DB_VER', '4');
 define('CP_PORTAL_OPT', 'cp_portal_settings');
 define('CP_PORTAL_MAIN', __DIR__ . '/crazy-panel.php');
