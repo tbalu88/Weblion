@@ -1,9 +1,10 @@
 <?php
 /* Ügyfélportál – háttérválasztás
  * A lista a panel háttérlistája (cp_panel_bg_list: a weboldal „Választható hátterek” oldala képekkel + kiegészítő darabszámok).
- * Az ügyfél csak az adott napon szabad hátteret látja. Foglaltnak csak az aláírt szerződés szakaszban lévő
- * (vagy megnyert) deal háttere számít; a portálon tett választás csak KÉRÉS: a Salesmate háttér mezőjébe kerül
- * (ha a panelben be van kapcsolva a háttér visszaírása), és a panelen látszik. */
+ * Az ügyfél csak az adott napon szabad hátteret látja. Foglaltnak a panel „Foglalt szakaszok” listáján lévő
+ * (alapból „Szerződés kiküldve”-től), illetve megnyert deal háttere számít – ugyanúgy, mint a panel Hátterek fülén.
+ * A portálon tett választás KÉRÉS: a Salesmate háttér mezőjébe kerül (ha a panelben be van kapcsolva a háttér
+ * visszaírása), és a deal szerződés-kiküldésével válik foglalássá. */
 
 if (!defined('ABSPATH')) { exit; }
 
@@ -15,18 +16,18 @@ function cp_portal_bg_enabled($portal) {
 	return !($spin !== '' && $selfie === '');
 }
 
-/* az adott nap foglalt hátterei: kisbetűs név => darab (aláírt / megnyert dealek, a saját deal nélkül); null, ha a Salesmate nem érhető el */
+/* az adott nap foglalt hátterei: kisbetűs név => darab (foglalt szakaszú / megnyert dealek, a saját deal nélkül); null, ha a Salesmate nem érhető el */
 function cp_portal_bg_taken($date, $except_deal = '') {
 	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $date)) { return array(); }
 	$p = cp_panel_opts();
 	if ($p['f_bg'] === '') { return array(); }
-	$ck = 'cp_portal_bgday_' . md5($date . '|' . $p['f_bg'] . '|' . $p['signed_stages']);
+	$ck = 'cp_portal_bgday_' . md5($date . '|' . $p['f_bg'] . '|' . $p['booked_stages']);
 	$rows = get_transient($ck);
 	if (!is_array($rows)) {
 		$info = null;
 		$raw = cp_sm_fetch_range($date, $date, $info, array('deal.id', 'deal.stage', 'deal.status', 'deal.pipeline', 'deal.' . $p['f_date'], 'deal.' . $p['f_bg']));
 		if (is_wp_error($raw)) { return null; }
-		$signed = array_map('cp_panel_lc', cp_panel_lines($p['signed_stages']));
+		$booked = array_map('cp_panel_lc', cp_panel_lines($p['booked_stages']));  // a panel háttér-foglaltságával azonos (Szerződés kiküldve-től)
 		$pipeline = cp_panel_lc($p['pipeline']);
 		$rows = array();
 		foreach ($raw as $r) {
@@ -36,7 +37,7 @@ function cp_portal_bg_taken($date, $except_deal = '') {
 			if ($pipeline !== '' && $pl !== '' && $pl !== $pipeline) { continue; }
 			$status = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'status')));
 			$st = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'stage')));
-			if ($status === 'lost' || !($status === 'won' || in_array($st, $signed, true))) { continue; }
+			if ($status === 'lost' || !($status === 'won' || in_array($st, $booked, true))) { continue; }
 			$bg = cp_panel_lc(cp_panel_str(cp_panel_get($r, $p['f_bg'])));
 			if ($bg !== '') { $rows[$id] = $bg; }
 		}

@@ -263,7 +263,7 @@ function cp_portal_fields() {
 		'background' => array(
 			'stage' => 'c', 'q' => 'background', 'qlabel' => 'Háttér', 'section' => 'extra', 'required' => false,
 			'label' => 'Melyik hátteret kéritek?',
-			'help' => 'Csak az aznap még szabad hátterek látszanak. A választás kérés: a szerződés aláírásával válik foglalássá.',
+			'help' => 'Csak az aznap még szabad hátterek látszanak. A választás kérés: a szerződés kiküldésével válik foglalássá.',
 			'kind' => 'bg',
 		),
 		'photo_template' => array(
