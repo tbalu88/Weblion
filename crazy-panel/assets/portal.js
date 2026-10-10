@@ -196,6 +196,7 @@
 
   /* ---------------------------------------------------- események */
   fieldEls().forEach(function (fd) {
+    if (fd.getAttribute('data-field') === 'schedule') { autoEnd(fd); duration(fd); }  // betöltéskor: üres vége a csomag alapján (előtöltésként)
     var s = st(fd);
     var sv = fd.querySelector('.cpp-saved');
     s.saved = sv && sv.classList.contains('ok') ? JSON.stringify(read(fd)) : null;
@@ -207,7 +208,11 @@
     var fd = e.target.closest('[data-field]');
     if (!fd || e.target.type === 'radio' || e.target.type === 'checkbox') return;
     mark(fd, '', '');
-    if (fd.getAttribute('data-field') === 'schedule') duration(fd);
+    if (fd.getAttribute('data-field') === 'schedule') {
+      if (e.target.closest('[data-part="start"]')) autoEnd(fd);
+      else if (e.target.closest('[data-part="end"]') && e.target.value === '') fd.removeAttribute('data-auto-end');  // kitörölte: újra automatikus
+      duration(fd);
+    }
     if (fd.getAttribute('data-field') === 'onsite_contact') { var sc = fd.querySelector('[data-same-as-client]'); if (sc) sc.checked = false; }
     if (fd.getAttribute('data-kind') === 'object' && incomplete(fd)) return;  // amíg a mezőben dolgozik, nem szólunk a hiányzó részért
     later(fd, 800);
@@ -242,10 +247,25 @@
     box.textContent = t;
     box.classList.toggle('diff', diff);
   }
+  /* a kezdés + a foglalt csomag óraszáma → a szolgáltatás vége (amíg az ügyfél kézzel át nem írja) */
+  function autoEnd(fd) {
+    var box = fd.querySelector('.cpp-dur'), si = fd.querySelector('[data-part="start"] input'), ei = fd.querySelector('[data-part="end"] input');
+    var pkg = box ? parseFloat(box.getAttribute('data-pkg-hours')) || 0 : 0;
+    var x = si ? /^(\d{1,2}):(\d{2})$/.exec(si.value || '') : null;
+    if (!pkg || !x || !ei || ei.disabled) return false;
+    if (ei.value !== '' && ei.value !== fd.getAttribute('data-auto-end')) return false;   // kézzel megadott vége: nem írjuk felül
+    var m = ((+x[1]) * 60 + (+x[2]) + Math.round(pkg * 60)) % 1440;
+    var v = pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+    ei.value = v;
+    fd.setAttribute('data-auto-end', v);
+    return true;
+  }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
   form.addEventListener('change', function (e) {
     var fd = e.target.closest('[data-field]');
     if (!fd) return;
     if (e.target.hasAttribute('data-same-as-client')) { sameAsClient(fd, e.target); return; }
+    if (fd.getAttribute('data-field') === 'schedule' && e.target.closest('[data-part="start"]')) autoEnd(fd);
     if (fd.getAttribute('data-field') === 'schedule') duration(fd);
     showIf(fd);
     showFields();
