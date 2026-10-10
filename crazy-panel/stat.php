@@ -1785,3 +1785,14 @@ function cp_st_gads_script() {
 		. "  if (res.getResponseCode() !== 200) { throw new Error('A küldés nem sikerült: ' + res.getContentText()); }\n"
 		. "}\n";
 }
+
+/* költségtábla-összesítő a hibakereséshez (csatorna × fiók × hónap; titkot nem tartalmaz, a Claude-híd olvashatja) */
+add_action('init', function () {
+	if (get_transient('cp_st_adsdiag_t') || !cp_st_db_ok()) { return; }
+	set_transient('cp_st_adsdiag_t', 1, 10 * MINUTE_IN_SECONDS);
+	global $wpdb;
+	$t = cp_st_t('ads');
+	$r = $wpdb->get_results("SELECT channel, IF(LOCATE(':', campaign_id) > 0, SUBSTRING_INDEX(campaign_id, ':', 1), '(nincs)') acct, DATE_FORMAT(d, '%Y-%m') m, COUNT(*) n, COUNT(DISTINCT campaign_id) camps, ROUND(SUM(spend)) s, SUM(clicks) c, SUM(impressions) i, MAX(updated_at) u FROM $t WHERE d >= DATE_SUB(CURDATE(), INTERVAL 14 MONTH) GROUP BY channel, acct, m ORDER BY channel, acct, m", ARRAY_A);
+	$top = $wpdb->get_results("SELECT d, campaign_id, campaign_name, spend, clicks, impressions FROM $t WHERE channel = 'google' ORDER BY spend DESC LIMIT 15", ARRAY_A);
+	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top), false);
+});
