@@ -25,6 +25,7 @@ function cp_portal_admin_save() {
 		$o[$k] = isset($in[$k]) ? sanitize_text_field($in[$k]) : '';
 	}
 	$o['sm_status_labels'] = isset($in['sm_status_labels']) ? sanitize_textarea_field($in['sm_status_labels']) : '';
+	$o['bg_exclude'] = isset($in['bg_exclude']) ? sanitize_textarea_field($in['bg_exclude']) : '';
 	foreach (array('mail_from', 'reply_to', 'test_inbox') as $k) {
 		$v = isset($in[$k]) ? sanitize_email($in[$k]) : '';
 		if (isset($in[$k]) && trim($in[$k]) !== '' && $v === '') { $msg[] = 'Érvénytelen e-mail-cím (' . $k . '), nem mentettem.'; continue; }
@@ -108,6 +109,9 @@ function cp_portal_admin_page() {
 	cp_portal_admin_row2('Jegyzet a dealhez', '<label><input type="checkbox" name="sm_notes" value="1"' . checked(!empty($o['sm_notes']), true, false) . '> „Adatlap kitöltve” / „Adatlap módosítva a határidő után” jegyzet</label><p class="description"><b>Ellenőrizendő:</b> a Salesmate jegyzet-végpontját teszt-dealen ki kell próbálni, addig maradjon kikapcsolva (a hibák a hibalistába kerülnek).</p>');
 	echo '</table>';
 
+	echo '<h2>Háttérválasztás</h2><table class="form-table">';
+	cp_portal_admin_row2('Nem választható hátterek', '<textarea name="bg_exclude" rows="3" class="regular-text">' . esc_textarea($o['bg_exclude']) . '</textarea><p class="description">Soronként egy háttér neve (ahogy a panel háttérlistájában szerepel) – ezek nem jelennek meg az ügyfélportálon.</p>');
+	echo '</table>';
 	echo '<h2>Értesítések</h2><table class="form-table">';
 	$pset = trim((string) $o['pumble_url']) !== '';
 	cp_portal_admin_row2('Pumble webhook', '<input type="password" name="pumble_url" value="" class="large-text" autocomplete="new-password" placeholder="' . esc_attr($pset ? 'beállítva – csak cseréhez írd be az újat' : 'https://api.pumble.com/workspaces/…/incomingWebhooks/postMessage/…') . '">' . ($pset ? '<p><code>' . esc_html(substr($o['pumble_url'], 0, 31)) . '…' . esc_html(substr($o['pumble_url'], -4)) . '</code> <label><input type="checkbox" name="pumble_clear" value="1"> törlés</label></p>' : '') . '<p class="description">Külön a kezelők setup-fotós webhookjától: ide mennek a hiányos (határidő utáni) és a késői módosítás értesítések.</p>');

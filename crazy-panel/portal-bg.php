@@ -51,12 +51,19 @@ function cp_portal_bg_taken($date, $except_deal = '') {
 	return $out;
 }
 
+/* a panel háttérlistája a portálon nem választható hátterek nélkül (beállítás: bg_exclude, alapból Fehér, Zöld) */
+function cp_portal_bg_list() {
+	$o = cp_portal_opts();
+	$skip = array_flip(array_map('cp_panel_lc', cp_panel_lines($o['bg_exclude'])));
+	return array_values(array_filter(cp_panel_bg_list(), function ($b) use ($skip) { return !isset($skip[cp_panel_lc($b['name'])]); }));
+}
+
 /* választható hátterek a portálon: array(name, img, free) – csak a szabadok (+ a jelenlegi választás, ha közben foglalt lett) */
 function cp_portal_bg_options($portal, $current = '') {
 	$taken = cp_portal_bg_taken($portal->event_date, $portal->deal_id);
 	$unknown = $taken === null;
 	$out = array();
-	foreach (cp_panel_bg_list() as $b) {
+	foreach (cp_portal_bg_list() as $b) {
 		$k = cp_panel_lc($b['name']);
 		$free = $unknown || !isset($taken[$k]) || $taken[$k] < (int) $b['qty'];
 		$cur = $current !== '' && cp_panel_lc($current) === $k;
@@ -70,7 +77,7 @@ function cp_portal_bg_options($portal, $current = '') {
 function cp_portal_bg_check($portal, $name) {
 	if (!cp_portal_bg_enabled($portal)) { return new WP_Error('invalid', 'Ehhez a szolgáltatáshoz nem tartozik háttér.'); }
 	$k = cp_panel_lc($name);
-	foreach (cp_panel_bg_list() as $b) {
+	foreach (cp_portal_bg_list() as $b) {
 		if (cp_panel_lc($b['name']) !== $k) { continue; }
 		$taken = cp_portal_bg_taken($portal->event_date, $portal->deal_id);
 		if (is_array($taken) && isset($taken[$k]) && $taken[$k] >= (int) $b['qty']) {

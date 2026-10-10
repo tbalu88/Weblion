@@ -38,6 +38,10 @@ function cp_portal_flags_build($portal, $answers, $state) {
 	}
 	if ($g('vehicle_access', 'type') === 'permit_needed') { $add('behajtas', 'BEHAJTÁSI ENGEDÉLY KELL', 'warn', array('adatlap', 'munkalap')); }
 	if ($g('parking', 'type') === 'paid') { $add('fizetos_parkolas', 'FIZETŐS PARKOLÁS', 'info', array('elszamolas')); }
+	if (function_exists('cp_portal_duration_info')) {
+		$du = cp_portal_duration_info($portal, $answers);
+		if ($du['diff']) { $add('idotartam', 'IDŐTARTAM: ' . mb_strtoupper(cp_portal_hours_text($du['chosen'])) . ' (CSOMAG: ' . mb_strtoupper(cp_portal_hours_text($du['pkg'])) . ')', 'warn', $all); }
+	}
 	if ($state && !empty($state->changed_late_at)) {
 		$add('modositva', 'MÓDOSÍTVA ' . wp_date('m.d. H:i', cp_portal_db_ts($state->changed_late_at), cp_portal_tz()), 'warn', array('adatlap', 'munkalap'));
 	}
@@ -209,12 +213,16 @@ function cp_portal_contract_data($portal, $answers) {
 		));
 	}
 	$date = $g('event_date') !== '' ? $g('event_date') : (string) $portal->event_date;
+	$service = isset($portal->sm['package']) && trim((string) $portal->sm['package']) !== '' ? trim((string) $portal->sm['package']) : $g('services');
+	$du = cp_portal_duration_info($portal, $answers);
+	$dur = $du['chosen'] > 0 ? cp_portal_hours_text($du['chosen']) . ($du['diff'] ? ' – ELTÉR a foglalt csomagtól (' . cp_portal_hours_text($du['pkg']) . ')' : '') : '';
 	$time = $g('schedule', 'start') !== '' ? $g('schedule', 'start') . '–' . $g('schedule', 'end') : '';
 	$venue = trim($g('venue_address', 'name') . ($g('venue_address', 'address') !== '' ? ', ' . $g('venue_address', 'address') : ''), ', ');
 	$groups[] = array('A megbízás tárgya', array(
-		array('Szolgáltatás', $g('services')),
+		array('Szolgáltatás', $service),
 		array('Helyszín', $venue),
 		array('Dátum és időpont', trim(cp_portal_hu_date($date, false) . ($time !== '' ? ' ' . $time : ''))),
+		array('Időtartam', $dur),
 		array('Háttér', $g('background')),
 	));
 	// üres, nem kötelező sorok elhagyása; a szöveges blokk a szerződés sorrendjében
@@ -226,5 +234,5 @@ function cp_portal_contract_data($portal, $answers) {
 		foreach ($groups[$i][1] as $r) { $lines[] = $r[0] . ': ' . $r[1]; }
 		$lines[] = '';
 	}
-	return array('type' => $type, 'groups' => $groups, 'text' => trim(implode("\n", $lines)));
+	return array('type' => $type, 'groups' => $groups, 'text' => trim(implode("\n", $lines)), 'duration' => $du);
 }

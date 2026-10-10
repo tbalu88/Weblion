@@ -39,6 +39,7 @@ function cp_portal_defaults() {
 		'mail_from_name'=> 'EventCrazy',
 		'reply_to'      => '',
 		'test_inbox'    => '',         // ha meg van adva, MINDEN ügyfél-levél ide megy
+		'bg_exclude'    => "Fehér\nZöld", // ezek a hátterek nem választhatók a portálon (soronként)
 	);
 }
 
@@ -170,21 +171,20 @@ function cp_portal_fields() {
 			'stage' => 'a', 'q' => 'schedule', 'qlabel' => 'Kezdés és a szolgáltatás vége', 'section' => 'rendezveny', 'required' => true,
 			'label' => 'Mettől meddig kéritek a szolgáltatást?',
 			'help' => 'A foglalás alapján kitöltöttük, ha változott, írd át.',
-			'note' => 'Ha a helyszínen meggondoljátok magatokat, a szolgáltatás ott is hosszabbítható.',
+			'note' => 'Ha a helyszínen meggondoljátok magatokat, a szolgáltatás ott is hosszabbítható.',  // + a foglalt csomag óraszáma (cp_portal_duration_html)
 			'parts' => array(
 				'start' => array('label' => 'A gép indulása', 'kind' => 'time', 'req' => true),
 				'end'   => array('label' => 'Szolgáltatás vége', 'kind' => 'time', 'req' => true),
 			),
 		),
 		'services' => array(
-			'stage' => 'a', 'q' => 'services', 'qlabel' => 'Megrendelt szolgáltatások', 'section' => 'rendezveny', 'required' => true,
-			'label' => 'Milyen szolgáltatásokat rendeltek?',
-			'help' => 'A foglalás alapján kitöltöttük – ha eltér, írd át.',
-			'kind' => 'text', 'max' => 300, 'ph' => 'pl. Szelfigép, Medium Party csomag',
+			'stage' => 'a', 'q' => 'services', 'qlabel' => 'Megrendelt szolgáltatás', 'section' => 'rendezveny', 'required' => false,
+			'label' => 'A megrendelt szolgáltatás',
+			'kind' => 'fixed',  // a foglalás szerint (Salesmate), az ügyfél nem módosíthatja
 		),
 		/* ---------------- b) a rendezvény részletei (határidőig) */
 		'venue_room' => array(
-			'stage' => 'b', 'q' => 'room', 'qlabel' => 'Terem / pontos hely', 'section' => 'helyszin', 'required' => true,
+			'stage' => 'b', 'q' => 'room', 'qlabel' => 'Terem / pontos hely', 'section' => 'helyszin', 'required' => false,
 			'label' => 'Melyik teremben / hol pontosan áll majd a gép?',
 			'kind' => 'text', 'max' => 200, 'ph' => 'pl. Nagyterem, a bejárattól jobbra',
 		),
@@ -442,6 +442,9 @@ function cp_portal_validate($key, $raw, $answers = array()) {
 	if ($kind === 'consent') {
 		$given = is_array($raw) ? !empty($raw['given']) : !empty($raw);
 		return array('value' => array('given' => (bool) $given, 'at' => gmdate('c')));
+	}
+	if ($kind === 'fixed') {
+		return new WP_Error('invalid', 'A megrendelt szolgáltatás a portálon nem módosítható – írd meg nekünk, ha változtatnál.');
 	}
 	if ($kind === 'sablon') {
 		return new WP_Error('invalid', 'A fotósablon a sablonkészítőben menthető.');

@@ -58,8 +58,8 @@ function cp_portal_render_form_page($portal, $tok) {
 	$flow = $payload['flow'];
 	$sm = $portal->sm;
 	$o = cp_portal_opts();
-	$first = isset($sm['name']) ? trim((string) $sm['name']) : '';
-	if ($first !== '') { $pp = preg_split('/\s+/u', $first); $first = count($pp) > 1 ? $pp[count($pp) - 1] : $pp[0]; }  // magyar névsorrend: a keresztnév a végén
+	$full = isset($sm['name']) ? trim(preg_replace('/\s+/u', ' ', (string) $sm['name'])) : '';
+	$pkg = isset($sm['package']) ? trim(preg_replace('/\s*,\s*/u', ', ', (string) $sm['package'])) : '';
 	$st = $payload['state'];
 	$ca = (int) $st['contract_total'];
 	$cd = (int) $st['contract_done'];
@@ -70,8 +70,8 @@ function cp_portal_render_form_page($portal, $tok) {
 	cp_portal_page_head('Ügyfélportál');
 	echo '<body class="cpp">' . cp_portal_page_top(true);
 	echo '<main class="cpp-main">';
-	echo '<section class="cpp-hero"><small>Ügyfélportál</small><h1>' . esc_html($first !== '' ? 'Szia, ' . $first . '!' : 'Szia!') . '</h1>';
-	echo '<p>' . esc_html(cp_portal_hu_date($portal->event_date)) . (!empty($sm['package']) ? ' · ' . esc_html($sm['package']) : '') . '</p>';
+	echo '<section class="cpp-hero"><small>Ügyfélportál</small><h1>' . esc_html($full !== '' ? 'Kedves ' . $full . '!' : 'Kedves Ügyfelünk!') . '</h1>';
+	echo '<p>' . esc_html(cp_portal_hu_date($portal->event_date)) . ($pkg !== '' ? ' · ' . esc_html($pkg) : '') . '</p>';
 	echo '<p class="cpp-lead">' . ($flow === 'v2'
 		? 'Két lépésben kérünk adatokat: először a szerződéshez szükségeseket, aztán a rendezvény részleteit. Minden válasz azonnal mentődik, bármikor visszajöhetsz folytatni.'
 		: 'Néhány kérdés a helyszínről, hogy a kollégánk mindenre felkészülten érkezzen. Minden válasz azonnal mentődik, bármikor visszajöhetsz folytatni.') . '</p></section>';
@@ -94,21 +94,28 @@ function cp_portal_render_form_page($portal, $tok) {
 	echo '<form id="cpp-form" novalidate' . ($locked ? ' class="locked"' : '') . '>';
 	$fields = cp_portal_fields();
 	$secs = cp_portal_sections();
+	$sn = 0;
 	foreach (cp_portal_stage_titles() as $stage => $tt) {
-		echo '<div class="cpp-stage" data-stage="' . esc_attr($stage) . '"><div class="cpp-stage-h"><h2>' . esc_html($tt[0]) . '</h2><p>' . esc_html($stage === 'a' && $flow === 'v1' ? 'A szerződés már elkészült – ha valami változott, itt javíthatod.' : $tt[1]) . '</p></div>';
+		$sn++;
+		$secn = 0;
+		echo '<div class="cpp-stage" data-stage="' . esc_attr($stage) . '"><div class="cpp-stage-h"><h2><span class="cpp-no">' . $sn . '</span>' . esc_html(preg_replace('/^\d+\.\s*/u', '', $tt[0])) . '</h2><p>' . esc_html($stage === 'a' && $flow === 'v1' ? 'A szerződés már elkészült – ha valami változott, itt javíthatod.' : $tt[1]) . '</p></div>';
 		foreach ($secs as $sec => $si) {
 			if ($si[0] !== $stage) { continue; }
 			$html = '';
+			$qn = 0;
+			$no = $sn . '.' . ($secn + 1);
 			foreach ($fields as $k => $f) {
 				if ($f['section'] !== $sec) { continue; }
 				if ($k === 'background' && !cp_portal_bg_enabled($portal)) { continue; }
 				$val = array_key_exists($k, $answers) ? $answers[$k] : (isset($prefill[$k]) ? $prefill[$k] : null);
 				if (is_object($val)) { $val = (array) $val; }
 				$req = !empty($f['required']) && cp_portal_stage_required($f['stage'], $flow);
-				$html .= cp_portal_field_html($k, $f, $val, $locked, array_key_exists($k, $answers), $req, $answers, $portal);
+				if (!isset($f['kind']) || $f['kind'] !== 'consent') { $qn++; }
+				$html .= cp_portal_field_html($k, $f, $val, $locked, array_key_exists($k, $answers), $req, $answers, $portal, $no . '.' . $qn);
 			}
 			if ($html === '') { continue; }
-			echo '<section class="cpp-sec" data-sec="' . esc_attr($sec) . '">' . ($si[1] !== '' ? '<h3>' . esc_html($si[1]) . '</h3>' : '') . $html . '</section>';
+			if ($si[1] !== '') { $secn++; }
+			echo '<section class="cpp-sec" data-sec="' . esc_attr($sec) . '">' . ($si[1] !== '' ? '<h3><span class="cpp-no">' . esc_html($no) . '</span>' . esc_html($si[1]) . '</h3>' : '') . $html . '</section>';
 		}
 		if ($stage === 'a' && $flow === 'v2' && !$locked) {
 			echo '<section class="cpp-card cpp-done cpp-contract"><button type="button" class="cpp-btn" id="cpp-contract">Mehet a szerződés – adatok elküldése</button>';
@@ -138,7 +145,7 @@ function cp_portal_render_form_page($portal, $tok) {
 }
 
 /* egy mező kártyája; $val a mentett válasz vagy az előtöltés */
-function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $portal) {
+function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $portal, $no = '') {
 	$dis = $locked ? ' disabled' : '';
 	$kind = isset($f['parts']) ? 'object' : $f['kind'];
 	$sif = '';
@@ -153,9 +160,18 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 		$h .= '<div class="cpp-fs"><span class="cpp-saved" aria-live="polite"></span></div><p class="cpp-ferr" hidden></p></div>';
 		return $h;
 	}
-	$h .= '<div class="cpp-fh"><span class="cpp-fl" id="l-' . esc_attr($k) . '">' . esc_html($f['label']) . '</span>' . ($req ? '<span class="cpp-req">kötelező</span>' : '') . '<span class="cpp-saved' . ($saved ? ' ok' : '') . '" aria-live="polite">' . ($saved ? 'Mentve' : '') . '</span></div>';
+	$h .= '<div class="cpp-fh"><span class="cpp-fl" id="l-' . esc_attr($k) . '">' . ($no !== '' ? '<span class="cpp-no">' . esc_html($no) . '</span>' : '') . esc_html($f['label']) . '</span>' . ($req ? '<span class="cpp-req">kötelező</span>' : '') . '<span class="cpp-saved' . ($saved ? ' ok' : '') . '" aria-live="polite">' . ($saved ? 'Mentve' : '') . '</span></div>';
 	if (!empty($f['help'])) { $h .= '<p class="cpp-help">' . esc_html($f['help']) . '</p>'; }
-	if ($kind === 'object') {
+	if ($k === 'space_ok') { $h .= cp_portal_space_svg(); }
+	if ($k === 'onsite_contact' && !$locked) {
+		$h .= '<label class="cpp-same"><input type="checkbox" data-same-as-client> Ugyanaz, mint a megrendelő (kitöltöm az adataival)</label>';
+	}
+	if ($kind === 'fixed') {
+		$pkg = isset($portal->sm['package']) ? trim(preg_replace('/\s*,\s*/u', ', ', (string) $portal->sm['package'])) : '';
+		$hrs = isset($portal->sm['hours']) ? (float) $portal->sm['hours'] : 0;
+		$h .= '<div class="cpp-fixed">' . esc_html($pkg !== '' ? $pkg : 'A foglalás szerint') . ($hrs > 0 ? ' · ' . esc_html(cp_portal_hours_text($hrs)) : '') .
+			'<small>A foglalás szerint, itt nem módosítható. Ha változtatnál rajta, írd meg a különleges kérésnél, vagy keress minket.</small></div>';
+	} elseif ($kind === 'object') {
 		$v = is_array($val) ? $val : array();
 		foreach ($f['parts'] as $pk => $p) {
 			$show = '';
@@ -175,6 +191,12 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 		$p = array('kind' => $kind, 'max' => isset($f['max']) ? $f['max'] : 200, 'options' => isset($f['options']) ? $f['options'] : array(), 'ph' => isset($f['ph']) ? $f['ph'] : '');
 		$h .= '<div class="cpp-part" data-part="" data-pkind="' . esc_attr($kind) . '">' . cp_portal_input_html($k, $p, is_scalar($val) ? $val : '', $dis, '', $f['label']) . '</div>';
 	}
+	if ($k === 'schedule') {
+		$du = cp_portal_duration_info($portal, $answers);
+		if ($du['pkg'] > 0) {
+			$h .= '<p class="cpp-dur' . ($du['diff'] ? ' diff' : '') . '" data-pkg-hours="' . esc_attr($du['pkg']) . '">' . esc_html(cp_portal_duration_text($du)) . '</p>';
+		}
+	}
 	if (!empty($f['note'])) { $h .= '<p class="cpp-note">' . esc_html($f['note']) . '</p>'; }
 	$h .= '<p class="cpp-ferr" role="alert" hidden></p></div>';
 	return $h;
@@ -191,6 +213,7 @@ function cp_portal_bg_html($portal, $cur, $dis) {
 			'<b>' . esc_html($b['name']) . '</b>' . ($b['free'] ? '' : '<small>közben foglalt lett</small>') . '</span></label>';
 	}
 	$h .= '</div></div>';
+	$h .= '<p class="cpp-bgwarn">Ha később döntesz: a lista mindig csak az aznap még szabad hátteret mutatja, a mások által lefoglalt hátterek automatikusan eltűnnek – így előfordulhat, hogy a most kiszemelt háttér addigra már nem lesz elérhető.</p>';
 	if ($o['unknown']) { $h .= '<p class="cpp-note">A foglaltságot most nem tudtuk ellenőrizni – a választásodat egyeztetjük.</p>'; }
 	return $h;
 }
@@ -224,4 +247,29 @@ function cp_portal_input_html($name, $p, $v, $dis, $label, $aria) {
 		default:
 			return $lab . '<input id="' . esc_attr($id) . '" type="text"' . $al . ' maxlength="' . $max . '" value="' . esc_attr((string) $v) . '"' . $ph . $dis . '>';
 	}
+}
+
+/* a foglalt csomag óraszáma és az eltérés jelzése a menetrendnél (a JS élőben frissíti) */
+function cp_portal_duration_text($du) {
+	$t = 'A foglalásod szerint ' . cp_portal_hours_adj($du['pkg']) . ' csomagot kértél.';
+	if ($du['diff']) { $t .= ' A megadott időtartam ' . cp_portal_hours_text($du['chosen']) . ' – ez eltér a csomagtól, a kollégáink egyeztetnek veled a különbözetről.'; }
+	return $t;
+}
+
+/* sematikus helyigény-ábra felülnézetből: háttérszerkezet 213 cm, előtte a vendégek, a gép legalább 1,5 m-re a háttértől */
+function cp_portal_space_svg() {
+	return '<div class="cpp-space"><svg viewBox="0 0 320 250" role="img" aria-label="Helyigény felülnézetből: 213 cm széles háttér, előtte a vendégek, a gép legalább 1,5 méterre a háttértől">' .
+		'<rect x="40" y="20" width="240" height="210" rx="10" fill="#F6F3EE" stroke="#C9C3B8" stroke-dasharray="5 4"/>' .
+		'<rect x="54" y="34" width="212" height="14" rx="3" fill="#E8894A"/>' .
+		'<text x="160" y="30" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#5B6275">háttér · 213 cm</text>' .
+		'<g fill="#9AA0AE">' .
+		'<circle cx="110" cy="80" r="9"/><circle cx="140" cy="76" r="9"/><circle cx="170" cy="78" r="9"/><circle cx="200" cy="82" r="9"/>' .
+		'<circle cx="125" cy="104" r="9"/><circle cx="185" cy="104" r="9"/></g>' .
+		'<text x="160" y="132" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#5B6275">vendégek</text>' .
+		'<rect x="135" y="176" width="50" height="34" rx="6" fill="#141C33"/>' .
+		'<text x="160" y="197" text-anchor="middle" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#fff">gép</text>' .
+		'<line x1="292" y1="48" x2="292" y2="176" stroke="#5B6275" stroke-width="1.5"/>' .
+		'<path d="M288 54 L292 48 L296 54 M288 170 L292 176 L296 170" fill="none" stroke="#5B6275" stroke-width="1.5"/>' .
+		'<text x="300" y="116" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#141C33" transform="rotate(90 300 116)" text-anchor="middle">min. 1,5 m</text>' .
+		'</svg><p>Felülnézet: a háttérszerkezet 213 cm széles, előtte állnak a vendégek, a gépnek legalább 1,5 m kell a háttértől. Összesen nagyjából 6 m² szabad, fedett terület kell.</p></div>';
 }

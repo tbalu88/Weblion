@@ -13,7 +13,7 @@
   var retryT = null, retryMs = 3000;
 
   function $all(root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
-  function fieldEls() { return $all(form, '[data-field]').filter(function (f) { return f.getAttribute('data-kind') !== 'sablon'; }); }
+  function fieldEls() { return $all(form, '[data-field]').filter(function (f) { var k = f.getAttribute('data-kind'); return k !== 'sablon' && k !== 'fixed'; }); }
   function byKey(k) { return form.querySelector('[data-field="' + k + '"]'); }
 
   /* ---------------------------------------------------- olvasás / beírás */
@@ -207,12 +207,46 @@
     var fd = e.target.closest('[data-field]');
     if (!fd || e.target.type === 'radio' || e.target.type === 'checkbox') return;
     mark(fd, '', '');
+    if (fd.getAttribute('data-field') === 'schedule') duration(fd);
+    if (fd.getAttribute('data-field') === 'onsite_contact') { var sc = fd.querySelector('[data-same-as-client]'); if (sc) sc.checked = false; }
     if (fd.getAttribute('data-kind') === 'object' && incomplete(fd)) return;  // amíg a mezőben dolgozik, nem szólunk a hiányzó részért
     later(fd, 800);
   });
+  /* „Ugyanaz, mint a megrendelő”: a helyszíni kapcsolattartó a megrendelő (vagy a cég kapcsolattartójának) adataival */
+  function sameAsClient(fd, cb) {
+    if (!cb.checked) return;
+    var type = byKey('client_type') ? read(byKey('client_type')) : '';
+    var src = type === 'ceg' ? byKey('client_company') : byKey('client_private');
+    var v = src ? read(src) : {};
+    var name = type === 'ceg' ? v.contact_name : v.name, phone = type === 'ceg' ? v.contact_phone : v.phone;
+    if (!name && !phone) { cb.checked = false; err(fd, 'Előbb add meg a megrendelő adatait (1. rész), utána tudom átvenni.'); return; }
+    write(fd, { name: name || '', phone: phone || '' });
+    err(fd, '');
+    save(fd);
+  }
+  /* a foglalt csomag óraszámához képest eltér-e a megadott menetrend */
+  function duration(fd) {
+    var box = fd.querySelector('.cpp-dur');
+    if (!box) return;
+    var pkg = parseFloat(box.getAttribute('data-pkg-hours')) || 0, v = read(fd);
+    var m = function (t) { var x = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return x ? (+x[1]) * 60 + (+x[2]) : null; };
+    var a = m(v.start), b = m(v.end);
+    var hrs = function (h) { return String(Math.round(h * 100) / 100).replace('.', ',') + ' óra'; };
+    var t = 'A foglalásod szerint ' + hrs(pkg).replace(/óra$/, 'órás') + ' csomagot kértél.', diff = false;
+    if (a != null && b != null) {
+      if (b <= a) b += 1440;
+      var h = (b - a) / 60;
+      diff = Math.abs(h - pkg) >= 0.25;
+      if (diff) t += ' A megadott időtartam ' + hrs(h) + ' – ez eltér a csomagtól, a kollégáink egyeztetnek veled a különbözetről.';
+    }
+    box.textContent = t;
+    box.classList.toggle('diff', diff);
+  }
   form.addEventListener('change', function (e) {
     var fd = e.target.closest('[data-field]');
     if (!fd) return;
+    if (e.target.hasAttribute('data-same-as-client')) { sameAsClient(fd, e.target); return; }
+    if (fd.getAttribute('data-field') === 'schedule') duration(fd);
     showIf(fd);
     showFields();
     if (e.target.type === 'radio' || e.target.type === 'checkbox') {

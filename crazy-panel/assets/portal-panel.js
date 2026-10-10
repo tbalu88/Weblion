@@ -231,7 +231,7 @@
       h += '<h4>Válaszok <small class="cpx-muted">– irodai szerkesztés' + (p.deadline && p.deadline.passed ? '; a határidő után minden módosítás „MÓDOSÍTVA” címkét és Pumble-értesítést ad' : '') + '</small></h4>';
       let stg = '';
       SCHEMA.forEach(f => {
-        if (f.kind === 'sablon' || !activeField(f, p.answers)) return;
+        if (f.kind === 'sablon' || f.kind === 'fixed' || !activeField(f, p.answers)) return;
         if (f.stage !== stg) { stg = f.stage; h += '<div class="pp-sec">' + esc(STAGE[stg] || stg) + '</div>'; }
         const v = p.answers[f.key] !== undefined ? p.answers[f.key] : (p.prefill && p.prefill[f.key]) || null;
         h += editor(f, v, p.meta[f.key]);

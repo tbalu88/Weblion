@@ -111,6 +111,7 @@ function cp_portal_db_install() {
 	foreach ($sql as $q) { dbDelta($q); }
 	$missing = cp_portal_db_missing_tables();
 	if (!$missing && $prev !== '' && version_compare($prev, '2', '<')) { cp_portal_db_migrate_2(); }
+	if (!$missing && $prev !== '' && version_compare($prev, '3', '<')) { $GLOBALS['cp_portal_recompute_all'] = true; }  // a kötelező kérdések köre változott (v3)
 	if (!$missing) {
 		update_option('cp_portal_db_ver', CP_PORTAL_DB_VER, true);
 	} else {
@@ -133,6 +134,16 @@ function cp_portal_db_migrate_2() {
 		}
 	}
 }
+
+/* v3: az állapot (kitöltött kötelező kérdések) újraszámolása minden portálnál – a többi fájl betöltése után */
+add_action('init', function () {
+	if (empty($GLOBALS['cp_portal_recompute_all']) || !function_exists('cp_portal_recompute')) { return; }
+	global $wpdb;
+	foreach ((array) $wpdb->get_col('SELECT id FROM ' . cp_portal_t('portals')) as $pid) {
+		$p = cp_portal_get($pid);
+		if ($p) { cp_portal_recompute($p); }
+	}
+}, 5);
 
 function cp_portal_db_missing_tables() {
 	global $wpdb;

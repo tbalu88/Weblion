@@ -43,8 +43,10 @@
 .cpp-help{margin:-4px 0 10px;color:var(--mu);font-size:14px}
 .cpp-part+.cpp-part{margin-top:12px}
 .cpp-pl{display:block;font-size:14px;font-weight:600;color:var(--mu);margin:0 0 6px}
-.cpp-field input[type=text],.cpp-field input[type=tel],.cpp-field input[type=time],.cpp-field textarea{display:block;width:100%;min-height:50px;border:1.5px solid var(--li);border-radius:12px;padding:12px 14px;background:#fff;font:inherit;font-size:16px;color:var(--ink);-webkit-appearance:none;appearance:none}
+.cpp-field input[type=text],.cpp-field input[type=tel],.cpp-field input[type=time],.cpp-field input[type=email],.cpp-field input[type=date],.cpp-field textarea{display:block;width:100%;min-height:50px;border:1.5px solid var(--li);border-radius:12px;padding:12px 14px;background:#fff;font:inherit;font-size:16px;color:var(--ink);-webkit-appearance:none;appearance:none}
 .cpp-field input[type=time]{max-width:180px}
+.cpp-field input[type=date]{max-width:240px}
+.cpp-field input[type=date]::-webkit-date-and-time-value,.cpp-field input[type=time]::-webkit-date-and-time-value{text-align:left}
 .cpp-field textarea{min-height:110px;resize:vertical}
 .cpp-field input:focus,.cpp-field textarea:focus{outline:0;border-color:var(--o);box-shadow:0 0 0 3px rgba(232,137,74,.2)}
 .cpp-part.bad input,.cpp-part.bad textarea{border-color:var(--bad)}
@@ -123,3 +125,18 @@ form.locked .cpp-field{background:#FBFAF8}
 /* ügyfélportál – sablonkészítő ügyfél-módban (a panel sablon.js-e, a csapatnak szóló részek nélkül) */
 .sb-client .sb-deal,.sb-client .sb-ai,.sb-client [data-png],.sb-client [data-jpg],.sb-client [data-tp],.sb-client [data-oinfo],.sb-client .sb-holes,.sb-client .sb-pick-top small{display:none!important}
 .sb-client .sb-save-wrap .sb-oinfo{display:block}
+
+/* v2.1: számozás, fix szolgáltatás, időtartam, helyigény-ábra, „ugyanaz, mint a megrendelő” */
+.cpp-no{display:inline-block;min-width:34px;margin-right:6px;padding:1px 7px;border-radius:999px;background:#F1EDE7;color:var(--mu);font:700 12px/1.6 Inter,sans-serif;text-align:center;vertical-align:2px}
+.cpp-sec h3 .cpp-no{font-size:12.5px;background:var(--o);color:#fff}
+.cpp-stage-h h2 .cpp-no{font-size:14px;background:var(--n);color:#fff;vertical-align:3px}
+.cpp-fixed{background:#F6F3EE;border-radius:12px;padding:12px 14px;font-weight:600}
+.cpp-fixed small{display:block;font-weight:400;color:var(--mu);margin-top:4px;font-size:13.5px}
+.cpp-dur{margin:10px 0 0;border-radius:10px;padding:8px 11px;font-size:14px;background:#F6F3EE;color:var(--mu)}
+.cpp-dur.diff{background:var(--warnb);color:#6E4A00;font-weight:600}
+.cpp-space{margin:4px 0 12px;background:#FBFAF8;border:1px solid var(--li);border-radius:12px;padding:10px}
+.cpp-space svg{display:block;width:100%;max-width:420px;height:auto;margin:0 auto}
+.cpp-space p{margin:6px 0 0;font-size:13.5px;color:var(--mu);text-align:center}
+.cpp-same{display:flex;gap:10px;align-items:center;margin:0 0 12px;font-weight:600;cursor:pointer}
+.cpp-same input{width:20px;height:20px;accent-color:var(--o);flex:none}
+.cpp-bgwarn{margin:10px 0 0;background:var(--warnb);color:#6E4A00;border-radius:10px;padding:8px 11px;font-size:14px}

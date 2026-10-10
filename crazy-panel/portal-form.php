@@ -183,7 +183,6 @@ function cp_portal_prefill($portal) {
 		$out['schedule'] = $sch;
 	}
 	if (!empty($portal->event_date)) { $out['event_date'] = (string) $portal->event_date; }
-	if (!empty($sm['package'])) { $out['services'] = (string) $sm['package']; }
 	$name = isset($sm['name']) ? (string) $sm['name'] : '';
 	$email = isset($sm['email']) ? (string) $sm['email'] : '';
 	$phone = isset($sm['phone']) ? (string) $sm['phone'] : '';
@@ -192,4 +191,31 @@ function cp_portal_prefill($portal) {
 		$out['client_company'] = array_filter(array('contact_name' => $name, 'contact_email' => $email, 'contact_phone' => $phone, 'billing_email' => $email));
 	}
 	return (object) $out;
+}
+
+/* ------------------------------------------------------------ időtartam: a foglalt csomag óraszáma vs. a megadott menetrend */
+
+/* a menetrend hossza órában (éjfélen átnyúló zárással), vagy 0 */
+function cp_portal_schedule_hours($sch) {
+	if (!is_array($sch) || empty($sch['start']) || empty($sch['end']) || !cp_portal_time_ok($sch['start']) || !cp_portal_time_ok($sch['end'])) { return 0; }
+	$s = cp_portal_minutes($sch['start']);
+	$e = cp_portal_minutes($sch['end']);
+	if ($e <= $s) { $e += 1440; }
+	return round(($e - $s) / 60, 2);
+}
+
+function cp_portal_hours_text($h) {
+	return rtrim(rtrim(number_format((float) $h, 2, ',', ''), '0'), ',') . ' óra';
+}
+
+/* melléknévként: „4 órás” */
+function cp_portal_hours_adj($h) {
+	return rtrim(rtrim(number_format((float) $h, 2, ',', ''), '0'), ',') . ' órás';
+}
+
+/* array(pkg => a foglalás szerinti óra (0 = nem ismert), chosen => a megadott óra (0 = nincs), diff => eltér-e) */
+function cp_portal_duration_info($portal, $answers) {
+	$pkg = isset($portal->sm['hours']) ? (float) $portal->sm['hours'] : 0;
+	$chosen = cp_portal_schedule_hours(isset($answers['schedule']) ? $answers['schedule'] : null);
+	return array('pkg' => $pkg, 'chosen' => $chosen, 'diff' => $pkg > 0 && $chosen > 0 && abs($chosen - $pkg) >= 0.25);
 }
