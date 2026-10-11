@@ -1,0 +1,56 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v11/panel.js.orig	2026-10-11 11:37:32.074827414 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v11/panel.js	2026-10-11 11:37:32.095904912 +0000
+@@ -99,21 +99,42 @@
+     app.innerHTML = '';
+     const top = el('header', { class: 'cpx-top' });
+     top.innerHTML = '<div class="cpx-logo">Crazy<span>panel</span></div>' +
++      '<span class="cpx-cur" id="cpx-cur"></span>' +
++      '<button class="cpx-burger" id="cpx-burger" type="button" aria-label="Menü" aria-expanded="false" aria-controls="cpx-menu"><span></span><span></span><span></span></button>' +
++      '<div class="cpx-menu" id="cpx-menu">' +
+       '<nav class="cpx-tabs">' +
+       tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + tabBtn('stat', 'Statisztikák') +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">Frissítés</button>' +
+-      '<a class="cpx-btn ghost" href="' + esc(C.logout) + '">Kilépés</a></div>';
++      '<a class="cpx-btn ghost" href="' + esc(C.logout) + '">Kilépés</a></div></div>';
+     app.appendChild(top);
++    curLabel();
+     const main = el('main', { class: 'cpx-main', id: 'cpx-main' });
+     app.appendChild(main);
+     top.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
+-    top.querySelector('#cpx-refresh').addEventListener('click', () => refresh());
++    top.querySelector('#cpx-refresh').addEventListener('click', () => { menu(false); refresh(); });
++    /* mobil: hamburger menü */
++    top.querySelector('#cpx-burger').addEventListener('click', e => { e.stopPropagation(); menu(!top.classList.contains('open')); });
++    document.addEventListener('click', e => { if (top.classList.contains('open') && !e.target.closest('#cpx-menu')) menu(false); });
++    document.addEventListener('keydown', e => { if (e.key === 'Escape') menu(false); });
++    window.addEventListener('resize', () => { if (window.innerWidth > 700) menu(false); });
+     const dlg = el('div', { class: 'cpx-modal', id: 'cpx-modal', hidden: '' });
+     app.appendChild(dlg);
+     dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) closeModal(); });
+     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+   }
++  function menu(on) {
++    const top = document.querySelector('.cpx-top');
++    if (!top) return;
++    top.classList.toggle('open', !!on);
++    const b = document.getElementById('cpx-burger');
++    if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false');
++  }
++  function curLabel() {
++    const c = document.getElementById('cpx-cur');
++    const b = document.querySelector('.cpx-tabs [data-tab="' + S.tab + '"]');
++    if (c) c.textContent = b ? b.textContent : '';
++  }
+   const tabBtn = (id, label) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '">' + label + '</button>';
+ 
+   function renderStatus() {
+@@ -133,6 +154,8 @@
+     history.replaceState(null, '', '#' + tab);
+ 	if (tab === 'tarca' || tab === 'elszamolas') setTimeout(() => twTick(true), 50);
+     document.querySelectorAll('.cpx-tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
++    menu(false);
++    curLabel();
+     closeModal();
+     render();
+   }
