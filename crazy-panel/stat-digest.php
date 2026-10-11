@@ -8,6 +8,33 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+/* valódi atomi zár: INSERT IGNORE – csak az egyik párhuzamos kérés kapja meg (az add_option nem atomi) */
+function cp_st_dg_lock($name, $stale = 0) {
+	global $wpdb;
+	$ins = function () use ($wpdb, $name) {
+		$n = $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $name, (string) time()));
+		wp_cache_delete($name, 'options');
+		wp_cache_delete('notoptions', 'options');
+		wp_cache_delete('alloptions', 'options');
+		return $n === 1;
+	};
+	if ($ins()) { return true; }
+	if ($stale > 0) {
+		$t = (int) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $name));
+		if ($t && $t < time() - $stale) {
+			$wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $name, (string) $t));
+			return $ins();
+		}
+	}
+	return false;
+}
+
+function cp_st_dg_unlock($name) {
+	global $wpdb;
+	$wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s", $name));
+	wp_cache_delete($name, 'options');
+}
+
 function cp_st_dg_opts() {
 	$o = get_option('cp_st_dg', array());
 	return array_merge(array('week' => 1, 'month' => 1, 'hour' => 19), is_array($o) ? $o : array());
@@ -52,14 +79,18 @@ function cp_st_dg_maybe_send() {
 		$late = time() - $t['at'];
 		if ($late < 0 || $late > 36 * HOUR_IN_SECONDS) { continue; }
 		/* atomikus zár: két egyszerre futó kör ne küldjön kétszer */
-		if (!add_option('cp_st_dg_lock_' . $t['key'], time(), '', 'no')) { continue; }
+		if (!cp_st_dg_lock('cp_st_dg_lock_' . $t['key'])) { continue; }
+		/* a zár megszerzése után újra ellenőrizzük, hogy közben nem küldte-e el egy másik kör */
+		$sent = get_option('cp_st_dg_sent', array());
+		if (!is_array($sent)) { $sent = array(); }
+		if (!empty($sent[$t['key']])) { continue; }
 		$res = cp_st_dg_send($kind, $t['from'], $t['to'], false);
 		if ($res === true) {
 			$sent[$t['key']] = time();
 			$sent = array_slice($sent, -40, null, true);
 			update_option('cp_st_dg_sent', $sent, false);
 		} else {
-			delete_option('cp_st_dg_lock_' . $t['key']);
+			cp_st_dg_unlock('cp_st_dg_lock_' . $t['key']);
 		}
 		$log = get_option('cp_st_dg_log', array());
 		if (!is_array($log)) { $log = array(); }
@@ -153,7 +184,7 @@ function cp_st_dg_records($s, $kind, $pkey, $first) {
 		arsort($prev);
 		$best = reset($prev); $bestk = key($prev);
 		if ($cur > $best) {
-			$out[] = '🏆 *All-time rekord:* *' . $fmt($cur) . '* ' . $nm . ' egy ' . $unit . ' alatt' . "\n" . 'az eddigi csúcs ' . $fmt($best) . ' volt (' . cp_st_dg_plabel($kind, $bestk) . ')';
+			$out[] = '🏆 **All-time rekord:** **' . $fmt($cur) . '** ' . $nm . ' egy ' . $unit . ' alatt' . "\n" . 'az eddigi csúcs ' . $fmt($best) . ' volt (' . cp_st_dg_plabel($kind, $bestk) . ')';
 			continue;
 		}
 		/* legjobb N periódus óta */
@@ -161,7 +192,7 @@ function cp_st_dg_records($s, $kind, $pkey, $first) {
 		$keys = array_reverse(array_keys($prev));
 		$since = 0;
 		foreach ($keys as $k) { if ($prev[$k] >= $cur) { break; } $since++; }
-		if ($since >= ($kind === 'month' ? 12 : 26)) { $out[] = '⭐ ' . $since . ' ' . $unit . ' óta a legtöbb ' . $nm . ': *' . $fmt($cur) . '*'; }
+		if ($since >= ($kind === 'month' ? 12 : 26)) { $out[] = '⭐ ' . $since . ' ' . $unit . ' óta a legtöbb ' . $nm . ': **' . $fmt($cur) . '**'; }
 	}
 	return $out;
 }
@@ -205,8 +236,8 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$hu = array('', 'jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.');
 	$md = function ($d) use ($hu) { return $hu[(int) substr($d, 5, 2)] . ' ' . (int) substr($d, 8, 2) . '.'; };
 	$L = array();
-	/* Pumble: *félkövér*; minden statisztika külön blokk, üres sorral elválasztva */
-	$B = function ($x) { return '*' . $x . '*'; };
+	/* Pumble: **félkövér** (a webhook a dupla csillagot és a <b>-t értelmezi, a szimplát nem); minden statisztika külön blokk, üres sorral elválasztva */
+	$B = function ($x) { return '**' . $x . '**'; };
 	$L[] = $wk ? '📊 ' . $B('Heti összesítő – ' . cp_st_dg_plabel('week', $f)) . "\n" . $md($f) . ' – ' . $md($t) : '📊 ' . $B('Havi összesítő – ' . cp_st_dg_plabel('month', $pkey));
 	$L[] = '';
 	$pl = $wk ? 'előző hét' : 'előző hónap';
@@ -329,7 +360,7 @@ function cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) {
 	$out = array();
 	$r = function ($x) { return $x['leads'] ? $x['signed'] / $x['leads'] : null; };
 	$fmt = function ($v) { return $v === null ? '–' : str_replace('.', ',', (string) round($v * 100, 1)) . '%'; };
-	$out[] = '🔁 Konverzió: *' . $fmt($r($c)) . '* (aláírt / megkeresés az időszakban)';
+	$out[] = '🔁 Konverzió: **' . $fmt($r($c)) . '** (aláírt / megkeresés az időszakban)';
 	$out[] = $pl . ': ' . $fmt($r($p)) . ' · tavaly: ' . $fmt($r($y));
 	/* beérett kohorsz: havi összesítőnél a 3 hónappal korábbi hónap, hetinél a 6 héttel korábbi hét megkeresései, 120 napos horizonttal */
 	if ($kind === 'month') {
@@ -360,7 +391,7 @@ function cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) {
 	if ($kind === 'month') { $yt = (new DateTime($yf, cp_st_tz()))->format('Y-m-t'); }
 	$k0 = $coh($yf, $yt);
 	if ($k1['n'] >= 5) {
-		$line = $lbl . ' ' . $k1['n'] . ' megkeresésből ' . $k1['w'] . ' lett aláírt deal 120 napon belül: *' . cp_st_dg_pct($k1['w'], $k1['n']) . '*' . ($k0['n'] >= 5 ? ' (tavaly ugyanez: ' . cp_st_dg_pct($k0['w'], $k0['n']) . ')' : '');
+		$line = $lbl . ' ' . $k1['n'] . ' megkeresésből ' . $k1['w'] . ' lett aláírt deal 120 napon belül: **' . cp_st_dg_pct($k1['w'], $k1['n']) . '**' . ($k0['n'] >= 5 ? ' (tavaly ugyanez: ' . cp_st_dg_pct($k0['w'], $k0['n']) . ')' : '');
 		$out[] = $line;
 		if ($kind === 'month') {
 			$labels = cp_st_channel_labels();
@@ -438,10 +469,7 @@ function cp_st_ms_check() {
 	if (isset($o['ms']) && !$o['ms']) { return; }
 	$st = cp_st_state();
 	if (empty($st['deal_full_at']) || !empty($st['deal_redo'])) { return; }
-	if (!add_option('cp_st_ms_lock', time(), '', 'no')) {
-		if ((int) get_option('cp_st_ms_lock') < time() - 300) { delete_option('cp_st_ms_lock'); }
-		return;
-	}
+	if (!cp_st_dg_lock('cp_st_ms_lock', 300)) { return; }
 	$x = cp_st_ms_values();
 	$steps = cp_st_ms_steps();
 	$defs = cp_st_ms_defs();
@@ -477,10 +505,11 @@ function cp_st_ms_check() {
 		$log = cp_st_ms_log();
 		array_unshift($log, array('t' => time(), 'd' => cp_st_today(), 'k' => $key, 'txt' => $t));
 		update_option('cp_st_ms_log', array_slice($log, 0, 60), false);
-		if ($hook !== '') { cp_st_dg_post('🎯 *Mérföldkő:* ' . $t); }
+		update_option('cp_st_ms_done', $done, false);
+		if ($hook !== '') { cp_st_dg_post('🎯 **Mérföldkő:** ' . $t); }
 	}
 	update_option('cp_st_ms_done', $done, false);
-	delete_option('cp_st_ms_lock');
+	cp_st_dg_unlock('cp_st_ms_lock');
 }
 
 function cp_st_dg_post($txt) {
