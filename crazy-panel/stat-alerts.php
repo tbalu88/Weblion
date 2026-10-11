@@ -76,24 +76,42 @@ function cp_st_alerts() {
 	$booked = $lc(cp_st_lines($p['booked_stages']));
 	$open = $wpdb->get_results("SELECT id, title, stage, value, event_d, rotten_d, pay_method, contact_id, created_at FROM $D WHERE status = 'Open'", ARRAY_A);
 
-	/* 1) megválaszolatlan levelek: a kontakt utolsó bejövő levele újabb, mint az utolsó kimenő (nyitott deal, 30 napon belül) */
+	/* 1) megválaszolatlan levelek: a deal utolsó kommunikációja az ügyfél bejövő levele (nyitott deal, 30 napon belül).
+	 * A kontakt „utolsó kapott” ideje önmagában nem elég: a nem a dealhez kötött (pl. belső / továbbított) levelek is frissítik,
+	 * az „utolsó küldött” mező pedig a csapatpostafiókból küldött leveleknél gyakran üres. Ezért döntő a deal utolsó kommunikációja,
+	 * és a küldés után 2 percen belül „beérkező” levél (a saját levelünk visszhangja) nem számít. */
 	$rows = $wpdb->get_results($wpdb->prepare("SELECT x.id, x.title, x.value, x.stage, k.id cid, k.mail_recv_at, k.mail_sent_at FROM $D x JOIN $C k ON k.id = x.contact_id
-		WHERE x.status = 'Open' AND k.mail_recv_at IS NOT NULL AND (k.mail_sent_at IS NULL OR k.mail_recv_at > k.mail_sent_at) AND k.mail_recv_at >= %s ORDER BY k.mail_recv_at ASC", gmdate('Y-m-d H:i:s', $now - 30 * DAY_IN_SECONDS)), ARRAY_A);
-	$seen = array(); $items = array(); $oldest = 0;
+		WHERE x.status = 'Open' AND k.mail_recv_at IS NOT NULL AND (k.mail_sent_at IS NULL OR k.mail_recv_at > k.mail_sent_at) AND k.mail_recv_at >= %s
+		AND x.last_comm_at IS NOT NULL AND x.last_comm_mode = 'Email' AND ABS(TIMESTAMPDIFF(SECOND, x.last_comm_at, k.mail_recv_at)) <= 60
+		AND NOT (k.mail_sent_at IS NOT NULL AND TIMESTAMPDIFF(SECOND, k.mail_sent_at, k.mail_recv_at) BETWEEN 0 AND 120)
+		ORDER BY k.mail_recv_at ASC", gmdate('Y-m-d H:i:s', $now - 30 * DAY_IN_SECONDS)), ARRAY_A);
+	/* „Nem kell válasz” jelölés kontaktonként (a jelölt levélnél újabb bejövő levél újra jelez) */
+	$okm = get_option('cp_st_mail_ok', array());
+	if (!is_array($okm)) { $okm = array(); }
+	$seen = array(); $items = array(); $after = array(); $oldest = 0; $dism = 0;
+	$open_by = array();
+	foreach ($open as $r) { $open_by[$r['id']] = $r; }
 	foreach ($rows as $r) {
 		if (isset($seen[$r['cid']])) { continue; }
 		$seen[$r['cid']] = 1;
+		if (isset($okm[$r['cid']]) && $okm[$r['cid']] >= $r['mail_recv_at']) { $dism++; continue; }
 		$h = ($now - strtotime($r['mail_recv_at'] . ' UTC')) / 3600;
+		$ev = isset($open_by[$r['id']]['event_d']) ? $open_by[$r['id']]['event_d'] : '';
+		$it = cp_st_al_item($r, '', array('h' => round($h, 1), 'st' => $r['stage'], 'cid' => (string) $r['cid'], 'rv' => $r['mail_recv_at'], 'ok' => 1));
+		/* lezajlott rendezvény utáni levél (jellemzően köszönő): külön, a jelzésbe nem számít */
+		if (in_array(cp_panel_lc($r['stage']), $recv, true) || ($ev !== '' && $ev < $today)) { $it['sev'] = 'info'; $after[] = $it; continue; }
 		$oldest = max($oldest, $h);
-		$items[] = cp_st_al_item($r, '', array('h' => round($h, 1), 'st' => $r['stage']));
+		$items[] = $it;
 	}
 	$out[] = array(
 		'id' => 'mail', 'title' => 'Megválaszolatlan levelek',
-		'sev' => !$items ? 'ok' : ($oldest >= 24 ? 'red' : ($oldest >= (float) $o['al_mail_h'] ? 'amber' : 'info')),
+		'sev' => !$items ? ($after ? 'info' : 'ok') : ($oldest >= 24 ? 'red' : ($oldest >= (float) $o['al_mail_h'] ? 'amber' : 'info')),
 		'big' => count($items),
-		'text' => $items ? 'Az ügyfél utolsó levele újabb, mint a válaszunk. A legrégebbi ' . cp_st_al_age($oldest) . ' vár.' : 'Minden nyitott dealnél mi írtunk utoljára.',
-		'items' => array_slice($items, 0, 12), 'more' => max(0, count($items) - 12),
-		'note' => 'Forrás: a kontakt „utolsó kapott / küldött e-mail” ideje (Salesmate, ~10 perces frissítés). Az automatikus válaszlevelek is beleszámíthatnak.',
+		'text' => ($items ? 'Az ügyfél levele a deal utolsó kommunikációja, még nem válaszoltunk. A legrégebbi ' . cp_st_al_age($oldest) . ' vár.' : 'Rendezvény előtti dealnél nincs megválaszolatlan levél.')
+			. ($after ? ' A lezajlott rendezvények utáni ' . count($after) . ' levél (jellemzően köszönő) nem számít bele – lent, külön.' : '')
+			. ($dism ? ' ' . $dism . ' levél „nem kell válasz” jelöléssel elrejtve.' : ''),
+		'items' => array_merge(array_slice($items, 0, 15), array_slice($after, 0, 10)), 'more' => max(0, count($items) - 15) + max(0, count($after) - 10),
+		'note' => 'Akkor jelez, ha a deal utolsó kommunikációja az ügyfél levele (Salesmate, ~10 perces frissítés). A küldés után 2 percen belül „beérkező” saját másolat nem számít. A levél szövegét a Salesmate API nem adja ki, ezért a köszönő leveleket a „Nem kell válasz” gombbal lehet lezárni.',
 	);
 
 	/* 2) rohadó dealek */
@@ -342,6 +360,24 @@ function cp_st_al_season($today) {
 			'items' => $items);
 	}
 	return $out;
+}
+
+add_action('wp_ajax_nopriv_cp_st_mail_ok', 'cp_st_ajax_mail_ok');
+add_action('wp_ajax_cp_st_mail_ok', 'cp_st_ajax_mail_ok');
+function cp_st_ajax_mail_ok() {
+	cp_el_auth();
+	$cid = preg_replace('/[^0-9]/', '', isset($_POST['cid']) ? (string) wp_unslash($_POST['cid']) : '');
+	$rv = isset($_POST['rv']) ? preg_replace('/[^0-9: -]/', '', (string) wp_unslash($_POST['rv'])) : '';
+	if ($cid === '' || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $rv)) { cp_el_err('Hibás kérés.'); }
+	$m = get_option('cp_st_mail_ok', array());
+	if (!is_array($m)) { $m = array(); }
+	if (!empty($_POST['undo'])) { unset($m[$cid]); } else { $m[$cid] = $rv; }
+	/* 60 napnál régebbi jelölések törlése */
+	$lim = gmdate('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS);
+	foreach ($m as $k => $v) { if ($v < $lim) { unset($m[$k]); } }
+	update_option('cp_st_mail_ok', $m, false);
+	cp_st_bump();
+	wp_send_json_success(cp_st_alerts());
 }
 
 add_action('wp_ajax_nopriv_cp_st_alerts', 'cp_st_ajax_alerts');

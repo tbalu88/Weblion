@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_ST_DB_VER', '5');
+define('CP_ST_DB_VER', '6');
 define('CP_ST_OPT', 'cp_st_settings');
 define('CP_ST_SEC', 'cp_st_secrets');
 define('CP_ST_STATE', 'cp_st_state');
@@ -120,9 +120,10 @@ function cp_st_db_maybe_upgrade() {
 	cp_st_db_install();
 	update_option('cp_st_db_ver', CP_ST_DB_VER, false);
 	/* v5: új mezők (cím, rohadási dátum, fizetési mód, utolsó bejövő levél) – egy teljes újraolvasás tölti fel */
-	if ($was !== '' && version_compare($was, '5', '<')) {
+	if ($was !== '' && version_compare($was, '6', '<')) {
 		$st = cp_st_state();
-		foreach (array('deal', 'contact') as $k) { $st[$k . '_redo'] = 1; $st[$k . '_page'] = 0; $st[$k . '_run'] = gmdate('Y-m-d H:i:s'); unset($st[$k . '_cur'], $st[$k . '_span']); }
+		/* v6: a deal utolsó kommunikációja (a megválaszolatlan levelekhez) – csak a dealeket kell újraolvasni */
+		foreach (version_compare($was, '5', '<') ? array('deal', 'contact') : array('deal') as $k) { $st[$k . '_redo'] = 1; $st[$k . '_page'] = 0; $st[$k . '_run'] = gmdate('Y-m-d H:i:s'); unset($st[$k . '_cur'], $st[$k . '_span']); }
 		cp_st_state_set($st);
 		if (!wp_next_scheduled('cp_st_cron_more')) { wp_schedule_single_event(time() + 60, 'cp_st_cron_more'); }
 	}
@@ -160,6 +161,8 @@ function cp_st_db_install() {
   title varchar(190) NOT NULL DEFAULT '',
   rotten_d date NULL,
   pay_method varchar(40) NOT NULL DEFAULT '',
+  last_comm_at datetime NULL,
+  last_comm_mode varchar(20) NOT NULL DEFAULT '',
   first_mail_at datetime NULL,
   modified_at datetime NULL,
   seen_at datetime NOT NULL,
@@ -306,7 +309,7 @@ function cp_st_upsert($table, $cols, $rows, $update) {
 function cp_st_deal_fields() {
 	$p = cp_panel_opts();
 	$o = cp_st_opts();
-	$f = array('id', 'title', 'createdAt', 'status', 'stage', 'closedStage', 'closedDate', 'source', 'tags', 'dealValue', 'currency', 'primaryContact', 'lostReason', 'owner', 'lastModifiedAt', 'pipeline', 'rottenDate');
+	$f = array('id', 'title', 'createdAt', 'status', 'stage', 'closedStage', 'closedDate', 'source', 'tags', 'dealValue', 'currency', 'primaryContact', 'lostReason', 'owner', 'lastModifiedAt', 'pipeline', 'rottenDate', 'lastCommunicationAt', 'lastCommunicationMode');
 	if (function_exists('cp_tw_opts')) { $tw = cp_tw_opts(); if (!empty($tw['f_pay'])) { $f[] = $tw['f_pay']; } }
 	foreach (array($p['f_date'], $p['f_selfie'], $p['f_spin'], $o['f_svc'], $o['f_ctype']) as $k) { if ($k !== '') { $f[] = $k; } }
 	foreach (cp_st_lines($o['f_req']) as $k) { $f[] = $k; }
@@ -394,6 +397,8 @@ function cp_st_map_deal($r, $now) {
 		'modified_at'  => cp_st_utc(cp_st_ts(cp_panel_get($r, 'lastModifiedAt'))),
 		'title'        => mb_substr(cp_panel_str(cp_panel_get($r, 'title')), 0, 190),
 		'rotten_d'     => cp_panel_norm_date(cp_panel_get($r, 'rottenDate')) ?: null,
+		'last_comm_at'   => cp_st_utc(cp_st_ts(cp_panel_get($r, 'lastCommunicationAt'))),
+		'last_comm_mode' => mb_substr(cp_panel_str(cp_panel_get($r, 'lastCommunicationMode')), 0, 20),
 		'pay_method'   => function_exists('cp_tw_opts') ? mb_substr(cp_panel_str(cp_panel_get($r, cp_tw_opts()['f_pay'])), 0, 40) : '',
 		'seen_at'      => $now,
 	);
@@ -453,7 +458,7 @@ function cp_st_store_deals($raw, $backfill) {
 	}
 	$rows = array_values($rows);
 	cp_st_signed_apply($rows, $backfill);
-	$cols = array('id', 'contact_id', 'created_at', 'created_d', 'status', 'stage', 'closed_stage', 'closed_at', 'signed_d', 'signed_src', 'source', 'tags', 'svc', 'svc_req', 'value', 'currency', 'event_d', 'ctype', 'kind', 'lost_reason', 'owner', 'modified_at', 'title', 'rotten_d', 'pay_method', 'seen_at');
+	$cols = array('id', 'contact_id', 'created_at', 'created_d', 'status', 'stage', 'closed_stage', 'closed_at', 'signed_d', 'signed_src', 'source', 'tags', 'svc', 'svc_req', 'value', 'currency', 'event_d', 'ctype', 'kind', 'lost_reason', 'owner', 'modified_at', 'title', 'rotten_d', 'pay_method', 'last_comm_at', 'last_comm_mode', 'seen_at');
 	return cp_st_upsert(cp_st_t('deals'), $cols, $rows, array_diff($cols, array('id')));
 }
 

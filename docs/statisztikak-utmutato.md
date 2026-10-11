@@ -127,7 +127,7 @@ A Statisztikák fül tetején. Percenként frissül; a Salesmate-változásokat 
 
 | Figyelmeztetés | Mikor jelez | Forrás |
 |---|---|---|
-| Megválaszolatlan levelek | a kontakt utolsó bejövő levele újabb, mint az utolsó kimenő (nyitott deal, 30 napon belül); 4 óra után sárga, 24 után piros | Salesmate kontakt: utolsó kapott / küldött e-mail |
+| Megválaszolatlan levelek | a deal utolsó kommunikációja az ügyfél levele (nyitott deal, 30 napon belül; a küldés után 2 percen belüli saját másolat nem számít); 4 óra után sárga, 24 után piros. A lezajlott rendezvények utáni levelek (jellemzően köszönő) külön, nem számítanak bele; „Nem kell válasz” gombbal lezárható, újabb levélnél újra jelez | deal: utolsó kommunikáció + kontakt: utolsó kapott / küldött e-mail |
 | Rohadó dealek | a deal „rotten” dátuma lejárt; az utolsó 14 nap külön listában | Salesmate deal: rottenDate |
 | Lejárt kintlévőségek | „Rendezvény lement (G&R)” / „Pénzre várunk” szakasz, és a rendezvény + díjbekérő napjai (8 / 30, alapértelmezés 8) elmúltak | deal szakasz + a panel díjbekérő-jelölése |
 | Kintlévőségek | ugyanezek összesen, határidőn belül is | |

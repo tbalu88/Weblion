@@ -213,7 +213,14 @@
 		if (x.pm) ext.push(esc(x.pm));
 		if (x.st && x.id) ext.push(esc(x.st));
 		const name = x.id ? '<a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t || ('Deal #' + x.id)) + '</a>' : '<b>' + esc(x.t) + '</b>';
-		return '<li' + (x.sev ? ' class="st-al-' + x.sev + '"' : '') + '>' + name + (x.id ? '' : (x.st ? ' – ' + esc(x.st) : '')) + (ext.length ? ' <span class="st-sub">· ' + ext.join(' · ') + '</span>' : '') + (x.v ? ' <span class="st-al-v">' + ft(x.v) + '</span>' : '') + '</li>';
+		return '<li' + (x.sev ? ' class="st-al-' + x.sev + '"' : '') + '>' + name + (x.id ? '' : (x.st ? ' – ' + esc(x.st) : '')) + (ext.length ? ' <span class="st-sub">· ' + ext.join(' · ') + '</span>' : '') + (x.v ? ' <span class="st-al-v">' + ft(x.v) + '</span>' : '') + (x.ok && x.cid ? ' <button type="button" class="cpx-btn ghost sm st-mok" data-cid="' + esc(x.cid) + '" data-rv="' + esc(x.rv) + '" title="Nem kell rá válaszolni (pl. köszönő levél) – újabb levélnél újra jelez">✓ Nem kell válasz</button>' : '') + '</li>';
+	}
+	function toastSt(t) {
+		const d = document.createElement('div');
+		d.className = 'st-toast';
+		d.textContent = t;
+		document.body.appendChild(d);
+		setTimeout(() => d.remove(), 2600);
 	}
 	function drawAlerts() {
 		const box = document.getElementById('st-alerts');
@@ -224,10 +231,17 @@
 		if (!a) { box.innerHTML = h + '<div class="st-sub">Betöltés…</div>'; return; }
 		const act = a.alerts.filter(x => x.sev !== 'ok'), ok = a.alerts.filter(x => x.sev === 'ok');
 		h += '<div class="st-als">' + act.map(x => '<div class="st-al st-al-' + x.sev + '"><div class="st-al-h"><span class="st-al-big">' + esc(String(x.big)) + '</span><div><b>' + esc(x.title) + '</b>' + (x.n != null ? ' <span class="st-sub">(' + x.n + ' deal)</span>' : '') + '<div class="st-sub">' + esc(x.text) + '</div>' + (x.sub ? '<div class="st-sub st-al-sub">' + esc(x.sub) + '</div>' : '') + '</div></div>' +
-			(x.items && x.items.length ? '<details' + (x.sev === 'red' ? ' open' : '') + '><summary>' + (x.items.length + (x.more || 0)) + ' tétel' + (x.more ? ' (az első ' + x.items.length + ' látszik)' : '') + '</summary><ul>' + x.items.map(alItem).join('') + (x.more ? '<li class="st-sub">… és még ' + x.more + '</li>' : '') + '</ul>' + (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '') + '</details>' : (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '')) + '</div>').join('') + '</div>';
+			(x.items && x.items.length ? '<details' + (x.sev === 'red' ? ' open' : '') + '><summary>' + (x.items.length + (x.more || 0)) + ' tétel' + (x.more ? ' (az első ' + x.items.length + ' látszik)' : '') + '</summary><ul>' + x.items.map((it, i) => (x.id === 'mail' && it.sev === 'info' && (i === 0 || x.items[i - 1].sev !== 'info') ? '<li class="st-al-sep">Lezajlott rendezvény utáni levelek – nem számítanak bele (jellemzően köszönő):</li>' : '') + alItem(it)).join('') + (x.more ? '<li class="st-sub">… és még ' + x.more + '</li>' : '') + '</ul>' + (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '') + '</details>' : (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '')) + '</div>').join('') + '</div>';
 		if (ok.length) h += '<div class="st-al-okline">✓ Rendben: ' + ok.map(x => esc(x.title)).join(' · ') + '</div>';
 		if (a.quickErr) h += '<div class="st-warn err" style="margin-top:8px">Gyors szinkron hiba: ' + esc(a.quickErr) + '</div>';
+		const open = [...box.querySelectorAll('details')].map(d => d.open);
 		box.innerHTML = h;
+		box.querySelectorAll('details').forEach((d, i) => { if (open[i] != null) d.open = open[i]; });
+		box.querySelectorAll('.st-mok').forEach(b => b.onclick = async () => {
+			b.disabled = true;
+			try { S.al = await post('cp_st_mail_ok', { cid: b.dataset.cid, rv: b.dataset.rv }); drawAlerts(); toastSt('Elrejtve – ha újabb levél jön, újra jelez.'); }
+			catch (e) { b.disabled = false; alert(e.message); }
+		});
 	}
 
 	/* ------------------------------------------------------------ elrendezés: áthelyezés, átméretezés, elrejtés (böngészőnként mentve) */
