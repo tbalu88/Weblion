@@ -108,11 +108,41 @@
 		}, 60000);
 	}
 
+	/* időszakváltáskor a nézet maradjon annál a csempénél, amelyet éppen néztünk */
+	function anchorGet() {
+		const main = S.main;
+		if (!main || window.scrollY < 20) return null;
+		const st = document.getElementById('st-sticky');
+		const lim = st ? st.getBoundingClientRect().bottom : 0;
+		const els = main.querySelectorAll('[data-lid]');
+		for (let i = 0; i < els.length; i++) {
+			const r = els[i].getBoundingClientRect();
+			if (r.height && r.bottom > lim + 8) return { lid: els[i].dataset.lid, top: r.top };
+		}
+		return null;
+	}
+	function anchorFix(a) {
+		if (!a || !S.main) return;
+		const el = S.main.querySelector('[data-lid="' + a.lid + '"]');
+		if (!el) return;
+		const dy = el.getBoundingClientRect().top - a.top;
+		if (Math.abs(dy) > 1) window.scrollBy(0, dy);
+	}
 	async function reload(force) {
-		if (S.main) S.main.querySelectorAll('.st-body').forEach(x => { x.style.opacity = '.45'; });
+		const main = S.main;
+		const a = anchorGet();
+		if (main) {
+			main.querySelectorAll('.st-body').forEach(x => { x.style.opacity = '.45'; });
+			if (a) main.style.minHeight = main.offsetHeight + 'px';
+		}
 		await load(force);
 		draw();
-		loadGa().then(drawGa);
+		anchorFix(a);
+		requestAnimationFrame(() => anchorFix(a));
+		loadGa().then(() => { drawGa(); anchorFix(a); }).finally(() => {
+			if (main) main.style.minHeight = '';
+			anchorFix(a);
+		});
 	}
 
 	function delta(cur, base, money, inv, fmt) {
