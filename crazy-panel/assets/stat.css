@@ -123,3 +123,5 @@ body:has(.st-dragging),body:has(.st-resizing){user-select:none}
 .st-al li.st-al-sep{list-style:none;margin:10px 0 2px -18px;font-size:12px;font-weight:700;color:var(--mu)}
 .st-al li.st-al-info{color:var(--mu)}
 .st-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--n);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:60;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+.st-ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+.st-ul li{margin:3px 0;overflow-wrap:anywhere}

@@ -1536,6 +1536,8 @@ function cp_st_compute($gran, $anchor) {
 
 	/* 8) fedezet szolgáltatásonként: a lezajlott, aláírt rendezvények bevétele − az Elszámolás kifizetései (− papír) */
 	$out['margin'] = cp_st_margin($rows, $f, min($t, $today));
+	/* nyomtatás, ügyfél-elégedettség, gépállapot (Elszámolás fül) – a jelenlegi és az előző időszak */
+	if (function_exists('cp_st_ops')) { $out['ops'] = cp_st_ops($rows, $f, min($t, $today)); $out['opsPrev'] = cp_st_ops($rows, $pf, $pt); }
 
 	/* 9) hőtérkép: napokra és órákra (napi/heti nézetnél az utolsó 90 nap) */
 	$hf = $f; $ht = $cur_t;
@@ -1874,5 +1876,7 @@ add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) 
 
 /* élő figyelmeztetések (Figyelmeztetések csempe) */
 require_once __DIR__ . '/stat-alerts.php';
+/* nyomtatás / elégedettség / gépállapot */
+require_once __DIR__ . '/stat-ops.php';
 /* heti / havi összesítő a Pumble-re */
 require_once __DIR__ . '/stat-digest.php';

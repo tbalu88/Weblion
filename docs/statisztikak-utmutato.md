@@ -150,3 +150,12 @@ A Statisztikák fül tetején. Percenként frissül; a Salesmate-változásokat 
 
 - **Konverzió az összesítőben:** aláírt / megkeresés az időszakban (előző és tavalyi időszakhoz mérve), valamint a *beérett kohorsz*: havinál a 3 hónappal korábbi hónap, hetinél a 6 héttel korábbi hét megkereséseiből hány % lett aláírt deal 120 napon belül (havinál csatornánként is). A szinkron előtt, dátum nélkül aláírt dealek aláírtnak számítanak.
 - **Mérföldkövek (azonnali Pumble-üzenet, 10 percenként ellenőrizve):** idén aláírt szerződés (50-esével), idei aláírt érték (10 M Ft), idei megkeresés (250), idén lement rendezvény (50), havi aláírt érték (5 M Ft), havi aláírt szerződés (25), összes lement rendezvény (500). A lépcsők a Crazy összesítők oldalon állíthatók; az első bekapcsoláskor a már elért szinteket nem küldi ki. Az összesítő is felsorolja az időszakban elért mérföldköveket.
+
+## Nyomtatás, ügyfél-elégedettség, gépállapot
+
+Forrás: az Elszámolás fül kezelői sorai (kezelői adatlap). Időszak: a rendezvény napja szerint, csak lezajlott rendezvények.
+
+- **Nyomtatás:** papírfogyasztás (db) összesen, rendezvényenként, óránként; szolgáltatásonként, nyomtatónként, eszközönként; a legtöbb nyomatos rendezvények; papírköltség (egységár × db). Jelzi, hány fotós rendezvénynél hiányzik a papírfogyasztás.
+- **Ügyfél-elégedettség:** Elégedett / Foglalkozós / Elégedetlen arány, a nem „Elégedett” értékelések a kezelő megjegyzésével; jelzi, hány rendezvény nincs értékelve.
+- **Gépállapot:** Jó / Foglalkozós / HIBA, a hibák eszközzel és megjegyzéssel.
+- Mindhárom a Statisztikák fülön (külön kártyák) és a heti / havi Pumble-összesítőben is megjelenik.
