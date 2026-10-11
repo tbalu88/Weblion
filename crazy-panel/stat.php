@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_ST_DB_VER', '4');
+define('CP_ST_DB_VER', '5');
 define('CP_ST_OPT', 'cp_st_settings');
 define('CP_ST_SEC', 'cp_st_secrets');
 define('CP_ST_STATE', 'cp_st_state');
@@ -116,8 +116,16 @@ function cp_st_db_maybe_upgrade() {
 	if (get_option('cp_st_db_ver') === CP_ST_DB_VER) { return; }
 	if (get_transient('cp_st_db_lock')) { return; }
 	set_transient('cp_st_db_lock', 1, 60);
+	$was = (string) get_option('cp_st_db_ver', '');
 	cp_st_db_install();
 	update_option('cp_st_db_ver', CP_ST_DB_VER, false);
+	/* v5: új mezők (cím, rohadási dátum, fizetési mód, utolsó bejövő levél) – egy teljes újraolvasás tölti fel */
+	if ($was !== '' && version_compare($was, '5', '<')) {
+		$st = cp_st_state();
+		foreach (array('deal', 'contact') as $k) { $st[$k . '_redo'] = 1; $st[$k . '_page'] = 0; $st[$k . '_run'] = gmdate('Y-m-d H:i:s'); unset($st[$k . '_cur'], $st[$k . '_span']); }
+		cp_st_state_set($st);
+		if (!wp_next_scheduled('cp_st_cron_more')) { wp_schedule_single_event(time() + 60, 'cp_st_cron_more'); }
+	}
 	/* a felmérés ideiglenes eredményei */
 	foreach (array('cp_stat_probe', 'cp_stat_probe2', 'cp_stat_probe3', 'cp_stat_probe4', 'cp_stat_probe5', 'cp_stat_probe6') as $x) { delete_option($x); }
 	delete_transient('cp_st_db_lock');
@@ -149,6 +157,9 @@ function cp_st_db_install() {
   kind varchar(8) NOT NULL DEFAULT '',
   lost_reason varchar(100) NOT NULL DEFAULT '',
   owner varchar(60) NOT NULL DEFAULT '',
+  title varchar(190) NOT NULL DEFAULT '',
+  rotten_d date NULL,
+  pay_method varchar(40) NOT NULL DEFAULT '',
   first_mail_at datetime NULL,
   modified_at datetime NULL,
   seen_at datetime NOT NULL,
@@ -169,6 +180,7 @@ function cp_st_db_install() {
   ad_name varchar(190) NOT NULL DEFAULT '',
   company tinyint(1) NOT NULL DEFAULT 0,
   mail_sent_at datetime NULL,
+  mail_recv_at datetime NULL,
   seen_at datetime NOT NULL,
   PRIMARY KEY  (id)
 ) $c;");
@@ -294,7 +306,8 @@ function cp_st_upsert($table, $cols, $rows, $update) {
 function cp_st_deal_fields() {
 	$p = cp_panel_opts();
 	$o = cp_st_opts();
-	$f = array('id', 'createdAt', 'status', 'stage', 'closedStage', 'closedDate', 'source', 'tags', 'dealValue', 'currency', 'primaryContact', 'lostReason', 'owner', 'lastModifiedAt', 'pipeline');
+	$f = array('id', 'title', 'createdAt', 'status', 'stage', 'closedStage', 'closedDate', 'source', 'tags', 'dealValue', 'currency', 'primaryContact', 'lostReason', 'owner', 'lastModifiedAt', 'pipeline', 'rottenDate');
+	if (function_exists('cp_tw_opts')) { $tw = cp_tw_opts(); if (!empty($tw['f_pay'])) { $f[] = $tw['f_pay']; } }
 	foreach (array($p['f_date'], $p['f_selfie'], $p['f_spin'], $o['f_svc'], $o['f_ctype']) as $k) { if ($k !== '') { $f[] = $k; } }
 	foreach (cp_st_lines($o['f_req']) as $k) { $f[] = $k; }
 	return array_map(function ($k) { return 'deal.' . $k; }, array_values(array_unique($f)));
@@ -379,6 +392,9 @@ function cp_st_map_deal($r, $now) {
 		'lost_reason'  => mb_substr(cp_panel_str(cp_panel_get($r, 'lostReason')), 0, 100),
 		'owner'        => mb_substr(is_array($own) ? (isset($own['id']) ? (string) $own['id'] : cp_panel_str($own)) : cp_panel_str($own), 0, 60),
 		'modified_at'  => cp_st_utc(cp_st_ts(cp_panel_get($r, 'lastModifiedAt'))),
+		'title'        => mb_substr(cp_panel_str(cp_panel_get($r, 'title')), 0, 190),
+		'rotten_d'     => cp_panel_norm_date(cp_panel_get($r, 'rottenDate')) ?: null,
+		'pay_method'   => function_exists('cp_tw_opts') ? mb_substr(cp_panel_str(cp_panel_get($r, cp_tw_opts()['f_pay'])), 0, 40) : '',
 		'seen_at'      => $now,
 	);
 }
@@ -437,7 +453,7 @@ function cp_st_store_deals($raw, $backfill) {
 	}
 	$rows = array_values($rows);
 	cp_st_signed_apply($rows, $backfill);
-	$cols = array('id', 'contact_id', 'created_at', 'created_d', 'status', 'stage', 'closed_stage', 'closed_at', 'signed_d', 'signed_src', 'source', 'tags', 'svc', 'svc_req', 'value', 'currency', 'event_d', 'ctype', 'kind', 'lost_reason', 'owner', 'modified_at', 'seen_at');
+	$cols = array('id', 'contact_id', 'created_at', 'created_d', 'status', 'stage', 'closed_stage', 'closed_at', 'signed_d', 'signed_src', 'source', 'tags', 'svc', 'svc_req', 'value', 'currency', 'event_d', 'ctype', 'kind', 'lost_reason', 'owner', 'modified_at', 'title', 'rotten_d', 'pay_method', 'seen_at');
 	return cp_st_upsert(cp_st_t('deals'), $cols, $rows, array_diff($cols, array('id')));
 }
 
@@ -462,16 +478,17 @@ function cp_st_store_contacts($raw) {
 			'ad_name'      => $o['c_ad'] !== '' ? cp_st_clean($g($o['c_ad']), 190) : '',
 			'company'      => (is_array($co) ? !empty($co) : cp_panel_str($co) !== '') ? 1 : 0,
 			'mail_sent_at' => cp_st_utc($ms),
+			'mail_recv_at' => cp_st_utc(cp_st_ts($g('lastEmailReceivedAt'))),
 			'seen_at'      => $now,
 		);
 	}
-	$cols = array('id', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ev_type', 'ad_name', 'company', 'mail_sent_at', 'seen_at');
+	$cols = array('id', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ev_type', 'ad_name', 'company', 'mail_sent_at', 'mail_recv_at', 'seen_at');
 	return cp_st_upsert(cp_st_t('contacts'), $cols, array_values($rows), array_diff($cols, array('id')));
 }
 
 function cp_st_contact_fields() {
 	$o = cp_st_opts();
-	$f = array('id', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'lastEmailSentAt', 'company', 'lastModifiedAt');
+	$f = array('id', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'lastEmailSentAt', 'lastEmailReceivedAt', 'company', 'lastModifiedAt');
 	foreach (array($o['c_evtype'], $o['c_ad']) as $k) { if ($k !== '') { $f[] = $k; } }
 	return array_map(function ($k) { return 'contact.' . $k; }, array_values(array_unique($f)));
 }
@@ -1803,3 +1820,6 @@ add_action('init', function () {
 add_action('init', function () { if (get_option('cp_st_report_tmp') !== false) { delete_option('cp_st_report_tmp'); } });
 
 add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) { delete_option('cp_st_adsdump_tmp'); } });
+
+/* élő figyelmeztetések (Figyelmeztetések csempe) */
+require_once __DIR__ . '/stat-alerts.php';

@@ -120,3 +120,20 @@ Fedezet = dealérték − az Elszámolás fülön kifizetett kezelői összegek 
   Ezt kell kiválasztani, ha foglaltság miatt utasítotok el egy megkeresést.
 - **Papír egységára** a fedezethez: WordPress admin → Crazy statisztikák → „Papír egységára (Ft/db)”.
 - A régi, „Ads” forrású dealeknél nem tudni, melyik hirdetési rendszerből jöttek. Ezek külön sorban szerepelnek.
+
+## Figyelmeztetések csempe (élő)
+
+A Statisztikák fül tetején. Percenként frissül; a Salesmate-változásokat 10 percenként kéri le (és azonnal, ha valaki nézi a fület és az adat régebbi).
+
+| Figyelmeztetés | Mikor jelez | Forrás |
+|---|---|---|
+| Megválaszolatlan levelek | a kontakt utolsó bejövő levele újabb, mint az utolsó kimenő (nyitott deal, 30 napon belül); 4 óra után sárga, 24 után piros | Salesmate kontakt: utolsó kapott / küldött e-mail |
+| Rohadó dealek | a deal „rotten” dátuma lejárt; az utolsó 14 nap külön listában | Salesmate deal: rottenDate |
+| Lejárt kintlévőségek | „Rendezvény lement (G&R)” / „Pénzre várunk” szakasz, és a rendezvény + díjbekérő napjai (8 / 30, alapértelmezés 8) elmúltak | deal szakasz + a panel díjbekérő-jelölése |
+| Kintlévőségek | ugyanezek összesen, határidőn belül is | |
+| Lezajlott, de nincs továbbléptetve | a rendezvény lement, de a deal még szerződéses szakaszban áll | |
+| Közelgő rendezvény, aláíratlan szerződés | 14 napon belüli rendezvény, „Szerződés kiküldve” szakaszban | |
+| Telt napok | a következő 60 nap teltházas / majdnem telt napjai | |
+| Hirdetési anomáliák | tegnapi költés a 14 napos átlag 2×-e felett / 40%-a alatt, költés kattintás nélkül (3 nap), CPC 2×, 3 napja nincs platform-lead, leállt kampány, a szkript / API nem frissít | költségtábla |
+| Szezonális összevetés | az utolsó 30 nap megkeresései / aláírt dealjei a korábbi évek azonos időszakának átlagához | |
+| Kereslet a következő hónapokra | a következő 4 hónap rendezvényeire eddig jött megkeresések, a tavalyi év ugyanezen napjához | |

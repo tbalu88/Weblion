@@ -101,3 +101,21 @@ body:has(.st-dragging),body:has(.st-resizing){user-select:none}
 	.st-kpi b{font-size:19px}
 	.st-fun div{grid-template-columns:86px 1fr 70px}
 }
+/* élő figyelmeztetések */
+.st-als{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+.st-al{border:1px solid var(--li);border-left:5px solid #4C7BD9;border-radius:12px;padding:10px 12px;background:#fff;min-width:0}
+.st-al-red{border-left-color:var(--full);background:#FFF8F7}
+.st-al-amber{border-left-color:var(--mid);background:#FFFBF3}
+.st-al-good{border-left-color:var(--ok);background:#F5FBF8}
+.st-al-h{display:flex;flex-direction:column;gap:2px}
+.st-al-big{font:800 24px "Plus Jakarta Sans",sans-serif;line-height:1.15;white-space:nowrap}
+.st-al-red .st-al-big{color:var(--full)}.st-al-amber .st-al-big{color:#B06F12}.st-al-good .st-al-big{color:var(--ok)}
+.st-al details{margin-top:8px;font-size:13px}
+.st-al summary{cursor:pointer;color:var(--o);font-weight:600}
+.st-al ul{margin:6px 0 0;padding-left:18px;max-height:260px;overflow:auto}
+.st-al li{margin:3px 0;overflow-wrap:anywhere}
+.st-al li.st-al-red::marker{color:var(--full)}.st-al li.st-al-amber::marker{color:var(--mid)}
+.st-al-v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.st-al-sub,.st-al-note{margin-top:4px;font-size:12px}
+.st-al-okline{margin-top:10px;font-size:13px;color:var(--ok)}
+@media (max-width:600px){.st-als{grid-template-columns:minmax(0,1fr)}.st-al-big{font-size:21px}}

@@ -90,6 +90,9 @@
 			await load(false);
 		}
 		draw();
+		loadAlerts();
+		clearInterval(S.alTimer);
+		S.alTimer = setInterval(() => { if (document.getElementById('st-alerts') && !document.hidden) loadAlerts(); }, 60000);
 		loadGa().then(() => { if (S.main && document.body.contains(S.main) && document.getElementById('st-ga')) drawGa(); });
 		clearInterval(S.gaTimer);
 		S.gaTimer = setInterval(() => {
@@ -159,7 +162,7 @@
 			'</div>';
 		if (k.cur.nonhuf) h += '<div class="st-note">' + k.cur.nonhuf + ' nem forintos deal értéke nincs az összegben.</div>';
 
-		h += '<div class="st-grid" data-lc="card"><div class="cpx-card wide" data-lid="trend" data-lt="Trend"><div class="st-card-h"><h3>Trend</h3><small>' + ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran] + '</small></div>' +
+		h += '<div class="st-grid" data-lc="card"><div class="cpx-card wide" data-lid="alerts" data-lt="Figyelmeztetések"><div id="st-alerts"></div></div><div class="cpx-card wide" data-lid="trend" data-lt="Trend"><div class="st-card-h"><h3>Trend</h3><small>' + ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran] + '</small></div>' +
 			'<div id="st-trend"></div><div class="st-legend"><span><i style="background:var(--o)"></i>Megkeresés</span><span><i style="background:var(--ok)"></i>Aláírt deal</span><label><input type="checkbox" id="st-yoy"' + (S.yoy ? ' checked' : '') + '> <i class="ln" style="background:#8A93A8"></i>tavaly ugyanekkor</label></div><div class="st-tip" id="st-tip"></div></div>';
 
 		h += '<div class="cpx-card wide" data-lid="ga" data-lt="Weboldal-forgalom (GA4)"><div id="st-ga"></div></div>';
@@ -189,6 +192,42 @@
 		if (S.edit) layoutEdit(main);
 		drawTrend();
 		drawGa();
+		drawAlerts();
+	}
+
+	/* ------------------------------------------------------------ élő figyelmeztetések */
+	async function loadAlerts() {
+		try { S.al = await post('cp_st_alerts', {}); S.alErr = ''; } catch (e) { S.alErr = e.message; }
+		drawAlerts();
+	}
+	const hm = ts => { const x = new Date(ts * 1000); return pad(x.getHours()) + ':' + pad(x.getMinutes()); };
+	function alItem(x) {
+		const ext = [];
+		if (x.h != null) ext.push(x.h < 1 ? Math.round(x.h * 60) + ' perce vár' : (x.h < 48 ? Math.round(x.h) + ' órája vár' : Math.round(x.h / 24) + ' napja vár'));
+		if (x.late != null && x.late > 0) ext.push('<b class="st-bad">' + x.late + ' napja lejárt</b>');
+		else if (x.late != null) ext.push('határidő: ' + dshort(x.d));
+		if (x.ev) ext.push('rendezvény: ' + dshort(x.ev));
+		if (x.left != null) ext.push(x.left === 0 ? '<b class="st-bad">ma</b>' : x.left + ' nap múlva');
+		if (x.age != null) ext.push(x.age === 0 ? 'ma rohadt meg' : x.age + ' napja rohad');
+		if (x.term) ext.push(x.term + ' napos fizetés');
+		if (x.pm) ext.push(esc(x.pm));
+		if (x.st && x.id) ext.push(esc(x.st));
+		const name = x.id ? '<a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t || ('Deal #' + x.id)) + '</a>' : '<b>' + esc(x.t) + '</b>';
+		return '<li' + (x.sev ? ' class="st-al-' + x.sev + '"' : '') + '>' + name + (x.id ? '' : (x.st ? ' – ' + esc(x.st) : '')) + (ext.length ? ' <span class="st-sub">· ' + ext.join(' · ') + '</span>' : '') + (x.v ? ' <span class="st-al-v">' + ft(x.v) + '</span>' : '') + '</li>';
+	}
+	function drawAlerts() {
+		const box = document.getElementById('st-alerts');
+		if (!box) return;
+		const a = S.al;
+		let h = '<div class="st-card-h"><h3>Figyelmeztetések</h3><small>' + (a ? 'élő · frissítve ' + hm(a.at) + (a.quick ? ' · Salesmate: ' + hm(a.quick) : '') : '') + '</small></div>';
+		if (S.alErr && !a) { box.innerHTML = h + '<div class="st-warn err">' + esc(S.alErr) + '</div>'; return; }
+		if (!a) { box.innerHTML = h + '<div class="st-sub">Betöltés…</div>'; return; }
+		const act = a.alerts.filter(x => x.sev !== 'ok'), ok = a.alerts.filter(x => x.sev === 'ok');
+		h += '<div class="st-als">' + act.map(x => '<div class="st-al st-al-' + x.sev + '"><div class="st-al-h"><span class="st-al-big">' + esc(String(x.big)) + '</span><div><b>' + esc(x.title) + '</b>' + (x.n != null ? ' <span class="st-sub">(' + x.n + ' deal)</span>' : '') + '<div class="st-sub">' + esc(x.text) + '</div>' + (x.sub ? '<div class="st-sub st-al-sub">' + esc(x.sub) + '</div>' : '') + '</div></div>' +
+			(x.items && x.items.length ? '<details' + (x.sev === 'red' ? ' open' : '') + '><summary>' + (x.items.length + (x.more || 0)) + ' tétel' + (x.more ? ' (az első ' + x.items.length + ' látszik)' : '') + '</summary><ul>' + x.items.map(alItem).join('') + (x.more ? '<li class="st-sub">… és még ' + x.more + '</li>' : '') + '</ul>' + (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '') + '</details>' : (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '')) + '</div>').join('') + '</div>';
+		if (ok.length) h += '<div class="st-al-okline">✓ Rendben: ' + ok.map(x => esc(x.title)).join(' · ') + '</div>';
+		if (a.quickErr) h += '<div class="st-warn err" style="margin-top:8px">Gyors szinkron hiba: ' + esc(a.quickErr) + '</div>';
+		box.innerHTML = h;
 	}
 
 	/* ------------------------------------------------------------ elrendezés: áthelyezés, átméretezés, elrejtés (böngészőnként mentve) */
