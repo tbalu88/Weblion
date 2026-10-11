@@ -99,7 +99,7 @@ function cp_st_dg_cmp($cur, $prev, $lbl, $money = false) {
 	if ($prev === null) { return ''; }
 	if (!$prev) { return $lbl . ': ' . $f($prev); }
 	$p = round(($cur - $prev) / $prev * 100);
-	return $lbl . ': ' . $f($prev) . ', ' . ($p > 0 ? '+' : ($p < 0 ? '−' : '')) . abs($p) . '%';
+	return $lbl . ': ' . $f($prev) . ' (' . ($p > 0 ? '+' : ($p < 0 ? '−' : '')) . abs($p) . '%)';
 }
 
 /* periódusonkénti idősorok a rekordokhoz: kulcs = hét hétfője (Y-m-d) vagy hónap (Y-m) */
@@ -153,7 +153,7 @@ function cp_st_dg_records($s, $kind, $pkey, $first) {
 		arsort($prev);
 		$best = reset($prev); $bestk = key($prev);
 		if ($cur > $best) {
-			$out[] = '🏆 All-time rekord: ' . $fmt($cur) . ' ' . $nm . ' egy ' . $unit . ' alatt (az eddigi csúcs ' . $fmt($best) . ' volt, ' . cp_st_dg_plabel($kind, $bestk) . ').';
+			$out[] = '🏆 *All-time rekord:* *' . $fmt($cur) . '* ' . $nm . ' egy ' . $unit . ' alatt' . "\n" . 'az eddigi csúcs ' . $fmt($best) . ' volt (' . cp_st_dg_plabel($kind, $bestk) . ')';
 			continue;
 		}
 		/* legjobb N periódus óta */
@@ -161,7 +161,7 @@ function cp_st_dg_records($s, $kind, $pkey, $first) {
 		$keys = array_reverse(array_keys($prev));
 		$since = 0;
 		foreach ($keys as $k) { if ($prev[$k] >= $cur) { break; } $since++; }
-		if ($since >= ($kind === 'month' ? 12 : 26)) { $out[] = '⭐ ' . $since . ' ' . $unit . ' óta a legtöbb ' . $nm . ': ' . $fmt($cur) . '.'; }
+		if ($since >= ($kind === 'month' ? 12 : 26)) { $out[] = '⭐ ' . $since . ' ' . $unit . ' óta a legtöbb ' . $nm . ': *' . $fmt($cur) . '*'; }
 	}
 	return $out;
 }
@@ -205,22 +205,32 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$hu = array('', 'jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.');
 	$md = function ($d) use ($hu) { return $hu[(int) substr($d, 5, 2)] . ' ' . (int) substr($d, 8, 2) . '.'; };
 	$L = array();
-	$L[] = $wk ? '📊 Heti összesítő – ' . cp_st_dg_plabel('week', $f) . ' (' . $md($f) . ' – ' . $md($t) . ')' : '📊 Havi összesítő – ' . cp_st_dg_plabel('month', $pkey);
+	/* Pumble: *félkövér*; minden statisztika külön blokk, üres sorral elválasztva */
+	$B = function ($x) { return '*' . $x . '*'; };
+	$L[] = $wk ? '📊 ' . $B('Heti összesítő – ' . cp_st_dg_plabel('week', $f)) . "\n" . $md($f) . ' – ' . $md($t) : '📊 ' . $B('Havi összesítő – ' . cp_st_dg_plabel('month', $pkey));
 	$L[] = '';
 	$pl = $wk ? 'előző hét' : 'előző hónap';
-	$cm = function ($k, $money = false) use ($c, $p, $y, $pl) { return ' (' . implode(' · ', array_filter(array(cp_st_dg_cmp($c[$k], $p[$k], $pl, $money), cp_st_dg_cmp($c[$k], $y[$k], 'tavaly', $money)))) . ')'; };
-	$L[] = '📥 Megkeresések: ' . cp_st_dg_n($c['leads']) . $cm('leads');
+	$cm = function ($k, $money = false) use ($c, $p, $y, $pl) { return implode(' · ', array_filter(array(cp_st_dg_cmp($c[$k], $p[$k], $pl, $money), cp_st_dg_cmp($c[$k], $y[$k], 'tavaly', $money)))); };
+	$L[] = '📥 Megkeresések: ' . $B(cp_st_dg_n($c['leads']));
+	$L[] = $cm('leads');
 	arsort($c['ch']);
 	$labels = cp_st_channel_labels();
 	$chs = array();
 	foreach (array_slice($c['ch'], 0, 4, true) as $k => $n) { $chs[] = (isset($labels[$k]) ? $labels[$k] : $k) . ' ' . $n; }
-	if ($chs) { $L[] = '      csatornák: ' . implode(', ', $chs); }
-	$L[] = '✍️ Aláírt szerződések: ' . cp_st_dg_n($c['signed']) . ' – ' . cp_st_dg_ft($c['value']) . $cm('signed');
+	if ($chs) { $L[] = 'csatornák: ' . implode(' · ', $chs); }
+	$L[] = '';
+	$L[] = '✍️ Aláírt szerződések: ' . $B(cp_st_dg_n($c['signed']) . ' db') . ' – ' . $B(cp_st_dg_ft($c['value']));
+	$L[] = $cm('signed');
+	$L[] = '';
 	arsort($c['svc']);
 	$sv = array();
 	foreach (array_slice($c['svc'], 0, 4, true) as $k => $n) { $sv[] = $k . ' ' . $n; }
-	$L[] = '🎉 Lement rendezvények: ' . cp_st_dg_n($c['events']) . ' – ' . cp_st_dg_ft($c['evvalue']) . $cm('events') . ($sv ? "\n      " . implode(', ', $sv) : '');
+	$L[] = '🎉 Lement rendezvények: ' . $B(cp_st_dg_n($c['events']) . ' db') . ' – ' . $B(cp_st_dg_ft($c['evvalue']));
+	$L[] = $cm('events');
+	if ($sv) { $L[] = implode(' · ', $sv); }
+	$L[] = '';
 	foreach (cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) as $x) { $L[] = $x; }
+	$L[] = '';
 
 	/* levelek (eseménynapló) */
 	$from_utc = gmdate('Y-m-d H:i:s', strtotime($f . ' 00:00:00 Europe/Budapest'));
@@ -236,8 +246,11 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$unans = isset($A['mail']) ? (int) $A['mail']['big'] : 0;
 	$med = $waits ? cp_st_median(array_map('intval', $waits)) / 3600 : null;
 	$partial = $evf !== '' && $evf > $from_utc;
-	$L[] = '✉️ Levelek: ' . cp_st_dg_n($sent) . ' elküldött, ' . cp_st_dg_n($recv) . ' beérkezett ügyféllevél, ' . cp_st_dg_n(count($waits)) . ' megválaszolt' . ($med !== null ? ' (medián válaszidő: ' . ($med < 1 ? round($med * 60) . ' perc' : str_replace('.', ',', (string) round($med, 1)) . ' óra') . ')' : '') . ' · most ' . $unans . ' megválaszolatlan'
-		. ($evf === '' ? "\n      (a levelek mérése most indult, a következő összesítőtől lesz adat)" : ($partial ? "\n      (a mérés " . wp_date('m.d. H:i', strtotime($evf . ' UTC')) . ' óta fut – ez az időszak még nem teljes)' : ''));
+	$L[] = '✉️ Levelek: ' . $B(cp_st_dg_n(count($waits))) . ' megválaszolt ügyféllevél' . ($med !== null ? ', medián válaszidő: ' . $B($med < 1 ? round($med * 60) . ' perc' : str_replace('.', ',', (string) round($med, 1)) . ' óra') : '');
+	$L[] = cp_st_dg_n($sent) . ' elküldött · ' . cp_st_dg_n($recv) . ' beérkezett · most ' . $B($unans) . ' megválaszolatlan';
+	if ($evf === '') { $L[] = '(a levelek mérése most indult, a következő összesítőtől lesz adat)'; }
+	elseif ($partial) { $L[] = '(a mérés ' . wp_date('m.d. H:i', strtotime($evf . ' UTC')) . ' óta fut – ez az időszak még nem teljes)'; }
+	$L[] = '';
 
 	/* kintlévőség + változás az előző összesítőhöz */
 	$snap = get_option('cp_st_dg_snap', array());
@@ -247,8 +260,10 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	if ($rsum) {
 		$rv = $num($rsum['big']); $ov = $osum ? $num($osum['big']) : 0;
 		$chg = isset($snap[$kind]['recv']) ? $rv - $snap[$kind]['recv'] : null;
-		$L[] = '💰 Kintlévőség: ' . cp_st_dg_ft($rv) . ' (' . (int) (isset($rsum['n']) ? $rsum['n'] : 0) . ' deal) · lejárt: ' . cp_st_dg_ft($ov) . ' (' . (int) ($osum && isset($osum['n']) ? $osum['n'] : 0) . ' deal)' . ($chg !== null ? ' · az előző összesítő óta ' . ($chg > 0 ? '+' : ($chg < 0 ? '−' : '')) . cp_st_dg_ft(abs($chg)) : '');
-		if ($osum && !empty($osum['items'])) { $L[] = '      legrégebb lejárt: ' . $osum['items'][0]['late'] . ' napja'; }
+		$L[] = '💰 Kintlévőség: ' . $B(cp_st_dg_ft($rv)) . ' (' . (int) (isset($rsum['n']) ? $rsum['n'] : 0) . ' deal)';
+		$L[] = 'ebből lejárt: ' . $B(cp_st_dg_ft($ov)) . ' (' . (int) ($osum && isset($osum['n']) ? $osum['n'] : 0) . ' deal)' . ($osum && !empty($osum['items']) ? ' · a legrégebbi ' . $osum['items'][0]['late'] . ' napja' : '');
+		if ($chg !== null) { $L[] = 'az előző összesítő óta: ' . ($chg > 0 ? '+' : ($chg < 0 ? '−' : '')) . cp_st_dg_ft(abs($chg)); }
+		$L[] = '';
 		if ($commit) { $snap[$kind] = array('recv' => $rv, 'over' => $ov, 't' => time()); update_option('cp_st_dg_snap', $snap, false); }
 	}
 
@@ -259,7 +274,10 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 		$paid = 0; foreach (array('google', 'meta', 'linkedin') as $k) { $paid += isset($c['ch'][$k]) ? $c['ch'][$k] : 0; }
 		$parts = array();
 		foreach (array('google' => 'Google', 'meta' => 'Meta', 'linkedin' => 'LinkedIn') as $k => $n) { if ($sp[$k] > 0) { $parts[] = $n . ' ' . cp_st_dg_ft($sp[$k]); } }
-		$L[] = '📣 Hirdetés: ' . cp_st_dg_ft($tot) . ' (' . implode(', ', $parts) . ')' . ($c['leads'] ? ' · költés / összes megkeresés: ' . cp_st_dg_ft($tot / $c['leads']) : '') . ' · UTM / forrás szerint fizetett csatornából: ' . $paid . ' megkeresés';
+		$L[] = '📣 Hirdetési költés: ' . $B(cp_st_dg_ft($tot));
+		$L[] = implode(' · ', $parts);
+		$L[] = ($c['leads'] ? 'költés / összes megkeresés: ' . $B(cp_st_dg_ft($tot / $c['leads'])) . ' · ' : '') . 'fizetett csatornából (UTM / forrás): ' . $paid . ' megkeresés';
+		$L[] = '';
 	}
 
 	/* előre: a következő hét / hónap */
@@ -273,7 +291,8 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 		if ($fulls) { $up[] = 'telt / majdnem telt nap: ' . implode(', ', array_slice($fulls, 0, 6)); }
 	}
 	if (isset($A['contract'])) { $up[] = 'aláíratlan szerződés a következő 14 napban: ' . $A['contract']['big']; }
-	$L[] = '🗓️ ' . ($wk ? 'Jövő hét' : 'Következő hónap') . ': ' . implode(' · ', $up);
+	$L[] = '🗓️ ' . ($wk ? 'Jövő hét' : 'Következő hónap') . ': ' . $B($nx['events'] . ' foglalt rendezvény') . ' (' . cp_st_dg_ft($nx['evvalue']) . ')';
+	foreach (array_slice($up, 1) as $u) { $L[] = $u; }
 
 	/* rekordok */
 	$first = array();
@@ -287,12 +306,12 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$rec = cp_st_dg_records($s, $kind, $pkey, $first);
 	$msl = array();
 	foreach (cp_st_ms_log() as $x) { if ($x['d'] >= $f && $x['d'] <= $t) { $msl[] = '🎯 ' . $x['txt']; } }
-	if ($rec || $msl) { $L[] = ''; foreach (array_merge($rec, array_reverse($msl)) as $r) { $L[] = $r; } }
+	if ($rec || $msl) { foreach (array_merge($rec, array_reverse($msl)) as $r) { $L[] = ''; $L[] = $r; } }
 
 	/* nyitott piros figyelmeztetések */
 	$red = array();
 	foreach ($al['alerts'] as $x) { if ($x['sev'] === 'red') { $red[] = $x['title'] . ' (' . $x['big'] . ')'; } }
-	if ($red) { $L[] = ''; $L[] = '⚠️ Nyitott figyelmeztetés: ' . implode(' · ', $red); }
+	if ($red) { $L[] = ''; $L[] = '⚠️ ' . $B('Nyitott figyelmeztetések'); foreach ($red as $x) { $L[] = '• ' . $x; } }
 
 	$L[] = '';
 	$L[] = 'Részletek: ' . home_url('/' . trim(cp_panel_opts()['slug'], '/') . '/#stat');
@@ -310,7 +329,8 @@ function cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) {
 	$out = array();
 	$r = function ($x) { return $x['leads'] ? $x['signed'] / $x['leads'] : null; };
 	$fmt = function ($v) { return $v === null ? '–' : str_replace('.', ',', (string) round($v * 100, 1)) . '%'; };
-	$out[] = '🔁 Konverzió (aláírt / megkeresés az időszakban): ' . $fmt($r($c)) . ' (' . $pl . ': ' . $fmt($r($p)) . ' · tavaly: ' . $fmt($r($y)) . ')';
+	$out[] = '🔁 Konverzió: *' . $fmt($r($c)) . '* (aláírt / megkeresés az időszakban)';
+	$out[] = $pl . ': ' . $fmt($r($p)) . ' · tavaly: ' . $fmt($r($y));
 	/* beérett kohorsz: havi összesítőnél a 3 hónappal korábbi hónap, hetinél a 6 héttel korábbi hét megkeresései, 120 napos horizonttal */
 	if ($kind === 'month') {
 		$cf = (new DateTime($f, cp_st_tz()))->modify('-3 months')->format('Y-m-01');
@@ -340,14 +360,14 @@ function cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) {
 	if ($kind === 'month') { $yt = (new DateTime($yf, cp_st_tz()))->format('Y-m-t'); }
 	$k0 = $coh($yf, $yt);
 	if ($k1['n'] >= 5) {
-		$line = '      ' . $lbl . ' ' . $k1['n'] . ' megkeresésből ' . $k1['w'] . ' lett aláírt deal 120 napon belül (' . cp_st_dg_pct($k1['w'], $k1['n']) . ')' . ($k0['n'] >= 5 ? ' · tavaly ugyanez: ' . cp_st_dg_pct($k0['w'], $k0['n']) : '');
+		$line = $lbl . ' ' . $k1['n'] . ' megkeresésből ' . $k1['w'] . ' lett aláírt deal 120 napon belül: *' . cp_st_dg_pct($k1['w'], $k1['n']) . '*' . ($k0['n'] >= 5 ? ' (tavaly ugyanez: ' . cp_st_dg_pct($k0['w'], $k0['n']) . ')' : '');
 		$out[] = $line;
 		if ($kind === 'month') {
 			$labels = cp_st_channel_labels();
 			$parts = array();
 			uasort($k1['ch'], function ($a, $b) { return $b[0] - $a[0]; });
 			foreach ($k1['ch'] as $ch => $v) { if ($v[0] >= 5) { $parts[] = (isset($labels[$ch]) ? $labels[$ch] : $ch) . ' ' . cp_st_dg_pct($v[1], $v[0]) . ' (' . $v[1] . '/' . $v[0] . ')'; } }
-			if ($parts) { $out[] = '      csatornánként: ' . implode(', ', array_slice($parts, 0, 5)); }
+			if ($parts) { $out[] = 'csatornánként: ' . implode(' · ', array_slice($parts, 0, 5)); }
 		}
 	}
 	return $out;
@@ -457,7 +477,7 @@ function cp_st_ms_check() {
 		$log = cp_st_ms_log();
 		array_unshift($log, array('t' => time(), 'd' => cp_st_today(), 'k' => $key, 'txt' => $t));
 		update_option('cp_st_ms_log', array_slice($log, 0, 60), false);
-		if ($hook !== '') { cp_st_dg_post('🎯 Mérföldkő: ' . $t); }
+		if ($hook !== '') { cp_st_dg_post('🎯 *Mérföldkő:* ' . $t); }
 	}
 	update_option('cp_st_ms_done', $done, false);
 	delete_option('cp_st_ms_lock');
