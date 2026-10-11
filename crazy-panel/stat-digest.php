@@ -220,6 +220,7 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$sv = array();
 	foreach (array_slice($c['svc'], 0, 4, true) as $k => $n) { $sv[] = $k . ' ' . $n; }
 	$L[] = '🎉 Lement rendezvények: ' . cp_st_dg_n($c['events']) . ' – ' . cp_st_dg_ft($c['evvalue']) . $cm('events') . ($sv ? "\n      " . implode(', ', $sv) : '');
+	foreach (cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) as $x) { $L[] = $x; }
 
 	/* levelek (eseménynapló) */
 	$from_utc = gmdate('Y-m-d H:i:s', strtotime($f . ' 00:00:00 Europe/Budapest'));
@@ -284,7 +285,9 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$ef = $evf !== '' ? $fk(gmdate('Y-m-d', strtotime($evf . ' UTC +7 days'))) : '9999';
 	$first['msent'] = $ef; $first['mans'] = $ef;
 	$rec = cp_st_dg_records($s, $kind, $pkey, $first);
-	if ($rec) { $L[] = ''; foreach ($rec as $r) { $L[] = $r; } }
+	$msl = array();
+	foreach (cp_st_ms_log() as $x) { if ($x['d'] >= $f && $x['d'] <= $t) { $msl[] = '🎯 ' . $x['txt']; } }
+	if ($rec || $msl) { $L[] = ''; foreach (array_merge($rec, array_reverse($msl)) as $r) { $L[] = $r; } }
 
 	/* nyitott piros figyelmeztetések */
 	$red = array();
@@ -294,6 +297,178 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 	$L[] = '';
 	$L[] = 'Részletek: ' . home_url('/' . trim(cp_panel_opts()['slug'], '/') . '/#stat');
 	return implode("\n", $L);
+}
+
+/* ------------------------------------------------------------ konverziós arány */
+
+function cp_st_dg_pct($a, $b) {
+	return $b ? str_replace('.', ',', (string) round($a / $b * 100, 1)) . '%' : '–';
+}
+
+/* pp-eltérés: „32,1% (előző: 28,0% · tavaly: 30,5%)” */
+function cp_st_dg_conv($rows, $kind, $f, $t, $c, $p, $y, $pl) {
+	$out = array();
+	$r = function ($x) { return $x['leads'] ? $x['signed'] / $x['leads'] : null; };
+	$fmt = function ($v) { return $v === null ? '–' : str_replace('.', ',', (string) round($v * 100, 1)) . '%'; };
+	$out[] = '🔁 Konverzió (aláírt / megkeresés az időszakban): ' . $fmt($r($c)) . ' (' . $pl . ': ' . $fmt($r($p)) . ' · tavaly: ' . $fmt($r($y)) . ')';
+	/* beérett kohorsz: havi összesítőnél a 3 hónappal korábbi hónap, hetinél a 6 héttel korábbi hét megkeresései, 120 napos horizonttal */
+	if ($kind === 'month') {
+		$cf = (new DateTime($f, cp_st_tz()))->modify('-3 months')->format('Y-m-01');
+		$ct = (new DateTime($cf, cp_st_tz()))->format('Y-m-t');
+		$lbl = 'A 3 hónappal korábbi (' . cp_st_dg_plabel('month', substr($cf, 0, 7)) . 'i)';
+	} else {
+		$cf = gmdate('Y-m-d', strtotime($f . ' 12:00 -42 days'));
+		$ct = gmdate('Y-m-d', strtotime($t . ' 12:00 -42 days'));
+		$lbl = 'A 6 héttel korábbi (' . cp_st_dg_plabel('week', $cf) . ')';
+	}
+	$coh = function ($a, $b) use ($rows) {
+		$lim = gmdate('Y-m-d', strtotime($a . ' 12:00 +120 days'));
+		$o = array('n' => 0, 'w' => 0, 'ch' => array());
+		foreach ($rows as $x) {
+			if (!cp_st_in($x['created_d'], $a, $b)) { continue; }
+			/* aláírt, de a szinkron előtt, dátum nélkül (nodate): aláírtnak számít */
+			$won = (!empty($x['signed_d']) && $x['signed_d'] <= $lim) || $x['signed_src'] === 'nodate' ? 1 : 0;
+			$o['n']++; $o['w'] += $won;
+			if (!isset($o['ch'][$x['ch']])) { $o['ch'][$x['ch']] = array(0, 0); }
+			$o['ch'][$x['ch']][0]++; $o['ch'][$x['ch']][1] += $won;
+		}
+		return $o;
+	};
+	$k1 = $coh($cf, $ct);
+	$yf = (new DateTime($cf, cp_st_tz()))->modify($kind === 'month' ? '-1 year' : '-364 days')->format('Y-m-d');
+	$yt = (new DateTime($ct, cp_st_tz()))->modify($kind === 'month' ? '-1 year' : '-364 days')->format('Y-m-d');
+	if ($kind === 'month') { $yt = (new DateTime($yf, cp_st_tz()))->format('Y-m-t'); }
+	$k0 = $coh($yf, $yt);
+	if ($k1['n'] >= 5) {
+		$line = '      ' . $lbl . ' ' . $k1['n'] . ' megkeresésből ' . $k1['w'] . ' lett aláírt deal 120 napon belül (' . cp_st_dg_pct($k1['w'], $k1['n']) . ')' . ($k0['n'] >= 5 ? ' · tavaly ugyanez: ' . cp_st_dg_pct($k0['w'], $k0['n']) : '');
+		$out[] = $line;
+		if ($kind === 'month') {
+			$labels = cp_st_channel_labels();
+			$parts = array();
+			uasort($k1['ch'], function ($a, $b) { return $b[0] - $a[0]; });
+			foreach ($k1['ch'] as $ch => $v) { if ($v[0] >= 5) { $parts[] = (isset($labels[$ch]) ? $labels[$ch] : $ch) . ' ' . cp_st_dg_pct($v[1], $v[0]) . ' (' . $v[1] . '/' . $v[0] . ')'; } }
+			if ($parts) { $out[] = '      csatornánként: ' . implode(', ', array_slice($parts, 0, 5)); }
+		}
+	}
+	return $out;
+}
+
+/* ------------------------------------------------------------ mérföldkövek (azonnali üzenet) */
+
+function cp_st_ms_defs() {
+	return array(
+		'ys' => array('Idén aláírt szerződés', 'db', 50),
+		'yv' => array('Idei aláírt dealérték', 'Ft', 10000000),
+		'yl' => array('Idei megkeresés', 'db', 250),
+		'ye' => array('Idén lement rendezvény', 'db', 50),
+		'mv' => array('Havi aláírt dealérték', 'Ft', 5000000),
+		'ms' => array('Havi aláírt szerződés', 'db', 25),
+		'ae' => array('Összes lement rendezvény (valaha)', 'db', 500),
+	);
+}
+
+function cp_st_ms_steps() {
+	$o = cp_st_dg_opts();
+	$out = array();
+	foreach (cp_st_ms_defs() as $k => $d) { $out[$k] = isset($o['ms_' . $k]) && (int) $o['ms_' . $k] > 0 ? (int) $o['ms_' . $k] : $d[2]; }
+	return $out;
+}
+
+/* a mostani értékek + a tavalyi ugyanezen napi értékek */
+function cp_st_ms_values() {
+	$rows = cp_st_load();
+	$today = cp_st_today();
+	$y = substr($today, 0, 4); $mo = substr($today, 0, 7);
+	$ly = (new DateTime($today, cp_st_tz()))->modify('-1 year')->format('Y-m-d');
+	$lyy = substr($ly, 0, 4); $lmo = substr($ly, 0, 7);
+	$v = array('ys' => 0, 'yv' => 0, 'yl' => 0, 'ye' => 0, 'mv' => 0, 'ms' => 0, 'ae' => 0);
+	$l = $v;
+	foreach ($rows as $r) {
+		if (substr($r['created_d'], 0, 4) === $y) { $v['yl']++; }
+		if ($r['created_d'] <= $ly && substr($r['created_d'], 0, 4) === $lyy) { $l['yl']++; }
+		if (!empty($r['signed_d'])) {
+			$val = $r['huf'] ? $r['value'] : 0;
+			if (substr($r['signed_d'], 0, 4) === $y) { $v['ys']++; $v['yv'] += $val; }
+			if (substr($r['signed_d'], 0, 7) === $mo) { $v['ms']++; $v['mv'] += $val; }
+			if ($r['signed_d'] <= $ly && substr($r['signed_d'], 0, 4) === $lyy) { $l['ys']++; $l['yv'] += $val; }
+			if ($r['signed_d'] <= $ly && substr($r['signed_d'], 0, 7) === $lmo) { $l['ms']++; $l['mv'] += $val; }
+		}
+		if (cp_st_dg_booked($r) && $r['event_d'] <= $today) {
+			$v['ae']++;
+			if (substr($r['event_d'], 0, 4) === $y) { $v['ye']++; }
+		}
+		if (cp_st_dg_booked($r) && $r['event_d'] <= $ly) {
+			$l['ae']++;
+			if (substr($r['event_d'], 0, 4) === $lyy) { $l['ye']++; }
+		}
+	}
+	return array('v' => $v, 'l' => $l, 'y' => $y, 'mo' => $mo);
+}
+
+function cp_st_ms_log() {
+	$l = get_option('cp_st_ms_log', array());
+	return is_array($l) ? $l : array();
+}
+
+add_action('cp_st_quick', 'cp_st_ms_check', 30);
+
+function cp_st_ms_check() {
+	if (!cp_st_db_ok()) { return; }
+	$o = cp_st_dg_opts();
+	if (isset($o['ms']) && !$o['ms']) { return; }
+	$st = cp_st_state();
+	if (empty($st['deal_full_at']) || !empty($st['deal_redo'])) { return; }
+	if (!add_option('cp_st_ms_lock', time(), '', 'no')) {
+		if ((int) get_option('cp_st_ms_lock') < time() - 300) { delete_option('cp_st_ms_lock'); }
+		return;
+	}
+	$x = cp_st_ms_values();
+	$steps = cp_st_ms_steps();
+	$defs = cp_st_ms_defs();
+	$done = get_option('cp_st_ms_done', null);
+	$first = !is_array($done);
+	if ($first) { $done = array(); }
+	$hook = cp_st_dg_hook();
+	foreach ($steps as $k => $step) {
+		$cur = $x['v'][$k];
+		$lvl = (int) floor($cur / $step) * $step;
+		if ($lvl <= 0) { continue; }
+		$per = in_array($k, array('mv', 'ms'), true) ? $x['mo'] : ($k === 'ae' ? 'all' : $x['y']);
+		$key = $k . '|' . $per . '|' . $lvl;
+		if (isset($done[$key])) { continue; }
+		$done[$key] = time();
+		if ($first) { continue; } /* első bekapcsolás: a már elért mérföldköveket csak rögzítjük */
+		$money = $defs[$k][1] === 'Ft';
+		$num = $money ? cp_st_dg_ft($lvl) : cp_st_dg_n($lvl) . '.';
+		$hub = array('', 'januárban', 'februárban', 'márciusban', 'áprilisban', 'májusban', 'júniusban', 'júliusban', 'augusztusban', 'szeptemberben', 'októberben', 'novemberben', 'decemberben');
+		$when = in_array($k, array('mv', 'ms'), true) ? $hub[(int) substr($x['mo'], 5, 2)] : ($k === 'ae' ? 'összesen' : 'idén');
+		$txt = array(
+			'ys' => 'Idén megvan a ' . $num . ' aláírt szerződés!',
+			'yv' => 'Az idei aláírt dealérték átlépte a ' . $num . '-ot!',
+			'yl' => 'Idén megjött a ' . $num . ' megkeresés!',
+			'ye' => 'Idén lement a ' . $num . ' rendezvény!',
+			'mv' => ucfirst($when) . ' az aláírt dealérték átlépte a ' . $num . '-ot!',
+			'ms' => ucfirst($when) . ' megvan a ' . $num . ' aláírt szerződés!',
+			'ae' => 'Összesen lement a ' . $num . ' rendezvényünk!',
+		);
+		$t = $txt[$k];
+		$lv = $x['l'][$k];
+		if ($k !== 'ae' && $lv > 0) { $t .= ' (tavaly ugyanekkor: ' . ($money ? cp_st_dg_ft($lv) : cp_st_dg_n($lv)) . ')'; }
+		$log = cp_st_ms_log();
+		array_unshift($log, array('t' => time(), 'd' => cp_st_today(), 'k' => $key, 'txt' => $t));
+		update_option('cp_st_ms_log', array_slice($log, 0, 60), false);
+		if ($hook !== '') { cp_st_dg_post('🎯 Mérföldkő: ' . $t); }
+	}
+	update_option('cp_st_ms_done', $done, false);
+	delete_option('cp_st_ms_lock');
+}
+
+function cp_st_dg_post($txt) {
+	$hook = cp_st_dg_hook();
+	if ($hook === '') { return new WP_Error('nohook', 'Nincs webhook.'); }
+	if (function_exists('cp_el_pumble')) { return cp_el_pumble($txt, $hook); }
+	$res = wp_remote_post($hook, array('timeout' => 15, 'headers' => array('Content-Type' => 'application/json'), 'body' => wp_json_encode(array('text' => $txt))));
+	return is_wp_error($res) ? $res : true;
 }
 
 /* ------------------------------------------------------------ WP admin: Beállítások → Crazy összesítők */
@@ -313,6 +488,8 @@ function cp_st_dg_admin() {
 		$o['week'] = !empty($in['week']) ? 1 : 0;
 		$o['month'] = !empty($in['month']) ? 1 : 0;
 		$o['hour'] = max(0, min(23, (int) (isset($in['hour']) ? $in['hour'] : 19)));
+		$o['ms'] = !empty($in['ms']) ? 1 : 0;
+		foreach (array_keys(cp_st_ms_defs()) as $k) { if (isset($in['ms_' . $k])) { $o['ms_' . $k] = max(1, (int) preg_replace('/[^0-9]/', '', $in['ms_' . $k])); } }
 		update_option('cp_st_dg', $o, false);
 		$msg = 'Beállítások elmentve.';
 		$u = isset($in['hook_new']) ? trim((string) $in['hook_new']) : '';
@@ -342,6 +519,22 @@ function cp_st_dg_admin() {
 	echo '<input type="hidden" name="cp_st_dg_save" value="1"><table class="form-table">';
 	cp_panel_row('Pumble-webhook', '<input type="password" name="hook_new" class="large-text" autocomplete="new-password" placeholder="' . esc_attr($has ? 'beállítva – csak cseréhez írd be az újat' : 'https://api.pumble.com/workspaces/…/incomingWebhooks/postMessage/…') . '">' . ($has ? ' <label><input type="checkbox" name="hook_clear" value="1"> törlés</label>' : '') . '<p class="description">Pumble: Workspace settings → Incoming Webhooks → New Webhook → a vezetőségi csatorna (ne a kezelői setup-fotós). Titkosítva tárolódik.</p>');
 	cp_panel_row('Küldés', '<label><input type="checkbox" name="week" value="1"' . checked(!empty($o['week']), true, false) . '> heti (vasárnap)</label> &nbsp; <label><input type="checkbox" name="month" value="1"' . checked(!empty($o['month']), true, false) . '> havi (a hónap utolsó napja)</label> &nbsp; időpont: <input name="hour" value="' . (int) $o['hour'] . '" class="small-text" inputmode="numeric"> óra');
+	$mv = cp_st_ms_values();
+	$steps = cp_st_ms_steps();
+	$rowsh = array();
+	foreach (cp_st_ms_defs() as $k => $d) {
+		$cur = $mv['v'][$k];
+		$next = ((int) floor($cur / $steps[$k]) + 1) * $steps[$k];
+		$fmt = $d[1] === 'Ft' ? 'cp_st_dg_ft' : 'cp_st_dg_n';
+		$rowsh[] = '<tr><td>' . esc_html($d[0]) . '</td><td>lépcső: <input name="ms_' . $k . '" value="' . (int) $steps[$k] . '" class="regular-text" style="width:9em" inputmode="numeric"> ' . esc_html($d[1]) . '</td><td>most: <b>' . esc_html($fmt($cur)) . '</b> · következő: ' . esc_html($fmt($next)) . '</td></tr>';
+	}
+	cp_panel_row('Mérföldkövek', '<label><input type="checkbox" name="ms" value="1"' . checked(!isset($o['ms']) || !empty($o['ms']), true, false) . '> azonnali Pumble-üzenet, ha egy lépcsőt átlépünk (10 percenként ellenőrzi; az első bekapcsoláskor a már elért szinteket nem küldi ki)</label><table class="widefat striped" style="margin-top:8px;max-width:860px">' . implode('', $rowsh) . '</table>');
+	$ml = cp_st_ms_log();
+	if ($ml) {
+		$l = array();
+		foreach (array_slice($ml, 0, 8) as $x) { $l[] = esc_html(wp_date('Y.m.d. H:i', $x['t']) . ' · ' . $x['txt']); }
+		cp_panel_row('Elért mérföldkövek', implode('<br>', $l));
+	}
 	cp_panel_row('Következő', 'heti: ' . esc_html(cp_st_dg_plabel('week', $t['week']['from'])) . ' · havi: ' . esc_html(cp_st_dg_plabel('month', substr($t['month']['from'], 0, 7))) . ' (a legutóbbi esedékes periódus)');
 	$log = get_option('cp_st_dg_log', array());
 	if (is_array($log) && $log) {

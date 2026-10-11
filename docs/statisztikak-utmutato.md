@@ -145,3 +145,8 @@ A Statisztikák fül tetején. Percenként frissül; a Salesmate-változásokat 
 - Tartalom: megkeresések (csatornánként), aláírt szerződések + érték, lement rendezvények + érték, levelek (elküldött / beérkezett / megválaszolt + medián válaszidő, most megválaszolatlan), kintlévőség és lejárt kintlévőség (+ változás az előző összesítő óta), hirdetési költés, jövő hét / következő hónap foglalt rendezvényei és telt napjai, **all-time rekordok** és „N hét / hónap óta a legjobb”, nyitott piros figyelmeztetések.
 - Levelek: a Salesmate nem ad levél-listát, ezért a panel 10 percenként eseménynaplót vezet (a kontakt „elküldött levelek” számlálója és utolsó kapott levele alapján). A levél-rekordok 8 hét (havi: 6 hónap) mérés után indulnak.
 - Előnézet és teszt küldés ugyanott.
+
+### Konverzió és mérföldkövek
+
+- **Konverzió az összesítőben:** aláírt / megkeresés az időszakban (előző és tavalyi időszakhoz mérve), valamint a *beérett kohorsz*: havinál a 3 hónappal korábbi hónap, hetinél a 6 héttel korábbi hét megkereséseiből hány % lett aláírt deal 120 napon belül (havinál csatornánként is). A szinkron előtt, dátum nélkül aláírt dealek aláírtnak számítanak.
+- **Mérföldkövek (azonnali Pumble-üzenet, 10 percenként ellenőrizve):** idén aláírt szerződés (50-esével), idei aláírt érték (10 M Ft), idei megkeresés (250), idén lement rendezvény (50), havi aláírt érték (5 M Ft), havi aláírt szerződés (25), összes lement rendezvény (500). A lépcsők a Crazy összesítők oldalon állíthatók; az első bekapcsoláskor a már elért szinteket nem küldi ki. Az összesítő is felsorolja az időszakban elért mérföldköveket.
