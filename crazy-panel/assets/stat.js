@@ -21,6 +21,7 @@
 
 	const S = { gran: 'month', a: ymd(new Date()), data: null, ga: null, err: '', loading: false, gaTimer: null, yoy: true, main: null, sel: -1 };
 	try { const g = localStorage.getItem('cpst_gran'); if (g && GRANS.some(x => x[0] === g)) S.gran = g; } catch (e) { /* privát mód */ }
+	S.edit = false;
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -136,7 +137,8 @@
 		const k = d.kpi;
 		let h = '<div class="st-head"><div class="st-seg" role="tablist">' + GRANS.map(g => '<button data-g="' + g[0] + '" class="' + (S.gran === g[0] ? 'on' : '') + '">' + g[1] + '</button>').join('') + '</div>' +
 			'<div class="st-nav"><button class="cpx-btn ghost" data-d="-1" aria-label="Előző időszak">‹</button><h2>' + esc(periodLabel(d.gran, d.from, d.to)) + '</h2><button class="cpx-btn ghost" data-d="1" aria-label="Következő időszak">›</button>' +
-			'<button class="cpx-btn ghost" data-now' + (d.from <= d.today && d.to >= d.today ? ' disabled' : '') + '>Most</button></div></div>';
+			'<button class="cpx-btn ghost" data-now' + (d.from <= d.today && d.to >= d.today ? ' disabled' : '') + '>Most</button>' +
+			'<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>';
 		h += '<div class="st-note">' + (d.partial ? 'Folyamatban lévő időszak (' + dshort(d.from) + '–' + dshort(d.curTo) + '); az összevetés azonos hosszúságú szakaszokkal: előző ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ', tavaly ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.' : 'Előző időszak: ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ' · tavalyi azonos időszak: ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.') + ' Megkeresés = beérkezett deal (létrehozás napja), új deal = aláírt szerződés (aláírás napja).</div>';
 		const y = d.sync;
 		if (y.busy) h += '<div class="st-warn"><b>Az első Salesmate-beolvasás folyamatban</b> (' + num(y.deals) + ' deal eddig) – a számok még hiányosak lehetnek.</div>';
@@ -144,23 +146,26 @@
 		if (y.last && Date.now() / 1000 - y.last > 3 * 3600) h += '<div class="st-warn">A legutóbbi sikeres szinkron ' + Math.round((Date.now() / 1000 - y.last) / 3600) + ' órája volt – a WP-Cron valószínűleg nem fut rendszeresen.</div>';
 
 		const cpl = (s, l) => s && l ? s / l : null;
-		h += '<div class="st-body"><div class="st-kpis">' +
-			kpiTile('Megkeresések', k.cur.leads, k.prev.leads, k.yoy.leads) +
-			kpiTile('Új (aláírt) dealek', k.cur.won, k.prev.won, k.yoy.won) +
-			kpiTile('Aláírt dealérték', k.cur.value, k.prev.value, k.yoy.value, true) +
-			kpiTile('Hirdetési költés', k.cur.spend, k.prev.spend, k.yoy.spend, true, true) +
-			kpiTile('Költség / megkeresés', cpl(k.cur.spend, k.cur.leads), cpl(k.prev.spend, k.prev.leads), cpl(k.yoy.spend, k.yoy.leads), true, true) +
-			kpiTile('Aláírt érték / hirdetési költés', k.cur.spend ? k.cur.value / k.cur.spend : null, k.prev.spend ? k.prev.value / k.prev.spend : null, k.yoy.spend ? k.yoy.value / k.yoy.spend : null, false, false, v => v == null ? '–' : (Math.round(v * 10) / 10).toString().replace('.', ',') + '×') +
+		const tiles = [
+			['leads', kpiTile('Megkeresések', k.cur.leads, k.prev.leads, k.yoy.leads)],
+			['won', kpiTile('Új (aláírt) dealek', k.cur.won, k.prev.won, k.yoy.won)],
+			['value', kpiTile('Aláírt dealérték', k.cur.value, k.prev.value, k.yoy.value, true)],
+			['spend', kpiTile('Hirdetési költés', k.cur.spend, k.prev.spend, k.yoy.spend, true, true)],
+			['cpl', kpiTile('Költség / megkeresés', cpl(k.cur.spend, k.cur.leads), cpl(k.prev.spend, k.prev.leads), cpl(k.yoy.spend, k.yoy.leads), true, true)],
+			['roas', kpiTile('Aláírt érték / hirdetési költés', k.cur.spend ? k.cur.value / k.cur.spend : null, k.prev.spend ? k.prev.value / k.prev.spend : null, k.yoy.spend ? k.yoy.value / k.yoy.spend : null, false, false, v => v == null ? '–' : (Math.round(v * 10) / 10).toString().replace('.', ',') + '×')]
+		];
+		h += '<div class="st-body">' + (S.edit ? '<div class="st-editbar" id="st-editbar"></div>' : '') + '<div class="st-kpis" data-lc="kpi">' +
+			tiles.map(t => t[1].replace('<div class="st-kpi">', '<div class="st-kpi" data-lid="k-' + t[0] + '" data-lt="' + esc(t[1].match(/class="l">([^<]*)/)[1]) + '">')).join('') +
 			'</div>';
 		if (k.cur.nonhuf) h += '<div class="st-note">' + k.cur.nonhuf + ' nem forintos deal értéke nincs az összegben.</div>';
 
-		h += '<div class="cpx-card"><div class="st-card-h"><h3>Trend</h3><small>' + ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran] + '</small></div>' +
+		h += '<div class="st-grid" data-lc="card"><div class="cpx-card wide" data-lid="trend" data-lt="Trend"><div class="st-card-h"><h3>Trend</h3><small>' + ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran] + '</small></div>' +
 			'<div id="st-trend"></div><div class="st-legend"><span><i style="background:var(--o)"></i>Megkeresés</span><span><i style="background:var(--ok)"></i>Aláírt deal</span><label><input type="checkbox" id="st-yoy"' + (S.yoy ? ' checked' : '') + '> <i class="ln" style="background:#8A93A8"></i>tavaly ugyanekkor</label></div><div class="st-tip" id="st-tip"></div></div>';
 
-		h += '<div class="cpx-card" id="st-ga"></div>';
+		h += '<div class="cpx-card wide" data-lid="ga" data-lt="Weboldal-forgalom (GA4)"><div id="st-ga"></div></div>';
 
-		h += '<div class="st-grid">';
 		h += cardCpl(d, L);
+		h += cardAds(d, L);
 		h += cardLead(d);
 		h += cardReact(d, L);
 		h += cardRoas(d, L);
@@ -178,9 +183,137 @@
 		main.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { shiftAnchor(+b.dataset.d); reload(false); });
 		main.querySelector('[data-now]').onclick = () => { S.a = ymd(new Date()); reload(false); };
 		main.querySelector('#st-yoy').onchange = e => { S.yoy = e.target.checked; drawTrend(); };
+		main.querySelector('[data-edit]').onclick = () => { S.edit = !S.edit; draw(); };
 		bindLi(main);
+		layoutApply(main);
+		if (S.edit) layoutEdit(main);
 		drawTrend();
 		drawGa();
+	}
+
+	/* ------------------------------------------------------------ elrendezés: áthelyezés, átméretezés, elrejtés (böngészőnként mentve) */
+	const LKEY = 'cpst_layout_v1';
+	function layoutGet() {
+		try { const x = JSON.parse(localStorage.getItem(LKEY) || '{}'); return x && typeof x === 'object' ? x : {}; } catch (e) { return {}; }
+	}
+	function layoutSave(main) {
+		const out = {};
+		main.querySelectorAll('[data-lc]').forEach(c => {
+			const items = [...c.children].filter(x => x.dataset.lid);
+			out[c.dataset.lc] = { order: items.map(x => x.dataset.lid), span: {}, hidden: items.filter(x => x.classList.contains('st-hid')).map(x => x.dataset.lid) };
+			items.forEach(x => { if (x.dataset.span) out[c.dataset.lc].span[x.dataset.lid] = +x.dataset.span; });
+		});
+		try { localStorage.setItem(LKEY, JSON.stringify(out)); } catch (e) { /* privát mód: csak erre a megnyitásra marad meg */ }
+	}
+	const defSpan = el => el.classList.contains('st-kpi') ? 1 : (el.classList.contains('wide') ? 12 : 6);
+	function setSpan(el, n) {
+		const max = el.classList.contains('st-kpi') ? 3 : 12, min = el.classList.contains('st-kpi') ? 1 : 3;
+		n = Math.max(min, Math.min(max, Math.round(n)));
+		el.dataset.span = n;
+		el.style.gridColumn = 'span ' + n;
+	}
+	function layoutApply(main) {
+		const L = layoutGet();
+		main.querySelectorAll('[data-lc]').forEach(c => {
+			const cfg = L[c.dataset.lc] || {};
+			const items = [...c.children].filter(x => x.dataset.lid);
+			const pos = id => { const i = (cfg.order || []).indexOf(id); return i < 0 ? 1e3 + items.findIndex(x => x.dataset.lid === id) : i; };
+			/* új (még nem mentett) csempe: az alapértelmezett helyén, a mentett szomszédja után */
+			if (cfg.order && cfg.order.length) {
+				const known = items.filter(x => cfg.order.includes(x.dataset.lid)).sort((a, b) => pos(a.dataset.lid) - pos(b.dataset.lid));
+				const res = [];
+				let ki = 0;
+				items.forEach(x => { if (cfg.order.includes(x.dataset.lid)) res.push(known[ki++]); else res.push(x); });
+				res.forEach(x => c.appendChild(x));
+			}
+			items.forEach(x => {
+				const sp = cfg.span && cfg.span[x.dataset.lid];
+				setSpan(x, sp || defSpan(x));
+				x.classList.toggle('st-hid', (cfg.hidden || []).includes(x.dataset.lid));
+			});
+		});
+	}
+	function layoutEdit(main) {
+		main.classList.add('st-editing');
+		const bar = main.querySelector('#st-editbar');
+		const drawBar = () => {
+			const hid = [...main.querySelectorAll('[data-lid].st-hid')];
+			bar.innerHTML = '<div><b>Elrendezés szerkesztése</b> – húzd a <span class="st-hint">⠿</span> fogantyúnál az áthelyezéshez, a jobb alsó saroknál a méretezéshez; × = elrejtés. Böngészőnként mentődik.</div>' +
+				'<div class="st-editbar-r">' + (hid.length ? '<span class="st-sub">Rejtett:</span> ' + hid.map(x => '<button class="cpx-btn ghost sm" data-show="' + esc(x.dataset.lid) + '">+ ' + esc(x.dataset.lt || x.dataset.lid) + '</button>').join(' ') : '') +
+				' <button class="cpx-btn ghost sm" data-lreset>Alaphelyzet</button> <button class="cpx-btn sm" data-ldone>Kész</button></div>';
+			bar.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const x = main.querySelector('[data-lid="' + b.dataset.show + '"]'); if (x) x.classList.remove('st-hid'); layoutSave(main); drawBar(); });
+			bar.querySelector('[data-lreset]').onclick = () => { if (!confirm('Visszaállítod az alap elrendezést?')) return; try { localStorage.removeItem(LKEY); } catch (e) { /* privát mód */ } draw(); };
+			bar.querySelector('[data-ldone]').onclick = () => { S.edit = false; draw(); };
+		};
+		drawBar();
+		main.querySelectorAll('[data-lid]').forEach(x => {
+			const ctl = document.createElement('div');
+			ctl.className = 'st-ctl';
+			ctl.innerHTML = '<button type="button" class="st-grip" aria-label="Áthelyezés" title="Húzd az áthelyezéshez">⠿</button><button type="button" class="st-x" aria-label="Elrejtés" title="Elrejtés">×</button>';
+			x.appendChild(ctl);
+			const rz = document.createElement('div');
+			rz.className = 'st-rz';
+			rz.title = 'Húzd a méretezéshez';
+			x.appendChild(rz);
+			ctl.querySelector('.st-x').onclick = () => { x.classList.add('st-hid'); layoutSave(main); drawBar(); };
+			ctl.querySelector('.st-grip').addEventListener('pointerdown', e => dragStart(e, x, main));
+			rz.addEventListener('pointerdown', e => resizeStart(e, x, main));
+		});
+	}
+	function dragStart(e, item, main) {
+		e.preventDefault();
+		const c = item.parentNode;
+		item.classList.add('st-dragging');
+		let lastY = e.clientY, raf = 0;
+		const scroll = () => { const m = 60; if (lastY < m) window.scrollBy(0, -12); else if (lastY > innerHeight - m) window.scrollBy(0, 12); raf = requestAnimationFrame(scroll); };
+		raf = requestAnimationFrame(scroll);
+		const move = ev => {
+			lastY = ev.clientY;
+			const t = document.elementFromPoint(ev.clientX, ev.clientY);
+			const over = t && t.closest('[data-lid]');
+			if (!over || over === item || over.parentNode !== c) return;
+			const r = over.getBoundingClientRect();
+			const sameRow = ev.clientY > r.top && ev.clientY < r.bottom;
+			const before = sameRow ? ev.clientX < r.left + r.width / 2 : ev.clientY < r.top + r.height / 2;
+			c.insertBefore(item, before ? over : over.nextSibling);
+		};
+		const up = () => {
+			cancelAnimationFrame(raf);
+			item.classList.remove('st-dragging');
+			removeEventListener('pointermove', move);
+			removeEventListener('pointerup', up);
+			removeEventListener('pointercancel', up);
+			layoutSave(main);
+			if (item.querySelector('#st-trend')) drawTrend();
+		};
+		addEventListener('pointermove', move);
+		addEventListener('pointerup', up);
+		addEventListener('pointercancel', up);
+	}
+	function resizeStart(e, item, main) {
+		e.preventDefault();
+		const c = item.parentNode;
+		const cs = getComputedStyle(c);
+		const tracks = cs.gridTemplateColumns.split(' ').map(parseFloat).filter(n => !isNaN(n));
+		const gap = parseFloat(cs.columnGap) || 0;
+		const colW = (tracks[0] || 100) + gap;
+		const x0 = e.clientX, w0 = item.getBoundingClientRect().width;
+		item.classList.add('st-resizing');
+		const move = ev => {
+			const n = Math.min(tracks.length || 12, (w0 + (ev.clientX - x0) + gap) / colW);
+			setSpan(item, n);
+		};
+		const up = () => {
+			item.classList.remove('st-resizing');
+			removeEventListener('pointermove', move);
+			removeEventListener('pointerup', up);
+			removeEventListener('pointercancel', up);
+			layoutSave(main);
+			drawTrend();
+		};
+		addEventListener('pointermove', move);
+		addEventListener('pointerup', up);
+		addEventListener('pointercancel', up);
 	}
 
 	/* ------------------------------------------------------------ trenddiagram (SVG) */
@@ -283,7 +416,7 @@
 
 	/* ------------------------------------------------------------ kártyák */
 	const chName = (L, k) => '<span class="st-dot" style="background:' + (CH_COL[k] || '#ccc') + '"></span>' + esc(L[k] || k);
-	const card = (title, sub, body, wide) => '<div class="cpx-card' + (wide ? ' wide' : '') + '"><div class="st-card-h"><h3>' + title + '</h3>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>' + body + '</div>';
+	const card = (title, sub, body, wide) => { const t = String(title).replace(/<[^>]+>/g, ''); return '<div class="cpx-card' + (wide ? ' wide' : '') + '" data-lid="c-' + esc(t.toLowerCase().replace(/^\d+\.\s*/, '').replace(/[^a-z0-9áéíóöőúüű]+/g, '-').slice(0, 40)) + '" data-lt="' + esc(t) + '"><div class="st-card-h"><h3>' + title + '</h3>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>' + body + '</div>'; };
 	const miss = t => '<div class="st-miss">' + t + '</div>';
 	const paid = k => k === 'google' || k === 'meta' || k === 'linkedin';
 
@@ -291,7 +424,7 @@
 		const m = [];
 		if (d.miss.includes('cost_google')) m.push('Google Ads (a szkript még nem küldött adatot)');
 		if (d.miss.includes('cost_meta')) m.push('Meta (nincs megadva token / hirdetési fiók)');
-		if (d.miss.includes('cost_linkedin')) m.push('LinkedIn (nincs kézi tétel)');
+		if (d.miss.includes('cost_linkedin')) m.push('LinkedIn (nincs Windsor.ai-kulcs / adat és kézi tétel sem)');
 		return m.length ? miss('Hiányzó költségadat: ' + m.join(', ') + '. Ezeknél a csatornáknál a költségmutató nem számolható.') : '';
 	}
 
@@ -315,6 +448,24 @@
 		b += '<tr class="tot"><td>Összesen</td><td class="r">' + num(tl) + '</td><td class="r">' + ft(ts) + '</td><td class="r">' + (ts && tl ? ft(ts / tl) : '–') + '</td></tr></tbody></table></div>';
 		if (!rows.length) b = '<div class="st-sub">Ebben az időszakban nem volt megkeresés.</div>';
 		return card('1. Költség / megkeresés csatornánként', 'a periódusban beérkezett megkeresések', b + costMiss(d) + srcMiss(d));
+	}
+
+	/* platformonkénti hirdetési mutatók a kiválasztott időszakra (lead = a platform saját konverziója; LinkedIn: one-click lead) */
+	function cardAds(d, L) {
+		const sd = d.spendDetail || {};
+		const ks = ['google', 'meta', 'linkedin'].filter(k => sd[k]);
+		if (!ks.length) return card('Hirdetési platformok', '', '<div class="st-sub">Ebben az időszakban nincs hirdetési adat.</div>' + costMiss(d), true);
+		const dec = n => n == null ? '–' : (Math.round(n * 10) / 10).toString().replace('.', ',');
+		const eur = n => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+		let b = '<div class="st-tw"><table class="st-t"><thead><tr><th>Platform</th><th class="r">Költés</th><th class="r">Megjelenés</th><th class="r">Kattintás</th><th class="r">CTR</th><th class="r">Lead</th><th class="r">CPL</th></tr></thead><tbody>';
+		ks.forEach(k => {
+			const x = sd[k];
+			b += '<tr><td>' + chName(L, k) + '</td><td class="r">' + ft(x.spend) + (x.eur ? '<br><small class="st-sub">' + eur(x.eur) + '</small>' : '') + '</td><td class="r">' + num(x.impr) + '</td><td class="r">' + num(x.clicks) + '</td><td class="r">' + (x.impr ? dec(x.clicks / x.impr * 100) + '%' : '–') + '</td><td class="r">' + dec(x.conv) + '</td><td class="r">' + (x.conv ? ft(x.spend / x.conv) : '–') + '</td></tr>';
+		});
+		b += '</tbody></table></div>';
+		const li = d.sync && d.sync.li;
+		b += '<div class="st-sub" style="margin-top:8px">Lead = a hirdetési rendszer saját lead-konverziója (LinkedIn: one-click lead űrlap), nem a Salesmate-megkeresés. CPL = költés / lead.' + (li && sd.linkedin && sd.linkedin.eur ? ' A LinkedIn EUR-ban költ, forintra ' + dec(li.rate) + ' Ft/EUR árfolyamon számolva.' : '') + '</div>';
+		return card('Hirdetési platformok', 'költés, megjelenés, kattintás, lead a kiválasztott időszakban', b + costMiss(d), true);
 	}
 
 	function cardLead(d) {
@@ -437,7 +588,7 @@
 			'<label>Megjelenés<input name="impr" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<label>Konverzió<input name="conv" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<button class="cpx-btn" type="submit">Mentés</button></form>';
-		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el. A kampány december 10-ig fut.</div>';
+		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el. A kampány december 10-ig fut.' + (d.sync && d.sync.li && d.sync.li.on ? ' A Windsor.ai-ból lekért napokon a kézi tétel nem számít bele (nincs dupla költés).' : '') + '</div>';
 		if (list.length) b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Időszak</th><th>Megnevezés</th><th class="r">Költés</th><th class="r">Katt.</th><th></th></tr></thead><tbody>' + list.map(e => '<tr><td>' + dshort(e.from) + '–' + dshort(e.to) + '</td><td>' + esc(e.name) + '</td><td class="r">' + ft(e.amount) + '</td><td class="r">' + (e.clicks || '–') + '</td><td class="r"><button class="cpx-btn ghost sm" data-li-ed="' + esc(e.id) + '" aria-label="Szerkesztés">✎</button> <button class="cpx-btn ghost sm" data-li-del="' + esc(e.id) + '" aria-label="Törlés">×</button></td></tr>').join('') + '</tbody></table></div>';
 		return card('LinkedIn – kézi költség', '', b, true);
 	}
@@ -480,7 +631,7 @@
 			it('Salesmate', y.err ? false : !!y.last, y.err ? esc(y.err) : 'utolsó szinkron: ' + t(y.last) + ' · ' + num(y.deals) + ' deal') +
 			it('Google Ads', y.gads.at ? true : null, y.gads.at ? 'utolsó adat: ' + t(y.gads.at) : (y.gads.on ? 'kulcs kész, a szkript még nem küldött adatot' : 'nincs beállítva')) +
 			it('Meta', y.meta.err ? false : (y.meta.ok ? true : null), y.meta.err ? esc(y.meta.err) : (y.meta.ok ? 'utolsó lekérés: ' + t(y.meta.ok) : (y.meta.on ? 'beállítva, lekérésre vár' : 'nincs beállítva'))) +
-			it('LinkedIn', sp.linkedin ? true : null, sp.linkedin ? 'kézi tételek: ' + dshort(sp.linkedin.f) + '–' + dshort(sp.linkedin.t) : 'nincs kézi tétel') +
+			it('LinkedIn', y.li && y.li.err ? false : (y.li && y.li.ok ? true : (sp.linkedin ? true : null)), y.li && y.li.err ? esc(y.li.err) : (y.li && y.li.ok ? 'Windsor.ai, utolsó lekérés: ' + t(y.li.ok) : (y.li && y.li.on ? 'Windsor.ai beállítva, lekérésre vár' : (sp.linkedin ? 'kézi tételek: ' + dshort(sp.linkedin.f) + '–' + dshort(sp.linkedin.t) : 'nincs beállítva')))) +
 			it('GA4', y.ga ? true : null, y.ga ? 'összekötve' : 'nincs beállítva') +
 			'</div>';
 		if (C.st && C.st.admin) b += '<div class="st-sub" style="margin-top:8px">A kulcsokat és tokeneket a WordPress adminban lehet megadni: Beállítások → Crazy statisztikák (csak adminnak).</div>';

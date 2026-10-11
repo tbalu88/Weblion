@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_ST_DB_VER', '3');
+define('CP_ST_DB_VER', '4');
 define('CP_ST_OPT', 'cp_st_settings');
 define('CP_ST_SEC', 'cp_st_secrets');
 define('CP_ST_STATE', 'cp_st_state');
@@ -43,6 +43,9 @@ function cp_st_defaults() {
 		'meta_act'    => '',
 		'meta_ver'    => 'v24.0',
 		'ga_prop'     => '',
+		'li_act'      => '559891788',
+		'eur_huf'     => 390,
+		'svc_alias'   => "Szelfigép = Fotóautomata\nSzelfi gép = Fotóautomata\nSzelfi = Fotóautomata",
 		'rules'       => "source:facebook => meta\nsource:instagram => meta\nsource:meta => meta\nsource:linkedin => linkedin\ntag:linkedin => linkedin\nutm:facebook => meta\nutm:fb => meta\nutm:ig => meta\nutm:instagram => meta\nutm:meta => meta\nutm:linkedin => linkedin\nutm:google => google\nsource:google => google\nsource:referral => referral\nsource:ajánl => referral\nsource:ads => ads\nsource:crazyphoto => organic\nsource:eventcrazy => organic\nsource:spinner => organic\nsource:web => organic",
 	);
 }
@@ -185,6 +188,8 @@ function cp_st_db_install() {
   campaign_id varchar(64) NOT NULL,
   campaign_name varchar(190) NOT NULL DEFAULT '',
   spend decimal(14,2) NOT NULL DEFAULT 0,
+  spend_orig decimal(14,2) NOT NULL DEFAULT 0,
+  currency varchar(3) NOT NULL DEFAULT '',
   clicks int(11) NOT NULL DEFAULT 0,
   impressions int(11) NOT NULL DEFAULT 0,
   conversions decimal(12,2) NOT NULL DEFAULT 0,
@@ -347,7 +352,8 @@ function cp_st_map_deal($r, $now) {
 	$kind = ($spin !== '' && $sp !== '') ? 'both' : ($spin !== '' ? 'spin' : ($sp !== '' ? 'selfie' : ''));
 	if ($kind === '' && $svc !== '') {
 		$s = mb_strtolower($svc);
-		$kind = (strpos($s, 'spinner') !== false && strpos($s, 'fotó') !== false) ? 'both' : (strpos($s, 'spinner') !== false ? 'spin' : (strpos($s, 'fotóautomata') !== false ? 'selfie' : ''));
+		$self = strpos($s, 'fotóautomata') !== false || strpos($s, 'szelfi') !== false;
+		$kind = (strpos($s, 'spinner') !== false && ($self || strpos($s, 'fotó') !== false)) ? 'both' : (strpos($s, 'spinner') !== false ? 'spin' : ($self ? 'selfie' : ''));
 	}
 	$clts = cp_st_ts(cp_panel_get($r, 'closedDate'));
 	$status = cp_panel_str(cp_panel_get($r, 'status'));
@@ -613,9 +619,15 @@ function cp_st_sync($manual = false) {
 		$st['last_err'] = mb_substr($e->getMessage(), 0, 300);
 		$st['err_at'] = time();
 	}
+	/* a hirdetési lekérések saját állapotot írnak: előbb mentünk, utána újraolvasunk (különben a végső mentés felülírná) */
+	cp_st_state_set($st);
 	/* hirdetési költség (Meta) – óránként */
 	$meta = cp_st_meta_sync();
 	if ($meta !== '') { $log[] = $meta; }
+	/* LinkedIn (Windsor.ai) – naponta */
+	$wli = cp_st_windsor_sync();
+	if ($wli !== '') { $log[] = $wli; }
+	$st = cp_st_state();
 	$st['last_run'] = time();
 	$st['last_log'] = implode(' · ', $log);
 	$st['last_calls'] = $calls;
@@ -667,18 +679,20 @@ function cp_st_ads_replace($channel, $from, $to, $rows, $prefix = '') {
 	foreach ($rows as $r) {
 		if ($r['d'] < $from || $r['d'] > $to) { continue; }
 		$key = $r['d'] . '|' . $r['campaign_id'];
+		if (!isset($r['spend_orig'])) { $r['spend_orig'] = $r['spend']; }
+		if (!isset($r['currency'])) { $r['currency'] = ''; }
 		if (isset($out[$key])) {
-			foreach (array('spend', 'clicks', 'impressions', 'conversions') as $k) { $out[$key][$k] += $r[$k]; }
+			foreach (array('spend', 'spend_orig', 'clicks', 'impressions', 'conversions') as $k) { $out[$key][$k] += $r[$k]; }
 			continue;
 		}
 		$r['channel'] = $channel;
 		$r['updated_at'] = $now;
 		$out[$key] = $r;
 	}
-	$cols = array('d', 'channel', 'campaign_id', 'campaign_name', 'spend', 'clicks', 'impressions', 'conversions', 'updated_at');
-	foreach ($out as &$r) { $r['spend'] = (string) round((float) $r['spend'], 2); $r['conversions'] = (string) round((float) $r['conversions'], 2); $r['clicks'] = (int) $r['clicks']; $r['impressions'] = (int) $r['impressions']; }
+	$cols = array('d', 'channel', 'campaign_id', 'campaign_name', 'spend', 'spend_orig', 'currency', 'clicks', 'impressions', 'conversions', 'updated_at');
+	foreach ($out as &$r) { $r['spend'] = (string) round((float) $r['spend'], 2); $r['spend_orig'] = (string) round((float) $r['spend_orig'], 2); $r['currency'] = mb_substr((string) $r['currency'], 0, 3); $r['conversions'] = (string) round((float) $r['conversions'], 2); $r['clicks'] = (int) $r['clicks']; $r['impressions'] = (int) $r['impressions']; }
 	unset($r);
-	cp_st_upsert($t, $cols, array_values($out), array('campaign_name', 'spend', 'clicks', 'impressions', 'conversions', 'updated_at'));
+	cp_st_upsert($t, $cols, array_values($out), array('campaign_name', 'spend', 'spend_orig', 'currency', 'clicks', 'impressions', 'conversions', 'updated_at'));
 	cp_st_bump();
 	return count($out);
 }
@@ -833,19 +847,25 @@ function cp_st_li_all() {
 function cp_st_li_rebuild() {
 	global $wpdb;
 	$t = cp_st_t('ads');
-	$wpdb->query("DELETE FROM $t WHERE channel = 'linkedin'");
+	$wpdb->query("DELETE FROM $t WHERE channel = 'linkedin' AND campaign_id LIKE 'li-%'");
+	/* ahol már van Windsor.ai-adat, ott a kézi tétel nem számít (nincs dupla költés) */
+	$auto = array_flip((array) $wpdb->get_col("SELECT DISTINCT d FROM $t WHERE channel = 'linkedin' AND campaign_id NOT LIKE 'li-%'"));
 	$rows = array();
 	$now = gmdate('Y-m-d H:i:s');
 	foreach (cp_st_li_all() as $e) {
 		$days = (int) round((strtotime($e['to']) - strtotime($e['from'])) / DAY_IN_SECONDS) + 1;
 		if ($days < 1 || $days > 400) { continue; }
 		for ($i = 0; $i < $days; $i++) {
+			$d = gmdate('Y-m-d', strtotime($e['from'] . ' +' . $i . ' days'));
+			if (isset($auto[$d])) { continue; }
 			$rows[] = array(
-				'd'             => gmdate('Y-m-d', strtotime($e['from'] . ' +' . $i . ' days')),
+				'd'             => $d,
 				'channel'       => 'linkedin',
 				'campaign_id'   => 'li-' . $e['id'],
 				'campaign_name' => $e['name'],
 				'spend'         => (string) round($e['amount'] / $days, 2),
+				'spend_orig'    => (string) round($e['amount'] / $days, 2),
+				'currency'      => 'HUF',
 				'clicks'        => $i === 0 ? (int) $e['clicks'] : 0,
 				'impressions'   => $i === 0 ? (int) $e['impr'] : 0,
 				'conversions'   => (string) ($i === 0 ? (float) $e['conv'] : 0),
@@ -853,8 +873,113 @@ function cp_st_li_rebuild() {
 			);
 		}
 	}
-	cp_st_upsert($t, array('d', 'channel', 'campaign_id', 'campaign_name', 'spend', 'clicks', 'impressions', 'conversions', 'updated_at'), $rows, array('campaign_name', 'spend', 'clicks', 'impressions', 'conversions', 'updated_at'));
+	cp_st_upsert($t, array('d', 'channel', 'campaign_id', 'campaign_name', 'spend', 'spend_orig', 'currency', 'clicks', 'impressions', 'conversions', 'updated_at'), $rows, array('campaign_name', 'spend', 'spend_orig', 'currency', 'clicks', 'impressions', 'conversions', 'updated_at'));
 	cp_st_bump();
+}
+
+/* ------------------------------------------------------------ LinkedIn Ads (Windsor.ai) */
+
+function cp_st_li_accounts() {
+	$out = array();
+	foreach (preg_split('/[\s,;]+/', (string) cp_st_opts()['li_act']) as $x) { $x = preg_replace('/[^0-9]/', '', $x); if ($x !== '' && !in_array($x, $out, true)) { $out[] = $x; } }
+	return $out;
+}
+
+function cp_st_eur_huf() {
+	return max(0, (float) cp_st_opts()['eur_huf']);
+}
+
+/* eredeti összeg → Ft (HUF változatlan, EUR a beállított árfolyamon); ismeretlen pénznem: null */
+function cp_st_to_huf($amount, $cur) {
+	$cur = strtoupper((string) $cur);
+	if ($cur === '' || $cur === 'HUF') { return (float) $amount; }
+	if ($cur === 'EUR') { return (float) $amount * cp_st_eur_huf(); }
+	return null;
+}
+
+/* árfolyamváltozáskor a már tárolt EUR-os sorok forintértéke is frissül */
+function cp_st_reprice() {
+	global $wpdb;
+	$t = cp_st_t('ads');
+	$wpdb->query($wpdb->prepare("UPDATE $t SET spend = ROUND(spend_orig * %f, 2) WHERE currency = 'EUR'", cp_st_eur_huf()));
+	cp_st_bump();
+}
+
+/* naponta: az utolsó 30 nap újraírva; az első sikeres körben ~400 nap előzmény (a tavalyi összevetéshez) */
+function cp_st_windsor_sync($force = false) {
+	$key = cp_st_secret('windsor_key');
+	$acts = cp_st_li_accounts();
+	if ($key === '' || !$acts) { return ''; }
+	$st = cp_st_state();
+	if (!$force && !empty($st['wli_at']) && time() - (int) $st['wli_at'] < 20 * HOUR_IN_SECONDS) { return ''; }
+	$to = cp_st_today();
+	$msgs = array();
+	$errs = array();
+	foreach ($acts as $act) {
+		$bk = 'wli_bf_' . $act;
+		$from = gmdate('Y-m-d', strtotime($to . (empty($st[$bk]) ? ' -400 days' : ' -30 days')));
+		$r = cp_st_windsor_account($key, $act, $from, $to);
+		if (is_string($r)) { $errs[] = $act . ': ' . $r; continue; }
+		$unk = array();
+		foreach ($r as &$x) {
+			$huf = cp_st_to_huf($x['spend_orig'], $x['currency']);
+			if ($huf === null) { $unk[$x['currency']] = 1; $huf = 0; }
+			$x['spend'] = $huf;
+		}
+		unset($x);
+		if ($unk) { $errs[] = $act . ': ismeretlen pénznem (' . implode(', ', array_keys($unk)) . '), a forintösszegben 0'; }
+		$msgs[] = cp_st_ads_replace('linkedin', $from, $to, $r, 'w' . $act . ':');
+		$st[$bk] = 1;
+	}
+	/* csak hiba: egy óra múlva újra próbálja */
+	$st['wli_at'] = $msgs ? time() : time() - 19 * HOUR_IN_SECONDS;
+	$st['wli_err'] = mb_substr(implode(' · ', $errs), 0, 300);
+	if ($msgs) { $st['wli_ok'] = time(); }
+	cp_st_state_set($st);
+	if ($msgs) { cp_st_li_rebuild(); }
+	return 'LinkedIn: ' . ($msgs ? array_sum($msgs) . ' kampánynap' : '') . ($errs ? ' HIBA ' . $st['wli_err'] : '');
+}
+
+/* egy LinkedIn-fiók napi kampánysorai, vagy hibaüzenet (string); a kulcs csak a query-paraméterben megy, üzenetbe nem kerül */
+function cp_st_windsor_account($key, $act, $from, $to) {
+	$url = 'https://connectors.windsor.ai/linkedin?' . http_build_query(array(
+		'api_key'         => $key,
+		'fields'          => 'date,account_id,campaign_group_name,campaign,spend,impressions,clicks,oneclickleads,currency',
+		'date_from'       => $from,
+		'date_to'         => $to,
+		'select_accounts' => $act,
+	));
+	$res = wp_remote_get($url, array('timeout' => 45));
+	$hide = function ($m) use ($key) { return mb_substr(str_replace(array($key, rawurlencode($key)), '•••', (string) $m), 0, 200); };
+	if (is_wp_error($res)) { return $hide($res->get_error_message()); }
+	$code = (int) wp_remote_retrieve_response_code($res);
+	$j = json_decode(wp_remote_retrieve_body($res), true);
+	if ($code !== 200 || !is_array($j) || !isset($j['data']) || !is_array($j['data'])) {
+		$m = '';
+		if (is_array($j)) { foreach (array('error', 'message', 'detail') as $k) { if (!empty($j[$k])) { $m = is_array($j[$k]) ? (isset($j[$k]['message']) ? $j[$k]['message'] : wp_json_encode($j[$k])) : $j[$k]; break; } } }
+		return 'HTTP ' . $code . ': ' . ($m !== '' ? $hide($m) : 'érvénytelen válasz');
+	}
+	$rows = array();
+	foreach ($j['data'] as $x) {
+		if (!is_array($x)) { continue; }
+		$d = isset($x['date']) ? substr((string) $x['date'], 0, 10) : '';
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { continue; }
+		$grp = trim(isset($x['campaign_group_name']) ? (string) $x['campaign_group_name'] : '');
+		$camp = trim(isset($x['campaign']) ? (string) $x['campaign'] : '');
+		if ($camp === '') { $camp = $grp !== '' ? $grp : 'LinkedIn'; }
+		$rows[] = array(
+			'd'             => $d,
+			/* a Windsor nem ad kampányazonosítót: a csoport + kampány nevéből képzett kulcs */
+			'campaign_id'   => substr(md5($grp . '|' . $camp), 0, 16),
+			'campaign_name' => mb_substr(sanitize_text_field($grp !== '' && $grp !== $camp ? $grp . ' / ' . $camp : $camp), 0, 190),
+			'spend_orig'    => max(0, (float) (isset($x['spend']) ? $x['spend'] : 0)),
+			'currency'      => strtoupper(preg_replace('/[^A-Za-z]/', '', isset($x['currency']) ? (string) $x['currency'] : '')),
+			'clicks'        => max(0, (int) (isset($x['clicks']) ? $x['clicks'] : 0)),
+			'impressions'   => max(0, (int) (isset($x['impressions']) ? $x['impressions'] : 0)),
+			'conversions'   => max(0, (float) (isset($x['oneclickleads']) ? $x['oneclickleads'] : 0)),
+		);
+	}
+	return $rows;
 }
 
 /* ------------------------------------------------------------ GA4 Data API (függőség nélkül) */
@@ -1086,7 +1211,51 @@ function cp_st_load() {
 		if ($r['ev_type'] !== null && strpos((string) $r['ev_type'], '<') === 0) { $r['ev_type'] = ''; }
 	}
 	unset($r);
+	cp_st_svc_unify($rows);
 	return $rows;
+}
+
+/* „Szelfigép = Fotóautomata” soronként → kisbetűs név => egységes név */
+function cp_st_svc_aliases() {
+	$out = array();
+	foreach (cp_st_lines(cp_st_opts()['svc_alias']) as $l) {
+		$p = explode('=', $l, 2);
+		if (count($p) !== 2 || trim($p[0]) === '' || trim($p[1]) === '') { continue; }
+		$out[cp_panel_lc(trim($p[0]))] = trim($p[1]);
+	}
+	return $out;
+}
+
+/* ugyanaz a szolgáltatás egy néven: álnevek + kis/nagybetű („AI karikatúra” = „AI Karikatúra”, a gyakoribb írásmód marad) */
+function cp_st_svc_unify(&$rows) {
+	$al = cp_st_svc_aliases();
+	$key = function ($x) use ($al) {
+		$k = cp_panel_lc(preg_replace('/\s+/u', ' ', trim($x)));
+		return isset($al[$k]) ? cp_panel_lc($al[$k]) : $k;
+	};
+	$split = function ($svc) { return array_values(array_filter(array_map('trim', preg_split('/\s*[,&+]\s*/u', $svc)), 'strlen')); };
+	/* írásmódok számlálása kulcsonként; az álnév célja mindig nyer */
+	$cnt = array();
+	foreach ($rows as $r) {
+		foreach (array_merge($r['svcs'], $r['svc'] !== '' ? $split($r['svc']) : array()) as $x) {
+			$x = preg_replace('/\s+/u', ' ', trim($x));
+			$cnt[$key($x)][$x] = (isset($cnt[$key($x)][$x]) ? $cnt[$key($x)][$x] : 0) + 1;
+		}
+	}
+	$name = array();
+	foreach ($cnt as $k => $v) { uksort($v, function ($a, $b) use ($v) { return $v[$b] - $v[$a] ?: strcmp($a, $b); }); $name[$k] = key($v); }
+	foreach ($al as $t) { $name[cp_panel_lc($t)] = $t; }
+	foreach ($rows as &$r) {
+		$u = array();
+		foreach ($r['svcs'] as $x) { $n = $name[$key($x)]; if (!in_array($n, $u, true)) { $u[] = $n; } }
+		$r['svcs'] = $u;
+		if ($r['svc'] !== '') {
+			$u = array();
+			foreach ($split($r['svc']) as $x) { $n = $name[$key($x)]; if (!in_array($n, $u, true)) { $u[] = $n; } }
+			$r['svc'] = implode(' + ', $u);
+		}
+	}
+	unset($r);
 }
 
 function cp_st_in($d, $f, $t) {
@@ -1097,9 +1266,9 @@ function cp_st_spend($f, $t) {
 	global $wpdb;
 	$x = cp_st_t('ads');
 	$out = array('google' => 0, 'meta' => 0, 'linkedin' => 0);
-	foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT channel, SUM(spend) s, SUM(clicks) c, SUM(impressions) i, SUM(conversions) v FROM $x WHERE d BETWEEN %s AND %s GROUP BY channel", $f, $t), ARRAY_A) as $r) {
+	foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT channel, SUM(spend) s, SUM(clicks) c, SUM(impressions) i, SUM(conversions) v, SUM(CASE WHEN currency = 'EUR' THEN spend_orig ELSE 0 END) e FROM $x WHERE d BETWEEN %s AND %s GROUP BY channel", $f, $t), ARRAY_A) as $r) {
 		$out[$r['channel']] = (float) $r['s'];
-		$out['_' . $r['channel']] = array('clicks' => (int) $r['c'], 'impr' => (int) $r['i'], 'conv' => (float) $r['v']);
+		$out['_' . $r['channel']] = array('spend' => round((float) $r['s']), 'clicks' => (int) $r['c'], 'impr' => (int) $r['i'], 'conv' => (float) $r['v'], 'eur' => round((float) $r['e'], 2));
 	}
 	return $out;
 }
@@ -1381,6 +1550,7 @@ function cp_st_sync_info() {
 		'deals'  => $n,
 		'busy'   => $busy && empty($st['deal_full_at']),
 		'meta'   => array('on' => cp_st_has_secret('meta_token') && (bool) cp_st_meta_accounts(), 'ok' => isset($st['meta_ok']) ? (int) $st['meta_ok'] : 0, 'err' => isset($st['meta_err']) ? $st['meta_err'] : ''),
+		'li'     => array('on' => cp_st_has_secret('windsor_key') && (bool) cp_st_li_accounts(), 'ok' => isset($st['wli_ok']) ? (int) $st['wli_ok'] : 0, 'err' => isset($st['wli_err']) ? $st['wli_err'] : '', 'rate' => cp_st_eur_huf()),
 		'gads'   => array('on' => cp_st_has_secret('gads_secret_hash'), 'at' => isset($st['gads_at']) ? (int) $st['gads_at'] : 0),
 		'ga'     => cp_st_has_secret('ga_secret_json') && (bool) cp_st_ga_props(),
 	);
@@ -1476,14 +1646,20 @@ function cp_st_admin_save() {
 	foreach (array('f_svc', 'f_ctype', 'c_evtype', 'c_ad') as $k) { if (isset($in[$k])) { $o[$k] = preg_replace('/[^A-Za-z0-9_]/', '', $in[$k]); } }
 	foreach (array('ctype_biz', 'ctype_priv', 'offer_from', 'busy_re', 'meta_ver') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_text_field($in[$k]); } }
 	if (@preg_match('/' . str_replace('/', '\/', $o['busy_re']) . '/iu', '') === false) { $o['busy_re'] = cp_st_defaults()['busy_re']; }
-	foreach (array('f_req', 'rules') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
+	foreach (array('f_req', 'rules', 'svc_alias') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
 	if (isset($in['paper_ft'])) { $o['paper_ft'] = max(0, (int) $in['paper_ft']); }
 	foreach (array('ai_pack_ft', 'ai_pack_cr', 'ai_cr_img') as $k) { if (isset($in[$k])) { $o[$k] = max(0, (int) $in[$k]); } }
 	if (isset($in['ai_re'])) { $o['ai_re'] = sanitize_text_field($in['ai_re']); if (@preg_match('/' . str_replace('/', '\/', $o['ai_re']) . '/iu', '') === false) { $o['ai_re'] = cp_st_defaults()['ai_re']; } }
 	if (isset($in['meta_act'])) { $o['meta_act'] = trim(preg_replace('/[^0-9,\s]/', '', $in['meta_act'])); }
 	if (isset($in['ga_prop'])) { $o['ga_prop'] = sanitize_textarea_field($in['ga_prop']); }
+	if (isset($in['li_act'])) { $o['li_act'] = trim(preg_replace('/[^0-9,\s]/', '', $in['li_act'])); }
+	$rate_old = (float) $o['eur_huf'];
+	if (isset($in['eur_huf'])) { $o['eur_huf'] = max(0, min(10000, round((float) str_replace(array(' ', ','), array('', '.'), $in['eur_huf']), 4))); }
 	cp_st_save_opts($o);
 	$msg = 'Beállítások elmentve.';
+	if ((float) $o['eur_huf'] !== $rate_old) { cp_st_reprice(); $msg .= ' Az EUR-os költések újraszámolva ' . $o['eur_huf'] . ' Ft/EUR árfolyamon.'; }
+	if (!empty($in['windsor_key_new'])) { cp_st_secret_set('windsor_key', trim($in['windsor_key_new'])); $st = cp_st_state(); unset($st['wli_at']); cp_st_state_set($st); $msg .= ' A Windsor API-kulcs elmentve.'; }
+	if (!empty($in['windsor_key_clear'])) { cp_st_secret_set('windsor_key', ''); $msg .= ' A Windsor API-kulcs törölve.'; }
 	if (!empty($in['meta_token_new'])) { cp_st_secret_set('meta_token', trim($in['meta_token_new'])); $st = cp_st_state(); unset($st['meta_at']); cp_st_state_set($st); $msg .= ' A Meta-token elmentve.'; }
 	if (!empty($in['meta_token_clear'])) { cp_st_secret_set('meta_token', ''); $msg .= ' A Meta-token törölve.'; }
 	$json = '';
@@ -1519,6 +1695,7 @@ function cp_st_admin_page() {
 		if ($act === 'sync') { $res = cp_st_sync(true); }
 		if ($act === 'full') { $st = cp_st_state(); foreach (array('deal', 'contact', 'act') as $k) { $st[$k . '_page'] = 0; $st[$k . '_redo'] = 1; $st[$k . '_run'] = gmdate('Y-m-d H:i:s'); } cp_st_state_set($st); $res = cp_st_sync(true); }
 		if ($act === 'meta') { $res = cp_st_meta_sync(true); if ($res === '') { $res = 'Nincs beállítva a Meta-token vagy a hirdetési fiók.'; } }
+		if ($act === 'windsor') { $res = cp_st_windsor_sync(true); if ($res === '') { $res = 'Nincs beállítva a Windsor API-kulcs vagy a LinkedIn hirdetési fiók.'; } }
 		if ($act === 'ga') {
 			delete_transient('cp_st_ga_live');
 			$l = cp_st_ga_live();
@@ -1551,6 +1728,11 @@ function cp_st_admin_page() {
 	cp_panel_row('System user token', '<input type="password" name="meta_token_new" class="regular-text" autocomplete="new-password" placeholder="' . (cp_st_has_secret('meta_token') ? 'Beállítva – csere esetén írd be az újat' : 'Még nincs beállítva') . '"> <label><input type="checkbox" name="meta_token_clear" value="1"> törlés</label><p class="description">ads_read jogosultságú system user token. Csak írható mező.</p>');
 	cp_panel_row('Graph API verzió', '<input name="meta_ver" value="' . esc_attr($o['meta_ver']) . '" class="small-text">');
 	cp_panel_row('Állapot', 'Utolsó sikeres lekérés: ' . esc_html($fmt(isset($st['meta_ok']) ? $st['meta_ok'] : 0)) . (!empty($st['meta_err']) ? ' · <b style="color:#b32d2e">' . esc_html($st['meta_err']) . '</b>' : '') . ' ' . $do('meta', 'Lekérés most'));
+	echo '</table><h2>LinkedIn hirdetések (Windsor.ai)</h2><table class="form-table">';
+	cp_panel_row('Windsor API-kulcs', '<input type="password" name="windsor_key_new" class="regular-text" autocomplete="new-password" placeholder="' . (cp_st_has_secret('windsor_key') ? 'Beállítva – csere esetén írd be az újat' : 'Még nincs beállítva') . '"> <label><input type="checkbox" name="windsor_key_clear" value="1"> törlés</label><p class="description">A windsor.ai fiókod API-kulcsa (onboard.windsor.ai → API key). Csak írható mező, titkosítva tárolódik.</p>');
+	cp_panel_row('LinkedIn hirdetési fiók(ok)', '<input name="li_act" value="' . esc_attr($o['li_act']) . '" class="regular-text" placeholder="pl. 559891788"><p class="description">Több fiók vesszővel elválasztva.</p>');
+	cp_panel_row('EUR/HUF árfolyam', '<input name="eur_huf" value="' . esc_attr(str_replace('.', ',', (string) $o['eur_huf'])) . '" class="small-text" inputmode="decimal"> Ft / EUR<p class="description">Az EUR-ban költő fiókok összegét ezen az árfolyamon számolja forintra (az eredeti összeg és pénznem is tárolódik). Módosításkor a korábbi EUR-os napok is újraszámolódnak.</p>');
+	cp_panel_row('Állapot', 'Utolsó sikeres lekérés: ' . esc_html($fmt(isset($st['wli_ok']) ? $st['wli_ok'] : 0)) . (!empty($st['wli_err']) ? ' · <b style="color:#b32d2e">' . esc_html($st['wli_err']) . '</b>' : '') . ' ' . $do('windsor', 'Lekérés most') . '<p class="description">Naponta egyszer fut (az utolsó 30 nap újraírva, az első körben ~400 nap előzmény). Ahol van Windsor-adat, ott a kézi LinkedIn-tétel nem számít.</p>');
 	echo '</table><h2>Google Ads</h2><table class="form-table">';
 	cp_panel_row('Végpont', '<code>' . esc_html(rest_url('crazy-panel/v1/ads')) . '</code>');
 	cp_panel_row('Szkript kulcsa', (cp_st_has_secret('gads_secret_hash') ? 'Beállítva (csak a hash-e tárolódik). ' : 'Még nincs. ') . '<label><input type="checkbox" name="gads_new" value="1"> új kulcs készítése mentéskor</label><br><small>Utolsó adatküldés a szkripttől: ' . esc_html($fmt(isset($st['gads_at']) ? $st['gads_at'] : 0)) . (isset($st['gads_n']) ? ' (' . (int) $st['gads_n'] . ' kampánynap)' : '') . '</small>');
@@ -1562,6 +1744,7 @@ function cp_st_admin_page() {
 	echo '</table><h2>Mezők és szabályok</h2><table class="form-table">';
 	cp_panel_row('Szolgáltatás (deal)', '<input name="f_svc" value="' . esc_attr($o['f_svc']) . '">');
 	cp_panel_row('Kért szolgáltatások (deal, többválasztós)', '<textarea name="f_req" rows="2" class="regular-text">' . esc_textarea($o['f_req']) . '</textarea>');
+	cp_panel_row('Szolgáltatás-álnevek', '<textarea name="svc_alias" rows="3" class="regular-text">' . esc_textarea($o['svc_alias']) . '</textarea><p class="description">Soronként: <code>régi név = egységes név</code>. A statisztikában ezek egy szolgáltatásként számítanak. A csak kis/nagybetűben eltérő neveket (pl. „AI karikatúra” / „AI Karikatúra”) magától összevonja.</p>');
 	cp_panel_row('Céges / magán (deal)', '<input name="f_ctype" value="' . esc_attr($o['f_ctype']) . '"> céges érték: <input name="ctype_biz" value="' . esc_attr($o['ctype_biz']) . '" class="small-text"> magán érték: <input name="ctype_priv" value="' . esc_attr($o['ctype_priv']) . '" class="small-text">');
 	cp_panel_row('Rendezvénytípus (kontakt)', '<input name="c_evtype" value="' . esc_attr($o['c_evtype']) . '"> hirdetés neve (kontakt): <input name="c_ad" value="' . esc_attr($o['c_ad']) . '">');
 	cp_panel_row('Ajánlat szakasz', '<input name="offer_from" value="' . esc_attr($o['offer_from']) . '" class="regular-text"><p class="description">Az ennél későbbi szakaszba jutott (vagy aláírt) deal „ajánlatig jutott”.</p>');
@@ -1602,3 +1785,21 @@ function cp_st_gads_script() {
 		. "  if (res.getResponseCode() !== 200) { throw new Error('A küldés nem sikerült: ' + res.getContentText()); }\n"
 		. "}\n";
 }
+
+/* költségtábla-összesítő a hibakereséshez (csatorna × fiók × hónap; titkot nem tartalmaz, a Claude-híd olvashatja) */
+add_action('init', function () {
+	if (get_transient('cp_st_adsdiag_t') || !cp_st_db_ok()) { return; }
+	set_transient('cp_st_adsdiag_t', 1, 10 * MINUTE_IN_SECONDS);
+	global $wpdb;
+	$t = cp_st_t('ads');
+	$r = $wpdb->get_results("SELECT channel, IF(LOCATE(':', campaign_id) > 0, SUBSTRING_INDEX(campaign_id, ':', 1), '(nincs)') acct, DATE_FORMAT(d, '%Y-%m') m, COUNT(*) n, COUNT(DISTINCT campaign_id) camps, ROUND(SUM(spend)) s, SUM(clicks) c, SUM(impressions) i, MAX(updated_at) u FROM $t WHERE d >= DATE_SUB(CURDATE(), INTERVAL 14 MONTH) GROUP BY channel, acct, m ORDER BY channel, acct, m", ARRAY_A);
+	$top = $wpdb->get_results("SELECT d, campaign_id, campaign_name, spend, clicks, impressions FROM $t WHERE channel = 'google' ORDER BY spend DESC LIMIT 15", ARRAY_A);
+	$d = cp_st_t('deals'); $c = cp_st_t('contacts');
+	$src = $wpdb->get_results("SELECT DATE_FORMAT(x.created_d, '%Y-%m') m, x.source, IFNULL(k.utm_source, '') us, IFNULL(k.utm_medium, '') um, COUNT(*) n FROM $d x LEFT JOIN $c k ON k.id = x.contact_id WHERE x.created_d >= DATE_SUB(CURDATE(), INTERVAL 13 MONTH) GROUP BY m, x.source, us, um ORDER BY m, n DESC", ARRAY_A);
+	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top, 'lead_src' => $src), false);
+});
+
+/* az egyszeri riport-adatgyűjtés ideiglenes adatának törlése */
+add_action('init', function () { if (get_option('cp_st_report_tmp') !== false) { delete_option('cp_st_report_tmp'); } });
+
+add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) { delete_option('cp_st_adsdump_tmp'); } });
