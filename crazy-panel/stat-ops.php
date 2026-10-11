@@ -66,12 +66,12 @@ function cp_st_ops($rows, $f, $t) {
 				$o['sat']['counts'][$sa] = (isset($o['sat']['counts'][$sa]) ? $o['sat']['counts'][$sa] : 0) + 1;
 				$o['sat']['rated']++;
 				$ev_rated = true;
-				if (cp_panel_lc($sa) !== 'elégedett') { $o['sat']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $sa, 'note' => mb_substr(trim((string) (isset($row['no']) ? $row['no'] : '')), 0, 160)); }
+				if (cp_panel_lc($sa) !== 'elégedett') { $o['sat']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $sa, 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['no']) ? $row['no'] : ''))), 0, 160)); }
 			}
 			if (!empty($row['gm'])) {
 				$gm = (string) $row['gm'];
 				$o['gm']['counts'][$gm] = (isset($o['gm']['counts'][$gm]) ? $o['gm']['counts'][$gm] : 0) + 1;
-				if (cp_panel_lc($gm) !== 'jó') { $o['gm']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $gm, 'dev' => (string) (isset($row['sv']) ? $row['sv'] : ''), 'note' => mb_substr(trim((string) (isset($row['gmn']) ? $row['gmn'] : '')), 0, 160)); }
+				if (cp_panel_lc($gm) !== 'jó') { $o['gm']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $gm, 'dev' => (string) (isset($row['sv']) ? $row['sv'] : ''), 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['gmn']) ? $row['gmn'] : ''))), 0, 160)); }
 			}
 		}
 		if ($ev_has) {
