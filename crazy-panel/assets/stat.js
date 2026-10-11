@@ -181,7 +181,8 @@
 			'<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>' +
 			(S.gran === 'custom' ? '<form class="st-range" id="st-range"><label>Kezdete<input type="date" name="cf" value="' + esc(S.cf) + '" max="' + esc(S.ct) + '" required></label><label>Vége<input type="date" name="ct" value="' + esc(S.ct) + '" required></label>' +
 				'<span class="st-range-q">' + [['7', '7 nap'], ['30', '30 nap'], ['90', '90 nap'], ['ytd', 'Év eleje óta'], ['ly', 'Tavaly']].map(q => '<button type="button" class="cpx-btn ghost sm" data-q="' + q[0] + '">' + q[1] + '</button>').join('') + '</span>' +
-				'<button class="cpx-btn sm" type="submit">Mutasd</button></form>' : '') + '</div>';
+				'<button class="cpx-btn sm" type="submit">Mutasd</button></form>' : '') +
+			(S.edit ? '' : '<nav class="st-jump" id="st-jump" aria-label="Ugrás szekcióhoz"></nav>') + '</div>';
 		h += '<div class="st-note">' + (d.partial ? 'Folyamatban lévő időszak (' + dshort(d.from) + '–' + dshort(d.curTo) + '); az összevetés azonos hosszúságú szakaszokkal: előző ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ', tavaly ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.' : 'Előző időszak: ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ' · tavalyi azonos időszak: ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.') + ' Megkeresés = beérkezett deal (létrehozás napja), új deal = aláírt szerződés (aláírás napja).</div>';
 		const y = d.sync;
 		if (y.busy) h += '<div class="st-warn"><b>Az első Salesmate-beolvasás folyamatban</b> (' + num(y.deals) + ' deal eddig) – a számok még hiányosak lehetnek.</div>';
@@ -222,6 +223,7 @@
 		h += cardLi(d);
 		h += cardSources(d);
 		h += '</div></div>';
+		h += '<button type="button" class="st-totop" id="st-totop" aria-label="Vissza az oldal tetejére" title="Vissza a tetejére">↑</button>';
 		main.innerHTML = h;
 
 		main.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.gran = b.dataset.g; try { localStorage.setItem('cpst_gran', S.gran); } catch (e) { /* privát mód */ } reload(false); });
@@ -250,6 +252,7 @@
 		bindLi(main);
 		layoutApply(main);
 		if (S.edit) layoutEdit(main);
+		jumpBuild();
 		drawTrend();
 		drawGa();
 		drawAlerts();
@@ -440,6 +443,77 @@
 			S.stickyObs = true;
 			window.addEventListener('scroll', () => { const s = document.getElementById('st-sticky'); if (s) s.classList.toggle('stuck', s.getBoundingClientRect().top <= parseFloat(s.style.top || '0') + 1 && window.scrollY > 10); }, { passive: true });
 			window.addEventListener('resize', () => stickyTop());
+		}
+	}
+
+	/* ------------------------------------------------------------ ugrósáv a szekciókhoz */
+	function jumpSecs() {
+		const main = S.main;
+		if (!main) return [];
+		const out = [];
+		const k = main.querySelector('.st-kpis');
+		if (k && k.querySelector('[data-lid]:not(.st-hid)')) out.push({ id: 'kpi', t: 'Mutatók', el: k });
+		main.querySelectorAll('.st-grid > [data-lid]:not(.st-hid)').forEach(x => out.push({ id: x.dataset.lid, t: String(x.dataset.lt || x.dataset.lid).replace(/^\d+\.\s*/, ''), el: x }));
+		return out;
+	}
+	const stickyBottom = () => { const st = document.getElementById('st-sticky'); return st ? st.getBoundingClientRect().bottom : 0; };
+	function jumpBuild() {
+		const nav = document.getElementById('st-jump');
+		if (!nav) return;
+		nav.innerHTML = jumpSecs().map(x => '<button type="button" data-jump="' + esc(x.id) + '" title="' + esc(x.t) + '">' + esc(x.t) + '</button>').join('');
+		nav.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => jumpGo(b.dataset.jump));
+		/* asztalon az egérgörgő oldalra görgesse a sort */
+		nav.onwheel = e => { if (nav.scrollWidth > nav.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); nav.scrollLeft += e.deltaY; } };
+		const up = document.getElementById('st-totop');
+		if (up) up.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+		if (!S.jumpObs) {
+			S.jumpObs = true;
+			let raf = 0;
+			window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; jumpSpy(); }); }, { passive: true });
+		}
+		jumpSpy();
+	}
+	function jumpGo(id) {
+		const sec = jumpSecs().find(x => x.id === id);
+		if (!sec) return;
+		S.jumpLock = id;
+		jumpMark(id);
+		const target = () => sec.el.getBoundingClientRect().top - stickyBottom() - 10;
+		window.scrollBy({ top: target(), behavior: 'smooth' });
+		/* a ragadós sáv magassága görgetés közben változhat (mobilon összecsukódik): a végén pontosítunk */
+		const t0 = Date.now(), tok = (S.jumpTok = (S.jumpTok || 0) + 1);
+		let last = -1, still = 0;
+		const settle = () => {
+			if (tok !== S.jumpTok) return;
+			if (window.scrollY === last) still++; else { still = 0; last = window.scrollY; }
+			if (still < 6 && Date.now() - t0 < 2500) { requestAnimationFrame(settle); return; }
+			const dy = target();
+			if (Math.abs(dy) > 2) window.scrollBy(0, dy);
+			requestAnimationFrame(() => { const dy2 = target(); if (Math.abs(dy2) > 2) window.scrollBy(0, dy2); S.jumpLock = ''; jumpSpy(); jumpMark(id); });
+		};
+		requestAnimationFrame(settle);
+	}
+	function jumpSpy() {
+		const up = document.getElementById('st-totop');
+		if (up) up.classList.toggle('on', window.scrollY > 700);
+		if (S.jumpLock) return;
+		const secs = jumpSecs();
+		if (!secs.length) return;
+		const lim = stickyBottom() + 40;
+		let cur = secs[0].id;
+		secs.forEach(x => { if (x.el.getBoundingClientRect().top <= lim) cur = x.id; });
+		if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = secs[secs.length - 1].id;
+		jumpMark(cur);
+	}
+	function jumpMark(id) {
+		const nav = document.getElementById('st-jump');
+		if (!nav) return;
+		let on = null;
+		nav.querySelectorAll('[data-jump]').forEach(b => { const a = b.dataset.jump === id; b.classList.toggle('on', a); if (a) on = b; });
+		if (on && nav.dataset.on !== id) {
+			nav.dataset.on = id;
+			const l = on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2;
+			nav.scrollTo({ left: Math.max(0, l), behavior: 'smooth' });
 		}
 	}
 
