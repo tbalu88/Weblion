@@ -137,3 +137,11 @@ A Statisztikák fül tetején. Percenként frissül; a Salesmate-változásokat 
 | Hirdetési anomáliák | tegnapi költés a 14 napos átlag 2×-e felett / 40%-a alatt, költés kattintás nélkül (3 nap), CPC 2×, 3 napja nincs platform-lead, leállt kampány, a szkript / API nem frissít | költségtábla |
 | Szezonális összevetés | az utolsó 30 nap megkeresései / aláírt dealjei a korábbi évek azonos időszakának átlagához | |
 | Kereslet a következő hónapokra | a következő 4 hónap rendezvényeire eddig jött megkeresések, a tavalyi év ugyanezen napjához | |
+
+## Heti / havi összesítő a Pumble-re
+
+- Beállítás: WordPress admin → **Beállítások → Crazy összesítők**. Ide kell egy **külön** Pumble incoming webhook (a vezetőségi csatornához – ne a kezelői setup-fotós csatorna, mert kintlévőségi és bevételi adat megy bele).
+- Heti: vasárnap 19:00 (a hétfő–vasárnap hétről), havi: a hónap utolsó napján 19:00. Ha a WP-Cron épp nem fut, 36 órán belül pótolja, periódusonként egyszer.
+- Tartalom: megkeresések (csatornánként), aláírt szerződések + érték, lement rendezvények + érték, levelek (elküldött / beérkezett / megválaszolt + medián válaszidő, most megválaszolatlan), kintlévőség és lejárt kintlévőség (+ változás az előző összesítő óta), hirdetési költés, jövő hét / következő hónap foglalt rendezvényei és telt napjai, **all-time rekordok** és „N hét / hónap óta a legjobb”, nyitott piros figyelmeztetések.
+- Levelek: a Salesmate nem ad levél-listát, ezért a panel 10 percenként eseménynaplót vezet (a kontakt „elküldött levelek” számlálója és utolsó kapott levele alapján). A levél-rekordok 8 hét (havi: 6 hónap) mérés után indulnak.
+- Előnézet és teszt küldés ugyanott.

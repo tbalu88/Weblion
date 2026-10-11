@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_ST_DB_VER', '6');
+define('CP_ST_DB_VER', '7');
 define('CP_ST_OPT', 'cp_st_settings');
 define('CP_ST_SEC', 'cp_st_secrets');
 define('CP_ST_STATE', 'cp_st_state');
@@ -184,8 +184,21 @@ function cp_st_db_install() {
   company tinyint(1) NOT NULL DEFAULT 0,
   mail_sent_at datetime NULL,
   mail_recv_at datetime NULL,
+  num_sent int(11) NULL,
   seen_at datetime NOT NULL,
   PRIMARY KEY  (id)
+) $c;");
+	/* levél-eseménynapló (v7): a kontakt „elküldött levelek” számlálójának és utolsó kapott levelének változásaiból */
+	dbDelta("CREATE TABLE " . cp_st_t('mail_ev') . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  contact_id bigint(20) unsigned NOT NULL,
+  kind varchar(8) NOT NULL,
+  at datetime NOT NULL,
+  n int(11) NOT NULL DEFAULT 1,
+  wait_s int(11) NULL,
+  PRIMARY KEY  (id),
+  KEY at (at),
+  KEY contact_id (contact_id)
 ) $c;");
 	dbDelta("CREATE TABLE " . cp_st_t('acts') . " (
   id bigint(20) unsigned NOT NULL,
@@ -484,16 +497,49 @@ function cp_st_store_contacts($raw) {
 			'company'      => (is_array($co) ? !empty($co) : cp_panel_str($co) !== '') ? 1 : 0,
 			'mail_sent_at' => cp_st_utc($ms),
 			'mail_recv_at' => cp_st_utc(cp_st_ts($g('lastEmailReceivedAt'))),
+			'num_sent'     => is_numeric($g('numberOfSentEmails')) ? (int) $g('numberOfSentEmails') : null,
 			'seen_at'      => $now,
 		);
 	}
-	$cols = array('id', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ev_type', 'ad_name', 'company', 'mail_sent_at', 'mail_recv_at', 'seen_at');
+	cp_st_mail_events($rows);
+	$cols = array('id', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ev_type', 'ad_name', 'company', 'mail_sent_at', 'mail_recv_at', 'num_sent', 'seen_at');
 	return cp_st_upsert(cp_st_t('contacts'), $cols, array_values($rows), array_diff($cols, array('id')));
+}
+
+/* levél-események a korábban tárolt értékekhez képest (csak a már ismert kontaktoknál; az első beolvasás nem esemény):
+ * sent = az „elküldött levelek” számláló növekedése, recv = újabb „utolsó kapott levél” (a küldés utáni 2 percen belüli saját másolat nem),
+ * answered = kimenő levél egy még meg nem válaszolt ügyféllevél után (wait_s = válaszidő) */
+function cp_st_mail_events($rows) {
+	global $wpdb;
+	if (!$rows || get_option('cp_st_db_ver') < '7') { return; }
+	$ids = implode(',', array_map('intval', array_keys($rows)));
+	$old = array();
+	foreach ((array) $wpdb->get_results('SELECT id, mail_sent_at, mail_recv_at, num_sent FROM ' . cp_st_t('contacts') . " WHERE id IN ($ids)", ARRAY_A) as $x) { $old[(int) $x['id']] = $x; }
+	$ev = array();
+	foreach ($rows as $id => $r) {
+		if (!isset($old[$id])) { continue; }
+		$o = $old[$id];
+		$ts = function ($v) { return $v ? strtotime($v . ' UTC') : 0; };
+		$ns = $ts($r['mail_sent_at']); $os = $ts($o['mail_sent_at']);
+		$nr = $ts($r['mail_recv_at']); $or = $ts($o['mail_recv_at']);
+		/* új bejövő levél */
+		if ($nr > $or && !($ns && $nr - $ns >= 0 && $nr - $ns <= 120)) { $ev[] = array('contact_id' => (int) $id, 'kind' => 'recv', 'at' => gmdate('Y-m-d H:i:s', $nr), 'n' => 1, 'wait_s' => null); }
+		/* elküldött levelek: a számláló növekedése (ha nincs számláló, az utolsó küldés ideje) */
+		$d = ($r['num_sent'] !== null && $o['num_sent'] !== null) ? (int) $r['num_sent'] - (int) $o['num_sent'] : ($ns > $os ? 1 : 0);
+		if ($d > 0 && $d < 200) {
+			$at = $ns > $os ? $ns : time();
+			$ev[] = array('contact_id' => (int) $id, 'kind' => 'sent', 'at' => gmdate('Y-m-d H:i:s', $at), 'n' => $d, 'wait_s' => null);
+			/* megválaszolt: a korábbi állapotban az ügyfél levele volt az utolsó */
+			if ($or && $or > $os && $at >= $or) { $ev[] = array('contact_id' => (int) $id, 'kind' => 'answered', 'at' => gmdate('Y-m-d H:i:s', $at), 'n' => 1, 'wait_s' => (int) ($at - $or)); }
+		}
+	}
+	if ($ev) { cp_st_upsert(cp_st_t('mail_ev'), array('contact_id', 'kind', 'at', 'n', 'wait_s'), $ev, array('n')); }
+	if ($ev && !get_option('cp_st_mail_ev_from')) { update_option('cp_st_mail_ev_from', gmdate('Y-m-d H:i:s'), false); }
 }
 
 function cp_st_contact_fields() {
 	$o = cp_st_opts();
-	$f = array('id', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'lastEmailSentAt', 'lastEmailReceivedAt', 'company', 'lastModifiedAt');
+	$f = array('id', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'lastEmailSentAt', 'lastEmailReceivedAt', 'numberOfSentEmails', 'company', 'lastModifiedAt');
 	foreach (array($o['c_evtype'], $o['c_ad']) as $k) { if ($k !== '') { $f[] = $k; } }
 	return array_map(function ($k) { return 'contact.' . $k; }, array_values(array_unique($f)));
 }
@@ -1828,3 +1874,5 @@ add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) 
 
 /* élő figyelmeztetések (Figyelmeztetések csempe) */
 require_once __DIR__ . '/stat-alerts.php';
+/* heti / havi összesítő a Pumble-re */
+require_once __DIR__ . '/stat-digest.php';
