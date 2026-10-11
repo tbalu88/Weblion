@@ -8,6 +8,15 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+/* nyomtatós-e a rendezvény: a deal szolgáltatása / kért szolgáltatásai / géptípusa alapján (VR, rendezvényfotó, spinner-videó, zene stb. nem) */
+function cp_st_is_print($r) {
+	$o = cp_st_opts();
+	$re = isset($o['print_re']) && $o['print_re'] !== '' ? $o['print_re'] : 'fotóautomata|szelfi|selfie|karikatúra|ai fotó|greenbox|tükör|robot|photo ?booth';
+	$txt = mb_strtolower($r['svc'] . ' ' . implode(' ', (array) $r['svcs']));
+	if (in_array($r['kind'], array('selfie', 'both'), true)) { return true; }
+	return trim($txt) !== '' && (bool) @preg_match('/' . str_replace('/', '\/', $re) . '/iu', $txt);
+}
+
 /* $rows: cp_st_load() kimenete (deal adatok cím, szolgáltatás, géptípus miatt) */
 function cp_st_ops($rows, $f, $t) {
 	global $wpdb;
@@ -17,7 +26,7 @@ function cp_st_ops($rows, $f, $t) {
 	$by = array();
 	foreach ($rows as $r) { $by[(string) $r['id']] = $r; }
 	$o = array(
-		'print' => array('total' => 0, 'events' => 0, 'hours' => 0, 'printers' => array(), 'svc' => array(), 'dev' => array(), 'top' => array(), 'photo' => 0, 'cost' => 0),
+		'print' => array('noprint' => array(), 'total' => 0, 'events' => 0, 'hours' => 0, 'printers' => array(), 'svc' => array(), 'dev' => array(), 'top' => array(), 'photo' => 0, 'cost' => 0),
 		'sat'   => array('counts' => array(), 'rated' => 0, 'events' => 0, 'ratedEvents' => 0, 'bad' => array()),
 		'gm'    => array('counts' => array(), 'bad' => array()),
 		'since' => array('print' => '', 'sat' => '', 'gm' => ''),
@@ -31,7 +40,11 @@ function cp_st_ops($rows, $f, $t) {
 	foreach ($rows as $r) {
 		if (!cp_st_in($r['event_d'], $f, $t) || (function_exists('cp_st_dg_booked') ? !cp_st_dg_booked($r) : empty($r['signed_d']))) { continue; }
 		$evs[(string) $r['id']] = $r;
-		if (in_array($r['kind'], array('selfie', 'both'), true)) { $o['print']['photo']++; }
+		if (cp_st_is_print($r)) { $o['print']['photo']++; }
+		else {
+			$nm = $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : 'nincs megadva');
+			$o['print']['noprint'][$nm] = (isset($o['print']['noprint'][$nm]) ? $o['print']['noprint'][$nm] : 0) + 1;
+		}
 	}
 	$o['sat']['events'] = count($evs);
 	foreach (cp_el_st_all() as $pair) {
@@ -92,7 +105,7 @@ function cp_st_ops($rows, $f, $t) {
 	$miss = array('pa' => array(), 'sa' => array(), 'gm' => array());
 	foreach ($evs as $eid => $r) {
 		$it = array('id' => $eid, 't' => isset($titles[$eid]) ? (string) $titles[$eid]->title : ('Deal #' . $eid), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => function_exists('cp_el_st_get') ? (int) !empty(cp_el_st_get($eid)['r']) : 0);
-		if (in_array($r['kind'], array('selfie', 'both'), true) && empty($has['pa'][$eid])) { $miss['pa'][] = $it; }
+		if (cp_st_is_print($r) && empty($has['pa'][$eid])) { $miss['pa'][] = $it; }
 		if (empty($has['sa'][$eid])) { $miss['sa'][] = $it; }
 		if (empty($has['gm'][$eid]) && ($o['since']['gm'] === '' || $r['event_d'] >= $o['since']['gm'])) { $miss['gm'][] = $it; }
 	}

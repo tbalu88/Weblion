@@ -1367,19 +1367,33 @@ function cp_st_median($a) {
 	return $n % 2 ? $a[(int) ($n / 2)] : ($a[$n / 2 - 1] + $a[$n / 2]) / 2;
 }
 
-function cp_st_compute($gran, $anchor) {
+function cp_st_compute($gran, $anchor, $cf = '', $ct = '') {
 	$rows = cp_st_load();
 	$today = cp_st_today();
-	list($f, $t) = cp_st_period($gran, $anchor);
+	/* egyéni intervallum: előző = az előtte lévő azonos hosszúságú szakasz, tavaly = ugyanezek a dátumok egy évvel korábban;
+	 * a trend felbontása a hossztól függ (≤45 nap: napi, ≤200 nap: heti, felette: havi) */
+	$tgran = $gran;
+	if ($gran === 'custom') {
+		$f = $cf; $t = $ct;
+		$full = cp_st_days($f, $t);
+		$pt = gmdate('Y-m-d', strtotime($f . ' 12:00 -1 day'));
+		$pf = gmdate('Y-m-d', strtotime($pt . ' 12:00 -' . ($full - 1) . ' days'));
+		$yf = (new DateTime($f, cp_st_tz()))->modify('-1 year')->format('Y-m-d');
+		$yt = (new DateTime($t, cp_st_tz()))->modify('-1 year')->format('Y-m-d');
+		$tgran = $full <= 45 ? 'day' : ($full <= 200 ? 'week' : 'month');
+		$anchor = min($t, $today);
+	} else {
+		list($f, $t) = cp_st_period($gran, $anchor);
+		list($pf, $pt) = cp_st_period($gran, cp_st_shift($gran, $f, -1));
+		list($yf, $yt) = cp_st_yoy($gran, $f, $t);
+	}
 	$partial = $t > $today && $f <= $today;
 	$len = $partial ? cp_st_days($f, $today) : cp_st_days($f, $t);
-	list($pf, $pt) = cp_st_period($gran, cp_st_shift($gran, $f, -1));
-	list($yf, $yt) = cp_st_yoy($gran, $f, $t);
 	$cur_t = $partial ? $today : $t;
 	if ($partial) { list($pf, $pt) = cp_st_trim($pf, $pt, $len); list($yf, $yt) = cp_st_trim($yf, $yt, $len); }
 	$labels = cp_st_channel_labels();
 	$out = array(
-		'gran' => $gran, 'from' => $f, 'to' => $t, 'curTo' => $cur_t, 'partial' => $partial,
+		'gran' => $gran, 'tgran' => $tgran, 'from' => $f, 'to' => $t, 'curTo' => $cur_t, 'partial' => $partial,
 		'prev' => array($pf, $pt), 'yoy' => array($yf, $yt), 'today' => $today,
 		'kpi' => array('cur' => cp_st_base($rows, $f, $cur_t), 'prev' => cp_st_base($rows, $pf, $pt), 'yoy' => cp_st_base($rows, $yf, $yt)),
 		'labels' => $labels,
@@ -1388,10 +1402,18 @@ function cp_st_compute($gran, $anchor) {
 
 	/* trend: az utolsó N időszak + a tavalyi azonos időszakok */
 	$nb = array('day' => 31, 'week' => 16, 'month' => 13, 'quarter' => 8, 'year' => 6);
+	$tf = $gran === 'custom' ? cp_st_period($tgran, $anchor)[0] : $f;
+	$nbn = $nb[$tgran];
+	if ($gran === 'custom') {
+		/* egyéni: a trend az intervallum egészét fedje (legfeljebb 60 oszlop) */
+		$cnt = 0; $x = $tf;
+		while ($x >= cp_st_period($tgran, $f)[0] && $cnt < 60) { $cnt++; $x = cp_st_shift($tgran, $x, -1); }
+		$nbn = max(1, $cnt);
+	}
 	$trend = array();
-	for ($i = $nb[$gran] - 1; $i >= 0; $i--) {
-		list($bf, $bt) = cp_st_period($gran, cp_st_shift($gran, $f, -$i));
-		list($lf, $lt) = cp_st_yoy($gran, $bf, $bt);
+	for ($i = $nbn - 1; $i >= 0; $i--) {
+		list($bf, $bt) = cp_st_period($tgran, cp_st_shift($tgran, $tf, -$i));
+		list($lf, $lt) = cp_st_yoy($tgran, $bf, $bt);
 		$x = array('f' => $bf, 't' => $bt, 'l' => 0, 'w' => 0, 'ly' => 0, 'wy' => 0);
 		foreach ($rows as $r) {
 			if (cp_st_in($r['created_d'], $bf, $bt)) { $x['l']++; }
@@ -1634,13 +1656,19 @@ function cp_st_ajax_data() {
 	cp_el_auth();
 	if (!cp_st_db_ok()) { cp_el_err('Az adatbázis-táblák még készülnek – próbáld újra egy perc múlva.', 503); }
 	$gran = isset($_REQUEST['g']) ? sanitize_key(wp_unslash($_REQUEST['g'])) : 'month';
-	if (!in_array($gran, array('day', 'week', 'month', 'quarter', 'year'), true)) { $gran = 'month'; }
+	if (!in_array($gran, array('day', 'week', 'month', 'quarter', 'year', 'custom'), true)) { $gran = 'month'; }
 	$a = cp_el_req_date('a');
 	if ($a === '') { $a = cp_st_today(); }
-	$ck = 'cp_st_c_' . md5($gran . '|' . $a . '|' . get_option('cp_st_ver', '') . '|' . cp_st_today() . '|' . wp_json_encode(cp_st_opts()));
+	$cf = $ct = '';
+	if ($gran === 'custom') {
+		$cf = cp_el_req_date('cf'); $ct = cp_el_req_date('ct');
+		if ($cf === '' || $ct === '' || $ct < $cf) { cp_el_err('Add meg az időszak kezdetét és végét.'); }
+		if (cp_st_days($cf, $ct) > 1100) { cp_el_err('Legfeljebb 3 éves időszak kérhető le.'); }
+	}
+	$ck = 'cp_st_c_' . md5($gran . '|' . $a . '|' . $cf . '|' . $ct . '|' . get_option('cp_st_ver', '') . '|' . cp_st_today() . '|' . wp_json_encode(cp_st_opts()));
 	$c = empty($_REQUEST['refresh']) ? get_transient($ck) : false;
 	if (!is_array($c)) {
-		$c = cp_st_compute($gran, $a);
+		$c = cp_st_compute($gran, $a, $cf, $ct);
 		set_transient($ck, $c, 10 * MINUTE_IN_SECONDS);
 	}
 	$c['li'] = array_values(cp_st_li_all());

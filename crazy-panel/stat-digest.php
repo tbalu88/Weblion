@@ -272,7 +272,11 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 			$L[] = '🖨️ **Nyomtatás:** ' . $B(cp_st_dg_n($pr['total']) . ' nyomat') . ' (' . $pr['events'] . ' rendezvény' . ($pr['events'] ? ', átlag ' . cp_st_dg_n($pr['total'] / $pr['events']) . ' / rendezvény' : '') . ')';
 			$L[] = cp_st_dg_cmp($pr['total'], $opp['print']['total'], $pl) . ($pr['hours'] > 0 ? ' · ' . cp_st_dg_n($pr['total'] / $pr['hours']) . ' nyomat / óra' : '') . ($pr['cost'] ? ' · papírköltség: ' . cp_st_dg_ft($pr['cost']) : '');
 			$mpa = isset($op['missing']['pa']) ? count($op['missing']['pa']) : 0;
-			if ($mpa) { $L[] = '(' . $mpa . ' fotós rendezvénynél nincs rögzítve a papírfogyasztás)'; }
+			$np = isset($pr['noprint']) ? $pr['noprint'] : array();
+			$npn = array_sum($np);
+			$parts = array();
+			foreach ($np as $k => $n) { $parts[] = $k . ($n > 1 ? ' ' . $n : ''); }
+			$L[] = $pr['photo'] . ' nyomtatós rendezvény' . ($mpa ? ', ebből ' . $mpa . ' rendezvénynél nincs rögzítve a papírfogyasztás' : ', mindegyiknél van adat') . ($npn ? ' · ' . $npn . ' nem nyomtatós (' . implode(', ', $parts) . ')' : '');
 			$L[] = '';
 		}
 		$sa = $op['sat'];

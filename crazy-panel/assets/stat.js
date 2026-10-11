@@ -6,7 +6,7 @@
 	const HU_MS = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
 	const DOW = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
 	const CH_COL = { google: '#4C7BD9', meta: '#7B5BD6', linkedin: '#2B8CA8', organic: '#2E9E6A', referral: '#D9902A', ads: '#9A8F80', other: '#B7AFA3', unknown: '#D2CBC0' };
-	const GRANS = [['day', 'Nap'], ['week', 'Hét'], ['month', 'Hónap'], ['quarter', 'Negyedév'], ['year', 'Év']];
+	const GRANS = [['day', 'Nap'], ['week', 'Hét'], ['month', 'Hónap'], ['quarter', 'Negyedév'], ['year', 'Év'], ['custom', 'Egyéni']];
 
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const pad = n => (n < 10 ? '0' : '') + n;
@@ -22,6 +22,11 @@
 	const S = { gran: 'month', a: ymd(new Date()), data: null, ga: null, err: '', loading: false, gaTimer: null, yoy: true, main: null, sel: -1 };
 	try { const g = localStorage.getItem('cpst_gran'); if (g && GRANS.some(x => x[0] === g)) S.gran = g; } catch (e) { /* privát mód */ }
 	S.edit = false;
+	/* egyéni intervallum (alapból az utolsó 30 nap) */
+	{ const t0 = new Date(), f0 = new Date(); f0.setDate(f0.getDate() - 29); S.cf = ymd(f0); S.ct = ymd(t0); }
+	try { const a = localStorage.getItem('cpst_cf'), b = localStorage.getItem('cpst_ct'); if (/^\d{4}-\d{2}-\d{2}$/.test(a || '') && /^\d{4}-\d{2}-\d{2}$/.test(b || '') && a <= b) { S.cf = a; S.ct = b; } } catch (e) { /* privát mód */ }
+	const dayDiff = (a, b) => Math.round((pd(b) - pd(a)) / 864e5);
+	const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate() + n); return ymd(d); };
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -37,6 +42,7 @@
 
 	function periodLabel(g, f, t) {
 		const a = pd(f);
+		if (g === 'custom') return f.slice(0, 4) === t.slice(0, 4) ? dshort(f) + ' – ' + t.slice(5, 7) + '.' + t.slice(8, 10) + '.' : dshort(f) + ' – ' + dshort(t);
 		if (g === 'day') return a.getFullYear() + '. ' + HU_M[a.getMonth()] + ' ' + a.getDate() + '.';
 		if (g === 'week') { const b = pd(t); return md(f) + ' – ' + md(t) + (a.getFullYear() !== new Date().getFullYear() || b.getFullYear() !== a.getFullYear() ? ' ' + b.getFullYear() : ''); }
 		if (g === 'month') return a.getFullYear() + '. ' + HU_M[a.getMonth()];
@@ -45,6 +51,7 @@
 	}
 
 	function shiftAnchor(dir) {
+		if (S.gran === 'custom') { const n = dayDiff(S.cf, S.ct) + 1; S.cf = addDays(S.cf, n * dir); S.ct = addDays(S.ct, n * dir); saveCustom(); return; }
 		const d = pd(S.a);
 		if (S.gran === 'day') d.setDate(d.getDate() + dir);
 		else if (S.gran === 'week') d.setDate(d.getDate() + 7 * dir);
@@ -58,7 +65,7 @@
 		S.loading = true; S.err = '';
 		status();
 		try {
-			S.data = await post('cp_st_data', { g: S.gran, a: S.a, refresh: force ? 1 : '' });
+			S.data = await post('cp_st_data', Object.assign({ g: S.gran, a: S.a, refresh: force ? 1 : '' }, S.gran === 'custom' ? { cf: S.cf, ct: S.ct } : {}));
 		} catch (e) { S.err = e.message; }
 		S.loading = false;
 		status();
@@ -138,10 +145,13 @@
 		}
 		const L = d.labels;
 		const k = d.kpi;
-		let h = '<div class="st-head"><div class="st-seg" role="tablist">' + GRANS.map(g => '<button data-g="' + g[0] + '" class="' + (S.gran === g[0] ? 'on' : '') + '">' + g[1] + '</button>').join('') + '</div>' +
+		let h = '<div class="st-sticky" id="st-sticky"><div class="st-head"><div class="st-seg" role="tablist">' + GRANS.map(g => '<button data-g="' + g[0] + '" class="' + (S.gran === g[0] ? 'on' : '') + '">' + g[1] + '</button>').join('') + '</div>' +
 			'<div class="st-nav"><button class="cpx-btn ghost" data-d="-1" aria-label="Előző időszak">‹</button><h2>' + esc(periodLabel(d.gran, d.from, d.to)) + '</h2><button class="cpx-btn ghost" data-d="1" aria-label="Következő időszak">›</button>' +
 			'<button class="cpx-btn ghost" data-now' + (d.from <= d.today && d.to >= d.today ? ' disabled' : '') + '>Most</button>' +
-			'<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>';
+			'<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>' +
+			(S.gran === 'custom' ? '<form class="st-range" id="st-range"><label>Kezdete<input type="date" name="cf" value="' + esc(S.cf) + '" max="' + esc(S.ct) + '" required></label><label>Vége<input type="date" name="ct" value="' + esc(S.ct) + '" required></label>' +
+				'<span class="st-range-q">' + [['7', '7 nap'], ['30', '30 nap'], ['90', '90 nap'], ['ytd', 'Év eleje óta'], ['ly', 'Tavaly']].map(q => '<button type="button" class="cpx-btn ghost sm" data-q="' + q[0] + '">' + q[1] + '</button>').join('') + '</span>' +
+				'<button class="cpx-btn sm" type="submit">Mutasd</button></form>' : '') + '</div>';
 		h += '<div class="st-note">' + (d.partial ? 'Folyamatban lévő időszak (' + dshort(d.from) + '–' + dshort(d.curTo) + '); az összevetés azonos hosszúságú szakaszokkal: előző ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ', tavaly ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.' : 'Előző időszak: ' + dshort(d.prev[0]) + '–' + dshort(d.prev[1]) + ' · tavalyi azonos időszak: ' + dshort(d.yoy[0]) + '–' + dshort(d.yoy[1]) + '.') + ' Megkeresés = beérkezett deal (létrehozás napja), új deal = aláírt szerződés (aláírás napja).</div>';
 		const y = d.sync;
 		if (y.busy) h += '<div class="st-warn"><b>Az első Salesmate-beolvasás folyamatban</b> (' + num(y.deals) + ' deal eddig) – a számok még hiányosak lehetnek.</div>';
@@ -162,7 +172,7 @@
 			'</div>';
 		if (k.cur.nonhuf) h += '<div class="st-note">' + k.cur.nonhuf + ' nem forintos deal értéke nincs az összegben.</div>';
 
-		h += '<div class="st-grid" data-lc="card"><div class="cpx-card wide" data-lid="alerts" data-lt="Figyelmeztetések"><div id="st-alerts"></div></div><div class="cpx-card wide" data-lid="trend" data-lt="Trend"><div class="st-card-h"><h3>Trend</h3><small>' + ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran] + '</small></div>' +
+		h += '<div class="st-grid" data-lc="card"><div class="cpx-card wide" data-lid="alerts" data-lt="Figyelmeztetések"><div id="st-alerts"></div></div><div class="cpx-card wide" data-lid="trend" data-lt="Trend"><div class="st-card-h"><h3>Trend</h3><small>' + (d.gran === 'custom' ? ({ day: 'napi', week: 'heti', month: 'havi' })[d.tgran] + ' bontás, a kiválasztott időszak' : ({ day: 'utolsó 31 nap', week: 'utolsó 16 hét', month: 'utolsó 13 hónap', quarter: 'utolsó 8 negyedév', year: 'utolsó 6 év' })[d.gran]) + '</small></div>' +
 			'<div id="st-trend"></div><div class="st-legend"><span><i style="background:var(--o)"></i>Megkeresés</span><span><i style="background:var(--ok)"></i>Aláírt deal</span><label><input type="checkbox" id="st-yoy"' + (S.yoy ? ' checked' : '') + '> <i class="ln" style="background:#8A93A8"></i>tavaly ugyanekkor</label></div><div class="st-tip" id="st-tip"></div></div>';
 
 		h += '<div class="cpx-card wide" data-lid="ga" data-lt="Weboldal-forgalom (GA4)"><div id="st-ga"></div></div>';
@@ -186,7 +196,25 @@
 
 		main.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.gran = b.dataset.g; try { localStorage.setItem('cpst_gran', S.gran); } catch (e) { /* privát mód */ } reload(false); });
 		main.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { shiftAnchor(+b.dataset.d); reload(false); });
-		main.querySelector('[data-now]').onclick = () => { S.a = ymd(new Date()); reload(false); };
+		main.querySelector('[data-now]').onclick = () => {
+			if (S.gran === 'custom') { const n = dayDiff(S.cf, S.ct); S.ct = ymd(new Date()); S.cf = addDays(S.ct, -n); saveCustom(); }
+			else S.a = ymd(new Date());
+			reload(false);
+		};
+		const rf = main.querySelector('#st-range');
+		if (rf) {
+			rf.onsubmit = e => { e.preventDefault(); const a = rf.elements.cf.value, b = rf.elements.ct.value; if (!a || !b || a > b) { alert('A kezdő dátum nem lehet később, mint a záró.'); return; } S.cf = a; S.ct = b; saveCustom(); reload(false); };
+			rf.elements.cf.onchange = () => { rf.elements.ct.min = rf.elements.cf.value; };
+			rf.elements.ct.onchange = () => { rf.elements.cf.max = rf.elements.ct.value; };
+			rf.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+				const t = ymd(new Date()), y = new Date().getFullYear(), q = b.dataset.q;
+				if (q === 'ytd') { S.cf = y + '-01-01'; S.ct = t; }
+				else if (q === 'ly') { S.cf = (y - 1) + '-01-01'; S.ct = (y - 1) + '-12-31'; }
+				else { S.ct = t; S.cf = addDays(t, -(+q - 1)); }
+				saveCustom(); reload(false);
+			});
+		}
+		stickyTop();
 		main.querySelector('#st-yoy').onchange = e => { S.yoy = e.target.checked; drawTrend(); };
 		main.querySelector('[data-edit]').onclick = () => { S.edit = !S.edit; draw(); };
 		bindLi(main);
@@ -371,6 +399,20 @@
 		addEventListener('pointercancel', up);
 	}
 
+	function saveCustom() { try { localStorage.setItem('cpst_cf', S.cf); localStorage.setItem('cpst_ct', S.ct); } catch (e) { /* privát mód */ } }
+	/* a ragadós sáv a panel (szintén ragadós) fejléce alatt álljon meg */
+	function stickyTop() {
+		const top = document.querySelector('.cpx-top');
+		const st = document.getElementById('st-sticky');
+		if (!st) return;
+		st.style.top = (top ? top.offsetHeight : 0) + 'px';
+		if (!S.stickyObs && 'IntersectionObserver' in window) {
+			S.stickyObs = true;
+			window.addEventListener('scroll', () => { const s = document.getElementById('st-sticky'); if (s) s.classList.toggle('stuck', s.getBoundingClientRect().top <= parseFloat(s.style.top || '0') + 1 && window.scrollY > 10); }, { passive: true });
+			window.addEventListener('resize', () => stickyTop());
+		}
+	}
+
 	/* ------------------------------------------------------------ trenddiagram (SVG) */
 	function drawTrend() {
 		const box = document.getElementById('st-trend');
@@ -393,7 +435,7 @@
 			s += '<rect x="' + (pl + cw * i) + '" y="' + pt + '" width="' + cw + '" height="' + (H - pt - pb) + '" fill="' + (sel ? 'rgba(232,137,74,.08)' : 'transparent') + '" data-i="' + i + '"/>';
 			s += '<rect x="' + (cx - bw - 1) + '" y="' + Y(x.l) + '" width="' + bw + '" height="' + (Y(0) - Y(x.l)) + '" rx="3" fill="#E8894A" pointer-events="none"/>';
 			s += '<rect x="' + (cx + 1) + '" y="' + Y(x.w) + '" width="' + bw + '" height="' + (Y(0) - Y(x.w)) + '" rx="3" fill="#2E9E6A" pointer-events="none"/>';
-			if (i % every === 0 || i === n - 1) s += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(tickLabel(S.data.gran, x.f)) + '</text>';
+			if (i % every === 0 || i === n - 1) s += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(tickLabel(S.data.tgran || S.data.gran, x.f)) + '</text>';
 		});
 		if (S.yoy) {
 			const pts = k => tr.map((x, i) => (pl + cw * i + cw / 2) + ',' + Y(x[k])).join(' ');
@@ -406,7 +448,7 @@
 		const show = i => {
 			const x = tr[i];
 			S.sel = i;
-			tip.innerHTML = '<b>' + esc(periodLabel(S.data.gran, x.f, x.t)) + '</b>: ' + x.l + ' megkeresés, ' + x.w + ' aláírt' + (S.yoy ? ' · tavaly: ' + x.ly + ' / ' + x.wy : '');
+			tip.innerHTML = '<b>' + esc(periodLabel(S.data.tgran || S.data.gran, x.f, x.t)) + '</b>: ' + x.l + ' megkeresés, ' + x.w + ' aláírt' + (S.yoy ? ' · tavaly: ' + x.ly + ' / ' + x.wy : '');
 			box.querySelectorAll('rect[data-i]').forEach(r => r.setAttribute('fill', +r.dataset.i === i ? 'rgba(232,137,74,.08)' : 'transparent'));
 		};
 		box.querySelectorAll('rect[data-i]').forEach(r => { r.addEventListener('mouseenter', () => show(+r.dataset.i)); r.addEventListener('click', () => show(+r.dataset.i)); });
@@ -642,7 +684,9 @@
 		b += bars('Szolgáltatásonként', svc) + bars('Nyomtatónként', p.printers) + bars('Eszközönként', p.dev);
 		if (p.top.length) b += '<h4 style="margin:12px 0 6px">Legtöbb nyomat</h4><ul class="st-ul">' + p.top.map(x => '<li><a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + '</span> <b>' + num(x.n) + '</b></li>').join('') + '</ul>';
 		const mpa = (o.missing && o.missing.pa) ? o.missing.pa.length : Math.max(0, p.photo - p.events);
-		if (mpa) b += miss(mpa + ' fotós rendezvénynél nincs rögzítve a papírfogyasztás (Elszámolás → Papírfogyasztás).');
+		const np = Object.entries(p.noprint || {});
+		b += '<div class="st-sub" style="margin-top:6px">' + p.photo + ' nyomtatós rendezvény' + (np.length ? ' · ' + np.reduce((s, x) => s + x[1], 0) + ' nem nyomtatós: ' + np.map(x => esc(x[0]) + (x[1] > 1 ? ' ' + x[1] : '')).join(', ') : '') + '</div>';
+		if (mpa) b += miss(mpa + ' nyomtatós rendezvénynél nincs rögzítve a papírfogyasztás (Elszámolás → Papírfogyasztás).');
 		b += missList(o.missing && o.missing.pa, 'a papírfogyasztás');
 		if (p.printers['nincs megadva'] && Object.keys(p.printers).length === 1) b += '<div class="st-sub" style="margin-top:6px">A nyomtatótípust nem töltik ki – ha kell nyomtatónkénti bontás, az Elszámolásban a „Nyomtató típusa” mezőt is érdemes kitölteni.</div>';
 		b += '<div class="st-sub" style="margin-top:6px">Adat ' + sm(o.since.print) + ' óta.</div>';

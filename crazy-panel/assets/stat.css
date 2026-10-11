@@ -128,3 +128,14 @@ body:has(.st-dragging),body:has(.st-resizing){user-select:none}
 .st-miss-d{margin-top:6px;font-size:13px}
 .st-miss-d summary{cursor:pointer;color:#8A6A00;font-weight:600}
 .st-miss-d ul{max-height:240px;overflow:auto}
+/* ragadós időszakválasztó */
+.st-sticky{position:sticky;top:58px;z-index:18;background:var(--bg);margin:-6px -20px 10px;padding:8px 20px 6px;transition:box-shadow .15s}
+.st-sticky.stuck{box-shadow:0 8px 18px -14px rgba(20,28,51,.45);border-bottom:1px solid var(--li)}
+.st-sticky .st-head{margin-bottom:0}
+.st-sticky.stuck .st-nav h2{font-size:17px}
+.st-range{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px}
+.st-range label{font-size:12px;font-weight:600;color:var(--mu)}
+.st-range input{display:block;height:34px;margin-top:2px;border:1.5px solid var(--li);border-radius:9px;padding:0 8px;background:#fff}
+.st-range-q{display:flex;gap:4px;flex-wrap:wrap}
+@media (max-width:700px){.st-sticky{margin:-6px -12px 10px;padding:6px 12px 6px}}
+@media (max-width:600px){.st-sticky.stuck .st-seg,.st-sticky.stuck .st-range,.st-sticky.stuck .st-edit-btn{display:none}.st-sticky.stuck .st-nav h2{font-size:15px}.st-range label{flex:1}.st-nav h2{white-space:nowrap}}
