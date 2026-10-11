@@ -622,20 +622,28 @@
 		return card('8. Fedezet szolgáltatásonként', 'lezajlott, aláírt rendezvények (rendezvénydátum szerint)', b);
 	}
 
+	/* hiányzó adatok listája (csak a fülön) */
+	function missList(list, what) {
+		if (!list || !list.length) return '';
+		return '<details class="st-miss-d"><summary>' + list.length + ' rendezvénynél hiányzik ' + what + ' – lista</summary><ul class="st-ul">' + list.map(x => '<li><a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.svc ? ' · ' + esc(x.svc) : '') + (x.el ? '' : ' · nincs Elszámolás-sor') + '</span></li>').join('') + '</ul></details>';
+	}
+
 	/* nyomtatás (Elszámolás: papírfogyasztás) */
 	function cardPrint(d) {
 		const o = d.ops, op = d.opsPrev;
 		if (!o) return '';
 		const p = o.print;
 		const sm = s => s ? dshort(s) : '–';
-		if (!p.events) return card('Nyomtatás', 'lezajlott rendezvények, az Elszámolás fül papírfogyasztása alapján', '<div class="st-sub">Ebben az időszakban nincs rögzített papírfogyasztás.</div>' + (o.since.print ? '<div class="st-sub">A papírfogyasztást ' + sm(o.since.print) + ' óta rögzítitek.</div>' : miss('A kezelői adatlapon / Elszámolás fülön még nincs papírfogyasztás rögzítve.')));
+		if (!p.events) return card('Nyomtatás', 'lezajlott rendezvények, az Elszámolás fül papírfogyasztása alapján', '<div class="st-sub">Ebben az időszakban nincs rögzített papírfogyasztás.</div>' + (o.since.print ? '<div class="st-sub">A papírfogyasztást ' + sm(o.since.print) + ' óta rögzítitek.</div>' : miss('A kezelői adatlapon / Elszámolás fülön még nincs papírfogyasztás rögzítve.')) + missList(o.missing && o.missing.pa, 'a papírfogyasztás'));
 		let b = '<div><span class="st-num">' + num(p.total) + '</span> <span class="st-sub">nyomat · ' + p.events + ' rendezvény · átlag ' + num(p.total / p.events) + ' / rendezvény' + (p.hours ? ' · ' + num(p.total / p.hours) + ' / óra' : '') + '</span></div>';
 		b += '<div class="st-sub">előző időszak: ' + (op ? delta(p.total, op.print.total) : '–') + (p.cost ? ' · papírköltség: <b>' + ft(p.cost) + '</b> (' + p.paper + ' Ft/db)' : '') + '</div>';
 		const bars = (title, obj) => { const e = Object.entries(obj); if (!e.length) return ''; const mx = Math.max(...e.map(x => x[1])); return '<h4 style="margin:12px 0 6px">' + title + '</h4><div class="st-bars">' + e.slice(0, 8).map(x => '<div class="st-bar"><span class="t">' + esc(x[0]) + '</span><span class="b"><span style="width:' + (x[1] / mx * 100) + '%"></span></span><span class="v">' + num(x[1]) + '</span></div>').join('') + '</div>'; };
 		const svc = {}; p.svc.forEach(x => { svc[x.k + ' (' + x.ev + ' rend.)'] = x.n; });
 		b += bars('Szolgáltatásonként', svc) + bars('Nyomtatónként', p.printers) + bars('Eszközönként', p.dev);
 		if (p.top.length) b += '<h4 style="margin:12px 0 6px">Legtöbb nyomat</h4><ul class="st-ul">' + p.top.map(x => '<li><a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + '</span> <b>' + num(x.n) + '</b></li>').join('') + '</ul>';
-		if (p.photo > p.events) b += miss((p.photo - p.events) + ' fotós rendezvénynél nincs rögzítve a papírfogyasztás (Elszámolás → Papírfogyasztás).');
+		const mpa = (o.missing && o.missing.pa) ? o.missing.pa.length : Math.max(0, p.photo - p.events);
+		if (mpa) b += miss(mpa + ' fotós rendezvénynél nincs rögzítve a papírfogyasztás (Elszámolás → Papírfogyasztás).');
+		b += missList(o.missing && o.missing.pa, 'a papírfogyasztás');
 		if (p.printers['nincs megadva'] && Object.keys(p.printers).length === 1) b += '<div class="st-sub" style="margin-top:6px">A nyomtatótípust nem töltik ki – ha kell nyomtatónkénti bontás, az Elszámolásban a „Nyomtató típusa” mezőt is érdemes kitölteni.</div>';
 		b += '<div class="st-sub" style="margin-top:6px">Adat ' + sm(o.since.print) + ' óta.</div>';
 		return card('Nyomtatás', 'lezajlott rendezvények, az Elszámolás fül papírfogyasztása alapján', b);
@@ -648,7 +656,7 @@
 		const s = o.sat, g = o.gm;
 		const col = { 'Elégedett': 'var(--ok)', 'Foglalkozós': 'var(--mid)', 'Elégedetlen': 'var(--full)', 'Jó': 'var(--ok)', 'HIBA': 'var(--full)' };
 		let b = '';
-		if (!s.rated) b += '<div class="st-sub">Ebben az időszakban nincs ügyfél-elégedettségi értékelés.' + (o.since.sat ? ' (' + dshort(o.since.sat) + ' óta rögzítitek.)' : '') + '</div>';
+		if (!s.rated) b += '<div class="st-sub">Ebben az időszakban nincs ügyfél-elégedettségi értékelés.' + (o.since.sat ? ' (' + dshort(o.since.sat) + ' óta rögzítitek.)' : '') + '</div>' + missList(o.missing && o.missing.sa, 'az elégedettségi értékelés');
 		else {
 			const tot = s.rated;
 			b += '<div><span class="st-num">' + s.pct + '%</span> <span class="st-sub">elégedett · ' + tot + ' értékelés · ' + s.ratedEvents + ' / ' + s.events + ' rendezvény értékelve' + (op && op.sat.pct != null ? ' · előző időszak: ' + op.sat.pct + '%' : '') + '</span></div>';
@@ -656,12 +664,14 @@
 			b += '<div class="st-sub">' + Object.entries(s.counts).map(x => esc(x[0]) + ': <b>' + x[1] + '</b>').join(' · ') + '</div>';
 			if (s.bad.length) b += '<h4 style="margin:12px 0 6px">Nem „Elégedett” értékelések</h4><ul class="st-ul">' + s.bad.map(x => '<li><b>' + esc(x.v) + '</b> – <a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
 			if (s.ratedEvents < s.events) b += miss((s.events - s.ratedEvents) + ' lezajlott rendezvénynél nincs elégedettségi értékelés (kezelői adatlap / Elszámolás → Ügyfél elégedettség).');
+			b += missList(o.missing && o.missing.sa, 'az elégedettségi értékelés');
 		}
 		b += '<h4 style="margin:14px 0 6px">Gépállapot</h4>';
 		const gt = Object.values(g.counts).reduce((a, x) => a + x, 0);
 		if (!gt) b += '<div class="st-sub">Nincs gépállapot-bejegyzés ebben az időszakban.' + (o.since.gm ? ' (' + dshort(o.since.gm) + ' óta rögzítitek.)' : '') + '</div>';
 		else {
 			b += '<div class="st-sub">' + Object.entries(g.counts).map(x => '<span style="color:' + (col[x[0]] || 'var(--mid)') + ';font-weight:700">' + esc(x[0]) + '</span>: ' + x[1]).join(' · ') + '</div>';
+			b += missList(o.missing && o.missing.gm, 'a gépállapot');
 			if (g.bad.length) b += '<ul class="st-ul">' + g.bad.map(x => '<li><b>' + esc(x.v) + '</b>' + (x.dev ? ' (' + esc(x.dev) + ')' : '') + ' – <a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
 		}
 		return card('Ügyfél-elégedettség és gépállapot', 'kezelői visszajelzések az Elszámolás fülről', b);

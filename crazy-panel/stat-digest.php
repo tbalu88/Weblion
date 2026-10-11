@@ -271,7 +271,8 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 		if ($pr['events'] || $op['since']['print'] !== '') {
 			$L[] = '🖨️ **Nyomtatás:** ' . $B(cp_st_dg_n($pr['total']) . ' nyomat') . ' (' . $pr['events'] . ' rendezvény' . ($pr['events'] ? ', átlag ' . cp_st_dg_n($pr['total'] / $pr['events']) . ' / rendezvény' : '') . ')';
 			$L[] = cp_st_dg_cmp($pr['total'], $opp['print']['total'], $pl) . ($pr['hours'] > 0 ? ' · ' . cp_st_dg_n($pr['total'] / $pr['hours']) . ' nyomat / óra' : '') . ($pr['cost'] ? ' · papírköltség: ' . cp_st_dg_ft($pr['cost']) : '');
-			if ($pr['photo'] > $pr['events']) { $L[] = '(' . ($pr['photo'] - $pr['events']) . ' fotós rendezvénynél nincs rögzítve a papírfogyasztás)'; }
+			$mpa = isset($op['missing']['pa']) ? count($op['missing']['pa']) : 0;
+			if ($mpa) { $L[] = '(' . $mpa . ' fotós rendezvénynél nincs rögzítve a papírfogyasztás)'; }
 			$L[] = '';
 		}
 		$sa = $op['sat'];

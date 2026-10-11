@@ -26,10 +26,11 @@ function cp_st_ops($rows, $f, $t) {
 	$opt = cp_st_opts();
 	$paper = (int) $opt['paper_ft'];
 	$evs = array();
+	$has = array('pa' => array(), 'sa' => array(), 'gm' => array());
 	/* a fotós (nyomtatós) rendezvények száma a lefedettséghez */
 	foreach ($rows as $r) {
 		if (!cp_st_in($r['event_d'], $f, $t) || (function_exists('cp_st_dg_booked') ? !cp_st_dg_booked($r) : empty($r['signed_d']))) { continue; }
-		$evs[(string) $r['id']] = 1;
+		$evs[(string) $r['id']] = $r;
 		if (in_array($r['kind'], array('selfie', 'both'), true)) { $o['print']['photo']++; }
 	}
 	$o['sat']['events'] = count($evs);
@@ -52,6 +53,9 @@ function cp_st_ops($rows, $f, $t) {
 		$ev_pa = 0; $ev_has = false; $ev_rated = false;
 		foreach ($st['r'] as $row) {
 			if (!is_array($row)) { continue; }
+			if (isset($row['pa']) && $row['pa'] !== '') { $has['pa'][$id] = 1; }
+			if (!empty($row['sa'])) { $has['sa'][$id] = 1; }
+			if (!empty($row['gm'])) { $has['gm'][$id] = 1; }
 			if (isset($row['pa']) && $row['pa'] !== '') {
 				$n = (int) $row['pa'];
 				$ev_has = true;
@@ -84,6 +88,17 @@ function cp_st_ops($rows, $f, $t) {
 		}
 		if ($ev_rated) { $o['sat']['ratedEvents']++; }
 	}
+	/* hiányzó adat rendezvényenként (csak a fülre): fotós rendezvény papírfogyasztás nélkül, értékelés / gépállapot nélküli rendezvény */
+	$miss = array('pa' => array(), 'sa' => array(), 'gm' => array());
+	foreach ($evs as $eid => $r) {
+		$it = array('id' => $eid, 't' => isset($titles[$eid]) ? (string) $titles[$eid]->title : ('Deal #' . $eid), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => function_exists('cp_el_st_get') ? (int) !empty(cp_el_st_get($eid)['r']) : 0);
+		if (in_array($r['kind'], array('selfie', 'both'), true) && empty($has['pa'][$eid])) { $miss['pa'][] = $it; }
+		if (empty($has['sa'][$eid])) { $miss['sa'][] = $it; }
+		if (empty($has['gm'][$eid]) && ($o['since']['gm'] === '' || $r['event_d'] >= $o['since']['gm'])) { $miss['gm'][] = $it; }
+	}
+	foreach ($miss as &$m) { usort($m, function ($a, $b) { return strcmp($b['d'], $a['d']); }); }
+	unset($m);
+	$o['missing'] = $miss;
 	$o['print']['cost'] = $paper * $o['print']['total'];
 	$o['print']['paper'] = $paper;
 	$o['print']['svc'] = array_values($o['print']['svc']);
