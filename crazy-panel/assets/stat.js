@@ -552,7 +552,7 @@
 		const show = i => {
 			const x = tr[i];
 			S.sel = i;
-			tip.innerHTML = '<b>' + esc(periodLabel(S.data.tgran || S.data.gran, x.f, x.t)) + '</b>: ' + x.l + ' megkeresés, ' + x.w + ' aláírt' + (S.yoy ? ' · tavaly: ' + x.ly + ' / ' + x.wy : '');
+			tip.innerHTML = '<b>' + esc(periodLabel(S.data.tgran || S.data.gran, x.f, x.t)) + '</b>: ' + x.l + ' megkeresés, ' + x.w + ' aláírt' + (S.yoy ? ' · tavaly' + (x.part ? ' ugyanezen napig (' + esc(x.lyt.slice(5).replace('-', '.')) + '.)' : '') + ': ' + x.ly + ' / ' + x.wy + (x.part ? ' · tavaly a teljes időszak: ' + x.lyf + ' / ' + x.wyf : '') : '');
 			box.querySelectorAll('rect[data-i]').forEach(r => r.setAttribute('fill', +r.dataset.i === i ? 'rgba(232,137,74,.08)' : 'transparent'));
 		};
 		box.querySelectorAll('rect[data-i]').forEach(r => { r.addEventListener('mouseenter', () => show(+r.dataset.i)); r.addEventListener('click', () => show(+r.dataset.i)); });

@@ -1415,11 +1415,21 @@ function cp_st_compute($gran, $anchor, $cf = '', $ct = '') {
 		list($bf, $bt) = cp_st_period($tgran, cp_st_shift($tgran, $tf, -$i));
 		list($lf, $lt) = cp_st_yoy($tgran, $bf, $bt);
 		$x = array('f' => $bf, 't' => $bt, 'l' => 0, 'w' => 0, 'ly' => 0, 'wy' => 0);
+		/* még tartó időszak: a tavalyi érték ugyanannyi napra szól (pl. okt. 1–12.), a teljes tavalyi időszak külön (lyf / wyf) */
+		$lt_cut = $lt;
+		if ($bt > $today && $bf <= $today) {
+			list($lf, $lt_cut) = cp_st_trim($lf, $lt, cp_st_days($bf, $today));
+			$x['part'] = $today; $x['lyt'] = $lt_cut; $x['lyf'] = 0; $x['wyf'] = 0;
+		}
 		foreach ($rows as $r) {
 			if (cp_st_in($r['created_d'], $bf, $bt)) { $x['l']++; }
 			if (cp_st_in($r['signed_d'], $bf, $bt)) { $x['w']++; }
-			if (cp_st_in($r['created_d'], $lf, $lt)) { $x['ly']++; }
-			if (cp_st_in($r['signed_d'], $lf, $lt)) { $x['wy']++; }
+			if (cp_st_in($r['created_d'], $lf, $lt_cut)) { $x['ly']++; }
+			if (cp_st_in($r['signed_d'], $lf, $lt_cut)) { $x['wy']++; }
+			if (isset($x['part'])) {
+				if (cp_st_in($r['created_d'], $lf, $lt)) { $x['lyf']++; }
+				if (cp_st_in($r['signed_d'], $lf, $lt)) { $x['wyf']++; }
+			}
 		}
 		$trend[] = $x;
 	}
