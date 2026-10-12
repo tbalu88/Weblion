@@ -1675,7 +1675,7 @@ function cp_st_ajax_data() {
 		if ($cf === '' || $ct === '' || $ct < $cf) { cp_el_err('Add meg az időszak kezdetét és végét.'); }
 		if (cp_st_days($cf, $ct) > 1100) { cp_el_err('Legfeljebb 3 éves időszak kérhető le.'); }
 	}
-	$ck = 'cp_st_c_' . md5($gran . '|' . $a . '|' . $cf . '|' . $ct . '|' . get_option('cp_st_ver', '') . '|' . cp_st_today() . '|' . wp_json_encode(cp_st_opts()));
+	$ck = 'cp_st_c_' . md5($gran . '|' . $a . '|' . $cf . '|' . $ct . '|' . get_option('cp_st_ver', '') . '|' . (defined('CP_PANEL_VER') ? CP_PANEL_VER : '') . '|' . cp_st_today() . '|' . wp_json_encode(cp_st_opts()));
 	$c = empty($_REQUEST['refresh']) ? get_transient($ck) : false;
 	if (!is_array($c)) {
 		$c = cp_st_compute($gran, $a, $cf, $ct);
