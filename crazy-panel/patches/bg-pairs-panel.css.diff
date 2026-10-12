@@ -1,0 +1,8 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/panel.css.orig	2026-10-12 09:38:57.267978068 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/panel.css	2026-10-12 09:39:33.642632628 +0000
+@@ -665,3 +665,5 @@
+   .cpx-top-r .cpx-status{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ }
+ @media (min-width:701px) and (max-width:1360px){.cpx-menu{left:auto;width:340px;border-radius:0 0 0 16px}}
++.cpx-matrix th.sticky small.pair{display:block;font-weight:500;font-size:11px;color:var(--mu);white-space:nowrap}
++.cpx-matrix td.full.via{opacity:.75}

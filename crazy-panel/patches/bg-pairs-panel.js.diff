@@ -1,0 +1,121 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/panel.js.orig	2026-10-12 09:38:55.270405982 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/panel.js	2026-10-12 09:39:33.642632628 +0000
+@@ -83,15 +83,26 @@
+     return { ev, subs, selfie, spin, pSelfie, pSpin, capS, capP: C.capSpin, freeS: capS - selfie, freeP: C.capSpin - spin };
+   }
+ 
++  /* kétoldalas (pillowcase) hátterek: az egyik oldal foglalása a párját is foglalja aznapra */
++  const PAIR = {};
++  Object.keys(C.bgPairs || {}).forEach(k => { PAIR[norm(k)] = C.bgPairs[k]; });
++  const partnerOf = name => PAIR[norm(name)] || '';
++  const viaTxt = x => x.via ? ' (a pár másik oldala: ' + x.via + ')' : '';
++  /* ugyanazt a fizikai hátteret használja-e a két név */
++  const sameBg = (a, b) => { const x = norm(a), y = norm(b); return x !== '' && (x === y || norm(PAIR[x] || '') === y); };
++
+   function bgStatus(m, date) {
+     const c = S.cache[m];
+     const map = {};
+-    (C.bgs || []).forEach(b => { map[norm(b.name)] = { name: b.name, qty: b.qty, booked: [], pending: [] }; });
++    (C.bgs || []).forEach(b => { map[norm(b.name)] = { name: b.name, qty: b.qty, partner: partnerOf(b.name), booked: [], pending: [] }; });
+     const unknown = [];
+     (c ? c.events : []).filter(e => e.date === date).forEach(e => {
+       const k = norm(e.bg);
+-      if (map[k]) map[k][e.state === 'booked' ? 'booked' : 'pending'].push(e);
++      const slot = e.state === 'booked' ? 'booked' : 'pending';
++      if (map[k]) map[k][slot].push(e);
+       else unknown.push(e);
++      const pk = norm(partnerOf(e.bg));
++      if (pk && map[pk]) map[pk][slot].push(Object.assign({}, e, { via: e.bg }));
+     });
+     return { list: Object.values(map), unknown };
+   }
+@@ -274,7 +285,7 @@
+       '<div class="cpx-subs"><span>Alvállalkozói slot erre a napra</span><div class="stepper"><button data-s="-1">−</button><b id="cpx-subn">' + I.subs + '</b><button data-s="1">+</button></div></div>' +
+       '</div>' +
+       '<h4>Rendezvények (' + I.ev.length + ')</h4>' + (I.ev.length ? I.ev.map(evRow).join('') : '<p class="cpx-muted">Erre a napra még nincs rendezvény.</p>') +
+-      '<h4>Hátterek ezen a napon</h4>' + (dayBgs.length ? dayBgs.map(e => '<div class="bgline"><span class="chip ' + (e.state === 'booked' ? 'taken' : 'pend') + '">' + esc(e.bg) + '</span><span>' + (e.state === 'booked' ? '<b>foglalt</b>' : '<b>csak ajánlatban</b> – még nem foglalt') + ' · ' + esc(e.title) + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra még senki nem választott hátteret.</p>') +
++      '<h4>Hátterek ezen a napon</h4>' + (dayBgs.length ? dayBgs.map(e => '<div class="bgline"><span class="chip ' + (e.state === 'booked' ? 'taken' : 'pend') + '">' + esc(e.bg) + '</span><span>' + (e.state === 'booked' ? '<b>foglalt</b>' : '<b>csak ajánlatban</b> – még nem foglalt') + ' · ' + esc(e.title) + (partnerOf(e.bg) ? ' · <i>' + (e.state === 'booked' ? 'a párja is foglalt' : 'a párját is foglalná') + ': ' + esc(partnerOf(e.bg)) + '</i>' : '') + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra még senki nem választott hátteret.</p>') +
+       '<div class="cpx-sheet-f"><button class="cpx-btn" id="cpx-goSheet">Napi munkalap</button><button class="cpx-btn ghost" id="cpx-goCheck">Gyors ellenőrzés erre a napra</button></div></div>';
+     dlg.hidden = false;
+     dlg.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', async () => {
+@@ -316,7 +327,7 @@
+     head.appendChild(monthNav(render));
+     head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg full"></span>foglalt<span class="lg pend"></span>csak ajánlatban<span class="lg ok"></span>szabad'));
+     main.appendChild(head);
+-    main.appendChild(el('p', { class: 'cpx-help' }, '<b>Piros</b> = a háttér foglalt: egy szerződéses (Szerződés kiküldve vagy későbbi) rendezvényhez választották, erre a napra nem adható ki. <b>Sárga</b> = csak egy árajánlatban szerepel: még kiadható, de ha az ajánlatból szerződés lesz, ütközni fog. <b>Zöld / üres</b> = szabad. A táblázat celláira kattintva megnyílik az adott nap.'));
++    main.appendChild(el('p', { class: 'cpx-help' }, '<b>Piros</b> = a háttér foglalt: egy szerződéses (Szerződés kiküldve vagy későbbi) rendezvényhez választották, erre a napra nem adható ki. <b>Sárga</b> = csak egy árajánlatban szerepel: még kiadható, de ha az ajánlatból szerződés lesz, ütközni fog. <b>Zöld / üres</b> = szabad. A kétoldalas háttereknél (a név alatt a párja) az egyik oldal foglalása a másikat is foglalja – ezt a <b>◐</b> jelzi. A táblázat celláira kattintva megnyílik az adott nap.'));
+     const [from, to] = monthRange(S.month);
+     const last = parseYmd(to).getDate();
+     const c = S.cache[S.month];
+@@ -331,11 +342,11 @@
+       const taken = bs.list.filter(b => b.booked.length >= b.qty);
+       const pend = bs.list.filter(b => b.booked.length < b.qty && b.pending.length);
+       const free = bs.list.filter(b => b.booked.length < b.qty && !b.pending.length);
+-      const who = arr => esc(arr.map(x => x.title).join(', '));
++      const who = arr => esc(arr.map(x => x.title + viaTxt(x)).join(', '));
+       pick.querySelector('#cpx-bgchips').innerHTML =
+         '<div class="bggroup"><h4>Foglalt (' + taken.length + ')</h4>' + (taken.length ? taken.map(b => '<div class="bgline"><span class="chip taken">' + esc(b.name) + '</span><span>' + who(b.booked) + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra nincs foglalt háttér.</p>') + '</div>' +
+         (pend.length ? '<div class="bggroup"><h4>Csak ajánlatban – még kiadható (' + pend.length + ')</h4>' + pend.map(b => '<div class="bgline"><span class="chip pend">' + esc(b.name) + '</span><span>' + who(b.pending) + '</span></div>').join('') + '</div>' : '') +
+-        '<div class="bggroup"><h4>Szabad (' + free.length + ')</h4>' + free.map(b => '<span class="chip">' + esc(b.name) + '</span>').join(' ') + '</div>' +
++        '<div class="bggroup"><h4>Szabad (' + free.length + ')</h4>' + free.map(b => '<span class="chip"' + (b.partner ? ' title="Kétoldalas, a párja: ' + esc(b.partner) + '"' : '') + '>' + esc(b.name) + '</span>').join(' ') + '</div>' +
+         (bs.unknown.filter(e => e.bg && norm(e.bg) !== 'még nem tudom').length ? '<p class="cpx-muted">Listán kívüli háttér is szerepel: ' + esc(bs.unknown.filter(e => e.bg && norm(e.bg) !== 'még nem tudom').map(e => e.bg + ' (' + e.title + ')').join('; ')) + '</p>' : '');
+     };
+     pick.querySelector('#cpx-bgdate').addEventListener('change', e => { S.day = e.target.value; drawChips(); });
+@@ -350,15 +361,17 @@
+     }
+     h += '</tr></thead><tbody>';
+     (C.bgs || []).forEach(b => {
+-      h += '<tr><th class="sticky">' + esc(b.name) + (b.qty > 1 ? ' <small>×' + b.qty + '</small>' : '') + '</th>';
++      const pn = partnerOf(b.name);
++      h += '<tr><th class="sticky">' + esc(b.name) + (b.qty > 1 ? ' <small>×' + b.qty + '</small>' : '') + (pn ? '<small class="pair">↔ ' + esc(pn) + '</small>' : '') + '</th>';
+       for (let d = 1; d <= last; d++) {
+         const date = S.month + '-' + pad(d);
+-        const evs = c.events.filter(e => e.date === date && norm(e.bg) === norm(b.name));
++        const evs = c.events.filter(e => e.date === date && sameBg(b.name, e.bg));
+         const bk = evs.filter(e => e.state === 'booked');
+         const pd = evs.filter(e => e.state !== 'booked');
+-        const cls = bk.length >= b.qty ? 'full' : pd.length || bk.length ? 'pend' : '';
+-        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title).join('\n');
+-        h += '<td class="' + cls + '" data-date="' + date + '" title="' + esc(tip) + '">' + (bk.length ? '●' : pd.length ? '?' : '') + '</td>';
++        const own = bk.some(e => norm(e.bg) === norm(b.name));
++        const cls = bk.length >= b.qty ? 'full' + (own ? '' : ' via') : pd.length || bk.length ? 'pend' : '';
++        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title + (norm(e.bg) !== norm(b.name) ? ' (a pár másik oldala: ' + e.bg + ')' : '')).join('\n');
++        h += '<td class="' + cls + '" data-date="' + date + '" title="' + esc(tip) + '">' + (bk.length ? (own ? '●' : '◐') : pd.length ? '?' : '') + '</td>';
+       }
+       h += '</tr>';
+     });
+@@ -414,8 +427,12 @@
+     const c = S.cache[m], qty = {}, cnt = {}, out = new Set();
+     (C.bgs || []).forEach(b => { qty[norm(b.name)] = b.qty; });
+     if (!c) return out;
+-    c.events.forEach(e => { if (e.state === 'booked' && qty[norm(e.bg)]) { const k = e.date + '|' + norm(e.bg); (cnt[k] = cnt[k] || []).push(e.id); } });
+-    Object.keys(cnt).forEach(k => { if (cnt[k].length > qty[k.split('|')[1]]) cnt[k].forEach(id => out.add(id)); });
++    /* a kétoldalas háttér két neve egy fizikai darab: közös kulcson számolunk */
++    const unit = n => { const k = norm(n), p = norm(PAIR[k] || ''); return p ? [k, p].sort().join('+') : k; };
++    const uq = {};
++    Object.keys(qty).forEach(k => { const u = unit(k); uq[u] = uq[u] == null ? qty[k] : Math.min(uq[u], qty[k]); });
++    c.events.forEach(e => { if (e.state === 'booked' && qty[norm(e.bg)]) { const k = e.date + '|' + unit(e.bg); (cnt[k] = cnt[k] || []).push(e.id); } });
++    Object.keys(cnt).forEach(k => { if (cnt[k].length > uq[k.split('|')[1]]) cnt[k].forEach(id => out.add(id)); });
+     return out;
+   }
+ 
+@@ -625,7 +642,8 @@
+     const cur = norm(e.bg);
+     const stOf = b => {
+       const others = b.booked.filter(x => x.id !== e.id), pend = b.pending.filter(x => x.id !== e.id);
+-      return others.length >= b.qty ? { c: 'taken', t: 'Foglalt – ' + others.map(who).join(', '), who: others } : pend.length ? { c: 'pend', t: 'Ajánlatban – ' + pend.map(who).join(', ') } : { c: 'free', t: 'Szabad' };
++      const wv = x => who(x) + viaTxt(x);
++      return others.length >= b.qty ? { c: 'taken', t: 'Foglalt – ' + others.map(wv).join(', '), who: others } : pend.length ? { c: 'pend', t: 'Ajánlatban – ' + pend.map(wv).join(', ') } : { c: 'free', t: 'Szabad' + (b.partner ? ' (kétoldalas, a párja: ' + b.partner + ')' : '') };
+     };
+     const imgOf = {};
+     (C.bgs || []).forEach(b => { imgOf[norm(b.name)] = b.img || ''; });
+@@ -850,7 +868,8 @@
+     if (Q.bg) {
+       const b = bs.list.find(x => x.name === Q.bg);
+       bgOk = !b || b.booked.length < b.qty;
+-      bgTxt = bgOk ? 'A(z) „' + Q.bg + '” háttér szabad.' : 'A(z) „' + Q.bg + '” háttér erre a napra már foglalt.';
++      const viaB = b && b.booked.find(x => x.via);
++      bgTxt = bgOk ? 'A(z) „' + Q.bg + '” háttér szabad.' + (b && b.partner ? ' (Kétoldalas: a párja, „' + b.partner + '” is lefoglalódik vele aznapra.)' : '') : 'A(z) „' + Q.bg + '” háttér erre a napra már foglalt' + (viaB && b.booked.length <= b.qty && !b.booked.some(x => !x.via) ? ', mert a pár másik oldalát („' + viaB.via + '”) lefoglalták.' : '.');
+     }
+     const avail = okS && okP;
+     const q = quote();

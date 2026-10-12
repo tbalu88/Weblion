@@ -1,0 +1,105 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/crazy-panel.php.orig	2026-10-12 09:38:55.268273513 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/crazy-panel.php	2026-10-12 09:41:50.183056519 +0000
+@@ -2,7 +2,7 @@
+ /**
+  * Plugin Name: Crazy Foglaltsági Panel
+  * Description: Belső, jelszóval védett panel a Salesmate foglalásokhoz: naptár és szabad gépek, háttér-foglaltság, rendezvény-követés (szerződés, template, háttér, díjbekérő, galéria), gyors ellenőrzés válaszlevéllel, napi munkalap, kezelői elszámolás kezelői adatlappal, ügyfélportál (rendezvény-adatlap), sablonkészítő (lyukasztott PNG a fotós szoftvernek), statisztikák (megkeresések, aláírt dealek, hirdetési költség, GA4).
+- * Version: 1.22.3
++ * Version: 1.23.0
+  * Author: Crazyphoto / EventCrazy
+  * Requires PHP: 7.4
+  * Text Domain: crazy-panel
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.22.3');
++define('CP_PANEL_VER', '1.23.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -50,6 +50,8 @@
+ 		'cache_min'     => 5,
+ 		'bg_url'        => 'https://crazyphoto.hu/valaszthato-hatterek/',
+ 		'bg_write'      => 1,
++		/* kétoldalas (pillowcase) hátterek: egy fizikai háttér két grafikával – az egyik foglalása a párját is foglalja aznapra */
++		'bg_pairs'      => "Arany - Levelek 2\nArany 2 - Karácsony 3\nArt Deco - Levelek\nBokeh - Bokeh 2\nBokeh 4 - Shimmer\nBőr - Deszka\nCandy - Absztrakt\nDeszka 2 - Tégla\nEsküvő - Karácsony\nGatsby - Hollywood\nPink - Karácsony 2\nPezsgő - Márvány\nRosé - Selyem\nVárosi - Polygon\nZebra - Graffiti\nZöld - Fehér\nFények - Levelek 3\nKarácsony 5 - Bokeh 5\nKarácsony 4 - Márvány 2",
+ 		'search_mode'   => 'auto',
+ 		'reply_sign'    => "Üdvözlettel:\nCrazyphoto csapat\nhttps://crazyphoto.hu",
+ 		'openai_key'    => '',
+@@ -653,6 +655,7 @@
+ 		'capSpin'  => (int) $o['cap_spin'],
+ 		'subsDef'  => (int) $o['subs_default'],
+ 		'bgs'      => cp_panel_bg_list(),
++		'bgPairs'  => cp_panel_bg_pairs(),
+ 		'sign'     => (string) $o['reply_sign'],
+ 		'logout'   => home_url('/' . trim($o['slug'], '/') . '/?kilep=1'),
+ 		'sm'       => 'https://' . $o['linkname'] . '/#/app/deals/',
+@@ -709,6 +712,36 @@
+ 	return $out;
+ }
+ 
++/* kétoldalas hátterek: kisbetűs név => a pár másik oldalának neve (mindkét irányban) */
++function cp_panel_bg_pairs() {
++	static $memo = null;
++	if ($memo !== null) { return $memo; }
++	$o = cp_panel_opts();
++	$memo = array();
++	foreach (cp_panel_lines(isset($o['bg_pairs']) ? $o['bg_pairs'] : '') as $l) {
++		$p = preg_split('/\s+[-–—]\s+/u', trim($l), 2);
++		if (count($p) !== 2) { continue; }
++		$a = trim($p[0]); $b = trim($p[1]);
++		if ($a === '' || $b === '' || cp_panel_lc($a) === cp_panel_lc($b)) { continue; }
++		$memo[cp_panel_lc($a)] = $b;
++		$memo[cp_panel_lc($b)] = $a;
++	}
++	return $memo;
++}
++function cp_panel_bg_partner($name) {
++	$m = cp_panel_bg_pairs();
++	$k = cp_panel_lc($name);
++	return isset($m[$k]) ? $m[$k] : '';
++}
++/* a párlistában szereplő, de a háttérlistában nem található nevek (a beállításoknál figyelmeztetés) */
++function cp_panel_bg_pairs_unknown() {
++	$known = array();
++	foreach (cp_panel_bg_list() as $b) { $known[cp_panel_lc($b['name'])] = 1; }
++	$out = array();
++	foreach (cp_panel_bg_pairs() as $k => $partner) { if (!isset($known[$k])) { $out[] = cp_panel_bg_partner($partner); } }
++	return array_values(array_unique($out));
++}
++
+ function cp_panel_lc($s) {
+ 	return mb_strtolower(trim((string) $s));
+ }
+@@ -911,8 +944,12 @@
+ 			$rows = cp_sm_fetch_range($date, $date, $info);
+ 			if (is_wp_error($rows)) { wp_send_json_error(array('msg' => 'Nem sikerült ellenőrizni a foglaltságot: ' . $rows->get_error_message()), 502); }
+ 			$who = array();
++			$pk = cp_panel_lc(cp_panel_bg_partner($bg));  // kétoldalas háttér: a pár másik oldala is foglal
+ 			foreach (cp_panel_normalize($rows) as $e) {
+-				if ($e['date'] === $date && $e['state'] === 'booked' && (string) $e['id'] !== $id && cp_panel_lc($e['bg']) === $k) { $who[] = $e['title']; }
++				if ($e['date'] !== $date || $e['state'] !== 'booked' || (string) $e['id'] === $id) { continue; }
++				$ek = cp_panel_lc($e['bg']);
++				if ($ek === $k) { $who[] = $e['title']; }
++				elseif ($pk !== '' && $ek === $pk) { $who[] = $e['title'] . ' (a pár másik oldala: ' . $e['bg'] . ')'; }
+ 			}
+ 			if (count($who) >= $qty) {
+ 				wp_send_json_error(array('msg' => 'conflict', 'who' => $who), 409);
+@@ -964,7 +1001,7 @@
+ 	delete_transient('cp_panel_webbg');
+ 	foreach ($text as $k) { if (isset($in[$k])) { $o[$k] = sanitize_text_field($in[$k]); } }
+ 	$o['slug'] = sanitize_title($o['slug']);
+-	foreach (array('booked_stages', 'pending_stages', 'signed_stages', 'backgrounds', 'f_extra', 'reply_sign') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
++	foreach (array('booked_stages', 'pending_stages', 'signed_stages', 'backgrounds', 'bg_pairs', 'f_extra', 'reply_sign') as $k) { if (isset($in[$k])) { $o[$k] = sanitize_textarea_field($in[$k]); } }
+ 	foreach (array('cap_selfie', 'cap_spin', 'subs_default', 'cache_min') as $k) { if (isset($in[$k])) { $o[$k] = max(0, (int) $in[$k]); } }
+ 	if (!empty($in['token_new'])) { $o['token'] = trim(sanitize_text_field($in['token_new'])); }
+ 	if (!empty($in['token_clear'])) { $o['token'] = ''; }
+@@ -1019,6 +1056,7 @@
+ 	cp_panel_row('Szakasz visszaírása', '<label><input type="checkbox" name="stage_write" value="1"' . checked(!empty($o['stage_write']), true, false) . '> A Követés fülön a „Szerződés” pipa a dealt átteszi a(z) „' . esc_html(cp_panel_lines($o['signed_stages']) ? cp_panel_lines($o['signed_stages'])[0] : '–') . '” szakaszba (megerősítés után; a Salesmate szakasz-automatizációi lefutnak)</label>');
+ 	cp_panel_row('Hosszabbítás mező (Salesmate kulcs)', '<input name="f_hx" value="' . esc_attr($o['f_hx']) . '" class="regular-text" placeholder="pl. decimalCustomField1 vagy textCustomField20"><p class="description">Ha megadod, a Követés fülön választott hosszabbítás a Salesmate dealbe is beíródik (és onnan olvasódik vissza). Tizedes vagy szöveges mező ajánlott (félórák miatt). A kulcsot lent a „Mezőkulcs keresése” segít megtalálni.</p>');
+ 	cp_panel_row('Hátterek (kiegészítés, darabszám)', '<textarea name="backgrounds" rows="8" class="large-text">' . esc_textarea($o['backgrounds']) . '</textarea><p class="description">A weboldalon nem szereplő, de még használt hátterek, illetve darabszám: <code>Fehér|2</code>. A weboldalas lista ezzel egészül ki.</p>');
++	cp_panel_row('Kétoldalas hátterek (párok)', '<textarea name="bg_pairs" rows="8" class="large-text">' . esc_textarea($o['bg_pairs']) . '</textarea><p class="description">Soronként egy fizikai háttér két oldala: <code>Arany - Levelek 2</code>. Ha az egyiket egy napra lefoglalják, a párja is foglalt lesz aznap (panel, gyors ellenőrzés, ügyfélportál).' . (($u = cp_panel_bg_pairs_unknown()) ? ' <span style="color:#b32d2e">A háttérlistában nem szereplő név: ' . esc_html(implode(', ', $u)) . '</span>' : '') . '</p>');
+ 	echo '</table><h2>Mezők (Salesmate API kulcsnevek)</h2><table class="form-table">';
+ 	foreach (array('f_date' => 'Rendezvény dátuma', 'f_time' => 'Kezdés időpontja', 'f_bg' => 'Háttér', 'f_selfie' => 'Szelfigép csomag', 'f_spin' => '360 csomag', 'f_loc' => 'Helyszín', 'f_guests' => 'Létszám', 'f_note' => 'Megjegyzés', 'f_paid' => 'Bejött az utalás? (nem kötelező)') as $k => $label) {
+ 		cp_panel_row($label, '<input name="' . $k . '" value="' . esc_attr($o[$k]) . '" class="regular-text">');

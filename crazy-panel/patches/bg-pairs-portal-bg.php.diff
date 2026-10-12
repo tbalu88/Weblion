@@ -1,0 +1,24 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/portal-bg.php.orig	2026-10-12 09:38:57.269887944 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v14/portal-bg.php	2026-10-12 09:38:57.290930669 +0000
+@@ -3,6 +3,7 @@
+  * A lista a panel háttérlistája (cp_panel_bg_list: a weboldal „Választható hátterek” oldala képekkel + kiegészítő darabszámok).
+  * Az ügyfél csak az adott napon szabad hátteret látja. Foglaltnak a panel „Foglalt szakaszok” listáján lévő
+  * (alapból „Szerződés kiküldve”-től), illetve megnyert deal háttere számít – ugyanúgy, mint a panel Hátterek fülén.
++ * Kétoldalas (pillowcase) háttérnél a pár másik oldalának foglalása is foglaltnak számít (cp_panel_bg_pairs).
+  * A portálon tett választás KÉRÉS: a Salesmate háttér mezőjébe kerül (ha a panelben be van kapcsolva a háttér
+  * visszaírása), és a deal szerződés-kiküldésével válik foglalássá. */
+ 
+@@ -43,10 +44,13 @@
+ 		}
+ 		set_transient($ck, $rows, 5 * MINUTE_IN_SECONDS);
+ 	}
++	/* kétoldalas háttér: a pár egyik oldalának foglalása a másikat is foglalja */
+ 	$out = array();
+ 	foreach ($rows as $id => $bg) {
+ 		if ((string) $id === (string) $except_deal) { continue; }
+ 		$out[$bg] = (isset($out[$bg]) ? $out[$bg] : 0) + 1;
++		$pk = function_exists('cp_panel_bg_partner') ? cp_panel_lc(cp_panel_bg_partner($bg)) : '';
++		if ($pk !== '') { $out[$pk] = (isset($out[$pk]) ? $out[$pk] : 0) + 1; }
+ 	}
+ 	return $out;
+ }
