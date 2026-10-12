@@ -1,0 +1,31 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v12/panel.js.orig	2026-10-12 06:23:15.611006961 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v12/panel.js	2026-10-12 06:23:15.742889127 +0000
+@@ -26,7 +26,7 @@
+ 
+   /* ------------------------------------------------------------ state */
+   const S = {
+-    tab: (location.hash || '#naptar').slice(1),
++    tab: location.hash.slice(1),
+     month: monthKey(today()),
+     day: today(),
+     cache: {},      // month -> {events, subs, at}
+@@ -36,7 +36,9 @@
+     loading: false,
+     err: ''
+   };
+-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon', 'stat'].includes(S.tab)) S.tab = 'naptar';
++  /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
++  const HOME = C.st && C.st.on ? 'stat' : 'naptar';
++  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon', 'stat'].includes(S.tab)) S.tab = HOME;
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -103,7 +105,7 @@
+       '<button class="cpx-burger" id="cpx-burger" type="button" aria-label="Menü" aria-expanded="false" aria-controls="cpx-menu"><span></span><span></span><span></span></button>' +
+       '<div class="cpx-menu" id="cpx-menu">' +
+       '<nav class="cpx-tabs">' +
+-      tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + tabBtn('stat', 'Statisztikák') +
++      (HOME === 'stat' ? tabBtn('stat', 'Statisztikák') : '') + tabBtn('naptar', 'Naptár') + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + (HOME === 'stat' ? '' : tabBtn('stat', 'Statisztikák')) +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">Frissítés</button>' +
+       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '">Kilépés</a></div></div>';
