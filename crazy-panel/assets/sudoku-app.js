@@ -9,6 +9,8 @@
   const KEY_GAME = 'szudoku.game.v1';
   const KEY_SETTINGS = 'szudoku.settings.v1';
   const KEY_STATS = 'szudoku.stats.v1';
+  const KEY_MP = 'szudoku.mp.v1';
+  const KEY_NAME = 'szudoku.name.v1';
   const MAX_MISTAKES = 3;
 
   const store = {
@@ -29,6 +31,7 @@
     autoRemoveNotes: true,
     hideDone: true,
     showTimer: true,
+    split: false,
   }, store.get(KEY_SETTINGS, {}));
 
   let stats = store.get(KEY_STATS, { total: 0, byDiff: {} });
@@ -39,10 +42,9 @@
 
   /* ---------- Játék létrehozása / mentése ---------- */
 
-  function newGame(diffKey) {
+  function freshGame(diffKey, puzzle, solution) {
     const diff = DIFFICULTIES[diffKey];
-    const { puzzle, solution } = E.generate(diffKey);
-    game = {
+    return {
       diff: diffKey,
       puzzle,
       solution,
@@ -61,6 +63,11 @@
       status: 'playing',
       counted: false,
     };
+  }
+
+  function newGame(diffKey) {
+    const { puzzle, solution } = E.generate(diffKey);
+    game = freshGame(diffKey, puzzle, solution);
     const s = diffStats(diffKey);
     s.played++;
     saveStats();
@@ -70,6 +77,10 @@
 
   function saveGame() {
     if (!game) return;
+    if (game.mp) {
+      store.set(KEY_MP, Object.assign({}, game, { undo: game.undo.slice(-60) }));
+      return;
+    }
     if (game.status === 'playing') {
       const copy = Object.assign({}, game, { undo: game.undo.slice(-60) });
       store.set(KEY_GAME, copy);
@@ -98,24 +109,42 @@
 
   function openHome() {
     stopTimer();
+    mpStopPolling();
     saveGame();
     showScreen('home');
     $('totalScore').textContent = stats.total.toLocaleString('hu-HU');
-    const saved = game && game.status === 'playing' ? game : loadGame();
+    const saved = game && !game.mp && game.status === 'playing' ? game : loadGame();
     if (saved) {
       $('btnContinue').classList.remove('hidden');
       $('continueInfo').textContent = DIFFICULTIES[saved.diff].name + ' · ' + fmtTime(saved.elapsed);
     } else {
       $('btnContinue').classList.add('hidden');
     }
+    const m = loadMp();
+    $('btnMpContinue').classList.toggle('hidden', !m || m.mp.ended);
+    if (m) $('mpContinueInfo').textContent = 'Szoba: ' + m.mp.id + ' · ' + DIFFICULTIES[m.diff].name;
   }
 
   function openGame() {
     showScreen('game');
     paused = false;
     $('pauseOverlay').classList.add('hidden');
+    $('board').style.visibility = '';
+    const isMp = !!game.mp;
+    $('game').classList.toggle('mp', isMp);
+    $('mpBar').classList.toggle('hidden', !isMp);
+    $('btnShare').classList.toggle('hidden', !isMp);
+    $('btnPause').classList.toggle('hidden', isMp);
+    $('topTitle').textContent = isMp ? 'Kétszemélyes játék' : '';
+    if (!isMp) {
+      mpStopPolling();
+      $('game').classList.remove('split');
+      $('oppSide').classList.add('hidden');
+      $('mpOverlay').classList.add('hidden');
+    }
     render();
     startTimer();
+    if (isMp) mpStartPolling();
   }
 
   /* ---------- Időzítő ---------- */
@@ -129,6 +158,7 @@
 
   function startTimer() {
     stopTimer();
+    if (game && game.mp) { timerId = setInterval(mpClock, 250); mpClock(); return; }
     timerId = setInterval(() => {
       if (!game || game.status !== 'playing' || paused || document.hidden) return;
       game.elapsed++;
@@ -139,7 +169,7 @@
   function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
 
   function setPaused(p) {
-    if (!game || game.status !== 'playing') return;
+    if (!game || game.mp || game.status !== 'playing') return;
     paused = p;
     $('pauseOverlay').classList.toggle('hidden', !p);
     $('board').style.visibility = p ? 'hidden' : '';
@@ -234,7 +264,7 @@
     $('score').textContent = game.score.toLocaleString('hu-HU');
     $('diffName').textContent = DIFFICULTIES[game.diff].name;
     const mEl = $('mistakes');
-    mEl.textContent = settings.mistakeLimit ? 'Hibák: ' + game.mistakes + '/' + MAX_MISTAKES : 'Hibák: ' + game.mistakes;
+    mEl.textContent = settings.mistakeLimit || game.mp ? 'Hibák: ' + game.mistakes + '/' + MAX_MISTAKES : 'Hibák: ' + game.mistakes;
     mEl.classList.toggle('bad', game.mistakes > 0);
     $('timer').textContent = fmtTime(game.elapsed);
     $('timer').parentElement.style.visibility = settings.showTimer ? '' : 'hidden';
@@ -265,6 +295,7 @@
       b.classList.toggle('show', left <= 0 && !settings.hideDone);
       b.classList.toggle('active', game.fast && game.fastNum === d);
     }
+    if (game.mp) renderMp();
   }
 
   function animate(i, cls, ms) {
@@ -356,7 +387,7 @@
       game.mistakes++;
       haptic([30, 40, 30]);
       animate(i, 'shake', 500);
-      if (settings.mistakeLimit && game.mistakes >= MAX_MISTAKES) {
+      if ((settings.mistakeLimit || game.mp) && game.mistakes >= MAX_MISTAKES) {
         afterChange();
         lose();
         return;
@@ -380,6 +411,7 @@
   function afterChange() {
     render();
     saveGame();
+    if (game.mp) mpSchedulePush();
   }
 
   /* Kitöltött sor / oszlop / blokk felvillantása és bónusz pont. */
@@ -484,6 +516,7 @@
 
   function checkWin() {
     for (let i = 0; i < 81; i++) if (game.values[i] !== game.solution[i]) return;
+    if (game.mp) { mpSolved(); return; }
     game.status = 'won';
     stopTimer();
     const diff = DIFFICULTIES[game.diff];
@@ -507,6 +540,7 @@
   }
 
   function lose() {
+    if (game.mp) { mpOut(); return; }
     game.status = 'lost';
     stopTimer();
     const s = diffStats(game.diff);
@@ -560,8 +594,8 @@
 
   /* ---------- Lapok ---------- */
 
-  function openSheet(id) {
-    if (id === 'diffSheet') buildDiffList();
+  function openSheet(id, mode) {
+    if (id === 'diffSheet') buildDiffList(mode === 'mp');
     if (id === 'statsSheet') buildStats();
     if (id === 'settingsSheet') {
       document.querySelectorAll('[data-setting]').forEach((el) => { el.checked = !!settings[el.dataset.setting]; });
@@ -570,7 +604,10 @@
   }
   function closeSheet(el) { el.classList.add('hidden'); }
 
-  function buildDiffList() {
+  function buildDiffList(isMp) {
+    $('diffTitle').textContent = isMp ? 'Kétszemélyes játék' : 'Válassz nehézséget';
+    $('mpNameField').classList.toggle('hidden', !isMp);
+    if (isMp) $('mpName').value = store.get(KEY_NAME, '');
     const list = $('diffList');
     list.innerHTML = '';
     Object.values(DIFFICULTIES).forEach((d, n) => {
@@ -582,6 +619,12 @@
         closeSheet($('diffSheet'));
         b.disabled = true;
         // a generálás egy pillanatig tarthat – előbb rajzolódjon ki a lap bezárása
+        if (isMp) {
+          const name = $('mpName').value.trim();
+          store.set(KEY_NAME, name);
+          requestAnimationFrame(() => setTimeout(() => mpCreate(d.key, name), 10));
+          return;
+        }
         requestAnimationFrame(() => setTimeout(() => newGame(d.key), 10));
       });
       list.appendChild(b);
@@ -607,7 +650,7 @@
   function bind() {
     $('btnNew').addEventListener('click', () => openSheet('diffSheet'));
     $('btnContinue').addEventListener('click', () => {
-      if (!game || game.status !== 'playing') game = loadGame();
+      if (!game || game.mp || game.status !== 'playing') game = loadGame();
       if (game) openGame();
     });
     $('btnStats').addEventListener('click', () => openSheet('statsSheet'));
@@ -683,11 +726,423 @@
 
     // Háttérbe kerüléskor automatikus szünet és mentés
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && game && game.status === 'playing' && $('game').classList.contains('active')) {
+      if (document.hidden && game && !game.mp && game.status === 'playing' && $('game').classList.contains('active')) {
         setPaused(true);
       }
     });
     window.addEventListener('pagehide', saveGame);
+
+    // Kétszemélyes játék
+    $('btnMp').addEventListener('click', () => openSheet('diffSheet', 'mp'));
+    $('btnMpContinue').addEventListener('click', () => {
+      const m = loadMp();
+      if (!m) return;
+      game = m;
+      mp.ended = !!m.mp.ended;
+      openGame();
+    });
+    $('btnShare').addEventListener('click', mpInvite);
+    $('btnInvite').addEventListener('click', mpInvite);
+    $('btnSplit').addEventListener('click', () => mpSetSplit(true));
+    $('oppSide').addEventListener('click', () => mpSetSplit(false));
+    $('btnJoin').addEventListener('click', () => {
+      const name = $('joinName').value.trim();
+      store.set(KEY_NAME, name);
+      closeSheet($('joinSheet'));
+      mpJoin(mp.joinId, name);
+    });
+  }
+
+  /* ---------- Kétszemélyes játék ---------- */
+
+  const API = location.origin + '/wp-json/crazy-sudoku/v1';
+  const POLL_MS = 2000;
+  const mp = { data: null, offset: 0, poll: null, pushTimer: null, pushing: false, dirty: false, lastPush: 0, ended: false, joinId: '', oppOutShown: false };
+
+  function loadMp() {
+    const g = store.get(KEY_MP, null);
+    if (!g || !g.mp || !Array.isArray(g.values) || g.values.length !== 81) return null;
+    return g;
+  }
+
+  function serverNow() { return Date.now() + mp.offset; }
+
+  async function api(method, path, body) {
+    const t0 = Date.now();
+    let res;
+    try {
+      res = await fetch(API + path, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined,
+        cache: 'no-store',
+        credentials: 'omit',
+      });
+    } catch (e) {
+      throw new Error('Nincs internetkapcsolat');
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* */ }
+    if (!res.ok) throw new Error((data && data.message) || 'Szerverhiba (' + res.status + ')');
+    if (data && data.now) mp.offset = data.now - (t0 + Date.now()) / 2;
+    return data;
+  }
+
+  function mpGameFromRoom(d, sess) {
+    const puzzle = Array.from(d.room.puzzle, Number);
+    const solution = Array.from(d.room.solution, Number);
+    const g = freshGame(DIFFICULTIES[d.room.diff] ? d.room.diff : 'medium', puzzle, solution);
+    g.status = 'waiting';
+    g.mp = { id: d.room.id, token: sess.token, seat: sess.seat, round: d.room.round, start: d.room.start, ended: false };
+    return g;
+  }
+
+  function mpBegin(d, sess) {
+    game = mpGameFromRoom(d, sess);
+    mp.data = d;
+    mp.ended = false;
+    mp.oppOutShown = false;
+    closeModal();
+    saveGame();
+    openGame();
+    mpPush();
+  }
+
+  async function mpCreate(diffKey, name) {
+    toast('Szoba létrehozása…');
+    const { puzzle, solution } = E.generate(diffKey);
+    try {
+      const d = await api('POST', '/room', { diff: diffKey, name, puzzle: puzzle.join(''), solution: solution.join('') });
+      mpBegin(d, { token: d.token, seat: d.seat });
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  async function mpJoin(id, name) {
+    const local = loadMp();
+    const token = local && local.mp.id === id ? local.mp.token : '';
+    try {
+      const d = await api('POST', '/room/' + id + '/join', { name, token });
+      if (token && local.mp.round === d.room.round) {
+        game = local;
+        mp.data = d;
+        mp.ended = !!local.mp.ended;
+        openGame();
+      } else {
+        mpBegin(d, { token: d.token || token, seat: d.seat });
+      }
+    } catch (e) {
+      toast(e.message);
+      openHome();
+    }
+  }
+
+  /* Meghívó link megnyitása: ?szoba=abc123 */
+  async function mpHandleLink() {
+    const params = new URLSearchParams(location.search);
+    const id = (params.get('szoba') || '').toLowerCase();
+    if (!/^[a-z0-9]{6}$/.test(id)) return false;
+    history.replaceState(null, '', location.pathname);
+    const local = loadMp();
+    if (local && local.mp.id === id) {
+      game = local;
+      mp.ended = !!local.mp.ended;
+      openGame();
+      return true;
+    }
+    mp.joinId = id;
+    $('joinName').value = store.get(KEY_NAME, '');
+    $('joinInfo').textContent = 'Ugyanazt a feladványt oldjátok meg egyszerre. Aki előbb végez, nyer.';
+    openSheet('joinSheet');
+    try {
+      const d = await api('GET', '/room/' + id);
+      const host = d.players[1];
+      const diff = DIFFICULTIES[d.room.diff];
+      if (d.players[2]) {
+        $('joinInfo').textContent = 'Ebben a szobában már ketten játszanak.';
+        $('btnJoin').disabled = true;
+      } else {
+        $('joinInfo').textContent = (host ? host.name : 'Valaki') + ' meghívott egy ' + (diff ? diff.name.toLowerCase() : '') +
+          ' szudoku párbajra. Ugyanazt a feladványt oldjátok meg egyszerre, aki előbb végez, nyer.';
+      }
+    } catch (e) {
+      $('joinInfo').textContent = e.message;
+      $('btnJoin').disabled = true;
+    }
+    return true;
+  }
+
+  function mpLink() {
+    return location.origin + location.pathname + '?szoba=' + game.mp.id;
+  }
+
+  async function mpInvite() {
+    if (!game || !game.mp) return;
+    const url = mpLink();
+    $('mpLink').textContent = url;
+    $('mpLink').classList.remove('hidden');
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Szudoku párbaj', text: 'Játsszunk egy szudokut! Ugyanaz a feladvány, aki előbb végez, nyer.', url });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link kimásolva');
+    } catch (e) {
+      toast('Másold ki a linket a tábláról');
+    }
+  }
+
+  function mpStartPolling() {
+    mpStopPolling();
+    mpTick();
+    mp.poll = setInterval(mpTick, POLL_MS);
+  }
+  function mpStopPolling() {
+    if (mp.poll) clearInterval(mp.poll);
+    mp.poll = null;
+  }
+
+  async function mpTick() {
+    if (!game || !game.mp || document.hidden) return;
+    // életjel / elmaradt mentés pótlása
+    if (mp.dirty || Date.now() - mp.lastPush > 6000) { mpPush(); return; }
+    try {
+      mpApply(await api('GET', '/room/' + game.mp.id));
+    } catch (e) {
+      if (/nem létezik/.test(e.message)) { toast(e.message); mpStopPolling(); }
+    }
+  }
+
+  function mpSchedulePush() {
+    clearTimeout(mp.pushTimer);
+    mp.pushTimer = setTimeout(mpPush, 250);
+  }
+
+  async function mpPush() {
+    if (!game || !game.mp) return;
+    if (mp.pushing) { mp.dirty = true; return; }
+    mp.pushing = true;
+    mp.dirty = false;
+    mp.lastPush = Date.now();
+    const g = game;
+    try {
+      const d = await api('POST', '/room/' + g.mp.id + '/state', {
+        token: g.mp.token, round: g.mp.round, values: g.values.join(''),
+        mistakes: g.mistakes, score: g.score, out: g.status === 'out',
+      });
+      if (game === g) mpApply(d);
+    } catch (e) {
+      mp.dirty = true;
+    } finally {
+      mp.pushing = false;
+    }
+  }
+
+  function mpApply(d) {
+    if (!game || !game.mp || !d || !d.room || d.room.id !== game.mp.id) return;
+    if (d.room.round !== game.mp.round) {
+      // visszavágó indult
+      if (d.room.round > game.mp.round) mpBegin(d, { token: game.mp.token, seat: game.mp.seat });
+      return;
+    }
+    mp.data = d;
+    game.mp.start = d.room.start;
+    mpCheckEnd();
+    render();
+  }
+
+  function mpClock() {
+    if (!game || !game.mp) return;
+    const start = game.mp.start;
+    if (game.status === 'waiting' && start && serverNow() >= start) {
+      game.status = 'playing';
+      saveGame();
+      render();
+    }
+    if (start && (game.status === 'playing' || game.status === 'waiting')) {
+      game.elapsed = Math.max(0, Math.floor((serverNow() - start) / 1000));
+    }
+    $('timer').textContent = fmtTime(game.elapsed);
+    mpOverlay();
+  }
+
+  function mpSeats() {
+    const me = game.mp.seat, other = me === 1 ? 2 : 1;
+    const P = (mp.data && mp.data.players) || {};
+    return { me: P[me] || null, opp: P[other] || null };
+  }
+
+  function mpProgress(values) {
+    let total = 0, ok = 0;
+    for (let i = 0; i < 81; i++) {
+      if (game.puzzle[i]) continue;
+      total++;
+      if (+values[i] === game.solution[i]) ok++;
+    }
+    return total ? ok / total : 0;
+  }
+
+  function mpOverlay() {
+    const ov = $('mpOverlay');
+    const { opp } = mpSeats();
+    const start = game.mp.start;
+    let show = false, count = '', msg = '';
+    if (!opp) {
+      show = true;
+      msg = 'Várakozás a másik játékosra… Küldd el neki a meghívó linket! Amint csatlakozik, indul a visszaszámlálás.';
+    } else if (game.status === 'waiting') {
+      show = true;
+      const left = start ? Math.ceil((start - serverNow()) / 1000) : 0;
+      count = left > 0 ? String(left) : '';
+      msg = opp.name + ' csatlakozott. Indulás…';
+    }
+    ov.classList.toggle('hidden', !show);
+    $('mpCount').textContent = count;
+    $('mpMsg').textContent = msg;
+    $('btnInvite').classList.toggle('hidden', !!opp);
+    if (opp) $('mpLink').classList.add('hidden');
+  }
+
+  function oppBoard(el, opp) {
+    if (el.children.length !== 81) {
+      el.innerHTML = '';
+      for (let i = 0; i < 81; i++) el.appendChild(document.createElement('span'));
+    }
+    const vals = opp ? opp.values : '';
+    for (let i = 0; i < 81; i++) {
+      const s = el.children[i];
+      if (game.puzzle[i]) { s.textContent = game.puzzle[i]; s.className = ''; continue; }
+      const v = vals ? +vals[i] : 0;
+      s.textContent = '';
+      s.className = !v ? '' : v === game.solution[i] ? 'f' : 'x';
+    }
+  }
+
+  function renderMp() {
+    const { me, opp } = mpSeats();
+    const myPct = Math.round(mpProgress(game.values) * 100);
+    $('mpMeName').textContent = (me ? me.name : 'Te') + ' (te)';
+    $('mpMeInfo').textContent = myPct + '% · ' + game.mistakes + ' hiba · ' + game.score + ' p';
+    $('mpMeBar').style.width = myPct + '%';
+    const oppEl = document.querySelector('.mp-p.opp');
+    let info = 'még nem csatlakozott';
+    let oppPct = 0;
+    if (opp) {
+      oppPct = Math.round(mpProgress(opp.values) * 100);
+      info = oppPct + '% · ' + opp.mistakes + ' hiba · ' + opp.score + ' p';
+      if (opp.done) info = 'kész · ' + fmtTime((opp.done - game.mp.start) / 1000);
+      else if (opp.out) info = 'kiesett (3 hiba)';
+    }
+    const online = opp && opp.seen && serverNow() - opp.seen < 15000;
+    oppEl.classList.toggle('online', !!online);
+    oppEl.classList.toggle('offline', !!opp && !online);
+    $('mpOppName').textContent = opp ? opp.name : 'Ellenfél';
+    $('mpOppInfo').textContent = info;
+    $('mpOppBar').style.width = oppPct + '%';
+    $('oppSideName').textContent = opp ? opp.name : 'Ellenfél';
+    $('oppSideInfo').textContent = info;
+    oppBoard($('oppBoardMini'), opp);
+    oppBoard($('oppBoardBig'), opp);
+    $('game').classList.toggle('split', !!settings.split);
+    $('oppSide').classList.toggle('hidden', !settings.split);
+    $('diffName').textContent = DIFFICULTIES[game.diff].name;
+    mpOverlay();
+  }
+
+  function mpSetSplit(on) {
+    settings.split = on;
+    store.set(KEY_SETTINGS, settings);
+    render();
+  }
+
+  function mpSolved() {
+    game.status = 'won';
+    game.score += DIFFICULTIES[game.diff].points * 10;
+    for (let i = 0; i < 81; i++) setTimeout(() => animate(i, 'flash', 650), (ROW[i] + COL[i]) * 40);
+    saveGame();
+    render();
+    mpPush(); // a szerver rögzíti, ki volt az első
+  }
+
+  function mpOut() {
+    game.status = 'out';
+    saveGame();
+    render();
+    mpPush();
+    const { opp } = mpSeats();
+    if (opp && !opp.done && !opp.out) {
+      $('endEmoji').textContent = '😵';
+      $('endTitle').textContent = 'Kiestél – elfogyott a 3 lehetőség';
+      $('endStats').innerHTML = '<div class="best"><b>' + escapeHtml(opp.name) + ' még játszik.</b></div>';
+      const actions = $('endActions');
+      actions.innerHTML = '';
+      addAction(actions, 'Figyelem tovább', 'btn primary', closeModal);
+      addAction(actions, 'Főmenü', 'btn ghost', () => { closeModal(); openHome(); });
+      $('endModal').classList.remove('hidden');
+    }
+  }
+
+  function mpCheckEnd() {
+    if (mp.ended || !mp.data) return;
+    const { me, opp } = mpSeats();
+    if (!me || !opp) return;
+    let result = '';
+    if (me.done && (!opp.done || me.done <= opp.done)) result = 'win';
+    else if (opp.done) result = 'lose';
+    else if (me.out && opp.out) result = 'draw';
+    else if (opp.out && !mp.oppOutShown && game.status === 'playing') {
+      mp.oppOutShown = true;
+      toast(opp.name + ' kiesett – fejezd be a győzelemért!');
+    }
+    if (!result) return;
+    mp.ended = true;
+    game.mp.ended = true;
+    if (game.status === 'playing' || game.status === 'waiting') game.status = 'lost';
+    if (result === 'win') { stats.total += game.score; saveStats(); }
+    saveGame();
+    setTimeout(() => mpShowEnd(result, me, opp), result === 'win' ? 900 : 200);
+  }
+
+  function mpShowEnd(result, me, opp) {
+    const start = game.mp.start;
+    const t = (p) => (p.done ? fmtTime((p.done - start) / 1000) : p.out ? 'kiesett' : '–');
+    $('endEmoji').textContent = result === 'win' ? '🏆' : result === 'draw' ? '🤝' : '🥈';
+    $('endTitle').textContent = result === 'win' ? 'Nyertél!' : result === 'draw' ? 'Döntetlen – mindketten kiestetek' : opp.name + ' nyert';
+    $('endStats').innerHTML =
+      '<div><small>Te</small><b class="' + (result === 'win' ? 'win' : '') + '">' + t(me) + '</b></div>' +
+      '<div><small>' + escapeHtml(opp.name) + '</small><b class="opp-c">' + t(opp) + '</b></div>' +
+      '<div><small>Hibáid</small><b>' + me.mistakes + '</b></div>' +
+      '<div><small>Pontjaid</small><b>' + game.score.toLocaleString('hu-HU') + '</b></div>';
+    const actions = $('endActions');
+    actions.innerHTML = '';
+    addAction(actions, 'Visszavágó', 'btn primary', mpRematch);
+    addAction(actions, 'Főmenü', 'btn ghost', () => { closeModal(); openHome(); });
+    $('endModal').classList.remove('hidden');
+  }
+
+  async function mpRematch() {
+    if (!game || !game.mp) return;
+    closeModal();
+    toast('Új feladvány…');
+    const { puzzle, solution } = E.generate(game.diff);
+    try {
+      const d = await api('POST', '/room/' + game.mp.id + '/rematch', {
+        token: game.mp.token, round: game.mp.round, puzzle: puzzle.join(''), solution: solution.join(''),
+      });
+      mpApply(d);
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   /* ---------- Indítás ---------- */
@@ -696,6 +1151,7 @@
   bind();
   game = loadGame();
   openHome();
+  mpHandleLink();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline mód nem elérhető */ });

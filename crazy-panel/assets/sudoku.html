@@ -37,6 +37,8 @@
           <small id="continueInfo"></small>
         </button>
         <button id="btnNew" class="btn">Új játék</button>
+        <button id="btnMp" class="btn">👥 Kétszemélyes játék</button>
+        <button id="btnMpContinue" class="btn hidden"><span>Kétszemélyes játék folytatása</span><small id="mpContinueInfo"></small></button>
         <button id="btnStats" class="btn ghost">Statisztika</button>
       </div>
     </div>
@@ -48,7 +50,11 @@
       <button class="icon-btn" id="btnBack" aria-label="Vissza">
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
+      <div class="topbar-title" id="topTitle"></div>
       <div class="topbar-right">
+        <button class="icon-btn hidden" id="btnShare" aria-label="Meghívó link">
+          <svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+        </button>
         <button class="icon-btn" id="btnRestart" aria-label="Új játék">
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -70,14 +76,43 @@
       </div>
     </div>
 
+    <div class="mp-bar hidden" id="mpBar">
+      <div class="mp-players">
+        <div class="mp-p me">
+          <div class="mp-row"><b id="mpMeName">Te</b><small id="mpMeInfo"></small></div>
+          <div class="mp-prog"><i id="mpMeBar"></i></div>
+        </div>
+        <div class="mp-p opp">
+          <div class="mp-row"><b id="mpOppName">Ellenfél</b><small id="mpOppInfo"></small></div>
+          <div class="mp-prog"><i id="mpOppBar"></i></div>
+        </div>
+      </div>
+      <button class="opp-mini" id="btnSplit" aria-label="Táblák egymás mellett">
+        <div class="opp-board" id="oppBoardMini"></div>
+        <span class="split-ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg></span>
+      </button>
+    </div>
+
+    <div class="boards">
     <div class="board-wrap">
       <div id="board" class="board"></div>
+      <div id="mpOverlay" class="pause-overlay mp-overlay hidden">
+        <div class="mp-count" id="mpCount"></div>
+        <p id="mpMsg"></p>
+        <button class="btn primary hidden" id="btnInvite">Meghívó link küldése</button>
+        <code class="mp-link hidden" id="mpLink"></code>
+      </div>
       <div id="pauseOverlay" class="pause-overlay hidden">
         <button class="play-big" id="btnResume" aria-label="Folytatás">
           <svg viewBox="0 0 24 24"><path d="M9 6l9 6-9 6z"/></svg>
         </button>
         <p>Szünet</p>
       </div>
+    </div>
+    <div class="opp-side hidden" id="oppSide">
+      <div class="opp-side-head"><b id="oppSideName">Ellenfél</b><small id="oppSideInfo"></small></div>
+      <div class="opp-board big" id="oppBoardBig"></div>
+    </div>
     </div>
 
     <div class="fast-row">
@@ -121,8 +156,21 @@
   <div class="sheet-backdrop hidden" id="diffSheet">
     <div class="sheet">
       <div class="sheet-handle"></div>
-      <h2>Válassz nehézséget</h2>
+      <h2 id="diffTitle">Válassz nehézséget</h2>
+      <label class="field hidden" id="mpNameField"><span>A neved</span><input id="mpName" type="text" maxlength="20" autocomplete="nickname" placeholder="pl. Anna"></label>
       <div id="diffList" class="diff-list"></div>
+      <button class="btn ghost" data-close>Mégse</button>
+    </div>
+  </div>
+
+  <!-- Kétszemélyes: csatlakozás meghívó linkkel -->
+  <div class="sheet-backdrop hidden" id="joinSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Meghívtak egy kétszemélyes játékra</h2>
+      <p class="sheet-text" id="joinInfo">Ugyanazt a feladványt oldjátok meg egyszerre. Aki előbb végez, nyer.</p>
+      <label class="field"><span>A neved</span><input id="joinName" type="text" maxlength="20" autocomplete="nickname" placeholder="pl. Bence"></label>
+      <button class="btn primary" id="btnJoin">Csatlakozás</button>
       <button class="btn ghost" data-close>Mégse</button>
     </div>
   </div>
