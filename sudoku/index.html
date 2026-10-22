@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Szudoku">
+  <meta name="theme-color" content="#1b1d21">
+  <meta name="format-detection" content="telephone=no">
+  <title>Klasszikus Szudoku</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Kezdőképernyő -->
+  <section id="home" class="screen active">
+    <div class="home-inner">
+      <div class="logo">
+        <div class="logo-grid">
+          <span>9</span><span></span><span>7</span>
+          <span></span><span>5</span><span></span>
+          <span>3</span><span></span><span>1</span>
+        </div>
+      </div>
+      <h1>Klasszikus Szudoku</h1>
+      <p class="home-score">🎃 Összpontszám: <b id="totalScore">0</b></p>
+
+      <div class="home-actions">
+        <button id="btnContinue" class="btn primary hidden">
+          <span>Folytatás</span>
+          <small id="continueInfo"></small>
+        </button>
+        <button id="btnNew" class="btn">Új játék</button>
+        <button id="btnStats" class="btn ghost">Statisztika</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Játék -->
+  <section id="game" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" id="btnBack" aria-label="Vissza">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="topbar-right">
+        <button class="icon-btn" id="btnRestart" aria-label="Új játék">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" id="btnSettings" aria-label="Beállítások">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="score">🎃 Eredmény: <span id="score">0</span></div>
+    <div class="infobar">
+      <div id="mistakes">Hibák: 0/3</div>
+      <div id="diffName">Nehéz</div>
+      <div class="timer-wrap">
+        <span id="timer">00:00</span>
+        <button class="pause-btn" id="btnPause" aria-label="Szünet">
+          <svg viewBox="0 0 24 24"><path d="M10 8v8M14 8v8"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <div id="board" class="board"></div>
+      <div id="pauseOverlay" class="pause-overlay hidden">
+        <button class="play-big" id="btnResume" aria-label="Folytatás">
+          <svg viewBox="0 0 24 24"><path d="M9 6l9 6-9 6z"/></svg>
+        </button>
+        <p>Szünet</p>
+      </div>
+    </div>
+
+    <div class="fast-row">
+      <span class="fast-label" id="fastLabel"></span>
+      <button class="switch" id="btnFast" role="switch" aria-checked="false" aria-label="Gyors bevitel (először számot választasz)">
+        <span class="knob">
+          <svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+        </span>
+      </button>
+    </div>
+
+    <div class="tools">
+      <button class="tool" id="btnUndo">
+        <svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 17"/></svg>
+        <span>Visszavonás</span>
+      </button>
+      <button class="tool" id="btnErase">
+        <svg viewBox="0 0 24 24"><path d="M7 21h10"/><path d="M3.5 13.5l8-8a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L12 19H8z"/><path d="M8.5 8.5l7 7"/></svg>
+        <span>Törlés</span>
+      </button>
+      <button class="tool" id="btnAutoNotes">
+        <svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5L9 20H4v-5z"/><path d="M12 7l5 5"/><path d="M15 21h6"/><path d="M8.5 11.5l-1.5 3h3l-1.5 3" class="thin"/></svg>
+        <span>Gyors ceruza</span>
+      </button>
+      <button class="tool" id="btnPencil">
+        <i class="badge pill" id="pencilBadge">OFF</i>
+        <svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5L9 20H4v-5z"/><path d="M12 7l5 5"/></svg>
+        <span>Ceruza</span>
+      </button>
+      <button class="tool" id="btnHint">
+        <i class="badge round" id="hintBadge">3</i>
+        <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/><path d="M10 11l1 1 1-1 1 1 1-1" class="thin"/></svg>
+        <span>Tipp</span>
+      </button>
+    </div>
+
+    <div class="numpad" id="numpad"></div>
+  </section>
+
+  <!-- Nehézség választó -->
+  <div class="sheet-backdrop hidden" id="diffSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Válassz nehézséget</h2>
+      <div id="diffList" class="diff-list"></div>
+      <button class="btn ghost" data-close>Mégse</button>
+    </div>
+  </div>
+
+  <!-- Beállítások -->
+  <div class="sheet-backdrop hidden" id="settingsSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Beállítások</h2>
+      <label class="setting"><span>Hibakorlát (3 hiba)</span><input type="checkbox" data-setting="mistakeLimit"></label>
+      <label class="setting"><span>Hibás szám azonnali jelzése</span><input type="checkbox" data-setting="showErrors"></label>
+      <label class="setting"><span>Azonos számok kiemelése</span><input type="checkbox" data-setting="highlightSame"></label>
+      <label class="setting"><span>Sor/oszlop/blokk kiemelése</span><input type="checkbox" data-setting="highlightPeers"></label>
+      <label class="setting"><span>Jegyzetek automatikus törlése</span><input type="checkbox" data-setting="autoRemoveNotes"></label>
+      <label class="setting"><span>Kész számok elrejtése</span><input type="checkbox" data-setting="hideDone"></label>
+      <label class="setting"><span>Időzítő mutatása</span><input type="checkbox" data-setting="showTimer"></label>
+      <button class="btn" data-close>Kész</button>
+    </div>
+  </div>
+
+  <!-- Statisztika -->
+  <div class="sheet-backdrop hidden" id="statsSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Statisztika</h2>
+      <div id="statsBody"></div>
+      <button class="btn ghost" id="btnResetStats">Statisztika törlése</button>
+      <button class="btn" data-close>Bezár</button>
+    </div>
+  </div>
+
+  <!-- Eredmény / vége -->
+  <div class="modal-backdrop hidden" id="endModal">
+    <div class="modal">
+      <div class="modal-emoji" id="endEmoji">🏆</div>
+      <h2 id="endTitle">Gratulálok!</h2>
+      <div class="end-stats" id="endStats"></div>
+      <div class="modal-actions" id="endActions"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
