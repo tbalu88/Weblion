@@ -3483,6 +3483,7 @@ function cp_el_img_route() {
  * ===================================================================== */
 require_once __DIR__ . '/portal.php';
 require_once __DIR__ . '/sablon.php';
+require_once __DIR__ . '/sudoku.php';
 
 /* =====================================================================
  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

@@ -14,15 +14,17 @@ Telepítés nélküli, offline is működő webes szudoku, iPhone 15 Pro-ra opti
 - Visszavonás, Törlés, maradék darabszám a számgombokon, azonos számok kiemelése
 - Pontszám (sor/oszlop/blokk bónusz, idő- és hibátlan bónusz), statisztika, automatikus mentés
 
-## Használat iPhone-on
-1. Töltsd fel a `sudoku/` mappát bármilyen HTTPS tárhelyre (pl. `eventcrazy.hu/sudoku/` vagy GitHub Pages).
-2. Nyisd meg Safariban → Megosztás → **Főképernyőhöz adás**.
-3. Az ikonról indítva teljes képernyős alkalmazásként fut, offline is.
+## Elérés
+**https://eventcrazy.hu/crazy-panel/sudoku/** – jelszó nélkül, a keresők elől rejtve (noindex).
 
-Helyi kipróbálás: `cd sudoku && python3 -m http.server` → http://localhost:8000
+iPhone-on: Safari → Megosztás → **Főképernyőhöz adás**; az ikonról teljes képernyős alkalmazásként, offline is fut.
 
-## Fájlok
-- `engine.js` – generátor és megoldó (bitmaszkos visszalépéses keresés)
-- `app.js` – játéklogika, felület, mentés (localStorage)
-- `style.css`, `index.html` – felület
-- `manifest.webmanifest`, `sw.js`, `icons/` – PWA / offline
+## Fájlok (a szerveren: `wp-content/plugins/crazy-panel/`)
+- `sudoku.php` – útvonal: `/crazy-panel/sudoku/<név>` → `assets/sudoku*` (a `crazy-panel.php` tölti be)
+- `assets/sudoku.html`, `assets/sudoku.css` – felület
+- `assets/sudoku-engine.js` – generátor és megoldó (bitmaszkos visszalépéses keresés)
+- `assets/sudoku-app.js` – játéklogika, mentés (localStorage)
+- `assets/sudoku-sw.js`, `assets/sudoku-manifest.json` – PWA / offline
+- `assets/sudoku-icons.json` – az ikonok base64-ben (a tárhelyre csak szöveges fájl írható)
+
+Frissítéskor a `sudoku-sw.js`-ben növeld a `CACHE` nevet, hogy a telepített példányok is frissüljenek.

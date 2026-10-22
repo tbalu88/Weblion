@@ -7,3 +7,5 @@ amelyeket az AI-keret funkció érint (a teljes bővítmény a szerveren van).
   (egyedi stílusok mentése / törlése, `cp_sb_own` beállítás + `uploads/crazy-sablon/egyedi-*.png`)
 - `assets/sablon.js`, `assets/sablon.css` – „Egyedi” kategória és az AI-keret kártya a Sablon fülön
 - `crazy-panel.php` – admin beállítások: OpenAI kulcs, képmodell, minőség, napi keret (v1.11.0)
+
+- `sudoku.php`, `assets/sudoku*` – Szudoku játék a `/crazy-panel/sudoku/` címen (lásd `SUDOKU.md`)
