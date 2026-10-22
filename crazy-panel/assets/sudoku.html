@@ -40,6 +40,7 @@
         <button id="btnMp" class="btn">👥 Kétszemélyes játék</button>
         <button id="btnMpContinue" class="btn hidden"><span>Kétszemélyes játék folytatása</span><small id="mpContinueInfo"></small></button>
         <button id="btnStats" class="btn ghost">Statisztika</button>
+        <button id="btnInstall" class="btn ghost install-btn hidden">📲 Kitétel a főképernyőre</button>
       </div>
     </div>
   </section>
@@ -172,6 +173,16 @@
       <label class="field"><span>A neved</span><input id="joinName" type="text" maxlength="20" autocomplete="nickname" placeholder="pl. Bence"></label>
       <button class="btn primary" id="btnJoin">Csatlakozás</button>
       <button class="btn ghost" data-close>Mégse</button>
+    </div>
+  </div>
+
+  <!-- Főképernyőre tétel útmutató -->
+  <div class="sheet-backdrop hidden" id="installSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Kitétel a főképernyőre</h2>
+      <div id="installBody"></div>
+      <button class="btn" data-close>Rendben</button>
     </div>
   </div>
 

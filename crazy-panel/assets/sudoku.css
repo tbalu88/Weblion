@@ -382,3 +382,19 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 @media (max-height: 740px) {
   #game.mp .board-wrap { width: min(100%, calc(100dvh - 380px - var(--safe-top) - var(--safe-bottom))); }
 }
+
+/* ---------- Főképernyőre tétel útmutató ---------- */
+.install-btn { color: var(--accent); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: st; }
+.steps li { display: flex; gap: 12px; align-items: flex-start; background: var(--btn); border-radius: 12px; padding: 12px; line-height: 1.4; font-size: 15px; counter-increment: st; }
+.steps li::before {
+  content: counter(st); flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+}
+.steps .ico { display: inline-flex; vertical-align: -5px; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; background: #3a3e45; margin: 0 2px; }
+.steps .ico svg { width: 16px; height: 16px; stroke-width: 2; }
+.install-note { margin: 4px 0 0; color: var(--text-dim); font-size: 13px; line-height: 1.45; text-align: center; }
+.install-warn { background: rgba(232,162,61,.15); border: 1px solid rgba(232,162,61,.4); color: #f0c27a; border-radius: 12px; padding: 12px; font-size: 15px; line-height: 1.45; }
+.copy-row { display: flex; gap: 8px; align-items: center; }
+.copy-row code { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); background: var(--btn); border-radius: 10px; padding: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-user-select: all; user-select: all; }
+.copy-row .btn { width: auto; min-height: 44px; padding: 8px 14px; font-size: 15px; }

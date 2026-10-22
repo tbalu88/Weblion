@@ -741,6 +741,7 @@
       mp.ended = !!m.mp.ended;
       openGame();
     });
+    $('btnInstall').addEventListener('click', openInstall);
     $('btnShare').addEventListener('click', mpInvite);
     $('btnInvite').addEventListener('click', mpInvite);
     $('btnSplit').addEventListener('click', () => mpSetSplit(true));
@@ -751,6 +752,75 @@
       closeSheet($('joinSheet'));
       mpJoin(mp.joinId, name);
     });
+  }
+
+  /* ---------- Főképernyőre tétel (iOS) ---------- */
+
+  const ICO_SHARE = '<span class="ico"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>';
+  const ICO_MORE = '<span class="ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></span>';
+  const ICO_PLUS = '<span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></span>';
+
+  function isStandalone() {
+    return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  }
+
+  function browserKind() {
+    const ua = navigator.userAgent || '';
+    const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    // alkalmazáson belüli böngészők: itt nincs „Főképernyőhöz adás”
+    const inApp = /FBAN|FBAV|FB_IAB|FBIOS|Messenger|Instagram|Line\/|GSA\/|LinkedInApp|Twitter|TikTok|musical_ly|Snapchat|Pinterest|WhatsApp|Viber|Gmail|GoogleApp/i.test(ua);
+    let kind = 'safari';
+    if (inApp) kind = 'inapp';
+    else if (/CriOS/.test(ua)) kind = 'chrome';
+    else if (/FxiOS|EdgiOS|OPiOS|DuckDuckGo/.test(ua)) kind = 'other';
+    return { ios, kind };
+  }
+
+  function openInstall() {
+    const { ios, kind } = browserKind();
+    const url = location.origin + location.pathname;
+    let html = '';
+    if (ios && kind === 'inapp') {
+      html =
+        '<div class="install-warn">Az oldalt most egy alkalmazás (pl. Messenger, Gmail, Instagram) saját böngészője nyitotta meg. ' +
+        'Itt nincs „Főképernyőhöz adás”, ezért előbb nyisd meg <b>Safariban</b>.</div>' +
+        '<ol class="steps">' +
+        '<li><span>Koppints a jobb felső vagy alsó ' + ICO_MORE + ' menüre, és válaszd a <b>Megnyitás Safariban</b> (vagy „Megnyitás böngészőben”) lehetőséget.</span></li>' +
+        '<li><span>Ha nincs ilyen, másold ki a címet, nyisd meg a <b>Safarit</b>, és illeszd be a címsorba.</span></li>' +
+        '<li><span>Safariban nyisd meg újra ezt az útmutatót a kezdőképernyőn.</span></li>' +
+        '</ol>' +
+        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+    } else if (ios && kind === 'chrome') {
+      html = '<ol class="steps">' +
+        '<li><span>Koppints a címsor jobb oldalán a ' + ICO_SHARE + ' <b>Megosztás</b> ikonra.</span></li>' +
+        '<li><span>Görgess le, és válaszd a ' + ICO_PLUS + ' <b>Főképernyőhöz adás</b> lehetőséget.</span></li>' +
+        '<li><span>Koppints a <b>Hozzáadás</b> gombra.</span></li>' +
+        '</ol>' +
+        '<p class="install-note">Ha nem látod, nyisd meg az oldalt Safariban – ott biztosan működik.</p>';
+    } else if (ios && kind === 'other') {
+      html = '<div class="install-warn">Ebben a böngészőben a főképernyőre tétel nem mindig érhető el. Nyisd meg az oldalt <b>Safariban</b>.</div>' +
+        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+    } else if (ios) {
+      html = '<ol class="steps">' +
+        '<li><span>Koppints a Safari ' + ICO_SHARE + ' <b>Megosztás</b> ikonjára. iOS 26-on előbb a címsor melletti ' + ICO_MORE + ' gombra, majd a <b>Megosztás</b>ra.</span></li>' +
+        '<li><span><b>Görgess lejjebb</b> a megnyíló listában, és válaszd a ' + ICO_PLUS + ' <b>Főképernyőhöz adás</b> lehetőséget.</span></li>' +
+        '<li><span>Hagyd bekapcsolva a <b>Megnyitás webappként</b> kapcsolót (ha van), és koppints a <b>Hozzáadás</b> gombra.</span></li>' +
+        '</ol>' +
+        '<p class="install-note">Ha a listában nincs ott: görgess a lista aljára → <b>Műveletek szerkesztése</b> → keresd meg a „Főképernyőhöz adás”-t és kapcsold be. ' +
+        'Privát böngészésben és ha a Képernyőidő korlátozza a Safarit, az opció nem jelenik meg.</p>';
+    } else {
+      html = '<p class="install-note" style="font-size:15px">Telefonon nyisd meg ezt a címet Safariban (iPhone) vagy Chrome-ban (Android), majd a böngésző menüjéből válaszd a <b>Főképernyőhöz adás</b> lehetőséget.</p>' +
+        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+    }
+    $('installBody').innerHTML = html;
+    const copy = $('btnCopyUrl');
+    if (copy) {
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(url); toast('Cím kimásolva'); }
+        catch (e) { toast('Jelöld ki és másold a címet'); }
+      });
+    }
+    openSheet('installSheet');
   }
 
   /* ---------- Kétszemélyes játék ---------- */
@@ -1151,6 +1221,7 @@
   bind();
   game = loadGame();
   openHome();
+  $('btnInstall').classList.toggle('hidden', isStandalone());
   mpHandleLink();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
