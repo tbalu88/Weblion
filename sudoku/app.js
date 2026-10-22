@@ -611,8 +611,17 @@
       if (game) openGame();
     });
     $('btnStats').addEventListener('click', () => openSheet('statsSheet'));
-    $('btnResetStats').addEventListener('click', () => {
-      if (!confirm('Biztosan törlöd a statisztikát?')) return;
+    let resetArmed = null;
+    $('btnResetStats').addEventListener('click', (e) => {
+      const b = e.currentTarget;
+      if (!resetArmed) {
+        b.textContent = 'Biztosan? Koppints újra';
+        resetArmed = setTimeout(() => { resetArmed = null; b.textContent = 'Statisztika törlése'; }, 3000);
+        return;
+      }
+      clearTimeout(resetArmed);
+      resetArmed = null;
+      b.textContent = 'Statisztika törlése';
       stats = { total: 0, byDiff: {} };
       saveStats();
       buildStats();
