@@ -291,6 +291,7 @@
   /* ---------- Képernyők ---------- */
 
   function showScreen(id) {
+    hideToast();
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
   }
 
@@ -576,9 +577,26 @@
       });
       el.appendChild(b);
     }
+    placeToast(el);
     el.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), action ? 4000 : 1800);
+  }
+
+  /* Játék közben az üzenet közvetlenül az eszközsor fölé kerül, hogy a gombja ne takarjon vezérlőt. */
+  function placeToast(el) {
+    const tools = $('game').classList.contains('active') ? $('game').querySelector('.tools') : null;
+    if (!tools) { el.style.left = ''; el.style.bottom = ''; el.style.maxWidth = ''; return; }
+    const ar = $('app').getBoundingClientRect(), tr = tools.getBoundingClientRect();
+    el.style.left = (tr.left + tr.width / 2 - ar.left) + 'px';
+    el.style.bottom = (ar.bottom - tr.top + 2) + 'px';
+    // középre igazítva jobbról se érjen el a gyors mód kapcsolójáig (≈ 60 px)
+    el.style.maxWidth = Math.max(150, tr.width - 128) + 'px';
+  }
+
+  function hideToast() {
+    clearTimeout(toastTimer);
+    $('toast').classList.remove('show');
   }
 
   function haptic(ms) {

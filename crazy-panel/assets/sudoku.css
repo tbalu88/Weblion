@@ -206,7 +206,7 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .tools { flex: 0 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 4px 0 2px; }
 .tool {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0;
-  padding: 6px 0; color: #c9ccd1; font-size: clamp(10px, 3.05vw, 14px); border-radius: 12px;
+  padding: 6px 0; color: #c9ccd1; font-size: clamp(10px, 2.9vw, 14px); border-radius: 12px;
 }
 .tool span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tool svg { width: clamp(26px, 4.2dvh, 34px); height: clamp(26px, 4.2dvh, 34px); stroke-width: 1.6; }
@@ -295,9 +295,10 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
   opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30; white-space: nowrap;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-.toast.has-action { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 18px; }
+.toast span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.toast.has-action { display: flex; align-items: center; gap: 10px; padding: 3px 3px 3px 14px; font-size: 14px; }
 .toast.show .toast-action { pointer-events: auto; }
-.toast-action { background: var(--accent); color: #fff; font-weight: 600; font-size: 14px; padding: 7px 14px; border-radius: 16px; }
+.toast-action { flex-shrink: 0; background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 14px; }
 html.gecko .toast-action { color: #0f2416; }
 
 /* Alacsony képernyők (pl. Safari / Chrome eszköztárral) */
@@ -305,7 +306,7 @@ html.gecko .toast-action { color: #0f2416; }
   .score { font-size: 19px; }
   .infobar { font-size: 15px; padding: 2px 2px 4px; }
   .fast-row { min-height: 34px; padding-top: 4px; }
-  .tool { font-size: min(12px, 3.05vw); gap: 3px; padding: 4px 0; }
+  .tool { font-size: min(12px, 2.9vw); gap: 3px; padding: 4px 0; }
   .logo-grid { width: 96px; height: 96px; }
   .logo-grid span { font-size: 24px; }
   .home-actions { margin-top: 10px; }
@@ -315,7 +316,7 @@ html.gecko .toast-action { color: #0f2416; }
   .score { font-size: 16px; margin-top: 0; }
   .infobar { font-size: 14px; padding: 0 2px 2px; }
   .fast-row { min-height: 30px; padding: 2px 4px 0; }
-  .tool { font-size: min(11px, 3.05vw); gap: 2px; padding: 2px 0; }
+  .tool { font-size: min(11px, 2.9vw); gap: 2px; padding: 2px 0; }
   .mp-p { padding: 5px 9px; }
   .mp-lead { min-height: 13px; line-height: 13px; font-size: 11px; }
 }
