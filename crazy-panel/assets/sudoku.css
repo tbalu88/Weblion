@@ -47,8 +47,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .hidden { display: none !important; }
 
 #app {
+  height: 100vh;
   height: 100dvh;
-  max-width: 520px;
+  max-width: 640px;
   margin: 0 auto;
   position: relative;
   overflow: hidden;
@@ -58,20 +59,24 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   display: none;
   height: 100%;
   flex-direction: column;
-  padding: calc(var(--safe-top) + 4px) 8px calc(var(--safe-bottom) + 8px);
+  padding: calc(var(--safe-top) + 4px) max(8px, env(safe-area-inset-right, 0px)) calc(var(--safe-bottom) + 8px) max(8px, env(safe-area-inset-left, 0px));
 }
 .screen.active { display: flex; }
+/* a játékoszlop szélessége a táblához igazodik (--gw-t a JS számolja) */
+#game { width: 100%; max-width: var(--gw, none); margin: 0 auto; --numh: clamp(48px, 9dvh, 84px); }
 
 /* ---------- Kezdőképernyő ---------- */
 .home-inner {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 14px;
-  padding: 0 16px;
+  padding: 0 16px 12px;
 }
+.home-inner::before, .home-inner::after { content: ""; flex: 1 0 0; }
 .logo-grid {
   width: 120px; height: 120px;
   display: grid; grid-template-columns: repeat(3, 1fr);
@@ -119,10 +124,11 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 #mistakes.bad { color: var(--error); }
 
 /* ---------- Tábla ---------- */
-.board-wrap { position: relative; width: min(100%, calc(100dvh - 400px - var(--safe-top) - var(--safe-bottom))); min-width: 280px; margin: 0 auto; }
+.board-wrap { position: relative; flex: 0 0 auto; width: var(--bs, min(calc(100vw - 16px), calc(100dvh - 400px))); }
 .board {
   container-type: inline-size;
   width: 100%;
+  height: var(--bs, auto);
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
@@ -184,7 +190,7 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .play-big svg { width: 36px; height: 36px; fill: #fff; stroke: none; margin-left: 4px; }
 
 /* ---------- Gyors bevitel kapcsoló ---------- */
-.fast-row { margin-top: auto; display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 12px 4px 4px; min-height: 44px; }
+.fast-row { flex: 0 0 auto; display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 6px 4px 2px; min-height: 40px; }
 .fast-label { color: var(--text-dim); font-size: 13px; }
 .switch { width: 50px; height: 28px; border-radius: 14px; background: #3a3e45; position: relative; transition: background .2s; }
 .switch .knob {
@@ -197,13 +203,13 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .switch[aria-checked="true"] .knob svg { fill: var(--accent); }
 
 /* ---------- Eszközök ---------- */
-.tools { display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 0 4px; }
+.tools { flex: 0 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 4px 0 2px; }
 .tool {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 8px 0; color: #c9ccd1; font-size: 14px; border-radius: 12px;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0;
+  padding: 6px 0; color: #c9ccd1; font-size: clamp(10px, 3.05vw, 14px); border-radius: 12px;
 }
-.tool span { white-space: nowrap; }
-.tool svg { width: 34px; height: 34px; stroke-width: 1.6; }
+.tool span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tool svg { width: clamp(26px, 4.2dvh, 34px); height: clamp(26px, 4.2dvh, 34px); stroke-width: 1.6; }
 .tool svg .thin { stroke-width: 1.2; }
 .tool:active { background: var(--btn); }
 .tool.disabled { opacity: .4; }
@@ -217,32 +223,32 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .badge.round.empty { background: #4a4e55; }
 
 /* ---------- Számbillentyűk ---------- */
-.numpad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; padding: 10px 0 0; margin-bottom: auto; }
+.numpad { flex: 0 0 auto; display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 5px; padding: 8px 0 0; }
 .num {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  aspect-ratio: 0.58; max-height: 92px; border-radius: 12px; background: var(--btn);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0;
+  height: var(--numh); border-radius: 12px; background: var(--btn); overflow: hidden;
   color: var(--accent); transition: transform .08s, background .15s;
 }
-.num b { font-size: clamp(30px, 10vw, 46px); font-weight: 400; line-height: 1; }
-.num small { font-size: 14px; color: var(--text-dim); margin-top: 6px; }
+.num b { font-size: clamp(22px, min(10vw, 5.4dvh), 44px); font-weight: 400; line-height: 1; }
+.num small { font-size: clamp(11px, 1.7dvh, 14px); color: var(--text-dim); margin-top: clamp(2px, .6dvh, 6px); }
 .num:active { transform: scale(.94); background: var(--btn-press); }
 .num.active { background: var(--accent); color: #fff; }
 .num.active small { color: rgba(255,255,255,.85); }
 .num.done { visibility: hidden; }
 .num.done.show { visibility: visible; opacity: .3; }
-.numpad.pencil .num b { font-size: clamp(22px, 7vw, 32px); color: #9fb7d9; }
+.numpad.pencil .num b { font-size: clamp(18px, min(7vw, 3.8dvh), 32px); color: #9fb7d9; }
 
 /* ---------- Lapok / modálok ---------- */
 .sheet-backdrop, .modal-backdrop {
   position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 20;
-  display: flex; align-items: flex-end; animation: fadeIn .15s;
+  display: flex; align-items: flex-end; justify-content: center; animation: fadeIn .15s;
 }
 .modal-backdrop { align-items: center; justify-content: center; padding: 24px; }
 @keyframes fadeIn { from { opacity: 0; } }
 @keyframes slideUp { from { transform: translateY(100%); } }
 @keyframes zoomIn { from { transform: scale(.85); opacity: 0; } }
 .sheet {
-  width: 100%; background: var(--sheet); border-radius: 22px 22px 0 0;
+  width: 100%; max-width: 600px; background: var(--sheet); border-radius: 22px 22px 0 0;
   padding: 10px 18px calc(var(--safe-bottom) + 16px); animation: slideUp .22s ease-out;
   display: flex; flex-direction: column; gap: 10px; max-height: 90%; overflow-y: auto;
 }
@@ -294,16 +300,24 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .toast-action { background: var(--accent); color: #fff; font-weight: 600; font-size: 14px; padding: 7px 14px; border-radius: 16px; }
 html.gecko .toast-action { color: #0f2416; }
 
-/* Alacsony képernyők (pl. Safari eszköztárral) */
+/* Alacsony képernyők (pl. Safari / Chrome eszköztárral) */
 @media (max-height: 740px) {
   .score { font-size: 19px; }
-  .infobar { font-size: 15px; padding: 2px 2px 6px; }
-  .fast-row { padding-top: 6px; min-height: 36px; }
-  .tool svg { width: 28px; height: 28px; }
-  .tool { font-size: 12px; gap: 4px; padding: 4px 0; }
-  .num { aspect-ratio: 0.7; }
-  .num small { margin-top: 3px; font-size: 12px; }
-  .board-wrap { width: min(100%, calc(100dvh - 330px - var(--safe-top) - var(--safe-bottom))); }
+  .infobar { font-size: 15px; padding: 2px 2px 4px; }
+  .fast-row { min-height: 34px; padding-top: 4px; }
+  .tool { font-size: min(12px, 3.05vw); gap: 3px; padding: 4px 0; }
+  .logo-grid { width: 96px; height: 96px; }
+  .logo-grid span { font-size: 24px; }
+  .home-actions { margin-top: 10px; }
+}
+@media (max-height: 620px) {
+  .topbar { height: 38px; }
+  .score { font-size: 16px; margin-top: 0; }
+  .infobar { font-size: 14px; padding: 0 2px 2px; }
+  .fast-row { min-height: 30px; padding: 2px 4px 0; }
+  .tool { font-size: min(11px, 3.05vw); gap: 2px; padding: 2px 0; }
+  .mp-p { padding: 5px 9px; }
+  .mp-lead { min-height: 13px; line-height: 13px; font-size: 11px; }
 }
 
 /* ---------- Kétszemélyes játék ---------- */
@@ -311,15 +325,15 @@ html.gecko .toast-action { color: #0f2416; }
 .topbar-title { flex: 1; min-width: 0; text-align: center; color: var(--text-dim); font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #game.mp .score { display: none; }
 
-.mp-bar { display: flex; gap: 10px; align-items: stretch; padding: 0 2px 8px; }
-.mp-players { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
-.mp-p { background: var(--btn); border-radius: 12px; padding: 7px 10px; border: 1px solid transparent; transition: border-color .3s; }
-.mp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
-.mp-row b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mp-row small { color: var(--text-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.mp-bar { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; padding: 0 2px 6px; }
+.mp-players { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px 6px; }
+.mp-p { min-width: 0; background: var(--btn); border-radius: 12px; padding: 5px 9px 6px; border: 1px solid transparent; transition: border-color .3s; }
+.mp-row { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mp-row b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-row small { color: var(--text-dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .mp-p.me b { color: var(--accent); }
 .mp-p.opp b { color: var(--opp); }
-.mp-prog { height: 5px; border-radius: 3px; background: var(--track); margin-top: 5px; overflow: hidden; }
+.mp-prog { height: 4px; border-radius: 2px; background: var(--track); margin-top: 4px; overflow: hidden; }
 .mp-prog i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .4s; }
 .mp-p.opp .mp-prog i { background: var(--opp); }
 .mp-p.offline small::before { content: "● "; color: #8d9299; }
@@ -328,12 +342,14 @@ html.gecko .toast-action { color: #0f2416; }
 .mp-p.ticker small::before { content: ""; }
 @keyframes danger { 0%, 100% { border-color: rgba(255,90,95,.2); } 50% { border-color: rgba(255,90,95,.95); } }
 .mp-p.danger { animation: danger 1.1s ease-in-out infinite; }
-.mp-lead { font-size: 12px; font-weight: 600; text-align: center; color: var(--text-dim); min-height: 15px; line-height: 15px; }
+.mp-lead { grid-column: 1 / -1; font-size: 12px; font-weight: 600; text-align: center; color: var(--text-dim); min-height: 15px; line-height: 15px; }
 .mp-lead.ahead { color: var(--good); }
 .mp-lead.behind { color: var(--opp); }
 
-.opp-mini { position: relative; width: 92px; flex-shrink: 0; border-radius: 8px; align-self: center; }
-.opp-mini .split-ico { position: absolute; right: -4px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%; background: var(--opp); display: flex; align-items: center; justify-content: center; }
+.opp-mini { position: relative; width: var(--mini, 74px); flex-shrink: 0; border-radius: 8px; align-self: center; }
+.opp-mini .opp-board { width: var(--mini, 74px); height: var(--mini, 74px); }
+@media (min-width: 600px) and (min-height: 800px) { #game { --mini: 104px; } }
+.opp-mini .split-ico { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--opp); display: flex; align-items: center; justify-content: center; }
 .opp-mini .split-ico svg { width: 15px; height: 15px; stroke: #1b1d21; stroke-width: 2.2; }
 
 .opp-board {
@@ -361,11 +377,12 @@ html.gecko .toast-action { color: #0f2416; }
 .opp-board span.nx { animation: oppBad 1.1s ease-out; }
 .opp-board span.uf { animation: oppUnit 1s ease-out both; }
 
-.boards { display: flex; gap: 8px; align-items: flex-start; justify-content: center; }
-.own-side { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-#game.split .own-side { align-items: stretch; }
-.opp-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; cursor: zoom-out; }
-.side-head { display: flex; flex-direction: column; gap: 1px; min-height: 34px; justify-content: flex-end; }
+.boards { flex: 1 1 0; min-height: 0; display: flex; gap: 8px; align-items: center; justify-content: center; }
+.own-side { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.opp-side { flex: 0 0 auto; width: var(--bso, 38%); min-width: 0; display: flex; flex-direction: column; gap: 6px; cursor: zoom-out; }
+.opp-side .opp-board { width: var(--bso, 100%); height: var(--bso, auto); }
+.side-head { display: flex; flex-direction: column; gap: 1px; min-height: 34px; justify-content: flex-end; min-width: 0; max-width: var(--bs, 100%); }
+.opp-side .side-head { max-width: var(--bso, 100%); }
 .side-head b { color: var(--opp); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-head small { color: var(--text-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .own-head b { color: var(--accent); }
@@ -376,10 +393,7 @@ html.gecko .toast-action { color: #0f2416; }
 .board-wrap.pressure { animation: pressure 1s ease-out; }
 
 /* Egymás melletti nézet (telefonon) */
-#game.mp .board-wrap { width: min(100%, calc(100dvh - 430px - var(--safe-top) - var(--safe-bottom))); }
 #game.split .opp-mini { display: none; }
-#game.split .own-side { flex: 1.55 1 0; }
-#game.split .own-side .board-wrap { width: 100%; }
 
 /* Élő eseménynapló (asztali nézetben) */
 .mp-feed { display: none; }
@@ -414,25 +428,45 @@ html.gecko .toast-action { color: #0f2416; }
 .end-stats .opp-c { color: var(--opp); }
 .end-stats .deduce { color: #ffd76a; }
 
-@media (max-height: 740px) {
-  #game.mp .board-wrap { width: min(100%, calc(100dvh - 390px - var(--safe-top) - var(--safe-bottom))); }
-}
-
-/* Asztali gép / tablet: a játékoszlop szélessége igazodjon a táblához */
-@media (min-width: 600px) {
-  #app { max-width: min(520px, max(360px, calc(100dvh - 384px))); }
-  #app:has(#game.mp.active) { max-width: min(520px, max(360px, calc(100dvh - 414px))); }
+/* Fekvő telefon: balra a tábla teljes magasságban, jobbra a vezérlők */
+@media (orientation: landscape) and (max-height: 600px) {
+  #app { max-width: none; }
+  #game.active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(290px, 42%);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "boards top" "boards score" "boards info" "boards mpbar" "boards fast" "boards tools" "boards pad";
+    column-gap: 16px;
+    --numh: clamp(44px, 12dvh, 60px);
+  }
+  #game .topbar { grid-area: top; }
+  #game .score { grid-area: score; }
+  #game .infobar { grid-area: info; }
+  #game .mp-bar { grid-area: mpbar; }
+  #game .boards { grid-area: boards; }
+  #game .fast-row { grid-area: fast; align-self: end; }
+  #game .tools { grid-area: tools; }
+  #game .numpad { grid-area: pad; }
+  #game .num b { font-size: clamp(20px, 7dvh, 30px); }
+  #game .tool svg { width: 24px; height: 24px; }
+  /* egyjátékosban van hely: 3×3-as, nagy számbillentyűzet */
+  #game:not(.mp) .numpad { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  #game:not(.mp) { --numh: clamp(38px, 13.5dvh, 64px); }
+  #game:not(.mp) .num { flex-direction: row; gap: 8px; }
+  #game:not(.mp) .num b { font-size: clamp(22px, 8dvh, 34px); }
+  #game:not(.mp) .num small { margin-top: 0; }
+  .home-inner { gap: 8px; }
 }
 
 /* Asztali párbaj-aréna: két egyforma tábla, alattuk a vezérlők és az élő napló */
 @media (min-width: 900px) and (min-height: 600px) {
   #app:has(#game.mp.active) { max-width: none; }
   #game.mp.active {
-    --bw: min(540px, calc(100dvh - 420px), calc((100vw - 96px) / 2));
     display: grid;
-    grid-template-columns: var(--bw) var(--bw);
-    grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+    grid-template-columns: var(--bs, 480px) var(--bs, 480px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
     grid-template-areas: "top top" "info mpbar" "boards boards" "fast feed" "tools feed" "pad feed";
+    --numh: 60px;
     column-gap: 40px;
     justify-content: center;
     align-content: start;
@@ -448,16 +482,12 @@ html.gecko .toast-action { color: #0f2416; }
   #game.mp .mp-feed { grid-area: feed; display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding-top: 12px; }
   #game.mp .mp-feed ol { overflow-y: auto; min-height: 0; }
   #game.mp .mp-feed.hidden { display: none !important; }
-  #game.mp .own-side, #game.mp .opp-side { flex: 0 0 var(--bw); width: var(--bw); }
-  #game.mp .own-side .board-wrap { width: var(--bw); }
+  #game.mp .own-side, #game.mp .opp-side { flex: 0 0 auto; width: var(--bs, 480px); }
+  #game.mp .opp-side .opp-board { width: var(--bs, 480px); height: var(--bs, 480px); }
   #game.mp .own-head { display: flex; }
   #game.mp .opp-side { cursor: default; }
   #game.mp .opp-mini { display: none; }
-  #game.mp .mp-players { flex-direction: row; flex-wrap: wrap; }
-  #game.mp .mp-p { flex: 1 1 0; min-width: 0; }
   #game.mp .mp-row small { display: none; }
-  #game.mp .mp-lead { flex-basis: 100%; }
-  #game.mp .num { aspect-ratio: auto; height: 64px; }
   #game.mp .opp-board span { font-size: 8.4cqw; }
 }
 

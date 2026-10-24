@@ -46,6 +46,10 @@
   let timerId = null;
   let paused = false;
 
+  // elrendezések (a CSS médialekérdezéseivel egyezően)
+  const ARENA = window.matchMedia('(min-width: 900px) and (min-height: 600px)');      // asztali párbaj: két tábla
+  const LANDSCAPE = window.matchMedia('(orientation: landscape) and (max-height: 600px)'); // fekvő telefon
+
   /* ---------- Nyelv ---------- */
 
   function t(key, vars) {
@@ -489,6 +493,52 @@
       b.classList.toggle('active', game.fast && game.fastNum === d);
     }
     if (game.mp) renderMp();
+    scheduleFit();
+  }
+
+  /* ---------- Tábla méretezése: kitölti a ténylegesen szabad helyet ---------- */
+
+  let fitQueued = false;
+  function scheduleFit() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(() => { fitQueued = false; fitBoard(); });
+  }
+
+  function fitBoard() {
+    const g = $('game');
+    if (!game || !g.classList.contains('active')) return;
+    const arena = !!game.mp && ARENA.matches;
+    const land = !arena && LANDSCAPE.matches;
+    const split = g.classList.contains('split');
+    const area = g.querySelector('.boards');
+    const cs = getComputedStyle(g);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    // a táblák feletti névsor (egymás melletti nézetben) is helyet foglal
+    const head = split || arena ? g.querySelector('.own-head').offsetHeight + 6 : 0;
+    const h = area.clientHeight - head;
+    let bs, bso = 0;
+    if (arena) {
+      bs = Math.min((g.clientWidth - padX - 40) / 2, h, 640);
+      bso = bs;
+    } else {
+      // álló nézetben a teljes oszlopszélességből számolunk, mert az oszlop a táblához igazodik
+      const w = land ? area.clientWidth : $('app').clientWidth - padX;
+      if (split) {
+        bs = Math.min((w - 8) * 0.6, h);
+        bso = Math.min(w - 8 - bs, h);
+      } else {
+        bs = Math.min(w, h);
+      }
+    }
+    bs = Math.max(100, Math.floor(bs));
+    bso = Math.max(60, Math.floor(bso));
+    // széles kijelzőn a vezérlők oszlopa a táblához keskenyedik (ne csússzon el); telefonon marad a teljes szélesség
+    const appW = $('app').clientWidth;
+    const gw = arena || land || appW < 600 ? 'none' : Math.max(360, Math.ceil((split ? bs + bso + 8 : bs) + padX)) + 'px';
+    if (g.style.getPropertyValue('--bs') !== bs + 'px') g.style.setProperty('--bs', bs + 'px');
+    if (g.style.getPropertyValue('--bso') !== bso + 'px') g.style.setProperty('--bso', bso + 'px');
+    if (g.style.getPropertyValue('--gw') !== gw) g.style.setProperty('--gw', gw);
   }
 
   function animate(i, cls, ms) {
@@ -978,6 +1028,8 @@
       if (!game || !$('game').classList.contains('active')) return;
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       const k = e.key;
+      // nyomva tartott billentyű ne kapcsolgasson / írjon újra (a nyilakkal lehet gyorsan léptetni)
+      if (e.repeat && !/^Arrow/.test(k)) return;
       if (k >= '1' && k <= '9') { onNumber(+k); e.preventDefault(); return; }
       if (k === 'Backspace' || k === 'Delete' || k === '0') { erase(); return; }
       if (k === 'n' || k === 'N' || k === 'p' || k === 'P') { togglePencil(); return; }
@@ -1006,6 +1058,14 @@
       }
     });
     window.addEventListener('pagehide', saveGame);
+
+    // átméretezés, elforgatás, böngésző-eszköztár megjelenése/eltűnése
+    window.addEventListener('resize', scheduleFit);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleFit);
+    window.addEventListener('orientationchange', () => setTimeout(scheduleFit, 300));
+    if (window.ResizeObserver) new ResizeObserver(scheduleFit).observe($('app'));
+    const onMode = () => { if (game && $('game').classList.contains('active')) render(); };
+    [ARENA, LANDSCAPE].forEach((mq) => { if (mq.addEventListener) mq.addEventListener('change', onMode); else if (mq.addListener) mq.addListener(onMode); });
 
     // Kétszemélyes játék
     $('btnMp').addEventListener('click', () => openSheet('diffSheet', 'mp'));
@@ -1087,8 +1147,6 @@
   /* ---------- Kétszemélyes játék ---------- */
 
   const API = location.origin + '/wp-json/crazy-sudoku/v1';
-  const WIDE = window.matchMedia('(min-width: 900px) and (min-height: 600px)');
-  WIDE.addEventListener && WIDE.addEventListener('change', () => { if (game && game.mp) render(); });
   const POLL_MS = 1500;
   const mp = {
     data: null, offset: 0, poll: null, pushTimer: null, pushing: false, dirty: false, lastPush: 0,
@@ -1542,7 +1600,7 @@
     oppBoard($('oppBoardMini'), opp);
     oppBoard($('oppBoardBig'), opp);
     // asztali nézetben mindig egymás mellett a két tábla
-    const split = !!settings.split || WIDE.matches;
+    const split = !!settings.split || ARENA.matches;
     $('game').classList.toggle('split', split);
     $('oppSide').classList.toggle('hidden', !split);
     mpOverlay();
