@@ -103,6 +103,7 @@
     document.querySelectorAll('[data-gecko-toggle]').forEach((el) => el.setAttribute('aria-pressed', on ? 'true' : 'false'));
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = on ? '#0f2416' : '#1b1d21';
+    scheduleFit();
   }
 
   function toggleGecko() {
@@ -522,14 +523,16 @@
     const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
     // a táblák feletti névsor (egymás melletti nézetben) is helyet foglal
     const head = split || arena ? g.querySelector('.own-head').offsetHeight + 6 : 0;
-    const h = area.clientHeight - head;
+    // gecko módban a sarokleveleknek is kell egy kis hely, hogy ne vágja le őket a képernyő széle
+    const leaf = settings.gecko ? 24 : 0;
+    const h = area.clientHeight - head - leaf;
     let bs, bso = 0;
     if (arena) {
       bs = Math.min((g.clientWidth - padX - 40) / 2, h, 640);
       bso = bs;
     } else {
       // álló nézetben a teljes oszlopszélességből számolunk, mert az oszlop a táblához igazodik
-      const w = land ? area.clientWidth : $('app').clientWidth - padX;
+      const w = (land ? area.clientWidth : $('app').clientWidth - padX) - leaf;
       if (split) {
         bs = Math.min((w - 8) * 0.6, h);
         bso = Math.min(w - 8 - bs, h);
@@ -1490,6 +1493,7 @@
     feed.insertBefore(li, feed.firstChild);
     while (feed.children.length > 40) feed.lastChild.remove();
     $('mpFeedEmpty').classList.add('hidden');
+    scheduleFit();
     if (ticker) {
       // a hírsávban a név már ott áll előtte, ezért levágjuk
       const name = (mpSeats().opp || {}).name || '';
