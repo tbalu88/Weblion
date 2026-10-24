@@ -153,7 +153,7 @@ function cp_sudoku_payload($room, $extra = array()) {
 		if (empty($room['seats'][$seat])) { continue; }
 		$s = cp_sudoku_seat($room['id'], $seat);
 		if (!$s || (int) $s['round'] !== (int) $room['round']) {
-			$s = array('round' => $room['round'], 'values' => $room['puzzle'], 'mistakes' => 0, 'score' => 0, 'done' => 0, 'out' => false, 'seen' => 0, 'ev' => array());
+			$s = array('round' => $room['round'], 'values' => $room['puzzle'], 'mistakes' => 0, 'score' => 0, 'done' => 0, 'out' => false, 'seen' => 0, 'ev' => array(), 'gk' => false);
 		}
 		$s['name'] = $room['seats'][$seat]['name'];
 		$players[$seat] = $s;
@@ -234,24 +234,36 @@ function cp_sudoku_api_state(WP_REST_Request $req) {
 			// a befejezés idejét a szerver rögzíti, egyszer
 			'done'     => $prev['done'] ? $prev['done'] : ($solved ? $now : 0),
 			'out'      => !empty($prev['out']) || (bool) $req->get_param('out'),
-			'ev'       => cp_sudoku_events($req->get_param('ev')),
+			'ev'       => cp_sudoku_events($req->get_param('ev'), isset($prev['ev']) ? $prev['ev'] : array(), $now),
+			// gecko mód: a gecko-támadás csak akkor él, ha mindkét játékosnál be van kapcsolva
+			'gk'       => (bool) $req->get_param('gk'),
 			'seen'     => $now,
 		));
 	}
 	return cp_sudoku_payload($room);
 }
 
-/* A játékos legutóbbi eseményei (következtetés, tipp) az ellenfél élő naplójához. */
-function cp_sudoku_events($ev) {
+/* A játékos legutóbbi eseményei (d = következtetés, h = tipp, g = gecko-támadás) az ellenfélnek.
+   's' = mikor kapta meg először a szerver – ebből látja az ellenfél, hogy friss-e (pl. a támadás). */
+function cp_sudoku_events($ev, $prev_ev, $now) {
 	$out = array();
 	if (!is_array($ev)) { return $out; }
+	$seen = array();
+	if (is_array($prev_ev)) {
+		foreach ($prev_ev as $p) {
+			if (is_array($p) && isset($p['k'], $p['t'], $p['s'])) { $seen[$p['k'] . '|' . $p['t']] = (int) $p['s']; }
+		}
+	}
 	foreach (array_slice($ev, -8) as $e) {
-		if (!is_array($e) || !isset($e['k']) || !in_array($e['k'], array('d', 'h'), true)) { continue; }
+		if (!is_array($e) || !isset($e['k']) || !in_array($e['k'], array('d', 'h', 'g'), true)) { continue; }
+		$t = (int) (isset($e['t']) ? $e['t'] : 0);
+		$key = $e['k'] . '|' . $t;
 		$out[] = array(
 			'k' => $e['k'],
 			'l' => max(0, min(3, (int) (isset($e['l']) ? $e['l'] : 0))),
 			'p' => max(0, min(100000, (int) (isset($e['p']) ? $e['p'] : 0))),
-			't' => (int) (isset($e['t']) ? $e['t'] : 0),
+			't' => $t,
+			's' => isset($seen[$key]) ? $seen[$key] : $now,
 		);
 	}
 	return $out;

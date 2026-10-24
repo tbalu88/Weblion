@@ -104,6 +104,10 @@
     'toast.notesRemoved': 'Automatikus jelöltek eltávolítva',
     'toast.fast': 'Gyors mód: előbb számot, aztán mezőket válassz',
     'toast.geckoOn': '🦎 Gecko mód bekapcsolva',
+    'gecko.hint': '🦎 Kapd el a zuhanó geckót – összekeveri az ellenfél tábláját!',
+    'gecko.caught': '🦎 Elkaptad! Viszi {name} táblájára…',
+    'gecko.attacked': '🦎 {name} geckója összekeverte a tábládat!',
+    'gecko.restored': '✨ Helyreállt a rend',
 
     'deduce.1': '🧠 Szép következtetés!',
     'deduce.2': '🌟 Mesteri lépés!',
@@ -156,6 +160,8 @@
     'feed.youBox': 'Kitöltöttél egy blokkot',
     'feed.youDeduce': '{label} +{p}',
     'feed.start': 'Rajt! Sok sikert!',
+    'feed.geckoSent': '🦎 Elkaptad a geckót – {name} tábláját összekeveri',
+    'feed.geckoHit': '🦎 {name} geckója 5 mp-re összekeverte a tábládat',
 
     'err.net': 'Nincs internetkapcsolat',
     'err.server': 'Szerverhiba ({s})',
@@ -288,6 +294,10 @@
     'toast.notesRemoved': 'Auto notes removed',
     'toast.fast': 'Quick mode: pick a number, then tap cells',
     'toast.geckoOn': '🦎 Gecko mode on',
+    'gecko.hint': '🦎 Catch the falling gecko – it scrambles your opponent’s board!',
+    'gecko.caught': '🦎 Caught! Sending it to {name}’s board…',
+    'gecko.attacked': '🦎 {name}’s gecko scrambled your board!',
+    'gecko.restored': '✨ Order restored',
 
     'deduce.1': '🧠 Nice deduction!',
     'deduce.2': '🌟 Masterful move!',
@@ -340,6 +350,8 @@
     'feed.youBox': 'You completed a box',
     'feed.youDeduce': '{label} +{p}',
     'feed.start': 'Go! Good luck!',
+    'feed.geckoSent': '🦎 You caught the gecko – it scrambles {name}’s board',
+    'feed.geckoHit': '🦎 {name}’s gecko scrambled your board for 5 s',
 
     'err.net': 'No internet connection',
     'err.server': 'Server error ({s})',

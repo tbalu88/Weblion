@@ -27,6 +27,10 @@ Telepítés nélküli, offline is működő webes szudoku, iPhone 15 Pro-ra opti
   táblád széle narancssárgán megvillan. Vezetés-kijelző, hírsáv és élő eseménynapló (lendület 🔥,
   „mindjárt végez” ⚠️, hibák, tippek, következtetések). Asztali gépen (≥ 900 px) két egyforma tábla,
   alattuk a vezérlők és a napló.
+- **🦎 Gecko-támadás** (párbajban, csak ha **mindkét** játékos gecko módban van): 20–40 mp-enként egy aranyszínű
+  gecko zuhan át nagyon gyorsan a képernyőn. Aki elkapja (koppintás / kattintás), annak a geckója átrepül az
+  ellenfél táblájára: ott 5 mp-re összekeverednek és felborulnak a számok, az ellenfél addig nem írhat be
+  (a játékállás nem változik). Utána a számok rugózva a helyükre repülnek. Elkapás után 35–55 mp szünet.
 
 ## Elérés
 **https://eventcrazy.hu/crazy-panel/sudoku/** – jelszó nélkül, a keresők elől rejtve (noindex).
@@ -38,7 +42,8 @@ iPhone-on: Safari → Megosztás → **Főképernyőhöz adás**; az ikonról te
 - `GET /room/{id}` → szoba és a két játékos állása
 - `POST /room/{id}/join` {name, token?} → 2. hely (vagy visszalépés a saját tokennel)
 - `POST /room/{id}/state` {token, round, values, mistakes, score, out, ev} – a befejezés idejét a szerver rögzíti;
-  `ev` = a játékos legutóbbi eseményei (következtetés, tipp) az ellenfél naplójához
+  `ev` = a játékos legutóbbi eseményei (d = következtetés, h = tipp, g = gecko-támadás); a szerver mindegyikre
+  rárakja `s`-ként, mikor kapta meg először (így a régi támadás nem sül el újra); `gk` = gecko mód be van-e kapcsolva
 - `POST /room/{id}/rematch` {token, round, puzzle, solution} → új kör
 
 A szobák tranziensekben tárolódnak (2 napig), a játékosok állása helyenként külön.
