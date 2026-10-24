@@ -303,25 +303,32 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 }
 
 /* ---------- Kétszemélyes játék ---------- */
-:root { --opp: #e8a23d; --opp-soft: rgba(232,162,61,.35); --good: #34c759; }
-.topbar-title { flex: 1; text-align: center; color: var(--text-dim); font-size: 15px; font-weight: 600; }
+:root { --opp: #e8a23d; --opp-soft: rgba(232,162,61,.35); --good: #34c759; --track: #3a3e45; }
+.topbar-title { flex: 1; min-width: 0; text-align: center; color: var(--text-dim); font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #game.mp .score { display: none; }
 
 .mp-bar { display: flex; gap: 10px; align-items: stretch; padding: 0 2px 8px; }
-.mp-players { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
-.mp-p { background: var(--btn); border-radius: 12px; padding: 7px 10px; }
-.mp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mp-players { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.mp-p { background: var(--btn); border-radius: 12px; padding: 7px 10px; border: 1px solid transparent; transition: border-color .3s; }
+.mp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
 .mp-row b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mp-row small { color: var(--text-dim); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mp-row small { color: var(--text-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .mp-p.me b { color: var(--accent); }
 .mp-p.opp b { color: var(--opp); }
-.mp-prog { height: 5px; border-radius: 3px; background: #3a3e45; margin-top: 5px; overflow: hidden; }
+.mp-prog { height: 5px; border-radius: 3px; background: var(--track); margin-top: 5px; overflow: hidden; }
 .mp-prog i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .4s; }
 .mp-p.opp .mp-prog i { background: var(--opp); }
 .mp-p.offline small::before { content: "● "; color: #8d9299; }
 .mp-p.online small::before { content: "● "; color: var(--good); }
+.mp-p.ticker small { color: var(--opp); font-weight: 600; }
+.mp-p.ticker small::before { content: ""; }
+@keyframes danger { 0%, 100% { border-color: rgba(255,90,95,.2); } 50% { border-color: rgba(255,90,95,.95); } }
+.mp-p.danger { animation: danger 1.1s ease-in-out infinite; }
+.mp-lead { font-size: 12px; font-weight: 600; text-align: center; color: var(--text-dim); min-height: 15px; line-height: 15px; }
+.mp-lead.ahead { color: var(--good); }
+.mp-lead.behind { color: var(--opp); }
 
-.opp-mini { position: relative; width: 92px; flex-shrink: 0; border-radius: 8px; }
+.opp-mini { position: relative; width: 92px; flex-shrink: 0; border-radius: 8px; align-self: center; }
 .opp-mini .split-ico { position: absolute; right: -4px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%; background: var(--opp); display: flex; align-items: center; justify-content: center; }
 .opp-mini .split-ico svg { width: 15px; height: 15px; stroke: #1b1d21; stroke-width: 2.2; }
 
@@ -342,45 +349,112 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .opp-board span.x { background: rgba(255,90,95,.45); }
 .opp-mini .opp-board span { border-width: 0 !important; }
 .opp-mini .opp-board { border-radius: 6px; overflow: hidden; }
+/* az ellenfél friss lépései felvillannak */
+@keyframes oppNew { 0% { background: #ffd27a; transform: scale(1.35); box-shadow: 0 0 12px #ffb347; } 100% { background: var(--opp-soft); transform: scale(1); box-shadow: none; } }
+@keyframes oppBad { 0%, 60% { background: #ff5a5f; } 100% { background: rgba(255,90,95,.45); } }
+@keyframes oppUnit { 0% { background: var(--cell); } 35% { background: #ffc35c; } 100% { background: var(--opp-soft); } }
+.opp-board span.nf { animation: oppNew 1.1s ease-out; position: relative; z-index: 1; }
+.opp-board span.nx { animation: oppBad 1.1s ease-out; }
+.opp-board span.uf { animation: oppUnit 1s ease-out both; }
 
 .boards { display: flex; gap: 8px; align-items: flex-start; justify-content: center; }
-.boards .board-wrap { flex: 0 0 auto; }
-.opp-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.opp-side-head { display: flex; flex-direction: column; gap: 1px; }
-.opp-side-head b { color: var(--opp); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.opp-side-head small { color: var(--text-dim); font-size: 12px; }
+.own-side { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+#game.split .own-side { align-items: stretch; }
+.opp-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; cursor: zoom-out; }
+.side-head { display: flex; flex-direction: column; gap: 1px; min-height: 34px; justify-content: flex-end; }
+.side-head b { color: var(--opp); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-head small { color: var(--text-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.own-head b { color: var(--accent); }
+.own-head { display: none; }
+#game.split .own-head { display: flex; }
 
-/* Egymás melletti nézet */
-#game.mp .board-wrap { width: min(100%, calc(100dvh - 420px - var(--safe-top) - var(--safe-bottom))); }
+@keyframes pressure { 0% { box-shadow: 0 0 0 0 rgba(232,162,61,.0); } 30% { box-shadow: 0 0 0 4px rgba(232,162,61,.85), 0 0 24px rgba(232,162,61,.55); } 100% { box-shadow: 0 0 0 0 rgba(232,162,61,0); } }
+.board-wrap.pressure { animation: pressure 1s ease-out; }
+
+/* Egymás melletti nézet (telefonon) */
+#game.mp .board-wrap { width: min(100%, calc(100dvh - 430px - var(--safe-top) - var(--safe-bottom))); }
 #game.split .opp-mini { display: none; }
-#game.split .boards .board-wrap { width: auto; flex: 1.55 1 0; min-width: 0; }
-#game.split .cell { font-size: 8.4cqw; }
-#game.split .opp-side { display: flex; }
+#game.split .own-side { flex: 1.55 1 0; }
+#game.split .own-side .board-wrap { width: 100%; }
 
-.mp-overlay { background: var(--bg); text-align: center; padding: 16px; z-index: 2; }
-.mp-overlay p { margin: 0; max-width: 280px; line-height: 1.4; }
-.mp-count { font-size: 72px; font-weight: 200; color: var(--accent); line-height: 1; }
+/* Élő eseménynapló (asztali nézetben) */
+.mp-feed { display: none; }
+.mp-feed h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); font-weight: 600; }
+.mp-feed ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mp-feed li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; line-height: 1.35; padding: 7px 10px; border-radius: 10px; background: var(--btn); animation: feedIn .35s ease-out; }
+.mp-feed li time { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.mp-feed li.opp { border-left: 3px solid var(--opp); }
+.mp-feed li.me { border-left: 3px solid var(--accent); }
+.mp-feed li.hot { background: rgba(232,162,61,.16); }
+.mp-feed li.bad span { color: #ff8a8d; }
+.mp-feed li.good span { color: #ffd76a; }
+.feed-empty { color: var(--text-dim); font-size: 13px; margin: 0; }
+@keyframes feedIn { from { opacity: 0; transform: translateY(-6px); } }
+
+.mp-overlay { background: var(--bg); text-align: center; padding: 16px; z-index: 4; }
+.mp-overlay p { margin: 0; max-width: 300px; line-height: 1.4; }
+.mp-count { font-size: 72px; font-weight: 200; color: var(--accent); line-height: 1; animation: countPop 1s ease-out infinite; }
+@keyframes countPop { 0% { transform: scale(1.4); opacity: .3; } 30% { transform: scale(1); opacity: 1; } }
 .mp-count:empty { display: none; }
 .mp-overlay .btn { width: auto; min-height: 46px; padding: 8px 20px; font-size: 16px; }
 .mp-link { font-size: 12px; color: var(--text-dim); word-break: break-all; -webkit-user-select: all; user-select: all; max-width: 100%; }
 
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--text-dim); }
 .field input {
-  font: inherit; font-size: 17px; color: var(--text); background: var(--btn); border: 1px solid #3a3e45;
+  font: inherit; font-size: 17px; color: var(--text); background: var(--btn); border: 1px solid var(--track);
   border-radius: 12px; padding: 12px 14px; outline: none; -webkit-user-select: text; user-select: text;
 }
 .field input:focus { border-color: var(--accent); }
 .sheet-text { margin: 0; color: var(--text-dim); text-align: center; line-height: 1.4; font-size: 15px; }
 .end-stats .win { color: var(--good); }
 .end-stats .opp-c { color: var(--opp); }
+.end-stats .deduce { color: #ffd76a; }
 
-/* Széles kijelzőn (iPad, fekvő, asztali) a két tábla egyforma méretben */
-@media (min-width: 760px) {
-  #app:has(#game.split.active) { max-width: 980px; }
-  #game.split .boards .board-wrap { flex: 1 1 0; }
-}
 @media (max-height: 740px) {
-  #game.mp .board-wrap { width: min(100%, calc(100dvh - 380px - var(--safe-top) - var(--safe-bottom))); }
+  #game.mp .board-wrap { width: min(100%, calc(100dvh - 390px - var(--safe-top) - var(--safe-bottom))); }
+}
+
+/* Asztali gép / tablet: a játékoszlop szélessége igazodjon a táblához */
+@media (min-width: 600px) {
+  #app { max-width: min(520px, max(360px, calc(100dvh - 384px))); }
+  #app:has(#game.mp.active) { max-width: min(520px, max(360px, calc(100dvh - 414px))); }
+}
+
+/* Asztali párbaj-aréna: két egyforma tábla, alattuk a vezérlők és az élő napló */
+@media (min-width: 900px) and (min-height: 600px) {
+  #app:has(#game.mp.active) { max-width: none; }
+  #game.mp.active {
+    --bw: min(540px, calc(100dvh - 420px), calc((100vw - 96px) / 2));
+    display: grid;
+    grid-template-columns: var(--bw) var(--bw);
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+    grid-template-areas: "top top" "info mpbar" "boards boards" "fast feed" "tools feed" "pad feed";
+    column-gap: 40px;
+    justify-content: center;
+    align-content: start;
+    padding-left: 24px; padding-right: 24px;
+  }
+  #game.mp .topbar { grid-area: top; }
+  #game.mp .infobar { grid-area: info; align-self: end; }
+  #game.mp .mp-bar { grid-area: mpbar; padding-bottom: 6px; }
+  #game.mp .boards { grid-area: boards; gap: 40px; justify-content: center; }
+  #game.mp .fast-row { grid-area: fast; margin: 0; }
+  #game.mp .tools { grid-area: tools; }
+  #game.mp .numpad { grid-area: pad; margin: 0; align-self: start; }
+  #game.mp .mp-feed { grid-area: feed; display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding-top: 12px; }
+  #game.mp .mp-feed ol { overflow-y: auto; min-height: 0; }
+  #game.mp .mp-feed.hidden { display: none !important; }
+  #game.mp .own-side, #game.mp .opp-side { flex: 0 0 var(--bw); width: var(--bw); }
+  #game.mp .own-side .board-wrap { width: var(--bw); }
+  #game.mp .own-head { display: flex; }
+  #game.mp .opp-side { cursor: default; }
+  #game.mp .opp-mini { display: none; }
+  #game.mp .mp-players { flex-direction: row; flex-wrap: wrap; }
+  #game.mp .mp-p { flex: 1 1 0; min-width: 0; }
+  #game.mp .mp-row small { display: none; }
+  #game.mp .mp-lead { flex-basis: 100%; }
+  #game.mp .num { aspect-ratio: auto; height: 64px; }
+  #game.mp .opp-board span { font-size: 8.4cqw; }
 }
 
 /* ---------- Főképernyőre tétel útmutató ---------- */
@@ -398,3 +472,106 @@ h1 { margin: 6px 0 0; font-weight: 600; font-size: 28px; }
 .copy-row { display: flex; gap: 8px; align-items: center; }
 .copy-row code { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); background: var(--btn); border-radius: 10px; padding: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-user-select: all; user-select: all; }
 .copy-row .btn { width: auto; min-height: 44px; padding: 8px 14px; font-size: 15px; }
+.install-note.big { font-size: 15px; }
+.stats-total { text-align: center; color: var(--accent); margin: 0 0 6px; }
+.table-wrap { overflow-x: auto; }
+
+/* ---------- Nyelv / gecko kapcsolók ---------- */
+.home-top { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px 0; }
+.lang-pills { display: flex; background: var(--btn); border-radius: 10px; padding: 3px; }
+.lang-pills button, .seg button { padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.lang-pills button.on, .seg button.on { background: var(--accent); color: #fff; }
+.seg { display: flex; background: var(--btn); border-radius: 10px; padding: 3px; flex-shrink: 0; }
+.gecko-toggle { font-size: 22px; line-height: 1; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; filter: grayscale(1) opacity(.6); transition: filter .2s, transform .2s; }
+.gecko-toggle[aria-pressed="true"] { filter: none; transform: rotate(-12deg); }
+.gecko-toggle:active { transform: scale(.9); }
+
+/* ---------- Effektek: felszálló feliratok, geckók ---------- */
+.fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.fx-labels { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 6; }
+.screen-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 40; }
+.fx-label {
+  position: absolute; transform: translate(-50%, 0); white-space: nowrap; pointer-events: none;
+  background: rgba(20,22,26,.9); color: #ffd76a; font-weight: 700; font-size: 14px; padding: 6px 11px; border-radius: 14px;
+  border: 1px solid rgba(255,215,106,.5); box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: rise 1.8s ease-out forwards;
+}
+.fx-label.big { font-size: 17px; padding: 8px 14px; background: linear-gradient(135deg, #3a2a05, #6b4a00); color: #ffe9a3; border-color: #ffd76a; }
+@keyframes rise {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(.7); }
+  15% { opacity: 1; transform: translate(-50%, -12px) scale(1.05); }
+  75% { opacity: 1; transform: translate(-50%, -34px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -54px) scale(.95); }
+}
+@keyframes deduced { 0% { box-shadow: inset 0 0 0 3px #ffd76a, 0 0 18px #ffd76a; } 100% { box-shadow: inset 0 0 0 0 transparent, 0 0 0 transparent; } }
+.cell.deduced { animation: deduced 1.2s ease-out; z-index: 2; }
+
+.gk { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.gk-svg { width: 100%; height: 100%; overflow: visible; }
+.gk .body, .gk .head { fill: #5fbf3a; }
+.gk .leg path { stroke: #4fa62f; stroke-width: 5; }
+.gk .leg circle { fill: #8be05e; }
+.gk .tail { stroke: #4fa62f; stroke-width: 7; }
+.gk .spot { fill: #f2d64b; }
+.gk .eye { fill: #1b2a12; }
+.gk .pupil { fill: #fff; }
+.gk .leg, .gk .tail { transform-box: view-box; }
+.gk .l1 { transform-origin: 23px 40px; } .gk .l2 { transform-origin: 37px 40px; }
+.gk .l3 { transform-origin: 23px 66px; } .gk .l4 { transform-origin: 37px 66px; }
+.gk .tail { transform-origin: 30px 74px; }
+@keyframes legA { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
+@keyframes legB { from { transform: rotate(22deg); } to { transform: rotate(-22deg); } }
+@keyframes wag { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+.gk.run .l1, .gk.run .l4 { animation: legA .14s ease-in-out infinite alternate; }
+.gk.run .l2, .gk.run .l3 { animation: legB .14s ease-in-out infinite alternate; }
+.gk .tail { animation: wag .28s ease-in-out infinite alternate; }
+.gk.peek .tail { animation-duration: .5s; }
+
+/* ---------- 🦎 Gecko téma ---------- */
+html.gecko {
+  --bg: #0f2416; --cell: #16341f; --cell-peer: #1f4a2b; --cell-same: #2e7d32; --cell-sel: #8bd65a; --cell-error: #4a2a1e;
+  --line: #285a35; --line-bold: #6fae5c; --text: #e3f2d6; --text-dim: #93b98a; --given: #eaf6dc; --user: #b4f07a;
+  --error: #ff7a59; --accent: #7ed957; --btn: #1a3a23; --btn-press: #24502f; --sheet: #132c1a; --track: #2a5634;
+  --opp: #f2b84b; --opp-soft: rgba(242,184,75,.38);
+}
+html.gecko body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(126,217,87,.16), transparent 45%),
+    radial-gradient(ellipse at 100% 100%, rgba(242,214,75,.08), transparent 40%),
+    radial-gradient(circle, rgba(126,217,87,.06) 1.5px, transparent 2px);
+  background-size: auto, auto, 22px 22px;
+}
+html.gecko .cell {
+  background-image:
+    radial-gradient(circle at 28% 30%, rgba(255,255,255,.045) 0 16%, transparent 17%),
+    radial-gradient(circle at 72% 68%, rgba(0,0,0,.14) 0 13%, transparent 14%),
+    radial-gradient(circle at 75% 22%, rgba(255,255,255,.03) 0 9%, transparent 10%);
+}
+html.gecko .cell.sel { color: #0f2416; }
+html.gecko .cell.sel .notes span { color: #0f2416; }
+html.gecko .cell.same { color: #f4ffe8; }
+html.gecko .board { border-radius: 10px; overflow: hidden; border-color: #7ed957; box-shadow: 0 0 0 3px rgba(126,217,87,.18), 0 10px 30px rgba(0,0,0,.35); }
+html.gecko .board-wrap::before, html.gecko .board-wrap::after {
+  content: ""; position: absolute; width: 44px; height: 44px; pointer-events: none; z-index: 5;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M6 58C10 30 30 10 58 6C54 34 34 54 6 58Z' fill='%234fa62f'/%3E%3Cpath d='M6 58C22 42 38 26 58 6' stroke='%238be05e' stroke-width='2.5' fill='none'/%3E%3Cpath d='M22 44l-2-14M32 34l-1-14M42 24l-1-10M24 42l14 1M34 32l13 1' stroke='%238be05e' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.4));
+}
+html.gecko .board-wrap::before { left: -24px; top: -26px; transform: rotate(-90deg); }
+html.gecko .board-wrap::after { right: -24px; bottom: -26px; transform: rotate(90deg); }
+html.gecko .num { color: var(--accent); border: 1px solid rgba(126,217,87,.18); }
+html.gecko .num.active { color: #0f2416; }
+html.gecko .switch, html.gecko .setting input { background: var(--track); }
+html.gecko .switch[aria-checked="true"] { background: var(--accent); }
+html.gecko .setting input:checked { background: var(--accent); }
+html.gecko .logo-grid span:nth-child(5) { color: #0f2416; }
+html.gecko .steps .ico { background: var(--track); }
+html.gecko .score, html.gecko .home-score { color: var(--accent); }
+html.gecko .tool { color: #cfe8c3; }
+html.gecko .badge.pill { background: #2f5b38; }
+html.gecko .opp-mini .split-ico svg { stroke: #0f2416; }
+html.gecko .fx-label { background: rgba(10,30,15,.92); color: #d6ff9e; border-color: rgba(126,217,87,.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gk, .fx-label { display: none; }
+  .mp-p.danger, .mp-count { animation: none; }
+}

@@ -3,6 +3,7 @@
   'use strict';
 
   const E = window.SudokuEngine;
+  const I18N = window.SudokuI18n;
   const { ROW, COL, BOX, PEERS, DIFFICULTIES } = E;
   const $ = (id) => document.getElementById(id);
 
@@ -12,6 +13,8 @@
   const KEY_MP = 'szudoku.mp.v1';
   const KEY_NAME = 'szudoku.name.v1';
   const MAX_MISTAKES = 3;
+  // következtetés-bónusz szorzója szintenként (a nehézség alappontjára)
+  const DEDUCE_MULT = [0, 2, 5, 8];
 
   const store = {
     get(key, fallback) {
@@ -32,13 +35,181 @@
     hideDone: true,
     showTimer: true,
     split: false,
+    gecko: false,
+    lang: /^hu/i.test(navigator.language || 'hu') ? 'hu' : 'en',
   }, store.get(KEY_SETTINGS, {}));
+  function saveSettings() { store.set(KEY_SETTINGS, settings); }
 
   let stats = store.get(KEY_STATS, { total: 0, byDiff: {} });
 
   let game = null;       // aktuális játék állapota
   let timerId = null;
   let paused = false;
+
+  /* ---------- Nyelv ---------- */
+
+  function t(key, vars) {
+    let s = (I18N[settings.lang] || I18N.hu)[key];
+    if (s == null) s = I18N.hu[key] != null ? I18N.hu[key] : key;
+    if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
+    return s;
+  }
+  function fmtNum(n) { return Number(n).toLocaleString(settings.lang === 'en' ? 'en-US' : 'hu-HU'); }
+  function diffName(key) { return t('diff.' + key); }
+
+  function applyI18n() {
+    document.documentElement.lang = settings.lang;
+    document.title = t('app.title');
+    document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    document.querySelectorAll('[data-lang]').forEach((el) => el.classList.toggle('on', el.dataset.lang === settings.lang));
+  }
+
+  function setLang(lang) {
+    if (!I18N[lang]) return;
+    settings.lang = lang;
+    saveSettings();
+    applyI18n();
+    if ($('home').classList.contains('active')) renderHome();
+    else if (game) render();
+  }
+
+  /* ---------- Gecko mód ---------- */
+
+  const GECKO_SVG =
+    '<svg viewBox="0 0 60 120" class="gk-svg" aria-hidden="true">' +
+    '<g stroke-linecap="round" fill="none">' +
+    '<g class="leg l1"><path d="M23 40 L10 33 L6 24"/><circle cx="6" cy="24" r="3"/></g>' +
+    '<g class="leg l2"><path d="M37 40 L50 33 L54 24"/><circle cx="54" cy="24" r="3"/></g>' +
+    '<g class="leg l3"><path d="M23 66 L10 75 L7 85"/><circle cx="7" cy="85" r="3"/></g>' +
+    '<g class="leg l4"><path d="M37 66 L50 75 L53 85"/><circle cx="53" cy="85" r="3"/></g></g>' +
+    '<path class="tail" d="M30 74 C30 92 44 96 40 108 C37 117 28 115 31 108" fill="none" stroke-linecap="round"/>' +
+    '<ellipse class="body" cx="30" cy="54" rx="11" ry="22"/>' +
+    '<ellipse class="head" cx="30" cy="24" rx="10" ry="12"/>' +
+    '<circle class="spot" cx="27" cy="48" r="2.2"/><circle class="spot" cx="33" cy="57" r="2.2"/><circle class="spot" cx="28" cy="65" r="1.8"/>' +
+    '<circle class="eye" cx="24.5" cy="19" r="3.4"/><circle class="eye" cx="35.5" cy="19" r="3.4"/>' +
+    '<circle class="pupil" cx="24.5" cy="18.5" r="1.4"/><circle class="pupil" cx="35.5" cy="18.5" r="1.4"/>' +
+    '</svg>';
+
+  function applyTheme() {
+    const on = !!settings.gecko;
+    document.documentElement.classList.toggle('gecko', on);
+    document.querySelectorAll('.theme-emoji').forEach((el) => { el.textContent = on ? '🦎' : '🎃'; });
+    document.querySelectorAll('[data-gecko-toggle]').forEach((el) => el.setAttribute('aria-pressed', on ? 'true' : 'false'));
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = on ? '#0f2416' : '#1b1d21';
+  }
+
+  function toggleGecko() {
+    settings.gecko = !settings.gecko;
+    saveSettings();
+    applyTheme();
+    document.querySelectorAll('[data-setting="gecko"]').forEach((el) => { el.checked = settings.gecko; });
+    if (settings.gecko) {
+      toast(t('toast.geckoOn'));
+      if ($('game').classList.contains('active')) geckoRunBoard(Math.floor(Math.random() * 9), 'row');
+      else geckoScreenRun(2);
+    }
+  }
+
+  function makeGecko(cls) {
+    const el = document.createElement('div');
+    el.className = 'gk ' + cls;
+    el.innerHTML = GECKO_SVG;
+    return el;
+  }
+
+  /* Gecko kikukucskál egy mező széléről. */
+  function geckoPeek(i) {
+    if (!settings.gecko) return;
+    const fx = $('fx');
+    const size = fx.clientWidth / 9;
+    const g = makeGecko('peek');
+    const side = Math.floor(Math.random() * 4); // honnan bújik elő
+    const ang = [180, 270, 0, 90][side];
+    const cx = (COL[i] + 0.5) * size, cy = (ROW[i] + 0.5) * size;
+    const off = [[0, -0.55], [0.55, 0], [0, 0.55], [-0.55, 0]][side];
+    g.style.width = size * 0.9 + 'px';
+    g.style.height = size * 1.8 + 'px';
+    fx.appendChild(g);
+    const at = (dx, dy, a, s) => 'translate(' + (cx + dx * size - size * 0.45) + 'px,' + (cy + dy * size - size * 0.9) + 'px) rotate(' + a + 'deg) scale(' + s + ')';
+    const anim = g.animate([
+      { transform: at(off[0], off[1], ang, 0.2), opacity: 0 },
+      { transform: at(off[0] * 0.2, off[1] * 0.2, ang, 0.85), opacity: 1, offset: 0.25 },
+      { transform: at(off[0] * 0.2, off[1] * 0.2, ang + 14, 0.85), opacity: 1, offset: 0.5 },
+      { transform: at(off[0] * 0.2, off[1] * 0.2, ang - 14, 0.85), opacity: 1, offset: 0.72 },
+      { transform: at(off[0], off[1], ang, 0.2), opacity: 0 },
+    ], { duration: 1500, easing: 'ease-in-out' });
+    anim.onfinish = () => g.remove();
+  }
+
+  /* Gecko átrohan egy soron / oszlopon / blokkon (index = sor, oszlop vagy blokk száma). */
+  function geckoRunBoard(index, kind) {
+    if (!settings.gecko) return;
+    const fx = $('fx');
+    const W = fx.clientWidth, size = W / 9;
+    const g = makeGecko('run');
+    const gw = size * 0.8, gh = size * 1.6;
+    g.style.width = gw + 'px';
+    g.style.height = gh + 'px';
+    fx.appendChild(g);
+    const rtl = Math.random() < 0.5;
+    let x0, y0, x1, y1;
+    if (kind === 'row') {
+      y0 = y1 = (index + 0.5) * size;
+      x0 = rtl ? W + gh : -gh; x1 = rtl ? -gh : W + gh;
+    } else if (kind === 'col') {
+      x0 = x1 = (index + 0.5) * size;
+      y0 = rtl ? W + gh : -gh; y1 = rtl ? -gh : W + gh;
+    } else {
+      const br = Math.floor(index / 3) * 3, bc = (index % 3) * 3;
+      x0 = (bc - 1) * size; y0 = (br - 1) * size; x1 = (bc + 4) * size; y1 = (br + 4) * size;
+      if (rtl) { const tx = x0, ty = y0; x0 = x1; y0 = y1; x1 = tx; y1 = ty; }
+    }
+    const ang = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI + 90;
+    const tf = (x, y) => 'translate(' + (x - gw / 2) + 'px,' + (y - gh / 2) + 'px) rotate(' + ang + 'deg)';
+    const anim = g.animate([{ transform: tf(x0, y0) }, { transform: tf(x1, y1) }], { duration: 1100, easing: 'linear' });
+    anim.onfinish = () => g.remove();
+  }
+
+  /* Geckók szaladnak át az egész képernyőn (győzelem). */
+  function geckoScreenRun(n) {
+    if (!settings.gecko) return;
+    const layer = $('screenFx');
+    const W = layer.clientWidth, H = layer.clientHeight;
+    for (let k = 0; k < n; k++) {
+      setTimeout(() => {
+        const g = makeGecko('run');
+        const gw = 44, gh = 88;
+        g.style.width = gw + 'px';
+        g.style.height = gh + 'px';
+        layer.appendChild(g);
+        const y0 = H * (0.15 + Math.random() * 0.7), y1 = H * (0.15 + Math.random() * 0.7);
+        const ltr = Math.random() < 0.5;
+        const x0 = ltr ? -gh : W + gh, x1 = ltr ? W + gh : -gh;
+        const ang = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI + 90;
+        const tf = (x, y) => 'translate(' + (x - gw / 2) + 'px,' + (y - gh / 2) + 'px) rotate(' + ang + 'deg)';
+        const anim = g.animate([{ transform: tf(x0, y0) }, { transform: tf(x1, y1) }], { duration: 1400 + Math.random() * 600, easing: 'linear' });
+        anim.onfinish = () => g.remove();
+      }, k * 260);
+    }
+  }
+
+  /* Felszálló felirat egy mező fölött (pl. következtetés-bónusz). */
+  function celebrate(i, text, big) {
+    const layer = $('fxLabels');
+    const W = layer.clientWidth, size = W / 9;
+    const el = document.createElement('div');
+    el.className = 'fx-label' + (big ? ' big' : '');
+    el.textContent = text;
+    el.style.top = ROW[i] * size + 'px';
+    layer.appendChild(el);
+    // a felirat ne lógjon ki a tábla szélén
+    const half = el.offsetWidth / 2 + 4;
+    el.style.left = Math.min(Math.max((COL[i] + 0.5) * size, half), W - half) + 'px';
+    setTimeout(() => el.remove(), 1900);
+  }
 
   /* ---------- Játék létrehozása / mentése ---------- */
 
@@ -51,9 +222,12 @@
       values: puzzle.slice(),
       notes: new Array(81).fill(0),
       locked: puzzle.map((v) => (v ? 1 : 0)), // 1 = adott, 2 = tippből/helyesen beírt
+      tried: new Array(81).fill(0),           // 1 = ide már próbált hibás számot (nincs következtetés-bónusz)
       mistakes: 0,
       hintsLeft: diff.hints,
       score: 0,
+      deductions: 0,
+      deductPts: 0,
       elapsed: 0,
       selected: -1,
       pencil: false,
@@ -61,8 +235,16 @@
       fastNum: 0,
       undo: [],
       status: 'playing',
-      counted: false,
     };
+  }
+
+  // régebbi mentésekből hiányzó mezők pótlása
+  function upgrade(g) {
+    if (!g) return g;
+    if (!Array.isArray(g.tried)) g.tried = new Array(81).fill(0);
+    if (g.deductions == null) { g.deductions = 0; g.deductPts = 0; }
+    if (g.mp && !Array.isArray(g.mp.ev)) g.mp.ev = [];
+    return g;
   }
 
   function newGame(diffKey) {
@@ -82,8 +264,7 @@
       return;
     }
     if (game.status === 'playing') {
-      const copy = Object.assign({}, game, { undo: game.undo.slice(-60) });
-      store.set(KEY_GAME, copy);
+      store.set(KEY_GAME, Object.assign({}, game, { undo: game.undo.slice(-60) }));
     } else {
       store.del(KEY_GAME);
     }
@@ -92,7 +273,7 @@
   function loadGame() {
     const g = store.get(KEY_GAME, null);
     if (!g || g.status !== 'playing' || !Array.isArray(g.values) || g.values.length !== 81) return null;
-    return g;
+    return upgrade(g);
   }
 
   function diffStats(key) {
@@ -112,17 +293,18 @@
     mpStopPolling();
     saveGame();
     showScreen('home');
-    $('totalScore').textContent = stats.total.toLocaleString('hu-HU');
+    renderHome();
+  }
+
+  function renderHome() {
+    $('totalScore').textContent = fmtNum(stats.total);
     const saved = game && !game.mp && game.status === 'playing' ? game : loadGame();
-    if (saved) {
-      $('btnContinue').classList.remove('hidden');
-      $('continueInfo').textContent = DIFFICULTIES[saved.diff].name + ' · ' + fmtTime(saved.elapsed);
-    } else {
-      $('btnContinue').classList.add('hidden');
-    }
+    $('btnContinue').classList.toggle('hidden', !saved);
+    if (saved) $('continueInfo').textContent = diffName(saved.diff) + ' · ' + fmtTime(saved.elapsed);
     const m = loadMp();
     $('btnMpContinue').classList.toggle('hidden', !m || m.mp.ended);
-    if (m) $('mpContinueInfo').textContent = 'Szoba: ' + m.mp.id + ' · ' + DIFFICULTIES[m.diff].name;
+    if (m) $('mpContinueInfo').textContent = t('home.room', { id: m.mp.id, diff: diffName(m.diff) });
+    $('btnInstall').classList.toggle('hidden', isStandalone());
   }
 
   function openGame() {
@@ -130,12 +312,15 @@
     paused = false;
     $('pauseOverlay').classList.add('hidden');
     $('board').style.visibility = '';
+    $('fx').innerHTML = '';
+    $('fxLabels').innerHTML = '';
     const isMp = !!game.mp;
     $('game').classList.toggle('mp', isMp);
     $('mpBar').classList.toggle('hidden', !isMp);
+    $('mpFeedBox').classList.toggle('hidden', !isMp);
     $('btnShare').classList.toggle('hidden', !isMp);
     $('btnPause').classList.toggle('hidden', isMp);
-    $('topTitle').textContent = isMp ? 'Kétszemélyes játék' : '';
+    $('topTitle').textContent = isMp ? t('game.duel') : '';
     if (!isMp) {
       mpStopPolling();
       $('game').classList.remove('split');
@@ -150,7 +335,7 @@
   /* ---------- Időzítő ---------- */
 
   function fmtTime(sec) {
-    sec = Math.floor(sec);
+    sec = Math.max(0, Math.floor(sec));
     const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
     const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
     return h ? h + ':' + mm + ':' + ss : mm + ':' + ss;
@@ -227,9 +412,11 @@
 
   function render() {
     if (!game) return;
-    const sel = game.selected;
+    // gyors módban (kiválasztott számmal) nincs kijelölt mező, csak az azonos számok világítanak
+    const fastActive = game.fast && game.fastNum;
+    const sel = fastActive ? -1 : game.selected;
     const selVal = sel >= 0 ? game.values[sel] : 0;
-    const focusDigit = game.fast && game.fastNum ? game.fastNum : selVal;
+    const focusDigit = fastActive ? game.fastNum : selVal;
 
     for (let i = 0; i < 81; i++) {
       const c = cells[i];
@@ -245,7 +432,7 @@
       // ütköző mezők (azonos szám a sorban/oszlopban/blokkban) a hibás beíráshoz
       if (!wrong && settings.showErrors && v && sel >= 0 && isWrong(sel) && v === selVal && PEERS[sel].includes(i)) cls.push('conflict');
       // a megőrzött animációs osztályok
-      ['flash', 'hinted', 'shake'].forEach((k) => { if (c.classList.contains(k)) cls.push(k); });
+      ['flash', 'hinted', 'shake', 'deduced'].forEach((k) => { if (c.classList.contains(k)) cls.push(k); });
       c.className = cls.join(' ');
 
       const vEl = c.firstChild;
@@ -261,10 +448,12 @@
     }
 
     // fejléc
-    $('score').textContent = game.score.toLocaleString('hu-HU');
-    $('diffName').textContent = DIFFICULTIES[game.diff].name;
+    $('score').textContent = fmtNum(game.score);
+    $('diffName').textContent = diffName(game.diff);
     const mEl = $('mistakes');
-    mEl.textContent = settings.mistakeLimit || game.mp ? 'Hibák: ' + game.mistakes + '/' + MAX_MISTAKES : 'Hibák: ' + game.mistakes;
+    mEl.textContent = settings.mistakeLimit || game.mp
+      ? t('game.mistakes', { n: game.mistakes, max: MAX_MISTAKES })
+      : t('game.mistakesFree', { n: game.mistakes });
     mEl.classList.toggle('bad', game.mistakes > 0);
     $('timer').textContent = fmtTime(game.elapsed);
     $('timer').parentElement.style.visibility = settings.showTimer ? '' : 'hidden';
@@ -280,9 +469,8 @@
     $('btnUndo').classList.toggle('disabled', game.undo.length === 0);
 
     // gyors mód
-    const fb = $('btnFast');
-    fb.setAttribute('aria-checked', game.fast ? 'true' : 'false');
-    $('fastLabel').textContent = game.fast ? (game.fastNum ? 'Koppints a mezőkre: ' + game.fastNum : 'Válassz számot') : '';
+    $('btnFast').setAttribute('aria-checked', game.fast ? 'true' : 'false');
+    $('fastLabel').textContent = game.fast ? (game.fastNum ? t('fast.tap', { d: game.fastNum }) : t('fast.pick')) : '';
 
     // számbillentyűk
     const pad = $('numpad');
@@ -315,11 +503,11 @@
 
   let toastTimer = null;
   function toast(msg) {
-    const t = $('toast');
-    t.textContent = msg;
-    t.classList.add('show');
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
   }
 
   function haptic(ms) {
@@ -338,7 +526,6 @@
   function onCellTap(i) {
     if (!canPlay()) return;
     if (game.fast && game.fastNum) {
-      game.selected = i;
       input(i, game.fastNum);
       return;
     }
@@ -350,10 +537,11 @@
     if (!canPlay()) return;
     if (game.fast) {
       game.fastNum = game.fastNum === d ? 0 : d;
+      game.selected = -1;
       render();
       return;
     }
-    if (game.selected < 0) { toast('Előbb válassz egy mezőt'); return; }
+    if (game.selected < 0) { toast(t('toast.selectCell')); return; }
     input(game.selected, d);
   }
 
@@ -364,7 +552,7 @@
       // csak a lehetséges jelölteket engedi, ha a szám már szerepel a sorban/oszlopban/blokkban
       const bit = 1 << d;
       if (!(game.notes[i] & bit) && !(E.candidates(correctValues(), i) & bit)) {
-        toast('A ' + d + ' már szerepel a sorban, oszlopban vagy blokkban');
+        toast(t('toast.inUnit', { d }));
         animate(i, 'shake', 500);
         return;
       }
@@ -380,11 +568,14 @@
       afterChange();
       return;
     }
+    // a következtetés nehézségét a beírás előtti állapotból mérjük
+    const tier = d === game.solution[i] && !game.tried[i] ? E.deductionTier(correctValues(), i) : 0;
     snapshot();
     game.values[i] = d;
     pop(i);
     if (d !== game.solution[i]) {
       game.mistakes++;
+      game.tried[i] = 1;
       haptic([30, 40, 30]);
       animate(i, 'shake', 500);
       if ((settings.mistakeLimit || game.mp) && game.mistakes >= MAX_MISTAKES) {
@@ -393,12 +584,26 @@
         return;
       }
     } else {
+      const pts = DIFFICULTIES[game.diff].points;
       game.locked[i] = 2;
       game.notes[i] = 0;
       if (settings.autoRemoveNotes) for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
-      game.score += DIFFICULTIES[game.diff].points;
+      game.score += pts;
       haptic(10);
-      checkUnits(i);
+      if (tier > 0) {
+        const bonus = pts * DEDUCE_MULT[tier];
+        game.score += bonus;
+        game.deductions++;
+        game.deductPts += bonus;
+        celebrate(i, t('deduce.' + tier) + ' +' + bonus, tier >= 2);
+        animate(i, 'deduced', 1200);
+        haptic([15, 30, 15]);
+        geckoPeek(i);
+        if (game.mp) mpEvent({ k: 'd', l: tier, p: bonus });
+      } else if (Math.random() < 0.3) {
+        geckoPeek(i);
+      }
+      checkUnits(i, true);
     }
     afterChange();
     checkWin();
@@ -414,21 +619,27 @@
     if (game.mp) mpSchedulePush();
   }
 
+  function unitCells(kind, k) {
+    const out = [];
+    for (let j = 0; j < 9; j++) {
+      if (kind === 'row') out.push(k * 9 + j);
+      else if (kind === 'col') out.push(j * 9 + k);
+      else out.push((Math.floor(k / 3) * 3 + Math.floor(j / 3)) * 9 + (k % 3) * 3 + (j % 3));
+    }
+    return out;
+  }
+
   /* Kitöltött sor / oszlop / blokk felvillantása és bónusz pont. */
-  function checkUnits(i) {
-    const groups = [
-      [...Array(9).keys()].map((k) => ROW[i] * 9 + k),
-      [...Array(9).keys()].map((k) => k * 9 + COL[i]),
-      [...Array(9).keys()].map((k) => {
-        const br = Math.floor(BOX[i] / 3) * 3, bc = (BOX[i] % 3) * 3;
-        return (br + Math.floor(k / 3)) * 9 + bc + (k % 3);
-      }),
-    ];
+  function checkUnits(i, mine) {
+    const groups = [['row', ROW[i]], ['col', COL[i]], ['box', BOX[i]]];
     let completed = 0;
-    for (const g of groups) {
+    for (const [kind, k] of groups) {
+      const g = unitCells(kind, k);
       if (g.every((j) => game.values[j] && game.values[j] === game.solution[j])) {
         completed++;
         g.forEach((j, n) => setTimeout(() => animate(j, 'flash', 650), n * 35));
+        setTimeout(() => geckoRunBoard(k, kind), completed * 250);
+        if (mine && game.mp) mpFeedAdd(t('feed.you' + kind[0].toUpperCase() + kind.slice(1)), 'me');
       }
     }
     if (completed) game.score += completed * DIFFICULTIES[game.diff].points * 2;
@@ -438,7 +649,7 @@
     if (!canPlay()) return;
     const i = game.selected;
     if (i < 0) return;
-    if (game.locked[i]) { toast('Ez a mező nem törölhető'); return; }
+    if (game.locked[i]) { toast(t('toast.locked')); return; }
     if (!game.values[i] && !game.notes[i]) return;
     snapshot();
     if (game.values[i]) game.values[i] = 0; else game.notes[i] = 0;
@@ -448,7 +659,7 @@
   function undo() {
     if (!canPlay()) return;
     const s = game.undo.pop();
-    if (!s) { toast('Nincs mit visszavonni'); return; }
+    if (!s) { toast(t('toast.noUndo')); return; }
     game.values = s.values;
     game.notes = s.notes;
     game.locked = s.locked;
@@ -457,8 +668,8 @@
 
   function hint() {
     if (!canPlay()) return;
-    if (game.hintsLeft <= 0) { toast('Elfogytak a tippek'); return; }
-    let i = game.selected;
+    if (game.hintsLeft <= 0) { toast(t('toast.noHints')); return; }
+    let i = game.fast && game.fastNum ? -1 : game.selected;
     if (i < 0 || game.locked[i]) {
       // a legkevesebb jelölttel rendelkező üres mező
       const cv = correctValues();
@@ -478,10 +689,11 @@
     game.notes[i] = 0;
     if (settings.autoRemoveNotes) for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
     game.hintsLeft--;
-    game.selected = i;
+    if (!(game.fast && game.fastNum)) game.selected = i;
     pop(i);
     animate(i, 'hinted', 1200);
-    checkUnits(i);
+    checkUnits(i, true);
+    if (game.mp) mpEvent({ k: 'h' });
     afterChange();
     checkWin();
   }
@@ -494,7 +706,7 @@
     for (let i = 0; i < 81; i++) {
       if (!game.values[i]) game.notes[i] = E.candidates(cv, i);
     }
-    toast('Jelöltek kitöltve');
+    toast(t('toast.notes'));
     afterChange();
   }
 
@@ -508,7 +720,8 @@
     if (!canPlay()) return;
     game.fast = !game.fast;
     game.fastNum = 0;
-    if (game.fast) toast('Gyors mód: előbb számot, aztán mezőket válassz');
+    game.selected = -1;
+    if (game.fast) toast(t('toast.fast'));
     afterChange();
   }
 
@@ -516,6 +729,8 @@
 
   function checkWin() {
     for (let i = 0; i < 81; i++) if (game.values[i] !== game.solution[i]) return;
+    for (let i = 0; i < 81; i++) setTimeout(() => animate(i, 'flash', 650), (ROW[i] + COL[i]) * 40);
+    geckoScreenRun(5);
     if (game.mp) { mpSolved(); return; }
     game.status = 'won';
     stopTimer();
@@ -535,7 +750,6 @@
     saveStats();
     saveGame();
     render();
-    for (let i = 0; i < 81; i++) setTimeout(() => animate(i, 'flash', 650), (ROW[i] + COL[i]) * 40);
     setTimeout(() => showEnd(true, isBest, timeBonus, mistakeBonus), 900);
   }
 
@@ -550,24 +764,24 @@
   }
 
   function showEnd(won, isBest, timeBonus, mistakeBonus) {
-    $('endEmoji').textContent = won ? '🏆' : '😵';
-    $('endTitle').textContent = won ? 'Gratulálok, megoldottad!' : 'Elfogyott a 3 lehetőség';
-    const diff = DIFFICULTIES[game.diff];
+    $('endEmoji').textContent = won ? (settings.gecko ? '🦎' : '🏆') : '😵';
+    $('endTitle').textContent = won ? t('end.won') : t('end.lost');
     let html =
-      '<div><small>Nehézség</small><b>' + diff.name + '</b></div>' +
-      '<div><small>Idő</small><b>' + fmtTime(game.elapsed) + '</b></div>' +
-      '<div><small>Hibák</small><b>' + game.mistakes + '</b></div>' +
-      '<div><small>Eredmény</small><b>' + game.score.toLocaleString('hu-HU') + '</b></div>';
+      '<div><small>' + t('end.diff') + '</small><b>' + diffName(game.diff) + '</b></div>' +
+      '<div><small>' + t('end.time') + '</small><b>' + fmtTime(game.elapsed) + '</b></div>' +
+      '<div><small>' + t('end.mistakes') + '</small><b>' + game.mistakes + '</b></div>' +
+      '<div><small>' + t('end.score') + '</small><b>' + fmtNum(game.score) + '</b></div>';
     if (won && (timeBonus || mistakeBonus)) {
-      html += '<div class="best"><small>Bónusz</small><b>+' + (timeBonus + mistakeBonus) + (mistakeBonus ? ' (hibátlan!)' : '') + '</b></div>';
+      html += '<div class="best"><small>' + t('end.bonus') + '</small><b>+' + (timeBonus + mistakeBonus) + (mistakeBonus ? ' ' + t('end.flawless') : '') + '</b></div>';
     }
-    if (won && isBest) html += '<div class="best"><b>⭐ Új legjobb idő!</b></div>';
+    if (game.deductions) html += '<div class="best deduce"><b>' + t('end.deductions', { n: game.deductions, p: fmtNum(game.deductPts) }) + '</b></div>';
+    if (won && isBest) html += '<div class="best"><b>' + t('end.best') + '</b></div>';
     $('endStats').innerHTML = html;
 
     const actions = $('endActions');
     actions.innerHTML = '';
     if (!won) {
-      addAction(actions, 'Második esély', 'btn primary', () => {
+      addAction(actions, t('end.second'), 'btn primary', () => {
         game.status = 'playing';
         game.mistakes = MAX_MISTAKES - 1;
         closeModal();
@@ -578,8 +792,8 @@
         startTimer();
       });
     }
-    addAction(actions, 'Új játék', won ? 'btn primary' : 'btn', () => { closeModal(); openSheet('diffSheet'); });
-    addAction(actions, 'Főmenü', 'btn ghost', () => { closeModal(); if (game.status !== 'playing') game = null; openHome(); });
+    addAction(actions, t('end.new'), won ? 'btn primary' : 'btn', () => { closeModal(); openSheet('diffSheet'); });
+    addAction(actions, t('end.menu'), 'btn ghost', () => { closeModal(); if (game.status !== 'playing') game = null; openHome(); });
     $('endModal').classList.remove('hidden');
   }
 
@@ -605,7 +819,7 @@
   function closeSheet(el) { el.classList.add('hidden'); }
 
   function buildDiffList(isMp) {
-    $('diffTitle').textContent = isMp ? 'Kétszemélyes játék' : 'Válassz nehézséget';
+    $('diffTitle').textContent = isMp ? t('game.duel') : t('diff.title');
     $('mpNameField').classList.toggle('hidden', !isMp);
     if (isMp) $('mpName').value = store.get(KEY_NAME, '');
     const list = $('diffList');
@@ -613,7 +827,7 @@
     Object.values(DIFFICULTIES).forEach((d, n) => {
       const b = document.createElement('button');
       b.className = 'diff-item';
-      b.innerHTML = '<span>' + d.name + '<br><small>' + d.clues + ' adott szám · ' + d.hints + ' tipp</small></span>' +
+      b.innerHTML = '<span>' + diffName(d.key) + '<br><small>' + t('diff.info', { clues: d.clues, hints: d.hints }) + '</small></span>' +
         '<span class="stars">' + '★'.repeat(n + 1) + '</span>';
       b.addEventListener('click', () => {
         closeSheet($('diffSheet'));
@@ -637,12 +851,13 @@
       const s = diffStats(d.key);
       const rate = s.played ? Math.round((s.won / s.played) * 100) + '%' : '–';
       const avg = s.won ? fmtTime(s.totalTime / s.won) : '–';
-      rows += '<tr><td>' + d.name + '</td><td>' + s.won + '/' + s.played + '</td><td>' + rate + '</td><td>' +
+      rows += '<tr><td>' + diffName(d.key) + '</td><td>' + s.won + '/' + s.played + '</td><td>' + rate + '</td><td>' +
         (s.best ? fmtTime(s.best) : '–') + '</td><td>' + avg + '</td><td>' + s.bestStreak + '</td></tr>';
     }
     $('statsBody').innerHTML =
-      '<p style="text-align:center;color:var(--accent);margin:0 0 6px">Összpontszám: <b>' + stats.total.toLocaleString('hu-HU') + '</b></p>' +
-      '<table class="stats-table"><tr><th></th><th>Nyert</th><th>Arány</th><th>Legjobb</th><th>Átlag</th><th>Sorozat</th></tr>' + rows + '</table>';
+      '<p class="stats-total">' + t('stats.total') + ' <b>' + fmtNum(stats.total) + '</b></p>' +
+      '<div class="table-wrap"><table class="stats-table"><tr><th></th><th>' + t('stats.won') + '</th><th>' + t('stats.rate') + '</th><th>' +
+      t('stats.best') + '</th><th>' + t('stats.avg') + '</th><th>' + t('stats.streak') + '</th></tr>' + rows + '</table></div>';
   }
 
   /* ---------- Események ---------- */
@@ -658,13 +873,13 @@
     $('btnResetStats').addEventListener('click', (e) => {
       const b = e.currentTarget;
       if (!resetArmed) {
-        b.textContent = 'Biztosan? Koppints újra';
-        resetArmed = setTimeout(() => { resetArmed = null; b.textContent = 'Statisztika törlése'; }, 3000);
+        b.textContent = t('stats.confirm');
+        resetArmed = setTimeout(() => { resetArmed = null; b.textContent = t('stats.reset'); }, 3000);
         return;
       }
       clearTimeout(resetArmed);
       resetArmed = null;
-      b.textContent = 'Statisztika törlése';
+      b.textContent = t('stats.reset');
       stats = { total: 0, byDiff: {} };
       saveStats();
       buildStats();
@@ -684,6 +899,9 @@
     $('btnHint').addEventListener('click', hint);
     $('btnFast').addEventListener('click', toggleFast);
 
+    document.querySelectorAll('[data-lang]').forEach((el) => el.addEventListener('click', () => setLang(el.dataset.lang)));
+    document.querySelectorAll('[data-gecko-toggle]').forEach((el) => el.addEventListener('click', toggleGecko));
+
     document.querySelectorAll('.sheet-backdrop').forEach((bd) => {
       bd.addEventListener('click', (e) => {
         if (e.target === bd || e.target.hasAttribute('data-close')) {
@@ -695,8 +913,9 @@
 
     document.querySelectorAll('[data-setting]').forEach((el) => {
       el.addEventListener('change', () => {
+        if (el.dataset.setting === 'gecko') { if (el.checked !== !!settings.gecko) toggleGecko(); return; }
         settings[el.dataset.setting] = el.checked;
-        store.set(KEY_SETTINGS, settings);
+        saveSettings();
         if (game) render();
       });
     });
@@ -704,14 +923,16 @@
     // Billentyűzet (asztali géphez / külső billentyűzethez)
     document.addEventListener('keydown', (e) => {
       if (!game || !$('game').classList.contains('active')) return;
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       const k = e.key;
       if (k >= '1' && k <= '9') { onNumber(+k); e.preventDefault(); return; }
       if (k === 'Backspace' || k === 'Delete' || k === '0') { erase(); return; }
       if (k === 'n' || k === 'N' || k === 'p' || k === 'P') { togglePencil(); return; }
       if (k === 'z' && (e.metaKey || e.ctrlKey)) { undo(); e.preventDefault(); return; }
       if (k === ' ') { setPaused(!paused); e.preventDefault(); return; }
-      const moves = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 };
+      const moves = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };
       if (moves[k] && canPlay()) {
+        if (game.fast && game.fastNum) game.fastNum = 0;
         let i = game.selected < 0 ? 40 : game.selected;
         const r = ROW[i], c = COL[i];
         if (k === 'ArrowUp') i = ((r + 8) % 9) * 9 + c;
@@ -738,7 +959,7 @@
       const m = loadMp();
       if (!m) return;
       game = m;
-      mp.ended = !!m.mp.ended;
+      mpReset(!!m.mp.ended);
       openGame();
     });
     $('btnInstall').addEventListener('click', openInstall);
@@ -756,9 +977,11 @@
 
   /* ---------- Főképernyőre tétel (iOS) ---------- */
 
-  const ICO_SHARE = '<span class="ico"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>';
-  const ICO_MORE = '<span class="ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></span>';
-  const ICO_PLUS = '<span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></span>';
+  const ICO = {
+    share: '<span class="ico"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>',
+    more: '<span class="ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></span>',
+    plus: '<span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></span>',
+  };
 
   function isStandalone() {
     return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
@@ -779,45 +1002,29 @@
   function openInstall() {
     const { ios, kind } = browserKind();
     const url = location.origin + location.pathname;
+    const step = (key) => '<li><span>' + t(key, ICO) + '</span></li>';
+    const copyRow = '<div class="copy-row"><code>' + escapeHtml(url) + '</code><button class="btn primary" id="btnCopyUrl">' + t('install.copy') + '</button></div>';
     let html = '';
     if (ios && kind === 'inapp') {
-      html =
-        '<div class="install-warn">Az oldalt most egy alkalmazás (pl. Messenger, Gmail, Instagram) saját böngészője nyitotta meg. ' +
-        'Itt nincs „Főképernyőhöz adás”, ezért előbb nyisd meg <b>Safariban</b>.</div>' +
-        '<ol class="steps">' +
-        '<li><span>Koppints a jobb felső vagy alsó ' + ICO_MORE + ' menüre, és válaszd a <b>Megnyitás Safariban</b> (vagy „Megnyitás böngészőben”) lehetőséget.</span></li>' +
-        '<li><span>Ha nincs ilyen, másold ki a címet, nyisd meg a <b>Safarit</b>, és illeszd be a címsorba.</span></li>' +
-        '<li><span>Safariban nyisd meg újra ezt az útmutatót a kezdőképernyőn.</span></li>' +
-        '</ol>' +
-        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+      html = '<div class="install-warn">' + t('install.inappWarn') + '</div><ol class="steps">' +
+        step('install.inapp1') + step('install.inapp2') + step('install.inapp3') + '</ol>' + copyRow;
     } else if (ios && kind === 'chrome') {
-      html = '<ol class="steps">' +
-        '<li><span>Koppints a címsor jobb oldalán a ' + ICO_SHARE + ' <b>Megosztás</b> ikonra.</span></li>' +
-        '<li><span>Görgess le, és válaszd a ' + ICO_PLUS + ' <b>Főképernyőhöz adás</b> lehetőséget.</span></li>' +
-        '<li><span>Koppints a <b>Hozzáadás</b> gombra.</span></li>' +
-        '</ol>' +
-        '<p class="install-note">Ha nem látod, nyisd meg az oldalt Safariban – ott biztosan működik.</p>';
+      html = '<ol class="steps">' + step('install.chrome1') + step('install.chrome2') + step('install.chrome3') + '</ol>' +
+        '<p class="install-note">' + t('install.chromeNote') + '</p>';
     } else if (ios && kind === 'other') {
-      html = '<div class="install-warn">Ebben a böngészőben a főképernyőre tétel nem mindig érhető el. Nyisd meg az oldalt <b>Safariban</b>.</div>' +
-        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+      html = '<div class="install-warn">' + t('install.otherWarn') + '</div>' + copyRow;
     } else if (ios) {
-      html = '<ol class="steps">' +
-        '<li><span>Koppints a Safari ' + ICO_SHARE + ' <b>Megosztás</b> ikonjára. iOS 26-on előbb a címsor melletti ' + ICO_MORE + ' gombra, majd a <b>Megosztás</b>ra.</span></li>' +
-        '<li><span><b>Görgess lejjebb</b> a megnyíló listában, és válaszd a ' + ICO_PLUS + ' <b>Főképernyőhöz adás</b> lehetőséget.</span></li>' +
-        '<li><span>Hagyd bekapcsolva a <b>Megnyitás webappként</b> kapcsolót (ha van), és koppints a <b>Hozzáadás</b> gombra.</span></li>' +
-        '</ol>' +
-        '<p class="install-note">Ha a listában nincs ott: görgess a lista aljára → <b>Műveletek szerkesztése</b> → keresd meg a „Főképernyőhöz adás”-t és kapcsold be. ' +
-        'Privát böngészésben és ha a Képernyőidő korlátozza a Safarit, az opció nem jelenik meg.</p>';
+      html = '<ol class="steps">' + step('install.safari1') + step('install.safari2') + step('install.safari3') + '</ol>' +
+        '<p class="install-note">' + t('install.safariNote') + '</p>';
     } else {
-      html = '<p class="install-note" style="font-size:15px">Telefonon nyisd meg ezt a címet Safariban (iPhone) vagy Chrome-ban (Android), majd a böngésző menüjéből válaszd a <b>Főképernyőhöz adás</b> lehetőséget.</p>' +
-        '<div class="copy-row"><code>' + url + '</code><button class="btn primary" id="btnCopyUrl">Másolás</button></div>';
+      html = '<p class="install-note big">' + t('install.desktop') + '</p>' + copyRow;
     }
     $('installBody').innerHTML = html;
     const copy = $('btnCopyUrl');
     if (copy) {
       copy.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(url); toast('Cím kimásolva'); }
-        catch (e) { toast('Jelöld ki és másold a címet'); }
+        try { await navigator.clipboard.writeText(url); toast(t('install.copied')); }
+        catch (e) { toast(t('install.copyFail')); }
       });
     }
     openSheet('installSheet');
@@ -826,13 +1033,33 @@
   /* ---------- Kétszemélyes játék ---------- */
 
   const API = location.origin + '/wp-json/crazy-sudoku/v1';
-  const POLL_MS = 2000;
-  const mp = { data: null, offset: 0, poll: null, pushTimer: null, pushing: false, dirty: false, lastPush: 0, ended: false, joinId: '', oppOutShown: false };
+  const WIDE = window.matchMedia('(min-width: 900px) and (min-height: 600px)');
+  WIDE.addEventListener && WIDE.addEventListener('change', () => { if (game && game.mp) render(); });
+  const POLL_MS = 1500;
+  const mp = {
+    data: null, offset: 0, poll: null, pushTimer: null, pushing: false, dirty: false, lastPush: 0,
+    ended: false, joinId: '', oppOutShown: false,
+    // az ellenfél korábbi állapota a változások (villanások, események) felismeréséhez
+    prev: null, fx: {}, seenEv: new Set(), fills: [], flags: {}, ticker: '', tickerUntil: 0,
+  };
+
+  function mpReset(ended) {
+    mp.ended = !!ended;
+    mp.oppOutShown = false;
+    mp.prev = null;
+    mp.fx = {};
+    mp.seenEv = new Set();
+    mp.fills = [];
+    mp.flags = {};
+    mp.ticker = '';
+    $('mpFeed').innerHTML = '';
+    $('mpFeedEmpty').classList.remove('hidden');
+  }
 
   function loadMp() {
     const g = store.get(KEY_MP, null);
     if (!g || !g.mp || !Array.isArray(g.values) || g.values.length !== 81) return null;
-    return g;
+    return upgrade(g);
   }
 
   function serverNow() { return Date.now() + mp.offset; }
@@ -849,11 +1076,19 @@
         credentials: 'omit',
       });
     } catch (e) {
-      throw new Error('Nincs internetkapcsolat');
+      const err = new Error(t('err.net'));
+      err.code = 'net';
+      throw err;
     }
     let data = null;
     try { data = await res.json(); } catch (e) { /* */ }
-    if (!res.ok) throw new Error((data && data.message) || 'Szerverhiba (' + res.status + ')');
+    if (!res.ok) {
+      const code = data && data.code;
+      const key = 'err.' + code;
+      const err = new Error(code && I18N.hu[key] ? t(key) : (data && data.message) || t('err.server', { s: res.status }));
+      err.code = code || 'server';
+      throw err;
+    }
     if (data && data.now) mp.offset = data.now - (t0 + Date.now()) / 2;
     return data;
   }
@@ -863,15 +1098,14 @@
     const solution = Array.from(d.room.solution, Number);
     const g = freshGame(DIFFICULTIES[d.room.diff] ? d.room.diff : 'medium', puzzle, solution);
     g.status = 'waiting';
-    g.mp = { id: d.room.id, token: sess.token, seat: sess.seat, round: d.room.round, start: d.room.start, ended: false };
+    g.mp = { id: d.room.id, token: sess.token, seat: sess.seat, round: d.room.round, start: d.room.start, ended: false, ev: [] };
     return g;
   }
 
   function mpBegin(d, sess) {
     game = mpGameFromRoom(d, sess);
+    mpReset(false);
     mp.data = d;
-    mp.ended = false;
-    mp.oppOutShown = false;
     closeModal();
     saveGame();
     openGame();
@@ -879,7 +1113,7 @@
   }
 
   async function mpCreate(diffKey, name) {
-    toast('Szoba létrehozása…');
+    toast(t('mp.creating'));
     const { puzzle, solution } = E.generate(diffKey);
     try {
       const d = await api('POST', '/room', { diff: diffKey, name, puzzle: puzzle.join(''), solution: solution.join('') });
@@ -896,8 +1130,8 @@
       const d = await api('POST', '/room/' + id + '/join', { name, token });
       if (token && local.mp.round === d.room.round) {
         game = local;
+        mpReset(!!local.mp.ended);
         mp.data = d;
-        mp.ended = !!local.mp.ended;
         openGame();
       } else {
         mpBegin(d, { token: d.token || token, seat: d.seat });
@@ -911,30 +1145,32 @@
   /* Meghívó link megnyitása: ?szoba=abc123 */
   async function mpHandleLink() {
     const params = new URLSearchParams(location.search);
-    const id = (params.get('szoba') || '').toLowerCase();
+    const id = (params.get('szoba') || params.get('room') || '').toLowerCase();
     if (!/^[a-z0-9]{6}$/.test(id)) return false;
     history.replaceState(null, '', location.pathname);
     const local = loadMp();
     if (local && local.mp.id === id) {
       game = local;
-      mp.ended = !!local.mp.ended;
+      mpReset(!!local.mp.ended);
       openGame();
       return true;
     }
     mp.joinId = id;
     $('joinName').value = store.get(KEY_NAME, '');
-    $('joinInfo').textContent = 'Ugyanazt a feladványt oldjátok meg egyszerre. Aki előbb végez, nyer.';
+    $('joinInfo').textContent = t('join.info');
+    $('btnJoin').disabled = false;
     openSheet('joinSheet');
     try {
       const d = await api('GET', '/room/' + id);
       const host = d.players[1];
-      const diff = DIFFICULTIES[d.room.diff];
       if (d.players[2]) {
-        $('joinInfo').textContent = 'Ebben a szobában már ketten játszanak.';
+        $('joinInfo').textContent = t('join.full');
         $('btnJoin').disabled = true;
       } else {
-        $('joinInfo').textContent = (host ? host.name : 'Valaki') + ' meghívott egy ' + (diff ? diff.name.toLowerCase() : '') +
-          ' szudoku párbajra. Ugyanazt a feladványt oldjátok meg egyszerre, aki előbb végez, nyer.';
+        $('joinInfo').textContent = t('join.invited', {
+          name: host ? host.name : t('join.someone'),
+          diff: DIFFICULTIES[d.room.diff] ? diffName(d.room.diff).toLowerCase() : '',
+        });
       }
     } catch (e) {
       $('joinInfo').textContent = e.message;
@@ -954,7 +1190,7 @@
     $('mpLink').classList.remove('hidden');
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Szudoku párbaj', text: 'Játsszunk egy szudokut! Ugyanaz a feladvány, aki előbb végez, nyer.', url });
+        await navigator.share({ title: t('mp.shareTitle'), text: t('mp.shareText'), url });
         return;
       } catch (e) {
         if (e && e.name === 'AbortError') return;
@@ -962,9 +1198,9 @@
     }
     try {
       await navigator.clipboard.writeText(url);
-      toast('Link kimásolva');
+      toast(t('mp.linkCopied'));
     } catch (e) {
-      toast('Másold ki a linket a tábláról');
+      toast(t('mp.linkCopyFail'));
     }
   }
 
@@ -985,13 +1221,21 @@
     try {
       mpApply(await api('GET', '/room/' + game.mp.id));
     } catch (e) {
-      if (/nem létezik/.test(e.message)) { toast(e.message); mpStopPolling(); }
+      if (e.code === 'cp_sdk_room') { toast(e.message); mpStopPolling(); }
     }
   }
 
   function mpSchedulePush() {
     clearTimeout(mp.pushTimer);
-    mp.pushTimer = setTimeout(mpPush, 250);
+    mp.pushTimer = setTimeout(mpPush, 200);
+  }
+
+  /* Saját esemény (következtetés, tipp) – az ellenfél élő naplójában jelenik meg. */
+  function mpEvent(ev) {
+    ev.t = Date.now();
+    game.mp.ev.push(ev);
+    if (game.mp.ev.length > 8) game.mp.ev.shift();
+    if (ev.k === 'd') mpFeedAdd(t('feed.youDeduce', { label: t('deduce.' + ev.l), p: ev.p }), 'me good');
   }
 
   async function mpPush() {
@@ -1004,7 +1248,7 @@
     try {
       const d = await api('POST', '/room/' + g.mp.id + '/state', {
         token: g.mp.token, round: g.mp.round, values: g.values.join(''),
-        mistakes: g.mistakes, score: g.score, out: g.status === 'out',
+        mistakes: g.mistakes, score: g.score, out: g.status === 'out', ev: g.mp.ev,
       });
       if (game === g) mpApply(d);
     } catch (e) {
@@ -1023,8 +1267,99 @@
     }
     mp.data = d;
     game.mp.start = d.room.start;
+    mpDiffOpponent();
     mpCheckEnd();
     render();
+  }
+
+  /* Az ellenfél állásának változásai: villanó csempék, kitöltött egységek, események. */
+  function mpDiffOpponent() {
+    const { opp } = mpSeats();
+    if (!opp) return;
+    const name = opp.name;
+    const vals = opp.values || '';
+    const now = Date.now();
+    const prev = mp.prev;
+    const evs = Array.isArray(opp.ev) ? opp.ev : [];
+    mp.prev = { values: vals, mistakes: opp.mistakes };
+    if (!prev) {
+      // első adat: alapállapot, nincs visszajátszás
+      evs.forEach((e) => mp.seenEv.add(e.k + e.t));
+      return;
+    }
+    const newOk = [];
+    for (let i = 0; i < 81; i++) {
+      if (game.puzzle[i] || vals[i] === prev.values[i]) continue;
+      const v = +vals[i];
+      if (!v) continue;
+      if (v === game.solution[i]) { newOk.push(i); mp.fx[i] = { cls: 'nf', until: now + 1300 }; }
+      else mp.fx[i] = { cls: 'nx', until: now + 1300 };
+    }
+    if (opp.mistakes > prev.mistakes) mpFeedAdd(t('feed.mistake', { name, m: opp.mistakes }), 'opp bad', true);
+    // kitöltött sor / oszlop / blokk
+    const done = (kind, k) => unitCells(kind, k).every((j) => +vals[j] === game.solution[j]);
+    const wasDone = (kind, k) => unitCells(kind, k).every((j) => +prev.values[j] === game.solution[j]);
+    const seen = new Set();
+    for (const i of newOk) {
+      for (const [kind, k] of [['row', ROW[i]], ['col', COL[i]], ['box', BOX[i]]]) {
+        const key = kind + k;
+        if (seen.has(key) || !done(kind, k) || wasDone(kind, k)) continue;
+        seen.add(key);
+        unitCells(kind, k).forEach((j, n) => { mp.fx[j] = { cls: 'uf', until: now + 1400 + n * 30, delay: n * 30 }; });
+        mpFeedAdd(t('feed.' + kind, { name }), 'opp', true);
+        mpPressure();
+      }
+    }
+    // lendület: 15 mp alatt legalább 5 helyes szám
+    newOk.forEach(() => mp.fills.push(now));
+    mp.fills = mp.fills.filter((x) => now - x < 15000);
+    if (mp.fills.length >= 5 && (!mp.flags.fire || now - mp.flags.fire > 30000)) {
+      mp.flags.fire = now;
+      mpFeedAdd(t('feed.fire', { name }), 'opp hot', true);
+      mpPressure();
+    }
+    const pct = mpProgress(vals);
+    if (pct >= 0.5 && !mp.flags.half) { mp.flags.half = 1; mpFeedAdd(t('feed.half', { name }), 'opp', true); }
+    if (pct >= 0.85 && !mp.flags.close && !opp.done) { mp.flags.close = 1; mpFeedAdd(t('feed.close', { name }), 'opp hot', true); mpPressure(); }
+    // az ellenfél saját eseményei (következtetés, tipp)
+    for (const e of evs) {
+      const key = e.k + e.t;
+      if (mp.seenEv.has(key)) continue;
+      mp.seenEv.add(key);
+      if (e.k === 'd') mpFeedAdd(t('feed.deduce', { name, label: t('deduce.' + e.l), p: e.p }), 'opp hot', true);
+      if (e.k === 'h') mpFeedAdd(t('feed.hint', { name }), 'opp', true);
+    }
+  }
+
+  /* Nyomás: a saját táblád széle felvillan narancssárgán. */
+  function mpPressure() {
+    const w = $('boardWrap');
+    w.classList.remove('pressure');
+    void w.offsetWidth;
+    w.classList.add('pressure');
+    setTimeout(() => w.classList.remove('pressure'), 1000);
+    haptic(20);
+  }
+
+  function mpFeedAdd(text, cls, ticker) {
+    const li = document.createElement('li');
+    li.className = cls || '';
+    const time = game && game.mp && game.mp.start ? fmtTime((serverNow() - game.mp.start) / 1000) : '';
+    li.innerHTML = '<time>' + time + '</time><span></span>';
+    li.lastChild.textContent = text;
+    const feed = $('mpFeed');
+    feed.insertBefore(li, feed.firstChild);
+    while (feed.children.length > 40) feed.lastChild.remove();
+    $('mpFeedEmpty').classList.add('hidden');
+    if (ticker) {
+      // a hírsávban a név már ott áll előtte, ezért levágjuk
+      const name = (mpSeats().opp || {}).name || '';
+      let short = text;
+      if (name && short.startsWith(name + ': ')) short = short.slice(name.length + 2);
+      else if (name && short.startsWith(name + ' ')) short = short.slice(name.length + 1);
+      mp.ticker = short;
+      mp.tickerUntil = Date.now() + 2800;
+    }
   }
 
   function mpClock() {
@@ -1032,6 +1367,7 @@
     const start = game.mp.start;
     if (game.status === 'waiting' && start && serverNow() >= start) {
       game.status = 'playing';
+      mpFeedAdd(t('feed.start'), 'me');
       saveGame();
       render();
     }
@@ -1040,6 +1376,8 @@
     }
     $('timer').textContent = fmtTime(game.elapsed);
     mpOverlay();
+    // lejárt villanások / hírsáv frissítése
+    if (mp.tickerText !== (Date.now() < mp.tickerUntil ? mp.ticker : '')) renderMp();
   }
 
   function mpSeats() {
@@ -1065,15 +1403,15 @@
     let show = false, count = '', msg = '';
     if (!opp) {
       show = true;
-      msg = 'Várakozás a másik játékosra… Küldd el neki a meghívó linket! Amint csatlakozik, indul a visszaszámlálás.';
+      msg = t('mp.waiting');
     } else if (game.status === 'waiting') {
       show = true;
       const left = start ? Math.ceil((start - serverNow()) / 1000) : 0;
       count = left > 0 ? String(left) : '';
-      msg = opp.name + ' csatlakozott. Indulás…';
+      msg = t('mp.joined', { name: opp.name });
     }
     ov.classList.toggle('hidden', !show);
-    $('mpCount').textContent = count;
+    if ($('mpCount').textContent !== count) $('mpCount').textContent = count;
     $('mpMsg').textContent = msg;
     $('btnInvite').classList.toggle('hidden', !!opp);
     if (opp) $('mpLink').classList.add('hidden');
@@ -1085,56 +1423,86 @@
       for (let i = 0; i < 81; i++) el.appendChild(document.createElement('span'));
     }
     const vals = opp ? opp.values : '';
+    const now = Date.now();
     for (let i = 0; i < 81; i++) {
       const s = el.children[i];
-      if (game.puzzle[i]) { s.textContent = game.puzzle[i]; s.className = ''; continue; }
-      const v = vals ? +vals[i] : 0;
-      s.textContent = '';
-      s.className = !v ? '' : v === game.solution[i] ? 'f' : 'x';
+      const fx = mp.fx[i] && mp.fx[i].until > now ? mp.fx[i] : null;
+      let cls = '';
+      if (game.puzzle[i]) {
+        if (s.textContent !== String(game.puzzle[i])) s.textContent = game.puzzle[i];
+      } else {
+        const v = vals ? +vals[i] : 0;
+        if (s.textContent) s.textContent = '';
+        cls = !v ? '' : v === game.solution[i] ? 'f' : 'x';
+      }
+      if (fx) cls += ' ' + fx.cls;
+      cls = cls.trim();
+      if (s.className !== cls) {
+        s.className = cls;
+        if (fx && fx.delay) s.style.animationDelay = fx.delay + 'ms'; else s.style.animationDelay = '';
+      }
     }
   }
 
   function renderMp() {
     const { me, opp } = mpSeats();
     const myPct = Math.round(mpProgress(game.values) * 100);
-    $('mpMeName').textContent = (me ? me.name : 'Te') + ' (te)';
-    $('mpMeInfo').textContent = myPct + '% · ' + game.mistakes + ' hiba · ' + game.score + ' p';
+    const myName = me ? me.name : t('mp.you');
+    $('mpMeName').textContent = t('mp.youTag', { name: myName });
+    $('mpMeInfo').textContent = t('mp.info', { pct: myPct, m: game.mistakes, s: fmtNum(game.score) });
     $('mpMeBar').style.width = myPct + '%';
+    $('ownSideName').textContent = t('mp.youTag', { name: myName });
+    $('ownSideInfo').textContent = $('mpMeInfo').textContent;
     const oppEl = document.querySelector('.mp-p.opp');
-    let info = 'még nem csatlakozott';
+    let info = t('mp.notJoined');
     let oppPct = 0;
     if (opp) {
       oppPct = Math.round(mpProgress(opp.values) * 100);
-      info = oppPct + '% · ' + opp.mistakes + ' hiba · ' + opp.score + ' p';
-      if (opp.done) info = 'kész · ' + fmtTime((opp.done - game.mp.start) / 1000);
-      else if (opp.out) info = 'kiesett (3 hiba)';
+      info = t('mp.info', { pct: oppPct, m: opp.mistakes, s: fmtNum(opp.score) });
+      if (opp.done) info = t('mp.done', { t: fmtTime((opp.done - game.mp.start) / 1000) });
+      else if (opp.out) info = t('mp.out');
     }
     const online = opp && opp.seen && serverNow() - opp.seen < 15000;
     oppEl.classList.toggle('online', !!online);
     oppEl.classList.toggle('offline', !!opp && !online);
-    $('mpOppName').textContent = opp ? opp.name : 'Ellenfél';
-    $('mpOppInfo').textContent = info;
+    oppEl.classList.toggle('danger', !!opp && !opp.done && oppPct >= 85);
+    // hírsáv: az ellenfél legutóbbi eseménye pár másodpercig az ő sorában
+    const tick = Date.now() < mp.tickerUntil ? mp.ticker : '';
+    mp.tickerText = tick;
+    oppEl.classList.toggle('ticker', !!tick);
+    $('mpOppName').textContent = opp ? opp.name : t('mp.opponent');
+    $('mpOppInfo').textContent = tick || info;
     $('mpOppBar').style.width = oppPct + '%';
-    $('oppSideName').textContent = opp ? opp.name : 'Ellenfél';
+    $('oppSideName').textContent = opp ? opp.name : t('mp.opponent');
     $('oppSideInfo').textContent = info;
+    // vezetés
+    const lead = $('mpLead');
+    if (opp && game.status !== 'waiting') {
+      const diff = myPct - oppPct;
+      lead.textContent = diff === 0 ? t('mp.tie') : diff > 0 ? t('mp.lead', { n: diff }) : t('mp.behind', { name: opp.name, n: -diff });
+      lead.className = 'mp-lead ' + (diff > 0 ? 'ahead' : diff < 0 ? 'behind' : '');
+    } else {
+      lead.textContent = '';
+      lead.className = 'mp-lead';
+    }
     oppBoard($('oppBoardMini'), opp);
     oppBoard($('oppBoardBig'), opp);
-    $('game').classList.toggle('split', !!settings.split);
-    $('oppSide').classList.toggle('hidden', !settings.split);
-    $('diffName').textContent = DIFFICULTIES[game.diff].name;
+    // asztali nézetben mindig egymás mellett a két tábla
+    const split = !!settings.split || WIDE.matches;
+    $('game').classList.toggle('split', split);
+    $('oppSide').classList.toggle('hidden', !split);
     mpOverlay();
   }
 
   function mpSetSplit(on) {
     settings.split = on;
-    store.set(KEY_SETTINGS, settings);
+    saveSettings();
     render();
   }
 
   function mpSolved() {
     game.status = 'won';
     game.score += DIFFICULTIES[game.diff].points * 10;
-    for (let i = 0; i < 81; i++) setTimeout(() => animate(i, 'flash', 650), (ROW[i] + COL[i]) * 40);
     saveGame();
     render();
     mpPush(); // a szerver rögzíti, ki volt az első
@@ -1148,12 +1516,12 @@
     const { opp } = mpSeats();
     if (opp && !opp.done && !opp.out) {
       $('endEmoji').textContent = '😵';
-      $('endTitle').textContent = 'Kiestél – elfogyott a 3 lehetőség';
-      $('endStats').innerHTML = '<div class="best"><b>' + escapeHtml(opp.name) + ' még játszik.</b></div>';
+      $('endTitle').textContent = t('mp.outTitle');
+      $('endStats').innerHTML = '<div class="best"><b>' + escapeHtml(t('mp.stillPlaying', { name: opp.name })) + '</b></div>';
       const actions = $('endActions');
       actions.innerHTML = '';
-      addAction(actions, 'Figyelem tovább', 'btn primary', closeModal);
-      addAction(actions, 'Főmenü', 'btn ghost', () => { closeModal(); openHome(); });
+      addAction(actions, t('mp.watch'), 'btn primary', closeModal);
+      addAction(actions, t('end.menu'), 'btn ghost', () => { closeModal(); openHome(); });
       $('endModal').classList.remove('hidden');
     }
   }
@@ -1168,7 +1536,7 @@
     else if (me.out && opp.out) result = 'draw';
     else if (opp.out && !mp.oppOutShown && game.status === 'playing') {
       mp.oppOutShown = true;
-      toast(opp.name + ' kiesett – fejezd be a győzelemért!');
+      toast(t('mp.oppOut', { name: opp.name }));
     }
     if (!result) return;
     mp.ended = true;
@@ -1181,25 +1549,26 @@
 
   function mpShowEnd(result, me, opp) {
     const start = game.mp.start;
-    const t = (p) => (p.done ? fmtTime((p.done - start) / 1000) : p.out ? 'kiesett' : '–');
-    $('endEmoji').textContent = result === 'win' ? '🏆' : result === 'draw' ? '🤝' : '🥈';
-    $('endTitle').textContent = result === 'win' ? 'Nyertél!' : result === 'draw' ? 'Döntetlen – mindketten kiestetek' : opp.name + ' nyert';
+    const tm = (p) => (p.done ? fmtTime((p.done - start) / 1000) : p.out ? t('mp.outShort') : '–');
+    $('endEmoji').textContent = result === 'win' ? (settings.gecko ? '🦎' : '🏆') : result === 'draw' ? '🤝' : '🥈';
+    $('endTitle').textContent = result === 'win' ? t('mp.win') : result === 'draw' ? t('mp.draw') : t('mp.oppWon', { name: opp.name });
     $('endStats').innerHTML =
-      '<div><small>Te</small><b class="' + (result === 'win' ? 'win' : '') + '">' + t(me) + '</b></div>' +
-      '<div><small>' + escapeHtml(opp.name) + '</small><b class="opp-c">' + t(opp) + '</b></div>' +
-      '<div><small>Hibáid</small><b>' + me.mistakes + '</b></div>' +
-      '<div><small>Pontjaid</small><b>' + game.score.toLocaleString('hu-HU') + '</b></div>';
+      '<div><small>' + t('mp.you') + '</small><b class="' + (result === 'win' ? 'win' : '') + '">' + tm(me) + '</b></div>' +
+      '<div><small>' + escapeHtml(opp.name) + '</small><b class="opp-c">' + tm(opp) + '</b></div>' +
+      '<div><small>' + t('mp.yourMistakes') + '</small><b>' + me.mistakes + '</b></div>' +
+      '<div><small>' + t('mp.yourScore') + '</small><b>' + fmtNum(game.score) + '</b></div>' +
+      (game.deductions ? '<div class="best deduce"><b>' + t('end.deductions', { n: game.deductions, p: fmtNum(game.deductPts) }) + '</b></div>' : '');
     const actions = $('endActions');
     actions.innerHTML = '';
-    addAction(actions, 'Visszavágó', 'btn primary', mpRematch);
-    addAction(actions, 'Főmenü', 'btn ghost', () => { closeModal(); openHome(); });
+    addAction(actions, t('mp.rematch'), 'btn primary', mpRematch);
+    addAction(actions, t('end.menu'), 'btn ghost', () => { closeModal(); openHome(); });
     $('endModal').classList.remove('hidden');
   }
 
   async function mpRematch() {
     if (!game || !game.mp) return;
     closeModal();
-    toast('Új feladvány…');
+    toast(t('mp.newPuzzle'));
     const { puzzle, solution } = E.generate(game.diff);
     try {
       const d = await api('POST', '/room/' + game.mp.id + '/rematch', {
@@ -1217,11 +1586,12 @@
 
   /* ---------- Indítás ---------- */
 
+  applyI18n();
+  applyTheme();
   buildBoard();
   bind();
   game = loadGame();
   openHome();
-  $('btnInstall').classList.toggle('hidden', isStandalone());
   mpHandleLink();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

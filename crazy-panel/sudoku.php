@@ -35,6 +35,7 @@ function cp_sudoku_route() {
 		'index.html'           => array('sudoku.html', 'text/html; charset=utf-8'),
 		'style.css'            => array('sudoku.css', 'text/css; charset=utf-8'),
 		'engine.js'            => array('sudoku-engine.js', 'application/javascript; charset=utf-8'),
+		'i18n.js'              => array('sudoku-i18n.js', 'application/javascript; charset=utf-8'),
 		'app.js'               => array('sudoku-app.js', 'application/javascript; charset=utf-8'),
 		'sw.js'                => array('sudoku-sw.js', 'application/javascript; charset=utf-8'),
 		'manifest.webmanifest' => array('sudoku-manifest.json', 'application/manifest+json; charset=utf-8'),
@@ -152,7 +153,7 @@ function cp_sudoku_payload($room, $extra = array()) {
 		if (empty($room['seats'][$seat])) { continue; }
 		$s = cp_sudoku_seat($room['id'], $seat);
 		if (!$s || (int) $s['round'] !== (int) $room['round']) {
-			$s = array('round' => $room['round'], 'values' => $room['puzzle'], 'mistakes' => 0, 'score' => 0, 'done' => 0, 'out' => false, 'seen' => 0);
+			$s = array('round' => $room['round'], 'values' => $room['puzzle'], 'mistakes' => 0, 'score' => 0, 'done' => 0, 'out' => false, 'seen' => 0, 'ev' => array());
 		}
 		$s['name'] = $room['seats'][$seat]['name'];
 		$players[$seat] = $s;
@@ -233,10 +234,27 @@ function cp_sudoku_api_state(WP_REST_Request $req) {
 			// a befejezés idejét a szerver rögzíti, egyszer
 			'done'     => $prev['done'] ? $prev['done'] : ($solved ? $now : 0),
 			'out'      => !empty($prev['out']) || (bool) $req->get_param('out'),
+			'ev'       => cp_sudoku_events($req->get_param('ev')),
 			'seen'     => $now,
 		));
 	}
 	return cp_sudoku_payload($room);
+}
+
+/* A játékos legutóbbi eseményei (következtetés, tipp) az ellenfél élő naplójához. */
+function cp_sudoku_events($ev) {
+	$out = array();
+	if (!is_array($ev)) { return $out; }
+	foreach (array_slice($ev, -8) as $e) {
+		if (!is_array($e) || !isset($e['k']) || !in_array($e['k'], array('d', 'h'), true)) { continue; }
+		$out[] = array(
+			'k' => $e['k'],
+			'l' => max(0, min(3, (int) (isset($e['l']) ? $e['l'] : 0))),
+			'p' => max(0, min(100000, (int) (isset($e['p']) ? $e['p'] : 0))),
+			't' => (int) (isset($e['t']) ? $e['t'] : 0),
+		);
+	}
+	return $out;
 }
 
 function cp_sudoku_api_rematch(WP_REST_Request $req) {
