@@ -223,6 +223,7 @@
       notes: new Array(81).fill(0),
       locked: puzzle.map((v) => (v ? 1 : 0)), // 1 = adott, 2 = tippből/helyesen beírt
       tried: new Array(81).fill(0),           // 1 = ide már próbált hibás számot (nincs következtetés-bónusz)
+      autoMask: new Array(81).fill(0),        // a Gyors ceruza által beírt (még nem kézzel átírt) jelöltek
       mistakes: 0,
       hintsLeft: diff.hints,
       score: 0,
@@ -242,6 +243,7 @@
   function upgrade(g) {
     if (!g) return g;
     if (!Array.isArray(g.tried)) g.tried = new Array(81).fill(0);
+    if (!Array.isArray(g.autoMask)) g.autoMask = new Array(81).fill(0);
     if (g.deductions == null) { g.deductions = 0; g.deductPts = 0; }
     if (g.mp && !Array.isArray(g.mp.ev)) g.mp.ev = [];
     return g;
@@ -462,6 +464,9 @@
     const pb = $('pencilBadge');
     pb.textContent = game.pencil ? 'ON' : 'OFF';
     pb.classList.toggle('on', game.pencil);
+    const auto = autoActive();
+    $('autoBadge').classList.toggle('hidden', !auto);
+    $('btnAutoNotes').setAttribute('aria-pressed', auto ? 'true' : 'false');
     const hb = $('hintBadge');
     hb.textContent = game.hintsLeft;
     hb.classList.toggle('empty', game.hintsLeft <= 0);
@@ -502,12 +507,28 @@
   }
 
   let toastTimer = null;
-  function toast(msg) {
+  /* action: { label, fn } – egy gomb az üzenetben (pl. Visszavonás) */
+  function toast(msg, action) {
     const el = $('toast');
-    el.textContent = msg;
+    el.textContent = '';
+    const text = document.createElement('span');
+    text.textContent = msg;
+    el.appendChild(text);
+    el.classList.toggle('has-action', !!action);
+    if (action) {
+      const b = document.createElement('button');
+      b.className = 'toast-action';
+      b.textContent = action.label;
+      b.addEventListener('click', () => {
+        clearTimeout(toastTimer);
+        el.classList.remove('show');
+        action.fn();
+      });
+      el.appendChild(b);
+    }
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+    toastTimer = setTimeout(() => el.classList.remove('show'), action ? 4000 : 1800);
   }
 
   function haptic(ms) {
@@ -519,8 +540,16 @@
   function canPlay() { return game && game.status === 'playing' && !paused; }
 
   function snapshot() {
-    game.undo.push({ values: game.values.slice(), notes: game.notes.slice(), locked: game.locked.slice() });
+    game.undo.push({ values: game.values.slice(), notes: game.notes.slice(), locked: game.locked.slice(), autoMask: game.autoMask.slice() });
     if (game.undo.length > 200) game.undo.shift();
+  }
+
+  function restoreSnapshot(s) {
+    game.values = s.values;
+    game.notes = s.notes;
+    game.locked = s.locked;
+    // régi (autoMask nélküli) pillanatképnél a jelöltek kézzel írtnak számítanak
+    game.autoMask = Array.isArray(s.autoMask) ? s.autoMask : new Array(81).fill(0);
   }
 
   function onCellTap(i) {
@@ -558,6 +587,7 @@
       }
       snapshot();
       game.notes[i] ^= bit;
+      game.autoMask[i] &= ~bit;
       afterChange();
       return;
     }
@@ -587,6 +617,7 @@
       const pts = DIFFICULTIES[game.diff].points;
       game.locked[i] = 2;
       game.notes[i] = 0;
+      game.autoMask[i] = 0;
       if (settings.autoRemoveNotes) for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
       game.score += pts;
       haptic(10);
@@ -652,7 +683,7 @@
     if (game.locked[i]) { toast(t('toast.locked')); return; }
     if (!game.values[i] && !game.notes[i]) return;
     snapshot();
-    if (game.values[i]) game.values[i] = 0; else game.notes[i] = 0;
+    if (game.values[i]) game.values[i] = 0; else { game.notes[i] = 0; game.autoMask[i] = 0; }
     afterChange();
   }
 
@@ -660,9 +691,7 @@
     if (!canPlay()) return;
     const s = game.undo.pop();
     if (!s) { toast(t('toast.noUndo')); return; }
-    game.values = s.values;
-    game.notes = s.notes;
-    game.locked = s.locked;
+    restoreSnapshot(s);
     afterChange();
   }
 
@@ -687,6 +716,7 @@
     game.values[i] = d;
     game.locked[i] = 2;
     game.notes[i] = 0;
+    game.autoMask[i] = 0;
     if (settings.autoRemoveNotes) for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
     game.hintsLeft--;
     if (!(game.fast && game.fastNum)) game.selected = i;
@@ -698,15 +728,38 @@
     checkWin();
   }
 
-  /* Gyors ceruza: minden üres mezőbe beírja a lehetséges jelölteket. */
+  /* Vannak-e még látható, a Gyors ceruza által beírt jelöltek. */
+  function autoActive() {
+    for (let i = 0; i < 81; i++) if (!game.values[i] && (game.notes[i] & game.autoMask[i])) return true;
+    return false;
+  }
+
+  /* Gyors ceruza: minden üres mezőbe beírja a lehetséges jelölteket.
+     Ha már be vannak írva, újabb koppintásra eltávolítja őket. */
   function autoNotes() {
     if (!canPlay()) return;
+    if (autoActive()) { removeAutoNotes(); return; }
     snapshot();
     const cv = correctValues();
     for (let i = 0; i < 81; i++) {
-      if (!game.values[i]) game.notes[i] = E.candidates(cv, i);
+      if (game.values[i]) continue;
+      const c = E.candidates(cv, i);
+      game.autoMask[i] = c & ~game.notes[i]; // csak az újonnan hozzáadottak az automatáéi
+      game.notes[i] = c;
     }
-    toast(t('toast.notes'));
+    toast(t('toast.notes'), { label: t('toast.undo'), fn: removeAutoNotes });
+    afterChange();
+  }
+
+  /* Csak az automatikusan beírt jelölteket veszi ki; a beírt számok és a kézi jegyzetek maradnak. */
+  function removeAutoNotes() {
+    if (!canPlay() || !autoActive()) return;
+    snapshot();
+    for (let i = 0; i < 81; i++) {
+      game.notes[i] &= ~game.autoMask[i];
+      game.autoMask[i] = 0;
+    }
+    toast(t('toast.notesRemoved'));
     afterChange();
   }
 
@@ -787,7 +840,7 @@
         closeModal();
         // az utolsó hibás beírás visszavonása
         const last = game.undo.pop();
-        if (last) { game.values = last.values; game.notes = last.notes; game.locked = last.locked; }
+        if (last) restoreSnapshot(last);
         afterChange();
         startTimer();
       });
@@ -928,6 +981,7 @@
       if (k >= '1' && k <= '9') { onNumber(+k); e.preventDefault(); return; }
       if (k === 'Backspace' || k === 'Delete' || k === '0') { erase(); return; }
       if (k === 'n' || k === 'N' || k === 'p' || k === 'P') { togglePencil(); return; }
+      if ((k === 'a' || k === 'A') && !e.metaKey && !e.ctrlKey) { autoNotes(); return; }
       if (k === 'z' && (e.metaKey || e.ctrlKey)) { undo(); e.preventDefault(); return; }
       if (k === ' ') { setPaused(!paused); e.preventDefault(); return; }
       const moves = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };

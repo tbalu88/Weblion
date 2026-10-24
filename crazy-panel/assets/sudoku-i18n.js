@@ -100,6 +100,8 @@
     'toast.noUndo': 'Nincs mit visszavonni',
     'toast.noHints': 'Elfogytak a tippek',
     'toast.notes': 'Jelöltek kitöltve',
+    'toast.undo': 'Visszavonás',
+    'toast.notesRemoved': 'Automatikus jelöltek eltávolítva',
     'toast.fast': 'Gyors mód: előbb számot, aztán mezőket válassz',
     'toast.geckoOn': '🦎 Gecko mód bekapcsolva',
 
@@ -282,6 +284,8 @@
     'toast.noUndo': 'Nothing to undo',
     'toast.noHints': 'No hints left',
     'toast.notes': 'Notes filled in',
+    'toast.undo': 'Undo',
+    'toast.notesRemoved': 'Auto notes removed',
     'toast.fast': 'Quick mode: pick a number, then tap cells',
     'toast.geckoOn': '🦎 Gecko mode on',
 
