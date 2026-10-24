@@ -44,6 +44,7 @@ function cp_sudoku_route() {
 		'icons/icon-512.png'   => array('icon:512', 'image/png'),
 	);
 	$body = isset($map[$file]) ? cp_sudoku_body($map[$file][0]) : null;
+	if ($body !== null && $file === 'index.html') { $body = cp_sudoku_static_refs($body); }
 	if ($body === null) {
 		status_header(404);
 		header('Content-Type: text/plain; charset=utf-8');
@@ -64,6 +65,25 @@ function cp_sudoku_route() {
 	header('Content-Length: ' . strlen($body));
 	echo $body;
 	exit;
+}
+
+/* Az oldal stílusát és szkriptjeit közvetlenül az nginx szolgálja ki a bővítmény mappájából (nem indul miattuk
+   WordPress, gyorsabb, és csúcsterhelésnél sem fogynak el a PHP-folyamatok). Az nginx egy évig gyorsítótáraz,
+   ezért a cím a fájl tartalmából képzett verziót kapja. */
+function cp_sudoku_static_refs($html) {
+	$files = array(
+		'href="style.css"' => array('href', 'sudoku.css'),
+		'src="i18n.js"'    => array('src', 'sudoku-i18n.js'),
+		'src="engine.js"'  => array('src', 'sudoku-engine.js'),
+		'src="app.js"'     => array('src', 'sudoku-app.js'),
+	);
+	foreach ($files as $needle => $f) {
+		$abs = __DIR__ . '/assets/' . $f[1];
+		if (!is_file($abs)) { continue; }
+		$url = plugins_url('assets/' . $f[1], __FILE__) . '?v=' . substr(md5_file($abs), 0, 10);
+		$html = str_replace($needle, $f[0] . '="' . esc_url($url) . '"', $html);
+	}
+	return $html;
 }
 
 /* Fájl tartalma; az ikonok base64-ben a sudoku-icons.json-ban vannak (a tárhelyre csak szöveg írható). */

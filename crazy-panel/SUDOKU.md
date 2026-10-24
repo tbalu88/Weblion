@@ -52,7 +52,9 @@ iPhone-on: Safari → Megosztás → **Főképernyőhöz adás**; az ikonról te
 A szobák tranziensekben tárolódnak (2 napig), a játékosok állása helyenként külön.
 
 ## Fájlok (a szerveren: `wp-content/plugins/crazy-panel/`)
-- `sudoku.php` – útvonal: `/crazy-panel/sudoku/<név>` → `assets/sudoku*` (a `crazy-panel.php` tölti be)
+- `sudoku.php` – útvonal: `/crazy-panel/sudoku/<név>` → `assets/sudoku*` (a `crazy-panel.php` tölti be).
+  Az oldal a stílust és a szkripteket közvetlenül a bővítmény mappájából tölti (`/wp-content/plugins/crazy-panel/
+  assets/…?v=<tartalom-hash>`), így ezekért nem indul WordPress; a `?v=` miatt frissítéskor azonnal az új jön.
 - `assets/sudoku.html`, `assets/sudoku.css` – felület
 - `assets/sudoku-engine.js` – generátor, megoldó és logikai elemző (`deductionTier`)
 - `assets/sudoku-i18n.js` – magyar és angol szövegek
@@ -61,3 +63,5 @@ A szobák tranziensekben tárolódnak (2 napig), a játékosok állása helyenk�
 - `assets/sudoku-icons.json` – az ikonok base64-ben (a tárhelyre csak szöveges fájl írható)
 
 Frissítéskor a `sudoku-sw.js`-ben növeld a `CACHE` nevet, hogy a telepített példányok is frissüljenek.
+A service worker csak sikeres választ ment (hibás, pl. 502-es válasz helyett a tárolt példányt adja), a párbaj
+API-ját nem gyorsítótárazza.
