@@ -255,6 +255,7 @@
     if (!Array.isArray(g.autoMask)) g.autoMask = new Array(81).fill(0);
     if (g.deductions == null) { g.deductions = 0; g.deductPts = 0; }
     if (g.mp && !Array.isArray(g.mp.ev)) g.mp.ev = [];
+    if (g.mp && !Array.isArray(g.mp.gkApplied)) g.mp.gkApplied = [];
     return g;
   }
 
@@ -304,6 +305,7 @@
     stopTimer();
     mpStopPolling();
     gkDropFalling();
+    cleanupScramble();
     saveGame();
     showScreen('home');
     renderHome();
@@ -327,6 +329,7 @@
     $('board').style.visibility = '';
     $('fx').innerHTML = '';
     $('fxLabels').innerHTML = '';
+    cleanupScramble();
     const isMp = !!game.mp;
     $('game').classList.toggle('mp', isMp);
     $('mpBar').classList.toggle('hidden', !isMp);
@@ -342,7 +345,7 @@
     }
     render();
     startTimer();
-    if (isMp) mpStartPolling();
+    if (isMp) { mpStartPolling(); gkResume(); }
   }
 
   /* ---------- Időzítő ---------- */
@@ -548,6 +551,7 @@
     if (g.style.getPropertyValue('--bs') !== bs + 'px') g.style.setProperty('--bs', bs + 'px');
     if (g.style.getPropertyValue('--bso') !== bso + 'px') g.style.setProperty('--bso', bso + 'px');
     if (g.style.getPropertyValue('--gw') !== gw) g.style.setProperty('--gw', gw);
+    gkScaleScramble();
   }
 
   function animate(i, cls, ms) {
@@ -613,7 +617,7 @@
 
   /* ---------- Bevitel ---------- */
 
-  function canPlay() { return game && game.status === 'playing' && !paused && !(game.mp && scramble.active); }
+  function canPlay() { return game && game.status === 'playing' && !paused && !gkLocked(); }
 
   function snapshot() {
     game.undo.push({ values: game.values.slice(), notes: game.notes.slice(), locked: game.locked.slice(), autoMask: game.autoMask.slice() });
@@ -1237,7 +1241,8 @@
     const solution = Array.from(d.room.solution, Number);
     const g = freshGame(DIFFICULTIES[d.room.diff] ? d.room.diff : 'medium', puzzle, solution);
     g.status = 'waiting';
-    g.mp = { id: d.room.id, token: sess.token, seat: sess.seat, round: d.room.round, start: d.room.start, ended: false, ev: [] };
+    g.mp = { id: d.room.id, token: sess.token, seat: sess.seat, round: d.room.round, start: d.room.start, ended: false, ev: [],
+      gkNext: 0, lockUntil: 0, gkApplied: [], gkLastS: 0 };
     return g;
   }
 
@@ -1388,7 +1393,7 @@
     try {
       const d = await api('POST', '/room/' + g.mp.id + '/state', {
         token: g.mp.token, round: g.mp.round, values: g.values.join(''),
-        mistakes: g.mistakes, score: g.score, out: g.status === 'out', ev: g.mp.ev, gk: !!settings.gecko,
+        mistakes: g.mistakes, score: g.score, out: g.status === 'out', ev: g.mp.ev, gk: gkEnabled(),
       });
       if (game === g) mpApply(d);
     } catch (e) {
@@ -1423,8 +1428,8 @@
     const evs = Array.isArray(opp.ev) ? opp.ev : [];
     mp.prev = { values: vals, mistakes: opp.mistakes };
     if (!prev) {
-      // első adat: alapállapot, nincs visszajátszás
-      evs.forEach((e) => mp.seenEv.add(e.k + e.t));
+      // első adat: alapállapot, nincs visszajátszás – kivéve egy friss, még nem alkalmazott gecko-támadást
+      evs.forEach((e) => { mp.seenEv.add(e.k + e.t); if (e.k === 'g') gkOnAttack(e, opp); });
       return;
     }
     const newOk = [];
@@ -1468,8 +1473,7 @@
       mp.seenEv.add(key);
       if (e.k === 'd') mpFeedAdd(t('feed.deduce', { name, label: t('deduce.' + e.l), p: e.p }), 'opp hot', true);
       if (e.k === 'h') mpFeedAdd(t('feed.hint', { name }), 'opp', true);
-      // gecko-támadás: csak ha friss (pl. újracsatlakozás után ne süljön el egy régi)
-      if (e.k === 'g' && (!e.s || serverNow() - e.s < 12000)) scrambleBoard(name);
+      if (e.k === 'g') gkOnAttack(e, opp);
     }
   }
 
@@ -1724,48 +1728,60 @@
     }
   }
 
-  /* ---------- 🦎 Gecko-támadás (párbajban, gecko módban) ----------
+  /* ---------- 🦎 Gecko-támadás (párbajban, ha mindkét játékos gecko módban van) ----------
      Időnként egy nagyon gyorsan zuhanó gecko jelenik meg; aki elkapja, annak a geckója átmegy az
-     ellenfél táblájára, és 5 mp-re összekeveri, felborítja a számait (ő addig nem írhat be). */
+     ellenfél táblájára, és 5 mp-re összekeveri, felborítja a számait (ő addig nem írhat be).
+     Az időzítés és a zárolás a mentett játékban él, így Vissza + Folytatás vagy újratöltés sem nullázza. */
 
   const GK_FALL_MS = [950, 1250];        // zuhanás ideje (minél kisebb, annál nehezebb)
   const GK_WAIT_MS = [20000, 40000];     // ennyi idő múlva jön a következő, ha nem kapta el
   const GK_COOLDOWN_MS = [35000, 55000]; // elkapás után ennyi a szünet
+  const GK_MIN_GAP_MS = 25000;           // a megtámadott fél ennél sűrűbben nem kever (a szerver 30 mp-et enged)
+  const GK_SLOP = 18;                    // érintési ráhagyás a gecko körül (px)
   const SCRAMBLE_MS = 5000;
+  const RESTORE_MS = 1300;               // a visszarendeződés ideje; a zárolás ennyivel tovább tart
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const gk = { next: 0, falling: null, hinted: false };
-  const scramble = { active: false, timers: [], layer: null };
+  const gk = { falling: null, anim: null, hinted: false, swallowUntil: 0 };
+  const scramble = { active: false, timers: [], layer: null, w0: 0 };
   const rnd = (a, b) => a + Math.random() * (b - a);
 
+  // csökkentett mozgásnál nem veszünk részt (az ellenfél sem kap tőlünk / ránk geckót)
+  function gkEnabled() { return !!settings.gecko && !REDUCED.matches; }
+  function gkLocked() { return !!(game && game.mp && (scramble.active || (game.mp.lockUntil || 0) > Date.now())); }
+  function gkOppReady() {
+    const { opp } = mpSeats();
+    return !!opp && !opp.done && !opp.out && !!opp.gk && !!opp.seen && serverNow() - opp.seen < 12000;
+  }
+
+  /* Új kör vagy szoba: csak a látvány takarítása (az időzítés a játékkal együtt újraindul). */
   function gkReset() {
-    gk.next = 0;
-    gkDropFalling();
+    gkDropFalling(false);
     cleanupScramble();
   }
 
-  function gkDropFalling() {
-    if (gk.falling) {
-      gk.falling.remove();
-      gk.falling = null;
-      gk.next = Date.now() + rnd(GK_WAIT_MS[0], GK_WAIT_MS[1]);
-    }
+  function gkDropFalling(reschedule = true) {
+    if (!gk.falling) return;
+    gk.falling.remove();
+    gk.falling = null;
+    gk.anim = null;
+    if (reschedule && game && game.mp) game.mp.gkNext = Date.now() + rnd(GK_WAIT_MS[0], GK_WAIT_MS[1]);
   }
 
   function gkTick() {
-    if (gk.falling && game && game.mp && !(mpSeats().opp || {}).gk) gkDropFalling();
-    if (!game || !game.mp || !settings.gecko || REDUCED.matches || document.hidden) return;
-    if (game.status !== 'playing' || scramble.active || gk.falling) return;
-    if (!$('game').classList.contains('active')) return;
-    if (document.querySelector('.sheet-backdrop:not(.hidden), .modal-backdrop:not(.hidden)')) return;
-    const { opp } = mpSeats();
-    // csak ha az ellenfél is gecko módban van
-    if (!opp || opp.done || opp.out || !opp.gk) return;
+    if (!game || !game.mp) return;
+    const ok = gkEnabled() && !document.hidden && game.status === 'playing' && !gkLocked() &&
+      $('game').classList.contains('active') &&
+      !document.querySelector('.sheet-backdrop:not(.hidden), .modal-backdrop:not(.hidden)') && gkOppReady();
+    if (gk.falling) { if (!ok) gkDropFalling(); return; }
+    if (!ok) return;
     const now = Date.now();
-    if (!gk.next) { gk.next = now + rnd(12000, 25000); return; } // az első a rajt után nem azonnal jön
-    if (now >= gk.next) gkSpawn();
+    // az első a rajt után nem azonnal jön
+    if (!game.mp.gkNext) { game.mp.gkNext = now + rnd(12000, 25000); saveGame(); return; }
+    if (now >= game.mp.gkNext) gkSpawn();
   }
 
-  /* Egy gecko fejjel lefelé, pörögve zuhan át a képernyőn; koppintással / kattintással kapható el. */
+  /* Egy gecko fejjel lefelé, pörögve zuhan át a képernyőn. Az érintést az egész dokumentum figyeli
+     (iOS-en a mozgó elem maga nem mindig kapja meg), lásd gkPointer. */
   function gkSpawn() {
     const layer = $('screenFx');
     const W = layer.clientWidth, H = layer.clientHeight;
@@ -1782,27 +1798,45 @@
       { transform: tf(H * 0.5, 180, drift / 2), offset: 0.5 },
       { transform: tf(H + 20, 180 + spin, drift) },
     ], { duration: rnd(GK_FALL_MS[0], GK_FALL_MS[1]), easing: 'cubic-bezier(.45,.05,.8,.7)' });
-    anim.onfinish = () => {
-      if (gk.falling === el) { el.remove(); gk.falling = null; gk.next = Date.now() + rnd(GK_WAIT_MS[0], GK_WAIT_MS[1]); }
-    };
-    el.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (gk.falling !== el) return;
-      gkCatch(el, anim);
-    }, { once: true });
+    gk.anim = anim;
+    anim.onfinish = () => { if (gk.falling === el) gkDropFalling(); };
     if (!gk.hinted) { gk.hinted = true; toast(t('gecko.hint')); }
   }
+
+  /* Elkapás: ha az érintés a zuhanó gecko körül van, elnyeljük (és az utána jövő kattintást is),
+     hogy az alatta lévő gomb / mező ne nyomódjon meg. */
+  function gkPointer(e) {
+    const el = gk.falling;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX < r.left - GK_SLOP || e.clientX > r.right + GK_SLOP || e.clientY < r.top - GK_SLOP || e.clientY > r.bottom + GK_SLOP) return;
+    e.preventDefault();
+    e.stopPropagation();
+    gk.swallowUntil = Date.now() + 700;
+    gkCatch(el, gk.anim);
+  }
+  function gkSwallowClick(e) {
+    if (Date.now() >= gk.swallowUntil) return;
+    gk.swallowUntil = 0;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  document.addEventListener('pointerdown', gkPointer, true);
+  if (REDUCED.addEventListener) REDUCED.addEventListener('change', () => { if (game && game.mp) { gkDropFalling(); mpSchedulePush(); } });
+  document.addEventListener('click', gkSwallowClick, true);
 
   /* Elkapva: kis pörgés, aztán átrepül az ellenfél táblájára, és indul a támadás. */
   function gkCatch(el, anim) {
     gk.falling = null;
-    gk.next = Date.now() + rnd(GK_COOLDOWN_MS[0], GK_COOLDOWN_MS[1]);
+    gk.anim = null;
     const layer = $('screenFx');
     const lr = layer.getBoundingClientRect(), er = el.getBoundingClientRect();
-    anim.cancel();
-    const gw = er.width, gh = er.height;
-    const x0 = er.left - lr.left + gw / 2, y0 = er.top - lr.top + gh / 2;
+    // a forgatott elem befoglaló doboza nagyobb – a középpontja kell, a mérete az elforgatatlan méret
+    const gw = el.offsetWidth, gh = el.offsetHeight;
+    const x0 = er.left - lr.left + er.width / 2, y0 = er.top - lr.top + er.height / 2;
+    if (anim) anim.cancel();
+    if (!game || !game.mp || game.status !== 'playing' || !gkEnabled() || !gkOppReady()) { el.remove(); return; }
+    game.mp.gkNext = Date.now() + rnd(GK_COOLDOWN_MS[0], GK_COOLDOWN_MS[1]);
     // cél: a látható ellenfél-tábla (mini vagy nagy), különben a képernyő teteje
     const big = $('oppBoardBig'), mini = $('oppBoardMini');
     const target = big.offsetParent && !$('oppSide').classList.contains('hidden') ? big : mini.offsetParent ? mini : null;
@@ -1827,7 +1861,9 @@
       }
     };
     // az esemény azonnal megy, hogy az ellenfélnél a repülés végére megérkezzen
-    if (game && game.mp) { mpEvent({ k: 'g' }); mpSchedulePush(); }
+    mpEvent({ k: 'g' });
+    saveGame();
+    mpSchedulePush();
   }
 
   /* Csillagszóró-szerű kitörés egy pontban. */
@@ -1847,69 +1883,95 @@
     }
   }
 
-  /* A megtámadott fél tábláján a számok összekeverednek és felborulnak, 5 mp múlva visszarendeződnek. */
-  function scrambleBoard(name) {
-    // csak ha nálunk is be van kapcsolva a gecko mód
-    if (!game || !game.mp || scramble.active || !settings.gecko) return;
+  /* Az ellenféltől jött 'g' esemény. Csak egyszer (a mentett listában is számon tartva), csak frissen,
+     csak ha mindketten gecko módban vagyunk, és nem sűrűbben, mint GK_MIN_GAP_MS. */
+  function gkOnAttack(e, opp) {
+    if (!game || !game.mp || !gkEnabled() || !opp || !opp.gk) return;
     if (game.status !== 'playing' && game.status !== 'waiting') return;
-    const wrap = $('boardWrap');
+    const applied = game.mp.gkApplied || (game.mp.gkApplied = []);
+    if (applied.includes(e.t)) return;
+    if (e.s && serverNow() - e.s > 12000) return;
+    if (game.mp.gkLastS && e.s && e.s - game.mp.gkLastS < GK_MIN_GAP_MS) return;
+    applied.push(e.t);
+    if (applied.length > 12) applied.shift();
+    game.mp.gkLastS = e.s || serverNow();
+    game.mp.lockUntil = Date.now() + SCRAMBLE_MS + RESTORE_MS;
+    saveGame();
+    scrambleBoard(opp.name, SCRAMBLE_MS, false);
+  }
+
+  /* Folytatáskor (vagy újratöltés után) a még tartó zárolás látványa is visszajön. */
+  function gkResume() {
+    if (!game || !game.mp) return;
+    const left = (game.mp.lockUntil || 0) - Date.now();
+    if (left > RESTORE_MS + 300) scrambleBoard((mpSeats().opp || {}).name || t('mp.opponent'), left - RESTORE_MS, true);
+  }
+
+  /* A megtámadott fél tábláján a számok összekeverednek és felborulnak, ms múlva visszarendeződnek. */
+  function scrambleBoard(name, ms, resumed) {
+    if (!game || !game.mp || scramble.active) return;
+    const wrap = $('boardWrap'), board = $('board');
     scramble.active = true;
-    toast(t('gecko.attacked', { name }));
-    mpFeedAdd(t('feed.geckoHit', { name }), 'opp bad');
-    haptic([40, 60, 40, 60, 80]);
-    // a valódi számok helyett úszó másolatok
+    if (!resumed) {
+      toast(t('gecko.attacked', { name }));
+      mpFeedAdd(t('feed.geckoHit', { name }), 'opp bad');
+      haptic([40, 60, 40, 60, 80]);
+    }
+    // a valódi számok helyett úszó másolatok; előbb minden pozíciót kiolvasunk (egy elrendezési kör)
+    const ctr = cells.map((c) => ({ x: c.offsetLeft + c.offsetWidth / 2, y: c.offsetTop + c.offsetHeight / 2 }));
+    scramble.w0 = board.clientWidth;
+    const fontPx = scramble.w0 * 0.084;
     const layer = document.createElement('div');
     layer.className = 'scramble';
-    wrap.appendChild(layer);
-    scramble.layer = layer;
-    $('board').classList.add('scrambled');
     const filled = [];
     for (let i = 0; i < 81; i++) if (game.values[i]) filled.push(i);
     const spots = shuffleCopy([...Array(81).keys()]);
-    const fontPx = $('board').clientWidth * 0.084;
+    const at = (q, r, sx, sc) => 'translate(' + q.x + 'px,' + q.y + 'px) translate(-50%,-50%) rotate(' + r + 'deg) scale(' + sx * sc + ',' + sc + ')';
     const pieces = filled.map((i, n) => {
-      const c = cells[i];
-      const home = { x: c.offsetLeft + c.offsetWidth / 2, y: c.offsetTop + c.offsetHeight / 2 };
-      const t2 = cells[spots[n]];
-      const away = { x: t2.offsetLeft + t2.offsetWidth / 2 + rnd(-8, 8), y: t2.offsetTop + t2.offsetHeight / 2 + rnd(-8, 8) };
+      const home = ctr[i];
+      const away = { x: ctr[spots[n]].x + rnd(-8, 8), y: ctr[spots[n]].y + rnd(-8, 8) };
       const el = document.createElement('span');
-      el.className = 'piece ' + (game.locked[i] === 1 ? 'given' : isWrong(i) ? 'wrong' : 'user');
+      el.className = 'piece ' + (game.locked[i] === 1 ? 'given' : isWrong(i) && settings.showErrors ? 'wrong' : 'user');
       el.style.fontSize = fontPx + 'px';
       el.innerHTML = '<i>' + game.values[i] + '</i>';
-      layer.appendChild(el);
       // felborulás: elforgatva, olykor tükrözve
       const rot = (Math.random() < 0.5 ? -1 : 1) * rnd(110, 250);
       const flip = Math.random() < 0.35 ? -1 : 1;
-      const at = (p, r, sx, sc) => 'translate(' + p.x + 'px,' + p.y + 'px) translate(-50%,-50%) rotate(' + r + 'deg) scale(' + sx * sc + ',' + sc + ')';
+      const sc = rnd(0.8, 1.15);
       el.style.transform = at(home, 0, 1, 1);
-      const out = el.animate([
-        { transform: at(home, 0, 1, 1) },
-        { transform: at({ x: (home.x + away.x) / 2, y: (home.y + away.y) / 2 - 30 }, rot / 2, 1, 1.25), offset: 0.45 },
-        { transform: at(away, rot, flip, rnd(0.8, 1.15)) },
+      layer.appendChild(el);
+      return { el, i, home, away, rot, flip, sc };
+    });
+    wrap.appendChild(layer);
+    scramble.layer = layer;
+    board.classList.add('scrambled');
+    pieces.forEach((p, n) => {
+      p.out = p.el.animate([
+        { transform: at(p.home, 0, 1, 1) },
+        { transform: at({ x: (p.home.x + p.away.x) / 2, y: (p.home.y + p.away.y) / 2 - 30 }, p.rot / 2, 1, 1.25), offset: 0.45 },
+        { transform: at(p.away, p.rot, p.flip, p.sc) },
       ], { duration: 650, delay: n * 6, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'forwards' });
-      return { el, home, away, rot, flip, out };
     });
     // közben geckók rohangálnak a táblán
-    for (let k = 0; k < 5; k++) {
+    const runs = Math.max(1, Math.round(ms / 1000));
+    for (let k = 0; k < runs; k++) {
       scramble.timers.push(setTimeout(() => geckoRunBoard(Math.floor(Math.random() * 9), ['row', 'col', 'box'][k % 3], true), 200 + k * 900));
     }
-    scramble.timers.push(setTimeout(() => {
-      pieces.forEach((p) => p.el.classList.add('wobble'));
-    }, 700));
+    scramble.timers.push(setTimeout(() => pieces.forEach((p) => p.el.classList.add('wobble')), 700));
     // visszarendeződés: rugózva repülnek a helyükre, hullámban, a végén felvillan a tábla
     scramble.timers.push(setTimeout(() => {
       let last = 0;
       pieces.forEach((p) => {
         p.el.classList.remove('wobble');
-        const at = (q, r, sx, sc) => 'translate(' + q.x + 'px,' + q.y + 'px) translate(-50%,-50%) rotate(' + r + 'deg) scale(' + sx * sc + ',' + sc + ')';
-        const i = filled[pieces.indexOf(p)];
-        const delay = (ROW[i] + COL[i]) * 28;
+        const delay = (ROW[p.i] + COL[p.i]) * 28;
         last = Math.max(last, delay);
-        p.out.cancel();
-        p.el.animate([
-          { transform: at(p.away, p.rot, p.flip, 1) },
+        // fill: both – a késleltetés alatt is a szétszórt helyén marad (nem ugrik haza, majd vissza)
+        const back = p.el.animate([
+          { transform: at(p.away, p.rot, p.flip, p.sc) },
           { transform: at(p.home, 0, 1, 1) },
-        ], { duration: 750, delay, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'forwards' });
+        ], { duration: 750, delay, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'both' });
+        p.out.cancel();
+        p.out = back;
       });
       scramble.timers.push(setTimeout(() => {
         cleanupScramble();
@@ -1917,15 +1979,23 @@
         toast(t('gecko.restored'));
         render();
       }, last + 800));
-    }, SCRAMBLE_MS));
+    }, ms));
   }
 
+  /* Csak a látvány takarítása; a zárolás ideje (game.mp.lockUntil) megmarad. */
   function cleanupScramble() {
     scramble.timers.forEach(clearTimeout);
     scramble.timers = [];
     if (scramble.layer) { scramble.layer.remove(); scramble.layer = null; }
     $('board').classList.remove('scrambled');
     scramble.active = false;
+  }
+
+  /* Ha közben átméreteződik a tábla (elforgatás, nézetváltás), a lebegő számok vele együtt skálázódnak. */
+  function gkScaleScramble() {
+    if (!scramble.layer || !scramble.w0) return;
+    const r = $('board').clientWidth / scramble.w0;
+    scramble.layer.style.transform = Math.abs(r - 1) > 0.002 ? 'scale(' + r + ')' : '';
   }
 
   function shuffleCopy(a) {

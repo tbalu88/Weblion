@@ -156,6 +156,7 @@ function cp_sudoku_payload($room, $extra = array()) {
 			$s = array('round' => $room['round'], 'values' => $room['puzzle'], 'mistakes' => 0, 'score' => 0, 'done' => 0, 'out' => false, 'seen' => 0, 'ev' => array(), 'gk' => false);
 		}
 		$s['name'] = $room['seats'][$seat]['name'];
+		unset($s['last_g']);
 		$players[$seat] = $s;
 	}
 	$res = new WP_REST_Response(array_merge(array(
@@ -226,6 +227,14 @@ function cp_sudoku_api_state(WP_REST_Request $req) {
 		if (!$prev || (int) $prev['round'] !== (int) $room['round']) { $prev = array('done' => 0, 'out' => false); }
 		$solved = $values === $room['solution'];
 		$now = cp_sudoku_now();
+		// gecko-támadás csak akkor mehet át, ha mindkét fél gecko módban van, a kör elindult,
+		// és az előző elfogadott támadás óta eltelt legalább 30 mp (nem lehet folyamatosan bénítani)
+		$other = cp_sudoku_seat($room['id'], $seat === 1 ? 2 : 1);
+		$other_gk = $other && (int) $other['round'] === (int) $room['round'] && !empty($other['gk']);
+		$last_g = isset($prev['last_g']) ? (int) $prev['last_g'] : 0;
+		$allow_g = (bool) $req->get_param('gk') && $other_gk && (int) $room['start'] > 0 && (int) $room['start'] <= $now && $now - $last_g >= 30000;
+		$new_g = false;
+		$ev = cp_sudoku_events($req->get_param('ev'), isset($prev['ev']) ? $prev['ev'] : array(), $now, $allow_g, $new_g);
 		cp_sudoku_seat_save($room['id'], $seat, array(
 			'round'    => (int) $room['round'],
 			'values'   => $values,
@@ -234,7 +243,8 @@ function cp_sudoku_api_state(WP_REST_Request $req) {
 			// a befejezés idejét a szerver rögzíti, egyszer
 			'done'     => $prev['done'] ? $prev['done'] : ($solved ? $now : 0),
 			'out'      => !empty($prev['out']) || (bool) $req->get_param('out'),
-			'ev'       => cp_sudoku_events($req->get_param('ev'), isset($prev['ev']) ? $prev['ev'] : array(), $now),
+			'ev'       => $ev,
+			'last_g'   => $new_g ? $now : $last_g,
 			// gecko mód: a gecko-támadás csak akkor él, ha mindkét játékosnál be van kapcsolva
 			'gk'       => (bool) $req->get_param('gk'),
 			'seen'     => $now,
@@ -245,7 +255,8 @@ function cp_sudoku_api_state(WP_REST_Request $req) {
 
 /* A játékos legutóbbi eseményei (d = következtetés, h = tipp, g = gecko-támadás) az ellenfélnek.
    's' = mikor kapta meg először a szerver – ebből látja az ellenfél, hogy friss-e (pl. a támadás). */
-function cp_sudoku_events($ev, $prev_ev, $now) {
+function cp_sudoku_events($ev, $prev_ev, $now, $allow_g = true, &$new_g = null) {
+	$new_g = false;
 	$out = array();
 	if (!is_array($ev)) { return $out; }
 	$seen = array();
@@ -258,6 +269,11 @@ function cp_sudoku_events($ev, $prev_ev, $now) {
 		if (!is_array($e) || !isset($e['k']) || !in_array($e['k'], array('d', 'h', 'g'), true)) { continue; }
 		$t = (int) (isset($e['t']) ? $e['t'] : 0);
 		$key = $e['k'] . '|' . $t;
+		if ($e['k'] === 'g' && !isset($seen[$key])) {
+			// új támadás: csak ha szabad, és mentésenként legfeljebb egy
+			if (!$allow_g || $new_g) { continue; }
+			$new_g = true;
+		}
 		$out[] = array(
 			'k' => $e['k'],
 			'l' => max(0, min(3, (int) (isset($e['l']) ? $e['l'] : 0))),

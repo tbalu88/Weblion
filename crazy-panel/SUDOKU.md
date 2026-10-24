@@ -31,6 +31,9 @@ Telepítés nélküli, offline is működő webes szudoku, iPhone 15 Pro-ra opti
   gecko zuhan át nagyon gyorsan a képernyőn. Aki elkapja (koppintás / kattintás), annak a geckója átrepül az
   ellenfél táblájára: ott 5 mp-re összekeverednek és felborulnak a számok, az ellenfél addig nem írhat be
   (a játékállás nem változik). Utána a számok rugózva a helyükre repülnek. Elkapás után 35–55 mp szünet.
+  A zárolás és az időzítés a mentett játékban él (Vissza + Folytatás vagy újratöltés sem nullázza); a szerver
+  csak akkor fogad el támadást, ha mindkét fél gecko módban van, a kör elindult, és az előző óta eltelt 30 mp.
+  „Mozgás csökkentése” beállítás mellett a játékos nem számít gecko módúnak.
 
 ## Elérés
 **https://eventcrazy.hu/crazy-panel/sudoku/** – jelszó nélkül, a keresők elől rejtve (noindex).
