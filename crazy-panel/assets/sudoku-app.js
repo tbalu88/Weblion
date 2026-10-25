@@ -67,6 +67,7 @@
     document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
     document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
     document.querySelectorAll('[data-lang]').forEach((el) => el.classList.toggle('on', el.dataset.lang === settings.lang));
   }
 
@@ -243,6 +244,7 @@
       pencil: false,
       fast: false,
       fastNum: 0,
+      hlNum: 0,          // számgombbal kiemelt szám (ha nem üres mezőn állunk)
       undo: [],
       status: 'playing',
     };
@@ -253,6 +255,7 @@
     if (!g) return g;
     if (!Array.isArray(g.tried)) g.tried = new Array(81).fill(0);
     if (!Array.isArray(g.autoMask)) g.autoMask = new Array(81).fill(0);
+    if (g.hlNum == null) g.hlNum = 0;
     if (g.deductions == null) { g.deductions = 0; g.deductPts = 0; }
     if (g.mp && !Array.isArray(g.mp.ev)) g.mp.ev = [];
     if (g.mp && !Array.isArray(g.mp.gkApplied)) g.mp.gkApplied = [];
@@ -428,19 +431,21 @@
 
   function render() {
     if (!game) return;
-    // gyors módban (kiválasztott számmal) nincs kijelölt mező, csak az azonos számok világítanak
+    // gyors módban (kiválasztott számmal) nincs kijelölt mező, csak az azonos számok világítanak;
+    // számgombbal kiemelt számnál (kitöltött mezőn vagy kijelölés nélkül) az a szám világít
     const fastActive = game.fast && game.fastNum;
+    const hlActive = !game.fast && game.hlNum;
     const sel = fastActive ? -1 : game.selected;
     const selVal = sel >= 0 ? game.values[sel] : 0;
-    const focusDigit = fastActive ? game.fastNum : selVal;
+    const focusDigit = fastActive ? game.fastNum : hlActive ? game.hlNum : selVal;
 
     for (let i = 0; i < 81; i++) {
       const c = cells[i];
       const v = game.values[i];
       const cls = ['cell', 'r' + ROW[i], 'c' + COL[i]];
       if (i === sel) cls.push('sel');
-      else if (settings.highlightSame && focusDigit && v === focusDigit) cls.push('same');
-      else if (settings.highlightPeers && sel >= 0 && (ROW[i] === ROW[sel] || COL[i] === COL[sel] || BOX[i] === BOX[sel])) cls.push('peer');
+      else if ((settings.highlightSame || hlActive) && focusDigit && v === focusDigit) cls.push('same');
+      else if (settings.highlightPeers && !hlActive && sel >= 0 && (ROW[i] === ROW[sel] || COL[i] === COL[sel] || BOX[i] === BOX[sel])) cls.push('peer');
       if (v && game.locked[i] !== 1) cls.push('user');
       const wrong = v && isWrong(i) && settings.showErrors;
       if (wrong) cls.push('wrong');
@@ -459,7 +464,7 @@
         const s = notesEl.children[d - 1];
         const on = !!(m & (1 << d));
         s.textContent = on ? d : '';
-        s.className = on && settings.highlightSame && focusDigit === d ? 'hl' : '';
+        s.className = on && (settings.highlightSame || hlActive) && focusDigit === d ? 'hl' : '';
       }
     }
 
@@ -489,18 +494,20 @@
 
     // gyors mód
     $('btnFast').setAttribute('aria-checked', game.fast ? 'true' : 'false');
-    $('fastLabel').textContent = game.fast ? (game.fastNum ? t('fast.tap', { d: game.fastNum }) : t('fast.pick')) : '';
+    $('fastLabel').textContent = game.fast ? (game.fastNum ? t('fast.tap', { d: game.fastNum }) : t('fast.pick'))
+      : hlActive ? t('hl.on', { d: game.hlNum }) : '';
 
     // számbillentyűk
     const pad = $('numpad');
     pad.classList.toggle('pencil', game.pencil);
+    pad.classList.toggle('hl', !!hlActive);
     for (const b of pad.children) {
       const d = +b.dataset.d;
       const left = 9 - countCorrect(d);
       b.lastChild.textContent = left;
       b.classList.toggle('done', left <= 0);
       b.classList.toggle('show', left <= 0 && !settings.hideDone);
-      b.classList.toggle('active', game.fast && game.fastNum === d);
+      b.classList.toggle('active', game.fast ? game.fastNum === d : game.hlNum === d);
     }
     if (game.mp) renderMp();
     scheduleFit();
@@ -598,12 +605,14 @@
   /* Játék közben az üzenet közvetlenül az eszközsor fölé kerül, hogy a gombja ne takarjon vezérlőt. */
   function placeToast(el) {
     const tools = $('game').classList.contains('active') ? $('game').querySelector('.tools') : null;
-    if (!tools) { el.style.left = ''; el.style.bottom = ''; el.style.maxWidth = ''; return; }
+    if (!tools) { el.classList.remove('anchored'); el.style.left = ''; el.style.bottom = ''; el.style.maxWidth = ''; return; }
     const ar = $('app').getBoundingClientRect(), tr = tools.getBoundingClientRect();
-    el.style.left = (tr.left + tr.width / 2 - ar.left) + 'px';
+    // balra igazítva a gyors-sorban, a gyors mód kapcsolója előtt – azt nem takarhatja
+    const sw = $('btnFast').getBoundingClientRect();
+    el.classList.add('anchored');
+    el.style.left = (tr.left - ar.left + 4) + 'px';
     el.style.bottom = (ar.bottom - tr.top + 2) + 'px';
-    // középre igazítva jobbról se érjen el a gyors mód kapcsolójáig (≈ 60 px)
-    el.style.maxWidth = Math.max(150, tr.width - 128) + 'px';
+    el.style.maxWidth = Math.max(150, (sw.width ? sw.left : tr.right) - tr.left - 14) + 'px';
   }
 
   function hideToast() {
@@ -639,6 +648,15 @@
       return;
     }
     game.selected = i;
+    // kitöltött mezőnél a mező száma világít; üres mezőnél megmarad a kiemelés (látszik, hová kerülhet)
+    if (game.values[i]) game.hlNum = 0;
+    render();
+  }
+
+  /* Kijelölés megszüntetése (kattintás a tábla mellé / Esc). */
+  function deselect() {
+    if (!game || game.selected < 0) return;
+    game.selected = -1;
     render();
   }
 
@@ -650,27 +668,37 @@
       render();
       return;
     }
-    if (game.selected < 0) { toast(t('toast.selectCell')); return; }
-    input(game.selected, d);
+    const i = game.selected;
+    // üres (vagy hibásan kitöltött, javítható) mezőn beír; kitöltött mezőn vagy kijelölés nélkül csak kiemel
+    if (i >= 0 && (!game.values[i] || !game.locked[i])) {
+      game.hlNum = 0;
+      input(i, d);
+      return;
+    }
+    game.hlNum = game.hlNum === d ? 0 : d;
+    render();
+  }
+
+  /* Jelölt (ceruzajegyzet) be / ki egy mezőben. */
+  function noteInput(i, d) {
+    if (game.locked[i] || game.values[i]) { render(); return; }
+    // csak a lehetséges jelölteket engedi, ha a szám már szerepel a sorban/oszlopban/blokkban
+    const bit = 1 << d;
+    if (!(game.notes[i] & bit) && !(E.candidates(correctValues(), i) & bit)) {
+      toast(t('toast.inUnit', { d }));
+      animate(i, 'shake', 500);
+      render();
+      return;
+    }
+    snapshot();
+    game.notes[i] ^= bit;
+    game.autoMask[i] &= ~bit;
+    afterChange();
   }
 
   function input(i, d) {
     if (game.locked[i]) { render(); return; }
-    if (game.pencil) {
-      if (game.values[i]) { render(); return; }
-      // csak a lehetséges jelölteket engedi, ha a szám már szerepel a sorban/oszlopban/blokkban
-      const bit = 1 << d;
-      if (!(game.notes[i] & bit) && !(E.candidates(correctValues(), i) & bit)) {
-        toast(t('toast.inUnit', { d }));
-        animate(i, 'shake', 500);
-        return;
-      }
-      snapshot();
-      game.notes[i] ^= bit;
-      game.autoMask[i] &= ~bit;
-      afterChange();
-      return;
-    }
+    if (game.pencil) { noteInput(i, d); return; }
     if (game.values[i] === d) {
       // ugyanaz a hibás szám újra -> törlés
       snapshot();
@@ -854,7 +882,10 @@
     game.fast = !game.fast;
     game.fastNum = 0;
     game.selected = -1;
-    if (game.fast) toast(t('toast.fast'));
+    if (game.fast) {
+      game.hlNum = 0;
+      toast(t('toast.fast'));
+    }
     afterChange();
   }
 
@@ -1031,6 +1062,14 @@
     $('btnPencil').addEventListener('click', togglePencil);
     $('btnHint').addEventListener('click', hint);
     $('btnFast').addEventListener('click', toggleFast);
+    // kattintás a tábla mellé (üres területre, széles kijelzőn a játékoszlopon kívül is):
+    // nincs kijelölt mező, a számgomb ilyenkor kiemel
+    document.addEventListener('pointerdown', (e) => {
+      if (!$('game').classList.contains('active')) return;
+      // a vezérlőcsoportok közti rés (pl. két számgomb között) ne vegye el a kijelölést
+      if (e.target.closest('button, input, label, .board, .opp-board, .numpad, .tools, .fast-row, .mp-bar, .sheet-backdrop, .modal-backdrop, .mp-feed, .scramble')) return;
+      deselect();
+    });
 
     document.querySelectorAll('[data-lang]').forEach((el) => el.addEventListener('click', () => setLang(el.dataset.lang)));
     document.querySelectorAll('[data-gecko-toggle]').forEach((el) => el.addEventListener('click', toggleGecko));
@@ -1064,6 +1103,8 @@
       if (k === 'Backspace' || k === 'Delete' || k === '0') { erase(); return; }
       if (k === 'n' || k === 'N' || k === 'p' || k === 'P') { togglePencil(); return; }
       if ((k === 'a' || k === 'A') && !e.metaKey && !e.ctrlKey) { autoNotes(); return; }
+      if ((k === 'f' || k === 'F') && !e.metaKey && !e.ctrlKey) { toggleFast(); return; }
+      if (k === 'Escape') { game.hlNum = 0; game.selected = -1; render(); return; }
       if (k === 'z' && (e.metaKey || e.ctrlKey)) { undo(); e.preventDefault(); return; }
       if (k === ' ') { setPaused(!paused); e.preventDefault(); return; }
       const moves = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };

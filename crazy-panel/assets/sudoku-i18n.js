@@ -28,6 +28,7 @@
     'tool.hint': 'Tipp',
     'fast.pick': 'Válassz számot',
     'fast.tap': 'Koppints a mezőkre: {d}',
+    'hl.on': '{d} kiemelve',
     'aria.back': 'Vissza',
     'aria.share': 'Meghívó link',
     'aria.new': 'Új játék',
@@ -35,6 +36,7 @@
     'aria.pause': 'Szünet',
     'aria.resume': 'Folytatás',
     'aria.fast': 'Gyors bevitel: előbb a számot választod',
+    'title.fast': 'Gyors bevitel (F): előbb a szám, aztán a mezők',
     'aria.split': 'Táblák egymás mellett',
     'aria.gecko': 'Gecko mód',
 
@@ -218,6 +220,7 @@
     'tool.hint': 'Hint',
     'fast.pick': 'Pick a number',
     'fast.tap': 'Tap cells: {d}',
+    'hl.on': '{d} highlighted',
     'aria.back': 'Back',
     'aria.share': 'Invite link',
     'aria.new': 'New game',
@@ -225,6 +228,7 @@
     'aria.pause': 'Pause',
     'aria.resume': 'Resume',
     'aria.fast': 'Quick input: pick the number first',
+    'title.fast': 'Quick input (F): pick the number, then the cells',
     'aria.split': 'Boards side by side',
     'aria.gecko': 'Gecko mode',
 
