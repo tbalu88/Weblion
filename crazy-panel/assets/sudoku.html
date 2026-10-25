@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" onerror="if(!this.dataset.r){this.dataset.r=1;var h=this.href;var l=this;setTimeout(function(){l.href=h+(h.indexOf('?')<0?'?':'&')+'r=1'},500)}">
 </head>
 <body>
 <div id="app">
@@ -251,8 +251,32 @@
   <div class="screen-fx" id="screenFx"></div>
 </div>
 
-<script src="i18n.js"></script>
-<script src="engine.js"></script>
-<script src="app.js"></script>
+<script>
+/* Betöltő: a szkriptek sorban jönnek; ha egy átmeneti hiba miatt nem töltődik be (pl. 502), újrapróbálja. */
+(function () {
+  var list = ["i18n.js", "engine.js", "app.js"];
+  function fail() {
+    var d = document.createElement('div');
+    d.className = 'load-fail';
+    var hu = /^hu/i.test(navigator.language || 'hu');
+    d.innerHTML = '<p>' + (hu ? 'Nem sikerült betölteni a játékot.' : 'The game could not be loaded.') + '</p><button>' + (hu ? 'Újratöltés' : 'Reload') + '</button>';
+    d.querySelector('button').onclick = function () { location.reload(); };
+    document.body.appendChild(d);
+  }
+  function load(i, tries) {
+    if (i >= list.length) return;
+    var s = document.createElement('script');
+    s.src = list[i] + (tries ? (list[i].indexOf('?') < 0 ? '?' : '&') + 'r=' + tries : '');
+    s.onload = function () { load(i + 1, 0); };
+    s.onerror = function () {
+      s.parentNode.removeChild(s);
+      if (tries < 3) setTimeout(function () { load(i, tries + 1); }, 600 * (tries + 1));
+      else fail();
+    };
+    document.body.appendChild(s);
+  }
+  load(0, 0);
+})();
+</script>
 </body>
 </html>

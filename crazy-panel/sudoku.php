@@ -71,17 +71,18 @@ function cp_sudoku_route() {
    WordPress, gyorsabb, és csúcsterhelésnél sem fogynak el a PHP-folyamatok). Az nginx egy évig gyorsítótáraz,
    ezért a cím a fájl tartalmából képzett verziót kapja. */
 function cp_sudoku_static_refs($html) {
+	// a nevek idézőjelben szerepelnek (href="style.css", illetve a betöltő listájában "app.js")
 	$files = array(
-		'href="style.css"' => array('href', 'sudoku.css'),
-		'src="i18n.js"'    => array('src', 'sudoku-i18n.js'),
-		'src="engine.js"'  => array('src', 'sudoku-engine.js'),
-		'src="app.js"'     => array('src', 'sudoku-app.js'),
+		'style.css' => 'sudoku.css',
+		'i18n.js'   => 'sudoku-i18n.js',
+		'engine.js' => 'sudoku-engine.js',
+		'app.js'    => 'sudoku-app.js',
 	);
-	foreach ($files as $needle => $f) {
-		$abs = __DIR__ . '/assets/' . $f[1];
+	foreach ($files as $name => $file) {
+		$abs = __DIR__ . '/assets/' . $file;
 		if (!is_file($abs)) { continue; }
-		$url = plugins_url('assets/' . $f[1], __FILE__) . '?v=' . substr(md5_file($abs), 0, 10);
-		$html = str_replace($needle, $f[0] . '="' . esc_url($url) . '"', $html);
+		$url = plugins_url('assets/' . $file, __FILE__) . '?v=' . substr(md5_file($abs), 0, 10);
+		$html = str_replace('"' . $name . '"', '"' . esc_url($url) . '"', $html);
 	}
 	return $html;
 }
