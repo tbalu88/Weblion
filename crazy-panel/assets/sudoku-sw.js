@@ -1,5 +1,5 @@
 /* Offline gyorsítótár – verzióváltáskor növeld a CACHE nevet. */
-const CACHE = 'szudoku-v9';
+const CACHE = 'szudoku-v10';
 const ASSETS = ['./', 'index.html', 'style.css', 'i18n.js', 'engine.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 // az oldal a szkripteket a bővítmény mappájából tölti (verziózott címmel); offline ezek helyett a fenti példányok is jók
