@@ -669,8 +669,10 @@
       return;
     }
     const i = game.selected;
-    // üres (vagy hibásan kitöltött, javítható) mezőn beír; kitöltött mezőn vagy kijelölés nélkül csak kiemel
-    if (i >= 0 && (!game.values[i] || !game.locked[i])) {
+    // üres mezőn beír; hibás beírást csak akkor ír felül, ha látszik, hogy hibás (hibajelzés be, nem ceruza mód);
+    // egyébként (kitöltött mező vagy nincs kijelölés) csak kiemel
+    const fixable = !game.locked[i] && settings.showErrors && !game.pencil;
+    if (i >= 0 && (!game.values[i] || fixable)) {
       game.hlNum = 0;
       input(i, d);
       return;
@@ -827,7 +829,7 @@
     game.autoMask[i] = 0;
     if (settings.autoRemoveNotes) for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
     game.hintsLeft--;
-    if (!(game.fast && game.fastNum)) game.selected = i;
+    if (!(game.fast && game.fastNum)) { game.selected = i; game.hlNum = 0; }
     pop(i);
     animate(i, 'hinted', 1200);
     checkUnits(i, true);
@@ -1065,9 +1067,12 @@
     // kattintás a tábla mellé (üres területre, széles kijelzőn a játékoszlopon kívül is):
     // nincs kijelölt mező, a számgomb ilyenkor kiemel
     document.addEventListener('pointerdown', (e) => {
-      if (!$('game').classList.contains('active')) return;
-      // a vezérlőcsoportok közti rés (pl. két számgomb között) ne vegye el a kijelölést
-      if (e.target.closest('button, input, label, .board, .opp-board, .numpad, .tools, .fast-row, .mp-bar, .sheet-backdrop, .modal-backdrop, .mp-feed, .scramble')) return;
+      if (!$('game').classList.contains('active') || paused) return;
+      if (document.querySelector('.sheet-backdrop:not(.hidden), .modal-backdrop:not(.hidden)')) return;
+      if (e.target.closest('button, input, label, .board, .opp-board, .opp-side, .pause-overlay, .scramble, .mp-feed')) return;
+      // a játékoszlopon belül csak a tábla körüli hely és a fejléc/infósor számít "a tábla mellé" kattintásnak –
+      // a vezérlők környéke (számsor, eszközök, szegély, alsó biztonsági sáv) nem veheti el a kijelölést
+      if (e.target.closest('#game') && !e.target.closest('.boards, .topbar, .score, .infobar')) return;
       deselect();
     });
 
