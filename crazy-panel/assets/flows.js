@@ -91,7 +91,7 @@
 		box.innerHTML = '<div class="cpx-muted">Betöltés…</div>';
 		let r;
 		try { r = await post('cp_flow_log', { flow: id }); } catch (e) { box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
-		const CHK = { ok: '<span class="fl-ok" title="A Salesmate-ben is így lett">✓ egyezik</span>', diff: '<span class="fl-diff" title="A Salesmate-ben most más az érték">✗ eltér</span>', wait: '<span class="cpx-muted" title="Még nem jött át a szinkronnal">… ellenőrzésre vár</span>' };
+		const CHK = { ok: '<span class="fl-ok" title="A Salesmate-ben is így lett">✓ egyezik</span>', diff: '<span class="fl-diff" title="A Salesmate-ben most más az érték">✗ eltér</span>', was: '<span class="fl-ok" title="A Salesmate-ben is így lett, azóta kézzel átírták">✓ egyezett (azóta átírták)</span>', wait: '<span class="cpx-muted" title="Még nem jött át a szinkronnal">… ellenőrzésre vár</span>' };
 		const RES = { done: 'elvégezve', error: 'hiba', same: 'már így volt', skipped: '', logged: '' };
 		box.innerHTML = r.rows.length ? '<table class="fl-t"><tbody>' + r.rows.map(l => '<tr class="r-' + esc(l.res) + '"><td class="fl-at">' + esc(l.at.slice(5, 16).replace(/-/g, '.')) + '</td><td>' + (l.deal ? '<a href="#deals" data-deal="' + l.deal + '">' + esc(l.title || '#' + l.deal) + '</a>' : '') + '<div>' + esc(l.detail).replace(/\n/g, '<br>') + '</div>' +
 			(l.chk === 'diff' ? '<small class="cpx-muted">Most: „' + esc(l.cur) + '”</small>' : '') + '</td><td class="fl-r">' + (l.mode === 'live' ? '<b>élő</b> ' : '') + esc(RES[l.res] || '') + ' ' + (CHK[l.chk] || '') + '</td></tr>').join('') + '</tbody></table>' :

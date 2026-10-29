@@ -237,7 +237,9 @@ function cp_flow_ajax_log() {
 		if ($r['expect_f'] !== '' && in_array($r['result'], array('logged', 'done', 'same'), true)) {
 			$age = time() - strtotime($r['created_at'] . ' UTC');
 			$cur = (string) ($r[$r['expect_f']] ?? '');
-			$chk = $cur === $r['expect_v'] ? 'ok' : ($age < 1200 ? 'wait' : 'diff');
+			/* egyezik, ha most is ez az érték, vagy a változásnapló szerint valamikor ez volt (pl. a Salesmate átnevezte, utána egy kolléga kézzel átírta) */
+			$was = $cur !== $r['expect_v'] && $r['deal_id'] ? (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d AND field = %s AND (new_val = %s OR old_val = %s)', $r['deal_id'], $r['expect_f'], $r['expect_v'], $r['expect_v'])) : 0;
+			$chk = $cur === $r['expect_v'] ? 'ok' : ($was ? 'was' : ($age < 1200 ? 'wait' : 'diff'));
 		}
 		$out[] = array('id' => (int) $r['id'], 'deal' => (int) $r['deal_id'], 'title' => (string) $r['title'], 'mode' => $r['mode'], 'a' => $r['action'], 'detail' => $r['detail'], 'res' => $r['result'], 'chk' => $chk,
 			'cur' => $r['expect_f'] !== '' ? (string) ($r[$r['expect_f']] ?? '') : '', 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at']);
