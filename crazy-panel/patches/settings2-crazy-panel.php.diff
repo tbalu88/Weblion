@@ -1,0 +1,29 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.56.0');
++define('CP_PANEL_VER', '1.57.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -738,7 +738,7 @@
+ 		'kb'         => function_exists('cp_kb_cfg') && cp_panel_can_x('feladatok') ? cp_kb_cfg() : array('on' => false),
+ 		'fl'         => function_exists('cp_flow_cfg') && cp_panel_can_x('flows') ? cp_flow_cfg() : array('on' => false),
+ 		'sr'         => array('on' => true),
+-		'set'        => array('on' => true),
++		'set'        => array('on' => cp_panel_can_x('beallitasok')),
+ 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+@@ -751,7 +751,7 @@
+ 	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/bgcat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+-	echo '<script src="' . esc_url(plugins_url('assets/settings.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
++	if (!empty($cfg['set']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/settings.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['sr']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/search.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contacts.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['au']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/audit.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }

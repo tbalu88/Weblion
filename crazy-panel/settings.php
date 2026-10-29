@@ -13,6 +13,8 @@ function cp_set_admin() { return function_exists('cp_panel_is_admin') && cp_pane
 function cp_set_auth($admin = false) {
 	cp_el_auth();
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	/* a Beállítások fül láthatósága (Beállítások → Láthatóság); alapból csak adminnak */
+	if (function_exists('cp_panel_can') && !cp_panel_can('beallitasok')) { cp_el_err('A Beállítások neked nincs engedélyezve.', 403); }
 	if ($admin && !cp_set_admin()) { cp_el_err('Ez csak az adminoknak érhető el.', 403); }
 }
 function cp_set_me() { return function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; }
@@ -22,7 +24,7 @@ function cp_set_user_sig($uid) { $u = function_exists('cp_pu_get') ? cp_pu_get((
 function cp_set_users_out() {
 	$out = array();
 	foreach (cp_pu_data()['list'] as $id => $u) {
-		$out[] = array('id' => (int) $id, 'n' => $u['n'], 'e' => $u['e'], 'r' => $u['r'], 'sm' => (int) ($u['sm'] ?? 0), 'a' => (int) !empty($u['a']), 'st' => empty($u['a']) ? 'letiltva' : ((string) $u['h'] === '' ? 'meghívva' : 'aktív'), 'last' => !empty($u['last']) ? wp_date('Y.m.d. H:i', (int) $u['last']) : '', 'sig' => !empty($u['sig']) ? 1 : 0);
+		$out[] = array('id' => (int) $id, 'n' => $u['n'], 'e' => $u['e'], 'r' => $u['r'], 'sm' => (int) ($u['sm'] ?? 0), 'a' => (int) !empty($u['a']), 'st' => empty($u['a']) ? 'letiltva' : ((string) $u['h'] === '' ? 'meghívva' : 'aktív'), 'last' => !empty($u['last']) ? wp_date('Y.m.d. H:i', (int) $u['last']) : '', 'sig' => !empty($u['sig']) ? 1 : 0, 'sig_html' => (string) ($u['sig'] ?? ''));
 	}
 	return $out;
 }
@@ -141,9 +143,20 @@ function cp_set_ajax_admin() {
 			$v = array();
 			foreach (cp_pu_data()['list'] as $id => $u) {
 				if (empty($u['a'])) { continue; }
-				foreach (array_keys(cp_pu_tabs()) as $k) { $on = !empty($in[$id][$k]); if ($on !== cp_pu_tab_default($k, $u['r'])) { $v[(int) $id][$k] = $on ? 1 : 0; } }
+				foreach (array_keys(cp_pu_tabs()) as $k) {
+					$on = !empty($in[$id][$k]);
+					if ((int) $id === cp_set_me() && $k === 'beallitasok') { $on = true; } /* saját magadtól nem veheted el */
+					if ($on !== cp_pu_tab_default($k, $u['r'])) { $v[(int) $id][$k] = $on ? 1 : 0; }
+				}
 			}
 			update_option('cp_panel_vis', $v, false); $msg = 'A láthatóság elmentve (a többieknél a következő oldalbetöltéskor látszik).';
+			break;
+		case 'sig':
+			$d = cp_pu_data(); $uid = (int) $p('uid', 0);
+			if (!isset($d['list'][$uid])) { cp_el_err('Nincs ilyen felhasználó.', 404); }
+			$sig = cp_mail_clean($p('sig'));
+			$d['list'][$uid]['sig'] = trim(wp_strip_all_tags($sig)) === '' && strpos($sig, '<img') === false ? '' : mb_substr($sig, 0, 20000);
+			cp_pu_save($d); $msg = $d['list'][$uid]['n'] . ' aláírása mentve.';
 			break;
 		case 'shared':
 			$off = (bool) $p('off');
@@ -215,3 +228,22 @@ function cp_set_ajax_admin() {
 	}
 	wp_send_json_success(array('msg' => $msg, 'link' => $link, 'data' => cp_set_data()));
 }
+
+/* ------------------------------------------------------------ kép az aláíráshoz (pl. logó) – nyilvános címen, mert a címzett levelezője tölti be */
+add_action('wp_ajax_nopriv_cp_set_img', 'cp_set_ajax_img');
+add_action('wp_ajax_cp_set_img', 'cp_set_ajax_img');
+function cp_set_ajax_img() {
+	cp_set_auth();
+	if (empty($_FILES['f']) || !is_uploaded_file($_FILES['f']['tmp_name']) || (int) $_FILES['f']['error'] !== 0) { cp_el_err('A feltöltés nem sikerült.'); }
+	$f = $_FILES['f'];
+	if ((int) $f['size'] > 2 * 1024 * 1024) { cp_el_err('A kép legfeljebb 2 MB lehet.'); }
+	$chk = wp_check_filetype_and_ext($f['tmp_name'], $f['name'], array('png' => 'image/png', 'jpg|jpeg' => 'image/jpeg', 'gif' => 'image/gif', 'webp' => 'image/webp'));
+	if (empty($chk['ext']) || !@getimagesize($f['tmp_name'])) { cp_el_err('Csak PNG, JPG, GIF vagy WEBP kép tölthető fel.'); }
+	$u = wp_upload_dir();
+	$dir = trailingslashit($u['basedir']) . 'crazy-sign';
+	wp_mkdir_p($dir);
+	$name = wp_generate_password(10, false, false) . '-' . sanitize_file_name(pathinfo($f['name'], PATHINFO_FILENAME)) . '.' . $chk['ext'];
+	if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) { cp_el_err('A feltöltés nem sikerült (tárhely).'); }
+	wp_send_json_success(array('url' => trailingslashit($u['baseurl']) . 'crazy-sign/' . $name));
+}
+

@@ -141,9 +141,10 @@ function cp_audit_summary($action, $p) {
 	/* beállítások: csak a terület és a művelet – titok (kulcs, webhook, aláírás) nem kerül a naplóba */
 	if ($action === 'cp_set_me') { return array('', ($p['op'] ?? '') === 'pwlink' ? 'jelszó-link kérése' : 'név / aláírás / értesítés mentése'); }
 	if ($action === 'cp_set_admin') {
-		$secn = array('user' => 'Felhasználók', 'vis' => 'Láthatóság', 'shared' => 'Közös jelszavak', 'notif' => 'Értesítések', 'mail' => 'Levelezés', 'smtp' => 'SMTP-ellenőrzés', 'ai' => 'AI', 'panel' => 'Salesmate és hátterek')[$p['sec'] ?? ''] ?? ($p['sec'] ?? '');
+		$secn = array('user' => 'Felhasználók', 'vis' => 'Láthatóság', 'shared' => 'Közös jelszavak', 'notif' => 'Értesítések', 'mail' => 'Levelezés', 'smtp' => 'SMTP-ellenőrzés', 'ai' => 'AI', 'panel' => 'Salesmate és hátterek', 'sig' => 'Aláírás')[$p['sec'] ?? ''] ?? ($p['sec'] ?? '');
 		$x = $secn;
 		if (($p['sec'] ?? '') === 'user') { $x .= ' · ' . (array('add' => 'új: ', 'save' => 'mentés: ', 'off' => 'letiltás: ', 'on' => 'engedélyezés: ', 'invite' => 'link küldése: ', 'del' => 'törlés: ')[$p['op'] ?? ''] ?? '') . mb_substr((string) ($p['n'] ?? ''), 0, 60) . (!empty($p['r']) ? ' (' . $p['r'] . ')' : ''); }
+		if (($p['sec'] ?? '') === 'sig' && function_exists('cp_pu_get')) { $uu = cp_pu_get((int) ($p['uid'] ?? 0)); $x .= ' · ' . ($uu ? $uu['n'] : '#' . (int) ($p['uid'] ?? 0)); }
 		if (($p['sec'] ?? '') === 'shared') { $x .= !empty($p['off']) ? ' · kikapcsolva' : ' · bekapcsolva'; }
 		if (($p['sec'] ?? '') === 'mail') { $x .= ' · beérkezés ' . (!empty($p['sync_on']) ? 'be' : 'ki') . ', küldés ' . (!empty($p['send_on']) ? 'be' : 'ki'); }
 		if (($p['sec'] ?? '') === 'ai') { $x .= ' · ' . (!empty($p['on']) ? 'be' : 'ki') . (!empty($p['key']) ? ', új kulcs' : '') . (!empty($p['key_clear']) ? ', kulcs törölve' : ''); }
