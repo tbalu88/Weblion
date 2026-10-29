@@ -50,6 +50,23 @@
 .crm-ev{font-size:12.5px;font-weight:600}
 .crm-cf{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;margin-top:3px}
 .crm-none{color:var(--mu);text-align:center;padding:8px;font-size:13px}
+/* szerkesztés */
+.crm-hl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.crm-hl .cpx-btn{height:36px}
+.crm-edit h4{margin:18px 0 8px}
+.crm-eg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px}
+.crm-ef{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--mu);min-width:0}
+.crm-ef input,.crm-ef select,.crm-ef textarea{height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;background:#fff;color:var(--ink);font-size:14px;font-weight:400;width:100%}
+.crm-ef textarea{height:auto;padding:8px 10px;resize:vertical}
+.crm-ef input:focus,.crm-ef select:focus,.crm-ef textarea:focus{outline:none;border-color:var(--o)}
+.crm-ef:has(textarea),.crm-ef:has(.crm-multi){grid-column:1/-1}
+.crm-multi{display:flex;flex-wrap:wrap;gap:6px 12px;font-weight:400;color:var(--ink);font-size:13.5px;background:#FAF8F4;border-radius:10px;padding:8px 10px}
+.crm-multi label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.crm-ef .crm-multi input{width:16px;height:16px;padding:0;accent-color:var(--o);flex:none}
+.crm-ebar{position:sticky;bottom:0;background:#fff;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0 4px;border-top:1px solid var(--li);margin-top:14px}
+.crm-emsg{font-size:13.5px;color:var(--mu)}
+.crm-emsg.err{color:var(--full)}
+@media (max-width:700px){.crm-eg{grid-template-columns:1fr}}
 /* kijelölés, tömeges műveletek */
 .crm-cbh,.crm-cbc{width:36px;padding-right:0!important;cursor:pointer}
 .crm-cb{width:17px;height:17px;accent-color:var(--o);cursor:pointer;margin:2px 0 0}

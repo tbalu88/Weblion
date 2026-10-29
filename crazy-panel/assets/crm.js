@@ -72,7 +72,7 @@
 		} else {
 			f = '<input type="search" data-f="q" placeholder="Keresés a táblán: név, e-mail, telefon, helyszín, #szám" value="' + esc(S.q) + '" aria-label="Keresés">' + own + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
 		}
-		return '<div class="crm-head">' + seg + '<div class="crm-filters">' + f + '</div></div>' +
+		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div><div class="crm-filters">' + f + '</div></div>' +
 			'<p class="crm-ro">' + (W ? 'A szakaszt itt is átállíthatod (a pipeline-on húzással, vagy a deal adatlapján) – ez a Salesmate-be is beíródik. A többi adatot egyelőre a Salesmate-ben módosítsd; a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
 	}
 
@@ -83,6 +83,8 @@
 		load();
 	}
 	function bindHead(main) {
+		const nb = main.querySelector('[data-new]');
+		if (nb) nb.addEventListener('click', newDeal);
 		main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { if (S.mode === b.dataset.mode) return; S.mode = b.dataset.mode; save(); view(main); }));
 		let tq = null;
 		main.querySelectorAll('[data-f]').forEach(inp => {
@@ -472,6 +474,7 @@
 		const smUrl = C.sm ? C.sm + d.id : '';
 		let h = sheetHead(esc(d.title || 'Deal #' + d.id)) +
 			'<div class="crm-top"><span>' + esc(d.stage) + '</span> ' + stBadge(d) + '<b>' + esc(money(d.value, d.currency)) + '</b>' +
+			(R.edit && !d.deleted_at ? '<button class="cpx-btn" type="button" data-edit>Szerkesztés</button>' : '') +
 			(smUrl ? '<a class="cpx-btn ghost" href="' + esc(smUrl) + '" target="_blank" rel="noopener">Salesmate ↗</a>' : '') + '</div>' +
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			(W && !d.deleted_at ? '<div class="crm-act">' + (d.status === 'Open' ? '<select data-mv aria-label="Szakasz">' + opts(STAGES.map(x => [x, x]), d.stage) + '</select><button class="cpx-btn ghost" type="button" data-mvst="Won">Megnyert</button><button class="cpx-btn ghost bad" type="button" data-mvst="Lost">Elvesztett</button>' : '<button class="cpx-btn ghost" type="button" data-mvst="Open">Újranyitás</button>') + '</div>' : '');
@@ -503,12 +506,123 @@
 			h += '<ul class="crm-list crm-hist">' + x.hist.map(r => '<li><small class="cpx-muted">' + esc(huDT(r.at)) + (r.by_user ? ' · ' + esc(r.by_user) : '') + '</small><div><b>' + esc(LBL[r.field] || r.field) + ':</b> ' + (r.old_val ? '<s>' + esc(histVal(r.field, r.old_val)) + '</s> → ' : '') + esc(histVal(r.field, r.new_val) || '(üres)') + '</div></li>').join('') + '</ul>';
 		} else h += '<p class="cpx-muted">A panel mostantól rögzít minden változást – ennél a deal-nél eddig nem volt.</p>';
 		sh.innerHTML = h;
+		const eb = sh.querySelector('[data-edit]');
+		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
 		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id); };
 		const mv = sh.querySelector('[data-mv]');
 		if (mv) mv.addEventListener('change', async () => { const ok = await doMove(id, { to: mv.value }, d.title); if (!ok) mv.value = d.stage; after(ok); });
 		sh.querySelectorAll('[data-mvst]').forEach(b => b.addEventListener('click', async () => after(await doMove(id, { st: b.dataset.mvst }, d.title))));
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open))));
 	}
+	/* ------------------------------------------------------------ deal szerkesztése (az adatlapon) */
+	const EDIT = [
+		['Deal', [['title', 'Név', 'text'], ['value', 'Érték (Ft)', 'num'], ['owner_id', 'Felelős', 'user'], ['source', 'Forrás', 'text']]],
+		['Rendezvény', [['event_d', 'Rendezvény dátuma', 'date'], ['start_at', 'Kezdés (óra:perc)', 'time'], ['venue', 'Helyszín', 'text'], ['guests', 'Tervezett létszám', 'int'], ['hours', 'Rendelkezésre állás (óra)', 'int'],
+			['service', 'Szolgáltatás', 'text'], ['pkg_fix', 'Választott csomag', 'text'], ['services_ec', 'EventCrazy szolgáltatás(ok)', 'multi'], ['services_cp', 'Választott szolgáltatás', 'multi'], ['services_more', 'További szolgáltatások', 'multi'], ['extras', 'Választott extra', 'multi'],
+			['background', 'Fotófal / háttér', 'text'], ['km_fee', 'Kiszállási díj (Ft)', 'int'], ['extension', 'Hosszabbítás (óra)', 'num'], ['operator', 'Gépkezelő asszisztens', 'text'], ['album', 'Fotóalbum', 'text'], ['template_st', 'Template', 'text'], ['coupon', 'Kuponkód', 'area']]],
+		['Pénzügy és szerződés', [['pay_method', 'Fizetési mód', 'text'], ['paid', 'Bejött az utalás?', 'text'], ['ctype', 'Szerződés EV/KFT', 'text']]],
+		['Megjegyzés', [['note', 'Megjegyzés', 'area']]]
+	];
+	const CEDIT = [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Mobil', 'tel'], ['phone', 'Telefon', 'tel']];
+	const timeOf = v => (v && /\d{2}:\d{2}/.test(v) ? v.match(/\d{2}:\d{2}/)[0] : '');
+	function editVal(d, k) { const v = d[k]; if (v == null) return ''; if (k === 'start_at') return timeOf(v); if (k === 'value' || k === 'extension') return String(Number(v)); return String(v); }
+	async function editDeal(sh, x) {
+		const d = x.deal, c = x.contact || {};
+		let vals = {};
+		try { vals = (await post('cp_crm_opts', {})).vals || {}; } catch (e) { /* választólista nélkül is szerkeszthető */ }
+		const field = (k, label, type, cur) => {
+			const nm = ' data-k="' + k + '"';
+			let inp;
+			if (type === 'user') inp = '<select' + nm + '>' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(cur)).map(i => [i, USERS[i].n])), String(cur || '')) + '</select>';
+			else if (type === 'area') inp = '<textarea rows="3"' + nm + '>' + esc(cur) + '</textarea>';
+			else if (type === 'multi') {
+				const on = String(cur || '').split(' | ').filter(Boolean);
+				const all = Array.from(new Set(((vals[k] || [])).concat(on)));
+				inp = '<span class="crm-multi"' + nm + ' data-multi>' + all.map(v => '<label><input type="checkbox" value="' + esc(v) + '"' + (on.includes(v) ? ' checked' : '') + '> ' + esc(v) + '</label>').join('') + (all.length ? '' : '<small class="cpx-muted">Nincs választható érték.</small>') + '</span>';
+			} else {
+				const t = { date: 'date', time: 'time', int: 'number', num: 'number', email: 'email', tel: 'tel' }[type] || 'text';
+				inp = '<input type="' + t + '"' + (type === 'num' ? ' step="0.5"' : '') + nm + ' value="' + esc(cur) + '"' + (vals[k] && type === 'text' ? ' list="crm-l-' + k + '"' : '') + '>' + (vals[k] && type === 'text' ? '<datalist id="crm-l-' + k + '">' + vals[k].map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>' : '');
+			}
+			return '<label class="crm-ef"><span>' + esc(label) + '</span>' + inp + '</label>';
+		};
+		let h = sheetHead('Szerkesztés: ' + esc(d.title || 'Deal #' + d.id)) + '<form class="crm-edit" novalidate>';
+		EDIT.forEach(sec => { h += '<h4>' + esc(sec[0]) + '</h4><div class="crm-eg">' + sec[1].map(f => field(f[0], f[1], f[2], editVal(d, f[0]))).join('') + '</div>'; });
+		if (x.contact) h += '<h4>Kapcsolat</h4><div class="crm-eg" data-contact>' + CEDIT.map(f => field('c_' + f[0], f[1], f[2], c[f[0]] || '')).join('') + '</div>';
+		h += '<p class="crm-ro">Mentéskor csak a megváltozott mezők íródnak be, a Salesmate-be is (a Salesmate automatizmusai lefuthatnak). A változás a deal előzményeiben a neveddel jelenik meg.</p>';
+		h += '<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-cancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
+		sh.innerHTML = h;
+		sh.scrollTop = 0;
+		const form = sh.querySelector('form');
+		const read = el => el.dataset.multi !== undefined ? Array.from(el.querySelectorAll('input:checked')).map(i => i.value).join(' | ') : el.value.trim();
+		const orig = {};
+		form.querySelectorAll('[data-k]').forEach(el => { orig[el.dataset.k] = read(el); });
+		sh.querySelector('[data-cancel]').onclick = () => openDeal(d.id);
+		form.addEventListener('submit', async e => {
+			e.preventDefault();
+			const ch = {}, cc = {};
+			form.querySelectorAll('[data-k]').forEach(el => { const k = el.dataset.k, v = read(el); if (v !== orig[k]) { if (k.indexOf('c_') === 0) cc[k.slice(2)] = v; else ch[k] = v; } });
+			const msg = sh.querySelector('.crm-emsg');
+			if (!Object.keys(ch).length && !Object.keys(cc).length) { msg.textContent = 'Nem változott semmi.'; return; }
+			if (ch.title !== undefined && !ch.title) { msg.textContent = 'A név nem lehet üres.'; return; }
+			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Mentés…'; msg.className = 'crm-emsg';
+			try {
+				const r = await post('cp_crm_save', { id: d.id, f: JSON.stringify(ch), c: JSON.stringify(cc) });
+				toast(r.warn ? 'Mentve, de: ' + r.warn : 'Mentve – a Salesmate-ben is.', !!r.warn);
+				if (S.mode === 'list') load(); else if (S.board) { const i = S.board.rows.findIndex(y => y.id === d.id); if (i >= 0 && r.row) { S.board.rows[i] = r.row; redrawBoard(); } }
+				openDeal(d.id);
+			} catch (err) { btn.disabled = false; msg.textContent = err.message; msg.className = 'crm-emsg err'; }
+		});
+	}
+
+	/* ------------------------------------------------------------ új deal */
+	async function newDeal() {
+		let vals = {};
+		const sh0 = sheet(sheetHead('Új deal') + '<div class="cpx-empty">Betöltés…</div>');
+		if (!sh0) return;
+		try { vals = (await post('cp_crm_opts', {})).vals || {}; } catch (e) { /* választólista nélkül is */ }
+		if (!sh0.isConnected) return;
+		const me = R.me_sm && USERS[String(R.me_sm)] ? String(R.me_sm) : '';
+		const inp = (k, label, type, extra) => '<label class="crm-ef"><span>' + esc(label) + '</span>' + (type === 'area' ? '<textarea rows="3" data-k="' + k + '"></textarea>' : '<input type="' + type + '" data-k="' + k + '"' + (extra || '') + '>') + '</label>';
+		const multi = k => '<span class="crm-multi" data-k="' + k + '" data-multi>' + (vals[k] || []).map(v => '<label><input type="checkbox" value="' + esc(v) + '"> ' + esc(v) + '</label>').join('') + '</span>';
+		let h = sheetHead('Új deal') + '<form class="crm-edit" novalidate>' +
+			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefon', 'tel') + '</div>' +
+			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül.</p>' +
+			'<h4>Rendezvény</h4><div class="crm-eg">' + inp('event_d', 'Rendezvény dátuma', 'date') + inp('start_at', 'Kezdés (óra:perc)', 'time') + inp('venue', 'Helyszín', 'text') + inp('guests', 'Tervezett létszám', 'number') + inp('hours', 'Rendelkezésre állás (óra)', 'number') +
+			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
+			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>' +
+			'<h4>Deal</h4><div class="crm-eg">' + inp('title', 'Deal neve *', 'text', ' required') +
+			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), STAGES[0]) + '</select></label>' +
+			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +
+			inp('value', 'Érték (Ft)', 'number') + inp('note', 'Megjegyzés', 'area') + '</div>' +
+			'<p class="crm-ro">A deal a Salesmate-ben is létrejön, és a Salesmate automatizmusai lefutnak (pl. Pumble-értesítés, átnevezés).</p>' +
+			'<div class="crm-ebar"><button class="cpx-btn" type="submit">Deal létrehozása</button><button class="cpx-btn ghost" type="button" data-close>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
+		sh0.innerHTML = h;
+		const form = sh0.querySelector('form');
+		const q = k => form.querySelector('[data-k="' + k + '"]');
+		let titleTouched = false;
+		q('title').addEventListener('input', () => { titleTouched = true; });
+		/* a deal neve magától: „[Crazyphoto] Név | dátum” (amíg kézzel át nem írod) */
+		const auto = () => { if (titleTouched) return; const n = q('c_name').value.trim(), dt = q('event_d').value; q('title').value = n ? '[Crazyphoto] ' + n + (dt ? ' | ' + dt : '') : ''; };
+		q('c_name').addEventListener('input', auto); q('event_d').addEventListener('input', auto); q('event_d').addEventListener('change', auto);
+		form.addEventListener('submit', async e => {
+			e.preventDefault();
+			const msg = sh0.querySelector('.crm-emsg');
+			const d = {};
+			form.querySelectorAll('[data-k]').forEach(el => { d[el.dataset.k] = el.dataset.multi !== undefined ? Array.from(el.querySelectorAll('input:checked')).map(i => i.value).join(' | ') : el.value.trim(); });
+			if (!d.c_name) { msg.textContent = 'Add meg a kontakt nevét.'; msg.className = 'crm-emsg err'; return; }
+			if (!d.title) { msg.textContent = 'Add meg a deal nevét.'; msg.className = 'crm-emsg err'; return; }
+			if (!window.confirm('Létrehozod a deal-t: ' + d.title + '?\n\nA Salesmate-ben is létrejön, és az automatizmusok lefutnak.')) return;
+			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Létrehozás…'; msg.className = 'crm-emsg';
+			try {
+				const r = await post('cp_crm_create', { d: JSON.stringify(d) });
+				toast('A deal létrejött (#' + r.id + ') – a Salesmate-ben is.');
+				load();
+				openDeal(r.id);
+			} catch (err) { btn.disabled = false; msg.textContent = err.message; msg.className = 'crm-emsg err'; }
+		});
+		q('c_name').focus();
+	}
+
 	function histVal(k, v) {
 		if (v == null || v === '') return '';
 		if (k === 'owner_id') return uname(v);

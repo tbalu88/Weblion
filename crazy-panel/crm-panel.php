@@ -32,6 +32,8 @@ function cp_crm_panel_cfg() {
 		'sync'   => isset($st['last_ok']) ? (int) $st['last_ok'] : 0,
 		'write'  => !empty(cp_panel_opts()['stage_write']),
 		'bulk'   => cp_crm_bulk_fields(),
+		'edit'   => !empty(cp_panel_opts()['stage_write']),
+		'me_sm'  => function_exists('cp_pu_current') && cp_pu_current() ? (int) cp_pu_current()['sm'] : 0,
 	);
 }
 
@@ -341,4 +343,215 @@ function cp_crm_ajax_delete() {
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	wp_send_json_success(array('id' => $id));
+}
+
+
+/* ------------------------------------------------------------ deal szerkesztése és új deal (v1.30)
+ * Írási formátumok a Salesmate-ben (próba a #20209 teszt-deal-en, 2026. okt. 29.):
+ * dátum: „Y-m-d”; időpont: UTC „Y-m-d\TH:i:s.000Z” (a zóna nélküli időt is UTC-nek veszi; az ezredmásodperc hibás évet ad); többválasztós: vesszővel elválasztva
+ * (a pontosvessző kiüríti a mezőt); felelős: felhasználó-azonosító; kontakt neve: vezeték- + utónév (firstName, lastName). */
+
+/* a panelben szerkeszthető deal-mezők: oszlop => típus */
+function cp_crm_edit_fields() {
+	return array(
+		'title' => 'str', 'value' => 'dec', 'owner_id' => 'user', 'source' => 'str',
+		'event_d' => 'date', 'start_at' => 'time', 'venue' => 'str', 'guests' => 'int', 'hours' => 'int', 'service' => 'str', 'pkg_fix' => 'str',
+		'services_ec' => 'multi', 'services_cp' => 'multi', 'services_more' => 'multi', 'extras' => 'multi',
+		'background' => 'str', 'km_fee' => 'int', 'extension' => 'dec', 'operator' => 'str', 'album' => 'str', 'template_st' => 'str', 'coupon' => 'str',
+		'pay_method' => 'str', 'paid' => 'str', 'ctype' => 'str', 'note' => 'str',
+	);
+}
+
+function cp_crm_sm_field($col) {
+	return $col === 'value' ? 'dealValue' : ($col === 'owner_id' ? 'owner' : cp_crm_spec('deal')[$col][0]);
+}
+
+function cp_crm_multi_list($v) {
+	$out = array();
+	foreach (preg_split('/\s*(?:\||,|;)\s*/u', is_array($v) ? implode(',', array_map('cp_panel_str', $v)) : (string) $v) as $x) { $x = trim($x); if ($x !== '') { $out[] = $x; } }
+	sort($out);
+	return $out;
+}
+
+/* panel-érték → Salesmate-érték; $date: a rendezvény dátuma (az időponthoz) */
+function cp_crm_to_sm($type, $v, $date) {
+	if ($type === 'user') { return $v === '' ? null : (int) $v; }
+	if ($type === 'int') { return $v === '' ? null : (int) round((float) str_replace(',', '.', $v)); }
+	if ($type === 'dec') { return $v === '' ? null : round((float) str_replace(array(' ', ','), array('', '.'), $v), 2); }
+	if ($type === 'date') { return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null; }
+	if ($type === 'time') {
+		if ($v === '' || !preg_match('/^\d{1,2}:\d{2}$/', $v) || !$date) { return null; }
+		$dt = new DateTime($date . ' ' . str_pad($v, 5, '0', STR_PAD_LEFT) . ':00', new DateTimeZone('Europe/Budapest'));
+		return gmdate('Y-m-d\TH:i:s.000\Z', $dt->getTimestamp());
+	}
+	if ($type === 'multi') { $l = cp_crm_multi_list(str_replace(' | ', ',', $v)); return implode(',', $l); }
+	return mb_substr(str_replace("\r\n", "\n", $v), 0, 2000);
+}
+
+/* visszaolvasott érték egyezik-e a kívánttal */
+function cp_crm_sm_same($type, $want, $nv) {
+	if ($type === 'user') { return (int) (is_array($nv) ? (isset($nv['id']) ? $nv['id'] : 0) : $nv) === (int) $want; }
+	if ($type === 'int' || $type === 'dec') { return ($want === null && ($nv === null || $nv === '')) || ($want !== null && is_numeric($nv) && abs((float) $nv - (float) $want) < 0.005); }
+	if ($type === 'date') { return $want === null ? cp_panel_norm_date($nv) === '' : cp_panel_norm_date($nv) === $want; }
+	if ($type === 'time') { return $want === null ? cp_crm_dt_ts($nv) === 0 : abs(cp_crm_dt_ts($nv) - strtotime($want)) < 60; }
+	if ($type === 'multi') { return cp_crm_multi_list($nv) === cp_crm_multi_list($want); }
+	return str_replace("\r\n", "\n", cp_panel_str($nv)) === (string) $want;
+}
+
+/* a Salesmate időpont-értéke (ezredmásodperc vagy ISO, zónával) → Unix-idő */
+function cp_crm_dt_ts($v) {
+	if ($v === null || $v === '' || is_array($v)) { return 0; }
+	if (is_numeric($v)) { $t = (float) $v; return (int) round($t > 100000000000 ? $t / 1000 : $t); }
+	$t = strtotime((string) $v);
+	return $t ? (int) $t : 0;
+}
+
+/* választólisták a szerkesztőhöz: a szöveges mezők eddigi értékei és a többválasztós mezők lehetőségei */
+add_action('wp_ajax_nopriv_cp_crm_opts', 'cp_crm_ajax_opts');
+add_action('wp_ajax_cp_crm_opts', 'cp_crm_ajax_opts');
+function cp_crm_ajax_opts() {
+	cp_crm_ajax_guard();
+	global $wpdb;
+	$t = cp_crm_t('deals');
+	$out = array();
+	foreach (array('source', 'service', 'pkg_fix', 'background', 'operator', 'album', 'template_st', 'pay_method', 'paid', 'ctype') as $f) {
+		$out[$f] = array_values(array_map('strval', (array) $wpdb->get_col("SELECT $f FROM $t WHERE deleted_at IS NULL AND $f <> '' GROUP BY $f ORDER BY COUNT(*) DESC LIMIT 30")));
+	}
+	foreach (array('services_ec', 'services_cp', 'services_more', 'extras') as $f) {
+		$n = array();
+		foreach ((array) $wpdb->get_col("SELECT $f FROM $t WHERE deleted_at IS NULL AND $f <> '' ORDER BY id DESC LIMIT 1500") as $v) { foreach (explode(' | ', $v) as $x) { $x = trim($x); if ($x !== '') { $n[$x] = (isset($n[$x]) ? $n[$x] : 0) + 1; } } }
+		arsort($n);
+		$out[$f] = array_slice(array_keys($n), 0, 40);
+	}
+	wp_send_json_success(array('vals' => $out));
+}
+
+/* deal (és a kontaktja) mentése: csak a megváltozott mezők; a Salesmate-be ír, visszaolvas, ellenőriz */
+add_action('wp_ajax_nopriv_cp_crm_save', 'cp_crm_ajax_save');
+add_action('wp_ajax_cp_crm_save', 'cp_crm_ajax_save');
+function cp_crm_ajax_save() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+	$f = json_decode(isset($_POST['f']) ? (string) wp_unslash($_POST['f']) : '', true);
+	$c = json_decode(isset($_POST['c']) ? (string) wp_unslash($_POST['c']) : '', true);
+	if ($id <= 0 || !is_array($f) || !is_array($c)) { cp_el_err('Hibás kérés.'); }
+	$r = cp_crm_save_data($id, $f, $c);
+	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), (int) ($r->get_error_data() ?: 400)); }
+	wp_send_json_success($r);
+}
+
+/* a mentés maga (a próbákhoz is): tömb vagy WP_Error */
+function cp_crm_save_data($id, $f, $c) {
+	global $wpdb;
+	$row = $wpdb->get_row($wpdb->prepare('SELECT event_d, start_at, contact_id FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A);
+	if (!$row) { return new WP_Error('cp_crm', 'Nincs ilyen deal.', 404); }
+	$F = cp_crm_edit_fields();
+	$body = array(); $types = array();
+	foreach ($f as $col => $v) {
+		if (!isset($F[$col]) || !is_scalar($v)) { continue; }
+		$v = trim(sanitize_textarea_field((string) $v));
+		if ($col === 'title' && $v === '') { return new WP_Error('cp_crm', 'A deal neve nem lehet üres.', 400); }
+		if ($F[$col] === 'user' && $v !== '' && !isset(cp_crm_users()[(int) $v])) { return new WP_Error('cp_crm', 'Ismeretlen felhasználó.', 400); }
+		$body[cp_crm_sm_field($col)] = $v; $types[cp_crm_sm_field($col)] = $F[$col];
+	}
+	/* a kezdés időpontja a rendezvény (esetleg most módosított) dátumához tartozik */
+	$date = isset($f['event_d']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $f['event_d']) ? (string) $f['event_d'] : (string) $row['event_d'];
+	$tf = cp_crm_spec('deal')['start_at'][0];
+	if (isset($f['event_d']) && !isset($f['start_at']) && $row['start_at'] && $date) { $body[$tf] = cp_crm_local($row['start_at']) ? substr(cp_crm_local($row['start_at']), 11, 5) : ''; $types[$tf] = 'time'; }
+	foreach ($body as $k => $v) { $body[$k] = cp_crm_to_sm($types[$k], $v, $date); }
+	$warn = array();
+	if ($body) {
+		$put = cp_sm_put_deal($id, $body);
+		if (is_wp_error($put)) { return new WP_Error('cp_crm', $put->get_error_message(), 502); }
+		$g = cp_sm_get_deal($id);
+		if (is_wp_error($g)) { return new WP_Error('cp_crm', 'A Salesmate-be beírtam, de a visszaolvasás nem sikerült – frissíts egy perc múlva.', 502); }
+		$lbl = array();
+		foreach (array_keys($F) as $col) { $lbl[cp_crm_sm_field($col)] = $col; }
+		foreach ($body as $k => $v) { if (!cp_crm_sm_same($types[$k], $v, cp_panel_get($g, $k))) { $warn[] = (isset($lbl[$k]) ? $lbl[$k] : $k) . ' nem úgy maradt meg, ahogy beírtad'; } }
+	}
+	/* kontakt */
+	$cid = (int) $row['contact_id'];
+	if ($c && $cid) {
+		$cb = array();
+		if (isset($c['name'])) { $n = trim(sanitize_text_field((string) $c['name'])); if ($n === '') { return new WP_Error('cp_crm', 'A kontakt neve nem lehet üres.', 400); } $cb['firstName'] = ''; $cb['lastName'] = $n; }
+		if (isset($c['email'])) { $e = trim((string) $c['email']); if ($e !== '' && !is_email($e)) { return new WP_Error('cp_crm', 'Érvénytelen e-mail-cím.', 400); } $cb['email'] = sanitize_email($e); }
+		foreach (array('mobile', 'phone') as $k) { if (isset($c[$k])) { $cb[$k] = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) $c[$k]), 0, 40); } }
+		if ($cb) {
+			$cp = cp_sm_request('PUT', '/apis/contact/v4/' . $cid, $cb);
+			if (is_wp_error($cp)) { $warn[] = 'a kontaktot nem sikerült menteni (' . $cp->get_error_message() . ')'; }
+			else {
+				$cg = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
+				$cd = is_wp_error($cg) ? null : (isset($cg['Data']) ? $cg['Data'] : $cg);
+				if (is_array($cd)) {
+					foreach (array('email', 'mobile', 'phone') as $k) { if (isset($cb[$k]) && cp_panel_str(isset($cd[$k]) ? $cd[$k] : '') !== $cb[$k]) { $warn[] = 'a kontakt ' . $k . ' mezője nem úgy maradt meg'; } }
+					if (isset($cb['lastName']) && trim(cp_panel_str(isset($cd['name']) ? $cd['name'] : '')) !== $cb['lastName']) { $warn[] = 'a kontakt neve nem úgy maradt meg'; }
+					cp_crm_store('contact', array($cd), 'get');
+				}
+			}
+		}
+	}
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	return array('row' => cp_crm_row_out($id), 'warn' => implode('; ', $warn));
+}
+
+/* új deal: kontakt (meglévő e-mail-cím alapján, vagy új), majd a deal a fő pipeline-ban */
+add_action('wp_ajax_nopriv_cp_crm_create', 'cp_crm_ajax_create');
+add_action('wp_ajax_cp_crm_create', 'cp_crm_ajax_create');
+function cp_crm_ajax_create() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$o = cp_panel_opts();
+	if (empty($o['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	$in = json_decode(isset($_POST['d']) ? (string) wp_unslash($_POST['d']) : '', true);
+	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
+	$g = function ($k) use ($in) { return isset($in[$k]) && is_scalar($in[$k]) ? trim(sanitize_textarea_field((string) $in[$k])) : ''; };
+	$name = $g('c_name'); $email = sanitize_email($g('c_email')); $phone = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', $g('c_mobile')), 0, 40);
+	$title = $g('title'); $stage = $g('stage');
+	if ($name === '') { cp_el_err('Add meg a kontakt nevét.'); }
+	if ($g('c_email') !== '' && !is_email($email)) { cp_el_err('Érvénytelen e-mail-cím.'); }
+	if ($title === '') { cp_el_err('Add meg a deal nevét.'); }
+	if (!in_array($stage, cp_crm_stages(), true)) { $stage = cp_crm_stages()[0]; }
+	global $wpdb;
+	/* kontakt: ha van már ilyen e-mail-cím, azt használjuk */
+	$cid = $email !== '' ? (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $email)) : 0;
+	if (!$cid) {
+		$cr = cp_sm_request('POST', '/apis/contact/v4', array_filter(array('firstName' => '', 'lastName' => $name, 'email' => $email, 'mobile' => $phone), function ($v) { return $v !== ''; }));
+		if (is_wp_error($cr)) { cp_el_err('A kontaktot nem sikerült létrehozni: ' . $cr->get_error_message(), 502); }
+		$cid = cp_crm_new_id($cr);
+		if (!$cid) { cp_el_err('A kontakt létrejött, de a Salesmate nem adta vissza az azonosítóját: ' . mb_substr(wp_json_encode($cr), 0, 200), 502); }
+	}
+	$F = cp_crm_edit_fields();
+	$date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $g('event_d')) ? $g('event_d') : '';
+	$body = array('title' => $title, 'pipeline' => $o['pipeline'], 'stage' => $stage, 'primaryContact' => $cid, 'currency' => 'HUF');
+	$own = $g('owner_id');
+	if ($own !== '' && isset(cp_crm_users()[(int) $own])) { $body['owner'] = (int) $own; }
+	foreach ($F as $col => $type) {
+		if (in_array($col, array('title', 'owner_id'), true) || $g($col) === '') { continue; }
+		$v = cp_crm_to_sm($type, $g($col), $date);
+		if ($v !== null && $v !== '') { $body[cp_crm_sm_field($col)] = $v; }
+	}
+	$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
+	if (is_wp_error($dr)) { cp_el_err('A deal-t nem sikerült létrehozni: ' . $dr->get_error_message(), 502); }
+	$id = cp_crm_new_id($dr);
+	if (!$id) { cp_el_err('A deal létrejött, de a Salesmate nem adta vissza az azonosítóját – 10 percen belül megjelenik a listában.', 502); }
+	/* saját tábla: azonnal (a kontakt is) */
+	$cg = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
+	if (!is_wp_error($cg)) { cp_crm_store('contact', array(isset($cg['Data']) ? $cg['Data'] : $cg), 'get'); }
+	if (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
+	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'created', 'old_val' => '', 'new_val' => 'létrehozva a panelben', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success(array('id' => $id, 'row' => cp_crm_row_out($id)));
+}
+
+/* a Salesmate létrehozási válaszából az új azonosító */
+function cp_crm_new_id($r) {
+	foreach (array(array('Data', 'id'), array('Data', 'dealId'), array('Data', 'contactId'), array('id')) as $p) {
+		$x = $r;
+		foreach ($p as $k) { $x = is_array($x) && isset($x[$k]) ? $x[$k] : null; }
+		if (is_numeric($x) && (int) $x > 0) { return (int) $x; }
+	}
+	if (isset($r['Data']) && is_numeric($r['Data'])) { return (int) $r['Data']; }
+	return 0;
 }
