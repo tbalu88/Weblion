@@ -192,6 +192,9 @@
 	/* „Név <cím>” lista: a név kékkel, a cím alatta */
 	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe">&lt;' + esc(m[2]) + '&gt;</span>' : '<span class="ml-tn">' + esc(x) + '</span>'; }).join(', ');
 
+	/* a levelek és a szál eseményei időrendben */
+	const timeline = x => (x.msgs || []).map(m => ({ at: String(m.sent_at || ''), m: m })).concat((x.events || []).map(e => ({ at: String(e.created_at || ''), ev: e }))).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+
 	/* minta (a postafiókok bekötéséig): csak a böngészőben, nem mentődik */
 	function demoData() {
 		const now = Date.now(), at = m => { const d = new Date(now - m * 60000); const p = n => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
@@ -252,12 +255,17 @@
 		const t = S.demoRows.find(x => x.id === id);
 		if (act === 'cp_mail_note_add') { const me = PEOPLE.find(x => x.id === M.me) || PEOPLE[0] || { id: 0, n: 'Te' }; const n = { id: -Date.now(), body: p.body, author: me.n, author_uid: me.id, created_at: new Date().toISOString().slice(0, 16).replace('T', ' ') }; t._notes.push(n); t.note = { b: n.body, by: n.author, at: n.created_at }; }
 		if (act === 'cp_mail_note_del') { t._notes = t._notes.filter(n => n.id !== Number(p.nid)); const l = t._notes[t._notes.length - 1]; t.note = l ? { b: l.body, by: l.author, at: l.created_at } : null; }
+		const evt = txt => { const me = PEOPLE.find(x => x.id === M.me) || PEOPLE[0] || { n: 'Te' }; t._ev = (t._ev || []).concat([{ id: -Date.now(), text: txt, author: me.n, created_at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16).replace('T', ' ') }]); };
 		if (act === 'cp_mail_thread_set') {
+			if (p.f === 'status' && p.v !== t.st) evt(p.v === 'closed' ? 'Levélszál lezárva' : 'Levélszál újranyitva');
+			if (p.f === 'assignee' && (Number(p.v) || 0) !== t.as) evt(Number(p.v) ? 'Kiosztva: ' + pname(Number(p.v)) : 'Felelős eltávolítva');
+			if (p.f === 'deal') evt(p.v ? 'Deal csatolva: ' + ((p._deal || {}).title || '') : 'Deal leválasztva');
+			if (p.f === 'tags' && p.v !== t.tags) evt(p.v ? 'Címkék: ' + p.v : 'Címkék törölve');
 			if (p.f === 'status') t.st = p.v; if (p.f === 'assignee') t.as = Number(p.v) || 0; if (p.f === 'tags') t.tags = p.v;
 			if (p.f === 'follow') t.fol = p.v === '1' ? Array.from(new Set(t.fol.concat([M.me || 1]))) : t.fol.filter(x => x !== (M.me || 1));
 			if (p.f === 'deal') t._deal = p.v ? p._deal : null;
 		}
-		return { t: t, msgs: t._msgs, notes: t._notes, deal: t._deal };
+		return { t: t, msgs: t._msgs, notes: t._notes, events: t._ev || [], deal: t._deal };
 	}
 
 	async function openThread(box, id) {
@@ -281,9 +289,9 @@
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small></div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
-			(x.msgs || []).map(m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
+			timeline(x).map(it => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
 				'<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button" disabled title="Válasz">' + RE_I + '</button><button type="button" disabled title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
-				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map(a => '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>').join('') +
+				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map(a => '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
 		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); } catch (e) { toast(e.message, true); } };

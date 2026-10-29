@@ -202,3 +202,8 @@
 .ml-mpop button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;text-align:left}
 .ml-mpop button:hover{background:#F6F3EE}
 @media (max-width:1100px){.ml-items{max-height:60vh;flex:none}.ml-thread{max-height:none}}
+.ml-ev{display:flex;align-items:center;gap:12px;padding:2px 12px;font-size:13.5px;flex:none}
+.ml-ev>span:nth-child(2){flex:1;min-width:0}
+.ml-ev b{font-weight:500}
+.ml-ev small{color:#8A8E96;font-size:12px;white-space:nowrap}
+.ml-av1.ev{width:26px;height:26px;font-size:13px!important}

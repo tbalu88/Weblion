@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '2');
+define('CP_MAIL_DB_VER', '3');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -83,6 +83,18 @@ add_action('init', function () {
   PRIMARY KEY  (id),
   KEY thread_id (thread_id),
   KEY deal_id (deal_id)
+) " . $wpdb->get_charset_collate() . ';');
+	/* v3: a szál eseményei (lezárás, kiosztás, deal csatolása…) – a levelek között jelennek meg */
+	dbDelta('CREATE TABLE ' . cp_mail_t('events') . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  thread_id bigint(20) unsigned NOT NULL,
+  kind varchar(20) NOT NULL DEFAULT '',
+  text varchar(255) NOT NULL DEFAULT '',
+  author_uid int(11) NULL,
+  author varchar(100) NOT NULL DEFAULT '',
+  created_at datetime NULL,
+  PRIMARY KEY  (id),
+  KEY thread_id (thread_id)
 ) " . $wpdb->get_charset_collate() . ';');
 	update_option('cp_mail_db_ver', CP_MAIL_DB_VER, false);
 }, 7);
@@ -317,8 +329,11 @@ function cp_mail_thread_full($id) {
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);
 	foreach ($notes as &$n) { $n['id'] = (int) $n['id']; $n['author_uid'] = (int) $n['author_uid']; $n['created_at'] = cp_mail_local($n['created_at']); }
 	unset($n);
+	$ev = $wpdb->get_results($wpdb->prepare('SELECT id, kind, text, author, created_at FROM ' . cp_mail_t('events') . ' WHERE thread_id = %d ORDER BY id', $id), ARRAY_A);
+	foreach ($ev as &$e) { $e['id'] = (int) $e['id']; $e['created_at'] = cp_mail_local($e['created_at']); }
+	unset($e);
 	$deal = $t['deal_id'] && function_exists('cp_crm_row_out') ? cp_crm_row_out((int) $t['deal_id']) : null;
-	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'deal' => $deal);
+	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal);
 }
 
 add_action('wp_ajax_nopriv_cp_mail_thread', 'cp_mail_ajax_thread');
@@ -383,5 +398,26 @@ function cp_mail_ajax_thread_set() {
 	elseif ($f === 'tags') { $set['tags'] = mb_substr(sanitize_text_field($v), 0, 255); }
 	else { cp_el_err('Hibás kérés.'); }
 	$wpdb->update(cp_mail_t('threads'), $set, array('id' => $id));
+	$ev = cp_mail_event_text($f, $set, $t);
+	if ($ev !== '') { $wpdb->insert(cp_mail_t('events'), array('thread_id' => $id, 'kind' => $f, 'text' => $ev, 'author_uid' => $me, 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'created_at' => gmdate('Y-m-d H:i:s'))); }
 	wp_send_json_success(cp_mail_thread_full($id));
+}
+
+/* az esemény szövege a szál idővonalán (követés nem kerül bele; változatlan értéknél üres) */
+function cp_mail_event_text($f, $set, $t) {
+	if ($f === 'status') { return $set['status'] === $t['status'] ? '' : ($set['status'] === 'closed' ? 'Levélszál lezárva' : 'Levélszál újranyitva'); }
+	if ($f === 'assignee') {
+		if ((int) $set['assignee_uid'] === (int) $t['assignee_uid']) { return ''; }
+		if (!$set['assignee_uid']) { return 'Felelős eltávolítva'; }
+		foreach (cp_mail_people() as $p) { if ($p['id'] === (int) $set['assignee_uid']) { return 'Kiosztva: ' . $p['n']; } }
+		return 'Kiosztva';
+	}
+	if ($f === 'deal') {
+		if ((int) $set['deal_id'] === (int) $t['deal_id']) { return ''; }
+		if (!$set['deal_id']) { return 'Deal leválasztva'; }
+		$d = function_exists('cp_crm_row_out') ? cp_crm_row_out((int) $set['deal_id']) : null;
+		return mb_substr('Deal csatolva: ' . ($d ? $d['title'] : '#' . $set['deal_id']), 0, 255);
+	}
+	if ($f === 'tags') { return $set['tags'] === $t['tags'] ? '' : ($set['tags'] === '' ? 'Címkék törölve' : mb_substr('Címkék: ' . $set['tags'], 0, 255)); }
+	return '';
 }
