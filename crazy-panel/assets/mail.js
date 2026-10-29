@@ -119,7 +119,7 @@
 	function view(main) {
 		S.main = main;
 		const seg = [['inbox', 'Postafiók'], ['compose', 'Új levél'], ['tpl', 'Sablonok']].map(x => '<button type="button" data-v="' + x[0] + '" class="' + (S.view === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('');
-		main.innerHTML = '<div class="ml">' + (M.connected ? '' : '<p class="ml-note">A levelezés még előkészítés alatt van: a postafiókok bekötéséig a leveleket továbbra is a Salesmate Team Inboxban kezeld. Itt már elkészítheted és szerkesztheted a sablonokat.</p>') +
+		main.innerHTML = '<div class="ml">' + (M.connected ? '' : '<p class="ml-note">Előkészítés alatt: a postafiókok bekötéséig a leveleket a Salesmate Team Inboxban kezeld.</p>') +
 			'<div class="ml-head"><div class="crm-seg ml-seg">' + seg + '</div></div><div class="ml-body"></div></div>';
 		main.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.v; try { localStorage.setItem('cpmail_view', S.view); } catch (e) { /* privát mód */ } view(main); }));
 		const body = main.querySelector('.ml-body');
@@ -147,6 +147,39 @@
 	const NOTE_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg>';
 	const CLIP_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>';
 
+	/* hasábszélességek: húzással méretezhetők, a böngésző megjegyzi */
+	const COLS = { c1: 150, c2: 320, fold: false };
+	function cols() {
+		let v = {};
+		try { v = JSON.parse(localStorage.getItem('cpmail_cols') || '{}') || {}; } catch (e) { /* privát mód */ }
+		return { c1: Math.min(260, Math.max(110, Number(v.c1) || COLS.c1)), c2: Math.min(640, Math.max(220, Number(v.c2) || COLS.c2)), fold: !!v.fold };
+	}
+	function saveCols(v) { try { localStorage.setItem('cpmail_cols', JSON.stringify(v)); } catch (e) { /* privát mód */ } }
+	function fit(g) {
+		if (!g.isConnected) return;
+		if (window.innerWidth <= 1100) { g.style.height = ''; return; }
+		g.style.height = Math.max(420, window.innerHeight - (g.getBoundingClientRect().top + window.scrollY) - 12) + 'px';
+	}
+	function layout(box) {
+		const g = box.querySelector('.ml-inbox');
+		fit(g);
+		if (!S.fitOn) { S.fitOn = true; window.addEventListener('resize', () => { const x = document.querySelector('.ml-inbox'); if (x) fit(x); }); }
+		box.querySelector('[data-fold]').addEventListener('click', () => { const v = cols(); v.fold = !v.fold; saveCols(v); drawInbox(box); });
+		g.querySelectorAll('[data-split]').forEach(h => {
+			const k = h.dataset.split;
+			h.addEventListener('dblclick', () => { const v = cols(); v[k] = COLS[k]; if (k === 'c1') v.fold = false; saveCols(v); g.classList.remove('fold'); g.style.setProperty('--' + k, v[k] + 'px'); });
+			h.addEventListener('pointerdown', e => {
+				e.preventDefault();
+				const v = cols(), x0 = e.clientX, w0 = k === 'c1' && v.fold ? 40 : v[k];
+				const lim = k === 'c1' ? [110, 260] : [220, 640];
+				h.setPointerCapture(e.pointerId); g.classList.add('drag');
+				const mv = ev => { v[k] = Math.round(Math.min(lim[1], Math.max(lim[0], w0 + ev.clientX - x0))); if (k === 'c1') { v.fold = false; g.classList.remove('fold'); } g.style.setProperty('--' + k, v[k] + 'px'); };
+				const up = () => { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); g.classList.remove('drag'); saveCols(v); if (k === 'c1' && box.querySelector('[data-fold]').textContent === '»') drawInbox(box); };
+				h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+			});
+		});
+	}
+
 	/* minta (a postafiókok bekötéséig): csak a böngészőben, nem mentődik */
 	function demoData() {
 		const now = Date.now(), at = m => { const d = new Date(now - m * 60000); const p = n => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
@@ -172,11 +205,12 @@
 		let rows = [], counts = {};
 		if (S.demo) { rows = (S.demoRows = S.demoRows || demoData()).filter(t => (S.tab !== 'open' || t.st === 'open') && (S.tab !== 'unassigned' || !t.as)); counts = { inbox: S.demoRows.filter(t => t.st === 'open').length, follow: S.demoRows.filter(t => t.fol.length).length }; }
 		else { try { const r = await post('cp_mail_threads', { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '' }); rows = r.rows; counts = r.counts || {}; } catch (e) { rows = []; S.err = e.message; } }
-		box.innerHTML = '<div class="ml-inbox">' +
-			'<aside class="ml-side"><button type="button" class="cpx-btn ml-new" data-compose>Új levél</button>' +
+		const L = cols();
+		box.innerHTML = '<div class="ml-inbox' + (L.fold ? ' fold' : '') + '" style="--c1:' + (L.fold ? 40 : L.c1) + 'px;--c2:' + L.c2 + 'px">' +
+			'<aside class="ml-side"><div class="ml-sideh"><button type="button" class="cpx-btn ml-new" data-compose>Új levél</button><button type="button" class="ml-fold" data-fold title="' + (L.fold ? 'Mappák kinyitása' : 'Mappák összecsukása') + '">' + (L.fold ? '»' : '«') + '</button></div>' +
 			'<select class="ml-box" aria-label="Postafiók"><option value="">Minden postafiók</option>' + BOXES.map(b => '<option value="' + esc(b.id) + '"' + (S.box === b.id ? ' selected' : '') + '>' + esc(b.n) + '</option>').join('') + '</select>' +
 			'<nav class="ml-folders">' + F.map(f => '<button type="button" data-f="' + f[0] + '" class="' + (S.folder === f[0] ? 'on' : '') + '"><span>' + f[1] + '</span><b>' + (counts[f[0]] || '') + '</b></button>').join('') + '</nav>' +
-			'<label class="ml-demo"><input type="checkbox" data-demo' + (S.demo ? ' checked' : '') + '> Minta megtekintése</label></aside>' +
+			'<label class="ml-demo"><input type="checkbox" data-demo' + (S.demo ? ' checked' : '') + '> Minta megtekintése</label></aside><div class="ml-split" data-split="c1" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
 			'<section class="ml-list"><input type="search" class="ml-q" placeholder="Keresés a levelek között" value="' + esc(S.mq || '') + '">' +
 			'<div class="ml-tabs">' + [['open', 'Nyitott'], ['unassigned', 'Kiosztatlan'], ['all', 'Mind']].map(x => '<button type="button" data-tab="' + x[0] + '" class="' + (S.tab === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
 			'<div class="ml-items">' + (rows.length ? rows.map(t => '<button type="button" class="ml-item' + (S.th === t.id ? ' on' : '') + (t.st === 'closed' ? ' closed' : '') + '" data-th="' + t.id + '">' +
@@ -184,8 +218,9 @@
 				'<span class="ml-i1"><b>' + esc(t.cn || t.ce) + '</b>' + (t.as ? '<span class="ml-as">› ' + esc(pname(t.as) || 'kolléga') + '</span>' : '') + '<small>' + esc(ago(t.at)) + '</small></span>' +
 				'<span class="ml-i2">' + (t.att ? CLIP_I : '') + (t.st === 'closed' ? '✓ ' : '') + esc(t.subj) + '</span>' +
 				'<span class="ml-i3">' + (t.note ? '<span class="ml-inote">' + NOTE_I + esc(t.note.b.replace(/\s+/g, ' ')) + '</span>' : '<span>' + esc(t.snip) + '</span>') + (t.cnt ? '<i>' + t.cnt + '</i>' : '') + '</span></span></button>').join('') :
-				'<div class="ml-empty"><b>' + (M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (M.connected ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + '</div></section>' +
+				'<div class="ml-empty"><b>' + (M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (M.connected ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + '</div></section><div class="ml-split" data-split="c2" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
 			'<section class="ml-read" data-read></section></div>';
+		layout(box);
 		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { S.folder = b.dataset.f; S.th = null; drawInbox(box); }));
 		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.tab; drawInbox(box); }));
 		box.querySelector('.ml-box').addEventListener('change', e => { S.box = e.target.value; drawInbox(box); });
