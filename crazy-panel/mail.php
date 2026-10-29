@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '5');
+define('CP_MAIL_DB_VER', '6');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -73,6 +73,7 @@ add_action('init', function () {
   status varchar(20) NOT NULL DEFAULT '',
   sent_at datetime NULL,
   mid varchar(32) NOT NULL DEFAULT '',
+  msgid varchar(255) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   KEY thread_id (thread_id),
   KEY mid (mid),
@@ -230,6 +231,7 @@ function cp_mail_cfg() {
 		'people'  => cp_mail_people(),
 		'me'      => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0,
 		'admin'   => function_exists('cp_panel_is_admin') && cp_panel_is_admin(),
+		'send'    => function_exists('cp_send_cfg') ? cp_send_cfg() : array('on' => false),
 	);
 }
 

@@ -65,7 +65,7 @@ function cp_audit_actions() {
 		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'),
 		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_note_add' => array('deal', 'Jegyzet a dealen'), 'cp_crm_note_del' => array('deal', 'Deal-jegyzet törlése'), 'cp_crm_act_save' => array('deal', 'Tevékenység mentése'), 'cp_crm_act_done' => array('deal', 'Tevékenység kész / visszanyitva'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
 		'cp_mail_note_add' => array('levelezes', 'Jegyzet a levélszálon'), 'cp_mail_note_del' => array('levelezes', 'Jegyzet törlése'), 'cp_mail_thread_set' => array('levelezes', 'Levélszál módosítása'),
-		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
+		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_send' => array('levelezes', 'Levél küldése a panelből'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
 		'cp_kb_card_save' => array('feladatok', 'Kártya mentése'), 'cp_kb_card_move' => array('feladatok', 'Kártya áthelyezése'), 'cp_kb_comment' => array('feladatok', 'Hozzászólás'),
 		'cp_kb_list_save' => array('feladatok', 'Lista módosítása'), 'cp_kb_board_save' => array('feladatok', 'Tábla módosítása'),
 		'cp_lead_set' => array('deal', 'Megkeresés jelölése'), 'cp_flow_set' => array('rendszer', 'Automatizmus kapcsolása'),
@@ -105,6 +105,10 @@ function cp_audit_summary($action, $p) {
 		return array($obj, implode(' · ', $parts));
 	}
 	if (strpos($action, 'cp_mail_') === 0 || $action === 'cp_ai_draft') {
+		if ($action === 'cp_mail_send') {
+			$tid = (int) ($p['thread'] ?? 0);
+			return array($tid ? 'mail:' . $tid : '', (!empty($p['test']) ? 'PRÓBALEVÉL magamnak · ' : 'címzett: ' . mb_substr((string) ($p['to'] ?? ''), 0, 160) . (!empty($p['cc']) ? ' · másolat: ' . mb_substr((string) $p['cc'], 0, 120) : '') . ' · ') . 'tárgy: ' . mb_substr((string) ($p['subject'] ?? ''), 0, 120));
+		}
 		if ($action === 'cp_mail_bulk') {
 			$n = count(array_filter(explode(',', (string) ($p['ids'] ?? ''))));
 			$op = array('read' => 'olvasottnak jelölés', 'unread' => 'olvasatlannak jelölés', 'tag' => 'címke', 'close' => 'lezárás', 'open' => 'újranyitás', 'assign' => 'kiosztás', 'archive' => 'archiválás', 'trash' => 'Kukába', 'spam' => 'Spambe', 'restore' => 'visszaállítás')[$p['op'] ?? ''] ?? ($p['op'] ?? '');

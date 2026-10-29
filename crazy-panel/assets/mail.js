@@ -29,7 +29,7 @@
 		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3200);
 	}
-	function status(s) { s.textContent = M.connected ? '' : (M.sync ? 'Levelezés: beérkezés 5 percenként, csak olvasva' : 'Levelezés: a postafiókok még nincsenek bekötve'); s.className = 'cpx-status'; }
+	function status(s) { s.textContent = M.connected ? '' : (M.sync ? ((M.send && M.send.on) ? 'Levelezés: beérkezés 5 percenként · küldés: próbaüzem' : 'Levelezés: beérkezés 5 percenként, csak olvasva') : 'Levelezés: a postafiókok még nincsenek bekötve'); s.className = 'cpx-status'; }
 
 	/* ------------------------------------------------------------ szövegszerkesztő (közös a levélíróhoz és a sablonokhoz) */
 	const ICON = {
@@ -119,7 +119,7 @@
 	function view(main) {
 		S.main = main;
 		const seg = [['inbox', 'Postafiók'], ['compose', 'Új levél'], ['tpl', 'Sablonok']].map(x => '<button type="button" data-v="' + x[0] + '" class="' + (S.view === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('');
-		main.innerHTML = '<div class="ml">' + (M.connected ? '' : (M.sync ? '<p class="ml-note">A beérkező levelek 5 percenként ide is megérkeznek (csak olvasva). Válaszolni továbbra is a Salesmate Team Inboxban kell – az AI-piszkozatot onnan küldd el.</p>' : '<p class="ml-note">Előkészítés alatt: a postafiókok bekötéséig a leveleket a Salesmate Team Inboxban kezeld.</p>')) +
+		main.innerHTML = '<div class="ml">' + (M.connected ? '' : (M.sync ? ((M.send && M.send.on) ? '<p class="ml-note ok"><b>Próbaüzem:</b> a panelből is küldhetsz és válaszolhatsz – a levél a postafiókból megy, és az Elküldött mappába is bekerül, így a Salesmate is látja.</p>' : '<p class="ml-note">A beérkező levelek 5 percenként ide is megérkeznek (csak olvasva). Válaszolni továbbra is a Salesmate Team Inboxban kell – az AI-piszkozatot onnan küldd el.</p>') : '<p class="ml-note">Előkészítés alatt: a postafiókok bekötéséig a leveleket a Salesmate Team Inboxban kezeld.</p>')) +
 			'<div class="ml-head"><div class="crm-seg ml-seg">' + seg + '</div></div><div class="ml-body"></div></div>';
 		main.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.v; try { localStorage.setItem('cpmail_view', S.view); } catch (e) { /* privát mód */ } view(main); }));
 		const body = main.querySelector('.ml-body');
@@ -360,8 +360,8 @@
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small></div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
-			timeline(x).map(it => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
-				'<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button" disabled title="Válasz">' + RE_I + '</button><button type="button" disabled title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
+			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
+				'<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
 				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map(a => '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
@@ -369,6 +369,20 @@
 		rd.querySelector('[data-st]').addEventListener('click', () => act('cp_mail_thread_set', { f: 'status', v: t.st === 'closed' ? 'open' : 'closed' }));
 		rd.querySelector('[data-tag]').addEventListener('click', () => { const v = window.prompt('Címkék (vesszővel elválasztva):', t.tags || ''); if (v !== null) act('cp_mail_thread_set', { f: 'tags', v: v }); });
 		rd.querySelector('[data-as]').addEventListener('change', e => act('cp_mail_thread_set', { f: 'assignee', v: e.target.value }));
+		/* v1.52: válasz a panelből (próbaüzem) */
+		const reply = (m, all) => {
+			const mine = (M.send.from || '').toLowerCase();
+			const pick = s => (String(s || '').match(/[^\s<>,;"']+@[^\s<>,;"']+/g) || []).map(x => x.toLowerCase()).filter(x => x !== mine);
+			const toL = m.dir === 'out' ? pick(m.to_list) : [String(m.from_email || '').toLowerCase()].filter(Boolean);
+			const ccL = all ? Array.from(new Set(pick(m.to_list).concat(pick(m.cc_list)))).filter(x => !toL.includes(x)) : [];
+			const subj = /^(re|vá|va|aw)\s*:/i.test(t.subj || '') ? t.subj : 'Re: ' + (t.subj || '');
+			const quote = '<p><br></p><p>' + esc(hdate(m.sent_at)) + ', ' + esc(m.from_name || m.from_email) + ' ezt írta:</p><blockquote style="margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex">' + (m.body || '') + '</blockquote>';
+			S.reply = { to: toL, cc: ccL, subject: subj, body: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
+			S.view = 'compose'; view(S.main);
+		};
+		const tl = timeline(x);
+		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
+		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));
 		rd.querySelectorAll('[data-one]').forEach(b => b.addEventListener('click', () => { if (b.dataset.one === 'unread') S.th = null; bulk(box, [t.id], b.dataset.one, ''); }));
 		rd.querySelector('[data-fol]').addEventListener('change', e => act('cp_mail_thread_set', { f: 'follow', v: e.target.checked ? '1' : '0' }));
 		const det = rd.querySelector('[data-detach]');
@@ -463,8 +477,11 @@
 		let tpls = [];
 		try { tpls = await loadTpls(); } catch (e) { /* sablon nélkül is írható */ }
 		let deal = null;
-		const draft = (() => { try { return JSON.parse(localStorage.getItem('cpmail_draft') || 'null'); } catch (e) { return null; } })();
+		const draft = S.reply || (() => { try { return JSON.parse(localStorage.getItem('cpmail_draft') || 'null'); } catch (e) { return null; } })();
+		S.reply = null;
+		const ctx = { thread: draft && draft.thread ? Number(draft.thread) : 0, subj: draft && draft.tsubj ? draft.tsubj : '' };
 		box.innerHTML = '<div class="ml-compose">' +
+			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b><button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div>' : '') +
 			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn>🔖 Sablon beszúrása ▾</button></span><div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
@@ -472,13 +489,37 @@
 			'<div class="ml-row" data-ccrow hidden><label>Rejtett</label><div class="ml-chips" data-bcc></div></div>' +
 			'<div class="ml-row"><label>Tárgy</label><input type="text" data-subj value="' + esc(draft ? draft.subject : '') + '"></div>' +
 			'<div data-ed></div>' +
-			'<div class="ml-send"><button type="button" class="cpx-btn" disabled title="A postafiókok bekötése után">Küldés</button><button type="button" class="cpx-btn ghost" disabled title="A postafiókok bekötése után">Ütemezés</button><button type="button" class="cpx-btn ghost" disabled title="A postafiókok bekötése után">Emlékeztető</button>' +
+			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' + (M.send.sign ? '<label class="ml-track"><input type="checkbox" data-sign checked> Aláírás hozzáadása</label>' : '') : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
 			'<button type="button" class="cpx-btn ghost" data-prev>Előnézet</button><button type="button" class="cpx-btn ghost" data-save>Piszkozat mentése</button><button type="button" class="ml-link" data-clear>Új, üres levél</button>' +
-			'<label class="ml-track"><input type="checkbox" checked disabled> Megnyitás követése</label></div>' +
+			'<label class="ml-track" title="A megnyitás követése később jön"><input type="checkbox" disabled> Megnyitás követése (később)</label></div>' +
 			'<div class="ml-prev" hidden></div></div>';
 		const q = sel => box.querySelector(sel);
 		const ed = editor(q('[data-ed]'), draft ? draft.body : '');
-		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), []), bcc = chips(q('[data-bcc]'), []);
+		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), []);
+		if (draft && draft.cc && draft.cc.length) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
+		if (draft && draft.deal) deal = { id: Number(draft.deal), title: draft.dealTitle || ('Deal #' + draft.deal) };
+		const unt = q('[data-unthread]');
+		if (unt) unt.addEventListener('click', () => { ctx.thread = 0; unt.parentNode.remove(); });
+		const fromSel = q('[data-from]');
+		if ((M.send && M.send.on)) { Array.from(fromSel.options).forEach(o => { if (o.value !== M.send.box) o.disabled = true; }); fromSel.value = M.send.box; }
+		const sendBtn = q('[data-send]'), testBtn = q('[data-test]');
+		const doSend = async test => {
+			const tl = to.get(), sj = q('[data-subj]').value.trim(), body = ed.get();
+			if (!test && !tl.length) { toast('Adj meg címzettet.', true); return; }
+			if (!sj) { toast('Add meg a tárgyat.', true); q('[data-subj]').focus(); return; }
+			if (ed.isEmpty()) { toast('Üres a levél.', true); return; }
+			if (!test && !window.confirm('Elküldöd a levelet?\n\nCímzett: ' + tl.join(', ') + (cc.get().length ? '\nMásolat: ' + cc.get().join(', ') : '') + (bcc.get().length ? '\nRejtett: ' + bcc.get().join(', ') : '') + '\nTárgy: ' + sj + '\n\nA levél a postafiókból megy ki, és az Elküldött mappába is bekerül.')) return;
+			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
+			try {
+				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: q('[data-sign]') && q('[data-sign]').checked ? 1 : '', test: test ? 1 : '' });
+				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
+				try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ }
+				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
+				open(r.thread);
+			} catch (e) { b.disabled = false; b.textContent = old; toast(e.message, true); }
+		};
+		if (sendBtn) sendBtn.addEventListener('click', () => doSend(false));
+		if (testBtn) testBtn.addEventListener('click', () => doSend(true));
 		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); });
 		q('[data-cc]').addEventListener('click', () => box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = !r.hidden; }));
 		q('[data-tplbtn]').addEventListener('click', e => {
@@ -491,7 +532,7 @@
 			});
 		});
 		q('[data-save]').addEventListener('click', () => {
-			try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: to.get(), subject: q('[data-subj]').value, body: ed.get() })); toast('Piszkozat elmentve ezen a gépen.'); } catch (e) { toast('A piszkozatot nem sikerült menteni.', true); }
+			try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: to.get(), cc: cc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '' })); toast('Piszkozat elmentve ezen a gépen.'); } catch (e) { toast('A piszkozatot nem sikerült menteni.', true); }
 		});
 		q('[data-clear]').addEventListener('click', () => { if (!window.confirm('Törlöd a levél tartalmát?')) return; try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ } drawCompose(box); });
 		q('[data-prev]').addEventListener('click', async () => {
@@ -587,7 +628,7 @@
 					'<div class="ml-aisub"><small>Tárgy:</small> ' + esc(r.subject) + '</div><div class="ml-aibody ml-mb">' + r.html.replace(/\[KITÖLTENDŐ:([^\]]*)\]/g, '<mark>[KITÖLTENDŐ:$1]</mark>') + '</div>' +
 					'<div class="ml-aia"><button type="button" class="cpx-btn" data-copy title="A Salesmate-be beilleszthető formában">Szöveg másolása</button><button type="button" class="cpx-btn ghost" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
 				out.querySelector('[data-take]').addEventListener('click', () => {
-					try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: r.to ? [r.to] : [], subject: r.subject, body: r.html })); localStorage.setItem('cpmail_view', 'compose'); } catch (e) { toast('A piszkozatot nem sikerült átvinni.', true); return; }
+					try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 })); localStorage.setItem('cpmail_view', 'compose'); } catch (e) { toast('A piszkozatot nem sikerült átvinni.', true); return; }
 					S.view = 'compose'; view(S.main); toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
 				});
 				out.querySelector('[data-again]').addEventListener('click', run);

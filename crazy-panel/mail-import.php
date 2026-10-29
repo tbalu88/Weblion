@@ -278,7 +278,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false) {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => '', 'sent_at' => $at, 'mid' => $mid));
+		'status' => '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()));
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
 	if (!$out) {
@@ -441,6 +441,7 @@ function cp_imp_admin_page() {
 	echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button ' . ($on ? '' : 'button-primary') . '" name="cp_imp_do" value="' . ($on ? 'sync_off' : 'sync_on') . '">' . ($on ? 'Kikapcsolás' : 'Bekapcsolás') . '</button></form>';
 	echo '<h2>Salesmate-sablonok betöltése</h2><p>Illeszd be a Chrome-bővítményben futó Claude által összegyűjtött sablonokat (JSON: <code>[{"folder":"…","name":"…","subject":"…","body_html":"…"}, …]</code>). Az azonos mappában azonos nevű sablon frissül, a többi újként kerül be. A Salesmate-et nem érinti.</p>';
 	echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_imp_do" value="tpl"><textarea name="tpl_json" rows="10" class="large-text code" placeholder="[ { &quot;folder&quot;: &quot;Ajánlatok&quot;, &quot;name&quot;: &quot;…&quot;, &quot;subject&quot;: &quot;…&quot;, &quot;body_html&quot;: &quot;<p>…</p>&quot; } ]"></textarea><p><button class="button button-primary">Sablonok betöltése</button></p></form>';
+	do_action('cp_imp_admin_after');
 	echo '</div>';
 }
 
