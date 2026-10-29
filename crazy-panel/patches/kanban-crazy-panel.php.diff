@@ -1,0 +1,35 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.34.5');
++define('CP_PANEL_VER', '1.35.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -729,6 +729,7 @@
+ 		'user'       => function_exists('cp_pu_current') && cp_pu_current() ? cp_pu_current()['n'] : '',
+ 		'crm'        => function_exists('cp_crm_panel_cfg') ? cp_crm_panel_cfg() : array('on' => false),
+ 		'mail'       => function_exists('cp_mail_cfg') ? cp_mail_cfg() : array('on' => false),
++		'kb'         => function_exists('cp_kb_cfg') ? cp_kb_cfg() : array('on' => false),
+ 	);
+ 	cp_panel_head('Crazy panel');
+ 	echo '<body><div id="cpx-app"></div>';
+@@ -737,6 +738,7 @@
+ 	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
+ 	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '</body></html>';
+@@ -3615,6 +3617,7 @@
+ require_once __DIR__ . '/crm-source.php';
+ require_once __DIR__ . '/panel-users.php';
+ require_once __DIR__ . '/mail.php';
++require_once __DIR__ . '/kanban.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

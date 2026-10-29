@@ -1,0 +1,60 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -41,7 +41,7 @@
+   /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
+   const HOME = C.st && C.st.on ? 'stat' : 'naptar';
+   /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
+-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals'] : [], C.mail && C.mail.on ? ['mail'] : []).includes(S.tab)) S.tab = HOME;
++  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : []).includes(S.tab)) S.tab = HOME;
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -113,7 +113,7 @@
+   /* ------------------------------------------------------------ shell */
+   function shell() {
+     app.innerHTML = '';
+-    const DEALS = (C.crm && C.crm.on ? tabBtn('deals', 'Deal-ek') : '') + (C.mail && C.mail.on ? tabBtn('mail', 'Levelezés') : '');
++    const DEALS = (C.crm && C.crm.on ? tabBtn('deals', 'Deal-ek') : '') + (C.mail && C.mail.on ? tabBtn('mail', 'Levelezés') : '') + (C.kb && C.kb.on ? tabBtn('feladatok', 'Feladatok') : '');
+     const TOOLS = [['ellenorzes', 'Gyors ellenőrzés'], ['sablon', 'Sablonkészítő']];
+     let toolsOpen = TOOLS.some(t => t[0] === S.tab);
+     try { if (localStorage.getItem('cpx_tools') === '1') toolsOpen = true; } catch (e) { /* privát mód */ }
+@@ -187,6 +187,7 @@
+     logout: '<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/>',
+     fold: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/>',
+     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
++    feladatok: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16M5.5 8h2M11.5 8h2M17.5 8h2M5.5 11h2M11.5 11h2"/>',
+     tools: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a2.1 2.1 0 0 0 3 3l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.3-.6-.6-2.3z"/>'
+   };
+   const ico = id => '<svg class="cpx-ico" viewBox="0 0 24 24" aria-hidden="true">' + (ICO[id] || '') + '</svg>';
+@@ -199,12 +200,15 @@
+ 	if (S.tab === 'stat') { if (window.CPStat) window.CPStat.status(s); return; }
+ 	if (S.tab === 'deals') { if (window.CPCrm) window.CPCrm.status(s); return; }
+ 	if (S.tab === 'mail') { if (window.CPMail) window.CPMail.status(s); return; }
++	if (S.tab === 'feladatok') { if (window.CPKanban) window.CPKanban.status(s); return; }
+     if (S.loading) { s.textContent = 'Betöltés…'; s.className = 'cpx-status'; return; }
+     if (S.err) { s.textContent = S.err; s.className = 'cpx-status err'; return; }
+     const c = S.cache[S.month];
+     if (c && c.at) { const d = new Date(c.at * 1000); s.textContent = 'Adatok: ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); s.className = 'cpx-status'; }
+   }
+ 
++  /* v1.35: a modulok (Levelezés, Feladatok, Deal-ek) egymás fülére is átléphetnek */
++  window.CPXGo = tab => go(tab);
+   function go(tab) {
+     S.tab = tab;
+     history.replaceState(null, '', '#' + tab);
+@@ -222,6 +226,7 @@
+ 	if (S.tab === 'stat') { if (window.CPStat) await window.CPStat.refresh(); return; }
+ 	if (S.tab === 'deals') { if (window.CPCrm) await window.CPCrm.refresh(); return; }
+ 	if (S.tab === 'mail') { if (window.CPMail) await window.CPMail.refresh(); return; }
++	if (S.tab === 'feladatok') { if (window.CPKanban) await window.CPKanban.refresh(); return; }
+     const ms = new Set([S.month, monthKey(S.day)]);
+     for (const m of ms) { try { await load(m, true); } catch (e) { /* status */ } }
+     render();
+@@ -243,6 +248,7 @@
+ 	if (S.tab === 'tarca') { pollTrack(false); elPoll(false); viewTw(main); renderStatus(); return; }
+ 	if (S.tab === 'elszamolas') { pollTrack(false); viewEl(main); renderStatus(); return; }
+ 	if (S.tab === 'stat') { pollTrack(false); elPoll(false); if (window.CPStat) window.CPStat.view(main); else main.innerHTML = '<div class="cpx-empty err">A Statisztikák nem töltődtek be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
++	if (S.tab === 'feladatok') { pollTrack(false); elPoll(false); if (window.CPKanban) window.CPKanban.view(main); else main.innerHTML = '<div class="cpx-empty err">A Feladatok fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'mail') { pollTrack(false); elPoll(false); if (window.CPMail) window.CPMail.view(main); else main.innerHTML = '<div class="cpx-empty err">A Levelezés nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'deals') { pollTrack(false); elPoll(false); if (window.CPCrm) window.CPCrm.view(main); else main.innerHTML = '<div class="cpx-empty err">A Deal-ek fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'sablon') { pollTrack(false); elPoll(false); if (window.CPSablon) window.CPSablon.view(main, SBX); else main.innerHTML = '<div class="cpx-empty err">A Sablonkészítő nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }

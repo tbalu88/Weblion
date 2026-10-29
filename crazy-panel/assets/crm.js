@@ -521,7 +521,9 @@
 		let h = sheetHead(esc(d.title || 'Deal #' + d.id)) +
 			'<div class="crm-top"><span>' + esc(d.stage) + '</span> ' + stBadge(d) + '<b>' + esc(money(d.value, d.currency)) + '</b>' +
 			(R.edit && !d.deleted_at ? '<button class="cpx-btn" type="button" data-edit>Szerkesztés</button>' : '') +
+			(window.CPKanban ? '<button class="cpx-btn ghost" type="button" data-todo title="Teendő felvétele a Feladatokba">☑ Teendő</button>' : '') +
 			(smUrl ? '<a class="cpx-btn ghost" href="' + esc(smUrl) + '" target="_blank" rel="noopener">Salesmate ↗</a>' : '') + '</div>' +
+			'<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div>' +
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			(W && !d.deleted_at ? '<div class="crm-act">' + (d.status === 'Open' ? '<select data-mv aria-label="Szakasz">' + opts(STAGES.map(x => [x, x]), d.stage) + '</select><button class="cpx-btn ghost" type="button" data-mvst="Won">Megnyert</button><button class="cpx-btn ghost bad" type="button" data-mvst="Lost">Elvesztett</button>' : '<button class="cpx-btn ghost" type="button" data-mvst="Open">Újranyitás</button>') + '</div>' : '');
 		h += '<h4>Rendezvény</h4>' + (dl(d, ['event_d', 'event_end_d', 'start_at', 'venue', 'guests', 'hours', 'service', 'package', 'services_cp', 'services_ec', 'services_more', 'extras', 'background', 'km_fee', 'extension', 'operator', 'album', 'template_st', 'template_paid', 'template_link', 'portal_link', 'coupon']) || '<p class="cpx-muted">Nincs megadva.</p>');
@@ -554,6 +556,11 @@
 		sh.innerHTML = h;
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
+		/* v1.35: teendő a Feladatokba (kanban), és a deal-hez kapcsolt kártyák */
+		const kbl = sh.querySelector('[data-kbl]');
+		if (window.CPKanban) window.CPKanban.linked(kbl, { deal: d.id });
+		const todo = sh.querySelector('[data-todo]');
+		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(sh.querySelector('[data-kbq]'), { title: d.title || 'Deal #' + d.id, deal: d.id, onDone: () => window.CPKanban.linked(kbl, { deal: d.id }) }));
 		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id); };
 		const mv = sh.querySelector('[data-mv]');
 		if (mv) mv.addEventListener('change', async () => { const ok = await doMove(id, { to: mv.value }, d.title); if (!ok) mv.value = d.stage; after(ok); });
