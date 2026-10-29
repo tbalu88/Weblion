@@ -478,6 +478,8 @@ function cp_crm_sync($manual = false) {
 	$st['last_log'] = implode(' · ', $log);
 	cp_crm_state_set($st);
 	cp_crm_unlock();
+	/* a fülek a saját táblákból olvasnak: a gyorsítótárukat ürítjük, hogy a Salesmate-ből jött változás azonnal látsszon */
+	if (function_exists('cp_crm_source_on') && cp_crm_source_on() && function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	return $st['last_err'] !== '' ? 'Hiba: ' . $st['last_err'] : ($log ? implode(' · ', $log) : 'Nincs változás.');
 }
 
@@ -517,6 +519,7 @@ function cp_crm_admin_page() {
 		check_admin_referer('cp_crm_do');
 		$do = sanitize_key(wp_unslash($_POST['cp_crm_do']));
 		if ($do === 'sync') { $msg = cp_crm_sync(true); }
+		if ($do === 'src_on' || $do === 'src_off') { update_option('cp_crm_source', $do === 'src_on' ? '1' : '0', false); if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); } $msg = $do === 'src_on' ? 'A panel fülei mostantól a saját táblákból olvasnak.' : 'A panel fülei újra közvetlenül a Salesmate-ből olvasnak.'; }
 		if ($do === 'full') {
 			$st = cp_crm_state();
 			foreach (cp_crm_mods() as $m => $x) { $st[$m . '_redo'] = 1; $st[$m . '_run'] = gmdate('Y-m-d H:i:s'); unset($st[$m . '_cur'], $st[$m . '_span']); }
@@ -528,7 +531,10 @@ function cp_crm_admin_page() {
 	$st = cp_crm_state();
 	$t = function ($k) use ($st) { return !empty($st[$k]) ? wp_date('Y.m.d. H:i', (int) $st[$k]) : '–'; };
 	echo '<div class="wrap"><h1>Crazy CRM – áthozatal a Salesmate-ből</h1>';
-	echo '<p>A Salesmate kiváltásának 1. szakasza. Ez a modul <b>csak olvassa</b> a Salesmate-et, és a panel saját tábláiba másolja az adatokat; a Salesmate-be nem ír, és a panel fülei egyelőre a Salesmate-ből olvasnak tovább.</p>';
+	echo '<p>A Salesmate kiváltásának 1. szakasza. A modul 10 percenként a panel saját tábláiba másolja a Salesmate adatait. A Salesmate-be csak a panel saját műveletei írnak (szakaszváltás, háttér stb.).</p>';
+	$src = get_option('cp_crm_source', '1') === '1';
+	$live = function_exists('cp_crm_source_on') && cp_crm_source_on();
+	echo '<p><b>A panel fülei:</b> ' . ($live ? 'a saját táblákból olvasnak.' : ($src ? '<span style="color:#b32d2e">átmenetileg a Salesmate-ből olvasnak</span> (a szinkron 30 percnél régebben futott le sikeresen, vagy az áthozatal még tart).' : 'a Salesmate-ből olvasnak (kikapcsolva).')) . '</p>';
 	if ($msg !== '') { echo '<div class="notice notice-info"><p>' . esc_html($msg) . '</p></div>'; }
 	if (!empty($st['last_err'])) { echo '<div class="notice notice-error"><p>Utolsó hiba (' . esc_html($t('err_at')) . '): ' . esc_html($st['last_err']) . '</p></div>'; }
 	echo '<table class="widefat striped" style="max-width:900px"><thead><tr><th>Modul</th><th>Salesmate-ben</th><th>A panelben</th><th>Teljes olvasás</th><th>Utolsó változás-lekérés</th></tr></thead><tbody>';
@@ -542,6 +548,7 @@ function cp_crm_admin_page() {
 	echo '<p>A deal-ek száma a Salesmate-ben a „Todo” és az „Ügynökség megkeresések” pipeline-t is tartalmazhatja; a panel csak a „' . esc_html(cp_panel_opts()['pipeline']) . '” pipeline-t hozza át. A keresőből kimaradt, azonosítóval pótolt deal-ek: ' . (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_crm_t('deals') . " WHERE via = 'get'") . '.</p>';
 	echo '<form method="post" style="margin:12px 0">';
 	wp_nonce_field('cp_crm_do');
+	echo ($src ? '<button class="button" name="cp_crm_do" value="src_off">Fülek: vissza a Salesmate-re</button> ' : '<button class="button" name="cp_crm_do" value="src_on">Fülek: a saját táblákból</button> ');
 	echo '<button class="button button-primary" name="cp_crm_do" value="sync">Szinkron most</button> <button class="button" name="cp_crm_do" value="full" onclick="return confirm(\'Mindent újraolvas a Salesmate-ből (néhány kör). Mehet?\')">Teljes újraolvasás</button></form>';
 	$h = $wpdb->get_results('SELECT h.deal_id, h.field, h.old_val, h.new_val, h.by_user, h.at, d.title FROM ' . cp_crm_t('history') . ' h LEFT JOIN ' . cp_crm_t('deals') . ' d ON d.id = h.deal_id ORDER BY h.id DESC LIMIT 30', ARRAY_A);
 	echo '<h2>Változásnapló (legutóbbi 30)</h2>';

@@ -244,11 +244,7 @@ function cp_crm_ajax_move() {
 	if (is_wp_error($chk)) { cp_el_err('A Salesmate-be beírtam, de a visszaolvasás nem sikerült – frissíts egy perc múlva.', 502); }
 	$ok = $to !== '' ? cp_panel_lc(cp_panel_str(cp_panel_get($chk, 'stage'))) === cp_panel_lc($to) : cp_panel_lc(cp_panel_str(cp_panel_get($chk, 'status'))) === cp_panel_lc($st);
 	if (!$ok) { cp_el_err('A Salesmate nem fogadta el a változást (jelenleg: „' . cp_panel_str(cp_panel_get($chk, $to !== '' ? 'stage' : 'status')) . '”).', 502); }
-	/* saját tábla + változásnapló (a módosító a panel nevében) */
-	$chk['lastModifiedBy'] = null;
-	cp_crm_store('deal', array($chk), 'get');
-	global $wpdb;
-	$wpdb->query($wpdb->prepare('UPDATE ' . cp_crm_t('history') . " SET by_user = %s, src = 'panel' WHERE deal_id = %d AND src = 'salesmate' AND by_user = '' AND at >= %s", 'Crazy panel', $id, gmdate('Y-m-d H:i:s', time() - 7200)));
+	/* a saját táblát és a változásnaplót a cp_sm_request() írás utáni kampója frissítette (crm-source.php) */
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	/* ügyfélportál: a „Szerződés aláírva” szakaszba lépéskor (mint a Követés fülön) */
 	$signed = cp_panel_lines($o['signed_stages']);

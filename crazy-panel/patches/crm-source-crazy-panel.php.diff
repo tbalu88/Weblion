@@ -1,0 +1,43 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.26.2');
++define('CP_PANEL_VER', '1.27.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -193,7 +193,10 @@
+ 	if ($code < 200 || $code >= 300) {
+ 		return new WP_Error('cp_http', 'Salesmate hiba (' . $code . '): ' . mb_substr($raw, 0, 300));
+ 	}
+-	return is_array($json) ? $json : new WP_Error('cp_json', 'Érvénytelen válasz: ' . mb_substr($raw, 0, 300));
++	if (!is_array($json)) { return new WP_Error('cp_json', 'Érvénytelen válasz: ' . mb_substr($raw, 0, 300)); }
++	/* a panel írása után a deal a saját CRM-táblában is frissül (crm-source.php) */
++	if ($method !== 'GET' && preg_match('#^/apis/deal/v4/(\d+)$#', $path, $m) && function_exists('cp_crm_after_write')) { cp_crm_after_write((int) $m[1]); }
++	return $json;
+ }
+ 
+ /* v1.8.2: a rendezvényfotózás és a rendezvényfilm nem a panel része (külön elszámolás / követés) */
+@@ -282,6 +285,11 @@
+ function cp_sm_fetch_range($from, $to, &$info = null, $fields = null) {
+ 	$o = cp_panel_opts();
+ 	$info = array('mode' => '', 'calls' => 0);
++	/* v1.27: a saját CRM-táblákból (ha a szinkron friss), különben a Salesmate-ből */
++	if (function_exists('cp_crm_source_on') && cp_crm_source_on()) {
++		$rows = cp_crm_range_rows($from, $to);
++		if (!is_wp_error($rows)) { $info['mode'] = 'crm'; return $rows; }
++	}
+ 	$modes = $o['search_mode'] === 'auto' ? array('after_before', 'between', 'between_str', 'scan') : array($o['search_mode']);
+ 	$last_err = null;
+ 	foreach ($modes as $mode) {
+@@ -3532,6 +3540,7 @@
+ require_once __DIR__ . '/stat.php';
+ require_once __DIR__ . '/crm.php';
+ require_once __DIR__ . '/crm-panel.php';
++require_once __DIR__ . '/crm-source.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön
