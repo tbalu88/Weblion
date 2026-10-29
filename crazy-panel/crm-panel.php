@@ -338,7 +338,7 @@ function cp_crm_ajax_delete() {
 	if (!$gone) { cp_el_err('A Salesmate nem törölte a dealt.', 502); }
 	global $wpdb;
 	$wpdb->update(cp_crm_t('deals'), array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
-	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve', 'by_user' => 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	wp_send_json_success(array('id' => $id));
 }

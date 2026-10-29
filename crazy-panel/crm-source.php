@@ -75,7 +75,7 @@ function cp_crm_after_write($id) {
 		$d['lastModifiedBy'] = null;
 		cp_crm_store('deal', array($d), 'get');
 		global $wpdb;
-		$wpdb->query($wpdb->prepare('UPDATE ' . cp_crm_t('history') . " SET by_user = %s, src = 'panel' WHERE deal_id = %d AND src = 'salesmate' AND by_user = '' AND at >= %s", 'Crazy panel', $id, gmdate('Y-m-d H:i:s', time() - 7200)));
+		$wpdb->query($wpdb->prepare('UPDATE ' . cp_crm_t('history') . " SET by_user = %s, src = 'panel' WHERE deal_id = %d AND src = 'salesmate' AND by_user = '' AND at >= %s", (function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel'), $id, gmdate('Y-m-d H:i:s', time() - 7200)));
 	}
 	$busy = false;
 }

@@ -1,0 +1,25 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -40,7 +40,8 @@
+   };
+   /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
+   const HOME = C.st && C.st.on ? 'stat' : 'naptar';
+-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon', 'stat'].concat(C.crm && C.crm.on ? ['deals'] : []).includes(S.tab)) S.tab = HOME;
++  /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
++  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals'] : []).includes(S.tab)) S.tab = HOME;
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -122,10 +123,10 @@
+       '<button class="cpx-burger" id="cpx-burger" type="button" aria-label="Menü" aria-expanded="false" aria-controls="cpx-menu"><span></span><span></span><span></span></button>' +
+       '<div class="cpx-menu" id="cpx-menu">' +
+       '<nav class="cpx-tabs">' +
+-      (HOME === 'stat' ? tabBtn('stat', 'Statisztikák') + DEALS : '') + tabBtn('naptar', 'Naptár') + (HOME === 'stat' ? '' : DEALS) + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + (HOME === 'stat' ? '' : tabBtn('stat', 'Statisztikák')) +
++      (HOME === 'stat' ? tabBtn('stat', 'Statisztikák') + DEALS : '') + tabBtn('naptar', 'Naptár') + (HOME === 'stat' ? '' : DEALS) + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('sablon', 'Sablonkészítő') + tabBtn('ellenorzes', 'Gyors ellenőrzés') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + (HOME === 'stat' || !(C.st && C.st.on) ? '' : tabBtn('stat', 'Statisztikák')) +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">' + ico('refresh') + '<span>Frissítés</span></button>' +
+-      '<a class="cpx-btn ghost" href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '<span>Kilépés</span></a></div></div>';
++      '<a class="cpx-btn ghost" href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '<span>Kilépés' + (C.role ? ' <small>(' + (C.role === 'iroda' ? 'iroda' : 'admin') + ')</small>' : '') + '</span></a></div></div>';
+     app.appendChild(top);
+     curLabel();
+     const main = el('main', { class: 'cpx-main', id: 'cpx-main' });

@@ -1,0 +1,147 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.27.2');
++define('CP_PANEL_VER', '1.28.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -27,6 +27,8 @@
+ 		'token'         => '',
+ 		'pw_hash'       => '',
+ 		'pw_ver'        => '1',
++		'pw_hash_office' => '',   // v1.28: irodai fiók (a Statisztikák nélkül)
++		'pw_ver_office'  => '1',
+ 		'pipeline'      => 'Crazyphoto megrendelés',
+ 		'booked_stages' => "Szerződés kiküldve\nSzerződés aláírva\nRendezvény felkészül\nRendezvény lement (G&R)\nPénzre várunk",
+ 		'pending_stages'=> "Érdeklődő / Megrendelő\nAjánlat kiküldve",
+@@ -128,20 +130,40 @@
+ 	return isset($_SERVER['REMOTE_ADDR']) ? preg_replace('/[^0-9a-fA-F:.]/', '', $_SERVER['REMOTE_ADDR']) : '0';
+ }
+ 
+-function cp_panel_sig($exp) {
++/* v1.28: két fiók – admin (a régi közös jelszó) és iroda; a süti: „lejárat|aláírás” (admin) vagy „lejárat|iroda|aláírás” */
++function cp_panel_sig($exp, $role = 'admin') {
+ 	$o = cp_panel_opts();
++	if ($role === 'iroda') { return hash_hmac('sha256', $exp . '|iroda|' . $o['pw_ver_office'] . '|' . substr($o['pw_hash_office'], 0, 20), wp_salt('auth')); }
+ 	return hash_hmac('sha256', $exp . '|' . $o['pw_ver'] . '|' . substr($o['pw_hash'], 0, 20), wp_salt('auth'));
+ }
+ 
+-function cp_panel_authed() {
+-	if (empty($_COOKIE[CP_PANEL_COOKIE])) { return false; }
++/* a belépett fiók: 'admin' | 'iroda' | '' (nincs belépve) */
++function cp_panel_role() {
++	static $r = null;
++	if ($r !== null) { return $r; }
++	$r = '';
++	if (empty($_COOKIE[CP_PANEL_COOKIE])) { return $r; }
+ 	$o = cp_panel_opts();
+-	if ($o['pw_hash'] === '') { return false; }
+ 	$parts = explode('|', (string) wp_unslash($_COOKIE[CP_PANEL_COOKIE]));
+-	if (count($parts) !== 2) { return false; }
+ 	$exp = (int) $parts[0];
+-	if ($exp < time()) { return false; }
+-	return hash_equals(cp_panel_sig($exp), $parts[1]);
++	if ($exp < time()) { return $r; }
++	if (count($parts) === 2 && $o['pw_hash'] !== '' && hash_equals(cp_panel_sig($exp), $parts[1])) { $r = 'admin'; }
++	elseif (count($parts) === 3 && $parts[1] === 'iroda' && $o['pw_hash_office'] !== '' && hash_equals(cp_panel_sig($exp, 'iroda'), $parts[2])) { $r = 'iroda'; }
++	return $r;
++}
++
++function cp_panel_authed() {
++	return cp_panel_role() !== '';
++}
++
++function cp_panel_is_admin() {
++	return cp_panel_role() === 'admin';
++}
++
++/* a változásnaplóba: ki módosított a panelből */
++function cp_panel_who() {
++	$r = cp_panel_role();
++	return $r === 'iroda' ? 'Iroda (panel)' : ($r === 'admin' ? 'Admin (panel)' : 'Crazy panel');
+ }
+ 
+ function cp_panel_try_login($pw) {
+@@ -151,13 +173,16 @@
+ 	$fails = (int) get_transient($key);
+ 	if ($fails >= 6) { return 'Túl sok sikertelen próbálkozás. Próbáld újra 15 perc múlva.'; }
+ 	require_once ABSPATH . WPINC . '/class-phpass.php';
+-	if (!wp_check_password($pw, $o['pw_hash'])) {
++	$role = '';
++	if (wp_check_password($pw, $o['pw_hash'])) { $role = 'admin'; }
++	elseif ($o['pw_hash_office'] !== '' && wp_check_password($pw, $o['pw_hash_office'])) { $role = 'iroda'; }
++	if ($role === '') {
+ 		set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS);
+ 		return 'Hibás jelszó.';
+ 	}
+ 	delete_transient($key);
+ 	$exp = time() + 30 * DAY_IN_SECONDS;
+-	setcookie(CP_PANEL_COOKIE, $exp . '|' . cp_panel_sig($exp), $exp, '/', '', is_ssl(), true);
++	setcookie(CP_PANEL_COOKIE, $exp . '|' . ($role === 'iroda' ? 'iroda|' : '') . cp_panel_sig($exp, $role), $exp, '/', '', is_ssl(), true);
+ 	return '';
+ }
+ 
+@@ -679,7 +704,8 @@
+ 		'hxInt'      => (bool) preg_match('/^int/i', (string) $o['f_hx']),
+ 		'portal'     => function_exists('cp_portal_panel_cfg') ? cp_portal_panel_cfg() : array('on' => false),
+ 		'sb'         => function_exists('cp_sb_cfg') ? cp_sb_cfg() : array(),
+-		'st'         => function_exists('cp_st_cfg') ? cp_st_cfg() : array('on' => false),
++		'st'         => function_exists('cp_st_cfg') && cp_panel_is_admin() ? cp_st_cfg() : array('on' => false),
++		'role'       => cp_panel_role(),
+ 		'crm'        => function_exists('cp_crm_panel_cfg') ? cp_crm_panel_cfg() : array('on' => false),
+ 	);
+ 	cp_panel_head('Crazy panel');
+@@ -1027,9 +1053,25 @@
+ 		} else {
+ 			$o['pw_hash'] = wp_hash_password($in['pw_new']);
+ 			$o['pw_ver'] = (string) (((int) $o['pw_ver']) + 1);
+-			$msg .= ' A panel jelszava megváltozott (mindenkit kiléptettünk).';
++			$msg .= ' Az admin jelszó megváltozott (az admin fiókkal belépetteket kiléptettük).';
++		}
++	}
++	if (!empty($in['pw_new_office'])) {
++		if (strlen($in['pw_new_office']) < 8) {
++			$msg .= ' Az irodai jelszó legalább 8 karakter legyen – nem változtattam meg.';
++		} elseif (wp_check_password($in['pw_new_office'], $o['pw_hash'])) {
++			$msg .= ' Az irodai jelszó nem lehet ugyanaz, mint az admin jelszó – nem mentettem.';
++		} else {
++			$o['pw_hash_office'] = wp_hash_password($in['pw_new_office']);
++			$o['pw_ver_office'] = (string) (((int) $o['pw_ver_office']) + 1);
++			$msg .= ' Az irodai jelszó beállítva (az irodai fiókkal belépetteket kiléptettük).';
+ 		}
+ 	}
++	if (!empty($in['pw_office_off']) && $o['pw_hash_office'] !== '') {
++		$o['pw_hash_office'] = '';
++		$o['pw_ver_office'] = (string) (((int) $o['pw_ver_office']) + 1);
++		$msg .= ' Az irodai fiók kikapcsolva.';
++	}
+ 	update_option(CP_PANEL_OPT, $o, false);
+ 	return $msg;
+ }
+@@ -1046,7 +1088,8 @@
+ 	wp_nonce_field('cp_panel_save');
+ 	echo '<h2>Hozzáférés</h2><table class="form-table">';
+ 	cp_panel_row('Panel útvonala', '<code>' . esc_html(home_url('/')) . '</code><input name="slug" value="' . esc_attr($o['slug']) . '" class="regular-text">');
+-	cp_panel_row('Közös jelszó', '<input type="password" name="pw_new" class="regular-text" autocomplete="new-password" placeholder="' . ($o['pw_hash'] ? 'Beállítva – új jelszó megadásához írd be' : 'Még nincs beállítva') . '"><p class="description">Legalább 8 karakter. Csak a hash-e kerül mentésre.</p>');
++	cp_panel_row('Admin jelszó', '<input type="password" name="pw_new" class="regular-text" autocomplete="new-password" placeholder="' . ($o['pw_hash'] ? 'Beállítva – új jelszó megadásához írd be' : 'Még nincs beállítva') . '"><p class="description">Teljes hozzáférés, a Statisztikákkal együtt. Legalább 8 karakter. Csak a hash-e kerül mentésre.</p>');
++	cp_panel_row('Irodai jelszó', '<input type="password" name="pw_new_office" class="regular-text" autocomplete="new-password" placeholder="' . ($o['pw_hash_office'] ? 'Beállítva – új jelszó megadásához írd be' : 'Még nincs beállítva (nincs irodai fiók)') . '"><p class="description">Minden, kivéve a Statisztikák fület. Legalább 8 karakter, és nem lehet ugyanaz, mint az admin jelszó.</p>' . ($o['pw_hash_office'] ? '<label><input type="checkbox" name="pw_office_off" value="1"> Irodai fiók kikapcsolása</label>' : ''));
+ 	echo '</table><h2>Salesmate kapcsolat</h2><table class="form-table">';
+ 	cp_panel_row('Salesmate cím (linkname)', '<input name="linkname" value="' . esc_attr($o['linkname']) . '" class="regular-text">');
+ 	cp_panel_row('API kulcs (Access Key)', '<input type="password" name="token_new" class="regular-text" autocomplete="off" placeholder="' . ($o['token'] ? 'Beállítva (••••' . esc_attr(substr($o['token'], -4)) . ') – cseréhez írd be az újat' : 'Illeszd be a Salesmate Access Key-t') . '"> <label><input type="checkbox" name="token_clear" value="1"> törlés</label><p class="description">Salesmate: Profil → My Account / Developer → Access Key. A kulcs csak a szerveren marad, a panel böngészőjébe nem kerül ki.</p>');
+@@ -1742,6 +1785,12 @@
+ 	}
+ }
+ 
++/* a Statisztikák végpontjai: csak az admin fiók */
++function cp_st_auth() {
++	cp_el_auth();
++	if (!cp_panel_is_admin()) { wp_send_json_error(array('msg' => 'A Statisztikák csak az admin fiókkal érhetők el.'), 403); }
++}
++
+ function cp_el_err($msg, $code = 400) {
+ 	wp_send_json_error(array('msg' => $msg), $code);
+ }

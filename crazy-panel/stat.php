@@ -1663,7 +1663,7 @@ function cp_st_sync_info() {
 add_action('wp_ajax_nopriv_cp_st_data', 'cp_st_ajax_data');
 add_action('wp_ajax_cp_st_data', 'cp_st_ajax_data');
 function cp_st_ajax_data() {
-	cp_el_auth();
+	cp_st_auth();
 	if (!cp_st_db_ok()) { cp_el_err('Az adatbázis-táblák még készülnek – próbáld újra egy perc múlva.', 503); }
 	$gran = isset($_REQUEST['g']) ? sanitize_key(wp_unslash($_REQUEST['g'])) : 'month';
 	if (!in_array($gran, array('day', 'week', 'month', 'quarter', 'year', 'custom'), true)) { $gran = 'month'; }
@@ -1688,7 +1688,7 @@ function cp_st_ajax_data() {
 add_action('wp_ajax_nopriv_cp_st_ga', 'cp_st_ajax_ga');
 add_action('wp_ajax_cp_st_ga', 'cp_st_ajax_ga');
 function cp_st_ajax_ga() {
-	cp_el_auth();
+	cp_st_auth();
 	if (!cp_st_has_secret('ga_secret_json') || !cp_st_ga_props()) { wp_send_json_success(array('off' => true)); }
 	$out = array('live' => cp_st_ga_live());
 	if (!empty($_REQUEST['f']) && !empty($_REQUEST['to'])) {
@@ -1708,7 +1708,7 @@ function cp_st_ajax_ga() {
 add_action('wp_ajax_nopriv_cp_st_li', 'cp_st_ajax_li');
 add_action('wp_ajax_cp_st_li', 'cp_st_ajax_li');
 function cp_st_ajax_li() {
-	cp_el_auth();
+	cp_st_auth();
 	$in = wp_unslash($_POST);
 	$l = cp_st_li_all();
 	if (cp_el_s($in, 'del') !== '') {

@@ -365,7 +365,7 @@ function cp_st_al_season($today) {
 add_action('wp_ajax_nopriv_cp_st_mail_ok', 'cp_st_ajax_mail_ok');
 add_action('wp_ajax_cp_st_mail_ok', 'cp_st_ajax_mail_ok');
 function cp_st_ajax_mail_ok() {
-	cp_el_auth();
+	cp_st_auth();
 	$cid = preg_replace('/[^0-9]/', '', isset($_POST['cid']) ? (string) wp_unslash($_POST['cid']) : '');
 	$rv = isset($_POST['rv']) ? preg_replace('/[^0-9: -]/', '', (string) wp_unslash($_POST['rv'])) : '';
 	if ($cid === '' || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $rv)) { cp_el_err('Hibás kérés.'); }
@@ -383,7 +383,7 @@ function cp_st_ajax_mail_ok() {
 add_action('wp_ajax_nopriv_cp_st_alerts', 'cp_st_ajax_alerts');
 add_action('wp_ajax_cp_st_alerts', 'cp_st_ajax_alerts');
 function cp_st_ajax_alerts() {
-	cp_el_auth();
+	cp_st_auth();
 	if (!cp_st_db_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 	/* „élő”: ha valaki nézi a fület, és 10 percnél régebbi a gyors szinkron, most frissít */
 	$st = cp_st_state();
