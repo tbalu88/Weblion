@@ -1,0 +1,61 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -17,6 +17,8 @@
+   const ft = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft';
+   const huDate = s => { const d = parseYmd(s); return d.getFullYear() + '. ' + HU_MONTHS[d.getMonth()] + ' ' + d.getDate() + '. (' + HU_DAYS_LONG[d.getDay()] + ')'; };
+   const norm = s => String(s || '').trim().toLowerCase();
++  /* keresésekhez: ékezet- és kisbetű-független (szabo = Szabó) */
++  const fold = s => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+   function el(tag, attrs, html) {
+     const e = document.createElement(tag);
+     if (attrs) for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else e.setAttribute(k, attrs[k]); }
+@@ -523,11 +525,11 @@
+       const all = trackEvents();
+       const clashes = bgClashes(S.month);
+       const rows = all.map(e => ({ e, k: chk(e, clashes) }));
+-      const q = norm(S.tq);
++      const q = fold(S.tq);
+       const pend = S.tf === 'ajanlat';
+       const pool = pend ? pendEvents().map(e => ({ e, k: chk(e, clashes) })) : rows;
+       const vis = pool.filter(r => (pend || S.tf === 'all' || (S.tf === 'adatlap' ? (r.k.pt && !r.k.ad) : S.tf === 'done' ? r.k.st === 'done' : S.tf === 'urgent' ? r.k.st === 'urgent' : r.k.st !== 'done')) &&
+-        (!q || norm(who(r.e) + ' ' + r.e.title + ' ' + r.e.bg + ' ' + (r.k.t.note || '')).includes(q)));
++        (!q || fold(who(r.e) + ' ' + r.e.title + ' ' + r.e.bg + ' ' + (r.k.t.note || '')).includes(q)));
+       const n = rows.length, done = rows.filter(r => r.k.st === 'done').length, urg = rows.filter(r => r.k.st === 'urgent').length;
+       kp.innerHTML = kpi('Szerződéses rendezvény', n) + kpi('Minden megvan', done) + kpi('Hiányos', n - done) + kpi('Sürgős (7 napon belül)', urg);
+       const cnt = f => rows.filter(f).length + '/' + n;
+@@ -728,8 +730,8 @@
+     }));
+     dlg.querySelector('#pk-cgo').addEventListener('click', () => { const v = dlg.querySelector('#pk-custom').value.trim(); if (v) save(v, false); });
+     dlg.querySelector('#pk-q').addEventListener('input', ev => {
+-      const q = norm(ev.target.value);
+-      dlg.querySelectorAll('.pcard').forEach(c => { c.hidden = q && !norm(c.dataset.bg).includes(q); });
++      const q = fold(ev.target.value);
++      dlg.querySelectorAll('.pcard').forEach(c => { c.hidden = q && !fold(c.dataset.bg).includes(q); });
+     });
+   }
+ 
+@@ -1274,10 +1276,10 @@
+ 		const busy = {};
+ 		all.forEach(L => { if (!L.kid) return; const b = busy[L.d.date] = busy[L.d.date] || {}; (b[L.kid] = b[L.kid] || []).push(L); });
+ 		EL.busy = busy;
+-		const q = norm(EL.q);
++		const q = fold(EL.q);
+ 		const vis = all.filter(L => (!EL.kf || (EL.kf === '-' ? !elKeyOf(L) : elKeyOf(L) === EL.kf)) &&
+ 			(!EL.only || (EL.only === 'miss' ? L.miss.length : !L.paid)) &&
+-			(!q || norm(L.d.who + ' ' + L.d.title + ' ' + L.d.loc + ' ' + elKezName(L) + ' ' + (L.row.no || '')).includes(q)));
++			(!q || fold(L.d.who + ' ' + L.d.title + ' ' + L.d.loc + ' ' + elKezName(L) + ' ' + (L.row.no || '')).includes(q)));
+ 		const deals = new Set(all.map(L => L.d.id));
+ 		const noKez = all.filter(L => !L.kid && !L.unk).length;
+ 		const totAll = all.reduce((s, L) => s + L.tot, 0);
+@@ -2201,9 +2203,9 @@
+ 					}).join('') + '</tbody></table></div>'
+ 					: '<p class="cpx-muted">Nincs függő AAM-befizetés – minden helyszíni készpénzes EV-s rendezvény pénze a tárcában van.</p>');
+ 
+-			const q = norm(TW.q);
++			const q = fold(TW.q);
+ 			const vis = rows.filter(r => (!TW.m || r.d.slice(0, 7) === TW.m) && (!TW.c || r.c === TW.c) &&
+-				(!q || norm(r.d + ' ' + r.t + ' ' + (r.k || '') + ' ' + (r.n || '') + ' ' + r.c).includes(q))).reverse();
++				(!q || fold(r.d + ' ' + r.t + ' ' + (r.k || '') + ' ' + (r.n || '') + ' ' + r.c).includes(q))).reverse();
+ 			const mt = {};
+ 			vis.forEach(r => { const t = mt[r.d.slice(0, 7)] = mt[r.d.slice(0, 7)] || { i: 0, o: 0 }; if (r.a > 0) t.i += r.a; else t.o += r.a; });
+ 			let h = '<table class="el-t tw-t"><thead><tr><th class="c-d">Dátum</th><th class="r">Összeg</th><th class="r">Egyenleg</th><th>Kategória</th><th>Kezelő</th><th>Megnevezés</th><th>Megjegyzés</th><th></th></tr></thead><tbody>';

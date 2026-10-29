@@ -89,8 +89,11 @@ function cp_crm_list_data($a) {
 		if (preg_match('/^#?\d{3,7}$/', $q)) {
 			$w[] = $wpdb->prepare('d.id = %d', (int) ltrim($q, '#'));
 		} else {
-			$like = '%' . $wpdb->esc_like($q) . '%';
-			$or = $wpdb->prepare('d.title LIKE %s OR d.venue LIKE %s OR c.name LIKE %s OR c.email LIKE %s OR co.name LIKE %s OR d.package LIKE %s', $like, $like, $like, $like, $like, $like);
+			/* ékezet- és kisbetű-független, szavanként (minden szónak szerepelnie kell valamelyik mezőben) */
+			$hay = "CONVERT(CONCAT_WS(' ', d.title, d.venue, d.package, d.service, c.name, c.email, co.name) USING utf8mb4) COLLATE utf8mb4_unicode_ci";
+			$and = array();
+			foreach (array_slice(preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY), 0, 6) as $word) { $and[] = $wpdb->prepare("$hay LIKE %s", '%' . $wpdb->esc_like($word) . '%'); }
+			$or = '(' . implode(' AND ', $and) . ')';
 			if (preg_match('/^\+?\d{6,}$/', $qs)) {
 				$pl = '%' . $wpdb->esc_like(substr($qs, -8)) . '%';
 				$or .= $wpdb->prepare(" OR REPLACE(REPLACE(REPLACE(c.phone, ' ', ''), '-', ''), '/', '') LIKE %s OR REPLACE(REPLACE(REPLACE(c.mobile, ' ', ''), '-', ''), '/', '') LIKE %s", $pl, $pl);
