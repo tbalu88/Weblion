@@ -5,6 +5,7 @@
 	const R = C.crm || {};
 	const STAGES = R.stages || [];
 	const USERS = R.users || {};
+	const W = !!R.write;
 	const ST_HU = { Open: 'Nyitott', Won: 'Megnyert', Lost: 'Elvesztett' };
 	const HU_MS = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
 	const DOW = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'];
@@ -71,7 +72,7 @@
 			f = own + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
 		}
 		return '<div class="crm-head">' + seg + '<div class="crm-filters">' + f + '</div></div>' +
-			'<p class="crm-ro">Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.</p>';
+			'<p class="crm-ro">' + (W ? 'A szakaszt itt is átállíthatod (a pipeline-on húzással, vagy a deal adatlapján) – ez a Salesmate-be is beíródik. A többi adatot egyelőre a Salesmate-ben módosítsd; a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
 	}
 
 	function view(main) {
@@ -187,10 +188,10 @@
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
-			h += '<section class="crm-col"><header><b>' + esc(s) + '</b><small>' + l.length + ' deal' + (v ? ' · ' + esc(money(v)) : '') + '</small></header><div class="crm-cards">';
+			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><b>' + esc(s) + '</b><small>' + l.length + ' deal' + (v ? ' · ' + esc(money(v)) : '') + '</small></header><div class="crm-cards">';
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14);
-				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (soon ? ' soon' : '') + (r.ev && r.ev < t ? ' past' : '') + '" data-id="' + r.id + '" tabindex="0">' +
+				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (soon ? ' soon' : '') + (r.ev && r.ev < t ? ' past' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '>' +
 					'<b>' + esc(shortTitle(r)) + '</b>' +
 					(r.ev ? '<span class="crm-ev">' + esc(huD(r.ev)) + '</span>' : '<span class="crm-ev cpx-muted">nincs dátum</span>') +
 					(r.cn ? '<small>' + esc(r.cn) + (r.co ? ' · ' + esc(r.co) : '') + '</small>' : '') +
@@ -202,13 +203,83 @@
 			h += '</div></section>';
 		});
 		h += '</div>';
+		if (W) h += '<div class="crm-drop" aria-hidden="true"><div data-st="Won">Megnyert</div><div data-st="Lost">Elvesztett</div></div>';
 		box.innerHTML = h;
 		bindOpen(box);
+		bindDrag(box);
 		const bd = box.querySelector('.crm-board');
 		const arr = () => { const a = box.querySelectorAll('[data-arr]'); a[0].disabled = bd.scrollLeft <= 2; a[1].disabled = bd.scrollLeft + bd.clientWidth >= bd.scrollWidth - 2; };
 		box.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => bd.scrollBy({ left: Number(b.dataset.arr) * 250, behavior: 'smooth' })));
 		bd.addEventListener('scroll', arr, { passive: true });
 		fitBoard(); arr();
+	}
+	/* húzás a szakaszok között, illetve a Megnyert / Elvesztett mezőre */
+	function bindDrag(box) {
+		if (!W) return;
+		const bd = box.querySelector('.crm-board');
+		let dragId = 0;
+		box.querySelectorAll('.crm-card[draggable]').forEach(c => {
+			c.addEventListener('dragstart', e => { dragId = Number(c.dataset.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragId)); c.classList.add('drag'); document.body.classList.add('crm-dragging'); });
+			c.addEventListener('dragend', () => { dragId = 0; c.classList.remove('drag'); document.body.classList.remove('crm-dragging'); box.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+		});
+		box.querySelectorAll('.crm-col[data-stage], .crm-drop [data-st]').forEach(z => {
+			z.addEventListener('dragover', e => { if (!dragId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; z.classList.add('over'); });
+			z.addEventListener('dragleave', e => { if (!z.contains(e.relatedTarget)) z.classList.remove('over'); });
+			z.addEventListener('drop', e => {
+				e.preventDefault(); z.classList.remove('over');
+				const id = dragId; dragId = 0;
+				document.body.classList.remove('crm-dragging');
+				if (id) doMove(id, z.dataset.stage ? { to: z.dataset.stage } : { st: z.dataset.st });
+			});
+		});
+		/* a tábla szélénél vízszintesen görget húzás közben */
+		bd.addEventListener('dragover', e => { if (!dragId) return; const r = bd.getBoundingClientRect(); if (e.clientX < r.left + 70) bd.scrollLeft -= 20; else if (e.clientX > r.right - 70) bd.scrollLeft += 20; });
+	}
+	function redrawBoard() {
+		const box = S.main && S.main.querySelector('#crm-body');
+		if (!box || S.mode !== 'board' || !S.board) return;
+		const bd = box.querySelector('.crm-board');
+		const keep = { x: bd ? bd.scrollLeft : 0, y: window.scrollY, cols: {} };
+		box.querySelectorAll('.crm-col').forEach(c => { keep.cols[c.dataset.stage] = c.querySelector('.crm-cards').scrollTop; });
+		drawBoard(box);
+		const nb = box.querySelector('.crm-board');
+		if (nb) nb.scrollLeft = keep.x;
+		box.querySelectorAll('.crm-col').forEach(c => { if (keep.cols[c.dataset.stage]) c.querySelector('.crm-cards').scrollTop = keep.cols[c.dataset.stage]; });
+		window.scrollTo(0, keep.y);
+	}
+	function toast(t, bad) {
+		let d = document.getElementById('cpx-toast');
+		if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); }
+		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
+		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3200);
+	}
+	/* áthelyezés: p = { to: szakasz } vagy { st: 'Won' | 'Lost' | 'Open' }; a Salesmate-be is ír */
+	async function doMove(id, p, title) {
+		const rows = S.board ? S.board.rows : [];
+		const r = rows.find(x => x.id === id);
+		const name = title || (r ? shortTitle(r) : 'Deal #' + id);
+		if (p.to && r && r.stage === p.to) return false;
+		const what = p.to ? 'a(z) „' + p.to + '” szakaszba' : (p.st === 'Won' ? 'a megnyertek közé' : p.st === 'Lost' ? 'az elvesztettek közé' : 'újra nyitottnak');
+		if (!window.confirm('Áthelyezed: ' + name + ' → ' + what + '?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai lefutnak (pl. e-mail az ügyfélnek).')) return false;
+		if (p.st === 'Lost') { const w = window.prompt('Az elvesztés oka (nem kötelező):', ''); if (w === null) return false; p.why = w; }
+		const old = r ? Object.assign({}, r) : null;
+		if (r) { if (p.to) r.stage = p.to; if (p.st) r.status = p.st; r._busy = 1; redrawBoard(); }
+		let ok = false;
+		try {
+			const x = await post('cp_crm_move', Object.assign({ id: id }, p));
+			if (x.row && S.board) { const i = S.board.rows.findIndex(y => y.id === id); if (i >= 0) S.board.rows[i] = x.row; }
+			toast(x.changed ? 'Kész – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már ott volt.');
+			ok = true;
+		} catch (e) {
+			if (r && old) Object.assign(r, old);
+			toast('Nem sikerült: ' + e.message, true);
+		}
+		if (S.board) {
+			S.board.rows.forEach(y => { delete y._busy; });
+			S.board.rows = S.board.rows.filter(y => y.status === 'Open' || (S.won && y.status === 'Won'));
+			redrawBoard();
+		}
+		return ok;
 	}
 	/* az oszlopok a képernyő aljáig érjenek (a saját görgetésük így mindig elérhető) */
 	function fitBoard() {
@@ -269,7 +340,8 @@
 		let h = sheetHead(esc(d.title || 'Deal #' + d.id)) +
 			'<div class="crm-top"><span>' + esc(d.stage) + '</span> ' + stBadge(d) + '<b>' + esc(money(d.value, d.currency)) + '</b>' +
 			(smUrl ? '<a class="cpx-btn ghost" href="' + esc(smUrl) + '" target="_blank" rel="noopener">Salesmate ↗</a>' : '') + '</div>' +
-			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '');
+			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
+			(W && !d.deleted_at ? '<div class="crm-act">' + (d.status === 'Open' ? '<select data-mv aria-label="Szakasz">' + opts(STAGES.map(x => [x, x]), d.stage) + '</select><button class="cpx-btn ghost" type="button" data-mvst="Won">Megnyert</button><button class="cpx-btn ghost bad" type="button" data-mvst="Lost">Elvesztett</button>' : '<button class="cpx-btn ghost" type="button" data-mvst="Open">Újranyitás</button>') + '</div>' : '');
 		h += '<h4>Rendezvény</h4>' + (dl(d, ['event_d', 'event_end_d', 'start_at', 'venue', 'guests', 'hours', 'service', 'package', 'services_cp', 'services_ec', 'services_more', 'extras', 'background', 'km_fee', 'extension', 'operator', 'album', 'template_st', 'template_paid', 'template_link', 'portal_link', 'coupon']) || '<p class="cpx-muted">Nincs megadva.</p>');
 		h += '<h4>Kapcsolat</h4>';
 		if (c) {
@@ -298,6 +370,10 @@
 			h += '<ul class="crm-list crm-hist">' + x.hist.map(r => '<li><small class="cpx-muted">' + esc(huDT(r.at)) + (r.by_user ? ' · ' + esc(r.by_user) : '') + '</small><div><b>' + esc(LBL[r.field] || r.field) + ':</b> ' + (r.old_val ? '<s>' + esc(histVal(r.field, r.old_val)) + '</s> → ' : '') + esc(histVal(r.field, r.new_val) || '(üres)') + '</div></li>').join('') + '</ul>';
 		} else h += '<p class="cpx-muted">A panel mostantól rögzít minden változást – ennél a deal-nél eddig nem volt.</p>';
 		sh.innerHTML = h;
+		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id); };
+		const mv = sh.querySelector('[data-mv]');
+		if (mv) mv.addEventListener('change', async () => { const ok = await doMove(id, { to: mv.value }, d.title); if (!ok) mv.value = d.stage; after(ok); });
+		sh.querySelectorAll('[data-mvst]').forEach(b => b.addEventListener('click', async () => after(await doMove(id, { st: b.dataset.mvst }, d.title))));
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open))));
 	}
 	function histVal(k, v) {

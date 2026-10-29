@@ -50,7 +50,22 @@
 .crm-ev{font-size:12.5px;font-weight:600}
 .crm-cf{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;margin-top:3px}
 .crm-none{color:var(--mu);text-align:center;padding:8px;font-size:13px}
+/* húzás */
+.crm-card[draggable]{cursor:grab}
+.crm-card.drag{opacity:.45}
+.crm-card.busy{opacity:.6;pointer-events:none;background:repeating-linear-gradient(135deg,#fff 0 10px,#FAF6F0 10px 20px)}
+.crm-col.over{background:#F7DEC8;box-shadow:inset 0 0 0 2px var(--o)}
+.crm-drop{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:40;gap:12px;width:min(720px,calc(100vw - 40px))}
+.crm-dragging .crm-drop{display:flex}
+.crm-drop div{flex:1;height:64px;display:flex;align-items:center;justify-content:center;border-radius:14px;border:2px dashed var(--ok);background:#F2FBF6;color:var(--ok);font:800 15px "Plus Jakarta Sans",sans-serif;box-shadow:0 14px 30px -14px rgba(20,28,51,.4)}
+.crm-drop div[data-st=Lost]{border-color:var(--full);background:#FFF4F3;color:var(--full)}
+.crm-drop div.over{background:var(--okb);transform:scale(1.03)}
+.crm-drop div[data-st=Lost].over{background:var(--fullb)}
+.cpx-toast.bad{background:var(--full)}
 /* adatlap */
+.crm-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 4px}
+.crm-act select{height:38px;border:1.5px solid var(--li);border-radius:999px;padding:0 14px;background:#fff;flex:1 1 220px;min-width:0}
+.crm-act .bad{color:var(--full);border-color:#F1C3BE}
 .crm-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 4px;font-size:14px}
 .crm-top .crm-st{margin-top:0}
 .crm-top b{font:800 16px "Plus Jakarta Sans",sans-serif;margin-left:auto}

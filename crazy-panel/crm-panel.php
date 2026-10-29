@@ -30,6 +30,7 @@ function cp_crm_panel_cfg() {
 		'stages' => cp_crm_stages(),
 		'users'  => $u,
 		'sync'   => isset($st['last_ok']) ? (int) $st['last_ok'] : 0,
+		'write'  => !empty(cp_panel_opts()['stage_write']),
 	);
 }
 
@@ -202,4 +203,62 @@ function cp_crm_ajax_sync() {
 	$st = cp_crm_state();
 	if (empty($st['last_run']) || time() - (int) $st['last_run'] >= 60) { cp_crm_sync(true); }
 	wp_send_json_success(array('sync' => cp_crm_sync_at()));
+}
+
+/* ------------------------------------------------------------ AJAX: deal áthelyezése (pipeline: húzás, adatlap: szakasz / megnyert / elvesztett)
+ * Ez az első írás: a Salesmate-be ír (a Salesmate automatizációi lefutnak), visszaolvassa, majd a saját táblát is frissíti.
+ * A panel beállításai között a „Szakasz visszaírása” kapcsolja (ugyanaz, mint a Követés fül szerződés-pipájáé). */
+
+add_action('wp_ajax_nopriv_cp_crm_move', 'cp_crm_ajax_move');
+add_action('wp_ajax_cp_crm_move', 'cp_crm_ajax_move');
+function cp_crm_ajax_move() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$o = cp_panel_opts();
+	if (empty($o['stage_write'])) { cp_el_err('A szakaszváltás a panel beállításaiban ki van kapcsolva.'); }
+	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+	$to = isset($_POST['to']) ? trim((string) wp_unslash($_POST['to'])) : '';
+	$st = isset($_POST['st']) ? (string) wp_unslash($_POST['st']) : '';
+	$why = isset($_POST['why']) ? mb_substr(sanitize_text_field(wp_unslash($_POST['why'])), 0, 100) : '';
+	if ($id <= 0 || ($to === '' && !in_array($st, array('Won', 'Lost', 'Open'), true))) { cp_el_err('Hibás kérés.'); }
+	if ($to !== '' && !in_array($to, cp_crm_stages(), true)) { cp_el_err('Ismeretlen szakasz.'); }
+	$d = cp_sm_get_deal($id);
+	if (is_wp_error($d)) { cp_el_err($d->get_error_message(), 502); }
+	$cur = cp_panel_str(cp_panel_get($d, 'stage'));
+	$curSt = cp_panel_str(cp_panel_get($d, 'status'));
+	$body = array();
+	if ($to !== '') {
+		if (cp_panel_lc($curSt) === 'lost') { cp_el_err('Ez a deal a Salesmate-ben elvesztettként van jelölve – előbb nyisd újra.', 409); }
+		if (cp_panel_lc($cur) === cp_panel_lc($to)) { wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => false)); }
+		$body['stage'] = $to;
+		$pl = cp_panel_get($d, 'pipeline');
+		if (is_string($pl) && trim($pl) !== '') { $body['pipeline'] = trim($pl); }
+	} else {
+		if (cp_panel_lc($curSt) === cp_panel_lc($st)) { wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => false)); }
+		$body['status'] = $st;
+		if ($st === 'Lost' && $why !== '') { $body['lostReason'] = $why; }
+	}
+	$put = cp_sm_put_deal($id, $body);
+	if (is_wp_error($put)) { cp_el_err($put->get_error_message(), 502); }
+	$chk = cp_sm_get_deal($id);
+	if (is_wp_error($chk)) { cp_el_err('A Salesmate-be beírtam, de a visszaolvasás nem sikerült – frissíts egy perc múlva.', 502); }
+	$ok = $to !== '' ? cp_panel_lc(cp_panel_str(cp_panel_get($chk, 'stage'))) === cp_panel_lc($to) : cp_panel_lc(cp_panel_str(cp_panel_get($chk, 'status'))) === cp_panel_lc($st);
+	if (!$ok) { cp_el_err('A Salesmate nem fogadta el a változást (jelenleg: „' . cp_panel_str(cp_panel_get($chk, $to !== '' ? 'stage' : 'status')) . '”).', 502); }
+	/* saját tábla + változásnapló (a módosító a panel nevében) */
+	$chk['lastModifiedBy'] = null;
+	cp_crm_store('deal', array($chk), 'get');
+	global $wpdb;
+	$wpdb->query($wpdb->prepare('UPDATE ' . cp_crm_t('history') . " SET by_user = %s, src = 'panel' WHERE deal_id = %d AND src = 'salesmate' AND by_user = '' AND at >= %s", 'Crazy panel', $id, gmdate('Y-m-d H:i:s', time() - 7200)));
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	/* ügyfélportál: a „Szerződés aláírva” szakaszba lépéskor (mint a Követés fülön) */
+	$signed = cp_panel_lines($o['signed_stages']);
+	if ($to !== '' && $signed && cp_panel_lc($to) === cp_panel_lc($signed[0]) && function_exists('cp_portal_defer')) { cp_portal_defer(function () use ($id) { cp_portal_on_stage($id, '', 'panel'); }); }
+	wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => true));
+}
+
+function cp_crm_row_out($id) {
+	global $wpdb;
+	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
+	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
+	return $r ? cp_crm_list_row($r) : null;
 }
