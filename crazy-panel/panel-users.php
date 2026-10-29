@@ -99,7 +99,7 @@ function cp_pu_login($email, $pw) {
  * eltérés állítható (cp_panel_vis: uid => tab => 0/1). A közös jelszavas belépésnél az alapértelmezés érvényes. */
 function cp_pu_tabs() {
 	return array('stat' => 'Statisztikák', 'deals' => 'Deal-ek', 'kapcsolatok' => 'Kapcsolatok', 'mail' => 'Levelezés', 'feladatok' => 'Feladatok', 'naptar' => 'Naptár', 'kovetes' => 'Követés',
-		'hatterek' => 'Hátterek', 'munkalap' => 'Napi munkalap', 'elszamolas' => 'Elszámolás', 'tarca' => 'Tárca', 'ellenorzes' => 'Gyors ellenőrzés', 'sablon' => 'Sablonkészítő', 'flows' => 'Automatizmusok');
+		'hatterek' => 'Hátterek', 'munkalap' => 'Napi munkalap', 'elszamolas' => 'Elszámolás', 'tarca' => 'Tárca', 'ellenorzes' => 'Gyors ellenőrzés', 'sablon' => 'Sablonkészítő', 'hatterkat' => 'Háttérkatalógus', 'flows' => 'Automatizmusok');
 }
 function cp_pu_tab_default($tab, $role) { return in_array($tab, array('stat', 'tarca', 'flows'), true) ? $role === 'admin' : true; }
 function cp_pu_vis() { $v = get_option('cp_panel_vis', array()); return is_array($v) ? $v : array(); }
