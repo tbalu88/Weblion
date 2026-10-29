@@ -69,7 +69,7 @@
 				'<select data-f="ev" aria-label="Rendezvény">' + opts([['', 'Minden rendezvény'], ['up', 'Közelgő rendezvény'], ['past', 'Lezajlott rendezvény'], ['none', 'Nincs dátum']], S.ev) + '</select>' +
 				'<select data-f="sort" class="crm-sortsel" aria-label="Rendezés">' + opts([['mod:desc', 'Legutóbb módosított'], ['cr:desc', 'Legújabb'], ['ev:asc', 'Rendezvény dátuma ▲'], ['ev:desc', 'Rendezvény dátuma ▼'], ['val:desc', 'Legnagyobb érték'], ['title:asc', 'Név (A–Z)']], S.so + ':' + S.dir) + '</select>';
 		} else {
-			f = own + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
+			f = '<input type="search" data-f="q" placeholder="Keresés a táblán: név, e-mail, telefon, helyszín, #szám" value="' + esc(S.q) + '" aria-label="Keresés">' + own + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
 		}
 		return '<div class="crm-head">' + seg + '<div class="crm-filters">' + f + '</div></div>' +
 			'<p class="crm-ro">' + (W ? 'A szakaszt itt is átállíthatod (a pipeline-on húzással, vagy a deal adatlapján) – ez a Salesmate-be is beíródik. A többi adatot egyelőre a Salesmate-ben módosítsd; a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
@@ -86,7 +86,7 @@
 		let tq = null;
 		main.querySelectorAll('[data-f]').forEach(inp => {
 			const k = inp.dataset.f;
-			if (k === 'q') { inp.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { S.q = inp.value.trim(); S.p = 0; load(); }, 300); }); return; }
+			if (k === 'q') { inp.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { S.q = inp.value.trim(); S.p = 0; if (S.mode === 'board' && S.board) redrawBoard(); else load(); }, S.mode === 'board' ? 150 : 300); }); return; }
 			inp.addEventListener('change', () => { if (k === 'sort') { const x = inp.value.split(':'); S.so = x[0]; S.dir = x[1]; } else S[k] = k === 'won' ? inp.checked : inp.value; S.p = 0; save(); load(); });
 		});
 	}
@@ -177,13 +177,14 @@
 
 	/* ------------------------------------------------------------ pipeline-tábla */
 	function drawBoard(box) {
-		const rows = S.board.rows || [];
+		const all = S.board.rows || [];
+		const rows = S.q ? all.filter(r => hit(r, S.q)) : all;
 		const col = {};
 		STAGES.forEach(s => { col[s] = []; });
 		rows.forEach(r => { (col[r.stage] = col[r.stage] || []).push(r); });
 		const names = STAGES.concat(Object.keys(col).filter(s => STAGES.indexOf(s) < 0));
 		const t = today();
-		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b><span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
+		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q ? '<span class="cpx-muted"> (keresés: „' + esc(S.q) + '”, összesen ' + num(all.length) + ')</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
 			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board">';
 		names.forEach(s => {
 			const l = col[s] || [];
@@ -289,6 +290,17 @@
 		bd.style.setProperty('--crm-h', Math.max(360, window.innerHeight - Math.max(0, top - window.scrollY) - 26) + 'px');
 	}
 	window.addEventListener('resize', () => { if (live() && S.mode === 'board') fitBoard(); });
+	/* keresés a táblán (ékezet- és kisbetű-független; telefonszámnál csak a számjegyek) */
+	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+	function hit(r, q) {
+		const t = fold(q).trim();
+		if (!t) return true;
+		if (/^#?\d{3,7}$/.test(t)) return String(r.id) === t.replace('#', '') || String(r.cp || '').replace(/\D/g, '').includes(t.replace('#', ''));
+		const dq = t.replace(/[^\d]/g, '');
+		if (dq.length >= 6 && String(r.cp || '').replace(/\D/g, '').includes(dq.slice(-8))) return true;
+		const hay = fold([r.title, r.cn, r.ce, r.co, r.venue, r.pkg, r.svc, uname(r.own)].join(' '));
+		return t.split(/\s+/).every(w => hay.includes(w));
+	}
 	function addDays(s, n) { const p = s.split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2] + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
 	/* ------------------------------------------------------------ deal-adatlap */
