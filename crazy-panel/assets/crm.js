@@ -73,7 +73,7 @@
 			f = '<input type="search" data-f="q" placeholder="Keresés a táblán: név, e-mail, telefon, helyszín, #szám" value="' + esc(S.q) + '" aria-label="Keresés">' + own + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
 		}
 		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div><div class="crm-filters">' + f + '</div></div>' +
-			'<p class="crm-ro">' + (W ? 'A szakaszt itt is átállíthatod (a pipeline-on húzással, vagy a deal adatlapján) – ez a Salesmate-be is beíródik. A többi adatot egyelőre a Salesmate-ben módosítsd; a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
+			'<p class="crm-ro">' + (W ? 'Minden módosítás a Salesmate-be is beíródik; a Salesmate-ben végzett változás 10 percen belül (vagy a Frissítés gombbal) itt is megjelenik.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
 	}
 
 	function view(main) {
@@ -312,18 +312,19 @@
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
-			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><b>' + esc(s) + '</b><small>' + l.length + ' deal' + (v ? ' · ' + esc(money(v)) : '') + '</small></header><div class="crm-cards">';
+			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span>' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '</div>' +
+				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small></header><div class="crm-cards">';
 			l.forEach(r => {
-				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14);
-				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (soon ? ' soon' : '') + (r.ev && r.ev < t ? ' past' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '>' +
-					'<b>' + esc(shortTitle(r)) + '</b>' +
-					(r.ev ? '<span class="crm-ev">' + esc(huD(r.ev)) + '</span>' : '<span class="crm-ev cpx-muted">nincs dátum</span>') +
-					(r.cn ? '<small>' + esc(r.cn) + (r.co ? ' · ' + esc(r.co) : '') + '</small>' : '') +
-					(r.pkg ? '<small class="cpx-muted">' + esc(r.pkg) + '</small>' : '') +
-					'<span class="crm-cf"><span>' + esc(money(r.value, r.cur)) + '</span><span class="cpx-muted">' + esc(uname(r.own)) + '</span></span>' +
-					(r.status === 'Won' ? stBadge(r) : '') + '</article>';
+				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
+				const rot = r.rot && r.rot <= t ? dayDiff(r.rot, t) : 0;
+				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '>' +
+					'<div class="crm-ct" title="' + esc(r.title) + '">' + esc(shortTitle(r)) + '</div>' +
+					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
+					'<div class="crm-cl"><span>' + esc(money(r.value, r.cur)) + '</span><i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
+					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') +
+					(rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '') + '</div></article>';
 			});
-			if (!l.length) h += '<div class="crm-none">–</div>';
+			if (!l.length) h += '<div class="crm-none">Nincs deal</div>';
 			h += '</div></section>';
 		});
 		h += '</div>';
@@ -331,6 +332,7 @@
 		box.innerHTML = h;
 		bindOpen(box);
 		bindDrag(box);
+		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
 		const bd = box.querySelector('.crm-board');
 		const arr = () => { const a = box.querySelectorAll('[data-arr]'); a[0].disabled = bd.scrollLeft <= 2; a[1].disabled = bd.scrollLeft + bd.clientWidth >= bd.scrollWidth - 2; };
 		box.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => bd.scrollBy({ left: Number(b.dataset.arr) * 250, behavior: 'smooth' })));
@@ -424,6 +426,11 @@
 		const hay = fold([r.title, r.cn, r.ce, r.co, r.venue, r.pkg, r.svc, uname(r.own)].join(' '));
 		return t.split(/\s+/).every(w => hay.includes(w));
 	}
+	const shortD = s => { const p = s.split('-').map(Number); return p[0] + '. ' + HU_MS[p[1] - 1] + ' ' + p[2] + '.'; };
+	const dayDiff = (a, b) => { const x = a.split('-').map(Number), y = b.split('-').map(Number); return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 864e5); };
+	const initials = n => String(n || '').replace(/^#.*/, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+	const AVC = ['#F6B48F', '#93D5B4', '#A9C1F6', '#E3B5E6', '#F3D27F', '#9FD8E5', '#F2A5A5'];
+	const avColor = id => AVC[Math.abs(Number(id) || 0) % AVC.length];
 	function addDays(s, n) { const p = s.split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2] + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
 	/* ------------------------------------------------------------ deal-adatlap */
@@ -575,7 +582,8 @@
 	}
 
 	/* ------------------------------------------------------------ új deal */
-	async function newDeal() {
+	async function newDeal(pre) {
+		pre = typeof pre === 'string' && STAGES.includes(pre) ? pre : STAGES[0];
 		let vals = {};
 		const sh0 = sheet(sheetHead('Új deal') + '<div class="cpx-empty">Betöltés…</div>');
 		if (!sh0) return;
@@ -591,7 +599,7 @@
 			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
 			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>' +
 			'<h4>Deal</h4><div class="crm-eg">' + inp('title', 'Deal neve *', 'text', ' required') +
-			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), STAGES[0]) + '</select></label>' +
+			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), pre) + '</select></label>' +
 			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +
 			inp('value', 'Érték (Ft)', 'number') + inp('note', 'Megjegyzés', 'area') + '</div>' +
 			'<p class="crm-ro">A deal a Salesmate-ben is létrejön, és a Salesmate automatizmusai lefutnak (pl. Pumble-értesítés, átnevezés).</p>' +

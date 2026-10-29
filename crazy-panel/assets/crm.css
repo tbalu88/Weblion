@@ -27,29 +27,38 @@
 /* pipeline-tábla */
 /* a tábla a teljes szélességet használja; az oszlopok a képernyő aljáig érnek, és külön görgetnek (vékony sávval) */
 .cpx-main:has(.crm-board){max-width:none}
-.crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;scroll-snap-type:x proximity}
-.crm-col{flex:1 0 240px;max-width:300px;background:#EFEBE4;border-radius:16px;padding:8px 4px 8px 8px;display:flex;flex-direction:column;scroll-snap-align:start;max-height:var(--crm-h,calc(100vh - 220px))}
-.crm-col header{padding:4px 6px 8px}
-.crm-col header b{display:block;font:800 14px "Plus Jakarta Sans",sans-serif}
-.crm-col header small{color:var(--mu);font-size:12.5px}
-.crm-cards{display:flex;flex-direction:column;gap:8px;min-height:30px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:#CFC7BB transparent}
+.crm-board{display:flex;gap:18px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;scroll-snap-type:x proximity}
+.crm-col{flex:1 0 290px;max-width:330px;display:flex;flex-direction:column;scroll-snap-align:start;max-height:var(--crm-h,calc(100vh - 220px));border-radius:16px;padding:4px 2px 4px 4px;transition:background .15s}
+.crm-col header{padding:2px 6px 12px 2px}
+.crm-chh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.crm-chip{display:inline-block;background:#ECE9E4;color:var(--ink);border-radius:8px;padding:5px 10px;font:600 14px Inter,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.crm-add{border:0;background:transparent;color:var(--mu);font-size:22px;line-height:1;width:30px;height:30px;border-radius:8px;cursor:pointer}
+.crm-add:hover{background:#ECE9E4;color:var(--ink)}
+.crm-col header small{display:flex;gap:14px;color:var(--mu);font-size:13px;margin-top:8px;padding-left:2px}
+.crm-cards{display:flex;flex-direction:column;gap:12px;min-height:40px;overflow-y:auto;padding:2px 6px 8px 2px;scrollbar-width:thin;scrollbar-color:#D8D2C8 transparent}
 .crm-cards::-webkit-scrollbar{width:6px}
-.crm-cards::-webkit-scrollbar-thumb{background:#CFC7BB;border-radius:6px}
-.crm-sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.crm-cards::-webkit-scrollbar-thumb{background:#D8D2C8;border-radius:6px}
+.crm-card{background:#fff;border:1px solid #EAE6E0;border-radius:14px;padding:14px 16px 12px;cursor:pointer;display:flex;flex-direction:column;gap:7px;font-size:14px;box-shadow:0 1px 2px rgba(20,28,51,.04);transition:box-shadow .15s,border-color .15s}
+.crm-card:hover,.crm-card:focus{border-color:#E2CBB6;box-shadow:0 6px 18px -10px rgba(20,28,51,.25);outline:none}
+.crm-ct{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crm-cl{display:flex;gap:6px;color:#4A5163;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px}
+.crm-cl i{font-style:normal;color:#C3BDB3}
+.crm-cl span{overflow:hidden;text-overflow:ellipsis}
+.crm-past{color:var(--full)}
+.crm-soon{color:#C4692D;font-weight:600}
+.crm-cfoot{display:flex;align-items:center;gap:8px;margin-top:3px}
+.crm-av{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 10.5px Inter,sans-serif;color:#1A1F2B;flex:none}
+.crm-cfoot .crm-st{margin-top:0}
+.crm-rot{margin-left:auto;display:inline-flex;align-items:center;gap:4px;color:var(--mu);font-size:12.5px}
+.crm-rot svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.crm-rot.hot{color:var(--full)}
+.crm-card.won{background:#FAFDFB}
+.crm-sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.crm-sumrow .crm-sum{margin:0}
 .crm-arr{display:flex;gap:6px}
 .crm-arr button{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--li);background:#fff;font-size:18px;line-height:1;cursor:pointer;color:var(--ink)}
 .crm-arr button[disabled]{opacity:.35;cursor:default}
-.crm-card{background:#fff;border:1px solid var(--li);border-radius:12px;padding:9px 11px;cursor:pointer;display:flex;flex-direction:column;gap:2px;font-size:13.5px;box-shadow:inset 3px 0 0 transparent}
-.crm-card:hover,.crm-card:focus{border-color:var(--o);outline:none}
-.crm-card b{font-weight:700;line-height:1.3}
-.crm-card small{font-size:12.5px;line-height:1.35}
-.crm-card.soon{border-left:3px solid var(--o)}
-.crm-card.past{border-left:3px solid var(--full)}
-.crm-card.won{background:#F7FCF9}
-.crm-card .crm-st{align-self:flex-start}
-.crm-ev{font-size:12.5px;font-weight:600}
-.crm-cf{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;margin-top:3px}
-.crm-none{color:var(--mu);text-align:center;padding:8px;font-size:13px}
+.crm-none{color:var(--mu);text-align:center;padding:18px 8px;font-size:13px;border:1.5px dashed #E4DFD8;border-radius:14px}
 /* szerkesztés */
 .crm-hl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .crm-hl .cpx-btn{height:36px}

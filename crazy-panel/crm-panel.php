@@ -113,7 +113,7 @@ function cp_crm_list_data($a) {
 	$from = "FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE " . implode(' AND ', $w);
 	$total = (int) $wpdb->get_var("SELECT COUNT(*) $from");
 	$sum = $wpdb->get_results("SELECT d.status s, COUNT(*) n, SUM(d.value) v $from GROUP BY d.status", ARRAY_A);
-	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con $from ORDER BY $order LIMIT " . ($p * $n) . ", $n", ARRAY_A);
+	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con $from ORDER BY $order LIMIT " . ($p * $n) . ", $n", ARRAY_A);
 	$out = array();
 	foreach ((array) $rows as $r) { $out[] = cp_crm_list_row($r); }
 	$by = array();
@@ -126,7 +126,7 @@ function cp_crm_list_row($r) {
 		'id' => (int) $r['id'], 'title' => (string) $r['title'], 'stage' => (string) $r['stage'], 'status' => (string) $r['status'],
 		'value' => $r['value'] === null ? null : (float) $r['value'], 'cur' => (string) $r['currency'],
 		'ev' => (string) $r['event_d'], 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
-		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'],
+		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'], 'rot' => isset($r['rotten_d']) ? (string) $r['rotten_d'] : '',
 		'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'cp' => (string) ($r['cm'] !== null && $r['cm'] !== '' ? $r['cm'] : $r['cp']), 'co' => (string) $r['con'],
 	);
 }
@@ -153,7 +153,7 @@ function cp_crm_board_data($a) {
 	if (!empty($a['won'])) { $w = $wpdb->prepare("(d.status = 'Open' OR (d.status = 'Won' AND d.event_d >= %s))", wp_date('Y-m-d', time() - 30 * DAY_IN_SECONDS)); }
 	$own = isset($a['own']) && is_scalar($a['own']) ? (string) $a['own'] : '';
 	if ($own !== '' && ctype_digit($own)) { $w .= $wpdb->prepare(' AND d.owner_id = %d', (int) $own); }
-	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND $w ORDER BY d.event_d IS NULL, d.event_d ASC, d.id DESC LIMIT 2000", ARRAY_A);
+	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND $w ORDER BY d.event_d IS NULL, d.event_d ASC, d.id DESC LIMIT 2000", ARRAY_A);
 	$out = array();
 	foreach ((array) $rows as $r) { $out[] = cp_crm_list_row($r); }
 	return array('rows' => $out, 'sync' => cp_crm_sync_at());
@@ -261,7 +261,7 @@ function cp_crm_ajax_move() {
 function cp_crm_row_out($id) {
 	global $wpdb;
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
-	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
+	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
 	return $r ? cp_crm_list_row($r) : null;
 }
 
