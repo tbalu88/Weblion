@@ -281,11 +281,11 @@
 		const me = M.me || (PEOPLE[0] || {}).id || 0;
 		const following = (t.fol || []).includes(me);
 		const money = v => (v == null ? '–' : Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft');
-		rd.innerHTML = '<div class="ml-rtool"><button type="button" data-st>' + (t.st === 'closed' ? '↺ Újranyitás' : '✓ Lezárás') + '</button><button type="button" data-tag>🏷 ' + (t.tags ? esc(t.tags) : 'Címke') + '</button>' + (window.CPKanban && t.id > 0 ? '<button type="button" data-todo title="Teendő felvétele a Feladatokba">☑ Teendő</button>' : '') +
+		rd.innerHTML = '<div class="ml-rtool"><button type="button" data-st>' + (t.st === 'closed' ? '↺ Újranyitás' : '✓ Lezárás') + '</button><button type="button" data-tag>🏷 ' + (t.tags ? esc(t.tags) : 'Címke') + '</button>' + (M.ai && t.id > 0 ? '<button type="button" class="ml-aibtn" data-ai title="Válaszpiszkozat az AI-val (átnézed, mielőtt elküldöd)">✨ AI válasz</button>' : '') + (window.CPKanban && t.id > 0 ? '<button type="button" data-todo title="Teendő felvétele a Feladatokba">☑ Teendő</button>' : '') +
 			'<span class="crm-bgap"></span><span class="ml-fols">' + (t.fol || []).slice(0, 3).map(f => '<i style="background:' + avc(pname(f)) + '" title="' + esc(pname(f)) + '">' + esc(ini(pname(f))) + '</i>').join('') + ((t.fol || []).length ? '' : '<small>Nincs követő</small>') + '</span>' +
 			'<select data-as aria-label="Felelős"><option value="">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (t.as === p.id ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' +
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
-			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-kbl class="ml-kbl"></div>' +
+			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small></div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
@@ -306,6 +306,9 @@
 			const h = rd.querySelector('[data-dpat]'); h.hidden = !h.hidden;
 			if (!h.hidden) dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }));
 		});
+		/* v1.38: AI válaszvarázsló – piszkozat, amit a levélíróban nézel át */
+		const aib = rd.querySelector('[data-ai]');
+		if (aib) aib.addEventListener('click', () => aiPanel(rd.querySelector('[data-aip]'), t));
 		/* v1.35: teendő a Feladatokba (kanban), és a levélszálhoz kapcsolt kártyák */
 		const kbl = rd.querySelector('[data-kbl]');
 		if (window.CPKanban && t.id > 0) window.CPKanban.linked(kbl, { th: t.id });
@@ -493,6 +496,35 @@
 		else if (S.cur && S.cur.id) S.cur = tpls.find(t => t.id === S.cur.id) || null;
 		drawList();
 		edit(S.cur);
+	}
+
+	function aiPanel(host, t) {
+		if (!host.hidden && host.dataset.open) { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; return; }
+		host.hidden = false; host.dataset.open = '1';
+		host.innerHTML = '<div class="ml-ai"><div class="ml-aih"><b>✨ AI válaszpiszkozat</b><button type="button" class="ml-dx" data-aix title="Bezárás">' + X_I + '</button></div>' +
+			'<div class="ml-aiw"><input type="text" data-wish maxlength="500" placeholder="Mit írjon? (nem kötelező – pl. küldj árat a 360 spinnerre, kérdezd meg a létszámot)"><button type="button" class="cpx-btn" data-gen>Piszkozat írása</button></div><div data-aio></div>' +
+			'<p class="ml-aif">A nevek, e-mail-címek és telefonszámok álnevesítve mennek az AI-hoz. A piszkozatot mindig nézd át, mielőtt elküldöd.</p></div>';
+		const out = host.querySelector('[data-aio]'), wish = host.querySelector('[data-wish]'), gen = host.querySelector('[data-gen]');
+		host.querySelector('[data-aix]').addEventListener('click', () => { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; });
+		const run = async () => {
+			gen.disabled = true; wish.disabled = true;
+			out.innerHTML = '<div class="ml-aild"><span class="ml-spin"></span>Az AI írja a választ… (általában 10–40 másodperc)</div>';
+			try {
+				const r = await post('cp_ai_draft', { thread: t.id, wish: wish.value.trim() });
+				out.innerHTML = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '') +
+					'<div class="ml-aisub"><small>Tárgy:</small> ' + esc(r.subject) + '</div><div class="ml-aibody ml-mb">' + r.html.replace(/\[KITÖLTENDŐ:([^\]]*)\]/g, '<mark>[KITÖLTENDŐ:$1]</mark>') + '</div>' +
+					'<div class="ml-aia"><button type="button" class="cpx-btn" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
+				out.querySelector('[data-take]').addEventListener('click', () => {
+					try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: r.to ? [r.to] : [], subject: r.subject, body: r.html })); localStorage.setItem('cpmail_view', 'compose'); } catch (e) { toast('A piszkozatot nem sikerült átvinni.', true); return; }
+					S.view = 'compose'; view(S.main); toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
+				});
+				out.querySelector('[data-again]').addEventListener('click', run);
+			} catch (e) { out.innerHTML = '<div class="ml-aierr">' + esc(e.message) + '</div>'; }
+			gen.disabled = false; wish.disabled = false;
+		};
+		gen.addEventListener('click', run);
+		wish.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+		wish.focus();
 	}
 
 	/* v1.35: egy levélszál megnyitása más fülről (pl. a Feladatok kártyájáról) */

@@ -208,3 +208,23 @@
 .ml-ev small{color:#8A8E96;font-size:12px;white-space:nowrap}
 .ml-av1.ev{width:26px;height:26px;font-size:13px!important}
 .ml-kbl:empty{display:none}.ml-kbl{padding:0 12px 6px}
+/* v1.38: AI válaszvarázsló */
+.ml-rtool .ml-aibtn{background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83}
+.ml-aip{padding:0 12px 8px}
+.ml-ai{background:#fff;border:1.5px solid #B9A7EE;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 24px -16px rgba(75,46,131,.5)}
+.ml-aih{display:flex;align-items:center;justify-content:space-between;font-size:13.5px}
+.ml-aiw{display:flex;gap:8px}
+.ml-aiw input{flex:1;height:34px;border:1.5px solid var(--li);border-radius:8px;padding:0 10px;font-size:13px}
+.ml-aiw .cpx-btn{height:34px;font-size:13px;white-space:nowrap}
+.ml-aild{display:flex;align-items:center;gap:8px;color:var(--mu);font-size:13px;padding:6px 0}
+.ml-spin{width:14px;height:14px;border-radius:50%;border:2px solid #D6CCFA;border-top-color:#6B4FD0;animation:mlspin .8s linear infinite}
+@keyframes mlspin{to{transform:rotate(360deg)}}
+.ml-ain{background:#FFF7E0;border:1px solid #F3E1B0;border-radius:8px;padding:6px 10px;font-size:12.5px}
+.ml-ain ul{margin:2px 0 4px;padding-left:18px}
+.ml-aisub{font-size:13px}.ml-aisub small{color:var(--mu)}
+.ml-aibody{border:1px solid var(--li);border-radius:8px;padding:8px 12px;max-height:340px;overflow:auto;background:#FCFBFA}
+.ml-aibody mark{background:#FCE6B0;border-radius:3px;padding:0 2px}
+.ml-aia{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ml-aia .cpx-btn{height:32px;font-size:13px}
+.ml-aierr{color:#AE2E24;font-size:13px;background:#FDECEA;border-radius:8px;padding:6px 10px}
+.ml-aif{margin:0;color:var(--mu);font-size:11.5px}
