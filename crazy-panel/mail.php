@@ -367,7 +367,8 @@ function cp_mail_ajax_threads() {
 	if ($box !== '') { $w[] = $wpdb->prepare('mailbox = %s', $box); }
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));
 	if ($q !== '') { $like = '%' . $wpdb->esc_like($q) . '%'; $w[] = $wpdb->prepare('(subject LIKE %s OR contact_name LIKE %s OR contact_email LIKE %s OR snippet LIKE %s)', $like, $like, $like, $like); }
-	$rows = $wpdb->get_results('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE ' . implode(' AND ', $w) . ' ORDER BY last_at DESC LIMIT 100', ARRAY_A);
+	$ord = sanitize_key(wp_unslash($_POST['so'] ?? '')) === 'old' ? 'ASC' : 'DESC';
+	$rows = $wpdb->get_results('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE ' . implode(' AND ', $w) . ' ORDER BY last_at ' . $ord . ' LIMIT 100', ARRAY_A);
 	$counts = array();
 	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' GROUP BY folder", ARRAY_A) as $c) { $counts[$c['folder']] = (int) $c['n']; }
 	$un = array();

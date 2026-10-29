@@ -283,3 +283,49 @@
 /* v1.59: ügyfélportál-állapot a deal-kártyán */
 .ml-pchip{display:inline-block;margin-top:3px;border-radius:999px;padding:1px 8px;font:600 11px Inter,sans-serif;background:#FDECEA;color:#AE2E24}
 .ml-pchip.kesz{background:#DFF3E8;color:#216E4E}.ml-pchip.modositva{background:#FFF0B8;color:#7F5F01}
+/* v1.60: levelezés mobilon – a Salesmate Team Inbox mintájára */
+.ml-mbar{display:flex;justify-content:flex-end;gap:6px;margin:6px 0 2px}
+.ml-mbar select{border:1px solid var(--li);border-radius:999px;padding:3px 10px;font:500 12px Inter,sans-serif;background:#fff;color:var(--ink)}
+.ml-fsel,.ml-fab,.ml-backbar{display:none}
+@media (max-width:760px){
+  .ml.v-inbox .ml-head{display:none}
+  .ml-note{font-size:11.5px;padding:4px 10px;margin:0 0 6px}
+  .ml-inbox{display:block!important;height:auto!important;border:0;background:transparent}
+  .ml-inbox .ml-side{display:none!important}
+  .ml-list{background:#fff;border:1px solid var(--li);border-radius:14px;padding:0 0 4px;overflow:hidden}
+  .ml-list .ml-tabs{order:-2;display:flex;gap:22px;margin:0;padding:0 16px;border-bottom:1px solid var(--li)}
+  .ml-list .ml-tabs button{font:600 16px Inter,sans-serif;padding:12px 0 10px;border-bottom-width:3px;cursor:pointer}
+  .ml-list .ml-tabs button.on{color:#2F6FDB;border-bottom-color:#2F6FDB}
+  .ml-list .ml-q{order:-1;margin:12px 12px 0;width:auto;height:42px;font-size:15px;border-radius:999px;padding:0 16px}
+  .ml-mbar{justify-content:space-between;margin:10px 12px 4px}
+  .ml-mbar select{font-size:14px;padding:8px 14px;border-radius:999px;background:#F6F4F0;border-color:transparent}
+  .ml-fsel{display:block;max-width:62%}
+  .ml-items{max-height:none!important;margin:0!important;overflow:visible}
+  .ml-item{padding:14px 16px;gap:0;border-bottom:1px solid #EEEAE4}
+  .ml-item .ml-ckw{display:none}
+  .ml-item .ml-ib{width:100%}
+  .ml-i1{font-size:15.5px}
+  .ml-i1 b{font-weight:600}
+  .ml-as{color:#2F6FDB;font-size:15px}
+  .ml-i1 small{font-size:12.5px}
+  .ml-i2{font-size:15px;margin-top:3px}
+  .ml-i3{font-size:14px;margin-top:3px}
+  .ml-i3 i{background:#1F3F99;color:#fff;border:0;border-radius:4px;padding:1px 8px;font-size:13px;font-weight:700}
+  .ml-inote{color:var(--mu)}
+  .ml-read{display:none;border:0;padding:0;background:transparent}
+  .ml-inbox.reading .ml-list{display:none}
+  .ml-inbox.reading .ml-read{display:block}
+  .ml-inbox.reading .ml-fab{display:none}
+  .ml-backbar{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--li);border-radius:12px;padding:6px 8px;margin-bottom:8px}
+  .ml-backbar button{border:0;background:#F6F4F0;border-radius:999px;padding:7px 14px;font:700 14px Inter,sans-serif;color:#2F6FDB;cursor:pointer;flex:none}
+  .ml-backbar span{font:600 14px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ml-read .ml-thread{max-height:none}
+  .ml-rtool{flex-wrap:wrap}
+  .ml-fab{display:flex;align-items:center;justify-content:center;position:fixed;right:18px;bottom:22px;width:58px;height:58px;border-radius:50%;border:0;background:#2F6FDB;color:#fff;box-shadow:0 10px 24px -8px rgba(47,111,219,.7);z-index:40;cursor:pointer}
+  .ml-fab svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ml-selbar{margin:0 12px}
+  .ml-mh{flex-wrap:wrap}
+  .ml-mh>div{min-width:0;flex:1}
+  .ml-from .ml-fe{display:block;font-size:12px;overflow-wrap:anywhere}
+  .ml-mt{flex-basis:100%;display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+}
