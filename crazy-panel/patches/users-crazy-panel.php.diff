@@ -1,0 +1,100 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.28.0');
++define('CP_PANEL_VER', '1.29.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -101,9 +101,12 @@
+ 	// kezelői adatlap (Elszámolás): jelszó nélkül, aláírt linkkel
+ 	if (isset($_GET['k'])) { cp_el_render_form((string) wp_unslash($_GET['k'])); exit; }
+ 
++	/* v1.29: személyes fiókok – jelszó beállítása (meghívó / visszaállító link) és elfelejtett jelszó */
++	if (isset($_GET['jelszo']) && function_exists('cp_pu_render_setpw')) { cp_pu_render_setpw(); exit; }
++	if (isset($_GET['elfelejtett']) && function_exists('cp_pu_render_forgot')) { cp_pu_render_forgot(); exit; }
+ 	$err = '';
+ 	if (isset($_POST['cp_pw'])) {
+-		$err = cp_panel_try_login(wp_unslash($_POST['cp_pw']));
++		$err = cp_panel_try_login(wp_unslash($_POST['cp_pw']), isset($_POST['cp_email']) ? sanitize_email(wp_unslash($_POST['cp_email'])) : '');
+ 		if ($err === '') {
+ 			wp_safe_redirect(home_url('/' . $slug . '/'));
+ 			exit;
+@@ -143,6 +146,9 @@
+ 	if ($r !== null) { return $r; }
+ 	$r = '';
+ 	if (empty($_COOKIE[CP_PANEL_COOKIE])) { return $r; }
++	/* v1.29: személyes fiók */
++	if (function_exists('cp_pu_current')) { $u = cp_pu_current(); if ($u) { $r = $u['r'] === 'admin' ? 'admin' : 'iroda'; return $r; } }
++	if (function_exists('cp_pu_shared_on') && !cp_pu_shared_on()) { return $r; }
+ 	$o = cp_panel_opts();
+ 	$parts = explode('|', (string) wp_unslash($_COOKIE[CP_PANEL_COOKIE]));
+ 	$exp = (int) $parts[0];
+@@ -162,16 +168,27 @@
+ 
+ /* a változásnaplóba: ki módosított a panelből */
+ function cp_panel_who() {
++	$u = function_exists('cp_pu_current') ? cp_pu_current() : null;
++	if ($u) { return $u['n']; }
+ 	$r = cp_panel_role();
+ 	return $r === 'iroda' ? 'Iroda (panel)' : ($r === 'admin' ? 'Admin (panel)' : 'Crazy panel');
+ }
+ 
+-function cp_panel_try_login($pw) {
++function cp_panel_try_login($pw, $email = '') {
+ 	$o = cp_panel_opts();
+-	if ($o['pw_hash'] === '') { return 'A panel jelszava még nincs beállítva (WordPress admin → Beállítások → Foglaltsági panel).'; }
+ 	$key = 'cp_panel_fail_' . md5(cp_panel_client_ip());
+ 	$fails = (int) get_transient($key);
+ 	if ($fails >= 6) { return 'Túl sok sikertelen próbálkozás. Próbáld újra 15 perc múlva.'; }
++	/* v1.29: személyes fiók (e-mail + jelszó) */
++	if ($email !== '' && function_exists('cp_pu_login')) {
++		$uid = cp_pu_login($email, $pw);
++		if (is_wp_error($uid)) { set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS); return $uid->get_error_message(); }
++		delete_transient($key);
++		cp_pu_set_cookie($uid);
++		return '';
++	}
++	if (function_exists('cp_pu_shared_on') && !cp_pu_shared_on()) { return 'Add meg az e-mail-címedet és a saját jelszavadat.'; }
++	if ($o['pw_hash'] === '') { return 'A panel jelszava még nincs beállítva (WordPress admin → Beállítások → Foglaltsági panel).'; }
+ 	require_once ABSPATH . WPINC . '/class-phpass.php';
+ 	$role = '';
+ 	if (wp_check_password($pw, $o['pw_hash'])) { $role = 'admin'; }
+@@ -670,12 +687,15 @@
+ 
+ function cp_panel_render_login($err) {
+ 	cp_panel_head('Crazy panel – belépés');
+-	echo '<body class="cpx-login"><form method="post" class="cpx-login-box" autocomplete="off">';
++	echo '<body class="cpx-login"><form method="post" class="cpx-login-box" autocomplete="on">';
+ 	echo '<div class="cpx-logo">Crazy<span>panel</span></div>';
+-	echo '<p class="cpx-muted">Belső foglaltsági panel. Add meg a közös jelszót.</p>';
++	$shared = !function_exists('cp_pu_shared_on') || cp_pu_shared_on();
++	echo '<p class="cpx-muted">Lépj be a saját e-mail-címeddel és jelszavaddal.' . ($shared ? ' (Közös jelszóval: hagyd üresen az e-mail-címet.)' : '') . '</p>';
+ 	if ($err !== '') { echo '<div class="cpx-err">' . esc_html($err) . '</div>'; }
+-	echo '<input type="password" name="cp_pw" placeholder="Jelszó" required autofocus>';
++	echo '<input type="email" name="cp_email" placeholder="E-mail-cím" autocomplete="username"' . ($shared ? '' : ' required') . ' autofocus value="' . esc_attr(isset($_POST['cp_email']) ? sanitize_email(wp_unslash($_POST['cp_email'])) : '') . '">';
++	echo '<input type="password" name="cp_pw" placeholder="Jelszó" required autocomplete="current-password">';
+ 	echo '<button type="submit">Belépés</button>';
++	if (function_exists('cp_pu_panel_url')) { echo '<p class="cpx-muted" style="margin:4px 0 0;text-align:center"><a href="' . esc_url(cp_pu_panel_url('elfelejtett=1')) . '" style="color:#F2B35B">Elfelejtett jelszó</a></p>'; }
+ 	echo '</form></body></html>';
+ }
+ 
+@@ -706,6 +726,7 @@
+ 		'sb'         => function_exists('cp_sb_cfg') ? cp_sb_cfg() : array(),
+ 		'st'         => function_exists('cp_st_cfg') && cp_panel_is_admin() ? cp_st_cfg() : array('on' => false),
+ 		'role'       => cp_panel_role(),
++		'user'       => function_exists('cp_pu_current') && cp_pu_current() ? cp_pu_current()['n'] : '',
+ 		'crm'        => function_exists('cp_crm_panel_cfg') ? cp_crm_panel_cfg() : array('on' => false),
+ 	);
+ 	cp_panel_head('Crazy panel');
+@@ -3590,6 +3611,7 @@
+ require_once __DIR__ . '/crm.php';
+ require_once __DIR__ . '/crm-panel.php';
+ require_once __DIR__ . '/crm-source.php';
++require_once __DIR__ . '/panel-users.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

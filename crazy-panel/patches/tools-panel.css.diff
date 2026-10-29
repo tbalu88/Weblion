@@ -1,0 +1,26 @@
+--- a/assets/panel.css
++++ b/assets/panel.css
+@@ -665,6 +665,13 @@
+ .cpx-tabs button,.cpx-top-r .cpx-btn{display:inline-flex;align-items:center;gap:10px}
+ .cpx-top-r .cpx-btn .cpx-ico{width:17px;height:17px}
+ .cpx-fold{display:none}
++.cpx-grp{display:flex;flex-direction:column}
++.cpx-grp-b{display:none;flex-direction:column;gap:2px}
++.cpx-grp.open .cpx-grp-b{display:flex}
++.cpx-tabs .cpx-grp-h{width:100%;text-align:left}
++.cpx-chev{margin-left:auto;width:16px!important;height:16px!important;transition:transform .15s;opacity:.7}
++.cpx-grp.open .cpx-chev{transform:rotate(90deg)}
++.cpx-menu .cpx-grp-b button,.cpx-shell .cpx-grp-b button{padding-left:28px!important}
+ @media (min-width:1025px){
+   .cpx-shell{display:flex;align-items:flex-start;min-height:100vh}
+   .cpx-shell>.cpx-main{flex:1;min-width:0}
+@@ -691,6 +698,9 @@
+   .cpx-mini .cpx-fold .cpx-ico{transform:scaleX(-1)}
+   .cpx-mini .cpx-tabs button,.cpx-mini .cpx-top-r .cpx-btn{justify-content:center;padding:10px 0}
+   .cpx-mini .cpx-tabs button span,.cpx-mini .cpx-top-r .cpx-btn span,.cpx-mini .cpx-status{display:none}
++  .cpx-mini .cpx-chev{display:none}
++  .cpx-mini .cpx-grp-b button{padding-left:0!important}
++  .cpx-mini .cpx-grp.open{background:rgba(255,255,255,.05);border-radius:12px}
+ }
+ .cpx-matrix th.sticky small.pair{display:block;font-weight:500;font-size:11px;color:var(--mu);white-space:nowrap}
+ .cpx-matrix td.full.via{opacity:.75}
