@@ -31,6 +31,7 @@ function cp_crm_panel_cfg() {
 		'users'  => $u,
 		'sync'   => isset($st['last_ok']) ? (int) $st['last_ok'] : 0,
 		'write'  => !empty(cp_panel_opts()['stage_write']),
+		'bulk'   => cp_crm_bulk_fields(),
 	);
 }
 
@@ -257,4 +258,84 @@ function cp_crm_row_out($id) {
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
 	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
 	return $r ? cp_crm_list_row($r) : null;
+}
+
+/* ------------------------------------------------------------ tömeges műveletek a listában (kijelölés): mezőírás, törlés
+ * Deal-enként egy kérés (a panel jelzi a haladást); a Salesmate-be ír, visszaolvas, a saját táblát a cp_sm_request() kampója frissíti. */
+
+/* a tömegesen írható mezők: oszlop => array(címke, típus) – a típus: user | text */
+function cp_crm_bulk_fields() {
+	return array(
+		'owner_id'    => array('Felelős', 'user'),
+		'paid'        => array('Bejött az utalás?', 'text'),
+		'pay_method'  => array('Választott fizetési mód', 'text'),
+		'reminder'    => array('Menjen-e emlékeztető', 'text'),
+		'operator'    => array('Gépkezelő asszisztens', 'text'),
+		'album'       => array('Fotóalbum', 'text'),
+		'ctype'       => array('Szerződés EV/KFT', 'text'),
+		'cal_check'   => array('Naptár', 'text'),
+		'template_st' => array('Template', 'text'),
+	);
+}
+
+/* egy mező eddig használt értékei (a választólistához) */
+add_action('wp_ajax_nopriv_cp_crm_values', 'cp_crm_ajax_values');
+add_action('wp_ajax_cp_crm_values', 'cp_crm_ajax_values');
+function cp_crm_ajax_values() {
+	cp_crm_ajax_guard();
+	global $wpdb;
+	$f = isset($_REQUEST['f']) ? sanitize_key(wp_unslash($_REQUEST['f'])) : '';
+	$all = cp_crm_bulk_fields();
+	if (!isset($all[$f]) || $all[$f][1] !== 'text') { wp_send_json_success(array('vals' => array())); }
+	$vals = $wpdb->get_col('SELECT ' . $f . ' v FROM ' . cp_crm_t('deals') . " WHERE deleted_at IS NULL AND $f <> '' GROUP BY $f ORDER BY COUNT(*) DESC LIMIT 25");
+	wp_send_json_success(array('vals' => array_values(array_map('strval', (array) $vals))));
+}
+
+add_action('wp_ajax_nopriv_cp_crm_set', 'cp_crm_ajax_set');
+add_action('wp_ajax_cp_crm_set', 'cp_crm_ajax_set');
+function cp_crm_ajax_set() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+	$f = isset($_POST['f']) ? sanitize_key(wp_unslash($_POST['f'])) : '';
+	$v = isset($_POST['v']) ? trim(sanitize_text_field(wp_unslash($_POST['v']))) : '';
+	$all = cp_crm_bulk_fields();
+	if ($id <= 0 || !isset($all[$f])) { cp_el_err('Hibás kérés.'); }
+	$sm = cp_crm_spec('deal')[$f][0];
+	if ($all[$f][1] === 'user') {
+		if (!ctype_digit($v) || !isset(cp_crm_users()[(int) $v])) { cp_el_err('Ismeretlen felhasználó.'); }
+		$val = (int) $v;
+	} else {
+		$val = mb_substr($v, 0, 190);
+	}
+	$put = cp_sm_put_deal($id, array($sm => $val));
+	if (is_wp_error($put)) { cp_el_err($put->get_error_message(), 502); }
+	$chk = cp_sm_get_deal($id);
+	if (is_wp_error($chk)) { cp_el_err('Beírtam, de a visszaolvasás nem sikerült.', 502); }
+	$now = cp_panel_get($chk, $sm);
+	$nowS = is_array($now) ? (isset($now['id']) ? (string) $now['id'] : cp_panel_str($now)) : cp_panel_str($now);
+	if ($nowS !== (string) $val) { cp_el_err('A Salesmate nem fogadta el az értéket (jelenleg: „' . $nowS . '”).', 502); }
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success(array('row' => cp_crm_row_out($id)));
+}
+
+add_action('wp_ajax_nopriv_cp_crm_delete', 'cp_crm_ajax_delete');
+add_action('wp_ajax_cp_crm_delete', 'cp_crm_ajax_delete');
+function cp_crm_ajax_delete() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+	if ($id <= 0 || (isset($_POST['ok']) ? (string) wp_unslash($_POST['ok']) : '') !== 'TÖRLÉS') { cp_el_err('Hibás kérés.'); }
+	$res = cp_sm_request('DELETE', '/apis/deal/v4/' . $id);
+	if (is_wp_error($res)) { cp_el_err($res->get_error_message(), 502); }
+	$chk = cp_sm_get_deal($id);
+	$gone = is_wp_error($chk) || empty($chk) || !cp_panel_get($chk, 'id');
+	if (!$gone) { cp_el_err('A Salesmate nem törölte a dealt.', 502); }
+	global $wpdb;
+	$wpdb->update(cp_crm_t('deals'), array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
+	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve', 'by_user' => 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success(array('id' => $id));
 }

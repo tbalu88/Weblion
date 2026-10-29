@@ -22,6 +22,7 @@
 	const shortTitle = r => { const t = r.title || 'Deal #' + r.id; if (!r.ev) return t; const m = t.match(/\s*\|\s*(\d{4}-\d{2}-\d{2})\.?$/); return m && m[1] === r.ev && m.index > 0 ? t.slice(0, m.index) : t; };
 	const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
+	const SEL = new Map(); /* kijelölt deal-ek a listában: id → sor (lapozáskor megmarad, szűréskor törlődik) */
 	const S = { mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
 	try {
 		const k = JSON.parse(localStorage.getItem('cpcrm') || '{}');
@@ -86,8 +87,8 @@
 		let tq = null;
 		main.querySelectorAll('[data-f]').forEach(inp => {
 			const k = inp.dataset.f;
-			if (k === 'q') { inp.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { S.q = inp.value.trim(); S.p = 0; if (S.mode === 'board' && S.board) redrawBoard(); else load(); }, S.mode === 'board' ? 150 : 300); }); return; }
-			inp.addEventListener('change', () => { if (k === 'sort') { const x = inp.value.split(':'); S.so = x[0]; S.dir = x[1]; } else S[k] = k === 'won' ? inp.checked : inp.value; S.p = 0; save(); load(); });
+			if (k === 'q') { inp.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { S.q = inp.value.trim(); S.p = 0; SEL.clear(); if (S.mode === 'board' && S.board) redrawBoard(); else load(); }, S.mode === 'board' ? 150 : 300); }); return; }
+			inp.addEventListener('change', () => { if (k === 'sort') { const x = inp.value.split(':'); S.so = x[0]; S.dir = x[1]; } else { S[k] = k === 'won' ? inp.checked : inp.value; SEL.clear(); } S.p = 0; save(); load(); });
 		});
 	}
 
@@ -142,9 +143,11 @@
 		const sum = Object.keys(by).map(k => (ST_HU[k] || k) + ': ' + num(by[k].n) + (by[k].v ? ' · ' + money(by[k].v) : '')).join(' · ');
 		let h = '<div class="crm-sum"><b>' + num(d.total) + ' deal</b>' + (sum ? '<span class="cpx-muted"> – ' + esc(sum) + '</span>' : '') + '</div>';
 		if (!d.rows.length) { box.innerHTML = h + '<div class="cpx-empty">Nincs a szűrésnek megfelelő deal.</div>'; return; }
-		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl"><thead><tr>' + sortTh('title', 'Deal') + '<th>Kapcsolat</th>' + sortTh('ev', 'Rendezvény') + '<th>Csomag</th><th>Szakasz</th>' + sortTh('val', 'Érték') + '<th>Felelős</th>' + sortTh('mod', 'Módosítva') + '</tr></thead><tbody>';
+		h += '<div class="crm-bulk" id="crm-bulk" hidden></div>';
+		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl"><thead><tr><th class="crm-cbh"><input type="checkbox" class="crm-cb" data-all aria-label="Az oldal összes deal-jének kijelölése"></th>' + sortTh('title', 'Deal') + '<th>Kapcsolat</th>' + sortTh('ev', 'Rendezvény') + '<th>Csomag</th><th>Szakasz</th>' + sortTh('val', 'Érték') + '<th>Felelős</th>' + sortTh('mod', 'Módosítva') + '</tr></thead><tbody>';
 		d.rows.forEach((r, i) => {
-			h += '<tr class="crm-row' + (i % 2 ? ' g1' : '') + '" data-id="' + r.id + '" tabindex="0">' +
+			h += '<tr class="crm-row' + (i % 2 ? ' g1' : '') + (SEL.has(r.id) ? ' sel' : '') + '" data-id="' + r.id + '" tabindex="0">' +
+				'<td class="crm-cbc"><input type="checkbox" class="crm-cb" data-cb="' + r.id + '"' + (SEL.has(r.id) ? ' checked' : '') + ' aria-label="Kijelölés"></td>' +
 				'<td data-l="Deal"><b>' + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
 				'<td data-l="Kapcsolat">' + contactCell(r) + '</td>' +
 				'<td data-l="Rendezvény">' + evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') + '</td>' +
@@ -167,12 +170,130 @@
 		}));
 		box.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); box.scrollIntoView({ block: 'start' }); }));
 		bindOpen(box);
+		bindSel(box);
 	}
 	function bindOpen(box) {
 		box.querySelectorAll('[data-id]').forEach(r => {
-			r.addEventListener('click', e => { if (e.target.closest('a')) return; openDeal(Number(r.dataset.id)); });
+			r.addEventListener('click', e => { if (e.target.closest('a, .crm-cbc, .crm-cb')) return; openDeal(Number(r.dataset.id)); });
 			r.addEventListener('keydown', e => { if (e.key === 'Enter') openDeal(Number(r.dataset.id)); });
 		});
+	}
+
+	/* ------------------------------------------------------------ kijelölés és tömeges műveletek (lista) */
+	function bindSel(box) {
+		const rows = (S.list && S.list.rows) || [];
+		const all = box.querySelector('[data-all]');
+		const sync = () => {
+			const on = rows.filter(r => SEL.has(r.id)).length;
+			if (all) { all.checked = on > 0 && on === rows.length; all.indeterminate = on > 0 && on < rows.length; }
+			box.querySelectorAll('[data-cb]').forEach(c => { const id = Number(c.dataset.cb); c.checked = SEL.has(id); c.closest('tr').classList.toggle('sel', SEL.has(id)); });
+			drawBulk(box);
+		};
+		box.querySelectorAll('.crm-cbc').forEach(td => td.addEventListener('click', e => { if (e.target === td) { const c = td.querySelector('.crm-cb'); c.click(); } }));
+		box.querySelectorAll('[data-cb]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.cb); const r = rows.find(x => x.id === id); if (c.checked && r) SEL.set(id, r); else SEL.delete(id); sync(); }));
+		if (all) all.addEventListener('change', () => { rows.forEach(r => { if (all.checked) SEL.set(r.id, r); else SEL.delete(r.id); }); sync(); });
+		sync();
+	}
+	function drawBulk(box) {
+		const bar = box.querySelector('#crm-bulk');
+		if (!bar) return;
+		const n = SEL.size;
+		bar.hidden = !n;
+		if (!n) { bar.innerHTML = ''; return; }
+		const onPage = ((S.list && S.list.rows) || []).filter(r => SEL.has(r.id)).length;
+		bar.innerHTML = '<button type="button" class="crm-bx" data-b="clear" aria-label="Kijelölés törlése">×</button><b>' + n + ' kijelölve</b>' + (onPage < n ? '<small class="cpx-muted">(' + (n - onPage) + ' másik oldalon)</small>' : '') +
+			'<span class="crm-bgap"></span>' +
+			'<button type="button" class="cpx-btn ghost" data-b="mail">E-mail</button>' +
+			(W ? '<button type="button" class="cpx-btn ghost" data-b="stage">Szakasz</button><button type="button" class="cpx-btn ghost" data-b="set">Módosítás</button><button type="button" class="cpx-btn ghost" data-b="won">Megnyert</button><button type="button" class="cpx-btn ghost bad" data-b="lost">Elvesztett</button>' : '') +
+			'<button type="button" class="cpx-btn ghost" data-b="csv">Export</button>' +
+			(W ? '<button type="button" class="cpx-btn crm-del" data-b="del">Törlés</button>' : '');
+		bar.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => bulk(b.dataset.b)));
+	}
+	const selRows = () => Array.from(SEL.values());
+	async function bulk(act) {
+		const rows = selRows();
+		if (act === 'clear') { SEL.clear(); if (S.list) drawList(S.main.querySelector('#crm-body')); return; }
+		if (act === 'csv') return exportCsv(rows);
+		if (act === 'mail') {
+			const em = Array.from(new Set(rows.map(r => r.ce).filter(Boolean)));
+			if (!em.length) { toast('A kijelölt deal-ek kontaktjainak nincs e-mail-címe.', true); return; }
+			if (em.length < rows.length) toast((rows.length - em.length) + ' kijelölt deal-nél nincs e-mail-cím – kimaradnak.');
+			location.href = 'mailto:?bcc=' + em.map(encodeURIComponent).join(',');
+			return;
+		}
+		if (act === 'stage') return dialog('Szakasz – ' + rows.length + ' deal', '<select data-v>' + opts(STAGES.map(x => [x, x]), '') + '</select>', v => runBulk(rows, 'a(z) „' + v + '” szakaszba helyezés', r => post('cp_crm_move', { id: r.id, to: v })));
+		if (act === 'won') return confirmRun(rows, 'megnyertnek jelölés', r => post('cp_crm_move', { id: r.id, st: 'Won' }));
+		if (act === 'lost') {
+			const w = window.prompt('Az elvesztés oka (nem kötelező) – mind a ' + rows.length + ' deal-hez:', '');
+			if (w === null) return;
+			return confirmRun(rows, 'elvesztettnek jelölés', r => post('cp_crm_move', { id: r.id, st: 'Lost', why: w }));
+		}
+		if (act === 'set') {
+			const F = R.bulk || {};
+			const keys = Object.keys(F);
+			if (!keys.length) { toast('Nincs tömegesen írható mező.', true); return; }
+			return dialog('Módosítás – ' + rows.length + ' deal', '<label>Mező<select data-f>' + opts(keys.map(k => [k, F[k][0]]), keys[0]) + '</select></label><label>Új érték<span data-vbox></span></label>', (v, f) => runBulk(rows, '„' + F[f][0] + '” → „' + (F[f][1] === 'user' ? uname(v) : v) + '”', r => post('cp_crm_set', { id: r.id, f: f, v: v })), async (sh) => {
+				const fs = sh.querySelector('[data-f]'), vb = sh.querySelector('[data-vbox]');
+				const fill = async () => {
+					const f = fs.value;
+					if (F[f][1] === 'user') { vb.innerHTML = '<select data-v>' + opts(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n]), '') + '</select>'; return; }
+					vb.innerHTML = '<input data-v list="crm-vals" placeholder="írd be, vagy válassz"><datalist id="crm-vals"></datalist>';
+					try { const x = await post('cp_crm_values', { f: f }); vb.querySelector('datalist').innerHTML = (x.vals || []).map(v => '<option value="' + esc(v) + '">').join(''); } catch (e) { /* nem kötelező */ }
+				};
+				fs.addEventListener('change', fill); await fill();
+			});
+		}
+		if (act === 'del') {
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: ' + rows.length + ' deal.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			if (w === null) return;
+			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
+			return runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' }));
+		}
+	}
+	function confirmRun(rows, what, fn) {
+		if (!window.confirm(rows.length + ' deal: ' + what + '?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).')) return;
+		return runBulk(rows, what, fn);
+	}
+	/* kis párbeszédablak a műveletsáv alatt; ok(v, f) a kiválasztott értékkel */
+	function dialog(title, body, ok, init) {
+		const box = S.main.querySelector('#crm-bulk');
+		let dl = S.main.querySelector('.crm-dlg');
+		if (dl) dl.remove();
+		dl = document.createElement('div'); dl.className = 'crm-dlg';
+		dl.innerHTML = '<b>' + esc(title) + '</b>' + body + '<span class="crm-dlg-b"><button type="button" class="cpx-btn" data-ok>Alkalmaz</button><button type="button" class="cpx-btn ghost" data-no>Mégse</button></span>';
+		box.after(dl);
+		if (init) init(dl);
+		dl.querySelector('[data-no]').onclick = () => dl.remove();
+		dl.querySelector('[data-ok]').onclick = () => {
+			const v = (dl.querySelector('[data-v]') || {}).value, f = (dl.querySelector('[data-f]') || {}).value;
+			if (v == null || String(v).trim() === '') { toast('Adj meg egy értéket.', true); return; }
+			const fa = (R.bulk || {})[f];
+			if (f && !window.confirm(SEL.size + ' deal: ' + (fa ? '„' + fa[0] + '” mező' : 'módosítás') + ' → „' + (fa && fa[1] === 'user' ? uname(v) : v) + '”?\n\nA Salesmate-be is beírom (a Salesmate automatizmusai lefuthatnak).')) return;
+			if (!f && !window.confirm(SEL.size + ' deal áthelyezése: „' + v + '”?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).')) return;
+			dl.remove(); ok(String(v).trim(), f);
+		};
+	}
+	/* deal-enként egymás után; haladás a műveletsávban, a végén összegzés */
+	async function runBulk(rows, what, fn) {
+		const bar = S.main.querySelector('#crm-bulk');
+		let ok = 0; const bad = [];
+		for (let i = 0; i < rows.length; i++) {
+			if (bar) bar.innerHTML = '<b>' + esc(what) + ': ' + (i + 1) + ' / ' + rows.length + '…</b><span class="crm-prog"><i style="width:' + Math.round(i / rows.length * 100) + '%"></i></span>';
+			try { await fn(rows[i]); ok++; SEL.delete(rows[i].id); }
+			catch (e) { bad.push(shortTitle(rows[i]) + ': ' + e.message); }
+		}
+		toast(bad.length ? ok + ' sikerült, ' + bad.length + ' nem – az utóbbiak kijelölve maradtak. ' + bad[0] : 'Kész: ' + ok + ' deal (' + what + ').', !!bad.length);
+		load();
+	}
+	function exportCsv(rows) {
+		const H = ['Azonosító', 'Deal', 'Kapcsolat', 'E-mail', 'Telefon', 'Cég', 'Rendezvény dátuma', 'Helyszín', 'Csomag', 'Szolgáltatás', 'Szakasz', 'Állapot', 'Érték', 'Pénznem', 'Felelős', 'Létrehozva', 'Módosítva'];
+		const q = v => { const t = v == null ? '' : String(v); return /[";\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+		const L = rows.map(r => [r.id, r.title, r.cn, r.ce, r.cp, r.co, r.ev, r.venue, r.pkg, r.svc, r.stage, ST_HU[r.status] || r.status, r.value == null ? '' : String(r.value).replace('.', ','), r.cur, uname(r.own), r.cr, r.mod].map(q).join(';'));
+		const blob = new Blob(['\ufeff' + [H.join(';')].concat(L).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob); a.download = 'dealek-' + today() + '.csv';
+		document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+		toast(rows.length + ' deal exportálva.');
 	}
 
 	/* ------------------------------------------------------------ pipeline-tábla */

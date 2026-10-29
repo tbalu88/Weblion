@@ -50,6 +50,25 @@
 .crm-ev{font-size:12.5px;font-weight:600}
 .crm-cf{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;margin-top:3px}
 .crm-none{color:var(--mu);text-align:center;padding:8px;font-size:13px}
+/* kijelölés, tömeges műveletek */
+.crm-cbh,.crm-cbc{width:36px;padding-right:0!important;cursor:pointer}
+.crm-cb{width:17px;height:17px;accent-color:var(--o);cursor:pointer;margin:2px 0 0}
+.crm-tbl tr.sel td{background:#FFF4EA!important}
+.crm-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1.5px solid var(--o);border-radius:14px;padding:8px 10px;margin:0 0 10px;position:sticky;top:0;z-index:5;box-shadow:0 10px 24px -18px rgba(20,28,51,.5)}
+.crm-bulk b{font-size:14px}
+.crm-bulk .cpx-btn{height:34px;padding:0 13px;font-size:13px}
+.crm-bulk .bad{color:var(--full);border-color:#F1C3BE}
+.crm-bgap{flex:1}
+.crm-bx{border:0;background:#F1EDE7;width:30px;height:30px;border-radius:50%;font-size:18px;cursor:pointer;line-height:1}
+.crm-del{background:var(--full);color:#fff}
+.crm-prog{flex:1;min-width:120px;height:8px;background:#F1EDE7;border-radius:8px;overflow:hidden}
+.crm-prog i{display:block;height:100%;background:var(--g)}
+.crm-dlg{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;background:#FFF9F3;border:1px solid var(--li);border-radius:14px;padding:12px;margin:-4px 0 12px;font-size:14px}
+.crm-dlg b{width:100%}
+.crm-dlg label{display:flex;flex-direction:column;gap:4px;color:var(--mu);font-size:12.5px;font-weight:600;flex:1 1 200px}
+.crm-dlg select,.crm-dlg input{height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;background:#fff;color:var(--ink);font-size:14px;width:100%}
+.crm-dlg>select{flex:1 1 220px}
+.crm-dlg-b{display:flex;gap:8px}
 /* húzás */
 .crm-card[draggable]{cursor:grab}
 .crm-card.drag{opacity:.45}
@@ -89,9 +108,12 @@
 	.crm-wrap{max-height:none;overflow:visible;background:transparent;border:0}
 	.crm-tbl thead{display:none}
 	.crm-tbl,.crm-tbl tbody,.crm-tbl tr,.crm-tbl td{display:block;width:100%}
-	.crm-tbl tr{background:#fff;border:1px solid var(--li);border-radius:14px;margin-bottom:10px;padding:8px 4px;overflow:hidden}
+	.crm-tbl tr{background:#fff;border:1px solid var(--li);border-radius:14px;margin-bottom:10px;padding:8px 4px;overflow:hidden;position:relative}
+	.crm-tbl td.crm-cbc{position:absolute;right:6px;top:8px;width:auto;padding:4px 6px!important}
+	.crm-tbl td.crm-cbc .crm-cb{width:22px;height:22px}
+	.crm-bulk{top:58px}
 	.crm-tbl tr.g1 td,.crm-tbl td{background:transparent;border:0;padding:3px 10px}
-	.crm-tbl td[data-l]:not(:first-child)::before{content:attr(data-l);display:block;font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.03em}
+	.crm-tbl td[data-l]:not([data-l="Deal"])::before{content:attr(data-l);display:block;font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.03em}
 	.crm-num{text-align:left}
 	.crm-col{flex-basis:82vw;max-width:none}
 	.crm-arr{display:none}
