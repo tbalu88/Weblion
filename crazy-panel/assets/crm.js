@@ -621,8 +621,9 @@
 	function timeline(x) {
 		const d = x.deal, m = x.mail || { msgs: [], notes: [] }, it = [];
 		(m.msgs || []).forEach(g => it.push({ k: 'mail', at: g.at, h: '<div class="d3-ti ' + (g.dir === 'out' ? 'out' : 'in') + '" data-th="' + g.th + '" role="button" tabindex="0"><i>' + (g.dir === 'out' ? I.mail_out : I.mail_in) + '</i><div><div class="d3-tt"><b>' + (g.dir === 'out' ? 'Levél tőlünk' : 'Levél érkezett') + '</b> – ' + esc(g.from) + (g.q ? ' <span class="d3-q" title="Az ügyfél válaszában idézett részből">idézetből</span>' : '') + (g.att ? ' <span class="d3-q">📎 ' + g.att + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div><div class="d3-ts">' + esc(g.subj) + '</div><div class="d3-tx">' + esc(g.snip) + '</div></div></div>' }));
+		(x.dnotes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note dnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a dealen</b> – ' + esc(n.author || '') + (n.src === 'sm' ? ' <span class="d3-q" title="A Salesmate-ben írták">Salesmate</span>' : '') + '<small>' + esc(huDT(n.at)) + '</small>' + (W && (n.mine || (C.au && C.au.on)) ? '<button type="button" class="d3-x" data-ndel="' + n.id + '" title="Jegyzet törlése (a Salesmate-ből is)">×</button>' : '') + '</div><div class="d3-tx">' + nl(n.body) + '</div></div></div>' }));
 		(m.notes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note" data-th="' + n.th + '" role="button" tabindex="0"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div></div></div>' }));
-		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small></div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));
+		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small>' + (W && Number(a.related_id) === d.id ? '<button type="button" class="d3-ab" data-aundo="' + a.id + '" title="Visszanyitás">↺</button>' : '') + '</div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));
 		(x.cards || []).forEach(c => it.push({ k: 'card', at: c.at, h: '<div class="d3-ti card" data-card="' + c.id + '" role="button" tabindex="0"><i>' + I.card + '</i><div><div class="d3-tt"><b>Feladat</b> – ' + esc(c.by) + '<small>' + esc(huDT(c.at)) + '</small></div><div class="d3-ts">' + (c.done ? '✓ ' : '') + esc(c.title) + '</div><div class="d3-tx">' + esc([c.list, c.as.join(', '), c.due ? 'határidő: ' + huD(c.due) : ''].filter(Boolean).join(' · ')) + '</div></div></div>' }));
 		(x.leads || []).forEach(l => it.push({ k: 'lead', at: l.at, h: '<div class="d3-ti lead"><i>' + I.lead + '</i><div><div class="d3-tt"><b>Webes megkeresés</b> – ' + esc(l.form) + '<small>' + esc(huDT(l.at)) + '</small></div><dl class="d3-kv">' + l.kv.map(p => '<dt>' + esc(p[0]) + '</dt><dd>' + nl(p[1]) + '</dd>').join('') + '</dl></div></div>' }));
 		(x.flows || []).forEach(f => it.push({ k: 'hist', at: f.at, h: '<div class="d3-ti flow"><i>' + I.flow + '</i><div><div class="d3-tt"><b>Automatizmus</b> – ' + esc(f.n) + (f.mode === 'shadow' ? ' <span class="d3-q">árnyék</span>' : '') + '<small>' + esc(huDT(f.at)) + '</small></div><div class="d3-tx">' + nl(f.detail) + '</div></div></div>' }));
@@ -643,15 +644,62 @@
 		const list = all.filter(i => D3.tab === 'all' || i.k === D3.tab);
 		let h = '<div class="d3-tabs">' + TABS.filter(t => t[0] === 'all' || cnt(t[0])).map(t => '<button type="button" data-t3="' + t[0] + '" class="' + (D3.tab === t[0] ? 'on' : '') + '">' + t[1] + ' <small>' + cnt(t[0]) + '</small></button>').join('') + '</div>';
 		if ((up.length || cardsOpen.length) && (D3.tab === 'all' || D3.tab === 'act' || D3.tab === 'card')) {
-			h += '<h5 class="d3-mh">Közelgő (' + (up.length + cardsOpen.length) + ')</h5>' + up.map(a => { const late = a.due_at && a.due_at < today(); return '<div class="d3-ti act up' + (late ? ' late' : '') + '"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b>' + (a.owner ? ' – ' + esc(a.owner) : '') + '<small>' + esc(huDT(a.due_at)) + (late ? ' · lejárt' : '') + '</small></div><div class="d3-ts">' + esc(a.type || '') + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>'; }).join('') +
+			h += '<h5 class="d3-mh">Közelgő (' + (up.length + cardsOpen.length) + ')</h5>' + up.map(a => { const late = a.due_at && a.due_at < today(); const mine = W && Number(a.related_id) === x.deal.id; return '<div class="d3-ti act up' + (late ? ' late' : '') + '"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b>' + (a.owner ? ' – ' + esc(a.owner) : '') + '<small>' + esc(huDT(a.due_at)) + (late ? ' · lejárt' : '') + '</small>' + (mine ? '<button type="button" class="d3-ab ok" data-adone="' + a.id + '" title="Késznek jelölés (a Salesmate-ben is)">✓ Kész</button><button type="button" class="d3-ab" data-aedit="' + a.id + '" title="Szerkesztés">✎</button>' : '') + '</div><div class="d3-ts">' + esc(a.type || '') + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>'; }).join('') +
 				cardsOpen.map(c => '<div class="d3-ti card up" data-card="' + c.id + '" role="button" tabindex="0"><i>' + I.card + '</i><div><div class="d3-tt"><b>' + esc(c.title) + '</b>' + (c.as.length ? ' – ' + esc(c.as.join(', ')) : '') + '<small>határidő: ' + esc(huD(c.due)) + '</small></div><div class="d3-ts">' + esc(c.list) + '</div></div></div>').join('');
 		}
 		let mon = '';
 		h += list.map(i => { const k = i.at.slice(0, 7); const mh = k !== mon ? '<h5 class="d3-mh">' + k.slice(0, 4) + '. ' + HU_MF[Number(k.slice(5, 7)) - 1] + '</h5>' : ''; mon = k; return mh + i.h; }).join('') || '<p class="cpx-muted">Ebben a nézetben nincs bejegyzés.</p>';
 		box.innerHTML = h;
 		box.querySelectorAll('[data-t3]').forEach(b => b.addEventListener('click', () => { D3.tab = b.dataset.t3; drawTimeline(box, x); }));
+		const re = () => D3.ctx && openDeal(D3.ctx.id, D3.ctx.back);
+		const run = async (btn, action, p, msg) => { btn.disabled = true; try { await post(action, p); toast(msg); re(); } catch (e) { btn.disabled = false; toast(e.message, true); } };
+		box.querySelectorAll('[data-adone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.adone, done: 1 }, 'Kész – a Salesmate-ben is.'); }));
+		box.querySelectorAll('[data-aundo]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.aundo, done: '' }, 'Visszanyitva – a Salesmate-ben is.'); }));
+		box.querySelectorAll('[data-aedit]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const a = (x.acts || []).find(z => String(z.id) === b.dataset.aedit); const c = document.querySelector('.crm-360 [data-comp]'); if (a && c) compose(c, x, 'act', a); }));
+		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
 		box.querySelectorAll('.d3-ti[data-th]').forEach(b => { const go = () => goMail(Number(b.dataset.th)); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+	}
+	/* jegyzet vagy tevékenység felvétele a dealre (a Salesmate-be is) */
+	function compose(box, x, mode, a) {
+		const d = x.deal, types = x.act_types || ['Task', 'Call'];
+		const me = R.me_sm && USERS[String(R.me_sm)] ? String(R.me_sm) : String(d.owner_id || '');
+		const due = a && a.due_at ? a.due_at.slice(0, 10) : '', tm = a && a.due_at && a.due_at.slice(11, 16) !== '01:00' && a.due_at.slice(11, 16) !== '00:00' ? a.due_at.slice(11, 16) : '';
+		const owners = Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(a ? a.owner_id : me)).map(i => [i, USERS[i].n]);
+		box.innerHTML = '<div class="d3-ctabs"><button type="button" data-cm="note" class="' + (mode === 'note' ? 'on' : '') + '">📝 Jegyzet</button><button type="button" data-cm="act" class="' + (mode === 'act' ? 'on' : '') + '">📅 ' + (a ? 'Tevékenység szerkesztése' : 'Tevékenység') + '</button></div>' +
+			(mode === 'note' ? '<textarea data-nb rows="2" placeholder="Jegyzet a dealhez – @Név: megemlítés. (Ctrl+Enter: mentés)"></textarea><div class="d3-cbar"><small>A Salesmate-be is beíródik.</small><button type="button" class="cpx-btn" data-save>Jegyzet mentése</button></div>' :
+			'<div class="d3-af"><input data-at type="text" placeholder="Mi a teendő? (pl. Visszahívni az árajánlat miatt)" value="' + esc(a ? a.title : '') + '">' +
+				'<label>Típus <select data-ty>' + types.concat(a && a.type && !types.includes(a.type) ? [a.type] : []).map(t => '<option' + ((a ? a.type : types[0]) === t ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></label>' +
+				'<label>Határidő <input data-ad type="date" value="' + esc(due || today()) + '"></label><label>Időpont <input data-am type="time" value="' + esc(tm) + '"></label>' +
+				'<label>Hossz <select data-du>' + [[15, '15 perc'], [30, '30 perc'], [60, '1 óra'], [120, '2 óra'], [240, '4 óra'], [480, 'egész nap']].map(o => '<option value="' + o[0] + '"' + (Number(a ? a.duration || 30 : 30) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+				'<label>Felelős <select data-ow>' + opts(owners, String(a ? a.owner_id : me)) + '</select></label>' +
+				'<textarea data-ds rows="2" placeholder="Leírás (nem kötelező)">' + esc(a ? a.description || '' : '') + '</textarea></div>' +
+				'<div class="d3-cbar"><small>A Salesmate-be is beíródik' + (a ? '' : ', a naptárszinkron ugyanúgy látja') + '. Időpont nélkül egész napos.</small>' + (a ? '<button type="button" class="cpx-btn ghost" data-cancel>Mégse</button>' : '') + '<button type="button" class="cpx-btn" data-save>' + (a ? 'Mentés' : 'Tevékenység felvétele') + '</button></div>');
+		box.querySelectorAll('[data-cm]').forEach(b => b.addEventListener('click', () => compose(box, x, b.dataset.cm)));
+		const cancel = box.querySelector('[data-cancel]');
+		if (cancel) cancel.addEventListener('click', () => compose(box, x, 'act'));
+		const btn = box.querySelector('[data-save]');
+		const done = msg => { toast(msg); if (D3.ctx) openDeal(D3.ctx.id, D3.ctx.back); };
+		const save = async () => {
+			let p, action;
+			if (mode === 'note') {
+				const v = box.querySelector('[data-nb]').value.trim();
+				if (!v) { box.querySelector('[data-nb]').focus(); return; }
+				action = 'cp_crm_note_add'; p = { deal: d.id, body: v };
+			} else {
+				const t = box.querySelector('[data-at]').value.trim();
+				if (!t) { box.querySelector('[data-at]').focus(); return; }
+				action = 'cp_crm_act_save';
+				p = { deal: d.id, id: a ? a.id : '', title: t, type: box.querySelector('[data-ty]').value, due: box.querySelector('[data-ad]').value, time: box.querySelector('[data-am]').value, dur: box.querySelector('[data-du]').value, owner: box.querySelector('[data-ow]').value, descr: box.querySelector('[data-ds]').value };
+			}
+			btn.disabled = true; btn.textContent = 'Mentés…';
+			try { await post(action, p); done(mode === 'note' ? 'Jegyzet mentve – a Salesmate-ben is.' : (a ? 'Tevékenység módosítva – a Salesmate-ben is.' : 'Tevékenység felvéve – a Salesmate-ben is.')); }
+			catch (e) { btn.disabled = false; btn.textContent = mode === 'note' ? 'Jegyzet mentése' : (a ? 'Mentés' : 'Tevékenység felvétele'); toast(e.message, true); }
+		};
+		btn.addEventListener('click', save);
+		const nb = box.querySelector('[data-nb]');
+		if (nb) nb.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } });
+		if (a) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 	}
 	/* a deal mezői csoportosítva; ami egyik csoportba sem került és van értéke, az „Egyéb” alá */
 	const GROUPS = [
@@ -716,7 +764,7 @@
 			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Adatok</h4>' + fieldGroups(d) + '<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section></aside>' +
 			/* közép: teendők és idővonal */
-			'<main class="d3-m"><div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
+			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok, levélszálak */
 			'<aside class="d3-r"><section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
 				(toEv != null ? '<dt>Rendezvényig</dt><dd>' + (toEv > 0 ? '<b>' + toEv + ' nap</b>' : toEv === 0 ? '<b>ma</b>' : 'lezajlott (' + (-toEv) + ' napja)') + '</dd>' : '') +
@@ -731,6 +779,9 @@
 			'<section class="d3-c"><h4>Fájlok <small>' + (m.files || []).length + '</small></h4>' + ((m.files || []).length ? '<ul class="d3-files">' + m.files.map(f => '<li><button type="button" data-th="' + f.th + '">' + I.file + '<span><b>' + esc(f.n) + '</b><small>' + esc([f.from, huDT(f.at)].filter(Boolean).join(' · ')) + '</small></span></button></li>').join('') + '</ul><p class="d3-sub">A mellékletek a levélben, a postafiókban érhetők el.</p>' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>') + '</section>' +
 			'</aside></div>';
 		sh.innerHTML = h;
+		D3.ctx = { id: id, back: back };
+		const cmp = sh.querySelector('[data-comp]');
+		if (cmp) compose(cmp, x, 'note');
 		drawTimeline(sh.querySelector('[data-tl]'), x);
 		bindCommon(sh, self);
 		bindBack(sh, back);

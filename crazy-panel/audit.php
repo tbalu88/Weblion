@@ -63,7 +63,7 @@ add_action('cp_audit_logout', function () { cp_audit_add('rendszer', 'logout', '
 function cp_audit_actions() {
 	return array(
 		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'),
-		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
+		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_note_add' => array('deal', 'Jegyzet a dealen'), 'cp_crm_note_del' => array('deal', 'Deal-jegyzet törlése'), 'cp_crm_act_save' => array('deal', 'Tevékenység mentése'), 'cp_crm_act_done' => array('deal', 'Tevékenység kész / visszanyitva'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
 		'cp_mail_note_add' => array('levelezes', 'Jegyzet a levélszálon'), 'cp_mail_note_del' => array('levelezes', 'Jegyzet törlése'), 'cp_mail_thread_set' => array('levelezes', 'Levélszál módosítása'),
 		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
 		'cp_kb_card_save' => array('feladatok', 'Kártya mentése'), 'cp_kb_card_move' => array('feladatok', 'Kártya áthelyezése'), 'cp_kb_comment' => array('feladatok', 'Hozzászólás'),
@@ -84,6 +84,15 @@ function cp_audit_summary($action, $p) {
 	$skip = array('action', 't', '_wpnonce', 'pw', 'pass', 'password', 'key', 'token', 'secret', 'checklist', 'order');
 	$parts = array(); $obj = '';
 	$name = function ($tbl, $col, $id) use ($wpdb) { return (string) $wpdb->get_var($wpdb->prepare("SELECT $col FROM $tbl WHERE id = %d", $id)); };
+	if (in_array($action, array('cp_crm_note_add', 'cp_crm_act_save', 'cp_crm_note_del', 'cp_crm_act_done'), true)) {
+		$did = (int) ($p['deal'] ?? 0);
+		if ($did && function_exists('cp_crm_t')) { $obj = 'deal:' . $did; $t = $name(cp_crm_t('deals'), 'title', $did); if ($t !== '') { $parts[] = $t; } }
+		if ($action === 'cp_crm_act_done' && function_exists('cp_crm_t')) { $t = $name(cp_crm_t('activities'), 'title', (int) ($p['id'] ?? 0)); $parts[] = ($t !== '' ? '„' . $t . '” ' : '') . (!empty($p['done']) ? 'kész' : 'visszanyitva'); }
+		if (!empty($p['title'])) { $parts[] = ($action === 'cp_crm_act_save' && !empty($p['id']) ? 'módosítva: ' : 'új: ') . mb_substr((string) $p['title'], 0, 100) . (!empty($p['due']) ? ' (' . $p['due'] . (!empty($p['time']) ? ' ' . $p['time'] : '') . ')' : ''); }
+		if (!empty($p['body'])) { $parts[] = '„' . mb_substr(preg_replace('/\s+/u', ' ', (string) $p['body']), 0, 100) . '”'; }
+		if ($action === 'cp_crm_note_del') { $parts[] = 'jegyzet #' . (int) ($p['id'] ?? 0); }
+		return array($obj, implode(' · ', $parts));
+	}
 	if (strpos($action, 'cp_crm_') === 0 || $action === 'cp_panel_setstage') {
 		$id = (int) ($p['id'] ?? $p['deal'] ?? 0);
 		if ($id && function_exists('cp_crm_t')) { $obj = 'deal:' . $id; $t = $name(cp_crm_t('deals'), 'title', $id); if ($t !== '') { $parts[] = $t; } }

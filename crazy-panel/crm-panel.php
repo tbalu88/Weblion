@@ -203,7 +203,7 @@ function cp_crm_deal_data($id) {
 	/* a Salesmate a modult számmal adja (4 = deal, 1 = kontakt), régebben névvel */
 	$aw = $wpdb->prepare("(related_id = %d AND (related_module = '4' OR LOWER(related_module) LIKE 'deal%%'))", $id);
 	if ($deal['contact_id']) { $aw .= $wpdb->prepare(" OR (related_id = %d AND (related_module = '1' OR LOWER(related_module) LIKE 'contact%%'))", $deal['contact_id']); }
-	$acts = $wpdb->get_results('SELECT id, title, type, owner_id, due_at, completed, completed_at, description FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND ($aw) ORDER BY due_at DESC LIMIT 50", ARRAY_A);
+	$acts = $wpdb->get_results('SELECT id, title, type, owner_id, due_at, duration, completed, completed_at, description, related_id, related_module FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND ($aw) ORDER BY due_at DESC LIMIT 50", ARRAY_A);
 	foreach ($acts as &$a) { $a['due_at'] = cp_crm_local($a['due_at']); $a['completed_at'] = cp_crm_local($a['completed_at']); $a['owner'] = cp_crm_user_name($a['owner_id']); }
 	unset($a);
 	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
