@@ -45,7 +45,7 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		$txt = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags(str_replace(array('<br>', '</p>'), array("\n", "\n"), (string) $m['body']))));
 		$att = json_decode((string) $m['attachments'], true) ?: array();
 		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'subj' => $m['subject'], 'snip' => mb_substr($txt, 0, 260), 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
-		foreach ($att as $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => (string) $a['n'], 'th' => (int) $m['thread_id'], 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']); } }
+		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']); } }
 	}
 	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);
 	foreach ($notes as $n) { $out['notes'][] = array('id' => (int) $n['id'], 'th' => (int) $n['thread_id'], 'b' => mb_substr((string) $n['body'], 0, 1200), 'by' => $n['author'], 'at' => cp_crm_local($n['created_at'])); }

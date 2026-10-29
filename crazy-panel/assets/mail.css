@@ -261,3 +261,16 @@
 .ml-rctx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#EEF3FD;border-radius:8px;padding:6px 10px;font-size:13px;margin-bottom:8px}
 .ml-rctx .ml-link{margin-left:auto;font-size:12.5px}
 .ml-ma button[data-reply],.ml-ma button[data-replyall]{cursor:pointer;opacity:1}
+/* v1.54: mellékletek */
+.ml-atts a{color:#2F6FDB;font-weight:600;text-decoration:none}
+.ml-atts a:hover{text-decoration:underline}
+.ml-attl:empty{display:none}
+.ml-attl{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0}
+.ml-attc{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--li);background:#fff;border-radius:999px;padding:3px 6px 3px 10px;font-size:12.5px}
+.ml-attc small{color:var(--mu)}
+.ml-attc.busy{opacity:.7}
+.ml-attc.err{border-color:#F0C7C2;background:#FDF3F1}
+.ml-attc.err small{color:#AE2E24}
+.ml-attc button{border:0;background:none;cursor:pointer;color:var(--mu);font-size:15px;line-height:1}
+.ml-compose.drop{outline:2px dashed #2F6FDB;outline-offset:4px}
+.ml-rctx .ml-aibtn{border:0;border-radius:8px;padding:4px 10px;font:600 12.5px Inter,sans-serif;cursor:pointer;background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83}.ml-rctx .ml-aibtn[disabled]{opacity:.55;cursor:not-allowed}

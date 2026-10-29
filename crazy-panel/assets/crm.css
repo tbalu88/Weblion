@@ -319,3 +319,5 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-x:hover{color:#AE2E24}
 .d3-ti.dnote{background:#FFF8E1}
 @media (max-width:820px){.d3-af{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.d3-files a.d3-fl{display:flex;gap:8px;align-items:flex-start;text-decoration:none;color:#141C33;width:100%}
+.d3-files a.d3-fl:hover b{text-decoration:underline}

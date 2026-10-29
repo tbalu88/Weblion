@@ -236,7 +236,7 @@ function cp_imp_is_bulk($hraw, $from) {
 }
 
 /* egy levél (UID) átvétele; visszaad: 'ok' | 'dup' | 'skip' */
-function cp_imp_one($mb, $uid, $sent, $live = false) {
+function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	global $wpdb;
 	$o = cp_imp_opts();
 	$me = strtolower($o['user']);
@@ -278,7 +278,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false) {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()));
+		'status' => '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
 	if (!$out) {
@@ -337,7 +337,7 @@ function cp_imp_tick() {
 		if (!isset($f['uids'])) { $f['uids'] = array_values(array_map('intval', (array) imap_search($mb, 'SINCE "' . $s['since'] . '"', SE_UID))); $f['pos'] = 0; $f['total'] = count($f['uids']); }
 		$k = 0;
 		while ($f['pos'] < $f['total'] && time() - $t0 < 45) {
-			try { $r = cp_imp_one($mb, $f['uids'][$f['pos']], !empty($f['sent'])); }
+			try { $r = cp_imp_one($mb, $f['uids'][$f['pos']], !empty($f['sent']), false, (string) ($f['raw'] ?? '')); }
 			catch (\Throwable $e) { $r = 'err'; $s['lasterr'] = mb_substr(get_class($e) . ': ' . $e->getMessage(), 0, 200); }
 			$s['cnt'][$r] = (int) ($s['cnt'][$r] ?? 0) + 1;
 			$f['pos']++;
@@ -505,7 +505,7 @@ function cp_imp_sync_run() {
 		$max = (int) ($sy['uid'] ?? 0);
 		foreach (array_slice($uids, 0, 300) as $uid) {
 			if (time() - $t0 > 100) { break; }
-			try { $r = cp_imp_one($mb, $uid, false, true); } catch (\Throwable $e) { $r = 'err'; }
+			try { $r = cp_imp_one($mb, $uid, false, true, 'INBOX'); } catch (\Throwable $e) { $r = 'err'; }
 			if ($r === 'ok') { $sy['n'] = (int) ($sy['n'] ?? 0) + 1; }
 			$max = max($max, $uid);
 		}

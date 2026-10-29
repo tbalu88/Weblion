@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '6');
+define('CP_MAIL_DB_VER', '7');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -74,6 +74,8 @@ add_action('init', function () {
   sent_at datetime NULL,
   mid varchar(32) NOT NULL DEFAULT '',
   msgid varchar(255) NOT NULL DEFAULT '',
+  imap_folder varchar(120) NOT NULL DEFAULT '',
+  imap_uid int(10) unsigned NULL,
   PRIMARY KEY  (id),
   KEY thread_id (thread_id),
   KEY mid (mid),

@@ -130,6 +130,8 @@ function cp_send_ajax() {
 	$html = cp_mail_render(cp_mail_clean(wp_unslash($_POST['body'] ?? '')), $vals, true);
 	if (trim(wp_strip_all_tags($html)) === '') { cp_el_err('Üres a levél.'); }
 	if (preg_match('/\[KITÖLTENDŐ/u', $html . $subj)) { cp_el_err('A levélben még van kitöltendő rész ([KITÖLTENDŐ: …]).'); }
+	$atts = function_exists('cp_att_take') ? cp_att_take(wp_unslash($_POST['att'] ?? ''), $me) : array();
+	if (is_wp_error($atts)) { cp_el_err($atts->get_error_message()); }
 	$o = cp_send_opts();
 	if (!empty($_POST['sign']) && trim((string) $o['sign']) !== '') { $html .= '<br><div class="cp-sign">' . wp_kses_post(nl2br((string) $o['sign'])) . '</div>'; }
 	$doc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1F2B">' . $html . '</body></html>';
@@ -147,6 +149,7 @@ function cp_send_ajax() {
 		$m->AltBody = trim(html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/li)\b[^>]*>#i', "\n", $html)), ENT_QUOTES, 'UTF-8'));
 		$m->MessageID = $msgid;
 		$m->XMailer = 'Crazy panel';
+		foreach ($atts as $x) { $m->addAttachment($x['path'], $x['n'], 'base64', $x['mime']); }
 		if ($t && !$test) { $pid = cp_send_parent_id((int) $t['id']); if ($pid !== '') { $m->addCustomHeader('In-Reply-To', $pid); $m->addCustomHeader('References', $pid); } }
 		$m->send();
 		$mime = $m->getSentMIMEMessage();
@@ -156,6 +159,9 @@ function cp_send_ajax() {
 	set_transient('cp_send_n' . $me, $n + 1, HOUR_IN_SECONDS);
 	$warn = !empty($o['append']) && !$test ? cp_send_append($mime) : '';
 	if ($test) { wp_send_json_success(array('test' => 1, 'to' => $to[0])); }
+	/* a küldött mellékletek megmaradnak (a panelből letölthetők) */
+	$alist = array();
+	foreach ($atts as $x) { @file_put_contents(dirname($x['path']) . '/.sent', '1'); delete_transient('cp_att_' . $x['tok']); $alist[] = array('n' => $x['n'], 'mime' => $x['mime'], 's' => (int) $x['size'], 'f' => $x['tok'] . '/' . basename($x['path'])); }
 	/* a levél a panel levélszálába (új levélnél új szál, a válaszok ide fűződnek) */
 	$T = cp_mail_t('threads'); $now = gmdate('Y-m-d H:i:s');
 	$plain = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($html)));
@@ -169,10 +175,10 @@ function cp_send_ajax() {
 		}
 	}
 	$who = function_exists('cp_panel_who') ? cp_panel_who() : '';
-	$row = array('thread_id' => (int) $t['id'], 'dir' => 'out', 'from_name' => (string) $o['from_name'] . ($who !== '' ? ' (' . $who . ')' : ''), 'from_email' => $i['user'], 'to_list' => implode(', ', $to), 'cc_list' => implode(', ', $cc), 'subject' => mb_substr($subj, 0, 255), 'body' => $html, 'attachments' => '[]', 'status' => 'Elküldve a panelből', 'sent_at' => $now, 'mid' => md5($msgid));
+	$row = array('thread_id' => (int) $t['id'], 'dir' => 'out', 'from_name' => (string) $o['from_name'] . ($who !== '' ? ' (' . $who . ')' : ''), 'from_email' => $i['user'], 'to_list' => implode(', ', $to), 'cc_list' => implode(', ', $cc), 'subject' => mb_substr($subj, 0, 255), 'body' => $html, 'attachments' => wp_json_encode($alist), 'status' => 'Elküldve a panelből', 'sent_at' => $now, 'mid' => md5($msgid));
 	if (in_array('msgid', $wpdb->get_col('SHOW COLUMNS FROM ' . cp_mail_t('messages')), true)) { $row['msgid'] = $msgid; }
 	$wpdb->insert(cp_mail_t('messages'), $row);
-	$wpdb->update($T, array('msg_count' => (int) $t['msg_count'] + 1, 'last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)), array('id' => (int) $t['id']));
+	$wpdb->update($T, array('msg_count' => (int) $t['msg_count'] + 1, 'last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => 'send', 'text' => 'Levél elküldve a panelből: ' . mb_substr(implode(', ', $to), 0, 200), 'author_uid' => $me, 'author' => $who, 'created_at' => $now));
 	wp_send_json_success(array('thread' => (int) $t['id'], 'warn' => $warn));
 }

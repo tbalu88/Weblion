@@ -47,7 +47,7 @@
 		redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>'
 	};
 	const TOOLS = [['bold', 'Félkövér'], ['italic', 'Dőlt'], ['underline', 'Aláhúzott'], ['strike', 'Áthúzott'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['ul', 'Felsorolás'], ['ol', 'Számozott lista'], ['quote', 'Idézet'], ['|'],
-		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet (a levelezés bekötése után)'], ['sign', 'Aláírás beszúrása'], ['clear', 'Formázás törlése'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
+		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['sign', 'Aláírás beszúrása'], ['clear', 'Formázás törlése'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
 	function editor(host, html) {
 		const vopts = Object.keys(VARS).map(k => '<button type="button" data-vk="' + esc(k) + '"><b>{{' + esc(k) + '}}</b><small>' + esc(VARS[k][0]) + '</small></button>').join('');
 		host.innerHTML = '<div class="ml-ed"><div class="ml-area" contenteditable="true" spellcheck="true" data-ph="Kezdj el gépelni…"></div><textarea class="ml-code" hidden spellcheck="false"></textarea>' +
@@ -63,6 +63,7 @@
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
 			const c = b.dataset.cmd;
+			if (c === 'attach') return; /* a levélíró kezeli (v1.54) */
 			if (c === 'code') { const on = code.hidden; if (on) { code.value = area.innerHTML; } else { area.innerHTML = code.value; } code.hidden = !on; area.hidden = on; b.classList.toggle('on', on); return; }
 			if (!code.hidden) return;
 			if (c === 'var') { vpop.hidden = !vpop.hidden; return; }
@@ -145,6 +146,9 @@
 	}
 	const nl2br = s => esc(s).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="ml-men">@$1</b>');
 	const NOTE_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg>';
+	/* v1.54: a melléklet letöltése a postafiókból (képnél / PDF-nél megnyitás a böngészőben) */
+	const attUrl = (mid, i, n) => C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&t=' + encodeURIComponent(C.t) + (/\.(png|jpe?g|gif|webp|pdf)$/i.test(n || '') ? '&view=1' : '');
+	window.CPMailAtt = attUrl;
 	const CLIP_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>';
 
 	/* hasábszélességek: húzással méretezhetők, a böngésző megjegyzi */
@@ -362,7 +366,7 @@
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
 			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
 				'<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
-				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map(a => '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
+				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
 		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); } catch (e) { toast(e.message, true); } };
@@ -377,7 +381,7 @@
 			const ccL = all ? Array.from(new Set(pick(m.to_list).concat(pick(m.cc_list)))).filter(x => !toL.includes(x)) : [];
 			const subj = /^(re|vá|va|aw)\s*:/i.test(t.subj || '') ? t.subj : 'Re: ' + (t.subj || '');
 			const quote = '<p><br></p><p>' + esc(hdate(m.sent_at)) + ', ' + esc(m.from_name || m.from_email) + ' ezt írta:</p><blockquote style="margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex">' + (m.body || '') + '</blockquote>';
-			S.reply = { to: toL, cc: ccL, subject: subj, body: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
+			S.reply = { to: toL, cc: ccL, subject: subj, body: quote, quote: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
 			S.view = 'compose'; view(S.main);
 		};
 		const tl = timeline(x);
@@ -479,9 +483,9 @@
 		let deal = null;
 		const draft = S.reply || (() => { try { return JSON.parse(localStorage.getItem('cpmail_draft') || 'null'); } catch (e) { return null; } })();
 		S.reply = null;
-		const ctx = { thread: draft && draft.thread ? Number(draft.thread) : 0, subj: draft && draft.tsubj ? draft.tsubj : '' };
+		const ctx = { thread: draft && draft.thread ? Number(draft.thread) : 0, subj: draft && draft.tsubj ? draft.tsubj : '', quote: draft && draft.quote ? draft.quote : '' };
 		box.innerHTML = '<div class="ml-compose">' +
-			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b><button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div>' : '') +
+			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>' + (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
 			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn>🔖 Sablon beszúrása ▾</button></span><div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
@@ -498,20 +502,73 @@
 		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), []);
 		if (draft && draft.cc && draft.cc.length) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
 		if (draft && draft.deal) deal = { id: Number(draft.deal), title: draft.dealTitle || ('Deal #' + draft.deal) };
+		/* v1.54: AI-válasz a válaszíróban is – a piszkozat az idézett levél fölé kerül */
+		const cai = q('[data-cai]');
+		if (cai) cai.addEventListener('click', () => {
+			const host = q('[data-caip]');
+			if (!host.hidden) { host.hidden = true; host.innerHTML = ''; return; }
+			host.hidden = false;
+			host.innerHTML = '<div class="ml-ai"><div class="ml-aiw"><input type="text" data-cwish maxlength="500" placeholder="Mit írjon? (nem kötelező – pl. küldj árat a 360 spinnerre)"><button type="button" class="cpx-btn" data-cgen>Piszkozat írása</button></div><div data-caio></div><p class="ml-aif">A nevek, e-mail-címek és telefonszámok álnevesítve mennek az AI-hoz. A piszkozatot mindig nézd át.</p></div>';
+			const w = host.querySelector('[data-cwish]'), g = host.querySelector('[data-cgen]'), o = host.querySelector('[data-caio]');
+			const run = async () => {
+				const cur = ed.get().replace(/\s+/g, '');
+				if (cur && cur !== (ctx.quote || '').replace(/\s+/g, '') && !window.confirm('Az AI-piszkozat lecseréli az eddig beírt választ (az idézett levél megmarad). Mehet?')) return;
+				g.disabled = true; w.disabled = true;
+				o.innerHTML = '<div class="ml-aild"><span class="ml-spin"></span>Az AI írja a választ… (általában 10–40 másodperc)</div>';
+				try {
+					const r = await post('cp_ai_draft', { thread: ctx.thread, wish: w.value.trim() });
+					ed.set(r.html + (ctx.quote || ''));
+					if (!q('[data-subj]').value.trim() && r.subject) q('[data-subj]').value = r.subject;
+					o.innerHTML = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '') + '<p class="ml-aif">✓ A piszkozat a levélben van – nézd át, a [KITÖLTENDŐ] részeket írd át. <button type="button" class="ml-link" data-cagain>Újraírás</button></p>';
+					o.querySelector('[data-cagain]').addEventListener('click', run);
+				} catch (e) { o.innerHTML = '<div class="ml-aierr">' + esc(e.message) + '</div>'; }
+				g.disabled = false; w.disabled = false;
+			};
+			g.addEventListener('click', run);
+			w.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+			w.focus();
+		});
 		const unt = q('[data-unthread]');
 		if (unt) unt.addEventListener('click', () => { ctx.thread = 0; unt.parentNode.remove(); });
 		const fromSel = q('[data-from]');
 		if ((M.send && M.send.on)) { Array.from(fromSel.options).forEach(o => { if (o.value !== M.send.box) o.disabled = true; }); fromSel.value = M.send.box; }
 		const sendBtn = q('[data-send]'), testBtn = q('[data-test]');
+		/* v1.54: mellékletek csatolása (feltöltés a szerverre, küldéskor a levélhez) */
+		const atts = [];
+		const attBox = document.createElement('div'); attBox.className = 'ml-attl'; q('[data-ed]').after(attBox);
+		const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : 'feltöltés…') + '</small><button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); };
+		const upload = async file => {
+			const a = { n: file.name, size: file.size, tok: '', err: '' }; atts.push(a); drawAtt();
+			if (file.size > 15 * 1048576) { a.err = 'túl nagy (max. 15 MB)'; drawAtt(); return; }
+			try { const fd = new FormData(); fd.append('action', 'cp_mail_upload'); fd.append('t', C.t); fd.append('f', file); const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' }); const j = await r.json(); if (!j || !j.success) throw new Error((j && j.data && j.data.msg) || 'hiba'); a.tok = j.data.tok; a.n = j.data.n; }
+			catch (e) { a.err = e.message || 'hiba'; }
+			drawAtt();
+		};
+		const ab = box.querySelector('[data-cmd="attach"]');
+		if (ab) {
+			if ((M.send && M.send.on)) {
+				ab.disabled = false; ab.title = 'Melléklet csatolása (fájlonként max. 15 MB, összesen 25 MB) – vagy húzd a fájlt a levélre';
+				const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.hidden = true; box.appendChild(fi);
+				ab.addEventListener('click', () => fi.click());
+				fi.addEventListener('change', () => { Array.from(fi.files || []).forEach(upload); fi.value = ''; });
+				const cmp = box.querySelector('.ml-compose');
+				cmp.addEventListener('dragover', e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); cmp.classList.add('drop'); } });
+				cmp.addEventListener('dragleave', e => { if (!cmp.contains(e.relatedTarget)) cmp.classList.remove('drop'); });
+				cmp.addEventListener('drop', e => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); cmp.classList.remove('drop'); Array.from(e.dataTransfer.files).forEach(upload); });
+			} else ab.title = 'Melléklet – a panelből küldés bekapcsolása után';
+		}
 		const doSend = async test => {
 			const tl = to.get(), sj = q('[data-subj]').value.trim(), body = ed.get();
 			if (!test && !tl.length) { toast('Adj meg címzettet.', true); return; }
 			if (!sj) { toast('Add meg a tárgyat.', true); q('[data-subj]').focus(); return; }
 			if (ed.isEmpty()) { toast('Üres a levél.', true); return; }
-			if (!test && !window.confirm('Elküldöd a levelet?\n\nCímzett: ' + tl.join(', ') + (cc.get().length ? '\nMásolat: ' + cc.get().join(', ') : '') + (bcc.get().length ? '\nRejtett: ' + bcc.get().join(', ') : '') + '\nTárgy: ' + sj + '\n\nA levél a postafiókból megy ki, és az Elküldött mappába is bekerül.')) return;
+			if (!test && !window.confirm('Elküldöd a levelet?\n\nCímzett: ' + tl.join(', ') + (cc.get().length ? '\nMásolat: ' + cc.get().join(', ') : '') + (bcc.get().length ? '\nRejtett: ' + bcc.get().join(', ') : '') + '\nTárgy: ' + sj + (atts.length ? '\nMelléklet: ' + atts.map(a => a.n).join(', ') : '') + '\n\nA levél a postafiókból megy ki, és az Elküldött mappába is bekerül.')) return;
+			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
+			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
 			try {
-				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: q('[data-sign]') && q('[data-sign]').checked ? 1 : '', test: test ? 1 : '' });
+				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: q('[data-sign]') && q('[data-sign]').checked ? 1 : '', test: test ? 1 : '', att: atts.map(a => a.tok).join(',') });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
@@ -532,7 +589,7 @@
 			});
 		});
 		q('[data-save]').addEventListener('click', () => {
-			try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: to.get(), cc: cc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '' })); toast('Piszkozat elmentve ezen a gépen.'); } catch (e) { toast('A piszkozatot nem sikerült menteni.', true); }
+			try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: to.get(), cc: cc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '' })); toast('Piszkozat elmentve ezen a gépen.'); } catch (e) { toast('A piszkozatot nem sikerült menteni.', true); }
 		});
 		q('[data-clear]').addEventListener('click', () => { if (!window.confirm('Törlöd a levél tartalmát?')) return; try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ } drawCompose(box); });
 		q('[data-prev]').addEventListener('click', async () => {
