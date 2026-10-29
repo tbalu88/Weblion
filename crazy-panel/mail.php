@@ -222,6 +222,7 @@ function cp_mail_cfg() {
 		'boxes'   => array(array('id' => 'eventcrazy', 'n' => 'EventCrazy', 'e' => 'info@eventcrazy.hu'), array('id' => 'crazyphoto', 'n' => 'Crazyphoto', 'e' => ''), array('id' => 'studioframes', 'n' => 'Studio Frames', 'e' => '')),
 		'connected' => false,
 		'ai'      => function_exists('cp_ai_ready') && cp_ai_ready(),
+		'sync'    => get_option('cp_imp_sync_on') === '1',
 		'people'  => cp_mail_people(),
 		'me'      => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0,
 		'admin'   => function_exists('cp_panel_is_admin') && cp_panel_is_admin(),

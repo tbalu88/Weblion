@@ -236,7 +236,7 @@ function cp_imp_is_bulk($hraw, $from) {
 }
 
 /* egy levél (UID) átvétele; visszaad: 'ok' | 'dup' | 'skip' */
-function cp_imp_one($mb, $uid, $sent) {
+function cp_imp_one($mb, $uid, $sent, $live = false) {
 	global $wpdb;
 	$o = cp_imp_opts();
 	$me = strtolower($o['user']);
@@ -272,7 +272,7 @@ function cp_imp_one($mb, $uid, $sent) {
 			$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE c.email = %s AND d.deleted_at IS NULL ORDER BY ABS(DATEDIFF(d.created_at, %s)) LIMIT 1', $other['e'], $at));
 		}
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
-			'followers' => '', 'tags' => 'import', 'status' => 'closed', 'folder' => 'archive', 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
+			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $live ? 'inbox' : 'archive', 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
 		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0);
 	}
@@ -295,6 +295,8 @@ function cp_imp_one($mb, $uid, $sent) {
 	}
 	$upd = array('msg_count' => (int) $t['msg_count'] + $add);
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
+	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
+	if ($live && !$out) { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	return 'ok';
@@ -393,6 +395,10 @@ function cp_imp_admin_page() {
 			}
 		} elseif ($do === 'start') {
 			$msg = cp_imp_start(array_map('strval', (array) wp_unslash($_POST['folders'] ?? array())));
+		} elseif ($do === 'sync_on' || $do === 'sync_off') {
+			update_option('cp_imp_sync_on', $do === 'sync_on' ? '1' : '0', false);
+			if ($do === 'sync_on') { if (!wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 30, 'cp_5min', 'cp_imp_sync'); } $msg = 'A folyamatos beérkezés bekapcsolva – 5 percenként, csak olvasva.'; }
+			else { wp_clear_scheduled_hook('cp_imp_sync'); $msg = 'A folyamatos beérkezés kikapcsolva.'; }
 		} elseif ($do === 'tpl') {
 			$msg = cp_imp_templates((string) wp_unslash($_POST['tpl_json'] ?? ''));
 		} elseif ($do === 'stop') {
@@ -429,6 +435,10 @@ function cp_imp_admin_page() {
 		echo '</ul>';
 		if (!empty($s['running'])) { echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button" name="cp_imp_do" value="stop">Import leállítása</button></form><p class="description">Az oldal frissítésével látod a haladást.</p>'; }
 	}
+	$sy = get_option('cp_imp_sync', array()); $on = get_option('cp_imp_sync_on') === '1';
+	echo '<h2>Folyamatos beérkezés (csak olvasva)</h2><p>Bekapcsolva 5 percenként megnézi a Beérkezett mappát, és az új leveleket a panel Levelezés fülére is beteszi (a deal-hez kötve). Csak olvas: nem töröl, nem helyez át, nem jelöl olvasottnak – a Salesmate Team Inbox ugyanúgy megkapja és kezeli a leveleket. Válaszolni továbbra is a Salesmate-ben kell.</p>';
+	echo '<p>Állapot: <b>' . ($on ? 'bekapcsolva' : 'kikapcsolva') . '</b>' . (!empty($sy['last']) ? ' · utolsó ellenőrzés: ' . esc_html(wp_date('Y.m.d. H:i', (int) $sy['last'])) . ' · átvéve összesen: ' . (int) ($sy['n'] ?? 0) . ' levél' : '') . (!empty($sy['err']) ? ' · <span style="color:#b32d2e">hiba: ' . esc_html($sy['err']) . '</span>' : '') . '</p>';
+	echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button ' . ($on ? '' : 'button-primary') . '" name="cp_imp_do" value="' . ($on ? 'sync_off' : 'sync_on') . '">' . ($on ? 'Kikapcsolás' : 'Bekapcsolás') . '</button></form>';
 	echo '<h2>Salesmate-sablonok betöltése</h2><p>Illeszd be a Chrome-bővítményben futó Claude által összegyűjtött sablonokat (JSON: <code>[{"folder":"…","name":"…","subject":"…","body_html":"…"}, …]</code>). Az azonos mappában azonos nevű sablon frissül, a többi újként kerül be. A Salesmate-et nem érinti.</p>';
 	echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_imp_do" value="tpl"><textarea name="tpl_json" rows="10" class="large-text code" placeholder="[ { &quot;folder&quot;: &quot;Ajánlatok&quot;, &quot;name&quot;: &quot;…&quot;, &quot;subject&quot;: &quot;…&quot;, &quot;body_html&quot;: &quot;<p>…</p>&quot; } ]"></textarea><p><button class="button button-primary">Sablonok betöltése</button></p></form>';
 	echo '</div>';
@@ -459,4 +469,53 @@ function cp_imp_templates($raw) {
 		else { $wpdb->insert($T, $row + array('created_at' => current_time('mysql', true))); $new++; }
 	}
 	return 'Sablonok: ' . $new . ' új, ' . $upd . ' frissítve' . ($bad ? ', ' . $bad . ' hibás / üres kihagyva' : '') . '. A panel Levelezés → Sablonok fülén látod őket.';
+}
+
+
+/* ------------------------------------------------------------ v1.45: folyamatos beérkezés (csak olvasva, 5 percenként)
+ * A Beérkezett mappa új levelei (UID alapján a legutóbbi óta) a Levelezés fülre, nyitott szálként. A már átvett levelet
+ * (Message-ID alapján) kihagyja. Első futáskor az utolsó 3 napot nézi át, utána csak az újakat. */
+add_filter('cron_schedules', function ($s) { $s['cp_5min'] = array('interval' => 300, 'display' => '5 percenként (Crazy levelezés)'); return $s; });
+add_action('init', function () {
+	if (get_option('cp_imp_sync_on') === '1' && !wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 60, 'cp_5min', 'cp_imp_sync'); }
+});
+add_action('cp_imp_sync', 'cp_imp_sync_run');
+function cp_imp_sync_run() {
+	if (get_option('cp_imp_sync_on') !== '1') { wp_clear_scheduled_hook('cp_imp_sync'); return; }
+	$st = cp_imp_state();
+	if (!empty($st['running']) || get_transient('cp_imp_lock') || get_transient('cp_imp_sync_lock')) { return; }
+	set_transient('cp_imp_sync_lock', 1, 240);
+	$sy = get_option('cp_imp_sync', array());
+	if (!is_array($sy)) { $sy = array(); }
+	$t0 = time();
+	try {
+		$mb = cp_imp_open('INBOX');
+		if (is_wp_error($mb)) { throw new \Exception($mb->get_error_message()); }
+		$info = imap_status($mb, cp_imp_ref() . 'INBOX', SA_UIDVALIDITY | SA_UIDNEXT);
+		$uv = $info ? (int) $info->uidvalidity : 0;
+		if (empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) {
+			/* első futás (vagy a szerver újraszámozta a leveleket): az utolsó 3 nap, a már meglévőket kihagyja */
+			$uids = array_map('intval', (array) imap_search($mb, 'SINCE "' . gmdate('d-M-Y', time() - 3 * DAY_IN_SECONDS) . '"', SE_UID));
+		} else {
+			$uids = array();
+			foreach ((array) imap_fetch_overview($mb, ((int) $sy['uid'] + 1) . ':*', FT_UID) as $ov) { if ((int) $ov->uid > (int) $sy['uid']) { $uids[] = (int) $ov->uid; } }
+		}
+		sort($uids);
+		$max = (int) ($sy['uid'] ?? 0);
+		foreach (array_slice($uids, 0, 300) as $uid) {
+			if (time() - $t0 > 100) { break; }
+			try { $r = cp_imp_one($mb, $uid, false, true); } catch (\Throwable $e) { $r = 'err'; }
+			if ($r === 'ok') { $sy['n'] = (int) ($sy['n'] ?? 0) + 1; }
+			$max = max($max, $uid);
+		}
+		imap_errors(); imap_alerts();
+		imap_close($mb);
+		if ((empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) && count($uids) <= 300 && $info) { $max = max($max, (int) $info->uidnext - 1); }
+		$sy['uid'] = $max; $sy['uv'] = $uv; $sy['err'] = '';
+	} catch (\Throwable $e) {
+		$sy['err'] = mb_substr($e->getMessage(), 0, 200);
+	}
+	$sy['last'] = time();
+	update_option('cp_imp_sync', $sy, false);
+	delete_transient('cp_imp_sync_lock');
 }

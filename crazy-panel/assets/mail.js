@@ -29,7 +29,7 @@
 		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3200);
 	}
-	function status(s) { s.textContent = M.connected ? '' : 'Levelezés: a postafiókok még nincsenek bekötve'; s.className = 'cpx-status'; }
+	function status(s) { s.textContent = M.connected ? '' : (M.sync ? 'Levelezés: beérkezés 5 percenként, csak olvasva' : 'Levelezés: a postafiókok még nincsenek bekötve'); s.className = 'cpx-status'; }
 
 	/* ------------------------------------------------------------ szövegszerkesztő (közös a levélíróhoz és a sablonokhoz) */
 	const ICON = {
@@ -119,7 +119,7 @@
 	function view(main) {
 		S.main = main;
 		const seg = [['inbox', 'Postafiók'], ['compose', 'Új levél'], ['tpl', 'Sablonok']].map(x => '<button type="button" data-v="' + x[0] + '" class="' + (S.view === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('');
-		main.innerHTML = '<div class="ml">' + (M.connected ? '' : '<p class="ml-note">Előkészítés alatt: a postafiókok bekötéséig a leveleket a Salesmate Team Inboxban kezeld.</p>') +
+		main.innerHTML = '<div class="ml">' + (M.connected ? '' : (M.sync ? '<p class="ml-note">A beérkező levelek 5 percenként ide is megérkeznek (csak olvasva). Válaszolni továbbra is a Salesmate Team Inboxban kell – az AI-piszkozatot onnan küldd el.</p>' : '<p class="ml-note">Előkészítés alatt: a postafiókok bekötéséig a leveleket a Salesmate Team Inboxban kezeld.</p>')) +
 			'<div class="ml-head"><div class="crm-seg ml-seg">' + seg + '</div></div><div class="ml-body"></div></div>';
 		main.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.v; try { localStorage.setItem('cpmail_view', S.view); } catch (e) { /* privát mód */ } view(main); }));
 		const body = main.querySelector('.ml-body');
@@ -513,12 +513,21 @@
 				const r = await post('cp_ai_draft', { thread: t.id, wish: wish.value.trim() });
 				out.innerHTML = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '') +
 					'<div class="ml-aisub"><small>Tárgy:</small> ' + esc(r.subject) + '</div><div class="ml-aibody ml-mb">' + r.html.replace(/\[KITÖLTENDŐ:([^\]]*)\]/g, '<mark>[KITÖLTENDŐ:$1]</mark>') + '</div>' +
-					'<div class="ml-aia"><button type="button" class="cpx-btn" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
+					'<div class="ml-aia"><button type="button" class="cpx-btn" data-copy title="A Salesmate-be beilleszthető formában">Szöveg másolása</button><button type="button" class="cpx-btn ghost" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
 				out.querySelector('[data-take]').addEventListener('click', () => {
 					try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: r.to ? [r.to] : [], subject: r.subject, body: r.html })); localStorage.setItem('cpmail_view', 'compose'); } catch (e) { toast('A piszkozatot nem sikerült átvinni.', true); return; }
 					S.view = 'compose'; view(S.main); toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
 				});
 				out.querySelector('[data-again]').addEventListener('click', run);
+				/* a piszkozat vágólapra – formázva (HTML) és sima szövegként is, hogy a Salesmate szerkesztőjébe beilleszthető legyen */
+				out.querySelector('[data-copy]').addEventListener('click', async () => {
+					const tmp = document.createElement('div'); tmp.innerHTML = r.html; const plain = tmp.innerText.replace(/\n{3,}/g, '\n\n').trim();
+					try {
+						if (window.ClipboardItem && navigator.clipboard.write) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([r.html], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })]);
+						else await navigator.clipboard.writeText(plain);
+						toast('Kimásolva – illeszd be a Salesmate válaszába (és nézd át a sárga [KITÖLTENDŐ] részeket).');
+					} catch (e) { toast('A másolás nem sikerült – jelöld ki a szöveget kézzel.', true); }
+				});
 			} catch (e) { out.innerHTML = '<div class="ml-aierr">' + esc(e.message) + '</div>'; }
 			gen.disabled = false; wish.disabled = false;
 		};
