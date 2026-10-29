@@ -44,6 +44,7 @@ function cp_imp_survey() {
 	$o = cp_imp_opts();
 	$since = gmdate('d-M-Y', strtotime('-' . max(1, (int) $o['years']) . ' years'));
 	$out = array('at' => time(), 'since' => $since, 'folders' => array());
+	imap_errors();
 	foreach ((array) imap_list($mb, cp_imp_ref(), '*') as $full) {
 		$name = cp_imp_folder_name($full);
 		if (!@imap_reopen($mb, cp_imp_ref() . $name, OP_READONLY)) { continue; }
@@ -69,19 +70,30 @@ function cp_imp_survey() {
 }
 
 /* ------------------------------------------------------------ egy levél feldolgozása */
+/* biztonságos átkódolás: PHP 8-ban az ismeretlen karakterkészlet kivételt dob – ilyenkor az eredeti marad */
+function cp_imp_conv($data, $cs) {
+	$cs = strtoupper(trim((string) $cs, " \t\"'"));
+	if ($cs === '' || $cs === 'UTF-8' || $cs === 'UTF8' || $cs === 'US-ASCII' || $cs === 'DEFAULT') { return $data; }
+	$alias = array('WINDOWS-1250' => 'Windows-1250', 'CP1250' => 'Windows-1250', 'WINDOWS-1252' => 'Windows-1252', 'CP1252' => 'Windows-1252', 'ISO-8859-2' => 'ISO-8859-2', 'LATIN2' => 'ISO-8859-2', 'ISO-8859-1' => 'ISO-8859-1', 'LATIN1' => 'ISO-8859-1');
+	$cs = $alias[$cs] ?? $cs;
+	try { $c = mb_convert_encoding($data, 'UTF-8', $cs); return is_string($c) ? $c : $data; }
+	catch (\Throwable $e) {
+		if (function_exists('iconv')) { $c = @iconv($cs, 'UTF-8//IGNORE', $data); if (is_string($c) && $c !== '') { return $c; } }
+		return $data;
+	}
+}
 function cp_imp_hdr($s) {
 	$out = '';
 	foreach ((array) imap_mime_header_decode((string) $s) as $p) {
 		$cs = strtoupper((string) $p->charset);
-		$out .= ($cs === 'DEFAULT' || $cs === 'UTF-8' || $cs === '') ? $p->text : (@mb_convert_encoding($p->text, 'UTF-8', $cs) ?: $p->text);
+		$out .= cp_imp_conv($p->text, $cs);
 	}
 	return trim($out);
 }
 function cp_imp_decode($data, $enc, $charset) {
 	if ($enc === 3) { $data = base64_decode($data); } elseif ($enc === 4) { $data = quoted_printable_decode($data); }
-	$cs = strtoupper((string) $charset);
-	if ($cs !== '' && $cs !== 'UTF-8' && $cs !== 'US-ASCII') { $c = @mb_convert_encoding($data, 'UTF-8', $cs); if ($c !== false) { $data = $c; } }
-	if (!mb_check_encoding($data, 'UTF-8')) { $data = mb_convert_encoding($data, 'UTF-8', 'ISO-8859-2'); }
+	$data = cp_imp_conv($data, $charset);
+	if (!mb_check_encoding($data, 'UTF-8')) { $data = cp_imp_conv($data, 'ISO-8859-2'); }
 	return $data;
 }
 function cp_imp_param($part, $name) {
@@ -308,6 +320,11 @@ function cp_imp_tick() {
 	}
 	set_transient('cp_imp_lock', 1, 120);
 	if (function_exists('set_time_limit')) { @set_time_limit(110); }
+	/* ha a köteg váratlanul leállna (végzetes hiba), az ok bekerül az állapotba */
+	register_shutdown_function(function () {
+		$e = error_get_last();
+		if ($e && in_array($e['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR), true)) { $st = cp_imp_state(); $st['fatal'] = mb_substr($e['message'] . ' @' . basename($e['file']) . ':' . $e['line'], 0, 300); cp_imp_state_set($st); delete_transient('cp_imp_lock'); }
+	});
 	$t0 = time();
 	$mb = cp_imp_open();
 	if (is_wp_error($mb)) { $s['err'] = $mb->get_error_message(); $s['errn'] = (int) ($s['errn'] ?? 0) + 1; if ($s['errn'] >= 5) { $s['running'] = 0; } cp_imp_state_set($s); delete_transient('cp_imp_lock'); return; }
@@ -316,11 +333,16 @@ function cp_imp_tick() {
 		if (!empty($f['done'])) { continue; }
 		if (!@imap_reopen($mb, cp_imp_ref() . $f['raw'], OP_READONLY)) { $f['done'] = 1; $f['err'] = 'nem nyitható'; continue; }
 		if (!isset($f['uids'])) { $f['uids'] = array_values(array_map('intval', (array) imap_search($mb, 'SINCE "' . $s['since'] . '"', SE_UID))); $f['pos'] = 0; $f['total'] = count($f['uids']); }
+		$k = 0;
 		while ($f['pos'] < $f['total'] && time() - $t0 < 45) {
-			$r = cp_imp_one($mb, $f['uids'][$f['pos']], !empty($f['sent']));
+			try { $r = cp_imp_one($mb, $f['uids'][$f['pos']], !empty($f['sent'])); }
+			catch (\Throwable $e) { $r = 'err'; $s['lasterr'] = mb_substr(get_class($e) . ': ' . $e->getMessage(), 0, 200); }
 			$s['cnt'][$r] = (int) ($s['cnt'][$r] ?? 0) + 1;
 			$f['pos']++;
+			/* menet közben is mentjük, hogy egy váratlan leállásnál se vesszen el a haladás */
+			if (++$k % 25 === 0) { $s['last'] = time(); cp_imp_state_set($s); }
 		}
+		imap_errors(); imap_alerts();
 		if ($f['pos'] >= $f['total']) { $f['done'] = 1; unset($f['uids']); }
 		if (time() - $t0 >= 45) { break; }
 	}
@@ -400,7 +422,7 @@ function cp_imp_admin_page() {
 		echo '<p><button class="button button-primary"' . (!empty($s['running']) ? ' disabled' : '') . '>Import indítása</button></p></form>';
 	}
 	if ($s) {
-		echo '<h2>Import állapota</h2><p>' . (!empty($s['running']) ? '<b>Fut</b> (percenként egy köteg)' : (!empty($s['finished']) ? '<b>Kész</b> – ' . esc_html(wp_date('Y.m.d. H:i', (int) $s['finished'])) : 'Áll')) . '. Átvéve: <b>' . (int) ($s['cnt']['ok'] ?? 0) . '</b> · már megvolt: ' . (int) ($s['cnt']['dup'] ?? 0) . ' · kihagyva (hírlevél, értesítő, üres): ' . (int) ($s['cnt']['skip'] ?? 0) . ' · ebből a mi válaszaink (idézetből): ' . (int) cp_imp_quoted_count() . (!empty($s['err']) ? ' · <span style="color:#b32d2e">hiba: ' . esc_html($s['err']) . '</span>' : '') . '</p><ul>';
+		echo '<h2>Import állapota</h2><p>' . (!empty($s['running']) ? '<b>Fut</b> (percenként egy köteg)' : (!empty($s['finished']) ? '<b>Kész</b> – ' . esc_html(wp_date('Y.m.d. H:i', (int) $s['finished'])) : 'Áll')) . '. Átvéve: <b>' . (int) ($s['cnt']['ok'] ?? 0) . '</b> · már megvolt: ' . (int) ($s['cnt']['dup'] ?? 0) . ' · kihagyva (hírlevél, értesítő, üres): ' . (int) ($s['cnt']['skip'] ?? 0) . (!empty($s['cnt']['err']) ? ' · hibás (átugorva): ' . (int) $s['cnt']['err'] : '') . ' · ebből a mi válaszaink (idézetből): ' . (int) cp_imp_quoted_count() . (!empty($s['err']) ? ' · <span style="color:#b32d2e">hiba: ' . esc_html($s['err']) . '</span>' : '') . '</p><ul>';
 		foreach ((array) ($s['folders'] ?? array()) as $f) { echo '<li>' . esc_html($f['name']) . ': ' . (isset($f['total']) ? (int) $f['pos'] . ' / ' . (int) $f['total'] : (!empty($f['done']) ? 'kész' : 'várakozik')) . (!empty($f['done']) ? ' ✓' : '') . '</li>'; }
 		echo '</ul>';
 		if (!empty($s['running'])) { echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button" name="cp_imp_do" value="stop">Import leállítása</button></form><p class="description">Az oldal frissítésével látod a haladást.</p>'; }
