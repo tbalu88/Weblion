@@ -393,6 +393,8 @@ function cp_imp_admin_page() {
 			}
 		} elseif ($do === 'start') {
 			$msg = cp_imp_start(array_map('strval', (array) wp_unslash($_POST['folders'] ?? array())));
+		} elseif ($do === 'tpl') {
+			$msg = cp_imp_templates((string) wp_unslash($_POST['tpl_json'] ?? ''));
 		} elseif ($do === 'stop') {
 			$s = cp_imp_state(); $s['running'] = 0; cp_imp_state_set($s); wp_clear_scheduled_hook('cp_imp_tick'); $msg = 'Az import leállítva (később folytatható: újraindításkor a már átvett leveleket átugorja).';
 		}
@@ -427,5 +429,34 @@ function cp_imp_admin_page() {
 		echo '</ul>';
 		if (!empty($s['running'])) { echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button" name="cp_imp_do" value="stop">Import leállítása</button></form><p class="description">Az oldal frissítésével látod a haladást.</p>'; }
 	}
+	echo '<h2>Salesmate-sablonok betöltése</h2><p>Illeszd be a Chrome-bővítményben futó Claude által összegyűjtött sablonokat (JSON: <code>[{"folder":"…","name":"…","subject":"…","body_html":"…"}, …]</code>). Az azonos mappában azonos nevű sablon frissül, a többi újként kerül be. A Salesmate-et nem érinti.</p>';
+	echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_imp_do" value="tpl"><textarea name="tpl_json" rows="10" class="large-text code" placeholder="[ { &quot;folder&quot;: &quot;Ajánlatok&quot;, &quot;name&quot;: &quot;…&quot;, &quot;subject&quot;: &quot;…&quot;, &quot;body_html&quot;: &quot;<p>…</p>&quot; } ]"></textarea><p><button class="button button-primary">Sablonok betöltése</button></p></form>';
 	echo '</div>';
+}
+
+/* a Salesmate-ből (böngészőben) kigyűjtött sablonok betöltése a panel sablontáblájába */
+function cp_imp_templates($raw) {
+	global $wpdb;
+	if (!function_exists('cp_mail_db_ok') || !cp_mail_db_ok()) { return 'A levelezés táblái még nem készek.'; }
+	$raw = trim($raw);
+	if (preg_match('/```(?:json)?\s*(.*?)```/s', $raw, $m)) { $raw = trim($m[1]); }
+	$j = json_decode($raw, true);
+	if (is_array($j) && isset($j['templates'])) { $j = $j['templates']; }
+	if (!is_array($j) || !$j) { return 'Nem érvényes JSON-lista (hiba: ' . json_last_error_msg() . ').'; }
+	$T = cp_mail_t(); $new = 0; $upd = 0; $bad = 0;
+	foreach (array_slice($j, 0, 500) as $x) {
+		if (!is_array($x)) { $bad++; continue; }
+		$name = mb_substr(sanitize_text_field((string) ($x['name'] ?? '')), 0, 190);
+		$cat = mb_substr(sanitize_text_field((string) ($x['folder'] ?? $x['category'] ?? '')), 0, 80);
+		$subj = mb_substr(sanitize_text_field((string) ($x['subject'] ?? '')), 0, 255);
+		$body = (string) ($x['body_html'] ?? $x['body'] ?? '');
+		if (!preg_match('/<[a-z][^>]*>/i', $body)) { $body = '<p>' . str_replace("\n", '<br>', esc_html(str_replace("\r", '', $body))) . '</p>'; }
+		$body = cp_mail_clean($body);
+		if ($name === '' || trim(wp_strip_all_tags($body)) === '') { $bad++; continue; }
+		$row = array('name' => $name, 'category' => $cat, 'subject' => $subj, 'body' => $body, 'updated_by' => 'Salesmate-import', 'updated_at' => current_time('mysql', true));
+		$id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $T WHERE name = %s AND category = %s AND deleted_at IS NULL", $name, $cat));
+		if ($id) { $wpdb->update($T, $row, array('id' => $id)); $upd++; }
+		else { $wpdb->insert($T, $row + array('created_at' => current_time('mysql', true))); $new++; }
+	}
+	return 'Sablonok: ' . $new . ' új, ' . $upd . ' frissítve' . ($bad ? ', ' . $bad . ' hibás / üres kihagyva' : '') . '. A panel Levelezés → Sablonok fülén látod őket.';
 }
