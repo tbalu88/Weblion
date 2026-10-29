@@ -330,6 +330,11 @@ function cp_st_deal_fields() {
 }
 
 function cp_st_search($module, $mid, $fields, $rules, $page, $rows = 250) {
+	/* v1.31: a deal-ek a panel saját CRM-táblájából (ha a szinkron friss); a kontaktok és tevékenységek a Salesmate-ből */
+	if ($module === 'deal' && function_exists('cp_crm_source_on') && cp_crm_source_on()) {
+		$r = cp_crm_st_search($rules, $page, $rows);
+		if (!is_wp_error($r)) { return $r; }
+	}
 	$body = array(
 		'displayingFields' => $fields,
 		'filterQuery'      => array('group' => array('operator' => 'AND', 'rules' => $rules)),

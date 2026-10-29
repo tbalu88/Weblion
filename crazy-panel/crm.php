@@ -439,6 +439,12 @@ function cp_crm_sync($manual = false) {
 				if (count($res['rows']) >= 250) { $st[$m . '_redo'] = 1; $st[$m . '_run'] = gmdate('Y-m-d H:i:s'); }
 				$st[$m . '_inc'] = $start;
 				$log[] = $m . ': ' . count($res['rows']) . ' friss';
+				/* v1.31: a Salesmate a kommunikáció idejét (levél, hívás) a módosítás ideje nélkül frissíti – külön lekérdezés */
+				if ($m === 'deal' && $calls < $budget) {
+					$rc = cp_crm_search('deal', array(cp_crm_rule('deal', 'lastCommunicationAt', 'IS_AFTER', $since)), 0);
+					$calls++;
+					if (!is_wp_error($rc)) { cp_crm_store('deal', $rc['rows'], 'search'); $log[] = 'deal: ' . count($rc['rows']) . ' kommunikáció'; }
+				}
 			}
 		}
 		/* naponta: a keresőből kimaradt friss deal-ek azonosítónként (legfeljebb 80 lekérés) */

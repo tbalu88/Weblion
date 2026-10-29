@@ -1,0 +1,11 @@
+--- a/portal-salesmate.php
++++ b/portal-salesmate.php
+@@ -18,7 +18,7 @@
+ 
+ /* a deal normalizált, portálhoz szükséges adatai (vagy WP_Error) */
+ function cp_portal_sm_snapshot($deal_id) {
+-	$d = cp_sm_get_deal($deal_id);
++	$d = function_exists('cp_crm_deal_read') ? cp_crm_deal_read($deal_id) : cp_sm_get_deal($deal_id);
+ 	if (is_wp_error($d)) { return $d; }
+ 	$p = cp_panel_opts();
+ 	$e = cp_el_opts();

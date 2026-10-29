@@ -1,0 +1,11 @@
+--- a/sablon.php
++++ b/sablon.php
+@@ -119,7 +119,7 @@
+ 	cp_el_auth();
+ 	$id = isset($_REQUEST['id']) ? preg_replace('/[^0-9]/', '', (string) wp_unslash($_REQUEST['id'])) : '';
+ 	if ($id === '' || strlen($id) > 20) { cp_el_err('Hibás deal azonosító.'); }
+-	$d = cp_sm_get_deal($id);
++	$d = function_exists('cp_crm_deal_read') ? cp_crm_deal_read($id) : cp_sm_get_deal($id);
+ 	if (is_wp_error($d)) { cp_el_err($d->get_error_message(), 502); }
+ 	$o = cp_panel_opts();
+ 	$img = trim(cp_panel_str(cp_panel_get($d, CP_SB_F_IMG)));
