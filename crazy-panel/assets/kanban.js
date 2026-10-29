@@ -12,6 +12,7 @@
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 	const S = { boards: null, mineN: 0, cur: null, data: null, q: '', onlyMine: false, arch: false, main: null, err: '', loading: false, pending: null };
+	try { S.hideActs = localStorage.getItem('cpkb_hideacts') === '1'; } catch (e) { /* privát mód */ }
 	try { const v = localStorage.getItem('cpkb_cur'); if (v) S.cur = v === 'mine' ? 'mine' : Number(v); } catch (e) { /* privát mód */ }
 
 	async function post(action, params) {
@@ -343,8 +344,8 @@
 			'<div class="kb-fld"><h5>Ellenőrzőlista' + (cl.length ? ' <small>' + pct + '%</small>' : '') + '</h5>' + (cl.length ? '<div class="kb-prog"><span style="width:' + pct + '%"></span></div>' : '') +
 				'<ul class="kb-cl">' + cl.map((it, i) => '<li class="' + (it.d ? 'd' : '') + '"><label><input type="checkbox" data-cli="' + i + '"' + (it.d ? ' checked' : '') + '><span>' + esc(it.t) + '</span></label><button type="button" class="kb-tb sm" data-cldel="' + i + '" title="Törlés">' + I.x + '</button></li>').join('') + '</ul>' +
 				'<div class="kb-cladd"><input type="text" data-clnew placeholder="Új elem… (Enter)" maxlength="200"></div></div>' +
-			'<div class="kb-fld"><h5>Hozzászólások</h5><div class="kb-cmp"><textarea rows="2" data-com placeholder="Írj hozzászólást – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: küldés)"></textarea><div class="kb-mpop" hidden></div><button type="button" class="cpx-btn" data-csend>Küldés</button></div>' +
-				'<ul class="kb-coms">' + x.comments.map(m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + '<p>' + nl2br(m.body) + '</p></div></li>').join('') + '</ul></div>' +
+			'<div class="kb-fld"><h5>Hozzászólások és változásnapló <label class="kb-chk kb-actt"><input type="checkbox" data-acts' + (S.hideActs ? '' : ' checked') + '> változások</label></h5><div class="kb-cmp"><textarea rows="2" data-com placeholder="Írj hozzászólást – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: küldés)"></textarea><div class="kb-mpop" hidden></div><button type="button" class="cpx-btn" data-csend>Küldés</button></div>' +
+				'<ul class="kb-coms">' + feed(x).map(it => it.a ? (S.hideActs ? '' : '<li class="kb-act"><span class="kb-dot"></span><div><b>' + esc(it.a.author || '–') + '</b> ' + esc(it.a.text) + ' <small>' + esc(ago(it.a.created_at)) + '</small></div></li>') : (m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + '<p>' + nl2br(m.body) + '</p></div></li>')(it.m)).join('') + '</ul></div>' +
 			'<div class="kb-shf"><small class="cpx-muted">Létrehozta: ' + esc(c.by || '–') + ' · ' + esc(ago(c.at)) + '</small><span class="crm-bgap"></span>' +
 				'<button type="button" class="cpx-btn ghost' + (c.arch ? '' : ' bad') + '" data-arch>' + (c.arch ? 'Visszaállítás' : 'Archiválás') + '</button></div></div>';
 		const save = async p => { try { const r = await post('cp_kb_card_save', Object.assign({ id: c.id }, p)); if (sh.isConnected) drawCard(sh, r); changed(sh); return r; } catch (e) { toast(e.message, true); return null; } };
@@ -378,6 +379,7 @@
 		if (ut) ut.addEventListener('click', () => save({ th: 0 }));
 		const ad = sh.querySelector('[data-adeal]');
 		if (ad) ad.addEventListener('click', () => { const h = sh.querySelector('[data-dpick]'); h.hidden = false; dealPicker(h, dx => save({ deal: dx.id })); h.querySelector('input').focus(); });
+		sh.querySelector('[data-acts]').addEventListener('change', e => { S.hideActs = !e.target.checked; try { localStorage.setItem('cpkb_hideacts', S.hideActs ? '1' : '0'); } catch (er) { /* privát mód */ } drawCard(sh, x); });
 		const ta = sh.querySelector('[data-com]');
 		mention(ta, sh.querySelector('.kb-mpop'));
 		const send = async () => { const b = ta.value.trim(); if (!b) return; ta.disabled = true; try { const r = await post('cp_kb_comment', { card: c.id, body: b }); if (sh.isConnected) drawCard(sh, r); changed(sh); } catch (e) { toast(e.message, true); ta.disabled = false; } };
@@ -386,6 +388,8 @@
 		sh.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Törlöd a hozzászólást?')) return; try { const r = await post('cp_kb_comment', { del: b.dataset.cdel }); drawCard(sh, r); changed(sh); } catch (e) { toast(e.message, true); } }));
 		sh.querySelector('[data-arch]').addEventListener('click', async () => { if (!c.arch && !window.confirm('Archiválod a kártyát? (Az Archív nézetből visszaállítható.)')) return; const r = await save({ arch: c.arch ? 0 : 1 }); if (r && !c.arch) { closeSheet(); toast('Kártya archiválva.'); } });
 	}
+	/* hozzászólások és változások időrendben, a legfrissebb felül */
+	const feed = x => (x.comments || []).map(m => ({ at: m.created_at, id: m.id, m: m })).concat((x.acts || []).map(a => ({ at: a.created_at, id: a.id, a: a }))).sort((p, q) => (p.at < q.at ? 1 : p.at > q.at ? -1 : 0));
 	function closeSheet() { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } }
 
 	/* @ megemlítés a hozzászólásban */
@@ -484,5 +488,12 @@
 	function status(s) { s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function refresh() { S.boards = null; S.data = null; TARGETS = null; if (S.main && S.main.isConnected) await view(S.main); }
 
-	window.CPKanban = { view, status, refresh, quickForm, linked, openCard };
+	/* mélylink (értesítésből, Pumble-ből): #feladatok:123 = a kártya, #feladatok:mine = Nekem nézet */
+	function deep(arg) {
+		if (arg === 'mine') { S.cur = 'mine'; if (S.main && S.main.isConnected) view(S.main); return; }
+		const id = Number(arg);
+		if (id > 0) openCard(id);
+	}
+
+	window.CPKanban = { view, status, refresh, quickForm, linked, openCard, deep };
 })();

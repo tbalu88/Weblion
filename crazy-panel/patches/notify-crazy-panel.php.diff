@@ -1,0 +1,44 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.35.0');
++define('CP_PANEL_VER', '1.36.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -695,6 +695,8 @@
+ 	echo '<input type="email" name="cp_email" placeholder="E-mail-cím" autocomplete="username"' . ($shared ? '' : ' required') . ' autofocus value="' . esc_attr(isset($_POST['cp_email']) ? sanitize_email(wp_unslash($_POST['cp_email'])) : '') . '">';
+ 	echo '<input type="password" name="cp_pw" placeholder="Jelszó" required autocomplete="current-password">';
+ 	echo '<button type="submit">Belépés</button>';
++	/* v1.36: a linkben kért kártya / levél (#feladatok:12) a belépés után is megnyíljon */
++	echo '<script>try{if(location.hash)sessionStorage.setItem("cp_after",location.hash)}catch(e){}</script>';
+ 	if (function_exists('cp_pu_panel_url')) { echo '<p class="cpx-muted" style="margin:4px 0 0;text-align:center"><a href="' . esc_url(cp_pu_panel_url('elfelejtett=1')) . '" style="color:#F2B35B">Elfelejtett jelszó</a></p>'; }
+ 	echo '</form></body></html>';
+ }
+@@ -730,6 +732,7 @@
+ 		'crm'        => function_exists('cp_crm_panel_cfg') ? cp_crm_panel_cfg() : array('on' => false),
+ 		'mail'       => function_exists('cp_mail_cfg') ? cp_mail_cfg() : array('on' => false),
+ 		'kb'         => function_exists('cp_kb_cfg') ? cp_kb_cfg() : array('on' => false),
++		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+ 	cp_panel_head('Crazy panel');
+ 	echo '<body><div id="cpx-app"></div>';
+@@ -738,6 +741,7 @@
+ 	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
+ 	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['nt']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/notify.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+@@ -3618,6 +3622,7 @@
+ require_once __DIR__ . '/panel-users.php';
+ require_once __DIR__ . '/mail.php';
+ require_once __DIR__ . '/kanban.php';
++require_once __DIR__ . '/notify.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

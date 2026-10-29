@@ -161,3 +161,8 @@
 	.kb-list{flex-basis:84vw;max-height:none}
 	.kb-lists{min-height:0}
 }
+/* v1.36: változásnapló a hozzászólások között */
+.kb-actt{float:right;text-transform:none;letter-spacing:0;font-weight:500;color:var(--mu);font-size:12px}
+.kb-coms li.kb-act{align-items:flex-start;gap:8px;color:#5E6470;font-size:12.5px;padding-left:9px}
+.kb-coms li.kb-act b{color:var(--ink);font-weight:600}
+.kb-dot{width:8px;height:8px;border-radius:50%;background:#C9C4BC;flex:none;margin-top:5px}

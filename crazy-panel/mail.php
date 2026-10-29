@@ -353,13 +353,14 @@ function cp_mail_ajax_note_add() {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$tid = (int) ($_POST['thread'] ?? 0);
-	$t = $wpdb->get_row($wpdb->prepare('SELECT id, deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid), ARRAY_A);
+	$t = $wpdb->get_row($wpdb->prepare('SELECT id, deal_id, subject FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid), ARRAY_A);
 	if (!$t) { cp_el_err('Nincs ilyen levélszál.', 404); }
 	$body = trim(mb_substr(sanitize_textarea_field(wp_unslash($_POST['body'] ?? '')), 0, 4000));
 	if ($body === '') { cp_el_err('Üres jegyzet.'); }
 	$men = array();
 	foreach (cp_mail_people() as $p) { if (mb_stripos($body, '@' . $p['n']) !== false) { $men[] = $p['id']; } }
 	$wpdb->insert(cp_mail_t('notes'), array('thread_id' => $tid, 'deal_id' => $t['deal_id'], 'body' => $body, 'author_uid' => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0, 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'mentions' => implode(',', $men), 'created_at' => gmdate('Y-m-d H:i:s')));
+	foreach ($men as $u) { if (function_exists('cp_notify')) { cp_notify($u, 'mail_mention', 'megemlített egy levéljegyzetben (' . mb_substr($t['subject'], 0, 80) . '): ' . cp_nt_quote($body), 'mail:' . $tid); } }
 	wp_send_json_success(cp_mail_thread_full($tid));
 }
 
@@ -399,6 +400,7 @@ function cp_mail_ajax_thread_set() {
 	else { cp_el_err('Hibás kérés.'); }
 	$wpdb->update(cp_mail_t('threads'), $set, array('id' => $id));
 	$ev = cp_mail_event_text($f, $set, $t);
+	if ($f === 'assignee' && !empty($set['assignee_uid']) && (int) $set['assignee_uid'] !== (int) $t['assignee_uid'] && function_exists('cp_notify')) { cp_notify((int) $set['assignee_uid'], 'mail_assign', 'rád osztotta a levelet: „' . mb_substr($t['subject'], 0, 100) . '”', 'mail:' . $id); }
 	if ($ev !== '') { $wpdb->insert(cp_mail_t('events'), array('thread_id' => $id, 'kind' => $f, 'text' => $ev, 'author_uid' => $me, 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'created_at' => gmdate('Y-m-d H:i:s'))); }
 	wp_send_json_success(cp_mail_thread_full($id));
 }

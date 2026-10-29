@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_KB_DB_VER', '1');
+define('CP_KB_DB_VER', '2');
 
 function cp_kb_t($name) {
 	global $wpdb;
@@ -75,6 +75,17 @@ add_action('init', function () {
   mentions varchar(255) NOT NULL DEFAULT '',
   created_at datetime NULL,
   deleted_at datetime NULL,
+  PRIMARY KEY  (id),
+  KEY card_id (card_id)
+) $cs;");
+	/* v2: változásnapló a kártyákon */
+	dbDelta('CREATE TABLE ' . cp_kb_t('activity') . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  card_id bigint(20) unsigned NOT NULL,
+  text varchar(400) NOT NULL DEFAULT '',
+  author_uid int(11) NULL,
+  author varchar(100) NOT NULL DEFAULT '',
+  created_at datetime NULL,
   PRIMARY KEY  (id),
   KEY card_id (card_id)
 ) $cs;");
@@ -274,6 +285,50 @@ function cp_kb_ajax_list_save() {
 	wp_send_json_success(array('id' => $id));
 }
 
+/* ------------------------------------------------------------ változásnapló és értesítések */
+function cp_kb_log($cid, $text) {
+	global $wpdb;
+	if ($text === '') { return; }
+	$wpdb->insert(cp_kb_t('activity'), array('card_id' => (int) $cid, 'text' => mb_substr($text, 0, 400), 'author_uid' => cp_kb_me() ?: null, 'author' => cp_kb_who(), 'created_at' => cp_kb_now()));
+}
+function cp_kb_lname($lid) { global $wpdb; return (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_kb_t('lists') . ' WHERE id = %d', $lid)); }
+function cp_kb_pnames($ids) { $n = array(); foreach (cp_kb_people() as $p) { if (in_array($p['id'], $ids, true)) { $n[] = $p['n']; } } return implode(', ', $n); }
+function cp_kb_q($s) { return '„' . mb_substr((string) $s, 0, 80) . '”'; }
+
+/* a mentés előtti és utáni kártya különbsége → naplósorok; az új felelősök értesítést kapnak */
+function cp_kb_diff($old, $set, $cid) {
+	$L = array();
+	if (isset($set['title']) && $set['title'] !== $old['title']) { $L[] = 'Átnevezte: ' . cp_kb_q($old['title']) . ' → ' . cp_kb_q($set['title']); }
+	if (isset($set['list_id']) && (int) $set['list_id'] !== (int) $old['list_id']) { $L[] = 'Áthelyezte: ' . cp_kb_lname((int) $old['list_id']) . ' → ' . cp_kb_lname((int) $set['list_id']); }
+	if (isset($set['assignees'])) {
+		$a = cp_kb_ids($old['assignees']); $b = cp_kb_ids($set['assignees']);
+		$add = array_values(array_diff($b, $a)); $del = array_values(array_diff($a, $b));
+		if ($add) { $L[] = 'Felelős hozzáadva: ' . cp_kb_pnames($add); }
+		if ($del) { $L[] = 'Felelős eltávolítva: ' . cp_kb_pnames($del); }
+		$title = $set['title'] ?? $old['title'];
+		foreach ($add as $u) { if (function_exists('cp_notify')) { cp_notify($u, 'kb_assign', 'rád osztotta a kártyát: ' . cp_kb_q($title), 'feladatok:' . $cid); } }
+	}
+	if (isset($set['labels']) && $set['labels'] !== $old['labels']) {
+		$nm = array(); foreach (cp_kb_labels() as $l) { if (in_array($l['k'], explode(',', $set['labels']), true)) { $nm[] = $l['n']; } }
+		$L[] = $nm ? 'Címkék: ' . implode(', ', $nm) : 'Címkék törölve';
+	}
+	if (array_key_exists('due', $set) && (string) $set['due'] !== (string) $old['due']) { $L[] = $set['due'] ? 'Határidő: ' . str_replace('-', '.', $set['due']) . '.' : 'Határidő törölve'; }
+	if (isset($set['done']) && (int) $set['done'] !== (int) $old['done']) { $L[] = $set['done'] ? 'Késznek jelölte' : 'Visszavette folyamatba (nem kész)'; }
+	if (isset($set['descr']) && trim($set['descr']) !== trim((string) $old['descr'])) { $L[] = trim($set['descr']) === '' ? 'Törölte a leírást' : 'Módosította a leírást'; }
+	if (isset($set['checklist'])) {
+		$o = json_decode((string) $old['checklist'], true) ?: array(); $n = json_decode($set['checklist'], true) ?: array();
+		$ot = array_column($o, 't'); $nt = array_column($n, 't');
+		foreach (array_diff($nt, $ot) as $t) { $L[] = 'Ellenőrzőlista – új elem: ' . cp_kb_q($t); }
+		foreach (array_diff($ot, $nt) as $t) { $L[] = 'Ellenőrzőlista – törölt elem: ' . cp_kb_q($t); }
+		$od = array(); foreach ($o as $x) { $od[$x['t']] = !empty($x['d']); }
+		foreach ($n as $x) { if (isset($od[$x['t']]) && $od[$x['t']] !== !empty($x['d'])) { $L[] = (!empty($x['d']) ? 'Kipipálta: ' : 'Visszavette a pipát: ') . cp_kb_q($x['t']); } }
+	}
+	if (array_key_exists('deal_id', $set) && (int) $set['deal_id'] !== (int) $old['deal_id']) { $L[] = $set['deal_id'] ? 'Deal csatolva: #' . (int) $set['deal_id'] : 'Deal leválasztva'; }
+	if (array_key_exists('thread_id', $set) && (int) $set['thread_id'] !== (int) $old['thread_id']) { $L[] = $set['thread_id'] ? 'Levélszál csatolva' : 'Levélszál leválasztva'; }
+	if (array_key_exists('archived_at', $set) && (bool) $set['archived_at'] !== (bool) $old['archived_at']) { $L[] = $set['archived_at'] ? 'Archiválta' : 'Visszaállította az archívumból'; }
+	foreach ($L as $t) { cp_kb_log($cid, $t); }
+}
+
 /* ------------------------------------------------------------ kártyák */
 function cp_kb_card_full($id) {
 	global $wpdb;
@@ -282,6 +337,9 @@ function cp_kb_card_full($id) {
 	$com = (array) $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_kb_t('comments') . ' WHERE card_id = %d AND deleted_at IS NULL ORDER BY id DESC', $id), ARRAY_A);
 	foreach ($com as &$m) { $m['id'] = (int) $m['id']; $m['author_uid'] = (int) $m['author_uid']; $m['created_at'] = cp_kb_local($m['created_at']); }
 	unset($m);
+	$act = (array) $wpdb->get_results($wpdb->prepare('SELECT id, text, author, created_at FROM ' . cp_kb_t('activity') . ' WHERE card_id = %d ORDER BY id DESC LIMIT 200', $id), ARRAY_A);
+	foreach ($act as &$a) { $a['id'] = (int) $a['id']; $a['created_at'] = cp_kb_local($a['created_at']); }
+	unset($a);
 	$row = cp_kb_card_row($c, count($com));
 	$cl = json_decode((string) $c['checklist'], true);
 	$row['descr'] = (string) $c['descr'];
@@ -289,7 +347,7 @@ function cp_kb_card_full($id) {
 	$row['by'] = $c['created_by'];
 	$row['at'] = cp_kb_local($c['created_at']);
 	$row['bn'] = (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_kb_t('boards') . ' WHERE id = %d', $c['board_id']));
-	return array('card' => $row, 'comments' => $com, 'links' => cp_kb_link_info(array($row)));
+	return array('card' => $row, 'comments' => $com, 'acts' => $act, 'links' => cp_kb_link_info(array($row)));
 }
 
 add_action('wp_ajax_nopriv_cp_kb_card', 'cp_kb_ajax_card');
@@ -336,6 +394,8 @@ function cp_kb_ajax_card_save() {
 		$pos = (int) $wpdb->get_var($wpdb->prepare('SELECT ' . ($top ? 'COALESCE(MIN(pos), 1) - 1' : 'COALESCE(MAX(pos), -1) + 1') . " FROM $C WHERE list_id = %d", $lid));
 		$wpdb->insert($C, array_merge(array('checklist' => '[]', 'descr' => ''), $set, array('board_id' => (int) $b['id'], 'list_id' => $lid, 'pos' => $pos, 'created_uid' => cp_kb_me(), 'created_by' => cp_kb_who(), 'created_at' => cp_kb_now(), 'updated_at' => cp_kb_now())));
 		$id = (int) $wpdb->insert_id;
+		cp_kb_log($id, 'Létrehozta' . (!empty($set['thread_id']) ? ' egy levélből' : (!empty($set['deal_id']) ? ' a deal adatlapjáról' : '')) . ' – lista: ' . cp_kb_lname($lid));
+		foreach (cp_kb_ids($set['assignees'] ?? '') as $u) { if (function_exists('cp_notify')) { cp_notify($u, 'kb_assign', 'rád osztotta a kártyát: ' . cp_kb_q($set['title']), 'feladatok:' . $id); } }
 	} else {
 		$c = cp_kb_card_ok($id);
 		if (!$c) { cp_el_err('Nincs ilyen kártya.', 404); }
@@ -345,7 +405,7 @@ function cp_kb_ajax_card_save() {
 				$set['list_id'] = $lid; $set['pos'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(MAX(pos), -1) + 1 FROM $C WHERE list_id = %d", $lid));
 			}
 		}
-		if ($set) { $set['updated_at'] = cp_kb_now(); $wpdb->update($C, $set, array('id' => $id)); }
+		if ($set) { $set['updated_at'] = cp_kb_now(); $wpdb->update($C, $set, array('id' => $id)); cp_kb_diff($c, $set, $id); }
 	}
 	wp_send_json_success(cp_kb_card_full($id));
 }
@@ -362,6 +422,7 @@ function cp_kb_ajax_card_move() {
 	$lid = (int) ($_POST['list'] ?? 0);
 	if (!(int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_kb_t('lists') . ' WHERE id = %d AND board_id = %d AND deleted_at IS NULL', $lid, $c['board_id']))) { cp_el_err('Nincs ilyen lista.'); }
 	$wpdb->update($C, array('list_id' => $lid, 'updated_at' => cp_kb_now()), array('id' => (int) $c['id']));
+	if ($lid !== (int) $c['list_id']) { cp_kb_log((int) $c['id'], 'Áthelyezte: ' . cp_kb_lname((int) $c['list_id']) . ' → ' . cp_kb_lname($lid)); }
 	foreach (cp_kb_ids(wp_unslash($_POST['order'] ?? '')) as $i => $cid) { $wpdb->update($C, array('pos' => $i), array('id' => $cid, 'list_id' => $lid)); }
 	wp_send_json_success(array('ok' => 1));
 }
@@ -387,6 +448,7 @@ function cp_kb_ajax_comment() {
 	$men = array();
 	foreach (cp_kb_people() as $p) { if (mb_stripos($body, '@' . $p['n']) !== false) { $men[] = $p['id']; } }
 	$wpdb->insert($M, array('card_id' => (int) $c['id'], 'body' => $body, 'author_uid' => cp_kb_me(), 'author' => cp_kb_who(), 'mentions' => implode(',', $men), 'created_at' => cp_kb_now()));
+	foreach ($men as $u) { if (function_exists('cp_notify')) { cp_notify($u, 'kb_mention', 'megemlített a(z) ' . cp_kb_q($c['title']) . ' kártyán: ' . (function_exists('cp_nt_quote') ? cp_nt_quote($body) : ''), 'feladatok:' . (int) $c['id']); } }
 	$wpdb->update(cp_kb_t('cards'), array('updated_at' => cp_kb_now()), array('id' => (int) $c['id']));
 	wp_send_json_success(cp_kb_card_full((int) $c['id']));
 }

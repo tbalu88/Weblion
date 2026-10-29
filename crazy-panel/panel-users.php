@@ -255,6 +255,8 @@ function cp_pu_admin_page() {
 			} elseif ($do === 'del') {
 				unset($d['list'][$uid]); cp_pu_save($d); $msg = $u['n'] . ' törölve.';
 			}
+		} elseif ($do === 'notif' && function_exists('cp_nt_admin_save')) {
+			$msg = cp_nt_admin_save() ?: 'Nem változott semmi.';
 		} elseif ($do === 'shared') {
 			update_option('cp_panel_shared_off', !empty($_POST['off']) ? '1' : '0', false);
 			$msg = !empty($_POST['off']) ? 'A közös jelszavak kikapcsolva – mostantól csak személyes fiókkal lehet belépni.' : 'A közös jelszavak újra működnek.';
@@ -287,5 +289,6 @@ function cp_pu_admin_page() {
 	echo '<tr><th></th><td><label><input type="checkbox" name="send" value="1" checked> Meghívó levél küldése (a jelszó beállításához)</label></td></tr></table><p><button class="button button-primary">Felhasználó létrehozása</button></p></form>';
 	$off = !cp_pu_shared_on();
 	echo '<h2>Közös jelszavak (átmenet)</h2><form method="post">' . wp_nonce_field('cp_pu_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_pu_do" value="shared"><p>A régi közös admin- és irodai jelszó ' . ($off ? '<b>ki van kapcsolva</b>.' : '<b>még működik</b> (a belépésnél üresen hagyott e-mail-címmel). Ha mindenki beállította a saját jelszavát, kapcsold ki.') . '</p><label><input type="checkbox" name="off" value="1"' . checked($off, true, false) . '> Közös jelszavak kikapcsolása (csak személyes fiókkal lehessen belépni)</label><p><button class="button">Mentés</button></p></form>';
+	if (function_exists('cp_nt_admin_section')) { cp_nt_admin_section(); }
 	echo '</div>';
 }

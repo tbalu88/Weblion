@@ -1,0 +1,24 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -27,8 +27,11 @@
+   }
+ 
+   /* ------------------------------------------------------------ state */
++  /* v1.36: mélylink (#feladatok:12, #mail:3) – a belépés előtt megnyitott link a belépés után is érvényes */
++  try { const h = sessionStorage.getItem('cp_after'); sessionStorage.removeItem('cp_after'); if (h && !location.hash) history.replaceState(null, '', h); } catch (e) { /* privát mód */ }
++  const DEEP = location.hash.indexOf(':') > 0 ? location.hash.slice(location.hash.indexOf(':') + 1) : '';
+   const S = {
+-    tab: location.hash.slice(1),
++    tab: location.hash.slice(1).split(':')[0],
+     month: monthKey(today()),
+     day: today(),
+     cache: {},      // month -> {events, subs, at}
+@@ -2463,4 +2466,8 @@
+ 	/* ------------------------------------------------------------ start */
+   shell();
+   render();
++  if (DEEP && (S.tab === 'feladatok' || S.tab === 'mail')) {
++    history.replaceState(null, '', '#' + S.tab);
++    setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); }, 300);
++  }
+ })();
