@@ -265,7 +265,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false) {
 	$fmt = function ($l) { return implode(', ', array_map(function ($a) { return $a['n'] !== '' ? $a['n'] . ' <' . $a['e'] . '>' : $a['e']; }, $l)); };
 	/* szál: ugyanaz a partner + ugyanaz a (Re:/Fwd: nélküli) tárgy */
 	$tkey = md5($other['e'] . '|' . cp_imp_norm_subj($subj));
-	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
+	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
 	if (!$t) {
 		$deal = 0;
 		if (function_exists('cp_crm_t')) {
@@ -274,7 +274,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false) {
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $live ? 'inbox' : 'archive', 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
-		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0);
+		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $live ? 'inbox' : 'archive');
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
@@ -296,7 +296,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false) {
 	$upd = array('msg_count' => (int) $t['msg_count'] + $add);
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
 	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
-	if ($live && !$out) { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
+	if ($live && !$out && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	return 'ok';

@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '4');
+define('CP_MAIL_DB_VER', '5');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -52,6 +52,8 @@ add_action('init', function () {
   created_at datetime NULL,
   tkey varchar(32) NOT NULL DEFAULT '',
   src varchar(10) NOT NULL DEFAULT '',
+  seen_at datetime NULL,
+  prev_folder varchar(20) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   KEY deal_id (deal_id),
   KEY last_at (last_at),
@@ -102,6 +104,8 @@ add_action('init', function () {
   PRIMARY KEY  (id),
   KEY thread_id (thread_id)
 ) " . $wpdb->get_charset_collate() . ';');
+	/* v5: olvasott / olvasatlan – a meglévő szálak olvasottként indulnak */
+	if ((int) get_option('cp_mail_db_ver') < 5) { $wpdb->query('UPDATE ' . cp_mail_t('threads') . ' SET seen_at = COALESCE(last_at, UTC_TIMESTAMP()) WHERE seen_at IS NULL'); }
 	update_option('cp_mail_db_ver', CP_MAIL_DB_VER, false);
 }, 7);
 
@@ -322,6 +326,7 @@ function cp_mail_thread_row($t) {
 	return array(
 		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
 		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'st' => $t['status'], 'folder' => $t['folder'],
+		'un' => empty($t['seen_at']) || (!empty($t['last_at']) && $t['seen_at'] < $t['last_at']) ? 1 : 0,
 		'snip' => $t['snippet'], 'cnt' => (int) $t['msg_count'], 'att' => (int) $t['has_attach'], 'at' => cp_mail_local($t['last_at']),
 		'fol' => array_values(array_filter(array_map('intval', explode(',', (string) $t['followers'])))), 'tags' => (string) $t['tags'],
 		'note' => $n ? array('b' => mb_substr((string) $n['body'], 0, 160), 'by' => $n['author'], 'at' => cp_mail_local($n['created_at'])) : null,
@@ -349,8 +354,10 @@ function cp_mail_ajax_threads() {
 	$rows = $wpdb->get_results('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE ' . implode(' AND ', $w) . ' ORDER BY last_at DESC LIMIT 100', ARRAY_A);
 	$counts = array();
 	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' GROUP BY folder", ARRAY_A) as $c) { $counts[$c['folder']] = (int) $c['n']; }
+	$un = array();
+	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND (seen_at IS NULL OR seen_at < last_at) GROUP BY folder", ARRAY_A) as $c) { $un[$c['folder']] = (int) $c['n']; }
 	$counts['follow'] = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND FIND_IN_SET(%d, followers)", $me));
-	wp_send_json_success(array('rows' => array_map('cp_mail_thread_row', (array) $rows), 'counts' => $counts));
+	wp_send_json_success(array('rows' => array_map('cp_mail_thread_row', (array) $rows), 'counts' => $counts, 'un' => $un));
 }
 
 function cp_mail_thread_full($id) {
@@ -374,7 +381,11 @@ add_action('wp_ajax_nopriv_cp_mail_thread', 'cp_mail_ajax_thread');
 add_action('wp_ajax_cp_mail_thread', 'cp_mail_ajax_thread');
 function cp_mail_ajax_thread() {
 	cp_el_auth();
-	$x = cp_mail_db_ok() ? cp_mail_thread_full((int) ($_POST['id'] ?? 0)) : null;
+	global $wpdb;
+	$id = (int) ($_POST['id'] ?? 0);
+	/* megnyitáskor olvasott (a csapat közös postafiókjában mindenkinek) */
+	if ($id && cp_mail_db_ok()) { $wpdb->query($wpdb->prepare('UPDATE ' . cp_mail_t('threads') . ' SET seen_at = UTC_TIMESTAMP() WHERE id = %d', $id)); }
+	$x = cp_mail_db_ok() ? cp_mail_thread_full($id) : null;
 	if (!$x) { cp_el_err('Nincs ilyen levélszál.', 404); }
 	wp_send_json_success($x);
 }
@@ -457,3 +468,66 @@ function cp_mail_event_text($f, $set, $t) {
 	if ($f === 'tags') { return $set['tags'] === $t['tags'] ? '' : ($set['tags'] === '' ? 'Címkék törölve' : mb_substr('Címkék: ' . $set['tags'], 0, 255)); }
 	return '';
 }
+
+/* ------------------------------------------------------------ v1.47: tömeges műveletek a kijelölt levélszálakon
+ * Csak a panelben hat (olvasott, címke, felelős, lezárás, mappa) – a postafiókban és a Salesmate-ben semmi nem változik. */
+function cp_mail_folder_name($f) {
+	return array('inbox' => 'Beérkezett', 'archive' => 'Archív', 'trash' => 'Kuka', 'spam' => 'Spam', 'sent' => 'Elküldött', 'outbox' => 'Kimenő', 'draft' => 'Piszkozatok')[$f] ?? $f;
+}
+add_action('wp_ajax_nopriv_cp_mail_bulk', 'cp_mail_ajax_bulk');
+add_action('wp_ajax_cp_mail_bulk', 'cp_mail_ajax_bulk');
+function cp_mail_ajax_bulk() {
+	cp_el_auth();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$T = cp_mail_t('threads');
+	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) wp_unslash($_POST['ids'] ?? '')))))), 0, 500);
+	$op = sanitize_key(wp_unslash($_POST['op'] ?? ''));
+	$v = (string) wp_unslash($_POST['v'] ?? '');
+	if (!$ids || !in_array($op, array('read', 'unread', 'close', 'open', 'assign', 'tag', 'archive', 'trash', 'spam', 'restore'), true)) { cp_el_err('Hibás kérés.'); }
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	$who = function_exists('cp_panel_who') ? cp_panel_who() : '';
+	$now = gmdate('Y-m-d H:i:s');
+	$rows = (array) $wpdb->get_results('SELECT * FROM ' . $T . ' WHERE id IN (' . implode(',', $ids) . ')', ARRAY_A);
+	$n = 0;
+	$aname = '';
+	if ($op === 'assign') {
+		$uid = ctype_digit($v) ? (int) $v : 0;
+		foreach (cp_mail_people() as $p) { if ($p['id'] === $uid) { $aname = $p['n']; } }
+		if ($uid && $aname === '') { cp_el_err('Nincs ilyen kolléga.'); }
+	}
+	$tagv = $op === 'tag' ? trim(mb_substr(sanitize_text_field($v), 0, 60), " ,") : '';
+	if ($op === 'tag' && $tagv === '') { cp_el_err('Adj meg egy címkét.'); }
+	foreach ($rows as $t) {
+		$set = array(); $ev = '';
+		switch ($op) {
+			case 'read': $set['seen_at'] = $now; break;
+			case 'unread': $set['seen_at'] = null; break;
+			case 'close': if ($t['status'] !== 'closed') { $set['status'] = 'closed'; $ev = 'Levélszál lezárva'; } break;
+			case 'open': if ($t['status'] !== 'open') { $set['status'] = 'open'; $ev = 'Levélszál újranyitva'; } break;
+			case 'assign':
+				if ((int) $t['assignee_uid'] !== $uid) { $set['assignee_uid'] = $uid ?: null; $ev = $uid ? 'Kiosztva: ' . $aname : 'Felelős eltávolítva'; }
+				break;
+			case 'tag':
+				$l = array_filter(array_map('trim', explode(',', (string) $t['tags'])));
+				if (!in_array($tagv, $l, true)) { $l[] = $tagv; $set['tags'] = mb_substr(implode(', ', $l), 0, 255); $ev = mb_substr('Címkék: ' . $set['tags'], 0, 255); }
+				break;
+			case 'archive': case 'trash': case 'spam':
+				if ($t['folder'] !== $op) { $set['folder'] = $op; $set['prev_folder'] = $t['folder']; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
+				break;
+			case 'restore':
+				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive'), true) ? $t['prev_folder'] : 'inbox';
+				if ($t['folder'] !== $to) { $set['folder'] = $to; $set['prev_folder'] = ''; $set['status'] = 'open'; $ev = 'Visszaállítva: ' . cp_mail_folder_name($to); }
+				break;
+		}
+		if (!$set) { continue; }
+		$wpdb->update($T, $set, array('id' => (int) $t['id']));
+		$n++;
+		if ($ev !== '') { $wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => $op, 'text' => $ev, 'author_uid' => $me, 'author' => $who, 'created_at' => $now)); }
+	}
+	if ($op === 'assign' && $uid && $n && $uid !== $me && function_exists('cp_notify')) {
+		cp_notify($uid, 'mail_assign', $n === 1 ? 'rád osztott egy levélszálat' : 'rád osztott ' . $n . ' levélszálat', 'mail:' . (int) $rows[0]['id']);
+	}
+	wp_send_json_success(array('n' => $n));
+}
+

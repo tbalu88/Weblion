@@ -228,3 +228,31 @@
 .ml-aia .cpx-btn{height:32px;font-size:13px}
 .ml-aierr{color:#AE2E24;font-size:13px;background:#FDECEA;border-radius:8px;padding:6px 10px}
 .ml-aif{margin:0;color:var(--mu);font-size:11.5px}
+/* v1.47: olvasatlan, kijelölés, tömeges műveletek */
+.ml-folders b.u{color:#2F6FDB;font-weight:800}
+.ml-item.un .ml-i1 b,.ml-item.un .ml-i2{font-weight:800;color:#141C33}
+.ml-item.un .ml-i1 b::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#2F6FDB;margin-right:6px;vertical-align:1px}
+.ml-item:focus-visible{outline:2px solid #2F6FDB;outline-offset:-2px}
+.ml-ckw{position:relative;flex:none;width:26px;height:26px;cursor:pointer;border-radius:50%}
+.ml-cb{position:absolute;inset:0;border-radius:6px;border:2px solid #9AA0AA;background:#fff;display:none;margin:3px}
+.ml-item:hover .ml-cb,.ml-inbox.sel .ml-cb,.ml-item.ck .ml-cb{display:block}
+.ml-item:hover .ml-ckw .ml-av,.ml-inbox.sel .ml-ckw .ml-av,.ml-item.ck .ml-ckw .ml-av{visibility:hidden}
+.ml-item.ck .ml-cb{background:#2F6FDB;border-color:#2F6FDB}
+.ml-item.ck .ml-cb::after{content:'';position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ml-item.ck{background:#EEF3FD}
+.ml-selbar:empty{display:none}
+.ml-selbar{display:flex;align-items:center;gap:8px;padding:6px 6px;font-size:13px;border-bottom:1px solid var(--li);background:#F6F8FE}
+.ml-sx{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:var(--mu);padding:0 4px}
+.ml-selbar .ml-link{margin-left:auto}
+.ml-selp{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:48px 20px;max-width:620px;margin:0 auto}
+.ml-selp h3{margin:0;font:800 18px "Plus Jakarta Sans",sans-serif}
+.ml-selico{position:relative;font-size:44px;color:#9AA0AA;line-height:1}
+.ml-selico i{position:absolute;right:-10px;top:-6px;width:22px;height:22px;border-radius:50%;background:#2E9E62;color:#fff;font:700 13px/22px Inter,sans-serif;font-style:normal}
+.ml-sbs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.ml-sb{border:1px solid var(--li);background:#fff;border-radius:9px;padding:7px 12px;font:600 13px Inter,sans-serif;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ml-sb:hover{background:#F6F3EE}
+.ml-sb.bad{color:#AE2E24;border-color:#F0C7C2}
+.ml-sb.bad:hover{background:#FDECEA}
+.ml-sbas select{border:0;background:transparent;font:500 13px Inter,sans-serif;color:var(--ink);max-width:160px}
+.ml-selp p{font-size:12.5px;margin:4px 0 0}
+.ml-items{user-select:none;-webkit-user-select:none}
