@@ -198,3 +198,32 @@ function cp_dact_ajax_act_done() {
 	if (!cp_dact_refresh_act((int) $a['id'])) { $wpdb->update(cp_crm_t('activities'), array('completed' => $done ? 1 : 0, 'completed_at' => $done ? gmdate('Y-m-d H:i:s') : null), array('id' => (int) $a['id'])); }
 	wp_send_json_success(array('id' => (int) $a['id'], 'done' => $done ? 1 : 0));
 }
+
+/* ------------------------------------------------------------ v1.53: a Salesmate deal-jegyzeteinek egyszeri áthozatala a háttérben
+ * (hogy a kereső a még meg nem nyitott dealek jegyzeteiben is találjon). Csak azoknál a dealeknél kérdez, ahol a Salesmate
+ * szerint van jegyzet; percenként legfeljebb 15 deal. Utána a deal megnyitásakor frissül, mint eddig. */
+add_action('init', function () {
+	if (!cp_dact_db_ok() || wp_doing_ajax()) { return; }
+	$bf = get_option('cp_dact_bf', array());
+	if (!empty($bf['done'])) { return; }
+	if (!wp_next_scheduled('cp_dact_bf')) { wp_schedule_event(time() + 60, 'cp_minute', 'cp_dact_bf'); }
+}, 30);
+add_action('cp_dact_bf', 'cp_dact_backfill');
+function cp_dact_backfill() {
+	global $wpdb;
+	if (!cp_dact_db_ok() || !function_exists('cp_crm_db_ok') || !cp_crm_db_ok() || get_transient('cp_dact_bf_lock')) { return; }
+	set_transient('cp_dact_bf_lock', 1, 55);
+	$bf = get_option('cp_dact_bf', array());
+	if (!is_array($bf)) { $bf = array(); }
+	$last = isset($bf['last']) ? (int) $bf['last'] : PHP_INT_MAX;
+	$ids = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . " WHERE deleted_at IS NULL AND (last_note <> '' OR last_note_at IS NOT NULL) AND id < %d ORDER BY id DESC LIMIT 15", min($last, 2147483647))));
+	$t0 = time();
+	foreach ($ids as $id) {
+		if (time() - $t0 > 45) { break; }
+		cp_dact_pull($id);
+		$bf['last'] = $id; $bf['n'] = (int) ($bf['n'] ?? 0) + 1;
+	}
+	if (!$ids) { $bf['done'] = time(); wp_clear_scheduled_hook('cp_dact_bf'); }
+	update_option('cp_dact_bf', $bf, false);
+	delete_transient('cp_dact_bf_lock');
+}

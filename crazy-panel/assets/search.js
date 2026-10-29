@@ -24,7 +24,7 @@
 	}
 	/* a legutóbb megnyitottak (ebben a böngészőben) */
 	function recent() { try { const v = JSON.parse(localStorage.getItem('cpx_recent') || '[]'); return Array.isArray(v) ? v.slice(0, 8) : []; } catch (e) { return []; } }
-	function remember(it) { try { const l = recent().filter(x => !(x.k === it.k && x.id === it.id)); l.unshift({ k: it.k, id: it.id, t: it.t, s: it.s }); localStorage.setItem('cpx_recent', JSON.stringify(l.slice(0, 8))); } catch (e) { /* privát mód */ } }
+	function remember(it) { try { const l = recent().filter(x => !(x.k === it.k && x.id === it.id)); l.unshift({ k: it.k, id: it.id, t: it.t, s: it.ico ? '' : it.s }); localStorage.setItem('cpx_recent', JSON.stringify(l.slice(0, 8))); } catch (e) { /* privát mód */ } }
 
 	const KI = { deal: '$', ct: '👤', co: '🏢', mail: '✉', card: '☑' };
 	function openIt(it) {
@@ -37,7 +37,7 @@
 		else if (it.k === 'card' && window.CPNotify) window.CPNotify.go('feladatok:' + it.id);
 	}
 	function row(it, n) {
-		return '<button type="button" class="sr-it' + (n === S.i ? ' on' : '') + '" data-n="' + n + '"><span class="sr-k k-' + it.k + '">' + KI[it.k] + '</span><span class="sr-b"><b>' + esc(it.t) + '</b>' + (it.s ? '<small>' + esc(it.s) + '</small>' : '') + (it.x ? '<em>' + esc(it.x) + '</em>' : '') + '</span>' + (it.r ? '<span class="sr-r">' + it.r + '</span>' : '') + '</button>';
+		return '<button type="button" class="sr-it' + (n === S.i ? ' on' : '') + '" data-n="' + n + '"><span class="sr-k k-' + (it.ico ? 'note' : it.k) + '">' + (it.ico || KI[it.k]) + '</span><span class="sr-b"><b>' + esc(it.t) + '</b>' + (it.s ? '<small>' + esc(it.s) + '</small>' : '') + (it.x ? '<em>' + esc(it.x) + '</em>' : '') + '</span>' + (it.r ? '<span class="sr-r">' + it.r + '</span>' : '') + '</button>';
 	}
 	function draw(groups, note) {
 		const box = S.el.querySelector('.sr-res');
@@ -58,7 +58,7 @@
 	function mark() { S.el.querySelectorAll('.sr-it').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === S.i)); const on = S.el.querySelector('.sr-it.on'); if (on) on.scrollIntoView({ block: 'nearest' }); }
 	function showRecent() {
 		const r = recent();
-		draw([['Legutóbb megnyitott', r]], 'Kezdj el gépelni: deal neve, ügyfél, e-mail, telefonszám, cég, helyszín, #dealszám, vagy bármilyen szó a levelekből és a feladatokból.');
+		draw([['Legutóbb megnyitott', r]], 'Kezdj el gépelni: deal neve, ügyfél, e-mail, telefonszám, cég, helyszín, #dealszám, vagy bármilyen szó a levelekből, a jegyzetekből és a feladatokból.');
 	}
 	async function search(q) {
 		const my = ++S.seq;
@@ -73,6 +73,7 @@
 			['Kontaktok', r.contacts.map(c => ({ k: 'ct', id: c.id, t: c.n, s: [c.e !== c.n ? c.e : '', c.co].filter(Boolean).join(' · '), r: '<small>' + c.c + ' deal</small>' }))],
 			['Cégek', r.companies.map(c => ({ k: 'co', id: c.id, t: c.n, s: c.c + ' kontakt' }))],
 			['Levelek', r.mail.map(m => ({ k: 'mail', id: m.id, t: m.subj || '(nincs tárgy)', s: [m.cn, huD(m.at), m.st === 'closed' ? 'lezárva' : ''].filter(Boolean).join(' · '), x: m.snip }))],
+			['Jegyzetek', (r.notes || []).map(n => ({ k: n.k, id: n.id, ico: '📝', t: n.title || '(név nélkül)', s: [n.src, n.by, huD(n.at)].filter(Boolean).join(' · '), x: n.snip }))],
 			['Feladatok', r.cards.map(c => ({ k: 'card', id: c.id, t: (c.done ? '✓ ' : '') + c.title, s: [c.where, c.due ? 'határidő: ' + huD(c.due) : ''].filter(Boolean).join(' · ') }))]
 		], 'Nincs találat erre: „' + q + '”.');
 	}
@@ -139,7 +140,7 @@
 		'.sr kbd{font:600 11px Inter,sans-serif;border:1px solid #E1DDD6;border-bottom-width:2px;border-radius:5px;padding:0 5px;color:#6B6F78;background:#FAF8F5}' +
 		'.sr-res{overflow-y:auto;padding:6px 0;min-height:60px}.sr-res.busy{opacity:.6}.sr-gh{padding:8px 16px 4px;font:700 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#8A8E96}' +
 		'.sr-it{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;text-align:left;padding:7px 16px;cursor:pointer;font:13.5px Inter,sans-serif;color:#141C33}.sr-it.on{background:#EEF3FD}' +
-		'.sr-k{flex:none;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#F1EFEB;font-size:13px;font-weight:700;color:#6B6F78}.sr-k.k-deal{background:#E4ECFC;color:#2F5BD8}.sr-k.k-ct{background:#FBEBDD}.sr-k.k-co{background:#E9F5EE}.sr-k.k-mail{background:#EEF3FD;color:#2F5BD8}.sr-k.k-card{background:#F3EEFC;color:#6E4FC4}' +
+		'.sr-k{flex:none;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#F1EFEB;font-size:13px;font-weight:700;color:#6B6F78}.sr-k.k-deal{background:#E4ECFC;color:#2F5BD8}.sr-k.k-ct{background:#FBEBDD}.sr-k.k-co{background:#E9F5EE}.sr-k.k-mail{background:#EEF3FD;color:#2F5BD8}.sr-k.k-card{background:#F3EEFC;color:#6E4FC4}.sr-k.k-note{background:#FFF3C4}' +
 		'.sr-b{flex:1;min-width:0}.sr-b b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sr-b small{display:block;color:#8A8E96;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sr-b em{display:block;font-style:normal;color:#4A4F5A;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
 		'.sr-r{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px}.sr-r small{color:#6B6F78;font-size:12px}.sr-st{font-style:normal;font:600 11px Inter,sans-serif;border-radius:999px;padding:1px 7px;background:#EEF0F4;color:#141C33}.sr-st.won{background:#DFF3E8;color:#216E4E}.sr-st.lost{background:#FDECEA;color:#AE2E24}' +
 		'.sr-none{padding:20px 16px;color:#6B6F78;font-size:13.5px}.sr-ft{display:flex;gap:16px;padding:8px 16px;border-top:1px solid #EEEAE4;font-size:12px;color:#8A8E96;flex-wrap:wrap}.sr-ft kbd{margin-right:2px}' +

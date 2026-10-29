@@ -28,7 +28,7 @@ function cp_srch_ajax() {
 function cp_srch_data($q) {
 	global $wpdb;
 	$q = trim(mb_substr($q, 0, 80));
-	$out = array('deals' => array(), 'contacts' => array(), 'companies' => array(), 'mail' => array(), 'cards' => array(), 'q' => $q);
+	$out = array('deals' => array(), 'contacts' => array(), 'companies' => array(), 'mail' => array(), 'cards' => array(), 'notes' => array(), 'q' => $q);
 	if (mb_strlen($q) < 2) { return $out; }
 	$words = cp_srch_words($q);
 	$digits = preg_replace('/\D/', '', $q);
@@ -76,6 +76,59 @@ function cp_srch_data($q) {
 		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.done, k.due, b.name board, l.name list FROM ' . cp_kb_t('cards') . ' k JOIN ' . cp_kb_t('boards') . ' b ON b.id = k.board_id LEFT JOIN ' . cp_kb_t('lists') . " l ON l.id = k.list_id WHERE k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $kw ORDER BY k.done, k.id DESC LIMIT 6", $me, $me), ARRAY_A);
 		foreach ($rows as $r) { $out['cards'][] = array('id' => (int) $r['id'], 'title' => $r['title'], 'done' => (int) $r['done'], 'due' => $r['due'], 'where' => trim($r['board'] . ' · ' . $r['list'], ' ·')); }
 	}
+	/* v1.53: jegyzetek – deal-jegyzetek (panel és Salesmate), a deal megjegyzés-mezői, levélszál-jegyzetek, kártya-hozzászólások, tevékenységek leírása */
+	$out['notes'] = cp_srch_notes($words, $crm);
+	return $out;
+}
+/* a találat környezete a szövegből */
+function cp_srch_snip($text, $words) {
+	$t = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags((string) $text)));
+	$pos = false;
+	foreach ($words as $w) { $p = mb_stripos($t, $w); if ($p !== false) { $pos = $p; break; } }
+	if ($pos === false) { return mb_substr($t, 0, 140) . (mb_strlen($t) > 140 ? '…' : ''); }
+	$st = max(0, $pos - 50);
+	return ($st > 0 ? '…' : '') . mb_substr($t, $st, 150) . (mb_strlen($t) > $st + 150 ? '…' : '');
+}
+function cp_srch_notes($words, $crm) {
+	global $wpdb;
+	$res = array();
+	$add = function ($k, $id, $src, $title, $body, $by, $at) use (&$res, $words) { $res[] = array('k' => $k, 'id' => (int) $id, 'src' => $src, 'title' => (string) $title, 'snip' => cp_srch_snip($body, $words), 'by' => (string) $by, 'at' => (string) $at); };
+	if ($crm) {
+		$D = cp_crm_t('deals');
+		if (function_exists('cp_dact_t') && function_exists('cp_dact_db_ok') && cp_dact_db_ok()) {
+			$w = cp_srch_like('n.body', $words);
+			foreach ((array) $wpdb->get_results('SELECT n.deal_id, n.body, n.author, n.src, n.created_at, d.title FROM ' . cp_dact_t() . " n JOIN $D d ON d.id = n.deal_id WHERE n.deleted_at IS NULL AND d.deleted_at IS NULL AND $w ORDER BY n.created_at DESC LIMIT 8", ARRAY_A) as $r) {
+				$add('deal', $r['deal_id'], $r['src'] === 'sm' ? 'Deal-jegyzet (Salesmate)' : 'Deal-jegyzet', $r['title'], $r['body'], $r['author'], $r['created_at']);
+			}
+		}
+		/* a deal saját megjegyzés-mezői (a Salesmate utolsó jegyzete is) */
+		$w = cp_srch_like("CONCAT_WS(' ', d.note, d.last_note, d.description)", $words);
+		foreach ((array) $wpdb->get_results("SELECT d.id, d.title, d.note, d.last_note, d.description, d.modified_at FROM $D d WHERE d.deleted_at IS NULL AND $w ORDER BY d.modified_at DESC LIMIT 6", ARRAY_A) as $r) {
+			$txt = $r['note'] . ' ' . $r['last_note'] . ' ' . $r['description'];
+			$add('deal', $r['id'], 'Deal megjegyzés', $r['title'], $txt, '', $r['modified_at']);
+		}
+		/* tevékenységek címe / leírása */
+		$w = cp_srch_like("CONCAT_WS(' ', a.description)", $words);
+		foreach ((array) $wpdb->get_results('SELECT a.related_id, a.title, a.description, a.due_at, d.title dt FROM ' . cp_crm_t('activities') . " a JOIN $D d ON d.id = a.related_id WHERE a.deleted_at IS NULL AND d.deleted_at IS NULL AND a.description <> '' AND $w ORDER BY a.due_at DESC LIMIT 5", ARRAY_A) as $r) {
+			$add('deal', $r['related_id'], 'Tevékenység: ' . mb_substr($r['title'], 0, 60), $r['dt'], $r['description'], '', $r['due_at']);
+		}
+	}
+	if (function_exists('cp_mail_db_ok') && cp_mail_db_ok() && cp_srch_can('mail')) {
+		$w = cp_srch_like('n.body', $words);
+		foreach ((array) $wpdb->get_results('SELECT n.thread_id, n.body, n.author, n.created_at, t.subject FROM ' . cp_mail_t('notes') . ' n JOIN ' . cp_mail_t('threads') . " t ON t.id = n.thread_id WHERE n.deleted_at IS NULL AND $w ORDER BY n.created_at DESC LIMIT 6", ARRAY_A) as $r) {
+			$add('mail', $r['thread_id'], 'Levél-jegyzet', $r['subject'], $r['body'], $r['author'], $r['created_at']);
+		}
+	}
+	if (function_exists('cp_kb_t') && get_option('cp_kb_db_ver') && cp_srch_can('feladatok')) {
+		$me = function_exists('cp_kb_me') ? (int) cp_kb_me() : 0;
+		$w = cp_srch_like('c.body', $words);
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT c.card_id, c.body, c.author, c.created_at, k.title FROM ' . cp_kb_t('comments') . ' c JOIN ' . cp_kb_t('cards') . ' k ON k.id = c.card_id JOIN ' . cp_kb_t('boards') . " b ON b.id = k.board_id WHERE c.deleted_at IS NULL AND k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $w ORDER BY c.created_at DESC LIMIT 6", $me, $me), ARRAY_A) as $r) {
+			$add('card', $r['card_id'], 'Kártya-hozzászólás', $r['title'], $r['body'], $r['author'], $r['created_at']);
+		}
+	}
+	usort($res, function ($a, $b) { return strcmp($b['at'], $a['at']); });
+	$seen = array(); $out = array();
+	foreach ($res as $r) { $key = $r['k'] . $r['id'] . $r['snip']; if (isset($seen[$key])) { continue; } $seen[$key] = 1; $r['at'] = function_exists('cp_crm_local') ? cp_crm_local($r['at']) : $r['at']; $out[] = $r; if (count($out) >= 10) { break; } }
 	return $out;
 }
 
