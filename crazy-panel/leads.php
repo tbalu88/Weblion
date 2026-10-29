@@ -121,6 +121,9 @@ function cp_lead_ajax_list() {
 	cp_lead_match();
 	$w = "status <> 'spam'";
 	if (($_POST['st'] ?? '') === 'spam') { $w = "status = 'spam'"; }
+	/* v1.43: a pipeline-hoz – csak a még párosítatlan (Salesmate-szinkronra váró) megkeresések, és a friss párosítások */
+	$pending = !empty($_POST['pending']);
+	if ($pending) { $w = "status <> 'spam' AND deal_id IS NULL AND created_at >= '" . gmdate('Y-m-d H:i:s', time() - 7 * DAY_IN_SECONDS) . "'"; }
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));
 	if ($q !== '') { $l = '%' . $wpdb->esc_like($q) . '%'; $w .= $wpdb->prepare(' AND (name LIKE %s OR email LIKE %s OR phone LIKE %s OR data LIKE %s)', $l, $l, $l, $l); }
 	$rows = (array) $wpdb->get_results('SELECT * FROM ' . cp_lead_t() . " WHERE $w ORDER BY id DESC LIMIT 200", ARRAY_A);
@@ -135,7 +138,11 @@ function cp_lead_ajax_list() {
 			'at' => function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at'], 'f' => is_array($fd) ? cp_lead_pairs($fd) : array(),
 			'deal' => $d ? array('id' => (int) $d['id'], 't' => $d['title'], 'stage' => $d['stage'], 'status' => $d['status']) : null);
 	}
-	wp_send_json_success(array('rows' => $out, 'labels' => cp_lead_labels(), 'cols' => cp_lead_cols()));
+	$fresh = array();
+	if ($pending) {
+		foreach ((array) $wpdb->get_results('SELECT id, deal_id FROM ' . cp_lead_t() . " WHERE status = 'new' AND deal_id IS NOT NULL AND created_at >= '" . gmdate('Y-m-d H:i:s', time() - 3 * DAY_IN_SECONDS) . "'", ARRAY_A) as $f) { $fresh[(int) $f['deal_id']] = (int) $f['id']; }
+	}
+	wp_send_json_success(array('rows' => $out, 'labels' => cp_lead_labels(), 'cols' => cp_lead_cols(), 'fresh' => (object) $fresh));
 }
 
 add_action('wp_ajax_nopriv_cp_lead_set', 'cp_lead_ajax_set');

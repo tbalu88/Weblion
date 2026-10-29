@@ -31,6 +31,7 @@
 		S.dense = !!k.dense;
 		if (Array.isArray(k.qf)) S.qf = k.qf.filter(x => typeof x === 'string');
 		if (Array.isArray(k.fold)) S.fold = k.fold.filter(x => typeof x === 'string');
+		if (S.mode === 'leads') S.mode = 'board';
 	} catch (e) { /* privát mód */ }
 	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, won: S.won, dense: S.dense, qf: S.qf, fold: S.fold })); } catch (e) { /* privát mód */ } }
 
@@ -63,7 +64,7 @@
 		return [['', 'Minden felelős']].concat(ids.map(i => [i, USERS[i].n + (USERS[i].a ? '' : ' (inaktív)')]));
 	}
 	function head() {
-		const seg = '<div class="crm-seg">' + [['list', 'Lista'], ['board', 'Pipeline'], ['leads', 'Megkeresések']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+		const seg = '<div class="crm-seg">' + [['list', 'Lista'], ['board', 'Pipeline']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
 		const own = '<select data-f="own" aria-label="Felelős">' + opts(ownerOpts(), S.own) + '</select>';
 		let f = '';
 		if (S.mode === 'leads') {
@@ -126,9 +127,10 @@
 				S.loading = false;
 				if (body()) drawList(body());
 			} else {
-				const d = await post('cp_crm_board', { own: S.own, won: S.won ? 1 : '' });
+				const [d, lp] = await Promise.all([post('cp_crm_board', { own: S.own, won: S.won ? 1 : '' }), post('cp_lead_list', { pending: 1 }).catch(() => null)]);
 				if (my !== S.seq) return;
 				S.board = d;
+				S.pend = lp || { rows: [], fresh: {} };
 				S.loading = false;
 				if (body()) drawBoard(body());
 			}
@@ -141,6 +143,18 @@
 	}
 
 	/* ------------------------------------------------------------ v1.42: megkeresések (a weboldal űrlapjairól, párhuzamosan a Salesmate-tel) */
+	const agoLead = s => { const d = (Date.now() - new Date(String(s).replace(' ', 'T')).getTime()) / 60000; return d < 2 ? 'most' : d < 60 ? Math.round(d) + ' perce' : d < 1440 ? Math.round(d / 60) + ' órája' : huDT(s); };
+	/* a pipeline-on várakozó megkeresés adatlapja (amíg a Salesmate-deal át nem jön) */
+	function openLead(id) {
+		const x = ((S.pend && S.pend.rows) || []).find(r => r.id === id);
+		if (!x) return;
+		const L = S.pend.labels || {}, COLS = S.pend.cols || {};
+		const lab = k => L[k] || (COLS[k] && LBL[COLS[k]]) || k.replace(/^(Deal|Contact|Company)\./, '');
+		const sh = sheet(sheetHead(esc(x.n || x.e || 'Új megkeresés')) + '<p class="crm-warn" style="background:#FFF7E0;color:#7F5F01">A weboldalról érkezett ' + esc(agoLead(x.at)) + ' (' + esc(x.form || 'űrlap') + '). A Salesmate-ben létrejött deal pár percen belül átjön, és ez a kártya a helyére kerül.</p>' +
+			'<dl class="crm-dl">' + (x.e ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(x.e) + '">' + esc(x.e) + '</a></dd>' : '') + (x.p ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(x.p).replace(/[^\d+]/g, '')) + '">' + esc(x.p) + '</a></dd>' : '') +
+			Object.keys(x.f).filter(k => x.f[k] !== '' && !/^Contact\.(firstName|lastName|name|email|mobile|phone)$/.test(k)).map(k => '<dt>' + esc(lab(k)) + '</dt><dd>' + esc(x.f[k]) + '</dd>').join('') + '</dl>');
+		return sh;
+	}
 	function drawLeads(box) {
 		const x = S.leads || { rows: [] }, L = x.labels || {}, COLS = x.cols || {};
 		const lab = k => L[k] || (COLS[k] && LBL[COLS[k]]) || k.replace(/^(Deal|Contact|Company)\./, '');
@@ -375,14 +389,17 @@
 				h += '<section class="crm-col folded" data-stage="' + esc(s) + '"><button type="button" class="crm-unfold" data-fold="' + esc(s) + '" title="Oszlop kinyitása"><span>' + esc(s) + '</span><b>' + l.length + '</b></button></section>';
 				return;
 			}
+			const pend = s === STAGES[0] && S.pend && !S.qf.length ? S.pend.rows.filter(x => !S.q || hit({ title: x.n, cn: x.n, ce: x.e, cp: x.p }, S.q)) : [];
 			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span><span class="crm-chb">' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '<button type="button" class="crm-add crm-fold" data-fold="' + esc(s) + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(s) + '">‹</button></span></div>' +
-				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small></header><div class="crm-cards">';
+				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small></header><div class="crm-cards">' +
+				pend.map(x => { const ev = x.f['Deal.dateCustomField1'] || '', sv = x.f['Deal.multiSelectCustomField3'] || ''; return '<article class="crm-card crm-pend" data-lead="' + x.id + '" tabindex="0"><div class="crm-ct"><span class="crm-lnew">új</span> ' + esc(x.n || x.e || 'Névtelen') + '</div><div class="crm-cl">' + (ev ? '<span>' + esc(shortD(ev)) + '</span><i>•</i>' : '') + '<span class="cpx-muted">' + esc(sv || x.form || 'weboldal') + '</span></div><div class="crm-pw">⏳ Salesmate-szinkronra vár · ' + esc(agoLead(x.at)) + '<button type="button" class="crm-px" data-pdel="' + x.id + '" title="Elvetés (spam / teszt)">×</button></div></article>'; }).join('');
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
 				const rot = r.rot && r.rot <= t ? dayDiff(r.rot, t) : 0;
 				const act = r.na ? (r.na < now ? '<span class="crm-na late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑ lejárt</span>' : '<span class="crm-na" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑ ' + esc(shortD(r.na.slice(0, 10))) + '</span>') : '<span class="crm-na none" title="Nincs ütemezett teendő">⚑ nincs teendő</span>';
 				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
-				const open = '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + esc(shortTitle(r)) + '</div>';
+				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
+				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + esc(shortTitle(r)) + '</div>';
 				if (S.dense) {
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i><span>' + esc(money(r.value, r.cur)) + '</span>' + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
@@ -403,6 +420,15 @@
 		bindDrag(box);
 		box.querySelectorAll('[data-fold]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const s = b.dataset.fold; S.fold = S.fold.includes(s) ? S.fold.filter(x => x !== s) : S.fold.concat([s]); save(); redrawBoard(); }));
 		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
+		box.querySelectorAll('[data-lead]').forEach(c => {
+			c.addEventListener('click', e => { if (e.target.closest('[data-pdel]')) return; openLead(Number(c.dataset.lead)); });
+			c.addEventListener('keydown', e => { if (e.key === 'Enter') openLead(Number(c.dataset.lead)); });
+		});
+		box.querySelectorAll('[data-pdel]').forEach(b => b.addEventListener('click', async e => {
+			e.stopPropagation();
+			if (!window.confirm('Elveted ezt a megkeresést a pipeline-ról (spam vagy teszt)? A Salesmate-et nem érinti.')) return;
+			try { await post('cp_lead_set', { id: b.dataset.pdel, st: 'spam' }); S.pend.rows = S.pend.rows.filter(x => x.id !== Number(b.dataset.pdel)); redrawBoard(); } catch (er) { alert(er.message); }
+		}));
 		const bd = box.querySelector('.crm-board');
 		const arr = () => { const a = box.querySelectorAll('[data-arr]'); a[0].disabled = bd.scrollLeft <= 2; a[1].disabled = bd.scrollLeft + bd.clientWidth >= bd.scrollWidth - 2; };
 		box.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => bd.scrollBy({ left: Number(b.dataset.arr) * 250, behavior: 'smooth' })));
@@ -541,6 +567,7 @@
 	const sheetHead = t => '<div class="cpx-sheet-h"><h3>' + t + '</h3><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>';
 
 	async function openDeal(id) {
+		if (S.pend && S.pend.fresh && S.pend.fresh[id]) { const lid = S.pend.fresh[id]; delete S.pend.fresh[id]; post('cp_lead_set', { id: lid, st: 'seen' }).catch(() => {}); if (S.mode === 'board' && S.board) setTimeout(redrawBoard, 0); }
 		const sh = sheet(sheetHead('Deal #' + id) + '<div class="cpx-empty">Betöltés…</div>');
 		if (!sh) return;
 		let x;
@@ -726,6 +753,6 @@
 	}
 
 	/* mélylink: #deals:leads = a Megkeresések nézet */
-	function deep(arg) { if (arg === 'leads') { S.mode = 'leads'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
+	function deep(arg) { if (arg === 'leads') { S.mode = 'board'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
 	window.CPCrm = { view, status, refresh, open: openDeal, deep };
 })();

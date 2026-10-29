@@ -163,13 +163,39 @@ function cp_mail_values($deal_id) {
 		'portal.link'         => (string) $d['portal_link'],
 		'felelos.nev'         => function_exists('cp_crm_user_name') ? cp_crm_user_name($d['owner_id']) : '',
 	));
+	/* v1.43: a Salesmate-ből átvett sablonok változói ({{Deal.…}}, {{Contact.…}}) – a nyers értékek, a szűrőket a renderelés alkalmazza */
+	if (function_exists('cp_crm_spec')) {
+		foreach ((array) cp_crm_spec('deal') as $col => $x) { if (is_array($x) && !empty($x[0]) && array_key_exists($col, $d)) { $v['Deal.' . $x[0]] = str_replace(' | ', ', ', (string) $d[$col]); } }
+	}
+	$v['Deal.id'] = (string) $d['id']; $v['Deal.title'] = (string) $d['title']; $v['Deal.dealValue'] = $d['value'] !== null ? (string) $d['value'] : '';
+	$v['Deal.ugyfelportal_link'] = (string) $d['portal_link'];
+	$v['Contact.id'] = (string) $d['contact_id']; $v['Contact.name'] = $c ? (string) $c['name'] : ''; $v['Contact.email'] = $c ? (string) $c['email'] : '';
+	$v['Contact.mobile'] = $c ? (string) $c['mobile'] : ''; $v['Contact.phone'] = $c ? (string) $c['phone'] : ''; $v['Company.name'] = (string) $co;
 	return $v;
 }
 
+/* Salesmate-szűrők: date : "%Y.%m.%d.", money / money_without_currency, remove: 'x', default: 'x' */
+function cp_mail_filter($x, $filters) {
+	foreach (array_filter(array_map('trim', explode('|', html_entity_decode(stripslashes((string) $filters), ENT_QUOTES, 'UTF-8')))) as $f) {
+		if (preg_match('/^date\s*:\s*["\']?(.*?)["\']?$/u', $f, $m)) {
+			$t = preg_match('/^\d{4}-\d{2}-\d{2}$/', $x) ? strtotime($x . ' 12:00:00 UTC') : (int) strtotime($x);
+			if ($t) { $x = strtr($m[1], array('%Y' => gmdate('Y', $t), '%y' => gmdate('y', $t), '%m' => gmdate('m', $t), '%d' => gmdate('d', $t), '%e' => gmdate('j', $t), '%H' => gmdate('H', $t), '%M' => gmdate('i', $t))); }
+		} elseif (preg_match('/^money/u', $f)) {
+			if (is_numeric($x)) { $x = number_format((float) $x, 0, ',', ' ') . ($f === 'money' ? ' Ft' : ''); }
+		} elseif (preg_match('/^remove\s*:\s*["\'](.*)["\']$/u', $f, $m)) {
+			$x = str_replace($m[1], '', $x);
+		} elseif (preg_match('/^default\s*:\s*["\'](.*)["\']$/u', $f, $m)) {
+			if ($x === '') { $x = $m[1]; }
+		}
+	}
+	return $x;
+}
+
 function cp_mail_render($text, $vals, $html) {
-	return preg_replace_callback('/\{\{\s*([a-z.]+)\s*\}\}/', function ($m) use ($vals, $html) {
+	return preg_replace_callback('/\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*((?:\|[^}]*)?)\}\}/u', function ($m) use ($vals, $html) {
 		if (!array_key_exists($m[1], $vals)) { return $m[0]; }
 		$x = (string) $vals[$m[1]];
+		if ($m[2] !== '' && $x !== '') { $x = cp_mail_filter($x, $m[2]); }
 		if ($x === '') { return $html ? '<span style="background:#FFF3CD">[' . esc_html($m[1]) . ']</span>' : '[' . $m[1] . ']'; }
 		return $html ? esc_html($x) : $x;
 	}, $text);
