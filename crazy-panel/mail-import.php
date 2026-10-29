@@ -104,6 +104,90 @@ function cp_imp_walk($mb, $uid, $part, $num, &$acc) {
 		$acc[$sub] = cp_imp_decode((string) $raw, (int) $part->encoding, cp_imp_param($part, 'charset'));
 	}
 }
+/* v1.41: az ügyfél levelében idézett KORÁBBI SAJÁT LEVELÜNK kinyerése – a Salesmate-ből küldött válaszaink
+ * nincsenek a postafiók Elküldött mappájában, de az ügyfél válaszában idézve ott vannak.
+ * Visszaad: array('text' => …, 'ts' => időbélyeg vagy 0) vagy null. */
+function cp_imp_html_to_quoted_text($html) {
+	$h = preg_replace('#<(style|script|head)[^>]*>.*?</\1>#is', '', (string) $html);
+	$h = preg_replace('#<blockquote[^>]*>#i', "\n[[QS]]\n", $h);
+	$h = preg_replace('#</blockquote>#i', "\n[[QE]]\n", $h);
+	$h = preg_replace('#<(br|/p|/div|/li|/tr|/h\d)\s*/?>#i', "\n", $h);
+	$t = html_entity_decode(wp_strip_all_tags($h), ENT_QUOTES, 'UTF-8');
+	/* a blockquote-on belüli sorok elé „> ” (beágyazásnál többszörösen) */
+	$out = array(); $lvl = 0;
+	foreach (explode("\n", str_replace("\r", '', $t)) as $ln) {
+		if (trim($ln) === '[[QS]]') { $lvl++; continue; }
+		if (trim($ln) === '[[QE]]') { $lvl = max(0, $lvl - 1); continue; }
+		$out[] = str_repeat('> ', $lvl) . $ln;
+	}
+	return implode("\n", $out);
+}
+function cp_imp_ours_re() {
+	$o = cp_imp_opts();
+	return '(' . preg_quote(strtolower($o['user']), '/') . '|eventcrazy|crazy\s?photo|studio\s?frames)';
+}
+function cp_imp_hu_date($s) {
+	$mon = array('jan' => 1, 'feb' => 2, 'márc' => 3, 'marc' => 3, 'ápr' => 4, 'apr' => 4, 'máj' => 5, 'maj' => 5, 'jún' => 6, 'jun' => 6, 'júl' => 7, 'jul' => 7, 'aug' => 8, 'szept' => 9, 'szep' => 9, 'sep' => 9, 'okt' => 10, 'oct' => 10, 'nov' => 11, 'dec' => 12);
+	if (preg_match('/(20\d\d)[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})\.?[^\d]{0,30}?(\d{1,2}):(\d{2})/u', $s, $m)) { return (int) strtotime(sprintf('%04d-%02d-%02d %02d:%02d Europe/Budapest', $m[1], $m[2], $m[3], $m[4], $m[5])); }
+	if (preg_match('/(20\d\d)\.\s*([a-záéíóöőúüű]+)\.?\s*(\d{1,2})\.?[^\d]{0,30}?(\d{1,2}):(\d{2})/iu', $s, $m)) {
+		foreach ($mon as $k => $v) { if (strpos(mb_strtolower($m[2]), $k) === 0) { return (int) strtotime(sprintf('%04d-%02d-%02d %02d:%02d Europe/Budapest', $m[1], $v, $m[3], $m[4], $m[5])); } }
+	}
+	/* angol: „Oct 1, 2026 at 10:05 AM” / „October 1, 2026 10:05” / „1 Oct 2026 at 10:05” */
+	$em = array('jan' => 1, 'feb' => 2, 'mar' => 3, 'apr' => 4, 'may' => 5, 'jun' => 6, 'jul' => 7, 'aug' => 8, 'sep' => 9, 'oct' => 10, 'nov' => 11, 'dec' => 12);
+	$y = $mo = $d = 0; $hh = $mi = -1;
+	if (preg_match('/\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(20\d\d)/', $s, $m) && isset($em[strtolower(substr($m[1], 0, 3))])) { $mo = $em[strtolower(substr($m[1], 0, 3))]; $d = (int) $m[2]; $y = (int) $m[3]; }
+	elseif (preg_match('/\b(\d{1,2})\.?\s+([A-Za-z]{3,9})\.?\s+(20\d\d)/', $s, $m) && isset($em[strtolower(substr($m[2], 0, 3))])) { $mo = $em[strtolower(substr($m[2], 0, 3))]; $d = (int) $m[1]; $y = (int) $m[3]; }
+	if ($y && preg_match('/\b(\d{1,2}):(\d{2})\s*([AaPp][Mm])?/', $s, $t)) {
+		$hh = (int) $t[1]; $mi = (int) $t[2];
+		if (!empty($t[3])) { $pm = strtolower($t[3]) === 'pm'; if ($pm && $hh < 12) { $hh += 12; } if (!$pm && $hh === 12) { $hh = 0; } }
+	}
+	if (!$y || $hh < 0) { return 0; }
+	$ts = (int) strtotime(sprintf('%04d-%02d-%02d %02d:%02d Europe/Budapest', $y, $mo, $d, $hh, $mi));
+	return $ts > 1500000000 && $ts < time() + 86400 ? $ts : 0;
+}
+function cp_imp_quoted_reply($plain, $html) {
+	$t = trim((string) $plain) !== '' ? str_replace("\r", '', (string) $plain) : ($html !== null ? cp_imp_html_to_quoted_text($html) : '');
+	if ($t === '') { return null; }
+	$ours = cp_imp_ours_re();
+	$lines = explode("\n", $t);
+	$n = count($lines);
+	for ($i = 0; $i < $n; $i++) {
+		$L = $lines[$i];
+		/* a) „… <info@eventcrazy.hu> ezt írta:” / „On …, EventCrazy <…> wrote:” (akár két sorba tördelve) */
+		$hdr = $L . (isset($lines[$i + 1]) && !preg_match('/(írta|wrote)\s*:\s*$/u', $L) ? ' ' . $lines[$i + 1] : '');
+		if (preg_match('/(írta|wrote|schrieb)\s*:\s*$/u', trim($hdr)) && preg_match('/' . $ours . '/iu', $hdr) && !preg_match('/^\s*>/', $L)) {
+			$j = preg_match('/(írta|wrote)\s*:\s*$/u', $L) ? $i + 1 : $i + 2;
+			$body = array();
+			for (; $j < $n; $j++) {
+				$q = $lines[$j];
+				if (!preg_match('/^\s*>/', $q)) { if (trim($q) === '' && !$body) { continue; } if (trim($q) === '') { $body[] = ''; continue; } break; }
+				$q = preg_replace('/^\s*>\s?/', '', $q);
+				if (preg_match('/^\s*>/', $q)) { continue; }   /* mélyebb idézet: a mi levelünk által idézett régebbi rész */
+				if (preg_match('/(írta|wrote|schrieb)\s*:\s*$/u', $q)) { break; }
+				$body[] = $q;
+			}
+			$txt = trim(preg_replace("/\n{3,}/", "\n\n", implode("\n", $body)));
+			return mb_strlen($txt) >= 20 ? array('text' => mb_substr($txt, 0, 8000), 'ts' => cp_imp_hu_date($hdr)) : null;
+		}
+		/* b) Outlook-stílus: „From: / Feladó: EventCrazy <info@…>” fejlécblokk, utána a levelünk */
+		if (preg_match('/^\s*\**(from|feladó)\s*:\**\s*(.*)$/iu', $L, $m) && preg_match('/' . $ours . '/iu', $m[2])) {
+			$j = $i + 1; $ts = 0;
+			for (; $j < $n && $j < $i + 8; $j++) {
+				if (preg_match('/^\s*\**(sent|date|elküldve|dátum|küldve)\s*:\**\s*(.*)$/iu', $lines[$j], $d)) { $ts = cp_imp_hu_date($d[2]); }
+				if (trim($lines[$j]) === '' || preg_match('/^\s*\**(subject|tárgy)\s*:/iu', $lines[$j])) { if (trim($lines[$j]) !== '') { $j++; } break; }
+			}
+			$body = array();
+			for (; $j < $n; $j++) {
+				if (preg_match('/^\s*\**(from|feladó)\s*:/iu', $lines[$j]) || preg_match('/^-{2,}\s*(original message|eredeti üzenet)/iu', $lines[$j])) { break; }
+				$body[] = preg_replace('/^\s*>\s?/', '', $lines[$j]);
+			}
+			$txt = trim(preg_replace("/\n{3,}/", "\n\n", implode("\n", $body)));
+			return mb_strlen($txt) >= 20 ? array('text' => mb_substr($txt, 0, 8000), 'ts' => $ts ?: 0) : null;
+		}
+	}
+	return null;
+}
+
 /* a szöveg tisztítása: idézett előzmények és aláírás-sallang le, max. 8000 karakter */
 function cp_imp_clean_text($plain, $html) {
 	$t = $plain;
@@ -117,6 +201,7 @@ function cp_imp_clean_text($plain, $html) {
 	/* „X írta:” / „On … wrote:” / „-----Original Message-----” utáni rész, és a > idézett sorok */
 	$t = preg_replace('/\n[^\n]{0,200}(írta|wrote|schrieb)\s*:\s*\n.*$/su', '', $t);
 	$t = preg_replace('/\n-{2,}\s*(Original Message|Eredeti üzenet|Forwarded message|Továbbított üzenet)\s*-{2,}.*$/sui', '', $t);
+	$t = preg_replace('/\n\s*\**(From|Feladó)\s*:\**[^\n]*\n\s*\**(Sent|Date|Elküldve|Dátum|Küldve)\s*:.*$/sui', '', $t);
 	$t = preg_replace('/^>.*$\n?/m', '', $t);
 	$t = preg_replace("/[ \t\x{00A0}]+/u", ' ', $t);
 	$t = trim(preg_replace("/\n{3,}/", "\n\n", $t));
@@ -182,7 +267,21 @@ function cp_imp_one($mb, $uid, $sent) {
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
 		'status' => '', 'sent_at' => $at, 'mid' => $mid));
-	$upd = array('msg_count' => (int) $t['msg_count'] + 1);
+	$add = 1;
+	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
+	if (!$out) {
+		$qr = cp_imp_quoted_reply($acc['plain'] ?? '', $acc['html'] ?? null);
+		if ($qr) {
+			$qmid = md5('q|' . $tkey . '|' . mb_strtolower(preg_replace('/\W+/u', '', mb_substr($qr['text'], 0, 400))));
+			if (!(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $qmid))) {
+				$qts = $qr['ts'] && $qr['ts'] < $ts ? $qr['ts'] : $ts - 60;
+				$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => 'out', 'from_name' => 'EventCrazy', 'from_email' => $me, 'to_list' => mb_substr($other['n'] !== '' ? $other['n'] . ' <' . $other['e'] . '>' : $other['e'], 0, 2000), 'cc_list' => '',
+					'subject' => mb_substr($subj, 0, 255), 'body' => '<p>' . str_replace("\n", '<br>', esc_html($qr['text'])) . '</p>', 'attachments' => '[]', 'status' => 'idézetből', 'sent_at' => gmdate('Y-m-d H:i:s', $qts), 'mid' => $qmid));
+				$add++;
+			}
+		}
+	}
+	$upd = array('msg_count' => (int) $t['msg_count'] + $add);
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
@@ -196,6 +295,17 @@ function cp_imp_tick() {
 	$s = cp_imp_state();
 	if (empty($s['running'])) { wp_clear_scheduled_hook('cp_imp_tick'); return; }
 	if (get_transient('cp_imp_lock')) { return; }
+	/* v1.41: a régi (idézetek nélküli) formátumban átvett leveleket töröljük a panelből, és elölről kezdjük – a postafiókot nem érinti */
+	if ((int) ($s['v'] ?? 1) < 2) {
+		global $wpdb;
+		$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
+		$wpdb->query("DELETE m FROM $M m JOIN $T t ON t.id = m.thread_id WHERE t.src = 'imap'");
+		$wpdb->query("DELETE FROM $T WHERE src = 'imap'");
+		foreach ($s['folders'] as &$f0) { unset($f0['uids'], $f0['pos'], $f0['total'], $f0['done']); }
+		unset($f0);
+		$s['cnt'] = array(); $s['v'] = 2; $s['restarted'] = time();
+		cp_imp_state_set($s);
+	}
 	set_transient('cp_imp_lock', 1, 120);
 	if (function_exists('set_time_limit')) { @set_time_limit(110); }
 	$t0 = time();
@@ -228,10 +338,12 @@ function cp_imp_start($folders) {
 	$list = array();
 	foreach ((array) ($sv['folders'] ?? array()) as $f) { if (in_array($f['raw'], $folders, true)) { $list[] = array('raw' => $f['raw'], 'name' => $f['name'], 'sent' => !empty($f['sent'])); } }
 	if (!$list) { return 'Válassz legalább egy mappát.'; }
-	cp_imp_state_set(array('running' => 1, 'started' => time(), 'since' => gmdate('d-M-Y', strtotime('-' . max(1, (int) $o['years']) . ' years')), 'folders' => $list, 'cnt' => array()));
+	cp_imp_state_set(array('v' => 2, 'running' => 1, 'started' => time(), 'since' => gmdate('d-M-Y', strtotime('-' . max(1, (int) $o['years']) . ' years')), 'folders' => $list, 'cnt' => array()));
 	if (!wp_next_scheduled('cp_imp_tick')) { wp_schedule_event(time() + 5, 'cp_minute', 'cp_imp_tick'); }
 	return 'Az import elindult – percenként halad, nyugodtan bezárhatod az oldalt.';
 }
+
+function cp_imp_quoted_count() { global $wpdb; return (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_mail_t('messages') . " WHERE status = 'idézetből'"); }
 
 /* ------------------------------------------------------------ beállítás: Beállítások → Crazy levelezés */
 add_action('admin_menu', function () { add_options_page('Crazy levelezés', 'Crazy levelezés', 'manage_options', 'cp-mail-import', 'cp_imp_admin_page'); });
@@ -288,7 +400,7 @@ function cp_imp_admin_page() {
 		echo '<p><button class="button button-primary"' . (!empty($s['running']) ? ' disabled' : '') . '>Import indítása</button></p></form>';
 	}
 	if ($s) {
-		echo '<h2>Import állapota</h2><p>' . (!empty($s['running']) ? '<b>Fut</b> (percenként egy köteg)' : (!empty($s['finished']) ? '<b>Kész</b> – ' . esc_html(wp_date('Y.m.d. H:i', (int) $s['finished'])) : 'Áll')) . '. Átvéve: <b>' . (int) ($s['cnt']['ok'] ?? 0) . '</b> · már megvolt: ' . (int) ($s['cnt']['dup'] ?? 0) . ' · kihagyva (hírlevél, értesítő, üres): ' . (int) ($s['cnt']['skip'] ?? 0) . (!empty($s['err']) ? ' · <span style="color:#b32d2e">hiba: ' . esc_html($s['err']) . '</span>' : '') . '</p><ul>';
+		echo '<h2>Import állapota</h2><p>' . (!empty($s['running']) ? '<b>Fut</b> (percenként egy köteg)' : (!empty($s['finished']) ? '<b>Kész</b> – ' . esc_html(wp_date('Y.m.d. H:i', (int) $s['finished'])) : 'Áll')) . '. Átvéve: <b>' . (int) ($s['cnt']['ok'] ?? 0) . '</b> · már megvolt: ' . (int) ($s['cnt']['dup'] ?? 0) . ' · kihagyva (hírlevél, értesítő, üres): ' . (int) ($s['cnt']['skip'] ?? 0) . ' · ebből a mi válaszaink (idézetből): ' . (int) cp_imp_quoted_count() . (!empty($s['err']) ? ' · <span style="color:#b32d2e">hiba: ' . esc_html($s['err']) . '</span>' : '') . '</p><ul>';
 		foreach ((array) ($s['folders'] ?? array()) as $f) { echo '<li>' . esc_html($f['name']) . ': ' . (isset($f['total']) ? (int) $f['pos'] . ' / ' . (int) $f['total'] : (!empty($f['done']) ? 'kész' : 'várakozik')) . (!empty($f['done']) ? ' ✓' : '') . '</li>'; }
 		echo '</ul>';
 		if (!empty($s['running'])) { echo '<form method="post">' . wp_nonce_field('cp_imp_do', '_wpnonce', true, false) . '<button class="button" name="cp_imp_do" value="stop">Import leállítása</button></form><p class="description">Az oldal frissítésével látod a haladást.</p>'; }
