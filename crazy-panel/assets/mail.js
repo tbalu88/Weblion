@@ -180,6 +180,18 @@
 		});
 	}
 
+	const svg = (d, c) => '<svg class="' + (c || 'ml-ic') + '" viewBox="0 0 24 24" aria-hidden="true">' + d + '</svg>';
+	const DEAL_I = svg('<circle cx="12" cy="12" r="9"/><path d="M14.8 9.2c-.4-.9-1.5-1.5-2.8-1.5-1.6 0-2.8.8-2.8 2s1.2 1.7 2.8 2.1 2.9.9 2.9 2.2-1.3 2.1-2.9 2.1c-1.4 0-2.5-.6-2.9-1.6M12 6v1.7M12 16.3V18"/>', 'ml-dc-i');
+	const X_I = svg('<path d="M6 6l12 12M18 6L6 18"/>');
+	const RE_I = svg('<path d="M10 8L5 12.5l5 4.5"/><path d="M5.5 12.5H14a5 5 0 0 1 5 5V19"/>');
+	const REA_I = svg('<path d="M8 8l-5 4.5L8 17"/><path d="M13 8l-5 4.5 5 4.5"/><path d="M8.5 12.5H15a5 5 0 0 1 5 5V19"/>');
+	const DEL_I = svg('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/>');
+	const MORE_I = svg('<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', 'ml-ic dots');
+	const HMON = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
+	const hdate = s => { const m = String(s || '').match(/^(\d{4})-(\d\d)-(\d\d)[ T](\d\d:\d\d)/); return m ? m[1] + '. ' + HMON[Number(m[2]) - 1] + ' ' + Number(m[3]) + '. ' + m[4] : String(s || ''); };
+	/* „Név <cím>” lista: a név kékkel, a cím alatta */
+	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe">&lt;' + esc(m[2]) + '&gt;</span>' : '<span class="ml-tn">' + esc(x) + '</span>'; }).join(', ');
+
 	/* minta (a postafiókok bekötéséig): csak a böngészőben, nem mentődik */
 	function demoData() {
 		const now = Date.now(), at = m => { const d = new Date(now - m * 60000); const p = n => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
@@ -267,10 +279,10 @@
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
 			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div>' +
 			'<div class="ml-thread">' +
-			(d ? '<div class="ml-dcard"><span class="ml-dc-i">$</span><div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + esc([money(d.value), d.cn, d.co, d.stage].filter(Boolean).join(' • ')) + '</small></div><button type="button" class="cpx-x" data-detach aria-label="Deal leválasztása">×</button></div>' : '') +
+			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small></div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
-			(x.msgs || []).map(m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg" style="background:' + avc(m.from_name) + '">' + esc(ini(m.from_name)) + '</span><div><b>' + esc(m.from_name) + '</b> <span class="cpx-muted">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? ' <span class="ml-dlv">' + esc(m.status) + '</span>' : '') +
-				'<small>Címzett: ' + esc(m.to_list) + (m.cc_list ? ' · Másolat: ' + esc(m.cc_list) : '') + '</small></div><span class="ml-mt">' + esc(String(m.sent_at).replace(/-/g, '.')) + '<span class="ml-ma"><button type="button" disabled title="Válasz">↩</button><button type="button" disabled title="Válasz mindenkinek">↩↩</button></span></span></div>' +
+			(x.msgs || []).map(m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
+				'<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button" disabled title="Válasz">' + RE_I + '</button><button type="button" disabled title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
 				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map(a => '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>').join('') +
 			'</div>' +
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';

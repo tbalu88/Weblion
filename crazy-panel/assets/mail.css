@@ -156,24 +156,39 @@
 .ml-subjh h3{margin:0;font:700 15px "Plus Jakarta Sans",sans-serif;flex:1}
 .ml-dpat{padding:0 12px 6px}
 .ml-thread{flex:1;overflow-y:auto;background:#F6F5F2;padding:8px 10px;display:flex;flex-direction:column;gap:8px;min-height:0}
-.ml-dcard{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--li);border-radius:10px;padding:8px 10px;flex:none}
-.ml-dc-i{width:24px;height:24px;border:1.5px solid var(--mu);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:var(--mu);flex:none}
-.ml-dcard>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-.ml-dcard a{font-size:13px;color:#2F6FDB;font-weight:600;text-decoration:none}
-.ml-dcard small{color:var(--ink);font-size:12.5px}
+.ml-dcard{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #E6E3DE;border-radius:12px;padding:10px 12px;flex:none;box-shadow:0 1px 2px rgba(20,28,51,.05)}
+.ml-dc-i{width:20px;height:20px;flex:none;fill:none;stroke:#6B6F78;stroke-width:1.6;stroke-linecap:round;margin-top:1px}
+.ml-dcard>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.ml-dcard a{font-size:14px;color:#2F5BD8;font-weight:400;text-decoration:none}
+.ml-dcard a:hover{text-decoration:underline}
+.ml-dcard small{color:var(--ink);font-size:13px;display:flex;flex-wrap:wrap;align-items:center}
+.ml-dcard small i{font-style:normal;color:#C4C0B9;font-size:9px;margin:0 9px}
+.ml-dx{border:0;background:none;padding:2px;cursor:pointer;line-height:0;border-radius:6px}
+.ml-dx:hover{background:#F2F0EC}
+.ml-ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ml-ic.dots{fill:currentColor;stroke:none}
+.ml-dx .ml-ic{width:15px;height:15px;stroke:#555B66;stroke-width:2.2}
 .ml-ncard{background:#FDF5E8;border:1px solid #F3E1C4;border-radius:10px;padding:8px 10px;flex:none}
 .ml-nh{display:flex;align-items:center;gap:8px;font-size:12.5px;padding-bottom:5px;border-bottom:1px solid #F0DFC3}
 .ml-nh small{margin-left:auto;color:var(--mu)}
 .ml-ndel{border:0;background:none;color:var(--mu);font-size:16px;cursor:pointer}
 .ml-nb{padding-top:5px;font-size:13px;line-height:1.5;white-space:normal}
 .ml-men{color:#2F6FDB}
-.ml-msg{background:#fff;border:1px solid var(--li);border-radius:10px;padding:10px 12px;flex:none}
-.ml-mh{display:flex;gap:10px;align-items:flex-start;padding-bottom:7px;border-bottom:1px solid #F0ECE6}
-.ml-mh>div{flex:1;min-width:0;font-size:13px}
-.ml-mh>div small{display:block;color:var(--mu);font-size:11.5px;margin-top:2px}
-.ml-mt{color:var(--mu);font-size:11.5px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;white-space:nowrap}
-.ml-ma button{border:0;background:none;color:var(--mu);font-size:15px}
-.ml-dlv{background:#2F6FDB;color:#fff;border-radius:6px;padding:1px 8px;font-size:12px}
+.ml-msg{background:#fff;border:1px solid #E6E3DE;border-radius:12px;padding:12px 14px;flex:none;box-shadow:0 1px 2px rgba(20,28,51,.05)}
+.ml-mh{display:flex;gap:12px;align-items:flex-start;padding-bottom:10px;border-bottom:1px solid #E9E6E1}
+.ml-mh>div{flex:1;min-width:0;font-size:13.5px}
+.ml-av1{font-weight:500!important;font-size:15px!important;color:#3B4150!important}
+.ml-av1.out{background:#DDF5E6;color:#2E6B48!important}
+.ml-from{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:24px}
+.ml-from>span:first-child{color:var(--ink)}
+.ml-fe{color:#6B6F78}
+.ml-to{color:#6B6F78;font-size:12.5px;margin-top:3px;line-height:1.5}
+.ml-tn{color:#2F5BD8}
+.ml-mt{color:#8A8E96;font-size:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;white-space:nowrap}
+.ml-ma{display:flex;gap:4px}
+.ml-ma button{border:0;background:none;color:#6B6F78;padding:3px;border-radius:6px;line-height:0}
+.ml-ma button:not([disabled]):hover{background:#F2F0EC;cursor:pointer}
+.ml-dlv{background:#2F5BD8;color:#fff;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:500;margin-left:18px}
 .ml-mb{padding-top:7px;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
 .ml-mb img{max-width:100%}
 .ml-mb p{margin:0 0 .6em}.ml-nb p{margin:0 0 .4em}
