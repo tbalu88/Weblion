@@ -23,41 +23,61 @@ add_action('wp_ajax_nopriv_cp_search', 'cp_srch_ajax');
 add_action('wp_ajax_cp_search', 'cp_srch_ajax');
 function cp_srch_ajax() {
 	cp_el_auth();
-	wp_send_json_success(cp_srch_data((string) wp_unslash($_REQUEST['q'] ?? '')));
+	wp_send_json_success(cp_srch_data((string) wp_unslash($_REQUEST['q'] ?? ''), array('k' => sanitize_key(wp_unslash($_REQUEST['k'] ?? '')), 'st' => sanitize_text_field(wp_unslash($_REQUEST['st'] ?? '')), 'own' => sanitize_key(wp_unslash($_REQUEST['own'] ?? '')))));
 }
-function cp_srch_data($q) {
+/* v1.56: $f['k'] = csak egy találattípus (deals, contacts, companies, acts, notes, mail, cards) – ilyenkor több találat; $f['st'] = deal-állapot; $f['own'] = '1': csak az enyém */
+function cp_srch_data($q, $f = array()) {
 	global $wpdb;
 	$q = trim(mb_substr($q, 0, 80));
-	$out = array('deals' => array(), 'contacts' => array(), 'companies' => array(), 'mail' => array(), 'cards' => array(), 'notes' => array(), 'q' => $q);
+	$out = array('deals' => array(), 'contacts' => array(), 'companies' => array(), 'acts' => array(), 'mail' => array(), 'cards' => array(), 'notes' => array(), 'q' => $q);
+	$k = (string) ($f['k'] ?? '');
+	$on = function ($g) use ($k) { return $k === '' || $k === $g; };
+	$L = function ($n) use ($k) { return $k !== '' ? 25 : $n; };
+	$mine_sm = !empty($f['own']) && function_exists('cp_pu_current') && cp_pu_current() ? (int) cp_pu_current()['sm'] : 0;
+	$st = in_array($f['st'] ?? '', array('Open', 'Won', 'Lost'), true) ? $f['st'] : '';
 	if (mb_strlen($q) < 2) { return $out; }
 	$words = cp_srch_words($q);
 	$digits = preg_replace('/\D/', '', $q);
 	$crm = function_exists('cp_crm_panel_on') && cp_crm_panel_on() && cp_srch_can('deals');
-	if ($crm) {
+	if ($crm && $on('deals')) {
 		/* deal-ek: a deal-lista keresője (név, e-mail, telefon, helyszín, csomag, #szám) – lezártak is */
-		$r = cp_crm_list_data(array('q' => $q, 'st' => '', 'so' => 'mod'));
-		foreach (array_slice($r['rows'], 0, 8) as $d) { $out['deals'][] = array('id' => $d['id'], 'title' => $d['title'], 'st' => $d['status'], 'stage' => $d['stage'], 'ev' => $d['ev'], 'cn' => $d['cn'], 'v' => $d['value']); }
+		$r = cp_crm_list_data(array('q' => $q, 'st' => $st, 'so' => 'mod', 'own' => $mine_sm ? (string) $mine_sm : ''));
+		foreach (array_slice($r['rows'], 0, $L(8)) as $d) { $out['deals'][] = array('id' => $d['id'], 'title' => $d['title'], 'st' => $d['status'], 'stage' => $d['stage'], 'ev' => $d['ev'], 'cn' => $d['cn'], 'v' => $d['value']); }
+	}
+	if ($crm) {
 		$C = cp_crm_t('contacts'); $CO = cp_crm_t('companies'); $D = cp_crm_t('deals');
+	}
+	if ($crm && $on('contacts')) {
 		$cw = cp_srch_like("CONCAT_WS(' ', c.name, c.email, c.city)", $words);
 		if (strlen($digits) >= 6) { $pl = '%' . $wpdb->esc_like(substr($digits, -8)) . '%'; $cw = '(' . $cw . $wpdb->prepare(" OR REPLACE(REPLACE(REPLACE(c.phone, ' ', ''), '-', ''), '/', '') LIKE %s OR REPLACE(REPLACE(REPLACE(c.mobile, ' ', ''), '-', ''), '/', '') LIKE %s", $pl, $pl) . ')'; }
-		foreach ((array) $wpdb->get_results("SELECT c.id, c.name, c.email, co.name co, (SELECT COUNT(*) FROM $D d WHERE d.contact_id = c.id AND d.deleted_at IS NULL) n FROM $C c LEFT JOIN $CO co ON co.id = c.company_id WHERE c.deleted_at IS NULL AND $cw ORDER BY n DESC, c.id DESC LIMIT 6", ARRAY_A) as $c) {
+		foreach ((array) $wpdb->get_results("SELECT c.id, c.name, c.email, co.name co, (SELECT COUNT(*) FROM $D d WHERE d.contact_id = c.id AND d.deleted_at IS NULL) n FROM $C c LEFT JOIN $CO co ON co.id = c.company_id WHERE c.deleted_at IS NULL AND $cw ORDER BY n DESC, c.id DESC LIMIT " . $L(6), ARRAY_A) as $c) {
 			$out['contacts'][] = array('id' => (int) $c['id'], 'n' => $c['name'] !== '' ? $c['name'] : $c['email'], 'e' => $c['email'], 'co' => (string) $c['co'], 'c' => (int) $c['n']);
 		}
+	}
+	if ($crm && $on('companies')) {
 		$ow = cp_srch_like("CONCAT_WS(' ', co.name, co.website)", $words);
-		foreach ((array) $wpdb->get_results("SELECT co.id, co.name, (SELECT COUNT(*) FROM $C c WHERE c.company_id = co.id AND c.deleted_at IS NULL) n FROM $CO co WHERE co.deleted_at IS NULL AND $ow ORDER BY n DESC, co.id DESC LIMIT 5", ARRAY_A) as $c) {
+		foreach ((array) $wpdb->get_results("SELECT co.id, co.name, (SELECT COUNT(*) FROM $C c WHERE c.company_id = co.id AND c.deleted_at IS NULL) n FROM $CO co WHERE co.deleted_at IS NULL AND $ow ORDER BY n DESC, co.id DESC LIMIT " . $L(5), ARRAY_A) as $c) {
 			$out['companies'][] = array('id' => (int) $c['id'], 'n' => $c['name'], 'c' => (int) $c['n']);
 		}
 	}
+	/* tevékenységek: cím és leírás – a deal-jükhöz visznek */
+	if ($crm && $on('acts')) {
+		$aw = cp_srch_like("CONCAT_WS(' ', a.title, a.description, a.type)", $words);
+		if ($mine_sm) { $aw .= $wpdb->prepare(' AND a.owner_id = %d', $mine_sm); }
+		foreach ((array) $wpdb->get_results('SELECT a.id, a.title, a.type, a.due_at, a.completed, a.owner_id, a.related_id, d.title dt FROM ' . cp_crm_t('activities') . " a LEFT JOIN $D d ON d.id = a.related_id AND a.related_module = '4' WHERE a.deleted_at IS NULL AND $aw ORDER BY a.completed, a.due_at DESC LIMIT " . $L(6), ARRAY_A) as $a) {
+			$out['acts'][] = array('id' => (int) $a['id'], 'deal' => $a['dt'] !== null ? (int) $a['related_id'] : 0, 'title' => $a['title'], 'type' => $a['type'], 'due' => cp_crm_local($a['due_at']), 'done' => (int) $a['completed'], 'owner' => cp_crm_user_name($a['owner_id']), 'dt' => (string) $a['dt']);
+		}
+	}
 	/* levelek: tárgy / partner / szöveg – a szövegben teljes szavas kereséssel */
-	if (function_exists('cp_mail_db_ok') && cp_mail_db_ok() && cp_srch_can('mail')) {
+	if ($on('mail') && function_exists('cp_mail_db_ok') && cp_mail_db_ok() && cp_srch_can('mail')) {
 		$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
 		$tw = cp_srch_like("CONCAT_WS(' ', t.subject, t.contact_name, t.contact_email, t.snippet)", $words);
-		$rows = (array) $wpdb->get_results("SELECT t.id, t.subject, t.contact_name, t.contact_email, t.last_at, t.status, t.folder, '' hit FROM $T t WHERE t.folder NOT IN ('trash', 'spam') AND $tw ORDER BY t.last_at DESC LIMIT 6", ARRAY_A);
+		$rows = (array) $wpdb->get_results("SELECT t.id, t.subject, t.contact_name, t.contact_email, t.last_at, t.status, t.folder, '' hit FROM $T t WHERE t.folder NOT IN ('trash', 'spam') AND $tw ORDER BY t.last_at DESC LIMIT " . $L(6), ARRAY_A);
 		$seen = array_map(function ($r) { return (int) $r['id']; }, $rows);
 		$ft = implode(' ', array_map(function ($w) { return '+' . preg_replace('/[^\p{L}\p{N}@._-]/u', '', $w) . '*'; }, array_filter($words, function ($w) { return mb_strlen($w) >= 3; })));
-		if (count($rows) < 6 && trim(str_replace(array('+', '*'), '', $ft)) !== '') {
+		if (count($rows) < $L(6) && trim(str_replace(array('+', '*'), '', $ft)) !== '') {
 			$more = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.subject, t.contact_name, t.contact_email, t.last_at, t.status, t.folder, SUBSTRING(m.body, 1, 4000) hit FROM $M m JOIN $T t ON t.id = m.thread_id WHERE t.folder NOT IN ('trash', 'spam') AND MATCH(m.body) AGAINST (%s IN BOOLEAN MODE) ORDER BY m.sent_at DESC LIMIT 30", $ft), ARRAY_A);
-			foreach ($more as $r) { if (count($rows) >= 8) { break; } if (!in_array((int) $r['id'], $seen, true)) { $rows[] = $r; $seen[] = (int) $r['id']; } }
+			foreach ($more as $r) { if (count($rows) >= $L(8)) { break; } if (!in_array((int) $r['id'], $seen, true)) { $rows[] = $r; $seen[] = (int) $r['id']; } }
 		}
 		foreach ($rows as $r) {
 			$snip = '';
@@ -70,14 +90,15 @@ function cp_srch_data($q) {
 		}
 	}
 	/* feladatkártyák: a csapattáblák és a saját személyes tábla */
-	if (function_exists('cp_kb_t') && get_option('cp_kb_db_ver') && cp_srch_can('feladatok')) {
+	if ($on('cards') && function_exists('cp_kb_t') && get_option('cp_kb_db_ver') && cp_srch_can('feladatok')) {
 		$me = function_exists('cp_kb_me') ? (int) cp_kb_me() : 0;
 		$kw = cp_srch_like("CONCAT_WS(' ', k.title, k.descr)", $words);
-		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.done, k.due, b.name board, l.name list FROM ' . cp_kb_t('cards') . ' k JOIN ' . cp_kb_t('boards') . ' b ON b.id = k.board_id LEFT JOIN ' . cp_kb_t('lists') . " l ON l.id = k.list_id WHERE k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $kw ORDER BY k.done, k.id DESC LIMIT 6", $me, $me), ARRAY_A);
+		if (!empty($f['own']) && $me) { $kw .= $wpdb->prepare(' AND FIND_IN_SET(%d, k.assignees)', $me); }
+		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.done, k.due, b.name board, l.name list FROM ' . cp_kb_t('cards') . ' k JOIN ' . cp_kb_t('boards') . ' b ON b.id = k.board_id LEFT JOIN ' . cp_kb_t('lists') . " l ON l.id = k.list_id WHERE k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $kw ORDER BY k.done, k.id DESC LIMIT " . $L(6), $me, $me), ARRAY_A);
 		foreach ($rows as $r) { $out['cards'][] = array('id' => (int) $r['id'], 'title' => $r['title'], 'done' => (int) $r['done'], 'due' => $r['due'], 'where' => trim($r['board'] . ' · ' . $r['list'], ' ·')); }
 	}
 	/* v1.53: jegyzetek – deal-jegyzetek (panel és Salesmate), a deal megjegyzés-mezői, levélszál-jegyzetek, kártya-hozzászólások, tevékenységek leírása */
-	$out['notes'] = cp_srch_notes($words, $crm);
+	if ($on('notes')) { $out['notes'] = cp_srch_notes($words, $crm, $L(10)); }
 	return $out;
 }
 /* a találat környezete a szövegből */
@@ -89,7 +110,7 @@ function cp_srch_snip($text, $words) {
 	$st = max(0, $pos - 50);
 	return ($st > 0 ? '…' : '') . mb_substr($t, $st, 150) . (mb_strlen($t) > $st + 150 ? '…' : '');
 }
-function cp_srch_notes($words, $crm) {
+function cp_srch_notes($words, $crm, $max = 10) {
 	global $wpdb;
 	$res = array();
 	$add = function ($k, $id, $src, $title, $body, $by, $at) use (&$res, $words) { $res[] = array('k' => $k, 'id' => (int) $id, 'src' => $src, 'title' => (string) $title, 'snip' => cp_srch_snip($body, $words), 'by' => (string) $by, 'at' => (string) $at); };
@@ -128,7 +149,7 @@ function cp_srch_notes($words, $crm) {
 	}
 	usort($res, function ($a, $b) { return strcmp($b['at'], $a['at']); });
 	$seen = array(); $out = array();
-	foreach ($res as $r) { $key = $r['k'] . $r['id'] . $r['snip']; if (isset($seen[$key])) { continue; } $seen[$key] = 1; $r['at'] = function_exists('cp_crm_local') ? cp_crm_local($r['at']) : $r['at']; $out[] = $r; if (count($out) >= 10) { break; } }
+	foreach ($res as $r) { $key = $r['k'] . $r['id'] . $r['snip']; if (isset($seen[$key])) { continue; } $seen[$key] = 1; $r['at'] = function_exists('cp_crm_local') ? cp_crm_local($r['at']) : $r['at']; $out[] = $r; if (count($out) >= $max) { break; } }
 	return $out;
 }
 

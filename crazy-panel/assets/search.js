@@ -9,7 +9,13 @@
 	const huD = s => { if (!s) return ''; const p = String(s).slice(0, 10).split('-').map(Number); return p[0] + '. ' + HU_MS[p[1] - 1] + ' ' + p[2] + '.'; };
 	const money = v => v == null ? '' : Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft';
 	const ST = { Open: 'nyitott', Won: 'megnyert', Lost: 'elvesztett' };
-	const S = { el: null, q: '', items: [], i: 0, seq: 0, t: null };
+	const S = { el: null, q: '', items: [], i: 0, seq: 0, t: null, k: '', st: '', own: '', fo: false };
+	/* v1.56: szűrők – típus (mint a Salesmate-ben), deal-állapot, csak az enyém */
+	const KINDS = [['', 'Mind'], ['deals', 'Deal'], ['contacts', 'Kontakt'], ['companies', 'Cég'], ['acts', 'Tevékenység'], ['notes', 'Jegyzet'], ['mail', 'Levél'], ['cards', 'Feladat']];
+	try { const f = JSON.parse(localStorage.getItem('cpx_srf') || '{}'); if (KINDS.some(k => k[0] === f.k)) S.k = f.k; if (['', 'Open', 'Won', 'Lost'].includes(f.st)) S.st = f.st; S.own = f.own ? '1' : ''; } catch (e) { /* privát mód */ }
+	const saveF = () => { try { localStorage.setItem('cpx_srf', JSON.stringify({ k: S.k, st: S.st, own: S.own })); } catch (e) { /* privát mód */ } };
+	const flt = () => '<div class="sr-flt">' + KINDS.map(k => '<button type="button" data-kind="' + k[0] + '" class="' + (S.k === k[0] ? 'on' : '') + '">' + k[1] + '</button>').join('') + '<button type="button" class="sr-fbtn' + (S.st || S.own ? ' act' : '') + (S.fo ? ' on' : '') + '" data-fopen title="További szűrők" aria-label="További szűrők"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>' +
+		'<div class="sr-more"' + (S.fo ? '' : ' hidden') + '><label>Deal állapota <select data-fst><option value="">mind</option><option value="Open">nyitott</option><option value="Won">megnyert</option><option value="Lost">elvesztett</option></select></label><label class="sr-chk"><input type="checkbox" data-fown> Csak az enyém <small>(deal, tevékenység, feladat)</small></label><button type="button" class="sr-clr" data-fclr>Szűrők törlése</button></div>';
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -64,7 +70,7 @@
 		const my = ++S.seq;
 		S.el.querySelector('.sr-res').classList.add('busy');
 		let r;
-		try { r = await post('cp_search', { q: q }); } catch (e) { if (my === S.seq) draw([], e.message); return; }
+		try { r = await post('cp_search', { q: q, k: S.k, st: S.st, own: S.own }); } catch (e) { if (my === S.seq) draw([], e.message); return; }
 		if (my !== S.seq || !S.el) return;
 		S.el.querySelector('.sr-res').classList.remove('busy');
 		S.i = 0;
@@ -72,6 +78,7 @@
 			['Deal-ek', r.deals.map(d => ({ k: 'deal', id: d.id, t: d.title || 'Deal #' + d.id, s: [d.cn, d.ev ? huD(d.ev) : '', d.stage].filter(Boolean).join(' · '), r: '<i class="sr-st ' + esc(String(d.st).toLowerCase()) + '">' + esc(ST[d.st] || d.st) + '</i>' + (d.v ? '<small>' + esc(money(d.v)) + '</small>' : '') }))],
 			['Kontaktok', r.contacts.map(c => ({ k: 'ct', id: c.id, t: c.n, s: [c.e !== c.n ? c.e : '', c.co].filter(Boolean).join(' · '), r: '<small>' + c.c + ' deal</small>' }))],
 			['Cégek', r.companies.map(c => ({ k: 'co', id: c.id, t: c.n, s: c.c + ' kontakt' }))],
+			['Tevékenységek', (r.acts || []).filter(a => a.deal).map(a => ({ k: 'deal', id: a.deal, ico: '📅', t: (a.done ? '✓ ' : '') + a.title, s: [a.type, a.owner, huD(a.due), a.dt].filter(Boolean).join(' · ') }))],
 			['Levelek', r.mail.map(m => ({ k: 'mail', id: m.id, t: m.subj || '(nincs tárgy)', s: [m.cn, huD(m.at), m.st === 'closed' ? 'lezárva' : ''].filter(Boolean).join(' · '), x: m.snip }))],
 			['Jegyzetek', (r.notes || []).map(n => ({ k: n.k, id: n.id, ico: '📝', t: n.title || '(név nélkül)', s: [n.src, n.by, huD(n.at)].filter(Boolean).join(' · '), x: n.snip }))],
 			['Feladatok', r.cards.map(c => ({ k: 'card', id: c.id, t: (c.done ? '✓ ' : '') + c.title, s: [c.where, c.due ? 'határidő: ' + huD(c.due) : ''].filter(Boolean).join(' · ') }))]
@@ -81,12 +88,21 @@
 		if (S.el) { S.el.querySelector('input').focus(); return; }
 		const el = document.createElement('div');
 		el.className = 'sr-wrap';
-		el.innerHTML = '<div class="sr" role="dialog" aria-modal="true" aria-label="Keresés"><div class="sr-in">' + (window.CPXIco ? window.CPXIco('search') : '🔍') + '<input type="search" placeholder="Keresés: deal, ügyfél, cég, e-mail, telefon, szó a levelekből…" aria-label="Keresés" autocomplete="off"><kbd>Esc</kbd></div><div class="sr-res"></div>' +
+		el.innerHTML = '<div class="sr" role="dialog" aria-modal="true" aria-label="Keresés"><div class="sr-in">' + (window.CPXIco ? window.CPXIco('search') : '🔍') + '<input type="search" placeholder="Keresés: deal, ügyfél, cég, e-mail, telefon, szó a levelekből…" aria-label="Keresés" autocomplete="off"><kbd>Esc</kbd></div>' + flt() + '<div class="sr-res"></div>' +
 			'<div class="sr-ft"><span><kbd>↑</kbd><kbd>↓</kbd> választás</span><span><kbd>Enter</kbd> megnyitás</span><span><kbd>' + (MAC ? '⌘' : 'Ctrl') + '</kbd><kbd>K</kbd> bárhonnan</span></div></div>';
 		document.body.appendChild(el);
 		S.el = el; S.i = 0;
 		const inp = el.querySelector('input');
 		el.addEventListener('mousedown', e => { if (e.target === el) close(); });
+		const rerun = () => { saveF(); const q = inp.value.trim(); if (q.length >= 2) search(q); else showRecent(); inp.focus(); };
+		el.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => { S.k = b.dataset.kind; el.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('on', x === b)); rerun(); }));
+		const fst = el.querySelector('[data-fst]'), fown = el.querySelector('[data-fown]'), fb = el.querySelector('[data-fopen]');
+		fst.value = S.st; fown.checked = !!S.own;
+		const mark2 = () => fb.classList.toggle('act', !!(S.st || S.own));
+		fb.addEventListener('click', () => { S.fo = !S.fo; el.querySelector('.sr-more').hidden = !S.fo; fb.classList.toggle('on', S.fo); inp.focus(); });
+		fst.addEventListener('change', () => { S.st = fst.value; mark2(); rerun(); });
+		fown.addEventListener('change', () => { S.own = fown.checked ? '1' : ''; mark2(); rerun(); });
+		el.querySelector('[data-fclr]').addEventListener('click', () => { S.st = ''; S.own = ''; S.k = ''; fst.value = ''; fown.checked = false; el.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('on', x.dataset.kind === '')); mark2(); rerun(); });
 		inp.addEventListener('input', () => {
 			clearTimeout(S.t);
 			const q = inp.value.trim();
@@ -138,6 +154,9 @@
 		'.sr{width:min(680px,100%);max-height:76vh;background:#fff;border-radius:16px;box-shadow:0 30px 70px -20px rgba(20,28,51,.6);display:flex;flex-direction:column;overflow:hidden;color:#141C33}' +
 		'.sr-in{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #EEEAE4}.sr-in .cpx-ico{width:20px;height:20px;fill:none;stroke:#6B6F78;stroke-width:2;flex:none}.sr-in input{flex:1;border:0;outline:0;font:500 16px Inter,sans-serif;color:#141C33;background:none;min-width:0}' +
 		'.sr kbd{font:600 11px Inter,sans-serif;border:1px solid #E1DDD6;border-bottom-width:2px;border-radius:5px;padding:0 5px;color:#6B6F78;background:#FAF8F5}' +
+		'.sr-flt{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 6px;border-bottom:1px solid #F2EFEA}.sr-flt button{border:1px solid #E1DDD6;background:#fff;border-radius:999px;padding:4px 12px;font:600 12.5px Inter,sans-serif;color:#141C33;cursor:pointer}.sr-flt button:hover{background:#F6F3EE}.sr-flt button.on{background:#141C33;border-color:#141C33;color:#fff}' +
+		'.sr-fbtn{display:inline-flex;align-items:center;padding:4px 8px!important;position:relative}.sr-fbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}.sr-fbtn.act::after{content:"";position:absolute;top:2px;right:2px;width:7px;height:7px;border-radius:50%;background:#E8553E}' +
+		'.sr-more{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:8px 16px;background:#FAF8F5;border-bottom:1px solid #F2EFEA;font-size:12.5px;color:#4A4F5A}.sr-more[hidden]{display:none}.sr-more select{border:1px solid #E1DDD6;border-radius:7px;padding:3px 6px;font:12.5px Inter,sans-serif;margin-left:4px}.sr-chk{display:inline-flex;gap:5px;align-items:center}.sr-chk small{color:#8A8E96}.sr-clr{border:0;background:none;color:#2F5BD8;font:600 12.5px Inter,sans-serif;cursor:pointer;margin-left:auto}' +
 		'.sr-res{overflow-y:auto;padding:6px 0;min-height:60px}.sr-res.busy{opacity:.6}.sr-gh{padding:8px 16px 4px;font:700 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#8A8E96}' +
 		'.sr-it{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;text-align:left;padding:7px 16px;cursor:pointer;font:13.5px Inter,sans-serif;color:#141C33}.sr-it.on{background:#EEF3FD}' +
 		'.sr-k{flex:none;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#F1EFEB;font-size:13px;font-weight:700;color:#6B6F78}.sr-k.k-deal{background:#E4ECFC;color:#2F5BD8}.sr-k.k-ct{background:#FBEBDD}.sr-k.k-co{background:#E9F5EE}.sr-k.k-mail{background:#EEF3FD;color:#2F5BD8}.sr-k.k-card{background:#F3EEFC;color:#6E4FC4}.sr-k.k-note{background:#FFF3C4}' +
