@@ -438,7 +438,8 @@
 		const top = document.querySelector('.cpx-top');
 		const st = document.getElementById('st-sticky');
 		if (!st) return;
-		st.style.top = (top ? top.offsetHeight : 0) + 'px';
+		/* oldalsávos menünél (széles kijelző) nincs felső fejléc */
+		st.style.top = (top && top.offsetWidth >= window.innerWidth - 20 ? top.offsetHeight : 0) + 'px';
 		if (!S.stickyObs && 'IntersectionObserver' in window) {
 			S.stickyObs = true;
 			window.addEventListener('scroll', () => { const s = document.getElementById('st-sticky'); if (s) s.classList.toggle('stuck', s.getBoundingClientRect().top <= parseFloat(s.style.top || '0') + 1 && window.scrollY > 10); }, { passive: true });

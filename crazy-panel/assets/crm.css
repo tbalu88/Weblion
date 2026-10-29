@@ -25,18 +25,26 @@
 .crm-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;font-size:14px;color:var(--mu)}
 .crm-pager .cpx-btn[disabled]{opacity:.4;cursor:default}
 /* pipeline-tábla */
-.crm-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;scroll-snap-type:x proximity}
-.crm-col{flex:0 0 260px;background:#EFEBE4;border-radius:16px;padding:8px;max-height:calc(100vh - 210px);display:flex;flex-direction:column;scroll-snap-align:start}
+/* a tábla a teljes szélességet használja; az oszlopok a képernyő aljáig érnek, és külön görgetnek (vékony sávval) */
+.cpx-main:has(.crm-board){max-width:none}
+.crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;scroll-snap-type:x proximity}
+.crm-col{flex:1 0 240px;max-width:300px;background:#EFEBE4;border-radius:16px;padding:8px 4px 8px 8px;display:flex;flex-direction:column;scroll-snap-align:start;max-height:var(--crm-h,calc(100vh - 220px))}
 .crm-col header{padding:4px 6px 8px}
 .crm-col header b{display:block;font:800 14px "Plus Jakarta Sans",sans-serif}
 .crm-col header small{color:var(--mu);font-size:12.5px}
-.crm-cards{display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:30px}
+.crm-cards{display:flex;flex-direction:column;gap:8px;min-height:30px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:#CFC7BB transparent}
+.crm-cards::-webkit-scrollbar{width:6px}
+.crm-cards::-webkit-scrollbar-thumb{background:#CFC7BB;border-radius:6px}
+.crm-sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.crm-arr{display:flex;gap:6px}
+.crm-arr button{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--li);background:#fff;font-size:18px;line-height:1;cursor:pointer;color:var(--ink)}
+.crm-arr button[disabled]{opacity:.35;cursor:default}
 .crm-card{background:#fff;border:1px solid var(--li);border-radius:12px;padding:9px 11px;cursor:pointer;display:flex;flex-direction:column;gap:2px;font-size:13.5px;box-shadow:inset 3px 0 0 transparent}
 .crm-card:hover,.crm-card:focus{border-color:var(--o);outline:none}
 .crm-card b{font-weight:700;line-height:1.3}
 .crm-card small{font-size:12.5px;line-height:1.35}
-.crm-card.soon{box-shadow:inset 3px 0 0 var(--o)}
-.crm-card.past{box-shadow:inset 3px 0 0 var(--full)}
+.crm-card.soon{border-left:3px solid var(--o)}
+.crm-card.past{border-left:3px solid var(--full)}
 .crm-card.won{background:#F7FCF9}
 .crm-card .crm-st{align-self:flex-start}
 .crm-ev{font-size:12.5px;font-weight:600}
@@ -70,8 +78,8 @@
 	.crm-tbl tr.g1 td,.crm-tbl td{background:transparent;border:0;padding:3px 10px}
 	.crm-tbl td[data-l]:not(:first-child)::before{content:attr(data-l);display:block;font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.03em}
 	.crm-num{text-align:left}
-	.crm-col{flex-basis:82vw;max-height:none}
-	.crm-cards{overflow:visible}
+	.crm-col{flex-basis:82vw;max-width:none}
+	.crm-arr{display:none}
 	.crm-dl{grid-template-columns:1fr;gap:0}
 	.crm-dl dt{font-size:12px;margin-top:6px}
 }

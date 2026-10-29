@@ -17,6 +17,8 @@
 	const huDT = s => s ? s.slice(0, 4) + '.' + s.slice(5, 7) + '.' + s.slice(8, 10) + '. ' + s.slice(11, 16) : '';
 	const uname = id => (USERS[String(id)] || {}).n || (id ? '#' + id : '');
 	const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
+	/* a cím végén álló egynapos dátum („| 2026-11-27”) elhagyható, mert a rendezvény dátuma külön is látszik; a többnaposat („2026-10-29/30”) meghagyjuk */
+	const shortTitle = r => { const t = r.title || 'Deal #' + r.id; if (!r.ev) return t; const m = t.match(/\s*\|\s*(\d{4}-\d{2}-\d{2})\.?$/); return m && m[1] === r.ev && m.index > 0 ? t.slice(0, m.index) : t; };
 	const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
 	const S = { mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
@@ -142,7 +144,7 @@
 		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl"><thead><tr>' + sortTh('title', 'Deal') + '<th>Kapcsolat</th>' + sortTh('ev', 'Rendezvény') + '<th>Csomag</th><th>Szakasz</th>' + sortTh('val', 'Érték') + '<th>Felelős</th>' + sortTh('mod', 'Módosítva') + '</tr></thead><tbody>';
 		d.rows.forEach((r, i) => {
 			h += '<tr class="crm-row' + (i % 2 ? ' g1' : '') + '" data-id="' + r.id + '" tabindex="0">' +
-				'<td data-l="Deal"><b>' + esc(r.title || 'Deal #' + r.id) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
+				'<td data-l="Deal"><b>' + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
 				'<td data-l="Kapcsolat">' + contactCell(r) + '</td>' +
 				'<td data-l="Rendezvény">' + evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') + '</td>' +
 				'<td data-l="Csomag">' + (r.pkg ? esc(r.pkg) : '<span class="cpx-muted">–</span>') + (r.svc ? '<small>' + esc(r.svc) + '</small>' : '') + '</td>' +
@@ -180,7 +182,8 @@
 		rows.forEach(r => { (col[r.stage] = col[r.stage] || []).push(r); });
 		const names = STAGES.concat(Object.keys(col).filter(s => STAGES.indexOf(s) < 0));
 		const t = today();
-		let h = '<div class="crm-sum"><b>' + num(rows.length) + ' deal</b><span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div><div class="crm-board">';
+		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b><span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
+			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board">';
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
@@ -188,7 +191,7 @@
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14);
 				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (soon ? ' soon' : '') + (r.ev && r.ev < t ? ' past' : '') + '" data-id="' + r.id + '" tabindex="0">' +
-					'<b>' + esc(r.title || 'Deal #' + r.id) + '</b>' +
+					'<b>' + esc(shortTitle(r)) + '</b>' +
 					(r.ev ? '<span class="crm-ev">' + esc(huD(r.ev)) + '</span>' : '<span class="crm-ev cpx-muted">nincs dátum</span>') +
 					(r.cn ? '<small>' + esc(r.cn) + (r.co ? ' · ' + esc(r.co) : '') + '</small>' : '') +
 					(r.pkg ? '<small class="cpx-muted">' + esc(r.pkg) + '</small>' : '') +
@@ -201,7 +204,20 @@
 		h += '</div>';
 		box.innerHTML = h;
 		bindOpen(box);
+		const bd = box.querySelector('.crm-board');
+		const arr = () => { const a = box.querySelectorAll('[data-arr]'); a[0].disabled = bd.scrollLeft <= 2; a[1].disabled = bd.scrollLeft + bd.clientWidth >= bd.scrollWidth - 2; };
+		box.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => bd.scrollBy({ left: Number(b.dataset.arr) * 250, behavior: 'smooth' })));
+		bd.addEventListener('scroll', arr, { passive: true });
+		fitBoard(); arr();
 	}
+	/* az oszlopok a képernyő aljáig érjenek (a saját görgetésük így mindig elérhető) */
+	function fitBoard() {
+		const bd = S.main && S.main.querySelector('.crm-board');
+		if (!bd) return;
+		const top = bd.getBoundingClientRect().top + window.scrollY;
+		bd.style.setProperty('--crm-h', Math.max(360, window.innerHeight - Math.max(0, top - window.scrollY) - 26) + 'px');
+	}
+	window.addEventListener('resize', () => { if (live() && S.mode === 'board') fitBoard(); });
 	function addDays(s, n) { const p = s.split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2] + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
 	/* ------------------------------------------------------------ deal-adatlap */
