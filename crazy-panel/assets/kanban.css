@@ -166,3 +166,9 @@
 .kb-coms li.kb-act{align-items:flex-start;gap:8px;color:#5E6470;font-size:12.5px;padding-left:9px}
 .kb-coms li.kb-act b{color:var(--ink);font-weight:600}
 .kb-dot{width:8px;height:8px;border-radius:50%;background:#C9C4BC;flex:none;margin-top:5px}
+/* v1.39: Kollégák nézet */
+.kb-list.person header{gap:8px}
+.kb-list.person header .kb-av{margin:0;border:0;width:26px;height:26px}
+.kb-list.person.me{background:#E9EEF9}
+.kb-pdue{display:flex;gap:6px;align-items:center;margin-top:6px}
+.kb-pdue input[type=date]{height:30px;border:1.5px solid var(--li);border-radius:8px;padding:0 6px;font-size:12.5px;flex:1;min-width:0}

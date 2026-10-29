@@ -517,3 +517,33 @@ function cp_kb_ajax_targets() {
 	}
 	wp_send_json_success(array('boards' => $out));
 }
+
+/* ------------------------------------------------------------ v1.39: „Kollégák” nézet – felhasználónkénti, mindenki által látható teendők
+ * Oszloponként egy kolléga, benne a csapattáblákon rá osztott kártyák. Új teendő egy kollégának: a „Kiosztott teendők”
+ * csapattáblára kerül, felelősnek őt állítva. A saját (privát) táblák kártyái itt nem látszanak. */
+function cp_kb_todo_board() {
+	global $wpdb;
+	$id = (int) get_option('cp_kb_todo_board', 0);
+	if ($id && (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_kb_t('boards') . " WHERE id = %d AND kind = 'team' AND deleted_at IS NULL", $id))) { return $id; }
+	$id = cp_kb_new_board('Kiosztott teendők', 'team', array('Teendő', 'Folyamatban', 'Kész'));
+	update_option('cp_kb_todo_board', $id, false);
+	return $id;
+}
+
+add_action('wp_ajax_nopriv_cp_kb_people', 'cp_kb_ajax_people');
+add_action('wp_ajax_cp_kb_people', 'cp_kb_ajax_people');
+function cp_kb_ajax_people() {
+	cp_kb_req();
+	global $wpdb;
+	cp_kb_visible_boards();
+	$todo = cp_kb_todo_board();
+	$C = cp_kb_t('cards'); $B = cp_kb_t('boards'); $L = cp_kb_t('lists');
+	$done = !empty($_POST['done']) ? '' : 'AND c.done = 0';
+	$rows = (array) $wpdb->get_results("SELECT c.*, b.name bn, l.name ln FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL AND b.kind = 'team' LEFT JOIN $L l ON l.id = c.list_id
+		WHERE c.archived_at IS NULL AND c.assignees <> '' $done ORDER BY c.done, c.due IS NULL, c.due, c.pos, c.id LIMIT 600", ARRAY_A);
+	$x = cp_kb_cards_out($rows);
+	foreach ($x['cards'] as $i => &$c) { $c['bn'] = $rows[$i]['bn']; $c['ln'] = (string) $rows[$i]['ln']; }
+	unset($c);
+	$lists = (array) $wpdb->get_results($wpdb->prepare("SELECT id, name FROM $L WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id", $todo), ARRAY_A);
+	wp_send_json_success(array('cards' => $x['cards'], 'links' => $x['links'], 'todo' => $todo, 'lists' => array_map(function ($l) { return array('id' => (int) $l['id'], 'n' => $l['name']); }, $lists)));
+}

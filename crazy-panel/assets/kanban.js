@@ -13,7 +13,7 @@
 	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 	const S = { boards: null, mineN: 0, cur: null, data: null, q: '', onlyMine: false, arch: false, main: null, err: '', loading: false, pending: null };
 	try { S.hideActs = localStorage.getItem('cpkb_hideacts') === '1'; } catch (e) { /* privát mód */ }
-	try { const v = localStorage.getItem('cpkb_cur'); if (v) S.cur = v === 'mine' ? 'mine' : Number(v); } catch (e) { /* privát mód */ }
+	try { const v = localStorage.getItem('cpkb_cur'); if (v) S.cur = v === 'mine' || v === 'people' ? v : Number(v); } catch (e) { /* privát mód */ }
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -67,6 +67,7 @@
 		dots: svg('<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>', 'kb-ic fill'),
 		plus: svg('<path d="M12 5v14M5 12h14"/>'),
 		x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+		people: svg('<circle cx="8" cy="8.5" r="2.8"/><circle cx="16.5" cy="8.5" r="2.8"/><path d="M2.5 19c.5-3 2.6-4.6 5.5-4.6s5 1.6 5.5 4.6M12.5 15.2c1-.5 2.4-.8 4-.8 2.9 0 5 1.6 5.5 4.6"/>'),
 		user: svg('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>'),
 		tag: svg('<path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.3"/>'),
 		arch: svg('<rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5V19h14V8.5M10 12.5h4"/>')
@@ -93,7 +94,7 @@
 		if (c.th) b.push('<span class="kb-b lnk" title="' + esc(th ? th.t : 'Levél') + '">' + I.mail + esc(th ? short(th.cn || th.t, 18) : 'levél') + '</span>');
 		return '<div class="kb-card' + (c.done ? ' isdone' : '') + '" draggable="' + (ctx === 'board' ? 'true' : 'false') + '" data-card="' + c.id + '">' +
 			(c.lb.length ? '<div class="kb-lbs">' + c.lb.map(l => '<span class="kb-lb ' + esc(l) + '" title="' + esc(lname(l)) + '"></span>').join('') + '</div>' : '') +
-			(ctx === 'mine' ? '<div class="kb-ctx">' + esc(c.bn) + ' › ' + esc(c.ln) + '</div>' : '') +
+			(ctx === 'mine' || ctx === 'people' ? '<div class="kb-ctx">' + esc(c.bn) + ' › ' + esc(c.ln) + '</div>' : '') +
 			'<div class="kb-ct">' + esc(c.title) + '</div>' +
 			(b.length || c.as.length ? '<div class="kb-bs">' + b.join('') + '<span class="kb-avs">' + c.as.slice(0, 4).map(id => av(id)).join('') + '</span></div>' : '') + '</div>';
 	}
@@ -106,31 +107,33 @@
 			main.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
 			try { await loadBoards(); } catch (e) { main.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		}
-		if (S.cur !== 'mine' && !S.boards.some(b => b.id === S.cur)) S.cur = S.boards.length ? S.boards[0].id : 'mine';
+		if (S.cur !== 'mine' && S.cur !== 'people' && !S.boards.some(b => b.id === S.cur)) S.cur = S.boards.length ? S.boards[0].id : 'mine';
 		const tab = (id, label, n, icon) => '<button type="button" data-b="' + id + '" class="' + (String(S.cur) === String(id) ? 'on' : '') + '">' + (icon || '') + '<span>' + esc(label) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>';
 		const cb = S.boards.find(b => b.id === S.cur);
 		main.innerHTML = '<div class="kb">' +
-			'<div class="kb-bar"><nav class="kb-tabs">' + tab('mine', 'Nekem', S.mineN, I.user) +
+			'<div class="kb-bar"><nav class="kb-tabs">' + tab('mine', 'Nekem', S.mineN, I.user) + tab('people', 'Kollégák', 0, I.people) +
 			S.boards.filter(b => b.k === 'team').map(b => tab(b.id, b.n, 0, I.team)).join('') +
 			S.boards.filter(b => b.k === 'personal').map(b => tab(b.id, b.n, 0, I.lock)).join('') +
 			'<button type="button" class="kb-addb" data-newb>' + I.plus + '<span>Új tábla</span></button></nav>' +
-			'<div class="kb-tools">' + (S.cur === 'mine' ? '' :
+			'<div class="kb-tools">' + (S.cur === 'mine' ? '' : S.cur === 'people' ? '<input type="search" class="kb-q" placeholder="Keresés a teendők között" value="' + esc(S.q) + '"><label class="kb-chk"><input type="checkbox" data-pdone' + (S.pDone ? ' checked' : '') + '> Készek is</label>' :
 				'<input type="search" class="kb-q" placeholder="Keresés a kártyák között" value="' + esc(S.q) + '">' +
 				'<label class="kb-chk"><input type="checkbox" data-onlymine' + (S.onlyMine ? ' checked' : '') + '> Csak az enyém</label>' +
 				'<button type="button" class="kb-tb' + (S.arch ? ' on' : '') + '" data-arch title="Archivált kártyák">' + I.arch + '<span>Archív</span></button>' +
 				(cb ? '<button type="button" class="kb-tb" data-bmenu title="Tábla műveletei">' + I.dots + '</button>' : '')) + '</div></div>' +
 			'<div class="kb-body"></div></div>';
-		main.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => { S.cur = b.dataset.b === 'mine' ? 'mine' : Number(b.dataset.b); S.arch = false; try { localStorage.setItem('cpkb_cur', String(S.cur)); } catch (e) { /* privát mód */ } view(main); }));
+		main.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => { S.cur = b.dataset.b === 'mine' || b.dataset.b === 'people' ? b.dataset.b : Number(b.dataset.b); S.arch = false; try { localStorage.setItem('cpkb_cur', String(S.cur)); } catch (e) { /* privát mód */ } view(main); }));
 		main.querySelector('[data-newb]').addEventListener('click', newBoard);
 		const q = main.querySelector('.kb-q');
-		if (q) { let t = null; q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { S.q = q.value; drawBoard(); }, 200); }); }
+		if (q) { let t = null; q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { S.q = q.value; if (S.cur === 'people') drawPeople(); else drawBoard(); }, 200); }); }
+		const pd = main.querySelector('[data-pdone]');
+		if (pd) pd.addEventListener('change', () => { S.pDone = pd.checked; S.pData = null; drawPeople(true); });
 		const om = main.querySelector('[data-onlymine]');
 		if (om) om.addEventListener('change', () => { S.onlyMine = om.checked; drawBoard(); });
 		const ar = main.querySelector('[data-arch]');
 		if (ar) ar.addEventListener('click', () => { S.arch = !S.arch; ar.classList.toggle('on', S.arch); S.data = null; drawBoard(true); });
 		const bm = main.querySelector('[data-bmenu]');
 		if (bm) bm.addEventListener('click', () => boardMenu(bm, cb));
-		if (S.cur === 'mine') drawMine(); else drawBoard(true);
+		if (S.cur === 'mine') drawMine(); else if (S.cur === 'people') drawPeople(true); else drawBoard(true);
 	}
 
 	async function loadBoards() {
@@ -299,6 +302,69 @@
 		if (b) b.textContent = S.mineN || '';
 	}
 
+	/* ------------------------------------------------------------ „Kollégák”: mindenki teendői, felhasználónként (publikus) */
+	async function drawPeople(reload) {
+		const body = S.main && S.main.querySelector('.kb-body');
+		if (!body) return;
+		if (reload || !S.pData) {
+			if (!S.pData) body.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
+			try { S.pData = await post('cp_kb_people', { done: S.pDone ? 1 : 0 }); S.err = ''; } catch (e) { body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		}
+		const x = S.pData, q = fold(S.q);
+		const vis = c => !q || fold(c.title + ' ' + c.bn + ' ' + c.ln).includes(q);
+		const order = PEOPLE.slice().sort((a, b) => (a.id === ME ? -1 : b.id === ME ? 1 : a.n.localeCompare(b.n, 'hu')));
+		body.innerHTML = '<p class="kb-hint">Itt mindenki látja, kinek mi a teendője (a csapattáblákról). Új teendőt bárki adhat bárkinek az oszlop alján; a kártyát másik kolléga oszlopába húzva átadod neki. A saját (lakatos) táblák kártyái itt nem látszanak.</p>' +
+			'<div class="kb-lists">' + order.map(p => {
+				const cs = x.cards.filter(c => c.as.includes(p.id));
+				return '<section class="kb-list person' + (p.id === ME ? ' me' : '') + '" data-person="' + p.id + '"><header>' + av(p.id) + '<h3>' + esc(p.n) + (p.id === ME ? ' (te)' : '') + '</h3><small>' + cs.filter(c => !c.done).length + '</small></header>' +
+					'<div class="kb-cards" data-pdrop="' + p.id + '">' + cs.filter(vis).map(c => tile(c, x.links, 'people').replace('draggable="false"', 'draggable="true"')).join('') + '</div>' +
+					'<footer><button type="button" class="kb-addc" data-padd>' + I.plus + 'Teendő ' + esc(p.id === ME ? 'magamnak' : p.n.split(' ').slice(-1)[0] + ' részére') + '</button></footer></section>';
+			}).join('') + '</div>';
+		body.querySelectorAll('[data-card]').forEach(el => el.addEventListener('click', () => { if (!el._dragged) openCard(Number(el.dataset.card)); }));
+		body.querySelectorAll('[data-padd]').forEach(b => b.addEventListener('click', () => personAdd(b.closest('.kb-list'))));
+		/* húzás másik kolléga oszlopába = átadás (a felelősök között a régi helyére az új kerül) */
+		let drag = null, from = 0;
+		body.querySelectorAll('.kb-card[draggable="true"]').forEach(el => {
+			el.addEventListener('dragstart', e => { drag = el; from = Number(el.closest('[data-person]').dataset.person); el._dragged = true; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', el.dataset.card); } catch (er) { /* régi böngésző */ } setTimeout(() => el.classList.add('drag'), 0); });
+			el.addEventListener('dragend', () => { el.classList.remove('drag'); setTimeout(() => { el._dragged = false; }, 50); drag = null; body.querySelectorAll('.over').forEach(z => z.classList.remove('over')); });
+		});
+		body.querySelectorAll('[data-pdrop]').forEach(z => {
+			z.addEventListener('dragover', e => { if (drag && Number(z.dataset.pdrop) !== from) { e.preventDefault(); z.classList.add('over'); } });
+			z.addEventListener('dragleave', e => { if (!z.contains(e.relatedTarget)) z.classList.remove('over'); });
+			z.addEventListener('drop', async e => {
+				if (!drag) return;
+				e.preventDefault(); z.classList.remove('over');
+				const to = Number(z.dataset.pdrop), c = x.cards.find(k => k.id === Number(drag.dataset.card));
+				if (!c || to === from) return;
+				const as = c.as.filter(u => u !== from && u !== to).concat([to]);
+				const old = c.as; c.as = as; drawPeople();
+				try { await post('cp_kb_card_save', { id: c.id, as: as.join(',') }); toast('Átadva: ' + pname(to) + '.'); }
+				catch (er) { c.as = old; drawPeople(); toast(er.message, true); }
+			});
+		});
+	}
+	function personAdd(sec) {
+		const uid = Number(sec.dataset.person), f = sec.querySelector('footer');
+		f.innerHTML = '<div class="kb-newc"><textarea rows="2" placeholder="Mi a teendő? (Enter: mentés, Esc: mégse)"></textarea><div class="kb-pdue"><input type="date" title="Határidő (nem kötelező)"><button type="button" class="cpx-btn" data-save>Kiosztás</button><button type="button" class="kb-tb" data-cancel>' + I.x + '</button></div></div>';
+		const ta = f.querySelector('textarea'), du = f.querySelector('input[type=date]');
+		ta.focus();
+		const save = async () => {
+			const t = ta.value.trim();
+			if (!t) { drawPeople(); return; }
+			ta.disabled = true;
+			try {
+				const p = { board: S.pData.todo, list: (S.pData.lists[0] || {}).id || 0, title: t, as: String(uid), top: 1 };
+				if (du.value) p.due = du.value;
+				await post('cp_kb_card_save', p);
+				await drawPeople(true);
+				toast(uid === ME ? 'Teendő felvéve.' : 'Kiosztva ' + pname(uid) + ' részére – értesítést kap róla.');
+			} catch (e) { toast(e.message, true); ta.disabled = false; }
+		};
+		ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } if (e.key === 'Escape') { e.stopPropagation(); drawPeople(); } });
+		f.querySelector('[data-save]').addEventListener('click', save);
+		f.querySelector('[data-cancel]').addEventListener('click', () => drawPeople());
+	}
+
 	/* átlépés más fülre */
 	function openThread(id) { if (window.CPMail && window.CPMail.open) window.CPMail.open(id); else toast('A Levelezés nem érhető el.', true); }
 	function openDeal(id) { if (window.CPCrm && window.CPCrm.open) window.CPCrm.open(id); else toast('A Deal-ek fül nem érhető el.', true); }
@@ -321,7 +387,7 @@
 	}
 	function changed(sh) {
 		if (sh && sh._after) sh._after();
-		if (S.main && S.main.isConnected && S.main.querySelector('.kb')) { if (S.cur === 'mine') drawMine(); else drawBoard(true); }
+		if (S.main && S.main.isConnected && S.main.querySelector('.kb')) { if (S.cur === 'mine') drawMine(); else if (S.cur === 'people') drawPeople(true); else drawBoard(true); }
 	}
 
 	function drawCard(sh, x) {
