@@ -99,9 +99,9 @@ function cp_pu_login($email, $pw) {
  * eltérés állítható (cp_panel_vis: uid => tab => 0/1). A közös jelszavas belépésnél az alapértelmezés érvényes. */
 function cp_pu_tabs() {
 	return array('stat' => 'Statisztikák', 'deals' => 'Deal-ek', 'mail' => 'Levelezés', 'feladatok' => 'Feladatok', 'naptar' => 'Naptár', 'kovetes' => 'Követés',
-		'hatterek' => 'Hátterek', 'munkalap' => 'Napi munkalap', 'elszamolas' => 'Elszámolás', 'tarca' => 'Tárca', 'ellenorzes' => 'Gyors ellenőrzés', 'sablon' => 'Sablonkészítő');
+		'hatterek' => 'Hátterek', 'munkalap' => 'Napi munkalap', 'elszamolas' => 'Elszámolás', 'tarca' => 'Tárca', 'ellenorzes' => 'Gyors ellenőrzés', 'sablon' => 'Sablonkészítő', 'flows' => 'Automatizmusok');
 }
-function cp_pu_tab_default($tab, $role) { return in_array($tab, array('stat', 'tarca'), true) ? $role === 'admin' : true; }
+function cp_pu_tab_default($tab, $role) { return in_array($tab, array('stat', 'tarca', 'flows'), true) ? $role === 'admin' : true; }
 function cp_pu_vis() { $v = get_option('cp_panel_vis', array()); return is_array($v) ? $v : array(); }
 function cp_pu_can_uid($uid, $tab, $role) {
 	$v = cp_pu_vis();
@@ -118,7 +118,7 @@ function cp_panel_tabs_allowed() { return array_values(array_filter(array_keys(c
 function cp_pu_vis_section($d) {
 	$tabs = cp_pu_tabs();
 	echo '<h2>Ki mit lát a panelben</h2><form method="post">' . wp_nonce_field('cp_pu_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_pu_do" value="vis">';
-	echo '<p>Pipáld be, kinek melyik fül és eszköz jelenjen meg. Alapból a <b>Statisztikák</b> és a <b>Tárca</b> csak az adminoknak látszik, minden más mindenkinek; az alaptól eltérő beállítás <b>félkövér</b>. A Statisztikák és a Tárca adatait a szerver is csak annak adja ki, akinek be van pipálva.</p>';
+	echo '<p>Pipáld be, kinek melyik fül és eszköz jelenjen meg. Alapból a <b>Statisztikák</b>, a <b>Tárca</b> és az <b>Automatizmusok</b> csak az adminoknak látszik, minden más mindenkinek; az alaptól eltérő beállítás <b>félkövér</b>. A Statisztikák és a Tárca adatait a szerver is csak annak adja ki, akinek be van pipálva.</p>';
 	echo '<div style="overflow-x:auto"><table class="widefat striped" style="width:auto"><thead><tr><th>Felhasználó</th>';
 	foreach ($tabs as $l) { echo '<th style="text-align:center;font-size:12px">' . esc_html($l) . '</th>'; }
 	echo '</tr></thead><tbody>';

@@ -1,0 +1,44 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.43.0');
++define('CP_PANEL_VER', '1.44.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -732,6 +732,7 @@
+ 		'crm'        => function_exists('cp_crm_panel_cfg') && cp_panel_can_x('deals') ? cp_crm_panel_cfg() : array('on' => false),
+ 		'mail'       => function_exists('cp_mail_cfg') && cp_panel_can_x('mail') ? cp_mail_cfg() : array('on' => false),
+ 		'kb'         => function_exists('cp_kb_cfg') && cp_panel_can_x('feladatok') ? cp_kb_cfg() : array('on' => false),
++		'fl'         => function_exists('cp_flow_cfg') && cp_panel_can_x('flows') ? cp_flow_cfg() : array('on' => false),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+@@ -742,6 +743,7 @@
+ 	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
+ 	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['fl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/flows.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['nt']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/notify.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+@@ -1824,7 +1826,7 @@
+ /* v1.37: fülenkénti jogosultság (panel-users.php); ha az nem töltődött be: Statisztikák és Tárca csak adminnak */
+ function cp_panel_can_x($tab) {
+ 	if (function_exists('cp_panel_can')) { return cp_panel_can($tab); }
+-	return in_array($tab, array('stat', 'tarca'), true) ? cp_panel_is_admin() : true;
++	return in_array($tab, array('stat', 'tarca', 'flows'), true) ? cp_panel_is_admin() : true;
+ }
+ function cp_tw_auth() {
+ 	cp_el_auth();
+@@ -3637,6 +3639,7 @@
+ require_once __DIR__ . '/ai.php';
+ require_once __DIR__ . '/mail-import.php';
+ require_once __DIR__ . '/leads.php';
++require_once __DIR__ . '/flows.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön
