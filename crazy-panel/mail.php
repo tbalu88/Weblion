@@ -390,6 +390,7 @@ function cp_mail_thread_full($id) {
 	foreach ($ev as &$e) { $e['id'] = (int) $e['id']; $e['created_at'] = cp_mail_local($e['created_at']); }
 	unset($e);
 	$deal = $t['deal_id'] && function_exists('cp_crm_row_out') ? cp_crm_row_out((int) $t['deal_id']) : null;
+	if ($deal && function_exists('cp_plk_chip')) { $deal['portal'] = cp_plk_chip((int) $t['deal_id']); }
 	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal);
 }
 

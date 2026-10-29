@@ -280,3 +280,6 @@
 .cp-sign a{color:inherit}
 .ml-area .cp-sign p,.ml-mb .cp-sign p{margin:revert}
 .ml-area .cp-sign img,.ml-mb .cp-sign img{max-width:none}
+/* v1.59: ügyfélportál-állapot a deal-kártyán */
+.ml-pchip{display:inline-block;margin-top:3px;border-radius:999px;padding:1px 8px;font:600 11px Inter,sans-serif;background:#FDECEA;color:#AE2E24}
+.ml-pchip.kesz{background:#DFF3E8;color:#216E4E}.ml-pchip.modositva{background:#FFF0B8;color:#7F5F01}

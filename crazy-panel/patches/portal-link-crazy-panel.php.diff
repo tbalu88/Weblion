@@ -1,0 +1,19 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.58.1');
++define('CP_PANEL_VER', '1.59.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3659,6 +3659,7 @@
+ require_once __DIR__ . '/mail-send.php';
+ require_once __DIR__ . '/mail-att.php';
+ require_once __DIR__ . '/settings.php';
++require_once __DIR__ . '/portal-link.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

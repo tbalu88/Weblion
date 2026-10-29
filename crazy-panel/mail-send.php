@@ -135,6 +135,11 @@ function cp_send_ajax() {
 	if ($thread && !$t) { cp_el_err('Nincs ilyen levélszál.', 404); }
 	$deal = (int) ($_POST['deal'] ?? 0) ?: ($t ? (int) $t['deal_id'] : 0);
 	$vals = cp_mail_values($deal);
+	/* v1.59: a {{Deal.ugyfelportal_link}} mindig friss, működő portál-link (a régi linkek nem kérhetők vissza) */
+	if ($deal && function_exists('cp_plk_ready') && cp_plk_ready() && stripos((string) wp_unslash($_POST['body'] ?? '') . (string) wp_unslash($_POST['subject'] ?? ''), 'ugyfelportal_link') !== false) {
+		$pp = cp_portal_get_by_deal((string) $deal);
+		if ($pp) { $u = cp_portal_issue_link($pp); if (!is_wp_error($u)) { $vals['Deal.ugyfelportal_link'] = $u; } }
+	}
 	$subj = trim(cp_mail_render(sanitize_text_field(wp_unslash($_POST['subject'] ?? '')), $vals, false));
 	if ($subj === '') { cp_el_err('Add meg a tárgyat.'); }
 	$html = cp_mail_render(cp_mail_clean(wp_unslash($_POST['body'] ?? '')), $vals, true);

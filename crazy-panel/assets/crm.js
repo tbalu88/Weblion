@@ -584,7 +584,7 @@
 		note: '<svg viewBox="0 0 24 24"><path d="M5 4h14v12l-4 4H5z"/><path d="M15 20v-4h4"/></svg>', act: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
 		hist: '<svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg>', card: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></svg>',
 		lead: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .6-4.5 4 1.3 6L12 16l-5.4 3.2 1.3-6-4.5-4 6-.6z"/></svg>', flow: '<svg viewBox="0 0 24 24"><path d="M4 6h6v4H4zM14 14h6v4h-6zM7 10v4a2 2 0 0 0 2 2h5"/></svg>',
-		plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', file: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>'
+		plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', portal: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>', file: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>'
 	};
 	function sheet360(html) {
 		const m = document.getElementById('cpx-modal');
@@ -632,12 +632,13 @@
 		(x.hist || []).forEach(r => { const l = hs[hs.length - 1]; if (l && l.at === r.at && l.by === r.by_user) l.rows.push(r); else hs.push({ at: r.at, by: r.by_user, rows: [r] }); });
 		hs.forEach(g => it.push({ k: 'hist', at: g.at, h: '<div class="d3-ti hist"><i>' + I.hist + '</i><div><div class="d3-tt"><b>' + (g.rows.length === 1 ? esc(LBL[g.rows[0].field] || g.rows[0].field) + ' módosítva' : g.rows.length + ' mező módosítva') + '</b>' + (g.by ? ' – ' + esc(g.by) : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 			g.rows.map(r => '<div class="d3-hv">' + (g.rows.length > 1 ? '<span>' + esc(LBL[r.field] || r.field) + ':</span> ' : '') + (r.old_val ? '<s>' + esc(histVal(r.field, r.old_val)) + '</s> → ' : '') + '<b>' + esc(histVal(r.field, r.new_val) || '–') + '</b></div>').join('') + '</div></div>' }));
+		(x.portal_ev || []).forEach(p => it.push({ k: 'portal', at: p.at, h: '<div class="d3-ti portal' + (p.ok ? '' : ' late') + '"><i>' + I.portal + '</i><div><div class="d3-tt"><b>' + esc(p.text) + '</b>' + (p.ok ? '' : ' <span class="d3-q">hiba</span>') + '<small>' + esc(huDT(p.at)) + '</small></div></div></div>' }));
 		if (d.created_at) it.push({ k: 'hist', at: d.created_at, h: '<div class="d3-ti hist"><i>' + I.plus + '</i><div><div class="d3-tt"><b>Deal létrehozva</b>' + (d.created_by_n ? ' – ' + esc(d.created_by_n) : '') + '<small>' + esc(huDT(d.created_at)) + '</small></div>' + (d.source ? '<div class="d3-tx">Forrás: ' + esc(d.source) + '</div>' : '') + '</div></div>' });
 		return it.filter(i => i.at).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 	}
 	function drawTimeline(box, x) {
 		const all = timeline(x);
-		const TABS = [['all', 'Mind'], ['mail', 'Levelek'], ['note', 'Jegyzetek'], ['act', 'Tevékenységek'], ['card', 'Feladatok'], ['lead', 'Megkeresés'], ['hist', 'Változások']];
+		const TABS = [['all', 'Mind'], ['mail', 'Levelek'], ['note', 'Jegyzetek'], ['act', 'Tevékenységek'], ['card', 'Feladatok'], ['lead', 'Megkeresés'], ['portal', 'Portál'], ['hist', 'Változások']];
 		const cnt = k => k === 'all' ? all.length : all.filter(i => i.k === k).length;
 		const up = (x.acts || []).filter(a => !Number(a.completed)).sort((a, b) => (a.due_at || '') < (b.due_at || '') ? -1 : 1);
 		const cardsOpen = (x.cards || []).filter(c => !c.done && c.due);
@@ -659,6 +660,45 @@
 		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
 		box.querySelectorAll('.d3-ti[data-th]').forEach(b => { const go = () => goMail(Number(b.dataset.th)); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+	}
+	/* v1.59: az ügyfélportál kártyája a deal-adatlapon */
+	const PST = { hianyos: 'Hiányos', kesz: 'Kész', modositva: 'Módosítva' };
+	function portalCard(x) {
+		const P = C.portal || {}, s = x.portal;
+		if (!P.on || !s) return '';
+		if (s.none) {
+			return '<section class="d3-c d3-portal"><h4>Ügyfélportál</h4>' + (s.mode !== 'on' ? '<p class="cpx-muted">Az ügyfélportál ki van kapcsolva.</p>' :
+				'<p class="d3-sub">Még nincs portál. Kiküldéskor létrejön, az ügyfél meghívó levelet kap a belépőlinkkel' + (P.sentStage ? ', és a deal az „' + esc(P.sentStage) + '” szakaszba kerül' : '') + '.</p>' +
+				'<div class="d3-pact"><select data-ptype aria-label="Megrendelő"><option value="">az ügyfél választja</option><option value="magan">magánszemély</option><option value="ceg">cég</option></select><button type="button" class="cpx-btn" data-psend>Ügyfélportál kiküldése</button></div>') + '</section>';
+		}
+		const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+		return '<section class="d3-c d3-portal"><h4>Ügyfélportál <span class="d3-pst ' + esc(s.st) + '">' + esc(PST[s.st] || s.st) + '</span></h4>' +
+			'<div class="d3-pbar"><i style="width:' + pct + '%"></i></div><p class="d3-sub"><b>' + s.done + '/' + s.total + '</b> kötelező kérdés · szerződéshez: ' + s.cd + '/' + s.ct + (s.deadline ? ' · határidő: <b>' + esc(s.deadline) + '</b>' + (s.passed ? ' (lezárva)' : '') : '') + '</p>' +
+			(s.flags && s.flags.length ? '<div class="d3-pflags">' + s.flags.map(f => '<span class="d3-q ' + esc(f.tone) + '">' + esc(f.t) + '</span>').join('') + '</div>' : '') +
+			(s.missing && s.missing.length ? '<p class="d3-sub">Hiányzik: ' + esc(s.missing.join(', ')) + '</p>' : '') +
+			'<p class="d3-sub">' + (s.last_open ? 'Az ügyfél utoljára megnyitotta: ' + esc(huDT(s.last_open)) : 'Az ügyfél még nem nyitotta meg.') + '</p>' +
+			'<div class="d3-pact"><button type="button" class="cpx-btn" data-popen>Adatlap megnyitása</button><button type="button" class="cpx-btn ghost" data-plink>Link másolása</button><button type="button" class="cpx-btn ghost" data-pmail>Új link e-mailben</button></div></section>';
+	}
+	function bindPortal(sh, x, reopen) {
+		const id = x.deal.id, title = x.deal.title || 'Deal #' + id;
+		const call = async (action, p) => post(action, Object.assign({ id: id }, p || {}));
+		const ps = sh.querySelector('[data-psend]');
+		if (ps) ps.addEventListener('click', async () => {
+			if (!window.confirm('Kiküldöd az ügyfélportált?\n\nAz ügyfél meghívó levelet kap a belépőlinkkel' + ((C.portal || {}).sentStage ? ', és a deal a Salesmate-ben az „' + C.portal.sentStage + '” szakaszba kerül.' : '.'))) return;
+			ps.disabled = true;
+			try { const r = await call('cp_portal_p_send', { type: sh.querySelector('[data-ptype]').value }); toast(r.msg || 'Kiküldve.'); reopen(); } catch (e) { ps.disabled = false; toast(e.message, true); }
+		});
+		const po = sh.querySelector('[data-popen]');
+		if (po) po.addEventListener('click', () => { if (window.CPPortal && window.CPPortal.open) window.CPPortal.open(id, title); else toast('Az ügyfélportál felülete nem töltődött be.', true); });
+		const pl = sh.querySelector('[data-plink]');
+		if (pl) pl.addEventListener('click', async () => {
+			pl.disabled = true;
+			try { const r = await call('cp_portal_p_link', { op: 'new' }); try { await navigator.clipboard.writeText(r.url); toast('Új személyes link kimásolva – csak az ügyfélnek küldd el.'); } catch (e) { window.prompt('A személyes link (másold ki):', r.url); } }
+			catch (e) { toast(e.message, true); }
+			pl.disabled = false;
+		});
+		const pm = sh.querySelector('[data-pmail]');
+		if (pm) pm.addEventListener('click', async () => { if (!window.confirm('Új belépőlinket küldök e-mailben az ügyfélnek. Mehet?')) return; pm.disabled = true; try { const r = await call('cp_portal_p_link', { op: 'send' }); toast(r.msg || 'Elküldve.'); reopen(); } catch (e) { pm.disabled = false; toast(e.message, true); } });
 	}
 	/* jegyzet vagy tevékenység felvétele a dealre (a Salesmate-be is) */
 	function compose(box, x, mode, a) {
@@ -766,7 +806,7 @@
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok, levélszálak */
-			'<aside class="d3-r"><section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
+			'<aside class="d3-r">' + portalCard(x) + '<section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
 				(toEv != null ? '<dt>Rendezvényig</dt><dd>' + (toEv > 0 ? '<b>' + toEv + ' nap</b>' : toEv === 0 ? '<b>ma</b>' : 'lezajlott (' + (-toEv) + ' napja)') + '</dd>' : '') +
 				(x.stage_since ? '<dt>Ebben a szakaszban</dt><dd>' + esc(agoTxt(x.stage_since)) + ' óta</dd>' : '') +
 				(d.last_comm_at ? '<dt>Utolsó kommunikáció</dt><dd>' + esc(huDT(d.last_comm_at)) + (d.last_comm_mode ? ' · ' + esc(d.last_comm_mode) : '') + '</dd>' : '') +
@@ -783,6 +823,7 @@
 		const cmp = sh.querySelector('[data-comp]');
 		if (cmp) compose(cmp, x, 'note');
 		drawTimeline(sh.querySelector('[data-tl]'), x);
+		bindPortal(sh, x, () => openDeal(id, back));
 		bindCommon(sh, self);
 		bindBack(sh, back);
 		const eb = sh.querySelector('[data-edit]');
