@@ -1,0 +1,13 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -2469,8 +2469,8 @@
+ 	/* ------------------------------------------------------------ start */
+   shell();
+   render();
+-  if (DEEP && (S.tab === 'feladatok' || S.tab === 'mail')) {
++  if (DEEP && (S.tab === 'feladatok' || S.tab === 'mail' || S.tab === 'deals')) {
+     history.replaceState(null, '', '#' + S.tab);
+-    setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); }, 300);
++    setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); else if (S.tab === 'deals' && window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(DEEP); }, 300);
+   }
+ })();

@@ -63,10 +63,13 @@
 		return [['', 'Minden felelős']].concat(ids.map(i => [i, USERS[i].n + (USERS[i].a ? '' : ' (inaktív)')]));
 	}
 	function head() {
-		const seg = '<div class="crm-seg">' + [['list', 'Lista'], ['board', 'Pipeline']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+		const seg = '<div class="crm-seg">' + [['list', 'Lista'], ['board', 'Pipeline'], ['leads', 'Megkeresések']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
 		const own = '<select data-f="own" aria-label="Felelős">' + opts(ownerOpts(), S.own) + '</select>';
 		let f = '';
-		if (S.mode === 'list') {
+		if (S.mode === 'leads') {
+			f = '<input type="search" data-f="q" placeholder="Keresés a megkeresések között: név, e-mail, telefon" value="' + esc(S.q) + '" aria-label="Keresés">' +
+				'<select data-f="lst" aria-label="Szűrés">' + opts([['', 'Minden megkeresés'], ['spam', 'Spamnek jelöltek']], S.lst || '') + '</select>';
+		} else if (S.mode === 'list') {
 			f = '<input type="search" data-f="q" placeholder="Keresés: név, e-mail, telefon, helyszín, #szám" value="' + esc(S.q) + '" aria-label="Keresés">' +
 				'<select data-f="st" aria-label="Állapot">' + opts([['Open', 'Nyitott'], ['Won', 'Megnyert'], ['Lost', 'Elvesztett'], ['', 'Mind']], S.st) + '</select>' +
 				'<select data-f="stage" aria-label="Szakasz">' + opts([['', 'Minden szakasz']].concat(STAGES.map(x => [x, x])), S.stage) + '</select>' + own +
@@ -82,7 +85,7 @@
 				'<span class="crm-bgap"></span><span class="crm-seg crm-dens"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '">Részletes</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '">Kompakt</button></span>';
 		}
 		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div><div class="crm-filters">' + f + '</div></div>' +
-			'<p class="crm-ro">' + (W ? 'Minden módosítás a Salesmate-be is beíródik; a Salesmate-ben végzett változás 10 percen belül (vagy a Frissítés gombbal) itt is megjelenik.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
+			(S.mode === 'leads' ? '<p class="crm-ro">A weboldal ajánlatkérő űrlapjairól beérkező megkeresések – azonnal, a beküldés pillanatában. A Salesmate ugyanúgy megkapja őket; amikor a szinkron áthozza a deal-t, itt össze is kapcsolódnak.</p>' : '<p class="crm-ro">' + (W ? 'Minden módosítás a Salesmate-be is beíródik; a Salesmate-ben végzett változás 10 percen belül (vagy a Frissítés gombbal) itt is megjelenik.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>');
 	}
 
 	function view(main) {
@@ -101,6 +104,7 @@
 		main.querySelectorAll('[data-f]').forEach(inp => {
 			const k = inp.dataset.f;
 			if (k === 'q') { inp.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { S.q = inp.value.trim(); S.p = 0; SEL.clear(); if (S.mode === 'board' && S.board) redrawBoard(); else load(); }, S.mode === 'board' ? 150 : 300); }); return; }
+			if (k === 'lst') { inp.addEventListener('change', () => { S.lst = inp.value; load(); }); return; }
 			inp.addEventListener('change', () => { if (k === 'sort') { const x = inp.value.split(':'); S.so = x[0]; S.dir = x[1]; } else { S[k] = k === 'won' ? inp.checked : inp.value; SEL.clear(); } S.p = 0; save(); if (k === 'bso' && S.board) { redrawBoard(); return; } load(); });
 		});
 	}
@@ -110,7 +114,12 @@
 		S.loading = true; S.err = ''; setStatus();
 		const body = () => S.main && S.main.querySelector('#crm-body');
 		try {
-			if (S.mode === 'list') {
+			if (S.mode === 'leads') {
+				const d = await post('cp_lead_list', { q: S.q, st: S.lst || '' });
+				if (my !== S.seq) return;
+				S.leads = d; S.loading = false;
+				if (body()) drawLeads(body());
+			} else if (S.mode === 'list') {
 				const d = await post('cp_crm_list', { q: S.q, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, p: S.p });
 				if (my !== S.seq) return;
 				S.list = d;
@@ -129,6 +138,28 @@
 			if (body()) { body().innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '<br><button class="cpx-btn" type="button" id="crm-retry">Újra</button></div>'; body().querySelector('#crm-retry').onclick = load; }
 		}
 		setStatus();
+	}
+
+	/* ------------------------------------------------------------ v1.42: megkeresések (a weboldal űrlapjairól, párhuzamosan a Salesmate-tel) */
+	function drawLeads(box) {
+		const x = S.leads || { rows: [] }, L = x.labels || {}, COLS = x.cols || {};
+		const lab = k => L[k] || (COLS[k] && LBL[COLS[k]]) || k.replace(/^(Deal|Contact|Company)\./, '');
+		const agoS = s => { const d = (Date.now() - new Date(String(s).replace(' ', 'T')).getTime()) / 60000; return d < 2 ? 'most' : d < 60 ? Math.round(d) + ' perce' : d < 1440 ? Math.round(d / 60) + ' órája' : huDT(s); };
+		if (!x.rows.length) { box.innerHTML = '<div class="cpx-empty"><b>Még nincs megkeresés</b><span>Az első beküldött ajánlatkérés pár másodpercen belül itt jelenik meg. A korábbiak a Salesmate-ből a Lista nézetben vannak.</span></div>'; return; }
+		box.innerHTML = '<div class="crm-leads">' + x.rows.map(r => {
+			const f = Object.keys(r.f).filter(k => r.f[k] !== '' && !/^(Contact\.(firstName|lastName|name|email|mobile|phone))$/.test(k));
+			return '<article class="crm-lead' + (r.st === 'new' ? ' new' : '') + '" data-lead="' + r.id + '"><div class="crm-lh"><div><b>' + esc(r.n || r.e || 'Névtelen') + '</b>' + (r.st === 'new' ? ' <span class="crm-lnew">új</span>' : '') +
+				'<small>' + esc([r.e, r.p].filter(Boolean).join(' · ')) + '</small></div><div class="crm-lt"><small>' + esc(agoS(r.at)) + '</small><small class="cpx-muted">' + esc(r.form || 'űrlap') + '</small></div></div>' +
+				(f.length ? '<dl class="crm-dl crm-ldl">' + f.map(k => '<dt>' + esc(lab(k)) + '</dt><dd>' + esc(r.f[k]) + '</dd>').join('') + '</dl>' : '') +
+				'<div class="crm-la">' + (r.deal ? '<button type="button" class="cpx-btn ghost" data-ldeal="' + r.deal.id + '">Deal: ' + esc(r.deal.t) + ' <small>(' + esc(r.deal.stage) + ')</small></button>' : '<span class="cpx-muted crm-lwait">A Salesmate-deal még nem jött át – a szinkron pár percen belül hozza, utána itt összekapcsolódik.</span>') +
+				'<span class="crm-bgap"></span>' + (r.st === 'new' ? '<button type="button" class="cpx-btn ghost" data-lst="seen">Láttam</button>' : '') +
+				(r.st === 'spam' ? '<button type="button" class="cpx-btn ghost" data-lst="seen">Nem spam</button>' : '<button type="button" class="cpx-btn ghost bad" data-lst="spam">Spam</button>') + '</div></article>';
+		}).join('') + '</div>';
+		box.querySelectorAll('[data-ldeal]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.ldeal))));
+		box.querySelectorAll('[data-lst]').forEach(b => b.addEventListener('click', async () => {
+			const id = Number(b.closest('[data-lead]').dataset.lead);
+			try { await post('cp_lead_set', { id: id, st: b.dataset.lst }); load(); } catch (e) { alert(e.message); }
+		}));
 	}
 
 	/* ------------------------------------------------------------ lista */
@@ -694,5 +725,7 @@
 		if (live()) load(); else setStatus();
 	}
 
-	window.CPCrm = { view, status, refresh, open: openDeal };
+	/* mélylink: #deals:leads = a Megkeresések nézet */
+	function deep(arg) { if (arg === 'leads') { S.mode = 'leads'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
+	window.CPCrm = { view, status, refresh, open: openDeal, deep };
 })();

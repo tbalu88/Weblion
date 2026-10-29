@@ -42,6 +42,7 @@
 	function go(link) {
 		const i = String(link).indexOf(':'), tab = i < 0 ? link : link.slice(0, i), arg = i < 0 ? '' : link.slice(i + 1);
 		if (tab === 'mail' && window.CPMail && window.CPMail.open) { window.CPMail.open(Number(arg)); return; }
+		if (tab === 'deals' && window.CPCrm) { if (window.CPXGo) window.CPXGo('deals'); setTimeout(() => window.CPCrm.deep && window.CPCrm.deep(arg), 60); return; }
 		if (tab === 'feladatok' && window.CPKanban) {
 			if (window.CPXGo) window.CPXGo('feladatok');
 			setTimeout(() => window.CPKanban.deep(arg), 60);
@@ -68,7 +69,7 @@
 		S.n = x.unread; badge();
 		const l = pop.querySelector('.cpx-ntl');
 		if (x.off) { l.innerHTML = '<div class="cpx-ntn">Értesítéseket személyes fiókkal kapsz.</div>'; return; }
-		l.innerHTML = x.rows.length ? x.rows.map(n => '<button type="button" class="cpx-nti' + (n.read ? '' : ' new') + '" data-id="' + n.id + '" data-link="' + esc(n.link) + '"><span class="cpx-ntk">' + (n.kind.indexOf('mail') === 0 ? '✉' : '☑') + '</span><span><b>' + esc(n.by_name || 'Valaki') + '</b> ' + esc(n.text) + '<small>' + esc(ago(n.created_at)) + '</small></span></button>').join('') :
+		l.innerHTML = x.rows.length ? x.rows.map(n => '<button type="button" class="cpx-nti' + (n.read ? '' : ' new') + '" data-id="' + n.id + '" data-link="' + esc(n.link) + '"><span class="cpx-ntk">' + (n.kind.indexOf('mail') === 0 ? '✉' : n.kind === 'lead' ? '★' : '☑') + '</span><span><b>' + esc(n.by_name || 'Valaki') + '</b> ' + esc(n.text) + '<small>' + esc(ago(n.created_at)) + '</small></span></button>').join('') :
 			'<div class="cpx-ntn">Még nincs értesítésed. Ha valaki megemlít (@Neved) vagy rád oszt egy kártyát, levelet, itt látod.</div>';
 		l.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', async () => {
 			close();
