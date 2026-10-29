@@ -75,6 +75,8 @@
 			if (c === 'img') { const u = window.prompt('A kép webcíme (https://…):', 'https://'); if (u && /^https:\/\//i.test(u.trim())) exec('insertImage', u.trim()); return; }
 			if (c === 'table') return exec('insertHTML', '<table style="border-collapse:collapse;width:100%"><tbody><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr></tbody></table><p><br></p>');
 			if (c === 'sign') {
+				if (M.sig) { if (area.innerHTML.indexOf('cp-sign') >= 0) { toast('Az aláírás már a levélben van.'); return; } return exec('insertHTML', '<div class="cp-sign">' + M.sig + '</div>'); }
+				if (M.send && M.send.on) { toast('Még nincs aláírásod – az admin állítja be (Beállítások → Felhasználók → Aláírás).', true); return; }
 				let sig = '';
 				try { sig = localStorage.getItem('cpmail_sig') || ''; } catch (e) { /* privát mód */ }
 				if (!sig) { sig = window.prompt('Az aláírásod (egyszer kell megadni, a gép megjegyzi):', 'Üdvözlettel:\n{{sajat.nev}}\nEventCrazy'); if (!sig) return; try { localStorage.setItem('cpmail_sig', sig); } catch (e) { /* privát mód */ } }
@@ -493,12 +495,15 @@
 			'<div class="ml-row" data-ccrow hidden><label>Rejtett</label><div class="ml-chips" data-bcc></div></div>' +
 			'<div class="ml-row"><label>Tárgy</label><input type="text" data-subj value="' + esc(draft ? draft.subject : '') + '"></div>' +
 			'<div data-ed></div>' +
-			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' + (M.send.sign ? '<label class="ml-track"><input type="checkbox" data-sign checked> ' + (M.send.own_sign ? 'Saját aláírás' : 'Aláírás') + ' hozzáadása</label>' : '') : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
+			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
 			'<button type="button" class="cpx-btn ghost" data-prev>Előnézet</button><button type="button" class="cpx-btn ghost" data-save>Piszkozat mentése</button><button type="button" class="ml-link" data-clear>Új, üres levél</button>' +
 			'<label class="ml-track" title="A megnyitás követése később jön"><input type="checkbox" disabled> Megnyitás követése (később)</label></div>' +
 			'<div class="ml-prev" hidden></div></div>';
 		const q = sel => box.querySelector(sel);
-		const ed = editor(q('[data-ed]'), draft ? draft.body : '');
+		/* v1.58: az aláírás írás közben a levélben van (válasznál az idézett levél fölött), mint a Salesmate-ben */
+		const SIG = M.sig ? '<div class="cp-sign">' + M.sig + '</div>' : '';
+		const withSig = b => { b = b || ''; if (!SIG || /cp-sign/.test(b)) return b; if (ctx.quote && b.indexOf(ctx.quote) >= 0) return b.replace(ctx.quote, SIG + ctx.quote); return b + SIG; };
+		const ed = editor(q('[data-ed]'), withSig(draft ? (draft.quote && draft.body === draft.quote ? '<p><br></p>' + draft.body : draft.body) : '<p><br></p>'));
 		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), []);
 		if (draft && draft.cc && draft.cc.length) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
 		if (draft && draft.deal) deal = { id: Number(draft.deal), title: draft.dealTitle || ('Deal #' + draft.deal) };
@@ -517,7 +522,7 @@
 				o.innerHTML = '<div class="ml-aild"><span class="ml-spin"></span>Az AI írja a választ… (általában 10–40 másodperc)</div>';
 				try {
 					const r = await post('cp_ai_draft', { thread: ctx.thread, wish: w.value.trim() });
-					ed.set(r.html + (ctx.quote || ''));
+					ed.set(withSig(r.html + (ctx.quote || '')));
 					if (!q('[data-subj]').value.trim() && r.subject) q('[data-subj]').value = r.subject;
 					o.innerHTML = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '') + '<p class="ml-aif">✓ A piszkozat a levélben van – nézd át, a [KITÖLTENDŐ] részeket írd át. <button type="button" class="ml-link" data-cagain>Újraírás</button></p>';
 					o.querySelector('[data-cagain]').addEventListener('click', run);
@@ -568,7 +573,7 @@
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
 			try {
-				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: q('[data-sign]') && q('[data-sign]').checked ? 1 : '', test: test ? 1 : '', att: atts.map(a => a.tok).join(',') });
+				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(',') });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
@@ -585,7 +590,7 @@
 			tplMenu(e.currentTarget, tpls, t => {
 				if (!ed.isEmpty() && !window.confirm('A sablon felülírja a levél jelenlegi szövegét. Mehet?')) return;
 				if (t.subject) q('[data-subj]').value = t.subject;
-				ed.set(t.body || '');
+				ed.set(withSig(t.body || ''));
 			});
 		});
 		q('[data-save]').addEventListener('click', () => {

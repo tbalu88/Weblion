@@ -108,13 +108,29 @@
 			} catch (e) { toast(e.message, true); }
 		});
 		area.addEventListener('input', fire);
-		return { get: () => { const h = code.hidden ? area.innerHTML : code.value; return h.replace(/<font[^>]*>|<\/font>/gi, ''); } };
+		/* a linkek színét és aláhúzását beírja a HTML-be (ahogy most látszik), hogy minden levelezőprogramban így jelenjen meg */
+		const norm = () => {
+			if (!code.hidden) area.innerHTML = code.value;
+			area.querySelectorAll('a').forEach(a => {
+				const par = a.parentElement ? getComputedStyle(a.parentElement) : null;
+				if (!a.style.color && par) a.style.color = par.color;
+				if (!a.style.textDecoration) a.style.textDecoration = 'none';
+			});
+			return area.innerHTML;
+		};
+		return { get: () => (code.hidden ? area.innerHTML : code.value), norm: norm };
 	}
 	/* az aláírás szerkesztése előnézettel (saját vagy – adminnak – egy kollégáé) */
 	function sigBlock(box, html) {
-		box.innerHTML = '<div data-sig></div><div class="cs-prev"><small>Így néz ki a levél alján:</small><div data-sigprev></div></div>';
+		box.innerHTML = '<div data-sig></div><div class="cs-prev"><small>Így néz ki a levél alján (ahogy a levelezőprogram mutatja):</small><iframe data-sigprev sandbox="allow-same-origin" title="Az aláírás előnézete"></iframe></div>';
 		const ed = sigEditor(box.querySelector('[data-sig]'), html);
-		const prev = () => { box.querySelector('[data-sigprev]').innerHTML = ed.get() || '<span class="cs-muted">(üres – a közös aláírás megy)</span>'; };
+		const fr = box.querySelector('[data-sigprev]');
+		/* elszigetelt előnézet: a panel stílusa nem hat rá, csak a levél saját formázása */
+		const prev = () => {
+			const h = ed.norm();
+			fr.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px 2px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#000}</style></head><body>' + (h || '<span style="color:#8A8E96">(üres – a közös aláírás megy)</span>') + '<p style="margin-top:18px;color:#8A8E96;font-size:12px">— a levél többi része itt lenne —</p></body></html>';
+		};
+		fr.addEventListener('load', () => { try { fr.style.height = Math.min(600, fr.contentDocument.documentElement.scrollHeight + 4) + 'px'; } catch (e) { /* zárt keret */ } });
 		prev(); box.querySelector('[data-sig]').addEventListener('input', prev);
 		return ed;
 	}
@@ -126,7 +142,7 @@
 			'<div class="cs-card"><h3>Saját Pumble-értesítés</h3><p class="cs-note">Ha megadod, a megemlítéseket és a rád osztott feladatokat ide, közvetlenül neked küldi a panel (Pumble: Incoming Webhook a saját csatornádra).</p>' + secret('hook', m.hook, 'https://api.pumble.com/…') + '</div>' +
 			'<div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button><button type="button" class="cpx-btn ghost" data-pw>Jelszó-módosító link küldése magamnak</button></div>';
 		const ed = sigBlock(box.querySelector('[data-sigb]'), m.sig);
-		box.querySelector('[data-save]').addEventListener('click', e => save(e.currentTarget, 'cp_set_me', { op: 'save', n: val(box, 'n'), sig: ed.get(), hook: val(box, 'hook'), hook_clear: val(box, 'hook_clear') }));
+		box.querySelector('[data-save]').addEventListener('click', e => save(e.currentTarget, 'cp_set_me', { op: 'save', n: val(box, 'n'), sig: ed.norm(), hook: val(box, 'hook'), hook_clear: val(box, 'hook_clear') }));
 		box.querySelector('[data-pw]').addEventListener('click', e => save(e.currentTarget, 'cp_set_me', { op: 'pwlink' }));
 	}
 
@@ -152,7 +168,7 @@
 			host.innerHTML = '<div class="cs-card"><h3>E-mail-aláírás: ' + esc(u.n) + '</h3><p class="cs-note">Ez kerül ' + esc(u.n) + ' panelből küldött leveleinek a végére. A Salesmate-ben használt aláírás a &lt;/&gt; gombbal HTML-ként bemásolható.</p><div data-sigb></div><div class="cs-bar"><button type="button" class="cpx-btn" data-sigsave>Aláírás mentése</button><button type="button" class="cpx-btn ghost" data-sigx>Bezárás</button></div></div>';
 			const ed = sigBlock(host.querySelector('[data-sigb]'), u.sig_html || '');
 			host.querySelector('[data-sigx]').addEventListener('click', () => { host.innerHTML = ''; });
-			host.querySelector('[data-sigsave]').addEventListener('click', e => save(e.currentTarget, 'cp_set_admin', { sec: 'sig', uid: u.id, sig: ed.get() }));
+			host.querySelector('[data-sigsave]').addEventListener('click', e => save(e.currentTarget, 'cp_set_admin', { sec: 'sig', uid: u.id, sig: ed.norm() }));
 			host.scrollIntoView({ behavior: 'smooth', block: 'start' });
 		}));
 		box.querySelector('[data-add]').addEventListener('click', e => save(e.currentTarget, 'cp_set_admin', { sec: 'user', op: 'add', n: val(box, 'nn'), e: val(box, 'ne'), r: val(box, 'nr'), sm: val(box, 'nsm'), send: val(box, 'nsend') }));
@@ -232,7 +248,7 @@
 		'.cs-vis td:not(:first-child),.cs-vis th:not(:first-child){text-align:center}.cs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}.cs-row>span{min-width:160px;font-weight:600;font-size:13px}.cs-users{display:flex;flex-wrap:wrap;margin-bottom:6px}' +
 		'.cs-ed{border:1px solid #E6E3DE;border-radius:10px;overflow:hidden;background:#fff}.cs-tb{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px;background:#FAF8F5;border-bottom:1px solid #E6E3DE}.cs-tb span{flex:1}.cs-tb i{width:1px;height:20px;background:#E1DDD6;margin:0 4px}.cs-tb button svg{display:block}.cs-up{font:600 12px Inter,sans-serif}.cs-tb button{border:0;background:none;border-radius:6px;padding:4px 8px;cursor:pointer;font:13px Inter,sans-serif;min-width:28px;color:#141C33}.cs-tb button:hover,.cs-tb button.on{background:#EFECE7}' +
 		'.cs .cs-tb select{padding:3px 6px;font-size:12.5px;max-width:140px}.cs-col{position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:6px;cursor:pointer}.cs-col:hover{background:#EFECE7}.cs-col span{font:700 14px Inter,sans-serif;text-decoration:underline;text-decoration-thickness:3px}.cs-col input{position:absolute;inset:0;opacity:0;cursor:pointer}' +
-		'.cs-area{min-height:110px;padding:10px 12px;font:14px/1.5 Arial,sans-serif;outline:0}.cs-area img{max-width:240px}.cs-code{width:100%;min-height:140px;border:0;font:12px/1.45 ui-monospace,Menlo,monospace;padding:10px}.cs-prev{margin-top:10px;border-top:1px dashed #E6E3DE;padding-top:8px}.cs-prev>div{font:14px/1.5 Arial,sans-serif;margin-top:4px}.cs-prev img{max-width:240px}' +
+		'.cs-area{min-height:110px;padding:10px 12px;font:14px/1.5 Arial,sans-serif;outline:0;color:#000}.cs-area a{color:inherit}.cs-area img{max-width:none}.cs-code{width:100%;min-height:140px;border:0;font:12px/1.45 ui-monospace,Menlo,monospace;padding:10px}.cs-prev{margin-top:10px;border-top:1px dashed #E6E3DE;padding-top:8px}.cs-prev iframe{display:block;width:100%;border:0;min-height:80px;margin-top:4px;background:#fff}' +
 		'.cs-link{background:#EEF3FD;border-radius:10px;padding:10px 12px;margin-bottom:10px}.cs-link p{margin:0 0 6px;font-size:13px}.cs-link input{width:100%;margin-bottom:6px}.cs-wp li{margin:6px 0}.cs-wp a{color:#2F5BD8;font-weight:600;text-decoration:none}' +
 		'@media (max-width:1250px){.cs-ut thead{display:none}.cs-ut,.cs-ut tbody{display:block}.cs-ut tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;padding:10px 12px;border-bottom:1px solid #F0ECE6}.cs-ut td{border:0;padding:0!important;min-width:0!important}.cs-ut td:last-child{grid-column:1/-1}.cs-ut td input[type=text],.cs-ut td select{width:100%;max-width:none}}' +
 		'@media (max-width:600px){.cs-ut tr{grid-template-columns:1fr}}' +

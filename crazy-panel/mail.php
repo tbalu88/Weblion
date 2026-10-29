@@ -208,16 +208,27 @@ function cp_mail_render($text, $vals, $html) {
 	}, $text);
 }
 
-/* a levéltörzs biztonságos HTML-je (formázás, linkek, listák, képek) */
+/* a levéltörzs és az aláírás biztonságos HTML-je – az e-mailekben szokásos formázással (v1.58: a Salesmate-aláírások és
+ * -sablonok táblázatai, linkstílusai, betűtípusai is megmaradnak; szkript, eseménykezelő, űrlap, iframe nem) */
 function cp_mail_clean($html) {
+	$c = array('style' => true, 'class' => true, 'align' => true, 'dir' => true, 'title' => true);
+	$cell = $c + array('width' => true, 'height' => true, 'valign' => true, 'bgcolor' => true, 'colspan' => true, 'rowspan' => true, 'nowrap' => true);
 	$allowed = array(
-		'p' => array('style' => true), 'br' => array(), 'b' => array(), 'strong' => array(), 'i' => array(), 'em' => array(), 'u' => array(), 's' => array(),
-		'h1' => array(), 'h2' => array(), 'h3' => array(), 'ul' => array(), 'ol' => array(), 'li' => array(), 'blockquote' => array(),
-		'a' => array('href' => true, 'target' => true, 'rel' => true), 'span' => array('style' => true), 'div' => array('style' => true),
-		'img' => array('src' => true, 'alt' => true, 'width' => true, 'height' => true, 'style' => true), 'hr' => array(),
-		'table' => array('style' => true), 'tr' => array(), 'td' => array('style' => true), 'th' => array('style' => true), 'tbody' => array(), 'thead' => array(),
+		'p' => $c, 'div' => $c, 'span' => $c, 'br' => array(), 'hr' => $c + array('size' => true, 'width' => true, 'color' => true, 'noshade' => true),
+		'b' => $c, 'strong' => $c, 'i' => $c, 'em' => $c, 'u' => $c, 's' => $c, 'strike' => $c, 'small' => $c, 'big' => $c, 'sup' => $c, 'sub' => $c, 'center' => $c,
+		'font' => $c + array('face' => true, 'size' => true, 'color' => true),
+		'h1' => $c, 'h2' => $c, 'h3' => $c, 'h4' => $c, 'h5' => $c, 'h6' => $c, 'ul' => $c, 'ol' => $c + array('start' => true, 'type' => true), 'li' => $c, 'blockquote' => $c, 'pre' => $c, 'code' => $c,
+		'a' => $c + array('href' => true, 'target' => true, 'rel' => true, 'name' => true),
+		'img' => $c + array('src' => true, 'alt' => true, 'width' => true, 'height' => true, 'border' => true, 'hspace' => true, 'vspace' => true),
+		'table' => $c + array('width' => true, 'height' => true, 'border' => true, 'cellpadding' => true, 'cellspacing' => true, 'bgcolor' => true, 'role' => true),
+		'thead' => $c, 'tbody' => $c, 'tfoot' => $c, 'tr' => $c + array('valign' => true, 'bgcolor' => true, 'height' => true), 'td' => $cell, 'th' => $cell, 'colgroup' => $c, 'col' => $c + array('width' => true, 'span' => true),
 	);
-	return wp_kses(mb_substr((string) $html, 0, 200000), $allowed, array('http', 'https', 'mailto', 'tel'));
+	/* a WordPress stílusszűrője alapból kidobna néhány, e-mailben gyakori CSS-tulajdonságot */
+	$css = function ($p) { return array_unique(array_merge($p, array('display', 'vertical-align', 'line-height', 'letter-spacing', 'white-space', 'text-decoration', 'text-transform', 'border', 'border-left', 'border-right', 'border-top', 'border-bottom', 'border-collapse', 'border-spacing', 'border-radius', 'border-color', 'border-style', 'border-width', 'padding', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom', 'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'width', 'height', 'max-width', 'min-width', 'max-height', 'color', 'background', 'background-color', 'font', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-align', 'float', 'clear', 'overflow', 'table-layout', 'mso-line-height-rule'))); };
+	add_filter('safe_style_css', $css, 99);
+	$out = wp_kses(mb_substr((string) $html, 0, 200000), $allowed, array('http', 'https', 'mailto', 'tel'));
+	remove_filter('safe_style_css', $css, 99);
+	return $out;
 }
 
 function cp_mail_cfg() {
@@ -234,6 +245,7 @@ function cp_mail_cfg() {
 		'me'      => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0,
 		'admin'   => function_exists('cp_panel_is_admin') && cp_panel_is_admin(),
 		'send'    => function_exists('cp_send_cfg') ? cp_send_cfg() : array('on' => false),
+		'sig'     => function_exists('cp_send_sig_html') ? cp_send_sig_html() : '',
 	);
 }
 

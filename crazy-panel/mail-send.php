@@ -20,6 +20,14 @@ function cp_send_can($uid = null) {
 	$uid = $uid === null ? (function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0) : (int) $uid;
 	return !empty($o['on']) && $uid > 0 && in_array($uid, array_map('intval', (array) $o['users']), true) && cp_send_ready();
 }
+/* a levélíróba kerülő aláírás (HTML): a kolléga sajátja, különben a közös */
+function cp_send_sig_html($uid = null) {
+	$uid = $uid === null ? (function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0) : (int) $uid;
+	$own = $uid && function_exists('cp_set_user_sig') ? cp_set_user_sig($uid) : '';
+	if ($own !== '') { return cp_mail_clean($own); }
+	$c = trim((string) cp_send_opts()['sign']);
+	return $c !== '' ? '<p>' . nl2br(esc_html($c)) . '</p>' : '';
+}
 function cp_send_cfg() {
 	$o = cp_send_opts();
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
@@ -137,7 +145,7 @@ function cp_send_ajax() {
 	$o = cp_send_opts();
 	/* aláírás: elsőként a kolléga saját aláírása (Beállítások → Saját beállításaim), különben a közös */
 	$own = function_exists('cp_set_user_sig') ? cp_set_user_sig($me) : '';
-	if (!empty($_POST['sign'])) {
+	if (!empty($_POST['sign']) && strpos($html, 'cp-sign') === false) {
 		if ($own !== '') { $html .= '<br><div class="cp-sign">' . cp_mail_clean($own) . '</div>'; }
 		elseif (trim((string) $o['sign']) !== '') { $html .= '<br><div class="cp-sign">' . wp_kses_post(nl2br((string) $o['sign'])) . '</div>'; }
 	}
