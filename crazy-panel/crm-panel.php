@@ -77,6 +77,10 @@ function cp_crm_list_data($a) {
 	if ($stage !== '') { $w[] = $wpdb->prepare('d.stage = %s', mb_substr($stage, 0, 80)); }
 	$own = $rq('own');
 	if ($own !== '' && ctype_digit($own)) { $w[] = $wpdb->prepare('d.owner_id = %d', (int) $own); }
+	/* v1.48: szűrés egy cégre vagy kontaktra */
+	$co_f = $rq('co'); $ct_f = $rq('ct');
+	if ($co_f !== '' && ctype_digit($co_f)) { $w[] = $wpdb->prepare('(d.company_id = %d OR c.company_id = %d)', (int) $co_f, (int) $co_f); }
+	if ($ct_f !== '' && ctype_digit($ct_f)) { $w[] = $wpdb->prepare('d.contact_id = %d', (int) $ct_f); }
 	$today = wp_date('Y-m-d');
 	$ev = $rq('ev');
 	if ($ev === 'up') { $w[] = $wpdb->prepare('d.event_d >= %s', $today); }
@@ -205,7 +209,7 @@ function cp_crm_deal_data($id) {
 	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
 	foreach ($hist as &$h) { $h['at'] = cp_crm_local($h['at']); }
 	unset($h);
-	return array('deal' => $deal, 'contact' => $contact, 'company' => $company, 'others' => $others, 'acts' => $acts, 'hist' => $hist, 'sync' => cp_crm_sync_at());
+	return apply_filters('cp_crm_deal_data', array('deal' => $deal, 'contact' => $contact, 'company' => $company, 'others' => $others, 'acts' => $acts, 'hist' => $hist, 'sync' => cp_crm_sync_at()));
 }
 
 /* ------------------------------------------------------------ AJAX: szinkron most (Frissítés gomb; percenként legfeljebb egyszer) */
