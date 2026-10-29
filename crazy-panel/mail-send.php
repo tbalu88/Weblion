@@ -24,7 +24,7 @@ function cp_send_can($uid = null) {
 function cp_send_sig_html($uid = null) {
 	$uid = $uid === null ? (function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0) : (int) $uid;
 	$own = $uid && function_exists('cp_set_user_sig') ? cp_set_user_sig($uid) : '';
-	if ($own !== '') { return cp_mail_clean($own); }
+	if ($own !== '') { return cp_sig_norm_links(cp_mail_clean($own)); }
 	$c = trim((string) cp_send_opts()['sign']);
 	return $c !== '' ? '<p>' . nl2br(esc_html($c)) . '</p>' : '';
 }
@@ -146,7 +146,7 @@ function cp_send_ajax() {
 	/* aláírás: elsőként a kolléga saját aláírása (Beállítások → Saját beállításaim), különben a közös */
 	$own = function_exists('cp_set_user_sig') ? cp_set_user_sig($me) : '';
 	if (!empty($_POST['sign']) && strpos($html, 'cp-sign') === false) {
-		if ($own !== '') { $html .= '<br><div class="cp-sign">' . cp_mail_clean($own) . '</div>'; }
+		if ($own !== '') { $html .= '<br><div class="cp-sign">' . cp_sig_norm_links(cp_mail_clean($own)) . '</div>'; }
 		elseif (trim((string) $o['sign']) !== '') { $html .= '<br><div class="cp-sign">' . wp_kses_post(nl2br((string) $o['sign'])) . '</div>'; }
 	}
 	$doc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1F2B">' . $html . '</body></html>';

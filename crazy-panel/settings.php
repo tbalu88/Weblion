@@ -77,7 +77,7 @@ function cp_set_ajax_me() {
 	if ($op === 'save') {
 		$n = sanitize_text_field(wp_unslash($_POST['n'] ?? ''));
 		if ($n !== '') { $d['list'][$me]['n'] = mb_substr($n, 0, 100); }
-		$sig = cp_mail_clean(wp_unslash($_POST['sig'] ?? ''));
+		$sig = cp_sig_norm_links(cp_mail_clean(wp_unslash($_POST['sig'] ?? '')));
 		$d['list'][$me]['sig'] = trim(wp_strip_all_tags($sig)) === '' && strpos($sig, '<img') === false ? '' : mb_substr($sig, 0, 20000);
 		cp_pu_save($d);
 		$h = trim((string) wp_unslash($_POST['hook'] ?? ''));
@@ -154,7 +154,7 @@ function cp_set_ajax_admin() {
 		case 'sig':
 			$d = cp_pu_data(); $uid = (int) $p('uid', 0);
 			if (!isset($d['list'][$uid])) { cp_el_err('Nincs ilyen felhasználó.', 404); }
-			$sig = cp_mail_clean($p('sig'));
+			$sig = cp_sig_norm_links(cp_mail_clean($p('sig')));
 			$d['list'][$uid]['sig'] = trim(wp_strip_all_tags($sig)) === '' && strpos($sig, '<img') === false ? '' : mb_substr($sig, 0, 20000);
 			cp_pu_save($d); $msg = $d['list'][$uid]['n'] . ' aláírása mentve.';
 			break;

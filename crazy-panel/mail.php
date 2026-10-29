@@ -547,3 +547,34 @@ function cp_mail_ajax_bulk() {
 	wp_send_json_success(array('n' => $n));
 }
 
+/* v1.58.1: az aláírás linkjei a környező szöveg színét kapják (ha nincs saját színük), aláhúzás nélkül – ahogy a
+ * Salesmate szerkesztője mutatja; így a címzett levelezőprogramjában is így jelenik meg (nem kéken, aláhúzva) */
+function cp_sig_norm_links($html) {
+	$html = (string) $html;
+	if ($html === '' || stripos($html, '<a') === false || !class_exists('DOMDocument')) { return $html; }
+	$doc = new DOMDocument();
+	$prev = libxml_use_internal_errors(true);
+	$ok = $doc->loadHTML('<?xml encoding="utf-8"?><div id="cp-sigw">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+	libxml_clear_errors(); libxml_use_internal_errors($prev);
+	if (!$ok) { return $html; }
+	foreach ($doc->getElementsByTagName('a') as $a) {
+		$st = trim((string) $a->getAttribute('style'));
+		$add = array();
+		if (!preg_match('/(^|;)\s*color\s*:/i', $st)) {
+			$col = '#000000';
+			for ($n = $a->parentNode; $n && $n instanceof DOMElement; $n = $n->parentNode) {
+				if (preg_match('/(?:^|;)\s*color\s*:\s*([^;]+)/i', (string) $n->getAttribute('style'), $m)) { $col = trim($m[1]); break; }
+				if ($n->getAttribute('id') === 'cp-sigw') { break; }
+			}
+			$add[] = 'color:' . $col;
+		}
+		if (!preg_match('/text-decoration/i', $st)) { $add[] = 'text-decoration:none'; }
+		if ($add) { $a->setAttribute('style', rtrim($st, '; ') . ($st !== '' ? ';' : '') . implode(';', $add)); }
+	}
+	$w = $doc->getElementById('cp-sigw');
+	if (!$w) { return $html; }
+	$out = '';
+	foreach ($w->childNodes as $c) { $out .= $doc->saveHTML($c); }
+	return $out;
+}
+
