@@ -1,0 +1,67 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.45.0');
++define('CP_PANEL_VER', '1.46.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -113,6 +113,7 @@
+ 		}
+ 	}
+ 	if (isset($_GET['kilep'])) {
++		do_action('cp_audit_logout');
+ 		setcookie(CP_PANEL_COOKIE, '', time() - 3600, '/', '', is_ssl(), true);
+ 		wp_safe_redirect(home_url('/' . $slug . '/'));
+ 		exit;
+@@ -182,9 +183,10 @@
+ 	/* v1.29: személyes fiók (e-mail + jelszó) */
+ 	if ($email !== '' && function_exists('cp_pu_login')) {
+ 		$uid = cp_pu_login($email, $pw);
+-		if (is_wp_error($uid)) { set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS); return $uid->get_error_message(); }
++		if (is_wp_error($uid)) { set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS); do_action('cp_audit_login_fail', $email); return $uid->get_error_message(); }
+ 		delete_transient($key);
+ 		cp_pu_set_cookie($uid);
++		do_action('cp_audit_login', (int) $uid, '');
+ 		return '';
+ 	}
+ 	if (function_exists('cp_pu_shared_on') && !cp_pu_shared_on()) { return 'Add meg az e-mail-címedet és a saját jelszavadat.'; }
+@@ -195,9 +197,11 @@
+ 	elseif ($o['pw_hash_office'] !== '' && wp_check_password($pw, $o['pw_hash_office'])) { $role = 'iroda'; }
+ 	if ($role === '') {
+ 		set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS);
++		do_action('cp_audit_login_fail', '');
+ 		return 'Hibás jelszó.';
+ 	}
+ 	delete_transient($key);
++	do_action('cp_audit_login', 0, $role);
+ 	$exp = time() + 30 * DAY_IN_SECONDS;
+ 	setcookie(CP_PANEL_COOKIE, $exp . '|' . ($role === 'iroda' ? 'iroda|' : '') . cp_panel_sig($exp, $role), $exp, '/', '', is_ssl(), true);
+ 	return '';
+@@ -733,6 +737,7 @@
+ 		'mail'       => function_exists('cp_mail_cfg') && cp_panel_can_x('mail') ? cp_mail_cfg() : array('on' => false),
+ 		'kb'         => function_exists('cp_kb_cfg') && cp_panel_can_x('feladatok') ? cp_kb_cfg() : array('on' => false),
+ 		'fl'         => function_exists('cp_flow_cfg') && cp_panel_can_x('flows') ? cp_flow_cfg() : array('on' => false),
++		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+@@ -743,6 +748,7 @@
+ 	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
+ 	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['au']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/audit.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['fl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/flows.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['nt']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/notify.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+@@ -3640,6 +3646,7 @@
+ require_once __DIR__ . '/mail-import.php';
+ require_once __DIR__ . '/leads.php';
+ require_once __DIR__ . '/flows.php';
++require_once __DIR__ . '/audit.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön
