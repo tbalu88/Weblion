@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '3');
+define('CP_MAIL_DB_VER', '4');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -50,9 +50,12 @@ add_action('init', function () {
   has_attach tinyint(1) NOT NULL DEFAULT 0,
   last_at datetime NULL,
   created_at datetime NULL,
+  tkey varchar(32) NOT NULL DEFAULT '',
+  src varchar(10) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   KEY deal_id (deal_id),
-  KEY last_at (last_at)
+  KEY last_at (last_at),
+  KEY tkey (tkey)
 ) " . $wpdb->get_charset_collate() . ';');
 	dbDelta('CREATE TABLE ' . cp_mail_t('messages') . " (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -67,8 +70,11 @@ add_action('init', function () {
   attachments text NULL,
   status varchar(20) NOT NULL DEFAULT '',
   sent_at datetime NULL,
+  mid varchar(32) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
-  KEY thread_id (thread_id)
+  KEY thread_id (thread_id),
+  KEY mid (mid),
+  FULLTEXT KEY body_ft (body)
 ) " . $wpdb->get_charset_collate() . ';');
 	dbDelta('CREATE TABLE ' . cp_mail_t('notes') . " (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,

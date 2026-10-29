@@ -399,7 +399,7 @@
 		sh.innerHTML = '<div class="kb-sh">' +
 			'<div class="kb-shh"><textarea class="kb-title" rows="1" data-title maxlength="255">' + esc(c.title) + '</textarea><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>' +
 			'<p class="kb-where">' + esc(c.bn) + (lists ? ' › <select data-list aria-label="Lista">' + lists.map(l => '<option value="' + l.id + '"' + (l.id === c.list ? ' selected' : '') + '>' + esc(l.n) + '</option>').join('') + '</select>' : '') + (c.arch ? ' · <b class="kb-archtag">archivált</b>' : '') + '</p>' +
-			'<div class="kb-row"><div class="kb-fld"><h5>Felelősök</h5><div class="kb-people">' + PEOPLE.map(p => '<button type="button" class="kb-pp' + (c.as.includes(p.id) ? ' on' : '') + '" data-as="' + p.id + '">' + av(p.id) + '<span>' + esc(p.n) + '</span></button>').join('') + (PEOPLE.length ? '' : '<span class="cpx-muted">Nincsenek személyes fiókok.</span>') + '</div></div>' +
+			'<div class="kb-row"><div class="kb-fld"><h5>Felelősök</h5><div class="kb-people">' + PEOPLE.filter(p => c.bk !== 'personal' || p.id === ME || c.as.includes(p.id)).map(p => '<button type="button" class="kb-pp' + (c.as.includes(p.id) ? ' on' : '') + '" data-as="' + p.id + '">' + av(p.id) + '<span>' + esc(p.n) + '</span></button>').join('') + (PEOPLE.length ? '' : '<span class="cpx-muted">Nincsenek személyes fiókok.</span>') + '</div>' + (c.bk === 'personal' ? '<small class="cpx-muted">Saját tábla: csak te látod. Kollégának szóló teendőt a Kollégák nézetben vagy egy csapattáblán vegyél fel.</small>' : '') + '</div>' +
 			'<div class="kb-fld"><h5>Határidő</h5><div class="kb-due"><input type="date" data-due value="' + esc(c.due) + '"><label class="kb-chk"><input type="checkbox" data-done' + (c.done ? ' checked' : '') + '> Kész</label>' + (c.due ? '<span class="kb-b due ' + dueCls(c) + '">' + (dueCls(c) === 'late' ? 'lejárt' : dueCls(c) === 'soon' ? 'hamarosan' : dueCls(c) === 'done' ? 'kész' : '') + '</span>' : '') + '</div></div></div>' +
 			'<div class="kb-fld"><h5>Címkék</h5><div class="kb-lbsel">' + LABELS.map(l => '<button type="button" class="kb-lbb ' + esc(l.k) + (c.lb.includes(l.k) ? ' on' : '') + '" data-lb="' + esc(l.k) + '">' + esc(l.n) + '</button>').join('') + '</div></div>' +
 			'<div class="kb-fld"><h5>Kapcsolódik</h5><div class="kb-links">' +
@@ -511,12 +511,22 @@
 			'<input type="text" data-qt maxlength="255" value="' + esc(o.title || '') + '" placeholder="Mi a teendő?">' +
 			'<div class="kb-qr"><label>Tábla<select data-qb>' + TARGETS.map(b => '<option value="' + b.id + '"' + (b.id === bsel ? ' selected' : '') + '>' + esc(b.n) + (b.k === 'personal' ? ' (saját)' : '') + '</option>').join('') + '</select></label>' +
 			'<label>Lista<select data-ql></select></label>' +
-			'<label>Felelős<select data-qa><option value="">–</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (p.id === ME ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select></label>' +
 			'<label>Határidő<input type="date" data-qd></label></div>' +
+			'<div class="kb-qp"><span>Kinek:</span>' + PEOPLE.map(p => '<button type="button" class="kb-pp' + (p.id === ME ? ' on' : '') + '" data-qp="' + p.id + '">' + av(p.id) + '<span>' + esc(p.n) + (p.id === ME ? ' (én)' : '') + '</span></button>').join('') + '</div><p class="kb-qhint" hidden></p>' +
 			'<div class="kb-qf"><small class="cpx-muted">' + [o.th ? 'a levélszálhoz' : '', o.deal ? 'a deal-hez' : ''].filter(Boolean).join(' és ') + (o.th || o.deal ? ' kapcsolva' : '') + '</small><span class="crm-bgap"></span><button type="button" class="cpx-btn" data-qs>Felvétel</button></div></div>';
 		const bs = host.querySelector('[data-qb]'), lsel = host.querySelector('[data-ql]');
 		const fill = () => { const b = TARGETS.find(z => z.id === Number(bs.value)) || { lists: [] }; lsel.innerHTML = b.lists.map(l => '<option value="' + l.id + '"' + (l.id === last.l ? ' selected' : '') + '>' + esc(l.n) + '</option>').join(''); };
-		fill(); bs.addEventListener('change', fill);
+		fill(); bs.addEventListener('change', () => { fill(); guard(); });
+		/* felelősök: több is lehet; kollégának szóló teendő nem kerülhet saját (privát) táblára – azt csak te látod */
+		const sel = new Set(ME ? [ME] : []), hint = host.querySelector('.kb-qhint');
+		const team = () => (TARGETS.find(b => b.k === 'team' && /kiosztott/i.test(b.n)) || TARGETS.find(b => b.k === 'team') || {}).id;
+		const guard = () => {
+			const b = TARGETS.find(z => z.id === Number(bs.value)) || {};
+			const others = Array.from(sel).some(u => u !== ME);
+			if (b.k === 'personal' && others && team()) { bs.value = String(team()); fill(); hint.textContent = 'Kollégának szóló teendő a közös táblára kerül – a saját táblát csak te látod.'; hint.hidden = false; }
+			else hint.hidden = true;
+		};
+		host.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => { const id = Number(b.dataset.qp); if (sel.has(id)) sel.delete(id); else sel.add(id); b.classList.toggle('on', sel.has(id)); guard(); }));
 		const tt = host.querySelector('[data-qt]');
 		tt.focus(); tt.select();
 		host.querySelector('[data-qx]').addEventListener('click', () => { host.hidden = true; host.innerHTML = ''; });
@@ -526,7 +536,7 @@
 			const btn = host.querySelector('[data-qs]'); btn.disabled = true;
 			try {
 				const p = { board: bs.value, list: lsel.value, title: t, top: 1 };
-				if (host.querySelector('[data-qa]').value) p.as = host.querySelector('[data-qa]').value;
+				if (sel.size) p.as = Array.from(sel).join(',');
 				if (host.querySelector('[data-qd]').value) p.due = host.querySelector('[data-qd]').value;
 				if (o.th) p.th = o.th;
 				if (o.deal) p.deal = o.deal;

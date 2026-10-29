@@ -117,6 +117,30 @@ function cp_ai_text($html, $max = 4000) {
 	return mb_strlen($t) > $max ? mb_substr($t, 0, $max) . ' …' : $t;
 }
 
+/* ------------------------------------------------------------ hasonló korábbi levélváltások (a postafiók-importból)
+ * Az ügyfél legutóbbi levelére teljes szöveges kereséssel a leghasonlóbb korábbi ügyféllevelek, mindegyikhez a mi
+ * rá adott válaszunkkal – legfeljebb 3 pár, más szálakból. */
+function cp_ai_similar($tid, $text, $P) {
+	global $wpdb;
+	$M = cp_mail_t('messages'); $T = cp_mail_t('threads');
+	$words = array_slice(array_unique(array_filter(preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($text)), function ($w) { return mb_strlen($w) >= 4; })), 0, 60);
+	if (count($words) < 3) { return array(); }
+	$q = implode(' ', $words);
+	$hits = (array) $wpdb->get_results($wpdb->prepare("SELECT m.id, m.thread_id, m.sent_at, m.body, MATCH(m.body) AGAINST(%s) sc FROM $M m JOIN $T t ON t.id = m.thread_id WHERE m.dir = 'in' AND t.id <> %d AND MATCH(m.body) AGAINST(%s) ORDER BY sc DESC LIMIT 15", $q, $tid, $q), ARRAY_A);
+	if ($wpdb->last_error) { return array(); }
+	$out = array(); $seen = array();
+	foreach ($hits as $h) {
+		if (isset($seen[$h['thread_id']]) || count($out) >= 3) { continue; }
+		$rep = $wpdb->get_row($wpdb->prepare("SELECT body FROM $M WHERE thread_id = %d AND dir = 'out' AND sent_at >= %s ORDER BY sent_at, id LIMIT 1", $h['thread_id'], $h['sent_at']), ARRAY_A);
+		if (!$rep) { continue; }
+		$seen[$h['thread_id']] = 1;
+		$cn = (string) $wpdb->get_var($wpdb->prepare("SELECT contact_name FROM $T WHERE id = %d", $h['thread_id']));
+		if ($cn !== '') { $P->add_name($cn, 'NÉV'); }
+		$out[] = "ÜGYFÉL ÍRTA:\n" . $P->hide(cp_ai_text($h['body'], 1500)) . "\nMI VÁLASZOLTUNK:\n" . $P->hide(cp_ai_text($rep['body'], 2500));
+	}
+	return $out;
+}
+
 /* ------------------------------------------------------------ válaszpiszkozat egy levélszálra */
 function cp_ai_draft($tid, $wish = '') {
 	global $wpdb;
@@ -147,6 +171,9 @@ function cp_ai_draft($tid, $wish = '') {
 	}
 	$notes = array();
 	foreach ((array) $x['notes'] as $n) { $notes[] = '- ' . $P->hide($n['body']); }
+	$lastin = '';
+	foreach (array_reverse($msgs) as $m) { if ($m['dir'] === 'in') { $lastin = cp_ai_text($m['body'], 3000); break; } }
+	$similar = $lastin !== '' ? cp_ai_similar((int) $tid, $lastin, $P) : array();
 	$o = cp_ai_opts();
 	/* a sablonok: állandó rész, gyorsítótárazva (a sok levélnél olcsóbb) */
 	$tpl = array();
@@ -165,6 +192,7 @@ function cp_ai_draft($tid, $wish = '') {
 		($deal ? "A kapcsolt deal adatai:\n" . implode("\n", $deal) . "\n\n" : "Ehhez a levélhez nincs deal kapcsolva.\n\n") .
 		($notes ? "Belső jegyzetek (csak a csapat látja):\n" . implode("\n", $notes) . "\n\n" : '') .
 		"A levelezés (legrégebbi elöl):\n" . implode("\n\n", $conv) . "\n\n" .
+		($similar ? "Hasonló korábbi levélváltásaink (stílus- és tartalommintának – a mostani ügyfél adatai ettől eltérhetnek, árat és dátumot csak akkor vegyél át, ha a mostani helyzetre is igaz):\n\n" . implode("\n\n---\n\n", $similar) . "\n\n" : '') .
 		($wish !== '' ? "A kolléga kérése ehhez a válaszhoz: " . $P->hide($wish) . "\n\n" : '') .
 		'Írd meg a válaszpiszkozatot a megadott JSON formában.';
 	$schema = array('type' => 'object', 'additionalProperties' => false, 'required' => array('subject', 'reply_html', 'notes', 'missing'), 'properties' => array(
@@ -186,6 +214,7 @@ function cp_ai_draft($tid, $wish = '') {
 		'missing' => array_map(array($P, 'show'), array_map('strval', (array) $j['missing'])),
 		'to' => $t['ce'],
 		'hidden' => count($P->map),
+		'similar' => count($similar),
 	);
 }
 

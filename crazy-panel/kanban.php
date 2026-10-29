@@ -346,7 +346,9 @@ function cp_kb_card_full($id) {
 	$row['checklist'] = is_array($cl) ? array_values($cl) : array();
 	$row['by'] = $c['created_by'];
 	$row['at'] = cp_kb_local($c['created_at']);
-	$row['bn'] = (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_kb_t('boards') . ' WHERE id = %d', $c['board_id']));
+	$bb = $wpdb->get_row($wpdb->prepare('SELECT name, kind FROM ' . cp_kb_t('boards') . ' WHERE id = %d', $c['board_id']), ARRAY_A);
+	$row['bn'] = (string) ($bb['name'] ?? '');
+	$row['bk'] = (string) ($bb['kind'] ?? 'team');
 	return array('card' => $row, 'comments' => $com, 'acts' => $act, 'links' => cp_kb_link_info(array($row)));
 }
 
@@ -386,6 +388,7 @@ function cp_kb_ajax_card_save() {
 	if ($id === 0) {
 		$b = cp_kb_board_ok((int) ($_POST['board'] ?? 0));
 		if (!$b) { cp_el_err('Nincs ilyen tábla.', 404); }
+		if ($b['kind'] === 'personal' && isset($set['assignees'])) { $set['assignees'] = in_array((int) $b['owner_uid'], cp_kb_ids($set['assignees']), true) ? (string) (int) $b['owner_uid'] : ''; }
 		$lid = (int) ($_POST['list'] ?? 0);
 		if (!$lid) { $lid = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_kb_t('lists') . ' WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id LIMIT 1', $b['id'])); }
 		if (!$lid || !(int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_kb_t('lists') . ' WHERE id = %d AND board_id = %d AND deleted_at IS NULL', $lid, $b['id']))) { cp_el_err('Nincs ilyen lista.'); }
@@ -399,6 +402,9 @@ function cp_kb_ajax_card_save() {
 	} else {
 		$c = cp_kb_card_ok($id);
 		if (!$c) { cp_el_err('Nincs ilyen kártya.', 404); }
+		/* saját (privát) táblán csak a tulajdonos lehet felelős – más úgysem látná */
+		$bk = cp_kb_board_ok((int) $c['board_id']);
+		if ($bk && $bk['kind'] === 'personal' && isset($set['assignees'])) { $set['assignees'] = in_array((int) $bk['owner_uid'], cp_kb_ids($set['assignees']), true) ? (string) (int) $bk['owner_uid'] : ''; }
 		if (isset($_POST['list'])) {
 			$lid = (int) $_POST['list'];
 			if ($lid !== (int) $c['list_id'] && (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_kb_t('lists') . ' WHERE id = %d AND board_id = %d AND deleted_at IS NULL', $lid, $c['board_id']))) {
