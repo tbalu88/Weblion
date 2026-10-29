@@ -156,7 +156,15 @@ function cp_crm_board_data($a) {
 	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND $w ORDER BY d.event_d IS NULL, d.event_d ASC, d.id DESC LIMIT 2000", ARRAY_A);
 	$out = array();
 	foreach ((array) $rows as $r) { $out[] = cp_crm_list_row($r); }
-	return array('rows' => $out, 'sync' => cp_crm_sync_at());
+	/* a következő nyitott tevékenység deal-enként (a deal-hez vagy a kontaktjához kötve) – a kártya teendő-jelzéséhez */
+	if ($out) {
+		$ids = implode(',', array_map(function ($x) { return (int) $x['id']; }, $out));
+		$na = array();
+		foreach ((array) $wpdb->get_results('SELECT related_id rid, MIN(due_at) due FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND (completed IS NULL OR completed = 0) AND (related_module = '4' OR LOWER(related_module) LIKE 'deal%') AND related_id IN ($ids) GROUP BY related_id", ARRAY_A) as $x) { $na[(int) $x['rid']] = cp_crm_local($x['due']); }
+		foreach ($out as &$x) { $x['na'] = isset($na[$x['id']]) ? $na[$x['id']] : ''; }
+		unset($x);
+	}
+	return array('rows' => $out, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
 }
 
 /* ------------------------------------------------------------ AJAX: deal-adatlap */

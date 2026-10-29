@@ -23,13 +23,16 @@
 	const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
 	const SEL = new Map(); /* kijelölt deal-ek a listában: id → sor (lapozáskor megmarad, szűréskor törlődik) */
-	const S = { bso: 'ev', mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
+	const S = { bso: 'ev', qf: [], dense: false, fold: [], mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
 	try {
 		const k = JSON.parse(localStorage.getItem('cpcrm') || '{}');
 		['mode', 'st', 'stage', 'own', 'ev', 'so', 'dir', 'bso'].forEach(x => { if (typeof k[x] === 'string') S[x] = k[x]; });
 		S.won = !!k.won;
+		S.dense = !!k.dense;
+		if (Array.isArray(k.qf)) S.qf = k.qf.filter(x => typeof x === 'string');
+		if (Array.isArray(k.fold)) S.fold = k.fold.filter(x => typeof x === 'string');
 	} catch (e) { /* privát mód */ }
-	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, won: S.won })); } catch (e) { /* privát mód */ } }
+	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, won: S.won, dense: S.dense, qf: S.qf, fold: S.fold })); } catch (e) { /* privát mód */ } }
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -73,6 +76,11 @@
 			f = '<input type="search" data-f="q" placeholder="Keresés a táblán: név, e-mail, telefon, helyszín, #szám" value="' + esc(S.q) + '" aria-label="Keresés">' + own +
 				'<select data-f="bso" aria-label="Rendezés">' + opts([['ev', 'Rendezvény dátuma szerint'], ['val', 'Érték szerint (legnagyobb elöl)'], ['title', 'Név szerint (A–Z)'], ['mod', 'Legutóbb módosított elöl'], ['rot', 'Legrégebben rohadó elöl']], S.bso) + '</select>' + '<label class="crm-chk"><input type="checkbox" data-f="won"' + (S.won ? ' checked' : '') + '> a megnyertek is (közelgő rendezvény)</label>';
 		}
+		if (S.mode === 'board') {
+			const QF = [['mine', 'Az enyém'], ['late', 'Lejárt teendő'], ['noact', 'Nincs teendő'], ['rot', 'Rohad'], ['d30', '30 napon belül'], ['nodate', 'Nincs dátum']].filter(x => x[0] !== 'mine' || R.me_sm);
+			f += '</div><div class="crm-qf">' + QF.map(x => '<button type="button" class="crm-qfb' + (S.qf.includes(x[0]) ? ' on' : '') + '" data-qf="' + x[0] + '">' + x[1] + '</button>').join('') +
+				'<span class="crm-bgap"></span><span class="crm-seg crm-dens"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '">Részletes</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '">Kompakt</button></span>';
+		}
 		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div><div class="crm-filters">' + f + '</div></div>' +
 			'<p class="crm-ro">' + (W ? 'Minden módosítás a Salesmate-be is beíródik; a Salesmate-ben végzett változás 10 percen belül (vagy a Frissítés gombbal) itt is megjelenik.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd, a változás 10 percen belül (vagy a Frissítés gombbal) ide is átjön.') + '</p>';
 	}
@@ -84,6 +92,8 @@
 		load();
 	}
 	function bindHead(main) {
+		main.querySelectorAll('[data-qf]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.qf; S.qf = S.qf.includes(k) ? S.qf.filter(x => x !== k) : S.qf.concat([k]); b.classList.toggle('on'); save(); redrawBoard(); }));
+		main.querySelectorAll('[data-dense]').forEach(b => b.addEventListener('click', () => { S.dense = b.dataset.dense === '1'; main.querySelectorAll('[data-dense]').forEach(x => x.classList.toggle('on', x === b)); save(); redrawBoard(); }));
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', newDeal);
 		main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { if (S.mode === b.dataset.mode) return; S.mode = b.dataset.mode; save(); view(main); }));
@@ -302,7 +312,16 @@
 	/* ------------------------------------------------------------ pipeline-tábla */
 	function drawBoard(box) {
 		const all = S.board.rows || [];
-		const rows = S.q ? all.filter(r => hit(r, S.q)) : all;
+		const t0 = today(), now = (S.board && S.board.now) || '';
+		const QFN = {
+			mine: r => String(r.own) === String(R.me_sm),
+			late: r => r.na && r.na < now,
+			noact: r => !r.na,
+			rot: r => r.rot && r.rot <= t0,
+			d30: r => r.ev && r.ev >= t0 && r.ev <= addDays(t0, 30),
+			nodate: r => !r.ev
+		};
+		const rows = all.filter(r => (!S.q || hit(r, S.q)) && S.qf.every(k => !QFN[k] || QFN[k](r)));
 		const col = {};
 		STAGES.forEach(s => { col[s] = []; });
 		rows.forEach(r => { (col[r.stage] = col[r.stage] || []).push(r); });
@@ -316,23 +335,32 @@
 		Object.keys(col).forEach(k => col[k].sort(SORT[S.bso] || SORT.ev));
 		const names = STAGES.concat(Object.keys(col).filter(s => STAGES.indexOf(s) < 0));
 		const t = today();
-		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q ? '<span class="cpx-muted"> (keresés: „' + esc(S.q) + '”, összesen ' + num(all.length) + ')</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
-			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board">';
+		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q || S.qf.length ? '<span class="cpx-muted"> (szűrve, összesen ' + num(all.length) + ')</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
+			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board' + (S.dense ? ' dense' : '') + '">';
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
-			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span>' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '</div>' +
+			if (S.fold.includes(s)) {
+				h += '<section class="crm-col folded" data-stage="' + esc(s) + '"><button type="button" class="crm-unfold" data-fold="' + esc(s) + '" title="Oszlop kinyitása"><span>' + esc(s) + '</span><b>' + l.length + '</b></button></section>';
+				return;
+			}
+			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span><span class="crm-chb">' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '<button type="button" class="crm-add crm-fold" data-fold="' + esc(s) + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(s) + '">‹</button></span></div>' +
 				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small></header><div class="crm-cards">';
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
 				const rot = r.rot && r.rot <= t ? dayDiff(r.rot, t) : 0;
-				h += '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '>' +
-					'<div class="crm-ct" title="' + esc(r.title) + '">' + esc(shortTitle(r)) + '</div>' +
+				const act = r.na ? (r.na < now ? '<span class="crm-na late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑ lejárt</span>' : '<span class="crm-na" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑ ' + esc(shortD(r.na.slice(0, 10))) + '</span>') : '<span class="crm-na none" title="Nincs ütemezett teendő">⚑ nincs teendő</span>';
+				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
+				const open = '<article class="crm-card' + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + esc(shortTitle(r)) + '</div>';
+				if (S.dense) {
+					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i><span>' + esc(money(r.value, r.cur)) + '</span>' + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
+					return;
+				}
+				h += open +
 					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
 					'<div class="crm-cl"><span>' + esc(money(r.value, r.cur)) + '</span><i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
-					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') +
-					(rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '') + '</div></article>';
+					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + '</div></article>';
 			});
 			if (!l.length) h += '<div class="crm-none">Nincs deal</div>';
 			h += '</div></section>';
@@ -342,6 +370,7 @@
 		box.innerHTML = h;
 		bindOpen(box);
 		bindDrag(box);
+		box.querySelectorAll('[data-fold]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const s = b.dataset.fold; S.fold = S.fold.includes(s) ? S.fold.filter(x => x !== s) : S.fold.concat([s]); save(); redrawBoard(); }));
 		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
 		const bd = box.querySelector('.crm-board');
 		const arr = () => { const a = box.querySelectorAll('[data-arr]'); a[0].disabled = bd.scrollLeft <= 2; a[1].disabled = bd.scrollLeft + bd.clientWidth >= bd.scrollWidth - 2; };
@@ -376,11 +405,11 @@
 		if (!box || S.mode !== 'board' || !S.board) return;
 		const bd = box.querySelector('.crm-board');
 		const keep = { x: bd ? bd.scrollLeft : 0, y: window.scrollY, cols: {} };
-		box.querySelectorAll('.crm-col').forEach(c => { keep.cols[c.dataset.stage] = c.querySelector('.crm-cards').scrollTop; });
+		box.querySelectorAll('.crm-col').forEach(c => { const k = c.querySelector('.crm-cards'); if (k) keep.cols[c.dataset.stage] = k.scrollTop; });
 		drawBoard(box);
 		const nb = box.querySelector('.crm-board');
 		if (nb) nb.scrollLeft = keep.x;
-		box.querySelectorAll('.crm-col').forEach(c => { if (keep.cols[c.dataset.stage]) c.querySelector('.crm-cards').scrollTop = keep.cols[c.dataset.stage]; });
+		box.querySelectorAll('.crm-col').forEach(c => { const k = c.querySelector('.crm-cards'); if (k && keep.cols[c.dataset.stage]) k.scrollTop = keep.cols[c.dataset.stage]; });
 		window.scrollTo(0, keep.y);
 	}
 	function toast(t, bad) {

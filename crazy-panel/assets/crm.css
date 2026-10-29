@@ -55,6 +55,28 @@
 .crm-rot svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 .crm-rot.hot{color:var(--full)}
 .crm-card.won{background:#FAFDFB}
+/* gyorsszűrők, sűrűség, összecsukott oszlop */
+.crm-qf{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;margin-top:2px}
+.crm-qfb{border:1.5px solid var(--li);background:#fff;border-radius:999px;padding:5px 12px;font:600 13px Inter,sans-serif;color:var(--mu);cursor:pointer}
+.crm-qfb:hover{border-color:#D9C5B3;color:var(--ink)}
+.crm-qfb.on{background:var(--n);border-color:var(--n);color:#fff}
+.crm-dens button{padding:5px 12px}
+.crm-chb{display:inline-flex;align-items:center}
+.crm-fold{font-size:18px}
+.crm-col.folded{flex:0 0 44px;max-width:44px;padding:0}
+.crm-unfold{width:44px;min-height:260px;border:1.5px dashed #E1DBD2;background:#F2EFEA;border-radius:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0;color:var(--ink)}
+.crm-unfold span{writing-mode:vertical-rl;transform:rotate(180deg);font:600 13px Inter,sans-serif;white-space:nowrap}
+.crm-unfold b{font-size:12px;background:#fff;border-radius:999px;padding:2px 7px;color:var(--mu)}
+.crm-unfold:hover{border-color:var(--o)}
+.crm-col.folded.over .crm-unfold{background:#F7DEC8;border-color:var(--o)}
+.crm-na{font-size:12px;color:var(--mu);white-space:nowrap}
+.crm-na.late{color:var(--full);font-weight:600}
+.crm-na.none{color:#C08A1E}
+.crm-board.dense .crm-card{padding:7px 10px;gap:2px}
+.crm-board.dense .crm-cards{gap:5px}
+.crm-board.dense .crm-ct{font-size:13.5px}
+.crm-board.dense .crm-cl{font-size:12.5px;align-items:center}
+.crm-board.dense .crm-rot{margin-left:auto}
 .crm-sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 .crm-sumrow .crm-sum{margin:0}
 .crm-arr{display:flex;gap:6px}
