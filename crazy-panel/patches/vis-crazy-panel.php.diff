@@ -1,0 +1,101 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.36.0');
++define('CP_PANEL_VER', '1.37.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -726,12 +726,13 @@
+ 		'hxInt'      => (bool) preg_match('/^int/i', (string) $o['f_hx']),
+ 		'portal'     => function_exists('cp_portal_panel_cfg') ? cp_portal_panel_cfg() : array('on' => false),
+ 		'sb'         => function_exists('cp_sb_cfg') ? cp_sb_cfg() : array(),
+-		'st'         => function_exists('cp_st_cfg') && cp_panel_is_admin() ? cp_st_cfg() : array('on' => false),
++		'st'         => function_exists('cp_st_cfg') && cp_panel_can_x('stat') ? cp_st_cfg() : array('on' => false),
+ 		'role'       => cp_panel_role(),
+ 		'user'       => function_exists('cp_pu_current') && cp_pu_current() ? cp_pu_current()['n'] : '',
+-		'crm'        => function_exists('cp_crm_panel_cfg') ? cp_crm_panel_cfg() : array('on' => false),
+-		'mail'       => function_exists('cp_mail_cfg') ? cp_mail_cfg() : array('on' => false),
+-		'kb'         => function_exists('cp_kb_cfg') ? cp_kb_cfg() : array('on' => false),
++		'crm'        => function_exists('cp_crm_panel_cfg') && cp_panel_can_x('deals') ? cp_crm_panel_cfg() : array('on' => false),
++		'mail'       => function_exists('cp_mail_cfg') && cp_panel_can_x('mail') ? cp_mail_cfg() : array('on' => false),
++		'kb'         => function_exists('cp_kb_cfg') && cp_panel_can_x('feladatok') ? cp_kb_cfg() : array('on' => false),
++		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+ 	cp_panel_head('Crazy panel');
+@@ -1817,7 +1818,17 @@
+ /* a Statisztikák végpontjai: csak az admin fiók */
+ function cp_st_auth() {
+ 	cp_el_auth();
+-	if (!cp_panel_is_admin()) { wp_send_json_error(array('msg' => 'A Statisztikák csak az admin fiókkal érhetők el.'), 403); }
++	if (!cp_panel_can_x('stat')) { wp_send_json_error(array('msg' => 'A Statisztikák nincsenek engedélyezve a fiókodnak.'), 403); }
++}
++
++/* v1.37: fülenkénti jogosultság (panel-users.php); ha az nem töltődött be: Statisztikák és Tárca csak adminnak */
++function cp_panel_can_x($tab) {
++	if (function_exists('cp_panel_can')) { return cp_panel_can($tab); }
++	return in_array($tab, array('stat', 'tarca'), true) ? cp_panel_is_admin() : true;
++}
++function cp_tw_auth() {
++	cp_el_auth();
++	if (!cp_panel_can_x('tarca')) { wp_send_json_error(array('msg' => 'A Tárca nincs engedélyezve a fiókodnak.'), 403); }
+ }
+ 
+ function cp_el_err($msg, $code = 400) {
+@@ -3978,14 +3989,14 @@
+ add_action('wp_ajax_nopriv_cp_tw_data', 'cp_tw_ajax_data');
+ add_action('wp_ajax_cp_tw_data', 'cp_tw_ajax_data');
+ function cp_tw_ajax_data() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	wp_send_json_success(cp_tw_payload(!empty($_REQUEST['refresh'])));
+ }
+ 
+ add_action('wp_ajax_nopriv_cp_tw_save', 'cp_tw_ajax_save');
+ add_action('wp_ajax_cp_tw_save', 'cp_tw_ajax_save');
+ function cp_tw_ajax_save() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	$in = wp_unslash($_POST);
+ 	/* a megnevezés „tt” néven jön, mert a „t” a panel CSRF-tokenje */
+ 	$in['t'] = cp_el_s($in, 'tt');
+@@ -4010,7 +4021,7 @@
+ add_action('wp_ajax_nopriv_cp_tw_del', 'cp_tw_ajax_del');
+ add_action('wp_ajax_cp_tw_del', 'cp_tw_ajax_del');
+ function cp_tw_ajax_del() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	$id = cp_el_s(wp_unslash($_POST), 'id');
+ 	if (!cp_tw_get($id)) { cp_el_err('A tétel már nem létezik – frissítsd az oldalt.', 404); }
+ 	delete_option(CP_TW_E . $id);
+@@ -4020,7 +4031,7 @@
+ add_action('wp_ajax_nopriv_cp_tw_aam', 'cp_tw_ajax_aam');
+ add_action('wp_ajax_cp_tw_aam', 'cp_tw_ajax_aam');
+ function cp_tw_ajax_aam() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	$in = wp_unslash($_POST);
+ 	$deal = preg_replace('/[^0-9]/', '', cp_el_s($in, 'deal'));
+ 	if ($deal === '' || strlen($deal) > 20) { cp_el_err('Hibás deal.'); }
+@@ -4057,7 +4068,7 @@
+ add_action('wp_ajax_nopriv_cp_tw_cfg', 'cp_tw_ajax_cfg');
+ add_action('wp_ajax_cp_tw_cfg', 'cp_tw_ajax_cfg');
+ function cp_tw_ajax_cfg() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	$in = wp_unslash($_POST);
+ 	$o = cp_tw_opts();
+ 	$f = cp_el_req_date('aam_from');
+@@ -4077,7 +4088,7 @@
+ add_action('wp_ajax_nopriv_cp_tw_import', 'cp_tw_ajax_import');
+ add_action('wp_ajax_cp_tw_import', 'cp_tw_ajax_import');
+ function cp_tw_ajax_import() {
+-	cp_el_auth();
++	cp_tw_auth();
+ 	if (cp_tw_all()) { cp_el_err('A tárcában már vannak tételek – az import csak üres tárcába futtatható.', 409); }
+ 	$rows = json_decode(isset($_POST['rows']) ? (string) wp_unslash($_POST['rows']) : '', true);
+ 	if (!is_array($rows) || !$rows || count($rows) > 3000) { cp_el_err('Hibás importadat.'); }

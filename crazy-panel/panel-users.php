@@ -94,6 +94,47 @@ function cp_pu_login($email, $pw) {
 	return $uid;
 }
 
+/* ------------------------------------------------------------ v1.37: ki melyik fület / eszközt látja
+ * Alapértelmezés szerepkör szerint (Statisztikák és Tárca: csak admin, minden más: mindenki); felhasználónként
+ * eltérés állítható (cp_panel_vis: uid => tab => 0/1). A közös jelszavas belépésnél az alapértelmezés érvényes. */
+function cp_pu_tabs() {
+	return array('stat' => 'Statisztikák', 'deals' => 'Deal-ek', 'mail' => 'Levelezés', 'feladatok' => 'Feladatok', 'naptar' => 'Naptár', 'kovetes' => 'Követés',
+		'hatterek' => 'Hátterek', 'munkalap' => 'Napi munkalap', 'elszamolas' => 'Elszámolás', 'tarca' => 'Tárca', 'ellenorzes' => 'Gyors ellenőrzés', 'sablon' => 'Sablonkészítő');
+}
+function cp_pu_tab_default($tab, $role) { return in_array($tab, array('stat', 'tarca'), true) ? $role === 'admin' : true; }
+function cp_pu_vis() { $v = get_option('cp_panel_vis', array()); return is_array($v) ? $v : array(); }
+function cp_pu_can_uid($uid, $tab, $role) {
+	$v = cp_pu_vis();
+	if ($uid > 0 && isset($v[$uid][$tab])) { return (bool) $v[$uid][$tab]; }
+	return cp_pu_tab_default($tab, $role);
+}
+function cp_panel_can($tab) {
+	$uid = cp_pu_current_id();
+	$role = function_exists('cp_panel_role') ? cp_panel_role() : 'iroda';
+	return cp_pu_can_uid($uid, $tab, $role);
+}
+function cp_panel_tabs_allowed() { return array_values(array_filter(array_keys(cp_pu_tabs()), 'cp_panel_can')); }
+
+function cp_pu_vis_section($d) {
+	$tabs = cp_pu_tabs();
+	echo '<h2>Ki mit lát a panelben</h2><form method="post">' . wp_nonce_field('cp_pu_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_pu_do" value="vis">';
+	echo '<p>Pipáld be, kinek melyik fül és eszköz jelenjen meg. Alapból a <b>Statisztikák</b> és a <b>Tárca</b> csak az adminoknak látszik, minden más mindenkinek; az alaptól eltérő beállítás <b>félkövér</b>. A Statisztikák és a Tárca adatait a szerver is csak annak adja ki, akinek be van pipálva.</p>';
+	echo '<div style="overflow-x:auto"><table class="widefat striped" style="width:auto"><thead><tr><th>Felhasználó</th>';
+	foreach ($tabs as $l) { echo '<th style="text-align:center;font-size:12px">' . esc_html($l) . '</th>'; }
+	echo '</tr></thead><tbody>';
+	foreach ($d['list'] as $id => $u) {
+		if (empty($u['a'])) { continue; }
+		echo '<tr><td>' . esc_html($u['n']) . ' <small>(' . esc_html($u['r']) . ')</small></td>';
+		foreach ($tabs as $k => $l) {
+			$on = cp_pu_can_uid((int) $id, $k, $u['r']);
+			$diff = $on !== cp_pu_tab_default($k, $u['r']);
+			echo '<td style="text-align:center' . ($diff ? ';font-weight:700;background:#fff7e0' : '') . '"><input type="checkbox" name="vis[' . (int) $id . '][' . esc_attr($k) . ']" value="1"' . checked($on, true, false) . ' title="' . esc_attr($u['n'] . ' – ' . $l) . '"></td>';
+		}
+		echo '</tr>';
+	}
+	echo '</tbody></table></div><p><button class="button button-primary">Mentés</button> <button class="button" name="vis_reset" value="1" onclick="return confirm(\'Mindenkinél visszaállítod az alapértelmezést?\')">Alapértelmezés visszaállítása</button></p></form>';
+}
+
 /* ------------------------------------------------------------ meghívó / jelszó-visszaállító link */
 
 function cp_pu_panel_url($q = '') {
@@ -255,6 +296,21 @@ function cp_pu_admin_page() {
 			} elseif ($do === 'del') {
 				unset($d['list'][$uid]); cp_pu_save($d); $msg = $u['n'] . ' törölve.';
 			}
+		} elseif ($do === 'vis') {
+			if (!empty($_POST['vis_reset'])) { delete_option('cp_panel_vis'); $msg = 'A láthatóság mindenkinél az alapértelmezés szerinti.'; }
+			else {
+				$in = isset($_POST['vis']) && is_array($_POST['vis']) ? wp_unslash($_POST['vis']) : array();
+				$v = array();
+				foreach ($d['list'] as $id => $u) {
+					if (empty($u['a'])) { continue; }
+					foreach (array_keys(cp_pu_tabs()) as $k) {
+						$on = !empty($in[$id][$k]);
+						if ($on !== cp_pu_tab_default($k, $u['r'])) { $v[(int) $id][$k] = $on ? 1 : 0; }
+					}
+				}
+				update_option('cp_panel_vis', $v, false);
+				$msg = 'A láthatóság elmentve (a változás a következő oldalbetöltéskor látszik).';
+			}
 		} elseif ($do === 'notif' && function_exists('cp_nt_admin_save')) {
 			$msg = cp_nt_admin_save() ?: 'Nem változott semmi.';
 		} elseif ($do === 'shared') {
@@ -289,6 +345,7 @@ function cp_pu_admin_page() {
 	echo '<tr><th></th><td><label><input type="checkbox" name="send" value="1" checked> Meghívó levél küldése (a jelszó beállításához)</label></td></tr></table><p><button class="button button-primary">Felhasználó létrehozása</button></p></form>';
 	$off = !cp_pu_shared_on();
 	echo '<h2>Közös jelszavak (átmenet)</h2><form method="post">' . wp_nonce_field('cp_pu_do', '_wpnonce', true, false) . '<input type="hidden" name="cp_pu_do" value="shared"><p>A régi közös admin- és irodai jelszó ' . ($off ? '<b>ki van kapcsolva</b>.' : '<b>még működik</b> (a belépésnél üresen hagyott e-mail-címmel). Ha mindenki beállította a saját jelszavát, kapcsold ki.') . '</p><label><input type="checkbox" name="off" value="1"' . checked($off, true, false) . '> Közös jelszavak kikapcsolása (csak személyes fiókkal lehessen belépni)</label><p><button class="button">Mentés</button></p></form>';
+	cp_pu_vis_section($d);
 	if (function_exists('cp_nt_admin_section')) { cp_nt_admin_section(); }
 	echo '</div>';
 }

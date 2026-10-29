@@ -1,0 +1,72 @@
+--- a/assets/panel.js
++++ b/assets/panel.js
+@@ -42,9 +42,11 @@
+     err: ''
+   };
+   /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
+-  const HOME = C.st && C.st.on ? 'stat' : 'naptar';
++  /* v1.37: felhasználónként beállítható, mely fülek és eszközök látszanak (C.tabs: az engedélyezettek) */
++  const CAN = id => !Array.isArray(C.tabs) || C.tabs.includes(id);
++  const HOME = C.st && C.st.on ? 'stat' : (CAN('naptar') ? 'naptar' : ((C.tabs || [])[0] || 'naptar'));
+   /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
+-  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : []).includes(S.tab)) S.tab = HOME;
++  if (!['naptar', 'kovetes', 'hatterek', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -117,7 +119,7 @@
+   function shell() {
+     app.innerHTML = '';
+     const DEALS = (C.crm && C.crm.on ? tabBtn('deals', 'Deal-ek') : '') + (C.mail && C.mail.on ? tabBtn('mail', 'Levelezés') : '') + (C.kb && C.kb.on ? tabBtn('feladatok', 'Feladatok') : '');
+-    const TOOLS = [['ellenorzes', 'Gyors ellenőrzés'], ['sablon', 'Sablonkészítő']];
++    const TOOLS = [['munkalap', 'Napi munkalap'], ['ellenorzes', 'Gyors ellenőrzés'], ['sablon', 'Sablonkészítő']].filter(t => CAN(t[0]));
+     let toolsOpen = TOOLS.some(t => t[0] === S.tab);
+     try { if (localStorage.getItem('cpx_tools') === '1') toolsOpen = true; } catch (e) { /* privát mód */ }
+     app.classList.add('cpx-shell');
+@@ -129,9 +131,9 @@
+       '<button class="cpx-burger" id="cpx-burger" type="button" aria-label="Menü" aria-expanded="false" aria-controls="cpx-menu"><span></span><span></span><span></span></button>' +
+       '<div class="cpx-menu" id="cpx-menu">' +
+       '<nav class="cpx-tabs">' +
+-      (HOME === 'stat' ? tabBtn('stat', 'Statisztikák') + DEALS : '') + tabBtn('naptar', 'Naptár') + (HOME === 'stat' ? '' : DEALS) + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('munkalap', 'Napi munkalap') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + (HOME === 'stat' || !(C.st && C.st.on) ? '' : tabBtn('stat', 'Statisztikák')) +
++      (HOME === 'stat' ? tabBtn('stat', 'Statisztikák') + DEALS : '') + tabBtn('naptar', 'Naptár') + (HOME === 'stat' ? '' : DEALS) + tabBtn('kovetes', 'Követés') + tabBtn('hatterek', 'Hátterek') + tabBtn('elszamolas', 'Elszámolás') + tabBtn('tarca', 'Tárca') + (HOME === 'stat' || !(C.st && C.st.on) ? '' : tabBtn('stat', 'Statisztikák')) +
+       /* v1.29: Eszközök (lenyitható csoport) */
+-      '<div class="cpx-grp' + (toolsOpen ? ' open' : '') + '" id="cpx-tools"><button type="button" class="cpx-grp-h" aria-expanded="' + (toolsOpen ? 'true' : 'false') + '" title="Eszközök">' + ico('tools') + '<span>Eszközök</span><svg class="cpx-ico cpx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><div class="cpx-grp-b">' + TOOLS.map(t => tabBtn(t[0], t[1])).join('') + '</div></div>' +
++      (!TOOLS.length ? '' : '<div class="cpx-grp' + (toolsOpen ? ' open' : '') + '" id="cpx-tools"><button type="button" class="cpx-grp-h" aria-expanded="' + (toolsOpen ? 'true' : 'false') + '" title="Eszközök">' + ico('tools') + '<span>Eszközök</span><svg class="cpx-ico cpx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><div class="cpx-grp-b">' + TOOLS.map(t => tabBtn(t[0], t[1])).join('') + '</div></div>') +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">' + ico('refresh') + '<span>Frissítés</span></button>' +
+       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '<span>Kilépés' + (C.user ? ' <small>(' + esc(C.user) + ')</small>' : (C.role ? ' <small>(' + (C.role === 'iroda' ? 'iroda' : 'admin') + ')</small>' : '')) + '</span></a></div></div>';
+@@ -140,7 +142,7 @@
+     const main = el('main', { class: 'cpx-main', id: 'cpx-main' });
+     app.appendChild(main);
+     top.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
+-    top.querySelector('.cpx-grp-h').addEventListener('click', () => {
++    if (top.querySelector('.cpx-grp-h')) top.querySelector('.cpx-grp-h').addEventListener('click', () => {
+       const g = top.querySelector('#cpx-tools'), on = g.classList.toggle('open');
+       g.querySelector('.cpx-grp-h').setAttribute('aria-expanded', on ? 'true' : 'false');
+       try { localStorage.setItem('cpx_tools', on ? '1' : '0'); } catch (e) { /* privát mód */ }
+@@ -174,7 +176,7 @@
+     const b = document.querySelector('.cpx-tabs [data-tab="' + S.tab + '"]');
+     if (c) c.textContent = b ? b.textContent : '';
+   }
+-  const tabBtn = (id, label) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '" title="' + label + '">' + ico(id) + '<span>' + label + '</span></button>';
++  const tabBtn = (id, label) => !CAN(id) ? '' : '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '" title="' + label + '">' + ico(id) + '<span>' + label + '</span></button>';
+   const ICO = {
+     stat: '<path d="M4 20V11M10 20V4M16 20v-8M2 20h20"/>',
+     deals: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2m0 8v2"/>',
+@@ -2067,6 +2069,7 @@
+ 	const twMonthLbl = m => m.slice(0, 4) + '. ' + HU_MONTHS[+m.slice(5) - 1];
+ 
+ 	async function twLoad(force) {
++		if (!CAN('tarca')) return null;
+ 		if (TW.loading && !force) return TW.loading;
+ 		const p = (async () => {
+ 			const r = await fetch(C.ajax + '?action=cp_tw_data&t=' + encodeURIComponent(C.t) + (force ? '&refresh=1' : ''), { credentials: 'same-origin' });
+@@ -2140,7 +2143,7 @@
+ 	}
+ 	function twBadgeDraw() {
+ 		const b = document.getElementById('el-tw');
+-		if (b) b.innerHTML = twBadgeHtml();
++		if (b) b.innerHTML = CAN('tarca') ? twBadgeHtml() : '';
+ 	}
+ 	function twStatus(s) {
+ 		if (TW.err) { s.textContent = TW.err; s.className = 'cpx-status err'; return; }
