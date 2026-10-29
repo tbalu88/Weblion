@@ -22,7 +22,9 @@ function cp_send_can($uid = null) {
 }
 function cp_send_cfg() {
 	$o = cp_send_opts();
-	return array('on' => cp_send_can(), 'sign' => trim((string) $o['sign']) !== '', 'from' => function_exists('cp_imp_opts') ? cp_imp_opts()['user'] : '', 'box' => function_exists('cp_imp_opts') ? cp_imp_opts()['box'] : '');
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	$own = $me && function_exists('cp_set_user_sig') ? cp_set_user_sig($me) : '';
+	return array('on' => cp_send_can(), 'sign' => $own !== '' || trim((string) $o['sign']) !== '', 'own_sign' => $own !== '', 'from' => function_exists('cp_imp_opts') ? cp_imp_opts()['user'] : '', 'box' => function_exists('cp_imp_opts') ? cp_imp_opts()['box'] : '');
 }
 
 function cp_send_mailer() {
@@ -133,7 +135,12 @@ function cp_send_ajax() {
 	$atts = function_exists('cp_att_take') ? cp_att_take(wp_unslash($_POST['att'] ?? ''), $me) : array();
 	if (is_wp_error($atts)) { cp_el_err($atts->get_error_message()); }
 	$o = cp_send_opts();
-	if (!empty($_POST['sign']) && trim((string) $o['sign']) !== '') { $html .= '<br><div class="cp-sign">' . wp_kses_post(nl2br((string) $o['sign'])) . '</div>'; }
+	/* aláírás: elsőként a kolléga saját aláírása (Beállítások → Saját beállításaim), különben a közös */
+	$own = function_exists('cp_set_user_sig') ? cp_set_user_sig($me) : '';
+	if (!empty($_POST['sign'])) {
+		if ($own !== '') { $html .= '<br><div class="cp-sign">' . cp_mail_clean($own) . '</div>'; }
+		elseif (trim((string) $o['sign']) !== '') { $html .= '<br><div class="cp-sign">' . wp_kses_post(nl2br((string) $o['sign'])) . '</div>'; }
+	}
 	$doc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1F2B">' . $html . '</body></html>';
 	$i = cp_imp_opts();
 	$dom = substr(strrchr($i['user'], '@'), 1) ?: 'eventcrazy.hu';
