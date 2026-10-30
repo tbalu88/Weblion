@@ -517,7 +517,7 @@
 			const old = rd.querySelector('.ml-mmenu'); if (old) { old.remove(); if (old._b === b) return; }
 			const it = tl[Number(b.dataset.mmore)], m = it && it.m; if (!m) return;
 			const pop = document.createElement('div'); pop.className = 'ml-mmenu'; pop._b = b;
-			pop.innerHTML = ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>';
+			pop.innerHTML = ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>' + (t.folder === 'spam' ? '' : '<button type="button" data-k="spam">⛔ Spamnek jelölés</button>');
 			b.parentNode.style.position = 'relative'; b.parentNode.appendChild(pop);
 			pop.querySelectorAll('[data-k]').forEach(x => x.addEventListener('click', async () => {
 				pop.remove();
@@ -526,6 +526,7 @@
 				else if (k === 'unread') { S.th = null; S.reading = false; bulk(box, [t.id], 'unread', ''); }
 				else if (k === 'copy') { const tmp = document.createElement('div'); tmp.innerHTML = m.body || ''; try { await navigator.clipboard.writeText(tmp.innerText.trim()); toast('A levél szövege a vágólapon.'); } catch (er) { toast('A másolás nem sikerült.', true); } }
 				else if (k === 'print') printMsg(m);
+				else if (k === 'spam') { if (!window.confirm('Spamnek jelölöd ezt a levélszálat? A Spam mappába kerül (csak a panelben – onnan visszaállítható).')) return; S.th = null; S.reading = false; bulk(box, [t.id], 'spam', ''); }
 			}));
 			setTimeout(() => document.addEventListener('click', function off(ev) { if (!pop.isConnected || !pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', off); } }), 0);
 		}));
