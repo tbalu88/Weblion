@@ -311,6 +311,7 @@
 				S.lcAt[key] = Date.now();
 				post('cp_mail_threads', P).then(n => { const same = JSON.stringify(n) === JSON.stringify(S.lc[key]); S.lc[key] = n; if (!same && box.isConnected && !S.th && JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so }) === key) drawInbox(box); }).catch(() => {});
 			}
+			if (!box.isConnected) return;
 			if (r) { rows = r.rows; counts = r.counts || {}; un = r.un || {}; }
 		}
 		if (S.demo && S.so === 'old') rows = rows.slice().reverse();
@@ -446,7 +447,9 @@
 		if (window.matchMedia && window.matchMedia('(max-width:760px)').matches) window.scrollTo(0, 0);
 		rd.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
 		let x;
-		try { x = id > 0 ? await post('cp_mail_thread', { id: id }) : await thAct(id, 'view', {}); } catch (e) { rd.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		try { x = id > 0 ? await post('cp_mail_thread', { id: id }) : await thAct(id, 'view', {}); } catch (e) { if (rd.isConnected && S.th === id) rd.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		/* közben másik levelet nyitottak meg, vagy újrarajzolódott a fül: ez a válasz már elavult */
+		if (!rd.isConnected || S.th !== id) return;
 		drawThread(box, rd, x);
 	}
 
@@ -460,6 +463,7 @@
 			'<span class="crm-bgap"></span><span class="ml-fols">' + (t.fol || []).slice(0, 3).map(f => '<i style="background:' + avc(pname(f)) + '" title="' + esc(pname(f)) + '">' + esc(ini(pname(f))) + '</i>').join('') + ((t.fol || []).length ? '' : '<small>Nincs követő</small>') + '</span>' +
 			'<select data-as aria-label="Felelős"><option value="">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (t.as === p.id ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' +
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
+			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
 			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
@@ -557,6 +561,8 @@
 		if (window.CPKanban && t.id > 0) window.CPKanban.linked(kbl, { th: t.id });
 		const todo = rd.querySelector('[data-todo]');
 		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(rd.querySelector('[data-kbq]'), { title: t.subj, th: t.id, deal: d && d.id ? d.id : 0, onDone: () => window.CPKanban.linked(kbl, { th: t.id }) }));
+		const fd = rd.querySelector('[data-fromdeal]');
+		if (fd) fd.addEventListener('click', () => { const id = S.fromDeal.deal; S.fromDeal = null; if (/^#mail$/.test(location.hash) && history.length > 1) history.back(); else if (window.CPCrm && window.CPCrm.open) window.CPCrm.open(id); });
 		const od = rd.querySelector('[data-opendeal]');
 		if (od) od.addEventListener('click', e => { e.preventDefault(); if (od.dataset.opendeal && window.CPCrm && window.CPCrm.open) window.CPCrm.open(Number(od.dataset.opendeal)); });
 		rd.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Törlöd a jegyzetet?')) act('cp_mail_note_del', { id: b.dataset.ndel, nid: b.dataset.ndel }); }));
@@ -909,6 +915,6 @@
 	}
 
 	/* v1.35: egy levélszál megnyitása más fülről (pl. a Feladatok kártyájáról) */
-	function open(id) { S.view = 'inbox'; S.th = id; S.forceTh = id; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
+	function open(id, o) { S.view = 'inbox'; S.th = id; S.forceTh = id; S.fromDeal = o && o.deal ? { th: id, deal: o.deal } : null; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
 	window.CPMail = { view, status, open, refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
 })();

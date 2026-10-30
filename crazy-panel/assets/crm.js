@@ -630,7 +630,15 @@
 	}
 	window.addEventListener('popstate', () => {
 		const m = /^#deals:(\d+)$/.exec(location.hash);
-		if (m) { if (document.querySelector('#cpx-main > .crm-page')) openDeal(Number(m[1]), null, true); }
+		if (m) {
+			const id = Number(m[1]);
+			if (document.querySelector('#cpx-main > .crm-page')) openDeal(id, null, true);
+			else if (history.state && history.state.cpDeal) {
+				/* visszalépés egy másik fülről (pl. a dealről megnyitott levélből): vissza a Deal-ek fülre, rajta a deal */
+				if (window.CPXGo && !document.querySelector('.cpx-tabs [data-tab="deals"].on')) { window.CPXGo('deals'); history.replaceState({ cpDeal: id }, '', '#deals:' + id); }
+				openDeal(id, null, true);
+			}
+		}
 		else closePage(false);
 	});
 	const head360 = (t, back, did) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '<button type="button" class="d3-back" data-close>← Vissza</button>') + '<h3>' + t + '</h3>' +
@@ -641,7 +649,13 @@
 		const l = sh.querySelector('[data-dlink]');
 		if (l && !l.dataset.b) { l.dataset.b = '1'; l.addEventListener('click', async () => { const u = dealUrl(l.dataset.dlink); try { await navigator.clipboard.writeText(u); toast('A deal linkje kimásolva: #' + l.dataset.dlink); } catch (e) { window.prompt('A deal linkje:', u); } }); }
 	}
-	const goMail = id => { hideModal(); closePage(); if (window.CPMail && window.CPMail.open) window.CPMail.open(id); };
+	/* v1.78.1: a dealről megnyitott levélből vissza lehet lépni a dealre (← gomb vagy a böngésző Vissza gombja) */
+	const goMail = id => {
+		const m = /^#deals:(\d+)$/.exec(location.hash), did = m ? Number(m[1]) : 0;
+		hideModal(); closePage(!did);
+		if (did) history.pushState({ cpFromDeal: did }, '', '#mail');
+		if (window.CPMail && window.CPMail.open) window.CPMail.open(id, { deal: did });
+	};
 	function dealRows(list, curId, back) {
 		if (!list.length) return '<p class="cpx-muted">Nincs.</p>';
 		return '<ul class="d3-deals">' + list.map(o => '<li class="' + (o.id === curId ? 'cur' : '') + '"><button type="button" data-open="' + o.id + '"><b>' + esc(o.title || 'Deal #' + o.id) + '</b><small>' +
@@ -659,7 +673,8 @@
 	}
 	function bindCommon(sh, back) {
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open), back)));
-		sh.querySelectorAll('[data-th]').forEach(b => b.addEventListener('click', () => goMail(Number(b.dataset.th))));
+		/* az idővonal elemeit (.d3-ti) a drawTimeline köti be – itt nem, különben kétszer nyílna meg a levél */
+		sh.querySelectorAll('[data-th]:not(.d3-ti)').forEach(b => b.addEventListener('click', () => goMail(Number(b.dataset.th))));
 		sh.querySelectorAll('[data-ct]').forEach(b => { if (!(Number(b.dataset.ct) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openContact(Number(b.dataset.ct), back); }); });
 		sh.querySelectorAll('[data-co]').forEach(b => { if (!(Number(b.dataset.co) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openCompany(Number(b.dataset.co), back); }); });
 	}
