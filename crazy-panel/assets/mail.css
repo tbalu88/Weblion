@@ -286,7 +286,7 @@
 /* v1.60: levelezés mobilon – a Salesmate Team Inbox mintájára */
 .ml-mbar{display:flex;justify-content:flex-end;gap:6px;margin:6px 0 2px}
 .ml-mbar select{border:1px solid var(--li);border-radius:999px;padding:3px 10px;font:500 12px Inter,sans-serif;background:#fff;color:var(--ink)}
-.ml-fsel,.ml-fab,.ml-backbar{display:none}
+.ml-fsel,.ml-fab,.ml-backbar,.ml-tfab,.ml-qa{display:none}
 @media (max-width:760px){
   .ml.v-inbox .ml-head{display:none}
   .ml-note{font-size:11.5px;padding:4px 10px;margin:0 0 6px}
@@ -328,4 +328,38 @@
   .ml-mh>div{min-width:0;flex:1}
   .ml-from .ml-fe{display:block;font-size:12px;overflow-wrap:anywhere}
   .ml-mt{flex-basis:100%;display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+  /* v1.61: iPhone-on ne nagyítsa a böngésző a szöveget; rendezett, egysoros lista-sorok */
+  html,body,.ml{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  .ml-i1{font-size:16px;line-height:1.3}
+  .ml-i1 b{font-weight:700}
+  .ml-as{font-size:14px}
+  .ml-i1 small{font-size:12.5px;font-weight:500}
+  .ml-i2{font-size:15px;line-height:1.35;margin-top:2px}
+  .ml-i3{font-size:14px;line-height:1.35;margin-top:2px}
+  .ml-i3>span{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#8A8F99}
+  .ml-i3>span.ml-inote{display:flex;color:#8A5A2B}
+  .ml-i3 i{font-size:12.5px;line-height:18px}
+  /* válasz írása: a szövegmező töltse ki a képernyőt */
+  .ml-compose{padding:10px 12px;border-radius:14px}
+  .ml-rctx{font-size:12.5px;padding:5px 8px;margin-bottom:4px}
+  .ml-ctop{padding-bottom:6px;gap:8px}
+  .ml-row{min-height:40px;padding:2px 0;gap:8px}
+  .ml-row>label{flex-basis:58px;font-size:13px}
+  .ml-row>input,.ml-row>select{height:34px;font-size:16px}
+  .ml-area{min-height:calc(100vh - 330px);min-height:calc(100dvh - 330px);max-height:none;font-size:16px}
+  .ml-send{position:sticky;bottom:0;z-index:6;gap:6px;box-shadow:0 -6px 14px -10px rgba(0,0,0,.25)}
+  .ml-send .ml-track{display:none}
+  /* gyors műveletek a megnyitott szálban */
+  .ml-inbox.reading .ml-tfab{display:flex;align-items:center;justify-content:center;position:fixed;right:18px;bottom:22px;width:58px;height:58px;border-radius:50%;border:0;background:#2F6FDB;color:#fff;box-shadow:0 10px 24px -8px rgba(47,111,219,.7);z-index:40;cursor:pointer}
+  .ml-tfab svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round}
+  .ml-inbox.reading .ml-qa:not([hidden]){display:block;position:fixed;inset:0;z-index:60}
+  .ml-qab{position:absolute;inset:0;background:rgba(20,24,33,.38)}
+  .ml-qas{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;padding:6px 0 calc(14px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px -12px rgba(0,0,0,.35)}
+  .ml-qah{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px;border-bottom:1px solid #EEEAE4;font:700 17px Inter,sans-serif}
+  .ml-qah button{border:0;background:transparent;font-size:18px;color:var(--mu);cursor:pointer;padding:4px 6px}
+  .ml-qas>button{display:flex;align-items:center;gap:14px;width:100%;border:0;background:transparent;padding:15px 22px;font:500 16px Inter,sans-serif;color:var(--ink);text-align:left;cursor:pointer}
+  .ml-qas>button:active{background:#F6F4F0}
+  .ml-qas>button[disabled]{opacity:.45;cursor:not-allowed}
+  .ml-qas>button svg{width:20px;height:20px;flex:none;fill:none;stroke:#2F6FDB;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .ml-qas small{display:block;padding:4px 22px 0;color:var(--mu);font-size:12.5px}
 }
