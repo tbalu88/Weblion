@@ -598,16 +598,50 @@
 		lead: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .6-4.5 4 1.3 6L12 16l-5.4 3.2 1.3-6-4.5-4 6-.6z"/></svg>', flow: '<svg viewBox="0 0 24 24"><path d="M4 6h6v4H4zM14 14h6v4h-6zM7 10v4a2 2 0 0 0 2 2h5"/></svg>',
 		plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', portal: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>', file: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>'
 	};
-	function sheet360(html) {
-		const m = document.getElementById('cpx-modal');
-		if (!m) return null;
-		m.innerHTML = '<div class="cpx-sheet crm-sheet crm-360" role="dialog" aria-modal="true">' + html + '</div>';
-		m.hidden = false;
-		return m.querySelector('.crm-360');
+	/* v1.75: a deal-, kontakt- és cégnézet önálló oldal a fő tartalomban (nem felugró ablak): saját címe van (#deals:<sorszám>),
+	   az Esc nem zárja be, a böngésző Vissza gombja és a ← / × gomb igen; a lista alatta megmarad */
+	function hideModal() { const m = document.getElementById('cpx-modal'); if (m && !m.hidden) { m.hidden = true; m.innerHTML = ''; } }
+	function closePage(nav) {
+		const main = document.getElementById('cpx-main');
+		if (main) { main.classList.remove('crm-pg-on'); const p = main.querySelector(':scope > .crm-page'); if (p) p.remove(); }
+		if (nav !== false && /^#deals:\d+/.test(location.hash)) history.replaceState(null, '', '#' + (D3.tab0 || 'deals'));
 	}
-	const head360 = (t, back) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '') + '<h3>' + t + '</h3><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>';
-	function bindBack(sh, back) { const b = sh.querySelector('[data-back]'); if (b && back) b.addEventListener('click', back.fn); }
-	const goMail = id => { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } if (window.CPMail && window.CPMail.open) window.CPMail.open(id); };
+	function sheet360(html) {
+		hideModal();
+		const main = document.getElementById('cpx-main');
+		if (!main) return null;
+		let pg = main.querySelector(':scope > .crm-page');
+		if (!pg) {
+			pg = document.createElement('div'); pg.className = 'crm-page';
+			main.prepend(pg);
+			pg.addEventListener('click', e => { const x = e.target.closest('[data-close]'); if (x && x.closest('.d3-h')) { e.preventDefault(); closePage(); } });
+		}
+		main.classList.add('crm-pg-on');
+		pg.innerHTML = '<div class="crm-360 crm-pg" role="region" aria-label="Adatlap">' + html + '</div>';
+		window.scrollTo(0, 0);
+		return pg.firstChild;
+	}
+	/* a deal saját címe: #deals:<sorszám> – a böngészőben visszaléphető, könyvjelzőzhető, elküldhető */
+	function dealUrl(id) { return location.origin + location.pathname + location.search + '#deals:' + id; }
+	function pushDeal(id) {
+		const cur = location.hash.slice(1).split(':')[0];
+		if (!/^#deals:\d+$/.test(location.hash)) D3.tab0 = cur || 'deals';
+		if (location.hash !== '#deals:' + id) history.pushState({ cpDeal: id }, '', '#deals:' + id);
+	}
+	window.addEventListener('popstate', () => {
+		const m = /^#deals:(\d+)$/.exec(location.hash);
+		if (m) { if (document.querySelector('#cpx-main > .crm-page')) openDeal(Number(m[1]), null, true); }
+		else closePage(false);
+	});
+	const head360 = (t, back, did) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '<button type="button" class="d3-back" data-close>← Vissza</button>') + '<h3>' + t + '</h3>' +
+		(did ? '<span class="d3-no" title="A deal egyedi sorszáma (a Salesmate-ben is ez)">#' + Number(did) + '</span><button type="button" class="cpx-btn ghost d3-link" data-dlink="' + Number(did) + '" title="A deal saját linkje – elküldhető, könyvjelzőzhető">🔗 <span>Link</span></button>' : '') +
+		'<button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>';
+	function bindBack(sh, back) {
+		const b = sh.querySelector('[data-back]'); if (b && back) b.addEventListener('click', back.fn);
+		const l = sh.querySelector('[data-dlink]');
+		if (l && !l.dataset.b) { l.dataset.b = '1'; l.addEventListener('click', async () => { const u = dealUrl(l.dataset.dlink); try { await navigator.clipboard.writeText(u); toast('A deal linkje kimásolva: #' + l.dataset.dlink); } catch (e) { window.prompt('A deal linkje:', u); } }); }
+	}
+	const goMail = id => { hideModal(); closePage(); if (window.CPMail && window.CPMail.open) window.CPMail.open(id); };
 	function dealRows(list, curId, back) {
 		if (!list.length) return '<p class="cpx-muted">Nincs.</p>';
 		return '<ul class="d3-deals">' + list.map(o => '<li class="' + (o.id === curId ? 'cur' : '') + '"><button type="button" data-open="' + o.id + '"><b>' + esc(o.title || 'Deal #' + o.id) + '</b><small>' +
@@ -671,7 +705,7 @@
 		box.querySelectorAll('[data-aedit]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const a = (x.acts || []).find(z => String(z.id) === b.dataset.aedit); const c = document.querySelector('.crm-360 [data-comp]'); if (a && c) compose(c, x, 'act', a); }));
 		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
 		box.querySelectorAll('.d3-ti[data-th]').forEach(b => { const go = () => goMail(Number(b.dataset.th)); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
-		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { hideModal(); closePage(); if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 	}
 	/* v1.59: az ügyfélportál kártyája a deal-adatlapon */
 	const PST = { hianyos: 'Hiányos', kesz: 'Kész', modositva: 'Módosítva' };
@@ -776,14 +810,15 @@
 		const i = STAGES.indexOf(d.stage);
 		return '<div class="d3-stages' + (d.status === 'Won' ? ' won' : d.status === 'Lost' ? ' lost' : '') + '">' + STAGES.map((s, k) => '<button type="button" data-stg="' + esc(s) + '" class="' + (k < i ? 'done' : k === i ? 'cur' : '') + '"' + (W && d.status === 'Open' && !d.deleted_at && k !== i ? '' : ' disabled') + ' title="' + esc(s) + (W && d.status === 'Open' && k !== i ? ' – kattints az áthelyezéshez' : '') + '"><span>' + esc(s) + '</span></button>').join('') + '</div>';
 	}
-	async function openDeal(id, back) {
+	async function openDeal(id, back, fromHist) {
+		if (!fromHist) pushDeal(id);
 		if (S.pend && S.pend.fresh && S.pend.fresh[id]) { const lid = S.pend.fresh[id]; delete S.pend.fresh[id]; post('cp_lead_set', { id: lid, st: 'seen' }).catch(() => {}); if (S.mode === 'board' && S.board) setTimeout(redrawBoard, 0); }
-		const sh = sheet360(head360('Deal #' + id, back) + '<div class="cpx-empty">Betöltés…</div>');
+		const sh = sheet360(head360('Deal #' + id, back, id) + '<div class="cpx-empty">Betöltés…</div>');
 		if (!sh) return;
 		bindBack(sh, back);
 		let x;
 		try { x = await post('cp_crm_deal', { id: id }); }
-		catch (e) { if (sh.isConnected) { sh.innerHTML = head360('Deal #' + id, back) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); } return; }
+		catch (e) { if (sh.isConnected) { sh.innerHTML = head360('Deal #' + id, back, id) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); } return; }
 		if (!sh.isConnected) return;
 		const d = x.deal, c = x.contact, co = x.company, m = x.mail || { threads: [], msgs: [], notes: [], files: [] };
 		const smUrl = C.sm ? C.sm + d.id : '';
@@ -798,7 +833,7 @@
 		const otherCt = (x.ct_deals || []).filter(o => o.id !== d.id);
 		const otherCo = (x.co_deals || []).filter(o => o.id !== d.id && !otherCt.some(z => z.id === o.id));
 		const ph = c ? (c.mobile || c.phone) : '';
-		let h = head360(esc(d.title || 'Deal #' + d.id), back) +
+		let h = head360(esc(d.title || 'Deal #' + d.id), back, d.id) +
 			'<div class="d3-top">' + stageBar(d) + '<div class="d3-acts">' + stBadge(d) +
 			(W && !d.deleted_at ? (d.status === 'Open' ? '<button class="cpx-btn ghost d3-won" type="button" data-mvst="Won">✓ Megnyert</button><button class="cpx-btn ghost bad" type="button" data-mvst="Lost">✗ Elvesztett</button>' : '<button class="cpx-btn ghost" type="button" data-mvst="Open">Újranyitás</button>') : '') +
 			(R.edit && !d.deleted_at ? '<button class="cpx-btn" type="button" data-edit>Szerkesztés</button>' : '') +
@@ -853,7 +888,7 @@
 	/* ------------------------------------------------------------ kontakt- és cégnézet: minden munkájuk, levelezésük */
 	function filterTo(k, id, n) {
 		S.who = { k: k, id: id, n: n }; S.mode = 'list'; S.st = ''; S.p = 0; SEL.clear(); save();
-		const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; }
+		hideModal(); closePage();
 		if (window.CPXGo) window.CPXGo('deals');
 		setTimeout(() => { if (S.main && S.main.isConnected) view(S.main); }, 30);
 	}

@@ -371,3 +371,13 @@ a.d3-who:hover{background:#F6F3EE}
 /* v1.69: deal levélből */
 .crm-aist{margin:10px 0 4px;padding:8px 10px;border-radius:8px;background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83;font-size:13px}.crm-aist:empty{display:none}
 .crm-mv{display:flex;margin:6px 0 2px;color:var(--ink);font-weight:600}
+
+/* v1.75: deal / kontakt / cég – önálló oldal a fő tartalomban (nem felugró ablak) */
+#cpx-main.crm-pg-on > :not(.crm-page){display:none!important}
+.crm-page{max-width:1560px;margin:0 auto}
+.crm-pg{padding:0 0 24px;background:transparent}
+.crm-pg .cpx-sheet-h{position:sticky;top:0;z-index:3;background:#F6F4F0;padding:8px 0;margin:0 0 6px;gap:10px;display:flex;align-items:center}
+.crm-pg .cpx-sheet-h h3{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:800 19px "Plus Jakarta Sans",sans-serif;margin:0}
+.d3-no{flex:none;font:700 13px Inter,sans-serif;color:#4A5163;background:#EEEAE4;border-radius:8px;padding:4px 9px;user-select:all}
+.crm-pg .d3-link{flex:none;padding:5px 10px;font-size:13px}
+@media (max-width:760px){.crm-pg .cpx-sheet-h h3{font-size:16px}.crm-pg .d3-link span{display:none}.crm-pg .d3-no{font-size:12px;padding:3px 6px}.crm-pg .cpx-sheet-h .cpx-x{display:none}}
