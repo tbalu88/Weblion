@@ -429,4 +429,10 @@
 .ml-extbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#FFF8EC;border:1px solid #F3E1C4;border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:12.5px;color:#7A5A1E}
 .ml-extbar button{border:0;background:#fff;border:1px solid #E6D3B0;border-radius:6px;padding:3px 10px;font:600 12px Inter,sans-serif;color:#7A5A1E;cursor:pointer}
 .ml-hf{display:block;width:100%;border:0;min-height:60px;background:#fff}
+/* v1.67.1: lenyitható idézett előzmények */
+.ml-qd{margin-top:10px}.ml-qd summary{cursor:pointer;color:#6B6F78;font-size:12.5px;list-style:none;display:inline-block;background:#F1EDE7;border-radius:6px;padding:2px 8px}.ml-qd summary::-webkit-details-marker{display:none}.ml-qd>div{margin-top:8px;padding-left:10px;border-left:2px solid #E6E3DE;color:#6B6F78}
+/* v1.67.1: üzenet Továbbiak menü */
+.ml-mmenu{position:absolute;right:0;top:100%;z-index:30;background:#fff;border:1px solid #E6E3DE;border-radius:12px;box-shadow:0 16px 36px -16px rgba(20,28,51,.4);padding:4px;min-width:200px;display:flex;flex-direction:column}
+.ml-mmenu button{border:0;background:transparent;text-align:left;padding:9px 12px;border-radius:8px;font:500 13.5px Inter,sans-serif;color:#1A1F2B;cursor:pointer;white-space:nowrap}
+.ml-mmenu button:hover{background:#F6F4F0}
 
