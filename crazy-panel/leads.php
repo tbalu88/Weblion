@@ -86,6 +86,8 @@ function cp_lead_ajax_in() {
 		'data' => $raw, 'name' => mb_substr($name, 0, 190), 'email' => mb_substr($email, 0, 190), 'phone' => mb_substr($phone, 0, 60), 'page' => mb_substr(esc_url_raw((string) wp_unslash($_POST['page'] ?? '')), 0, 255),
 		'ip_hash' => $ip, 'status' => 'new', 'created_at' => gmdate('Y-m-d H:i:s')));
 	$id = (int) $wpdb->insert_id;
+	/* v1.70: az átállás árnyék-üzeme (cutover.php) ebből számolja a panel deal-tervét */
+	do_action('cp_lead_received', $id, $pairs, (string) wp_unslash($_POST['page'] ?? ''));
 	/* a Salesmate deal minél előbb jöjjön át: soron kívüli szinkron 1,5 perc múlva */
 	if (!wp_next_scheduled('cp_crm_more')) { wp_schedule_single_event(time() + 90, 'cp_crm_more'); }
 	/* értesítés minden aktív kollégának (csengő, és ha be van állítva, Pumble) */
