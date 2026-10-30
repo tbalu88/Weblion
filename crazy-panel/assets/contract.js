@@ -20,7 +20,7 @@
 		if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); }
 		d.textContent = m; d.className = 'cpx-toast on' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 4000);
 	}
-	const slot = () => (C.ct && C.ct.on ? '<section class="d3-c d3-ct" data-ct><h4>Szerződés</h4><p class="d3-sub">Megbízási szerződés a deal és az ügyfélportál adataiból – a szolgáltatások bepipálhatók, vegyes megrendelés is.</p><div class="d3-pact"><button type="button" class="cpx-btn" data-ctopen>Szerződés készítése</button></div></section>' : '');
+	const slot = () => (C.ct && C.ct.on ? '<section class="d3-c d3-ct" data-contract><h4>Szerződés</h4><p class="d3-sub">Megbízási szerződés a deal és az ügyfélportál adataiból – a szolgáltatások bepipálhatók, vegyes megrendelés is.</p><div class="d3-pact"><button type="button" class="cpx-btn" data-ctopen>Szerződés készítése</button></div></section>' : '');
 	function mount(sh, x) {
 		const b = sh.querySelector('[data-ctopen]');
 		if (b) b.addEventListener('click', () => open(x.deal.id, x.deal.title));

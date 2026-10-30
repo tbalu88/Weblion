@@ -660,8 +660,8 @@
 	function bindCommon(sh, back) {
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open), back)));
 		sh.querySelectorAll('[data-th]').forEach(b => b.addEventListener('click', () => goMail(Number(b.dataset.th))));
-		sh.querySelectorAll('[data-ct]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); openContact(Number(b.dataset.ct), back); }));
-		sh.querySelectorAll('[data-co]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); openCompany(Number(b.dataset.co), back); }));
+		sh.querySelectorAll('[data-ct]').forEach(b => { if (!(Number(b.dataset.ct) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openContact(Number(b.dataset.ct), back); }); });
+		sh.querySelectorAll('[data-co]').forEach(b => { if (!(Number(b.dataset.co) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openCompany(Number(b.dataset.co), back); }); });
 	}
 	/* a deal teljes idővonala: levelek, jegyzetek, tevékenységek, feladatok, megkeresések, automatizmusok, változások */
 	function timeline(x) {
