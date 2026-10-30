@@ -150,7 +150,7 @@ function cp_gcal_plan($id) {
 	if ((int) $d['guests'] > 0) { $x[] = ' - Létszám: ' . (int) $d['guests'] . ' fő'; }
 	if ($x) { $L[] = '<br>Egyéb:<br>' . implode('<br>', $x); }
 	$L[] = '------------------------------------------------------------------------<br>bruttó = nettó + ÁFA<br>Hosszabbítás nettó 30 000 Ft / óra + ÁFA<br>Készenlét nettó  10 000 Ft / óra + ÁFA<br>Áttelepítés nettó  10 000 Ft / alkalom +ÁFA';
-	return array('title' => ($pen ? '✏️ ' : '') . 'EC | ' . trim((string) $d['cn']) . ' | ' . $date, 'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L));
+	return array('title' => trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date, /* v1.71.1: a naptárban a deal neve a cím */ 'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L));
 }
 
 /* ------------------------------------------------------------ Naptár fül */
@@ -229,10 +229,8 @@ function cp_gcal_shadow() {
 		$ev = null;
 		foreach ($cache[$day] as $e) { if (cp_gcal_match($e, $byDate, $byId) === $deal) { $ev = $e; break; } }
 		if (!$ev) { if ($age > 6 * HOUR_IN_SECONDS) { $set('missing', 'Nincs bejegyzés a naptárban a rendezvény napján (' . $day . ').'); } continue; }
-		/* a ✏️ jel kézi munka is lehet: eltérésnek nem számít, csak megjegyzés */
-		$pen = cp_gcal_pen($ev['t']); $note = '';
-		if ($kind === 'pen' && !$pen && $d['stage'] === cp_gcal_stages()[0]) { if ($age < 6 * HOUR_IN_SECONDS) { continue; } $note = 'Megjegyzés: a bejegyzés címében nincs ✏️ jel.'; }
-		if ($kind === 'sign' && $pen) { if ($age < DAY_IN_SECONDS) { continue; } $note = 'Megjegyzés: aláírás után is ✏️ van a címben.'; }
+		$note = '';
+		/* v1.71.1: a ceruzás jelölés módja egyeztetés alatt (a címekben nincs ✏️) – addig csak a bejegyzés meglétét nézi */
 		$set('match', $note);
 	}
 }

@@ -63,8 +63,13 @@
 		Object.keys(m).forEach(k => m[k].sort((a, b) => (a.ad === b.ad ? a.s.localeCompare(b.s) : (a.ad ? -1 : 1))));
 		return m;
 	}
-	const cls = e => 'gc-ev' + (e.pen ? ' pen' : (e.deal ? ' ok' : ' oth'));
-	const chip = (e, i) => '<button type="button" class="' + cls(e) + '" data-ev="' + i + '" title="' + esc(e.t) + '">' + (!e.ad && hm(e.s) ? '<i>' + hm(e.s) + '</i>' : '') + '<span>' + esc(e.t) + '</span></button>';
+	/* v1.71.1: a bejegyzés a Google Naptárban beállított saját színével (mint a telefonon); szín nélkül az alapszín */
+	const GC = { 1: ['#7986CB', 'Levendula'], 2: ['#33B679', 'Zsálya'], 3: ['#8E24AA', 'Szőlő'], 4: ['#E67C73', 'Flamingó'], 5: ['#F6BF26', 'Banán'], 6: ['#F4511E', 'Mandarin'], 7: ['#039BE5', 'Páva'], 8: ['#616161', 'Grafit'], 9: ['#3F51B5', 'Áfonya'], 10: ['#0B8043', 'Bazsalikom'], 11: ['#D50000', 'Paradicsom'] };
+	const colOf = e => (GC[e.col] || ['#4C7BD9', 'alapszín'])[0];
+	const tint = c => c + '22';
+	const sty = e => 'style="--gc:' + colOf(e) + ';background:' + tint(colOf(e)) + '"';
+	const cls = e => 'gc-ev' + (e.pen ? ' pen' : '') + (e.deal ? '' : ' oth');
+	const chip = (e, i) => '<button type="button" class="' + cls(e) + '" ' + sty(e) + ' data-ev="' + i + '" title="' + esc(e.t) + '">' + (!e.ad && hm(e.s) ? '<i>' + hm(e.s) + '</i>' : '') + '<span>' + esc(e.t) + '</span></button>';
 
 	function draw() {
 		const m = S.main;
@@ -83,7 +88,8 @@
 		}
 		if (!S.x) { m.innerHTML = h + (S.err ? '<div class="cpx-empty err">' + esc(S.err) + '<br><button class="cpx-btn" data-ref>Újra</button></div>' : '<div class="cpx-empty">Naptár betöltése…</div>') + '</div>'; bind(); return; }
 		if (S.err) h += '<div class="gc-warn err">' + esc(S.err) + '</div>';
-		h += '<div class="gc-leg"><span><i class="pen"></i>✏️ ceruzás (szerződés kiküldve)</span><span><i class="ok"></i>végleges (dealhez kötve)</span><span><i class="oth"></i>egyéb bejegyzés</span></div>';
+		const used = {}; (S.x.ev || []).forEach(e => { used[GC[e.col] ? e.col : 0] = (used[GC[e.col] ? e.col : 0] || 0) + 1; });
+		h += '<div class="gc-leg">' + Object.keys(used).map(k => '<span><i style="background:' + (GC[k] ? GC[k][0] : '#4C7BD9') + '"></i>' + (GC[k] ? GC[k][1] : 'alapszín') + ' <small>(' + used[k] + ')</small></span>').join('') + '<span class="gc-sm">a színek a Google Naptárból · halványabb: nem dealhez kötött</span></div>';
 		const miss = S.x.miss || [];
 		if (miss.length) {
 			h += '<div class="gc-warn"><button type="button" class="gc-mh" data-miss aria-expanded="' + (S.missOpen ? 'true' : 'false') + '">⚠️ <span class="gc-mt"><b>' + miss.length + ' szerződéses deal</b> rendezvénye nincs a naptárban ebben a nézetben</span><span class="gc-ml">' + (S.missOpen ? 'Elrejtés' : 'Megnézem') + '</span></button>' +
@@ -105,7 +111,7 @@
 			const days = Object.keys(bd).filter(d => d.slice(0, 7) === S.month).sort();
 			if (!days.length) h += '<div class="cpx-empty">Ebben a hónapban nincs bejegyzés.</div>';
 			h += '<div class="gc-list">' + days.map(d => '<section class="gc-ld' + (d === today ? ' today' : '') + (d < today ? ' past' : '') + '" id="gc-d-' + d + '"><h4>' + dayLabel(d) + (d === today ? ' <em>ma</em>' : '') + '</h4>' +
-				bd[d].map(e => { const i = idx(e); return '<button type="button" class="gc-li ' + cls(e) + '" data-ev="' + i + '"><span class="gc-tm">' + (e.ad ? 'egész nap' : esc(hm(e.s)) + (hm(e.e) ? '<b>–' + esc(hm(e.e)) + '</b>' : '')) + '</span><span class="gc-tt"><b>' + esc(e.t) + '</b>' +
+				bd[d].map(e => { const i = idx(e); return '<button type="button" class="gc-li ' + cls(e) + '" ' + sty(e) + ' data-ev="' + i + '"><span class="gc-tm">' + (e.ad ? 'egész nap' : esc(hm(e.s)) + (hm(e.e) ? '<b>–' + esc(hm(e.e)) + '</b>' : '')) + '</span><span class="gc-tt"><b>' + esc(e.t) + '</b>' +
 					(e.loc ? '<small>📍 ' + esc(e.loc) + '</small>' : '') + (e.deal ? '<small>' + esc(e.stg) + (e.own ? ' · ' + esc(e.own) : '') + (e.g && e.g.length ? ' · 👤 ' + e.g.length + ' kezelő' : '') + '</small>' : '') + '</span></button>'; }).join('') + '</section>').join('') + '</div>';
 		}
 		h += '</div>';
@@ -144,7 +150,7 @@
 		const when = e.ad ? dayLabel(e.s) + (e.e && e.e.slice(0, 10) !== e.s.slice(0, 10) ? ' – ' + dayLabel(e.e) : '') + ' · egész nap' : dayLabel(e.s) + ' · ' + hm(e.s) + (hm(e.e) ? '–' + hm(e.e) : '');
 		const w = document.createElement('div');
 		w.id = 'gc-mod'; w.className = 'gc-mod';
-		w.innerHTML = '<div class="gc-bg" data-x></div><div class="gc-card" role="dialog" aria-modal="true" aria-label="' + esc(e.t) + '"><header><span class="gc-dot ' + cls(e).replace('gc-ev ', '') + '"></span><h3>' + esc(e.t) + '</h3><button type="button" class="gc-x" data-x aria-label="Bezárás">✕</button></header>' +
+		w.innerHTML = '<div class="gc-bg" data-x></div><div class="gc-card" role="dialog" aria-modal="true" aria-label="' + esc(e.t) + '"><header><span class="gc-dot" style="background:' + colOf(e) + '"></span><h3>' + esc(e.t) + '</h3><button type="button" class="gc-x" data-x aria-label="Bezárás">✕</button></header>' +
 			'<div class="gc-body"><p class="gc-when">🗓 ' + esc(when) + '</p>' +
 			(e.loc ? '<p>📍 <a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(e.loc) + '" target="_blank" rel="noopener">' + esc(e.loc) + '</a></p>' : '') +
 			(e.deal ? '<div class="gc-deal"><div><b>Deal:</b> ' + esc(e.stg) + (e.dst && e.dst !== 'Open' ? ' (' + esc(e.dst === 'Won' ? 'megnyert' : e.dst) + ')' : '') + (e.own ? ' · ' + esc(e.own) : '') + (e.pen ? ' · <span class="gc-pen">✏️ ceruzás</span>' : '') + '</div><button type="button" class="cpx-btn" data-deal="' + e.deal + '">Deal megnyitása</button></div>' : '<p class="gc-sm">Ehhez a bejegyzéshez a panel nem talált dealt (a kezelői adatlap linkje vagy a kontakt neve alapján keres).</p>') +
@@ -200,7 +206,7 @@
 		'.gc-dn{font:600 12.5px Inter,sans-serif;color:#4A5163;padding:2px 4px}.gc-day.today .gc-dn{display:inline-block;align-self:flex-start;background:#2F6FDB;color:#fff;border-radius:20px;padding:2px 8px}' +
 		'.gc-ev{display:flex;gap:4px;align-items:baseline;width:100%;min-width:0;border-radius:6px;padding:3px 6px;font:500 12px/1.3 Inter,sans-serif;text-align:left;cursor:pointer;border:1px solid transparent;color:#141C33}' +
 		'.gc-ev span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gc-ev i{font-style:normal;font-weight:700;flex:none;color:#4A5163}' +
-		'.gc-ev.pen{background:#FFF1CC;border:1px dashed #D49A00}.gc-ev.ok{background:#DDF3E4;border-color:#BFE5CB}.gc-ev.oth{background:#EEF0F4}' +
+		'.gc-ev{border-left:4px solid var(--gc,#4C7BD9)!important}.gc-ev.pen{border-style:dashed}.gc-ev.oth{opacity:.72}' +
 		'.gc-more{border:0;background:transparent;color:#2F6FDB;font:600 11.5px Inter,sans-serif;text-align:left;padding:1px 6px;cursor:pointer}' +
 		'.gc-list{display:flex;flex-direction:column;gap:14px}.gc-ld h4{margin:0 0 6px;font:700 14px Inter,sans-serif;color:#141C33}.gc-ld h4 em{font-style:normal;background:#2F6FDB;color:#fff;border-radius:20px;padding:1px 8px;font-size:11.5px;margin-left:6px;text-transform:none}.gc-ld.past{opacity:.7}' +
 		'.gc-li{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;margin:0 0 6px;border-radius:12px;font-size:14px!important;line-height:1.35!important}.gc-li span{white-space:normal;overflow:visible}.gc-li .gc-tm{flex:none;width:86px;font-weight:700;color:#4A5163;font-size:13px}.gc-tt{display:flex;flex-direction:column;gap:2px;min-width:0}.gc-tt b{font-weight:600;overflow-wrap:anywhere}.gc-tt small{color:#5D6270;font-size:12.5px;overflow-wrap:anywhere}' +
