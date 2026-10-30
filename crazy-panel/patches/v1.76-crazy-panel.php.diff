@@ -1,0 +1,35 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v64/crazy-panel.b75.php	2026-10-30 16:32:54.878875507 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v64/crazy-panel.php	2026-10-30 16:32:54.897519129 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.75.0');
++define('CP_PANEL_VER', '1.76.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -757,6 +757,7 @@
+ 		'dash'       => array('on' => function_exists('cp_dash_ajax_data') && cp_panel_can_x('kezdolap')),
+ 		'gcal'       => array('on' => function_exists('cp_gcal_ajax_ev') && cp_panel_can_x('gnaptar')),
+ 		'bil'        => array('on' => function_exists('cp_bil_ajax_deal') && cp_panel_can_x('szamlazas')),
++		'ct'         => array('on' => function_exists('cp_ct_ajax_get') && cp_panel_can_x('deals')),
+ 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+@@ -778,6 +779,7 @@
+ 	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['dash']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/dash.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['ct']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contract.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['bil']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/bill.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['gcal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/gcal.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+@@ -3715,6 +3717,7 @@
+ require_once __DIR__ . '/dashboard.php';
+ require_once __DIR__ . '/gcal.php';
+ require_once __DIR__ . '/billing.php';
++require_once __DIR__ . '/contract.php';
+ require_once __DIR__ . '/mail-html.php';
+ require_once __DIR__ . '/cutover.php';
+ 

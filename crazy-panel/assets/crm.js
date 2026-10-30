@@ -853,7 +853,7 @@
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok, levélszálak */
-			'<aside class="d3-r">' + portalCard(x) + (window.CPBill ? window.CPBill.slot() : '') + '<section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
+			'<aside class="d3-r">' + portalCard(x) + (window.CPBill ? window.CPBill.slot() : '') + (window.CPContract ? window.CPContract.slot() : '') + '<section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
 				(toEv != null ? '<dt>Rendezvényig</dt><dd>' + (toEv > 0 ? '<b>' + toEv + ' nap</b>' : toEv === 0 ? '<b>ma</b>' : 'lezajlott (' + (-toEv) + ' napja)') + '</dd>' : '') +
 				(x.stage_since ? '<dt>Ebben a szakaszban</dt><dd>' + esc(agoTxt(x.stage_since)) + ' óta</dd>' : '') +
 				(d.last_comm_at ? '<dt>Utolsó kommunikáció</dt><dd>' + esc(huDT(d.last_comm_at)) + (d.last_comm_mode ? ' · ' + esc(d.last_comm_mode) : '') + '</dd>' : '') +
@@ -872,6 +872,7 @@
 		drawTimeline(sh.querySelector('[data-tl]'), x);
 		bindPortal(sh, x, () => openDeal(id, back));
 		if (window.CPBill) window.CPBill.mount(sh, x);
+		if (window.CPContract) window.CPContract.mount(sh, x);
 		bindCommon(sh, self);
 		bindBack(sh, back);
 		const eb = sh.querySelector('[data-edit]');
