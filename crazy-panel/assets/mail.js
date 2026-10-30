@@ -189,7 +189,7 @@
 	function frameDoc(mid, html, imgs) {
 		const o = location.origin, att = i => (C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&view=1&t=' + encodeURIComponent(C.t)).replace(/&/g, '&amp;');
 		return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: ' + o + (imgs ? ' https: http:' : '') + '; font-src data:' + (imgs ? ' https:' : '') + '">' +
-			'<meta name="referrer" content="no-referrer"><base target="_blank"><style>html,body{margin:0;padding:0}body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1A1F2B;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blockquote{margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex}</style></head><body>' +
+			'<meta name="referrer" content="no-referrer"><base target="_blank"><style>html,body{margin:0;padding:0}body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1A1F2B;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blockquote{margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex}blockquote blockquote,.cpq blockquote{margin-left:0!important;padding-left:8px!important;border-left:2px solid #ddd!important}blockquote blockquote blockquote,.cpq blockquote blockquote{border-left:0!important;padding-left:0!important;margin-left:0!important}details.cpq>summary{cursor:pointer;display:inline-block;margin:8px 0;padding:2px 10px;border-radius:6px;background:#F1EDE7;color:#6B6F78;font:12.5px Arial,sans-serif;list-style:none}details.cpq>summary::-webkit-details-marker{display:none}</style></head><body>' +
 			String(html).replace(/cpatt:(\d+)/g, (x, i) => att(i)) + '</body></html>';
 	}
 	function mountHtml(el, mid, imgs) {
@@ -204,6 +204,9 @@
 			f.addEventListener('load', () => {
 				try {
 					const d = f.contentDocument, fit = () => { f.style.height = (d.documentElement.scrollHeight + 2) + 'px'; };
+					/* v1.69.2: a korábbi levelek idézete (egymásba ágyazott blockquote / Gmail / Outlook előzmény) összecsukva */
+					const quotes = Array.from(d.querySelectorAll('blockquote, .gmail_quote, #divRplyFwdMsg, #appendonsend')).filter(q => !q.parentElement.closest('blockquote, .gmail_quote, details.cpq'));
+					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
 					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
 					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
 				} catch (e) { f.style.height = '480px'; }
