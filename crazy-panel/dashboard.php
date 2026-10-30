@@ -26,19 +26,23 @@ function cp_dash_ajax_data() {
 	$D = $crm ? cp_crm_t('deals') : '';
 	$loc = function ($dt) { return function_exists('cp_crm_local') ? cp_crm_local($dt) : (string) $dt; };
 
-	/* 1. teendők: Salesmate-tevékenységek (a saját felhasználómhoz rendelve) + a Feladatok kártyái (rám osztva) */
+	/* 1. teendők: Salesmate-tevékenységek (a saját felhasználómhoz rendelve) + a Feladatok kártyái (rám osztva)
+	 * v1.68: a Kezdőlapról elrejtettek kimaradnak; a régi lejártak is jönnek (a felület külön csoportba teszi) */
 	$todo = array();
+	$hid = array_flip(cp_dash_hidden($uid));
 	if ($crm && $sm) {
 		$A = cp_crm_t('activities');
 		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT a.id, a.title, a.type, a.due_at, a.related_id, d.title dt FROM $A a LEFT JOIN $D d ON d.id = a.related_id AND d.deleted_at IS NULL
-			WHERE a.deleted_at IS NULL AND (a.completed IS NULL OR a.completed = 0) AND a.owner_id = %d AND a.due_at IS NOT NULL AND a.due_at <= %s ORDER BY a.due_at LIMIT 30", $sm, cp_dash_utc($eod)), ARRAY_A) as $r) {
+			WHERE a.deleted_at IS NULL AND (a.completed IS NULL OR a.completed = 0) AND a.owner_id = %d AND a.due_at IS NOT NULL AND a.due_at <= %s ORDER BY a.due_at DESC LIMIT 600", $sm, cp_dash_utc($eod)), ARRAY_A) as $r) {
+			if (isset($hid['act:' . $r['id']])) { continue; }
 			$todo[] = array('k' => 'act', 'id' => (int) $r['id'], 't' => (string) $r['title'], 'ty' => (string) $r['type'], 'due' => $loc($r['due_at']), 'deal' => (int) $r['related_id'], 'dt' => (string) $r['dt']);
 		}
 	}
 	if ($uid && cp_panel_can_x('feladatok') && function_exists('cp_kb_db_ok') && cp_kb_db_ok()) {
 		$B = cp_kb_t('boards'); $Cd = cp_kb_t('cards');
 		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT c.id, c.title, c.due, b.name bn FROM $Cd c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL AND (b.kind <> 'personal' OR b.owner_uid = %d)
-			WHERE c.archived_at IS NULL AND c.done = 0 AND FIND_IN_SET(%d, c.assignees) AND (c.due IS NULL OR c.due <= %s) ORDER BY c.due IS NULL, c.due, c.id DESC LIMIT 30", $uid, $uid, wp_date('Y-m-d', time() + 2 * DAY_IN_SECONDS)), ARRAY_A) as $r) {
+			WHERE c.archived_at IS NULL AND c.done = 0 AND FIND_IN_SET(%d, c.assignees) AND (c.due IS NULL OR c.due <= %s) ORDER BY c.due IS NULL, c.due, c.id DESC LIMIT 200", $uid, $uid, wp_date('Y-m-d', time() + 2 * DAY_IN_SECONDS)), ARRAY_A) as $r) {
+			if (isset($hid['card:' . $r['id']])) { continue; }
 			$todo[] = array('k' => 'card', 'id' => (int) $r['id'], 't' => (string) $r['title'], 'due' => (string) $r['due'], 'bn' => (string) $r['bn']);
 		}
 	}
@@ -99,3 +103,65 @@ function cp_dash_ajax_data() {
 	$out['can'] = array('deals' => cp_panel_can_x('deals'), 'mail' => cp_panel_can_x('mail'), 'feladatok' => cp_panel_can_x('feladatok'), 'naptar' => cp_panel_can_x('naptar'));
 	wp_send_json_success($out);
 }
+
+/* ------------------------------------------------------------ v1.68: teendők tömegesen (Kész / Későbbre / Elrejtés) */
+
+/* a Kezdőlapról elrejtett teendők (felhasználónként; a Salesmate-ben és a Feladatokban megmaradnak) */
+function cp_dash_hidden($uid) {
+	if (!$uid) { return array(); }
+	$h = get_option('cp_dash_hide_' . (int) $uid, array());
+	return is_array($h) ? $h : array();
+}
+
+add_action('wp_ajax_nopriv_cp_dash_bulk', 'cp_dash_ajax_bulk');
+add_action('wp_ajax_cp_dash_bulk', 'cp_dash_ajax_bulk');
+function cp_dash_ajax_bulk() {
+	cp_el_auth();
+	if (!cp_panel_can_x('kezdolap')) { cp_el_err('A Kezdőlap nincs engedélyezve a fiókodnak.', 403); }
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$me = function_exists('cp_pu_current') ? cp_pu_current() : null;
+	$uid = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	if (!$uid) { cp_el_err('Ehhez személyes fiókkal kell belépned.', 403); }
+	$sm = $me ? (int) ($me['sm'] ?? 0) : 0;
+	$op = sanitize_key(wp_unslash($_POST['op'] ?? ''));
+	$days = max(1, min(90, (int) ($_POST['days'] ?? 1)));
+	if (!in_array($op, array('done', 'later', 'hide'), true)) { cp_el_err('Hibás művelet.'); }
+	$items = array_slice(array_filter(array_map('trim', explode(',', (string) wp_unslash($_POST['items'] ?? '')))), 0, 15);
+	$ok = 0; $err = array();
+	$hide = cp_dash_hidden($uid);
+	$newd = wp_date('Y-m-d', time() + $days * DAY_IN_SECONDS);
+	foreach ($items as $it) {
+		if (!preg_match('/^(act|card):(\d+)$/', $it, $m)) { continue; }
+		$id = (int) $m[2];
+		if ($m[1] === 'act') {
+			/* csak a saját (rám osztott) Salesmate-tevékenység */
+			$a = $sm ? $wpdb->get_row($wpdb->prepare('SELECT id, title, type, owner_id, due_at FROM ' . cp_crm_t('activities') . ' WHERE id = %d AND owner_id = %d AND deleted_at IS NULL', $id, $sm), ARRAY_A) : null;
+			if (!$a) { $err[] = $it; continue; }
+			if ($op === 'hide') { $hide[] = $it; $ok++; continue; }
+			$body = array('title' => $a['title'], 'type' => $a['type'] !== '' ? $a['type'] : 'Task', 'owner' => (int) $a['owner_id'], 'isCompleted' => $op === 'done');
+			if ($op === 'later') {
+				$tm = $a['due_at'] && function_exists('cp_crm_local') ? substr(cp_crm_local($a['due_at']), 11, 5) : '';
+				$body['dueDate'] = cp_dact_due_iso($newd, $tm !== '00:00' ? $tm : '');
+			}
+			$r = cp_sm_request('PUT', '/apis/activity/v4/' . $id, $body);
+			if (is_wp_error($r)) { $err[] = $it; continue; }
+			if (!function_exists('cp_dact_refresh_act') || !cp_dact_refresh_act($id)) {
+				$wpdb->update(cp_crm_t('activities'), $op === 'done' ? array('completed' => 1, 'completed_at' => gmdate('Y-m-d H:i:s')) : array('due_at' => gmdate('Y-m-d H:i:s', strtotime(str_replace(array('T', '.000Z'), array(' ', ''), $body['dueDate'])))), array('id' => $id));
+			}
+			$ok++;
+		} else {
+			/* csak a rám osztott, számomra látható kártya */
+			if (!function_exists('cp_kb_t')) { $err[] = $it; continue; }
+			$c = $wpdb->get_row($wpdb->prepare('SELECT c.id FROM ' . cp_kb_t('cards') . ' c JOIN ' . cp_kb_t('boards') . " b ON b.id = c.board_id AND b.deleted_at IS NULL AND (b.kind <> 'personal' OR b.owner_uid = %d) WHERE c.id = %d AND FIND_IN_SET(%d, c.assignees)", $uid, $id, $uid), ARRAY_A);
+			if (!$c) { $err[] = $it; continue; }
+			if ($op === 'hide') { $hide[] = $it; $ok++; continue; }
+			$wpdb->update(cp_kb_t('cards'), $op === 'done' ? array('done' => 1) : array('due' => $newd), array('id' => $id));
+			if (function_exists('cp_kb_log')) { cp_kb_log($id, $op === 'done' ? 'Késznek jelölte (Kezdőlap)' : 'Határidő: ' . $newd . ' (Kezdőlap, későbbre)'); }
+			$ok++;
+		}
+	}
+	if ($op === 'hide') { update_option('cp_dash_hide_' . $uid, array_slice(array_values(array_unique($hide)), -3000), false); }
+	wp_send_json_success(array('ok' => $ok, 'err' => $err));
+}
+

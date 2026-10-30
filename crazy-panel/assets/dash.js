@@ -4,7 +4,7 @@
 (function () {
 	'use strict';
 	const C = window.CPX || {};
-	const S = { main: null, x: null, err: '', at: 0, mine: false, timer: 0 };
+	const S = { main: null, x: null, err: '', at: 0, mine: false, timer: 0, tsel: new Set(), oldOpen: false, groups: {} };
 	try { S.mine = localStorage.getItem('cpdash_mine') === '1'; } catch (e) { /* privát mód */ }
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const pad = n => String(n).padStart(2, '0');
@@ -75,8 +75,14 @@
 		}
 		/* mai teendőim */
 		if (x.todo) {
+			/* v1.68: csoportok (aktuális / lejárt 30 napon belül / régi lejárt – összecsukva), tömeges kijelölés */
 			const t = x.todo.slice().sort((a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999')));
-			html += card('dh-todo', 'Mai teendőim', ico('kovetes'), (t.length ? '<ul class="dh-list">' + t.map(i => '<li class="dh-ti"><label class="dh-ck" title="Kész"><input type="checkbox" data-done="' + i.k + ':' + i.id + '"></label><button type="button" data-todo="' + i.k + ':' + i.id + ':' + (i.deal || 0) + '"><b>' + esc(i.t) + '</b><small>' + (i.k === 'act' ? esc(i.ty || 'Tevékenység') + (i.dt ? ' · ' + esc(i.dt) : '') : 'Feladat · ' + esc(i.bn)) + (i.due ? ' · ' + dueTxt(i.due) : '') + '</small></button></li>').join('') + '</ul>' : empty('Mára nincs nyitott teendőd.')) +
+			const G = [['now', 'Ma és a következő napok', t.filter(i => !i.due || dayDiff(i.due) >= 0).reverse().reverse()], ['late', 'Lejárt (30 napon belül)', t.filter(i => i.due && dayDiff(i.due) < 0 && dayDiff(i.due) >= -30).reverse()], ['old', 'Régi lejárt (30+ napja)', t.filter(i => i.due && dayDiff(i.due) < -30).reverse()]].filter(g => g[2].length);
+			const li = i => '<li class="dh-ti' + (S.tsel.has(i.k + ':' + i.id) ? ' sel' : '') + '"><label class="dh-ck" title="Kijelölés"><input type="checkbox" data-tsel="' + i.k + ':' + i.id + '"' + (S.tsel.has(i.k + ':' + i.id) ? ' checked' : '') + '></label><button type="button" data-todo="' + i.k + ':' + i.id + ':' + (i.deal || 0) + '"><b>' + esc(i.t) + '</b><small>' + (i.k === 'act' ? esc(i.ty || 'Tevékenység') + (i.dt ? ' · ' + esc(i.dt) : '') : 'Feladat · ' + esc(i.bn)) + (i.due ? ' · ' + dueTxt(i.due) : '') + '</small></button></li>';
+			const grp = g => { const open = g[0] !== 'old' || S.oldOpen; return '<li class="dh-tg"><label><input type="checkbox" data-tall="' + g[0] + '"' + (g[2].every(i => S.tsel.has(i.k + ':' + i.id)) ? ' checked' : '') + ' title="Mind kijelölése"></label><button type="button" data-tgo="' + g[0] + '">' + esc(g[1]) + ' <em>' + g[2].length + '</em>' + (g[0] === 'old' ? ' <span>' + (open ? '▾' : '▸') + '</span>' : '') + '</button></li>' + (open ? g[2].slice(0, g[0] === 'old' ? 300 : 100).map(li).join('') : ''); };
+			S.groups = {}; G.forEach(g => { S.groups[g[0]] = g[2].map(i => i.k + ':' + i.id); });
+			const bar = '<div class="dh-bulk"' + (S.tsel.size ? '' : ' hidden') + '><b>' + S.tsel.size + ' kijelölve</b><button type="button" data-bop="done">✓ Kész</button><span class="dh-later"><button type="button" data-blater>Későbbre ▾</button><span class="dh-lpop" hidden><button type="button" data-bop="later" data-days="1">holnapra</button><button type="button" data-bop="later" data-days="7">1 héttel később</button><button type="button" data-bop="later" data-days="30">1 hónappal később</button></span></span><button type="button" data-bop="hide" title="Csak a Kezdőlapról tűnik el – a Salesmate-ben / a Feladatokban megmarad">Elrejtés</button><button type="button" class="dh-x" data-bclr>Mégse</button></div>';
+			html += card('dh-todo', 'Mai teendőim', ico('kovetes'), bar + (t.length ? '<ul class="dh-list">' + G.map(grp).join('') + '</ul>' : empty('Mára nincs nyitott teendőd.')) +
 				(x.todo_need_sm ? '<p class="dh-hint">A Salesmate-tevékenységeid akkor jelennek meg itt, ha a fiókodhoz hozzá van rendelve a Salesmate-felhasználód (WordPress admin → Panel-felhasználók).</p>' : ''), '<span class="dh-n">' + t.length + '</span>');
 		}
 		/* új ajánlatkérések */
@@ -127,15 +133,28 @@
 			else if (k === 'act' && Number(deal) && window.CPCrm) window.CPCrm.open(Number(deal));
 			else if (k === 'act') toast('Ez a tevékenység nincs dealhez kötve – a Salesmate-ben látod.');
 		}));
-		m.querySelectorAll('[data-done]').forEach(c => c.addEventListener('change', async () => {
-			const [k, id] = c.dataset.done.split(':');
-			c.disabled = true;
-			try {
-				if (k === 'act') await post('cp_crm_act_done', { id: id, done: 1 });
-				else await post('cp_kb_card_save', { id: id, done: 1 });
-				const li = c.closest('li'); li.classList.add('gone'); toast('Kész – szép munka!');
-				setTimeout(() => load(true), 700);
-			} catch (e) { c.checked = false; c.disabled = false; toast(e.message, true); }
+		/* v1.68: kijelölés és tömeges műveletek (15-ösével a szerverre) */
+		const upBar = () => { const b = m.querySelector('.dh-bulk'); if (!b) return; b.hidden = !S.tsel.size; b.querySelector('b').textContent = S.tsel.size + ' kijelölve'; };
+		m.querySelectorAll('[data-tsel]').forEach(c => c.addEventListener('change', () => { const k = c.dataset.tsel; if (c.checked) S.tsel.add(k); else S.tsel.delete(k); c.closest('li').classList.toggle('sel', c.checked); upBar(); }));
+		m.querySelectorAll('[data-tall]').forEach(c => c.addEventListener('change', () => { (S.groups[c.dataset.tall] || []).forEach(k => { if (c.checked) S.tsel.add(k); else S.tsel.delete(k); }); draw(); }));
+		m.querySelectorAll('[data-tgo]').forEach(b => b.addEventListener('click', () => { if (b.dataset.tgo === 'old') { S.oldOpen = !S.oldOpen; draw(); } }));
+		const lb = m.querySelector('[data-blater]');
+		if (lb) lb.addEventListener('click', e => { e.stopPropagation(); const p = m.querySelector('.dh-lpop'); p.hidden = !p.hidden; });
+		const clr = m.querySelector('[data-bclr]');
+		if (clr) clr.addEventListener('click', () => { S.tsel.clear(); draw(); });
+		m.querySelectorAll('[data-bop]').forEach(b => b.addEventListener('click', async () => {
+			const op = b.dataset.bop, days = b.dataset.days || '', all = Array.from(S.tsel), acts = all.filter(k => k.indexOf('act:') === 0).length;
+			const what = op === 'done' ? 'Késznek jelölsz' : op === 'later' ? 'Későbbre teszel' : 'Elrejtesz a Kezdőlapról';
+			if (!window.confirm(what + ' ' + all.length + ' teendőt?' + (op !== 'hide' && acts ? '\n\n' + acts + ' Salesmate-tevékenység a Salesmate-ben is ' + (op === 'done' ? 'lezárul' : 'új határidőt kap') + '.' : '\n\nA Salesmate-ben és a Feladatokban megmaradnak.'))) return;
+			const bar = m.querySelector('.dh-bulk'); bar.querySelectorAll('button').forEach(x => { x.disabled = true; });
+			let ok = 0, bad = 0;
+			for (let i = 0; i < all.length; i += 15) {
+				bar.querySelector('b').textContent = 'Feldolgozás: ' + Math.min(i + 15, all.length) + ' / ' + all.length + '…';
+				try { const r = await post('cp_dash_bulk', { op: op, days: days, items: all.slice(i, i + 15).join(',') }); ok += r.ok; bad += r.err.length; } catch (e) { bad += Math.min(15, all.length - i); toast(e.message, true); }
+			}
+			S.tsel.clear();
+			toast(ok + ' teendő kész.' + (bad ? ' ' + bad + ' nem sikerült.' : ''), !!bad);
+			load(true);
 		}));
 		const mi = m.querySelector('[data-mine]');
 		if (mi) mi.addEventListener('change', () => { S.mine = mi.checked; try { localStorage.setItem('cpdash_mine', S.mine ? '1' : '0'); } catch (e) { /* privát mód */ } draw(); });
@@ -166,6 +185,8 @@
 		'.dh-day{padding:8px 16px 4px!important;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:#8A8F99;border-top:0!important}.dh-tm{font-style:normal;color:#2F6FDB;margin-right:6px}.dh-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}.dh-tag{font-style:normal;font-size:11.5px;font-weight:600;border-radius:6px;padding:1px 7px;background:#EEF6F0;color:#2F7D4F}.dh-tag.warn{background:#FFF4E0;color:#8A5A00}' +
 		'.dh-mc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px 16px 10px}.dh-mc button{border:1px solid #E6E3DE;border-radius:12px;background:#FAF8F5;padding:8px;cursor:pointer;font:12.5px Inter,sans-serif;color:#4A5163}.dh-mc b{display:block;font:700 20px Inter,sans-serif;color:#141C33}' +
 		'.dh-card h4{margin:8px 16px 2px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:#8A8F99}.dh-ml b{display:flex;justify-content:space-between;gap:8px}.dh-ml em{font-style:normal;font-weight:500;color:#8A8F99;font-size:12px;flex:none}.dh-ml .un b{color:#1F3F99}.dh-ml .un span{font-weight:600}' +
+		'.dh-tg{display:flex;align-items:center;background:#FAF8F5}.dh-tg label{display:flex;align-items:center;padding:0 0 0 16px}.dh-tg input{width:16px;height:16px;accent-color:#2F6FDB}.dh-tg button{flex-direction:row!important;gap:6px!important;align-items:center;font:700 12px Inter,sans-serif!important;text-transform:uppercase;letter-spacing:.04em;color:#6B6F78;padding:8px 10px!important}.dh-tg em{font-style:normal;background:#EEE9E2;border-radius:999px;padding:0 7px;color:#4A5163}.dh-ti.sel{background:#EEF3FD}' +
+		'.dh-bulk{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 12px 8px;padding:8px 10px;background:#1F3F99;color:#fff;border-radius:10px;font-size:13px}.dh-bulk b{margin-right:4px}.dh-bulk button{border:0;border-radius:7px;background:rgba(255,255,255,.16);color:#fff;font:600 12.5px Inter,sans-serif;padding:5px 10px;cursor:pointer}.dh-bulk button:hover{background:rgba(255,255,255,.28)}.dh-bulk .dh-x{background:transparent;text-decoration:underline}.dh-later{position:relative}.dh-lpop{position:absolute;top:110%;left:0;z-index:5;background:#fff;border-radius:10px;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);display:flex;flex-direction:column;padding:4px;min-width:170px}.dh-lpop button{background:transparent!important;color:#1A1F2B!important;text-align:left}.dh-lpop button:hover{background:#F6F4F0!important}' +
 		'.dh-empty{padding:12px 16px;color:#6B6F78;font-size:13.5px}.dh-hint{margin:8px 16px 0;font-size:12px;color:#8A5A00;background:#FFF8EC;border-radius:8px;padding:6px 10px}.dh-banner{display:block;width:calc(100% - 32px);margin:0 16px 8px;border:0;border-radius:10px;background:#EEF3FD;color:#1F3F99;font:600 13px Inter,sans-serif;padding:8px 10px;text-align:left;cursor:pointer}' +
 		'.dh-more{display:block;border:0;background:none;color:#2F6FDB;font:600 13px Inter,sans-serif;padding:8px 16px 0;cursor:pointer;margin:0}.dh-link{border:0;background:none;color:#2F6FDB;font:600 13px Inter,sans-serif;cursor:pointer}.dh-mine{font-size:12.5px;color:#4A5163;display:flex;align-items:center;gap:4px;cursor:pointer}' +
 		'@media (max-width:1100px){.dh-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}' +
