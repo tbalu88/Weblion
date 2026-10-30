@@ -1,6 +1,6 @@
 /* =====================================================================
  * Számlázás kártya a deal adatlapján (v1.73) – Billingo
- * Számla / díjbekérő / előlegszámla / végszámla (előleg beszámításával): előre kitöltött űrlap, átnézés, kiállítás
+ * Kft.: Billingo, egyéni vállalkozó: Számlázz.hu (v1.73.1, előnézettel). Számla / díjbekérő / előlegszámla / végszámla (előleg beszámításával): előre kitöltött űrlap, átnézés, kiállítás
  * gombnyomásra. Fotós szolgáltatásnál a kiküldés a galériával együtt (Követés fül, „Galéria” pipa).
  * ===================================================================== */
 (function () {
@@ -43,10 +43,11 @@
 		if (B.docs.length) {
 			h += '<ul class="bl-docs">' + B.docs.map(d => {
 				const p = PAY[d.pay] || ['', ''];
-				const st = d.sent_at ? 'kiküldve' : (d.send_mode === 'gallery' ? '⏳ a galériával megy ki' : (d.send_mode === 'no' ? 'nincs kiküldve' : 'nincs kiküldve'));
+				const szl = (B.profiles[d.profile] || {}).prov === 'szamlazz', pend = Number(d.pending) === 1;
+				const st = d.sent_at ? 'kiküldve' : (pend ? '⏳ előkészítve – a galéria kiküldésekor állítja ki és küldi el' : (d.send_mode === 'gallery' ? '⏳ a galériával megy ki' : 'nincs kiküldve'));
 				return '<li><div><b>' + esc(TYPES[d.type] || d.type) + '</b> ' + esc(d.number || '') + ' · ' + ft(d.gross) + (p[0] ? ' <span class="bl-pay ' + p[1] + '">' + p[0] + '</span>' : '') +
 					'<small>' + esc(d.profile) + ' · ' + esc(d.at || '') + (d.created_by ? ' · ' + esc(d.created_by) : '') + ' · ' + esc(st) + (d.err ? ' · <span class="bl-err">' + esc(d.err) + '</span>' : '') + '</small></div>' +
-					'<div class="bl-da"><button type="button" class="cpx-btn ghost" data-bopen="' + d.id + '">Megnyitás</button>' + (!d.sent_at ? '<button type="button" class="cpx-btn ghost" data-bsend="' + d.id + '">Küldés most</button>' : '') + '</div></li>';
+					'<div class="bl-da">' + (pend ? '' : '<button type="button" class="cpx-btn ghost" data-bopen="' + d.id + '">Megnyitás</button>') + (!d.sent_at && (!szl || pend) ? '<button type="button" class="cpx-btn ghost" data-bsend="' + d.id + '">' + (pend ? 'Kiállítás és küldés most' : 'Küldés most') + '</button>' : '') + '</div></li>';
 			}).join('') + '</ul>';
 		}
 		if (anyOk) h += '<div class="d3-pact">' + ['invoice', 'advance', 'proforma'].map(t => '<button type="button" class="cpx-btn' + (t === 'invoice' ? '' : ' ghost') + '" data-bnew="' + t + '">' + TYPES[t] + '</button>').join('') +
@@ -55,7 +56,7 @@
 		box.querySelectorAll('[data-bnew]').forEach(b => b.addEventListener('click', () => form(box, id, B, b.dataset.bnew)));
 		box.querySelectorAll('[data-bsend]').forEach(b => b.addEventListener('click', async () => {
 			const d = B.docs.find(z => String(z.id) === b.dataset.bsend);
-			if (!window.confirm('Elküldöd most a Billingóból?\n\n' + (TYPES[d.type] || '') + ' ' + (d.number || '') + ' → ' + (d.emails || ''))) return;
+			if (!window.confirm((Number(d.pending) === 1 ? 'Kiállítod és elküldöd most a Számlázz.hu-n?' : 'Elküldöd most?') + '\n\n' + (TYPES[d.type] || '') + ' ' + (d.number || '') + ' → ' + (d.emails || ''))) return;
 			b.disabled = true;
 			try { const r = await post('cp_bil_act', { row: d.id, op: 'send' }); toast(r.msg); B.docs = r.docs.map(fix); draw(box, id, B); } catch (e) { b.disabled = false; toast(e.message, true); }
 		}));
@@ -93,7 +94,7 @@
 			'<label>Fizetési mód<select data-f="pay"><option value="wire_transfer">átutalás</option><option value="cash">készpénz</option><option value="bankcard">bankkártya</option><option value="elore_utalas">előre utalás</option></select></label></div>' +
 			'<label class="bl-row w">Megjegyzés a számlán<textarea data-f="comment" rows="2"></textarea></label>' +
 			'<h5>Kiküldés</h5><div class="bl-send">' + [['now', 'Kiállítás után azonnal elküldöm'], ['gallery', 'A galériával együtt (a Követés fül „Galéria” pipájára)' + (B.gallery ? ' – a galéria már ki van küldve, ezért azonnal megy' : '')], ['no', 'Nem küldöm ki (csak kiállítom)']].map(o => '<label class="bl-chk"><input type="radio" name="bl-send" value="' + o[0] + '"' + ((B.photo && type === 'invoice' ? 'gallery' : 'now') === o[0] ? ' checked' : '') + '> ' + o[1] + '</label>').join('') + '</div>' +
-			'</div><footer><span class="cpx-muted">A Billingóban élesben kiállítja – visszavonni csak sztornóval lehet.</span><button type="button" class="cpx-btn ghost" data-x>Mégse</button><button type="button" class="cpx-btn" data-go>Kiállítás a Billingóban</button></footer></div>';
+			'</div><footer><span class="cpx-muted" data-warn></span><button type="button" class="cpx-btn ghost" data-x>Mégse</button><button type="button" class="cpx-btn ghost" data-prev hidden>Előnézet (PDF)</button><button type="button" class="cpx-btn" data-go>Kiállítás a Billingóban</button></footer></div>';
 		document.body.appendChild(w);
 		const close = () => w.remove();
 		w.querySelectorAll('[data-x]').forEach(x => x.addEventListener('click', close));
@@ -109,25 +110,32 @@
 		const sum = () => {
 			let net = 0, gross = 0;
 			items.forEach(i => { const v = i.qty * i.price, r = RATE(i.vat); if (i.ptype === 'gross') { gross += v; net += v / (1 + r); } else { net += v; gross += v * (1 + r); } });
-			sumBox.innerHTML = 'Nettó: <b>' + ft(net) + '</b> · Bruttó: <b>' + ft(gross) + '</b>' + (kind === 'final' ? ' <small>(a beszámított előleget a Billingo vonja le)</small>' : '');
+			sumBox.innerHTML = 'Nettó: <b>' + ft(net) + '</b> · Bruttó: <b>' + ft(gross) + '</b>' + (kind === 'final' ? ' <small>(' + (B.profiles[prof].prov === 'szamlazz' ? 'a teljes összeget add meg; a Számlázz.hu az előlegszámla alapján vonja le – nézd meg az Előnézetben' : 'a beszámított előleget a Billingo vonja le') + ')</small>' : '');
 		};
 		drawItems();
+		const provUi = () => { const z = B.profiles[prof].prov === 'szamlazz'; w.querySelector('[data-prev]').hidden = !z; w.querySelector('[data-warn]').textContent = (z ? 'A Számlázz.hu-n' : 'A Billingóban') + ' élesben kiállítja – visszavonni csak sztornóval lehet.'; w.querySelector('[data-go]').textContent = z ? 'Kiállítás a Számlázz.hu-n' : 'Kiállítás a Billingóban'; };
+		provUi();
+		const collect = () => { w.querySelectorAll('[data-b]').forEach(el => { b[el.dataset.b] = el.value.trim(); }); const f = k => w.querySelector('[data-f="' + k + '"]').value; return { id, profile: prof, type, buyer: JSON.stringify(b), items: JSON.stringify(items), fulfillment: f('ful'), due: f('due'), pay: f('pay'), comment: f('comment'), send: (w.querySelector('input[name="bl-send"]:checked') || {}).value || 'now', advance: JSON.stringify(kind === 'final' ? Array.from(w.querySelectorAll('[data-advs] input:checked')).map(x => Number(x.value)) : []) }; };
+		w.querySelector('[data-prev]').addEventListener('click', async ev => {
+			const btn = ev.currentTarget, win = window.open('', '_blank');
+			btn.disabled = true;
+			try { const r = await post('cp_bil_issue', Object.assign(collect(), { preview: 1 })); const bin = atob(r.pdf), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); const url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' })); if (win) win.location = url; else window.open(url, '_blank'); }
+			catch (e) { if (win) win.close(); toast(e.message, true); }
+			btn.disabled = false;
+		});
 		w.querySelector('[data-add]').addEventListener('click', () => { items.push({ name: '', qty: 1, unit: 'db', price: 0, ptype: 'net', vat: vat0(), comment: '' }); drawItems(); });
-		w.querySelector('[data-f="prof"]').addEventListener('change', e => { prof = e.target.value; items.forEach(i => { i.vat = vat0(); }); drawItems(); });
+		w.querySelector('[data-f="prof"]').addEventListener('change', e => { prof = e.target.value; items.forEach(i => { i.vat = vat0(); }); drawItems(); provUi(); });
 		w.querySelector('[data-go]').addEventListener('click', async ev => {
-			const btn = ev.currentTarget;
-			w.querySelectorAll('[data-b]').forEach(el => { b[el.dataset.b] = el.value.trim(); });
-			const f = k => w.querySelector('[data-f="' + k + '"]').value;
-			const send = (w.querySelector('input[name="bl-send"]:checked') || {}).value || 'now';
-			const advSel = kind === 'final' ? Array.from(w.querySelectorAll('[data-advs] input:checked')).map(x => Number(x.value)) : [];
+			const btn = ev.currentTarget, P = collect(), send = P.send, advSel = JSON.parse(P.advance), zz = B.profiles[prof].prov === 'szamlazz';
+			if (zz && advSel.length > 1) { toast('A Számlázz.hu végszámlája egy előlegszámlára hivatkozhat – csak egyet jelölj be.', true); return; }
 			if (kind === 'final' && !advSel.length && !window.confirm('Nincs kijelölve beszámítandó előleg – sima számlaként állítod ki?')) return;
 			const tot = sumBox.textContent;
-			if (!window.confirm(TYPES[kind] + ' kiállítása a Billingóban (' + B.profiles[prof].n + ')\n\nVevő: ' + b.name + (b.taxcode ? ' (' + b.taxcode + ')' : '') + '\n' + tot + '\nKiküldés: ' + ({ now: 'azonnal → ' + b.emails, gallery: 'a galériával együtt', no: 'nem megy ki' }[send]) + '\n\nMehet?')) return;
+			if (!window.confirm(TYPES[kind] + ' kiállítása ' + (zz ? 'a Számlázz.hu-n' : 'a Billingóban') + ' (' + B.profiles[prof].n + ')\n\nVevő: ' + b.name + (b.taxcode ? ' (' + b.taxcode + ')' : '') + '\n' + tot + '\nKiküldés: ' + ({ now: 'azonnal → ' + b.emails, gallery: zz ? 'a galéria kiküldésekor állítja ki és küldi el' : 'a galériával együtt', no: 'nem megy ki' }[send]) + '\n\nMehet?')) return;
 			btn.disabled = true; btn.textContent = 'Kiállítás…';
 			try {
-				const r = await post('cp_bil_issue', { id, profile: prof, type, buyer: JSON.stringify(b), items: JSON.stringify(items), fulfillment: f('ful'), due: f('due'), pay: f('pay'), comment: f('comment'), send, advance: JSON.stringify(advSel) });
+				const r = await post('cp_bil_issue', P);
 				toast(r.msg); close(); B.docs = r.docs.map(fix); draw(box, id, B);
-			} catch (e) { btn.disabled = false; btn.textContent = 'Kiállítás a Billingóban'; toast(e.message, true); }
+			} catch (e) { btn.disabled = false; provUi(); toast(e.message, true); }
 		});
 	}
 	window.CPBill = { slot, mount };
