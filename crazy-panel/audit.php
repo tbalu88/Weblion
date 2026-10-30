@@ -75,6 +75,7 @@ function cp_audit_actions() {
 		'cp_tw_save' => array('tarca', 'Tárca tétel mentése'), 'cp_tw_del' => array('tarca', 'Tárca tétel törlése'), 'cp_tw_import' => array('tarca', 'Tárca import'), 'cp_tw_cfg' => array('tarca', 'Tárca beállítás'),
 		'cp_panel_setbg' => array('naptar', 'Háttér beállítása'), 'cp_panel_setstage' => array('naptar', 'Szakasz a naptárból'), 'cp_panel_track' => array('kovetes', 'Követés jelölése'),
 		'cp_st_mail_ok' => array('stat', 'Levél „rendben” jelölése'),
+		'cp_bil_issue' => array('deal', 'Billingo-bizonylat kiállítása'), 'cp_bil_act' => array('deal', 'Billingo-bizonylat kiküldése / megnyitása'),
 	);
 }
 
