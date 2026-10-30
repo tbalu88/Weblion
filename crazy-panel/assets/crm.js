@@ -385,18 +385,22 @@
 		Object.keys(col).forEach(k => col[k].sort(SORT[S.bso] || SORT.ev));
 		const names = STAGES.concat(Object.keys(col).filter(s => STAGES.indexOf(s) < 0));
 		const t = today();
+		/* v1.66: mobilon a Salesmate mintájára – oszloponként lapozható, nincs összecsukás, részletes kártya */
+		const MOB = window.matchMedia && window.matchMedia('(max-width:760px)').matches;
+		const prog = i => '<span class="crm-prog" aria-hidden="true">' + names.map((x, j) => '<i class="' + (j === i ? 'on' : '') + '"></i>').join('') + '</span>';
 		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q || S.qf.length ? '<span class="cpx-muted"> (szűrve, összesen ' + num(all.length) + ')</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
 			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board' + (S.dense ? ' dense' : '') + '">';
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
-			if (S.fold.includes(s)) {
+			if (S.fold.includes(s) && !MOB) {
 				h += '<section class="crm-col folded" data-stage="' + esc(s) + '"><button type="button" class="crm-unfold" data-fold="' + esc(s) + '" title="Oszlop kinyitása"><span>' + esc(s) + '</span><b>' + l.length + '</b></button></section>';
 				return;
 			}
 			const pend = s === STAGES[0] && S.pend && !S.qf.length ? S.pend.rows.filter(x => !S.q || hit({ title: x.n, cn: x.n, ce: x.e, cp: x.p }, S.q)) : [];
 			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span><span class="crm-chb">' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '<button type="button" class="crm-add crm-fold" data-fold="' + esc(s) + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(s) + '">‹</button></span></div>' +
-				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small></header><div class="crm-cards">' +
+				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small>' +
+				'<div class="crm-mh"><b>' + esc(s) + '</b><small>' + esc(money(v)) + ' • ' + l.length + ' deal</small>' + prog(names.indexOf(s)) + '</div></header><div class="crm-cards">' +
 				pend.map(x => { const ev = x.f['Deal.dateCustomField1'] || '', sv = x.f['Deal.multiSelectCustomField3'] || ''; return '<article class="crm-card crm-pend" data-lead="' + x.id + '" tabindex="0"><div class="crm-ct"><span class="crm-lnew">új</span> ' + esc(x.n || x.e || 'Névtelen') + '</div><div class="crm-cl">' + (ev ? '<span>' + esc(shortD(ev)) + '</span><i>•</i>' : '') + '<span class="cpx-muted">' + esc(sv || x.form || 'weboldal') + '</span></div><div class="crm-pw">⏳ Salesmate-szinkronra vár · ' + esc(agoLead(x.at)) + '<button type="button" class="crm-px" data-pdel="' + x.id + '" title="Elvetés (spam / teszt)">×</button></div></article>'; }).join('');
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
@@ -405,7 +409,7 @@
 				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
 				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
 				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + esc(shortTitle(r)) + '</div>';
-				if (S.dense) {
+				if (S.dense && !MOB) {
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i><span>' + esc(money(r.value, r.cur)) + '</span>' + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
 				}
@@ -419,12 +423,19 @@
 			h += '</div></section>';
 		});
 		h += '</div>';
+		if (R.edit) h += '<button type="button" class="crm-fab" data-fab aria-label="Új deal" title="Új deal ebbe a szakaszba">+</button>';
 		if (W) h += '<div class="crm-drop" aria-hidden="true"><div data-st="Won">Megnyert</div><div data-st="Lost">Elvesztett</div></div>';
 		box.innerHTML = h;
 		bindOpen(box);
 		bindDrag(box);
 		box.querySelectorAll('[data-fold]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const s = b.dataset.fold; S.fold = S.fold.includes(s) ? S.fold.filter(x => x !== s) : S.fold.concat([s]); save(); redrawBoard(); }));
 		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
+		const fab = box.querySelector('[data-fab]');
+		if (fab) fab.addEventListener('click', () => {
+			const b = box.querySelector('.crm-board'), cs = Array.from(box.querySelectorAll('.crm-col[data-stage]'));
+			const c = cs.reduce((best, x) => Math.abs(x.offsetLeft - b.scrollLeft) < Math.abs(best.offsetLeft - b.scrollLeft) ? x : best, cs[0]);
+			newDeal(c ? c.dataset.stage : undefined);
+		});
 		box.querySelectorAll('[data-lead]').forEach(c => {
 			c.addEventListener('click', e => { if (e.target.closest('[data-pdel]')) return; openLead(Number(c.dataset.lead)); });
 			c.addEventListener('keydown', e => { if (e.key === 'Enter') openLead(Number(c.dataset.lead)); });
@@ -513,7 +524,8 @@
 		const bd = S.main && S.main.querySelector('.crm-board');
 		if (!bd) return;
 		const top = bd.getBoundingClientRect().top + window.scrollY;
-		bd.style.setProperty('--crm-h', Math.max(360, window.innerHeight - Math.max(0, top - window.scrollY) - 26) + 'px');
+		const mn = document.body.classList.contains('mn-on') && window.innerWidth <= 760 ? 70 : 0; /* mobilon az alsó menüsor */
+		bd.style.setProperty('--crm-h', Math.max(360, window.innerHeight - Math.max(0, top - window.scrollY) - 26 - mn) + 'px');
 	}
 	window.addEventListener('resize', () => { if (live() && S.mode === 'board') fitBoard(); });
 	/* keresés a táblán (ékezet- és kisbetű-független; telefonszámnál csak a számjegyek) */

@@ -329,3 +329,41 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-pflags{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}.d3-q.bad,.d3-q.red{background:#FDECEA;color:#AE2E24}.d3-q.warn,.d3-q.yellow{background:#FFF0B8;color:#7F5F01}.d3-q.ok,.d3-q.green{background:#DFF3E8;color:#216E4E}
 .d3-pact{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.d3-pact .cpx-btn{padding:5px 10px;font-size:12.5px}.d3-pact select{border:1px solid #E6E3DE;border-radius:8px;padding:5px 7px;font:12.5px Inter,sans-serif}
 .d3-ti.portal>i{background:#FBEBDD}.d3-ti.portal>i svg{stroke:#C2621A}
+/* v1.66: Pipeline mobilon a Salesmate mintájára – egy oszlop egy képernyő, oszloponként lapozva */
+.crm-mh,.crm-fab{display:none}
+@media (max-width:760px){
+	.crm-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+	.crm-head .crm-hl{flex:none;margin:0}
+	.crm-head .crm-hl [data-new]{display:none}
+	.crm-head .crm-filters{display:contents}
+	.crm-filters input[type=search]{flex:1 1 150px;min-width:0;width:auto;height:40px;border-radius:999px;font-size:15px}
+	.crm-filters select{flex:1 1 40%;min-width:0;height:38px;border-radius:999px;font-size:14px}
+	.crm-filters .crm-chk{flex:1 1 100%;font-size:13px;order:3}
+	.crm-qf{flex:1 1 100%;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;scrollbar-width:none;margin:0;order:4;padding-bottom:2px}
+	.crm-qf::-webkit-scrollbar{display:none}
+	.crm-qf .crm-qfb{flex:none}
+	.crm-qf .crm-dens,.crm-qf .crm-bgap{display:none}
+	.crm>.crm-ro{display:none}
+	.crm-sumrow{margin:6px 2px 6px}
+	.crm-board{scroll-snap-type:x mandatory;gap:10px;padding:0 0 4px;margin:0 -12px;padding-left:14px;padding-right:14px;scroll-padding:0 14px;-webkit-overflow-scrolling:touch}
+	.crm-board .crm-col{flex:0 0 calc(100vw - 52px);max-width:none;scroll-snap-align:center;scroll-snap-stop:always;background:#fff;border:1px solid var(--li);border-radius:16px;padding:0;overflow:hidden}
+	.crm-col>header{padding:0;margin:0;background:#F4F5F7;border-bottom:1px solid var(--li)}
+	.crm-col>header .crm-chh,.crm-col>header>small{display:none}
+	.crm-mh{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 10px 0}
+	.crm-mh b{font:700 16.5px Inter,sans-serif;text-align:center}
+	.crm-mh small{color:#6B6F78;font-size:14px}
+	.crm-prog{display:flex;gap:3px;width:100%;margin-top:10px}
+	.crm-prog i{flex:1;height:4px;background:#D9DCE1;border-radius:2px}
+	.crm-prog i.on{background:#2F6FDB}
+	.crm-cards{padding:0;gap:0}
+	.crm-card{border:0;border-radius:0;box-shadow:none;border-bottom:1px solid #EEF0F2;padding:14px 16px;margin:0}
+	.crm-card .crm-ct{font:600 16px/1.3 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+	.crm-card .crm-cl{font-size:14.5px;color:#6B6F78;margin-top:3px}
+	.crm-card .crm-cv{display:none}
+	.crm-card .crm-cfoot{margin-top:6px}
+	.crm-card .crm-cfoot .crm-av{display:none}
+	.crm-fab{display:flex;align-items:center;justify-content:center;position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;border:0;background:#2F6FDB;color:#fff;font:300 34px/1 Inter,sans-serif;box-shadow:0 10px 24px -8px rgba(47,111,219,.7);z-index:40;cursor:pointer}
+	body:not(.mn-on) .crm-fab{bottom:22px}
+	.crm-drop{display:none}
+}
+
