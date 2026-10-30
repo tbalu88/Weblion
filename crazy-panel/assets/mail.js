@@ -506,6 +506,7 @@
 			host.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { list.splice(Number(b.dataset.rm), 1); draw(); }));
 		};
 		draw();
+		host.addEventListener('click', e => { if (e.target === host) { const i = host.querySelector('input'); if (i) i.focus(); } });
 		return { get: () => list.slice(), add: x => { if (x && !list.includes(x)) { list.push(x); draw(); } } };
 	}
 	async function drawCompose(box) {

@@ -411,5 +411,13 @@
   .ml-ed{padding-top:12px}
   .ml-area{min-height:calc(100vh - 290px);min-height:calc(100dvh - 290px)}
   .ml-attl{margin-top:8px}
+  /* v1.62.1: rövid „Cc/Bcc” felirat, a címzett-chip egy sorban fér el */
+  .ml-row [data-cc]{font-size:0!important;padding:0 2px}
+  .ml-row [data-cc]::after{content:"Cc/Bcc";font-size:15px}
+  .ml-chips{flex-wrap:wrap}
+  .ml-chips input{flex:1 1 0;min-width:8px;width:8px}
+  .ml-chip{white-space:nowrap;overflow:hidden;font-size:14.5px;max-width:calc(100% - 22px)}
+  .ml-chip i{flex:none}
+  .ml-row .ml-chips{min-height:34px}
 }
 
