@@ -31,12 +31,13 @@
 	const dayLabel = d => { const n = dayDiff(d); if (n === 0) return 'Ma'; if (n === 1) return 'Holnap'; const x = new Date(dOnly(d) + 'T00:00:00'); return (x.getMonth() + 1) + '. ' + x.getDate() + '. ' + HU_D[x.getDay()]; };
 	const dueTxt = s => { if (!s) return ''; const n = dayDiff(s), tm = String(s).length > 10 ? String(s).slice(11, 16) : ''; if (n < 0) return '<b class="dh-late">' + (-n) + ' napja lejárt</b>'; if (n === 0) return 'ma' + (tm && tm !== '00:00' ? ' ' + tm : ''); if (n === 1) return 'holnap'; return dayLabel(s); };
 
+	/* v1.66.1: csak akkor rajzol, ha a Kezdőlap a látható fül (a #cpx-main a többi fülé is!) */
+	const active = () => { const b = document.querySelector('.cpx-tabs [data-tab].on'); return !!(S.main && S.main.isConnected && b && b.dataset.tab === 'kezdolap'); };
 	async function load(quiet) {
 		if (!quiet) { S.err = ''; }
 		try { S.x = await post('cp_dash_data', {}); S.at = Date.now(); S.err = ''; }
 		catch (e) { S.err = e.message; }
-		if (S.main && S.main.isConnected) draw();
-		status(document.getElementById('cpx-status'));
+		if (active()) { draw(); status(document.getElementById('cpx-status')); }
 	}
 
 	function card(cls, title, icon, body, extra) {
@@ -145,7 +146,7 @@
 		if (S.x) draw(); else main.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
 		if (!S.x || Date.now() - S.at > 60000) load(!!S.x);
 		clearInterval(S.timer);
-		S.timer = setInterval(() => { if (!document.hidden && S.main && S.main.isConnected) load(true); else if (!S.main || !S.main.isConnected) clearInterval(S.timer); }, 120000);
+		S.timer = setInterval(() => { if (!active()) { clearInterval(S.timer); return; } if (!document.hidden) load(true); }, 120000);
 	}
 	function status(s) {
 		if (!s || !document.querySelector('.dh')) { if (s && S.err) { s.textContent = S.err; s.className = 'cpx-status err'; } return; }
