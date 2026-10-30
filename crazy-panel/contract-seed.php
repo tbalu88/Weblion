@@ -1,5 +1,5 @@
 <?php
-/* a szerződésszerkesztő alap modulkönyvtára (a Drive-sablonokból kigyűjtve) – csak a panel olvassa */
+/* a szerződésszerkesztő alap modulkönyvtára (a Drive-sablonokból kigyűjtve, angol fordítással) – csak a panel olvassa */
 if (!defined('ABSPATH')) { exit; }
 return json_decode(<<<'JSON'
 {
@@ -150,7 +150,34 @@ return json_decode(<<<'JSON'
    "media": "kep",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Photo Booth",
+    "line": "Photo Booth",
+    "tasks": [
+     "Operation of the Photo Booth: {H} hours of availability;",
+     "Unlimited photo printing during the service period;",
+     "Provision of the accessories necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the photo booth."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space",
+     "1 table",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "photo booth",
+    "tdev": "photo booth",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the Photo Booth service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "spinner360": {
    "name": "360 Spinner",
@@ -184,7 +211,34 @@ return json_decode(<<<'JSON'
    "media": "video",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "360 Spinner",
+    "line": "360 Spinner",
+    "tasks": [
+     "Operation of the 360 Spinner: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the accessories necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the 360 Spinner."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space",
+     "1 table",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "360 Spinner",
+    "tdev": "360 Spinner",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the 360 Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "selfie_360": {
    "name": "Fotóautomata és 360 Spinner (Selfie + 360 Spinner)",
@@ -220,7 +274,36 @@ return json_decode(<<<'JSON'
    "media": "kepvideo",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Photo Booth and 360 Spinner (Selfie + 360 Spinner)",
+    "line": "Photo Booth and 360 Spinner",
+    "tasks": [
+     "Operation of the Photo Booth: {H} hours of availability;",
+     "Operation of the 360 Spinner: 3 hours of availability;",
+     "Unlimited photo printing and use during the service periods;",
+     "Provision of the accessories necessary for the provision of the services;",
+     "Provision of 2 assistants for the entire duration of the services, exclusively for tasks related to the operation of the photo booth and 360 Spinner."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space per service",
+     "1 table per service",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "photo booth and 360 Spinner",
+    "tdev": "photo booth and 360 Spinner",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the Photo Booth service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+     "If the Client wishes to use the 360 Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour per service.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion per service. In the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "overhead_spinner": {
    "name": "Overhead Spinner",
@@ -254,7 +337,34 @@ return json_decode(<<<'JSON'
    "media": "video",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Overhead Spinner",
+    "line": "Overhead Spinner",
+    "tasks": [
+     "Operation of the Overhead Spinner: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the accessories necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the Overhead Spinner."
+    ],
+    "reqs": [
+     "At least 9 m² of free, covered and rain-protected space",
+     "1 table",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "Overhead Spinner",
+    "tdev": "Overhead Spinner",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the Overhead Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "vip_spinner": {
    "name": "VIP Spinner",
@@ -289,7 +399,35 @@ return json_decode(<<<'JSON'
    "media": "video",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "VIP Spinner",
+    "line": "VIP Spinner",
+    "tasks": [
+     "Operation of the VIP Spinner: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the accessories necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the VIP Spinner."
+    ],
+    "reqs": [
+     "At least 18 m² of free, covered, completely level and rain-protected space for assembly",
+     "At least 16 m² of free, covered, completely level and rain-protected space for operation",
+     "1 table",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "VIP Spinner",
+    "tdev": "VIP Spinner",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the VIP Spinner service on site beyond the pre-ordered service period, the fee shall be {P:60000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "vr": {
    "name": "VR élmény",
@@ -322,7 +460,33 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "VR experience",
+    "line": "VR experience",
+    "tasks": [
+     "Operation of the VR experience: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the equipment necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the VR experience."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "VR experience",
+    "tdev": "VR",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the VR service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "cockpit_vr": {
    "name": "Cockpit VR élmény",
@@ -355,7 +519,33 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Cockpit VR experience",
+    "line": "Cockpit VR experience",
+    "tasks": [
+     "Operation of the Cockpit VR experience: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the equipment necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the Cockpit VR experience."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "Cockpit VR experience",
+    "tdev": "Cockpit VR",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the Cockpit VR service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "led_tancter": {
    "name": "LED tánctér",
@@ -389,7 +579,34 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "LED dance floor",
+    "line": "LED dance floor",
+    "tasks": [
+     "Operation of the LED dance floor: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the LED dance floor."
+    ],
+    "reqs": [
+     "At least 18 m² of free, covered, completely level and rain-protected space for assembly",
+     "At least 16 m² of free, covered, completely level and rain-protected space for operation",
+     "1 table",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "LED dance floor",
+    "tdev": "LED dance floor",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the LED dance floor service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "klasszikus_karikatura": {
    "name": "Klasszikus karikatúra",
@@ -422,7 +639,33 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Classic caricature",
+    "line": "Classic caricature",
+    "tasks": [
+     "Operation of the classic caricature service: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of 1 caricature artist for the entire duration of the service, exclusively for tasks related to the operation of the classic caricature service."
+    ],
+    "reqs": [
+     "2 chairs for the operation of the service",
+     "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "service equipment",
+    "tdev": "classic caricature",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the classic caricature service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "digitalis_karikatura": {
    "name": "Digitális karikatúra",
@@ -455,7 +698,33 @@ return json_decode(<<<'JSON'
    "media": "kep",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Digital caricature",
+    "line": "Digital caricature",
+    "tasks": [
+     "Operation of the digital caricature service: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of 1 caricature artist for the entire duration of the service, exclusively for tasks related to the operation of the digital caricature service."
+    ],
+    "reqs": [
+     "2 chairs for the operation of the service",
+     "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "service equipment",
+    "tdev": "digital caricature",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the digital caricature service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "elozene": {
    "name": "Élőzene (Crazy Melange duó)",
@@ -486,7 +755,31 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": false,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Live music (Crazy Melange duo)",
+    "line": "Crazy Melange duo musical activity",
+    "tasks": [
+     "Performance of the Crazy Melange duo: {H} hours of availability."
+    ],
+    "reqs": [
+     "2 chairs without armrests for the operation of the service",
+     "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "sound equipment",
+    "tdev": "Crazy Melange duo",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the live music service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "karaoke": {
    "name": "Karaoke (Crazy Karaoke)",
@@ -517,7 +810,31 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": false,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Karaoke (Crazy Karaoke)",
+    "line": "Crazy Karaoke activity",
+    "tasks": [
+     "Operation of Crazy Karaoke: {H} hours of availability."
+    ],
+    "reqs": [
+     "1 chair for the operation of the service",
+     "At least 6 m² of free, covered, completely level and rain-protected space for operation",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "karaoke equipment",
+    "tdev": "Crazy Karaoke",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the karaoke service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:25000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:25000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "crazycatch": {
    "name": "CrazyCatch élmény (Catch it)",
@@ -550,7 +867,33 @@ return json_decode(<<<'JSON'
    "media": "kep",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "CrazyCatch experience (Catch it)",
+    "line": "CrazyCatch experience",
+    "tasks": [
+     "Operation of the CrazyCatch experience: {H} hours of availability;",
+     "Unlimited use during the service period;",
+     "Provision of the equipment necessary for the provision of the service;",
+     "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the CrazyCatch experience."
+    ],
+    "reqs": [
+     "At least 6 m² of free, covered and rain-protected space",
+     "A grounded electrical power source",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "Catch it",
+    "tdev": "CrazyCatch",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the CrazyCatch service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+     "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+     "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "rendezvenyfoto": {
    "name": "Rendezvényfotózás",
@@ -577,7 +920,27 @@ return json_decode(<<<'JSON'
    "review": [
     "A sablonban nem volt feladatlista – a két feladatsort a panel javasolja, ellenőrizd."
    ],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Event photography",
+    "line": "Event photography",
+    "tasks": [
+     "Event photography: {H} hours of presence;",
+     "Delivery of the selected and edited photographs to the Client."
+    ],
+    "reqs": [],
+    "reqs_extra": [],
+    "dev": "photographic equipment",
+    "tdev": "photographic equipment",
+    "teljesites": "The Service Provider’s performance shall be deemed completed upon delivery of the finished photographs. The Client may submit any objections concerning the performance in writing no later than 48 hours following the completion of the service. In the absence of such notification, the performance shall be deemed accepted.",
+    "extras": [
+     "If the Client wishes to use the photography service on site beyond the pre-ordered service period, the fee shall be {P:25000} per commenced hour."
+    ],
+    "extra_egyeb": [],
+    "review": [
+     "The template contained no task list – the two task items are suggested by the panel; please verify."
+    ]
+   }
   },
   "kaszino": {
    "name": "Kaszinó (kaszinóasztal)",
@@ -610,7 +973,33 @@ return json_decode(<<<'JSON'
    "media": "",
    "cash": true,
    "review": [],
-   "extra_egyeb": []
+   "extra_egyeb": [],
+   "en": {
+    "name": "Casino (casino table)",
+    "line": "casino table",
+    "tasks": [
+     "Operation of 1 casino table: {H} hours of availability;",
+     "1 roulette table, 1 blackjack table, 1 poker table",
+     "Provision of 1 assistant per table for the entire duration of the service, exclusively for tasks related to the operation of the service. For programmes exceeding 90 minutes, the Service Provider shall be entitled to provide its staff with a 10-minute break."
+    ],
+    "reqs": [
+     "The space required for setting up the gaming tables",
+     "Power supply, where required",
+     "Access to the venue for the Service Provider’s staff",
+     "The chairs required for the poker tables",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "casino tables",
+    "tdev": "casino tables",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the casino table service on site beyond the pre-ordered service period, the fee shall be {P:50000} per commenced hour.",
+     "Our installation technician typically arrives at the venue 30 minutes before the scheduled start time to begin installation."
+    ],
+    "extra_egyeb": [],
+    "review": []
+   }
   },
   "crazymakeup": {
    "name": "Smink + Fodrász (Crazy Makeup)",
@@ -645,7 +1034,35 @@ return json_decode(<<<'JSON'
    "review": [],
    "extra_egyeb": [
     "A Megbízó tudomásul veszi és elfogadja, hogy a Megbízott által ajánlott, közvetített vagy a teljesítés során bemutatott sminkes, fodrász, illetve egyéb közreműködő szakemberekkel kizárólag a Megbízotton keresztül létesíthet üzleti kapcsolatot. A Megbízó vállalja, hogy a Megbízott előzetes írásbeli hozzájárulása nélkül sem közvetlenül, sem közvetett módon nem veszi fel a kapcsolatot ezen szakemberekkel munkavégzésre irányuló megbízás céljából, és nem köt velük önálló szerződést.\nA jelen megkerülési tilalom a felek közötti együttműködés időtartama alatt, valamint annak megszűnését követő 12 hónapig érvényes. A rendelkezés megsértése esetén a Megbízó köteles a Megbízott részére a megkerüléssel érintett megbízás teljes nettó vállalkozói díjának 100%-ával megegyező összegű kötbért megfizetni, amely nem érinti a Megbízó további kártérítési igényének érvényesítésére való jogát."
-   ]
+   ],
+   "en": {
+    "name": "Make-up & hair (Crazy Makeup)",
+    "line": "Crazy Makeup",
+    "tasks": [
+     "Operation of 1 Crazy Makeup station: {H} hours of availability;",
+     "Provision of the equipment and supplies required for the service",
+     "Provision of 1 make-up artist for the entire duration of the service, exclusively for tasks related to the operation of the service. For programmes exceeding 180 minutes, the Service Provider shall be entitled to provide its staff with a 10-minute break."
+    ],
+    "reqs": [
+     "The space required for setting up the tables",
+     "Power supply, where required",
+     "Access to the venue for the Service Provider’s staff",
+     "The chairs required for the make-up tables",
+     "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+    ],
+    "reqs_extra": [],
+    "dev": "make-up equipment",
+    "tdev": "make-up equipment",
+    "teljesites": "",
+    "extras": [
+     "If the Client wishes to use the make-up service on site beyond the pre-ordered service period, the fee shall be {P:50000} per commenced hour.",
+     "Our installation technician typically arrives at the venue 30 minutes before the scheduled start time to begin installation."
+    ],
+    "extra_egyeb": [
+     "The Client acknowledges and accepts that it may establish a business relationship with the make-up artists, hairdressers and other contributing professionals recommended or introduced by the Service Provider, or presented during the performance, exclusively through the Service Provider. The Client undertakes not to contact such professionals, either directly or indirectly, for the purpose of commissioning work, and not to conclude any independent agreement with them, without the prior written consent of the Service Provider.\nThis non-circumvention clause shall remain in force for the term of the cooperation between the Parties and for 12 months following its termination. In the event of a breach of this provision, the Client shall pay the Service Provider a contractual penalty equal to 100% of the total net service fee of the engagement affected by the circumvention, without prejudice to the Service Provider’s right to claim further damages."
+    ],
+    "review": []
+   }
   }
  },
  "order": [
@@ -665,7 +1082,48 @@ return json_decode(<<<'JSON'
   "rendezvenyfoto",
   "kaszino",
   "crazymakeup"
- ]
+ ],
+ "legal_en": {
+  "targy_intro": "The Service Provider undertakes to provide the Client, at the Client’s discretion, with the following service under the following parameters:",
+  "feladat_intro": "The Service Provider undertakes to provide the following services under this Agreement:",
+  "megbizott_common": [
+   "The Service Provider undertakes to comply with the timeframes of the events and to fulfil its obligation to provide information.",
+   "The Service Provider undertakes to safeguard the professional and corporate reputation of the Client.",
+   "The conduct, appearance and professionalism of the Service Provider shall reflect the business, ethical and professional values represented by the Client."
+  ],
+  "megbizo_intro": "The Client undertakes to provide the Service Provider’s employee with the conditions necessary for performing the work, as well as access to the systems and information necessary for the successful execution of the event.",
+  "megbizo_intro2": "Furthermore, the Client shall ensure the following for the smooth provision of the service:",
+  "transport": "Our equipment is delivered and installed by one person in all cases, which can be carried out by one person under normal venue conditions. In the case of special venue conditions (e.g. remote parking facilities, floors without elevator access, etc.), the Client undertakes to inform the Service Provider of such circumstances in advance so that the Service Provider can arrive at the venue prepared for the conditions on site. If the Client fails to provide prior information regarding circumstances of this nature that materially affect the work to be performed on site, the Client shall provide an appropriate number of people on site to assist with the transportation and installation of the equipment, in order to ensure that the service can be provided safely and without delay.",
+  "parking": "The Client undertakes to provide one parking space free of charge for the arriving equipment operator for the duration of assembly, the activity and dismantling. If no parking space is available at the event venue, the Client undertakes to reimburse the costs of street parking.",
+  "damage": "The Client shall be liable for any damage caused to the {DEV} or its accessories as a result of improper use, the conduct of a third party, or any reason arising within the Client’s sphere of responsibility.",
+  "late_interest": "In the event of late payment, the Service Provider shall be entitled to charge default interest at a rate equal to the central bank base rate applicable under the Hungarian Civil Code to transactions between business entities, plus 8%, and shall also be entitled to claim any documented costs incurred in connection with debt collection.",
+  "acknowledge": "The Client declares that it understands the fee structure and undertakes to pay the fees in accordance with the terms of this Agreement.",
+  "unforeseen": "The Client acknowledges that any additional services ordered on site due to unforeseen circumstances during the event are not included in the basic fee under this Agreement and shall be invoiced subsequently by the Service Provider on the final invoice following the provision of the service.",
+  "invoice_mod": "The Client may request an amendment to the invoice in writing within 8 calendar days from the date of issue of the invoice. Requests submitted after this deadline are not automatically accepted, and the Service Provider shall be entitled to charge an administrative fee for the additional work associated with amending the invoice.",
+  "contact_intro": "For the duration of the performance of the Agreement, the contracting Parties shall appoint contact persons for the purposes of cooperation. Such contact persons shall be authorised to coordinate and schedule tasks, certify performance, and make written statements.",
+  "teljesites": "The Service Provider’s performance shall be deemed completed upon the conclusion of the {DEV} operating period and the commencement of dismantling at the venue. The Client may submit any objections concerning the performance in writing no later than 24 hours following the completion of the service. In the absence of such notification, the performance shall be deemed accepted.",
+  "lemondas": [
+   "If either Party withdraws from this Agreement or cancels the service within 30 calendar days prior to the starting date of the event, that Party shall be obliged to pay the other Party a contractual penalty amounting to 40% of the net service fee.",
+   "If the cancellation takes place within 7 calendar days prior to the starting date of the event, the cancelling Party shall be obliged to pay a contractual penalty amounting to 80% of the net service fee.",
+   "The contractual penalty shall be payable within 8 calendar days from the date on which the cancellation statement is communicated."
+  ],
+  "vis": [
+   "Any event which is beyond the control of the Parties and which affects the contractual performance shall be deemed a force majeure event for the purposes of this Agreement.",
+   "For the purposes of this Agreement, force majeure shall include the following events: governmental measures, strikes, other industrial disruptions, activities of a public enemy, acts of terrorism, revolutionary acts, riots, blockades, epidemics, landslides, fire, storms, floods, earthquakes, explosions, water damage, lightning, extreme frost, extraordinary weather conditions, or any similar event beyond the control of the Parties.",
+   "In the event of force majeure, the Parties shall negotiate the performance of the services specified in this Agreement and the appropriate amendment of the Agreement."
+  ],
+  "jog": [
+   "The Parties agree that this Agreement shall be governed by Hungarian law.",
+   "For the resolution of disputes arising from this Agreement, the Parties agree to the exclusive jurisdiction of the Central District Court of Pest (Pesti Központi Kerületi Bíróság) or the Budapest-Capital Regional Court (Fővárosi Törvényszék), depending on the value of the claim."
+  ],
+  "egyeb_ptk": "Any matters not regulated by this Agreement shall be governed by the provisions of the Hungarian Civil Code and other applicable laws and regulations in force.",
+  "gdpr": "During the performance of this Agreement, the Service Provider may process personal data, including in particular photographs/images and contact details, exclusively for the purpose of providing the service and for the period necessary for such provision, in accordance with applicable data protection legislation, in particular Regulation (EU) 2016/679 of the European Parliament and of the Council (GDPR). The Service Provider shall not transfer personal data to third parties, and data subjects shall be entitled to request access to their data, its deletion or restriction of processing through the Service Provider’s contact details.",
+  "storage": "The Service Provider shall store the {MEDIA} taken at the event for 90 days, after which they shall be automatically deleted. The Client may request the deletion of the {MEDIA2} or a modification of the storage period by email at any time (up to a maximum of 1 year).",
+  "egyeb_post": [
+   "All information, data and documents disclosed to or obtained by either Party from the other Party shall constitute the business secrets of the respective Party. Accordingly, such information may not be used in any manner in dealings with parties other than the cooperating partners under this service agreement, nor may it be disclosed to any third party.",
+   "The contracting Parties shall continuously cooperate with each other throughout the term of the Agreement in accordance with the principles of good faith and fair dealing. Accordingly, they shall inform each other in a timely manner not only about the performance of the obligations set out in this Agreement, but also about any material matter that may affect the performance of the Agreement."
+  ]
+ }
 }
 JSON
 , true);

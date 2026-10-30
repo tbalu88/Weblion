@@ -1,0 +1,419 @@
+{
+ "fotoautomata": {
+  "name": "Photo Booth",
+  "line": "Photo Booth",
+  "tasks": [
+   "Operation of the Photo Booth: {H} hours of availability;",
+   "Unlimited photo printing during the service period;",
+   "Provision of the accessories necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the photo booth."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space",
+   "1 table",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "photo booth",
+  "tdev": "photo booth",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the Photo Booth service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "spinner360": {
+  "name": "360 Spinner",
+  "line": "360 Spinner",
+  "tasks": [
+   "Operation of the 360 Spinner: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the accessories necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the 360 Spinner."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space",
+   "1 table",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "360 Spinner",
+  "tdev": "360 Spinner",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the 360 Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "selfie_360": {
+  "name": "Photo Booth and 360 Spinner (Selfie + 360 Spinner)",
+  "line": "Photo Booth and 360 Spinner",
+  "tasks": [
+   "Operation of the Photo Booth: {H} hours of availability;",
+   "Operation of the 360 Spinner: 3 hours of availability;",
+   "Unlimited photo printing and use during the service periods;",
+   "Provision of the accessories necessary for the provision of the services;",
+   "Provision of 2 assistants for the entire duration of the services, exclusively for tasks related to the operation of the photo booth and 360 Spinner."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space per service",
+   "1 table per service",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "photo booth and 360 Spinner",
+  "tdev": "photo booth and 360 Spinner",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the Photo Booth service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+   "If the Client wishes to use the 360 Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour per service.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion per service. In the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "overhead_spinner": {
+  "name": "Overhead Spinner",
+  "line": "Overhead Spinner",
+  "tasks": [
+   "Operation of the Overhead Spinner: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the accessories necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the Overhead Spinner."
+  ],
+  "reqs": [
+   "At least 9 m² of free, covered and rain-protected space",
+   "1 table",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "Overhead Spinner",
+  "tdev": "Overhead Spinner",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the Overhead Spinner service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "vip_spinner": {
+  "name": "VIP Spinner",
+  "line": "VIP Spinner",
+  "tasks": [
+   "Operation of the VIP Spinner: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the accessories necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the VIP Spinner."
+  ],
+  "reqs": [
+   "At least 18 m² of free, covered, completely level and rain-protected space for assembly",
+   "At least 16 m² of free, covered, completely level and rain-protected space for operation",
+   "1 table",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "VIP Spinner",
+  "tdev": "VIP Spinner",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the VIP Spinner service on site beyond the pre-ordered service period, the fee shall be {P:60000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "vr": {
+  "name": "VR experience",
+  "line": "VR experience",
+  "tasks": [
+   "Operation of the VR experience: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the equipment necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the VR experience."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "VR experience",
+  "tdev": "VR",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the VR service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "cockpit_vr": {
+  "name": "Cockpit VR experience",
+  "line": "Cockpit VR experience",
+  "tasks": [
+   "Operation of the Cockpit VR experience: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the equipment necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the Cockpit VR experience."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "Cockpit VR experience",
+  "tdev": "Cockpit VR",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the Cockpit VR service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "led_tancter": {
+  "name": "LED dance floor",
+  "line": "LED dance floor",
+  "tasks": [
+   "Operation of the LED dance floor: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the LED dance floor."
+  ],
+  "reqs": [
+   "At least 18 m² of free, covered, completely level and rain-protected space for assembly",
+   "At least 16 m² of free, covered, completely level and rain-protected space for operation",
+   "1 table",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "LED dance floor",
+  "tdev": "LED dance floor",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the LED dance floor service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "klasszikus_karikatura": {
+  "name": "Classic caricature",
+  "line": "Classic caricature",
+  "tasks": [
+   "Operation of the classic caricature service: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of 1 caricature artist for the entire duration of the service, exclusively for tasks related to the operation of the classic caricature service."
+  ],
+  "reqs": [
+   "2 chairs for the operation of the service",
+   "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "service equipment",
+  "tdev": "classic caricature",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the classic caricature service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "digitalis_karikatura": {
+  "name": "Digital caricature",
+  "line": "Digital caricature",
+  "tasks": [
+   "Operation of the digital caricature service: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of 1 caricature artist for the entire duration of the service, exclusively for tasks related to the operation of the digital caricature service."
+  ],
+  "reqs": [
+   "2 chairs for the operation of the service",
+   "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "service equipment",
+  "tdev": "digital caricature",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the digital caricature service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "elozene": {
+  "name": "Live music (Crazy Melange duo)",
+  "line": "Crazy Melange duo musical activity",
+  "tasks": [
+   "Performance of the Crazy Melange duo: {H} hours of availability."
+  ],
+  "reqs": [
+   "2 chairs without armrests for the operation of the service",
+   "At least 4 m² of free, covered, completely level and rain-protected space for operation",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "sound equipment",
+  "tdev": "Crazy Melange duo",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the live music service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "karaoke": {
+  "name": "Karaoke (Crazy Karaoke)",
+  "line": "Crazy Karaoke activity",
+  "tasks": [
+   "Operation of Crazy Karaoke: {H} hours of availability."
+  ],
+  "reqs": [
+   "1 chair for the operation of the service",
+   "At least 6 m² of free, covered, completely level and rain-protected space for operation",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "karaoke equipment",
+  "tdev": "Crazy Karaoke",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the karaoke service on site beyond the pre-ordered service period, the fee shall be {P:40000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:25000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:25000} per occasion.\nIn the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "crazycatch": {
+  "name": "CrazyCatch experience (Catch it)",
+  "line": "CrazyCatch experience",
+  "tasks": [
+   "Operation of the CrazyCatch experience: {H} hours of availability;",
+   "Unlimited use during the service period;",
+   "Provision of the equipment necessary for the provision of the service;",
+   "Provision of 1 assistant for the entire duration of the service, exclusively for tasks related to the operation of the CrazyCatch experience."
+  ],
+  "reqs": [
+   "At least 6 m² of free, covered and rain-protected space",
+   "A grounded electrical power source",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "Catch it",
+  "tdev": "CrazyCatch",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the CrazyCatch service on site beyond the pre-ordered service period, the fee shall be {P:30000} per commenced hour.",
+   "Our equipment operator typically arrives at the venue 60 minutes before the scheduled start time to begin installation. If the Client wishes to request an earlier installation or inactive standby hours, the fee shall be {P:10000} per commenced hour.",
+   "If the Client wishes to relocate our already installed equipment to another location within the event venue, the relocation fee shall be {P:10000} per occasion. In the event of relocation, the time required for relocation shall not be included in the service period."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "rendezvenyfoto": {
+  "name": "Event photography",
+  "line": "Event photography",
+  "tasks": [
+   "Event photography: {H} hours of presence;",
+   "Delivery of the selected and edited photographs to the Client."
+  ],
+  "reqs": [],
+  "reqs_extra": [],
+  "dev": "photographic equipment",
+  "tdev": "photographic equipment",
+  "teljesites": "The Service Provider’s performance shall be deemed completed upon delivery of the finished photographs. The Client may submit any objections concerning the performance in writing no later than 48 hours following the completion of the service. In the absence of such notification, the performance shall be deemed accepted.",
+  "extras": [
+   "If the Client wishes to use the photography service on site beyond the pre-ordered service period, the fee shall be {P:25000} per commenced hour."
+  ],
+  "extra_egyeb": [],
+  "review": [
+   "The template contained no task list – the two task items are suggested by the panel; please verify."
+  ]
+ },
+ "kaszino": {
+  "name": "Casino (casino table)",
+  "line": "casino table",
+  "tasks": [
+   "Operation of 1 casino table: {H} hours of availability;",
+   "1 roulette table, 1 blackjack table, 1 poker table",
+   "Provision of 1 assistant per table for the entire duration of the service, exclusively for tasks related to the operation of the service. For programmes exceeding 90 minutes, the Service Provider shall be entitled to provide its staff with a 10-minute break."
+  ],
+  "reqs": [
+   "The space required for setting up the gaming tables",
+   "Power supply, where required",
+   "Access to the venue for the Service Provider’s staff",
+   "The chairs required for the poker tables",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "casino tables",
+  "tdev": "casino tables",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the casino table service on site beyond the pre-ordered service period, the fee shall be {P:50000} per commenced hour.",
+   "Our installation technician typically arrives at the venue 30 minutes before the scheduled start time to begin installation."
+  ],
+  "extra_egyeb": [],
+  "review": []
+ },
+ "crazymakeup": {
+  "name": "Make-up & hair (Crazy Makeup)",
+  "line": "Crazy Makeup",
+  "tasks": [
+   "Operation of 1 Crazy Makeup station: {H} hours of availability;",
+   "Provision of the equipment and supplies required for the service",
+   "Provision of 1 make-up artist for the entire duration of the service, exclusively for tasks related to the operation of the service. For programmes exceeding 180 minutes, the Service Provider shall be entitled to provide its staff with a 10-minute break."
+  ],
+  "reqs": [
+   "The space required for setting up the tables",
+   "Power supply, where required",
+   "Access to the venue for the Service Provider’s staff",
+   "The chairs required for the make-up tables",
+   "Prior information to the Service Provider regarding the conditions of the venue (parking, lack of elevator, etc.)"
+  ],
+  "reqs_extra": [],
+  "dev": "make-up equipment",
+  "tdev": "make-up equipment",
+  "teljesites": "",
+  "extras": [
+   "If the Client wishes to use the make-up service on site beyond the pre-ordered service period, the fee shall be {P:50000} per commenced hour.",
+   "Our installation technician typically arrives at the venue 30 minutes before the scheduled start time to begin installation."
+  ],
+  "extra_egyeb": [
+   "The Client acknowledges and accepts that it may establish a business relationship with the make-up artists, hairdressers and other contributing professionals recommended or introduced by the Service Provider, or presented during the performance, exclusively through the Service Provider. The Client undertakes not to contact such professionals, either directly or indirectly, for the purpose of commissioning work, and not to conclude any independent agreement with them, without the prior written consent of the Service Provider.\nThis non-circumvention clause shall remain in force for the term of the cooperation between the Parties and for 12 months following its termination. In the event of a breach of this provision, the Client shall pay the Service Provider a contractual penalty equal to 100% of the total net service fee of the engagement affected by the circumvention, without prejudice to the Service Provider’s right to claim further damages."
+  ],
+  "review": []
+ }
+}

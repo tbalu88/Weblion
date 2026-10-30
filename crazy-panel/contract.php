@@ -110,106 +110,156 @@ function cp_ct_prefill($id) {
 }
 
 /* ------------------------------------------------------------ a szerződés felépítése (blokkok: h, p, b, t, c, sig) */
+/* v1.77: kétnyelvű (magyar / angol) szövegek – a jogi alap és a modulok angolul a seed „legal_en” és „services.*.en” részéből */
+function cp_ct_t($lang) {
+	if ($lang === 'en') {
+		return array('title' => 'Service Agreement', 'between' => 'Entered into by and between:', 'cl_rows' => array('company' => 'Company name:', 'seat' => 'Registered office:', 'reg' => 'Company registration number:', 'tax' => 'Tax number:', 'name' => 'Name:', 'address' => 'Address:'),
+			'client_is' => 'hereinafter referred to as the “Client”, on the one hand, and:', 'prov_is' => 'hereinafter referred to as the “Service Provider”, on the other hand, jointly referred to as the “Parties”, under the following terms and conditions:',
+			'H' => array('Subject of the Agreement', 'Duties and Obligations of the Service Provider', 'Duties and Obligations of the Client', 'Fees for the Services Provided by the Service Provider', 'Additional Services', 'Communication and Contacts', 'Certification of Performance and Handling of Complaints', 'Cancellation and Withdrawal', 'Vis maior', 'Jurisdiction and Governing Law', 'Miscellaneous Provisions'),
+			'svc' => 'Service: ', 'venue' => 'Venue: ', 'dt' => 'Date and time: ', 'one' => 'the following service under', 'many' => 'the following services under', 'bg' => 'Provision of the background selected by the Client, which in this case is: ', 'corp' => array('professional and corporate reputation', 'reputation'),
+			'fee1' => 'For the performance of the service specified in Section 1, the Service Provider shall be entitled to a service fee of %s, i.e. %s, which the Client shall settle as follows:',
+			'feeN' => 'For the performance of the services specified in Section 1, the Service Provider shall be entitled to the following service fees:', 'feeT' => 'The total service fee is %s, i.e. %s, which the Client shall settle as follows:', 'svcH' => array('Service', 'Fee'), 'tot' => 'Total',
+			'pay' => array('pre' => 'by bank transfer in advance', 'post' => 'by deferred payment, with an 8-day payment deadline', 'cash' => 'in cash on site'), 'trI' => 'The delivery fee is as follows:', 'trH' => array('Location', 'Fee'),
+			'total' => 'The Client acknowledges that the total consideration for the service under this Agreement %samounts to a total of %s. ', 'total_tr' => 'consists of the service fee and the delivery fee combined, which ',
+			'ctC' => 'Contact person on behalf of the Client:', 'ctP' => 'Contact person on behalf of the Service Provider:', 'nm' => 'Name: ', 'tel' => 'Tel.: ', 'photo' => 'In the case of event photography: ',
+			'net40' => array('of the net service fee', 'of the service fee'), 'media' => array('k' => array('photographs', 'photographs'), 'v' => array('videos', 'videos'), 'kv' => array('photographs and videos', 'photographs and videos')),
+			'signC' => 'Client', 'signP' => 'Service Provider', 'rep' => 'represented by: ', 'pick' => 'Please select at least one service.');
+	}
+	return array('title' => 'Megbízási Szerződés', 'between' => 'Amely létrejött egyrészről:', 'cl_rows' => array('company' => 'Cégnév:', 'seat' => 'Székhely:', 'reg' => 'Cégjegyzékszám:', 'tax' => 'Adószám:', 'name' => 'Név:', 'address' => 'Lakcím:'),
+		'client_is' => 'továbbiakban Megbízó, másrészről:', 'prov_is' => 'továbbiakban Megbízott között (együttesen Felek), az alábbi feltételekkel:',
+		'H' => array('A megbízás tárgya', 'A Megbízott feladatai és kötelezettségei', 'A Megbízó feladatai és kötelezettségei', 'A Megbízott által nyújtott szolgáltatások díjazása', 'Kiegészítő szolgáltatások', 'Kapcsolattartás', 'Teljesítés igazolása és kifogáskezelés', 'Lemondás és elállás', 'Vis maior', 'Joghatóság és irányadó jog', 'Egyéb rendelkezések'),
+		'svc' => 'Szolgáltatás: ', 'venue' => 'Helyszín: ', 'dt' => 'Dátum és időpont: ', 'one' => 'az alábbi szolgáltatást biztosítja', 'many' => 'az alábbi szolgáltatásokat biztosítja', 'bg' => 'A Megbízó által választott háttér biztosítása, amely jelen esetben: ', 'corp' => array('szakmai és céges jó hírét', 'jó hírét'),
+		'fee1' => 'Az 1. pontban rögzített szolgáltatás elvégzéséért a Megbízottat megbízási díj illeti meg, amely %s, azaz %s, melyet a Megbízó az alábbi módon rendez:',
+		'feeN' => 'Az 1. pontban rögzített szolgáltatások elvégzéséért a Megbízottat az alábbi megbízási díj illeti meg:', 'feeT' => 'A megbízási díj összesen %s, azaz %s, melyet a Megbízó az alábbi módon rendez:', 'svcH' => array('Szolgáltatás', 'Díj'), 'tot' => 'Összesen',
+		'pay' => array('pre' => 'előre utalással', 'post' => 'halasztott fizetéssel, 8 napos fizetési határidővel', 'cash' => 'helyszínen készpénzben'), 'trI' => 'A kiszállási díj az alábbiak szerint alakul:', 'trH' => array('Település', 'Díj'),
+		'total' => 'A Megbízó tudomásul veszi, hogy a jelen szerződés szerinti szolgáltatás teljes ellenértéke %sösszesen %s. ', 'total_tr' => 'a megbízási díj és a kiszállási díj együttes összege, amely ',
+		'ctC' => 'Kapcsolattartó a megbízó részéről:', 'ctP' => 'Kapcsolattartó a megbízott részéről:', 'nm' => 'Név: ', 'tel' => 'Tel.: ', 'photo' => 'Rendezvényfotózás esetén: ',
+		'net40' => array('megbízási díj nettó ', 'megbízási díj '), 'media' => array('k' => array('képeket', 'képek'), 'v' => array('videókat', 'videók'), 'kv' => array('képeket és videókat', 'képek és videók')),
+		'signC' => 'Megbízó', 'signP' => 'Megbízott', 'rep' => 'képviseli: ', 'pick' => 'Válassz legalább egy szolgáltatást.');
+}
+function cp_ct_words_en($n) {
+	$n = (int) round($n); if ($n === 0) { return 'zero'; }
+	$o = array('', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen');
+	$t = array('', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety');
+	$u = function ($x) use ($o, $t) { $s = array(); if ($x >= 100) { $s[] = $o[intdiv($x, 100)] . ' hundred' . ($x % 100 ? ' and' : ''); $x %= 100; } if ($x) { $s[] = $x < 20 ? $o[$x] : $t[intdiv($x, 10)] . ($x % 10 ? '-' . $o[$x % 10] : ''); } return implode(' ', $s); };
+	$p = array();
+	foreach (array(1000000000 => 'billion', 1000000 => 'million', 1000 => 'thousand') as $g => $w) { if ($n >= $g) { $p[] = $u(intdiv($n, $g)) . ' ' . $w; $n %= $g; } }
+	if ($n) { $p[] = $u($n); }
+	return implode(' ', $p);
+}
+function cp_ct_money_l($n, $vat, $lang) {
+	if ($lang !== 'en') { return cp_ct_money($n, $vat); }
+	return 'HUF ' . number_format((float) $n, 0, '.', ',') . ($vat === 'aam' ? ' (VAT-exempt, AAM)' : ' net (+ VAT)');
+}
+function cp_ct_date_l($ymd, $lang) {
+	if ($lang !== 'en') { return cp_ct_hudate($ymd); }
+	return preg_match('/^\d{4}-\d{2}-\d{2}/', (string) $ymd) ? wp_date('j F Y', strtotime($ymd . ' 12:00:00')) . '.' : (string) $ymd;
+}
+function cp_ct_issuer_rows($I, $lang) {
+	if ($lang !== 'en') { return $I['rows']; }
+	$map = array('Név:' => $I['vat'] === 'aam' ? 'Name:' : 'Company name:', 'Székhely:' => 'Registered office:', 'Levelezési cím:' => 'Postal address:', 'Adószám:' => 'Tax number:', 'Cégjegyzékszám:' => 'Company registration number:', 'Bankszámlaszám:' => 'Bank account number:');
+	return array_map(function ($r) use ($map) { return array($map[$r[0]] ?? $r[0], str_replace(' - Gyarmati Andrea részére', ' – attn. Andrea Gyarmati', $r[1])); }, $I['rows']);
+}
+
 function cp_ct_build($st) {
-	$L = cp_ct_lib(); $G = $L['legal']; $I = $L['issuers'][$st['issuer'] === 'EV' ? 'EV' : 'KFT']; $vat = $I['vat'];
+	$L = cp_ct_lib(); $lang = ($st['lang'] ?? 'hu') === 'en' && !empty($L['legal_en']) ? 'en' : 'hu';
+	$G = $lang === 'en' ? $L['legal_en'] : $L['legal']; $T = cp_ct_t($lang);
+	$I = $L['issuers'][$st['issuer'] === 'EV' ? 'EV' : 'KFT']; $vat = $I['vat'];
+	$money = function ($n) use ($vat, $lang) { return cp_ct_money_l($n, $vat, $lang); };
 	$out = array(); $n = 0;
-	$H = function ($t) use (&$out, &$n) { $n++; $out[] = array('h', $n . '. ' . $t); };
+	$H = function ($i) use (&$out, &$n, $T) { $n++; $out[] = array('h', $n . '. ' . $T['H'][$i]); };
 	$p = function ($t) use (&$out) { if (trim((string) $t) !== '') { $out[] = array('p', $t); } };
 	$b = function ($t) use (&$out) { $out[] = array('b', $t); };
 	$sel = array();
-	foreach ((array) $st['svc'] as $s) { if (isset($L['services'][$s['k']])) { $sel[] = array_merge($L['services'][$s['k']], $s); } }
-	if (!$sel) { return array(array('p', 'Válassz legalább egy szolgáltatást.')); }
+	foreach ((array) $st['svc'] as $s) {
+		if (!isset($L['services'][$s['k']])) { continue; }
+		$S = $L['services'][$s['k']];
+		if ($lang === 'en' && !empty($S['en'])) { $S = array_merge($S, $S['en']); }
+		$sel[] = array_merge($S, $s);
+	}
+	if (!$sel) { return array(array('p', $T['pick'])); }
 	$multi = count($sel) > 1;
-	$names = implode(', ', array_map(function ($s) { return $s['line']; }, $sel));
-	$devs = array_values(array_unique(array_map(function ($s) { return $s['dev']; }, $sel)));
-	$tdevs = array_values(array_unique(array_map(function ($s) { return $s['tdev']; }, $sel)));
-	$join = function ($a) { return count($a) > 1 ? implode(', ', array_slice($a, 0, -1)) . ' és ' . end($a) : (string) ($a[0] ?? ''); };
-	$c = $st['client'];
-	$out[] = array('title', 'Megbízási Szerződés');
-	$p('Amely létrejött egyrészről:');
-	$out[] = array('t', $c['type'] === 'ceg' ? array(array('Cégnév:', $c['company']), array('Székhely:', $c['seat']), array('Cégjegyzékszám:', $c['reg']), array('Adószám:', $c['tax'])) : array(array('Név:', $c['name']), array('Lakcím:', $c['address'])), 'party');
-	$p('továbbiakban Megbízó, másrészről:');
-	$out[] = array('t', array_map(function ($r) { return array($r[0], $r[1]); }, $I['rows']), 'party');
-	$p('továbbiakban Megbízott között (együttesen Felek), az alábbi feltételekkel:');
-	/* 1. tárgy */
-	$H('A megbízás tárgya');
-	$p($multi ? str_replace('az alábbi szolgáltatást biztosítja', 'az alábbi szolgáltatásokat biztosítja', $G['targy_intro']) : $G['targy_intro']);
-	$p('Szolgáltatás: ' . $names);
-	$p('Helyszín: ' . $st['venue']);
-	$p('Dátum és időpont: ' . trim(cp_ct_hudate($st['date']) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
-	/* 2. a megbízott feladatai */
-	$H('A Megbízott feladatai és kötelezettségei');
+	$and = $lang === 'en' ? ' and ' : ' és ';
+	$join = function ($a) use ($and) { return count($a) > 1 ? implode(', ', array_slice($a, 0, -1)) . $and . end($a) : (string) ($a[0] ?? ''); };
+	$dev = function ($key, $list) use ($G, $lang, $join) { $d = $join($list); return $lang === 'en' ? str_replace('{DEV}', $d, $G[$key]) : cp_ct_dev($G, $key, $d); };
+	$c = $st['client']; $R = $T['cl_rows'];
+	$out[] = array('title', $T['title']);
+	$p($T['between']);
+	$out[] = array('t', $c['type'] === 'ceg' ? array(array($R['company'], $c['company']), array($R['seat'], $c['seat']), array($R['reg'], $c['reg']), array($R['tax'], $c['tax'])) : array(array($R['name'], $c['name']), array($R['address'], $c['address'])), 'party');
+	$p($T['client_is']);
+	$out[] = array('t', cp_ct_issuer_rows($I, $lang), 'party');
+	$p($T['prov_is']);
+	$H(0);
+	$p($multi ? str_replace($T['one'], $T['many'], $G['targy_intro']) : $G['targy_intro']);
+	$p($T['svc'] . implode(', ', array_map(function ($s) { return $s['line']; }, $sel)));
+	$p($T['venue'] . $st['venue']);
+	$p($T['dt'] . trim(cp_ct_date_l($st['date'], $lang) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
+	$H(1);
 	$p($G['feladat_intro']);
 	foreach ($sel as $s) {
 		if ($multi) { $out[] = array('sub', $s['name']); }
 		foreach ($s['tasks'] as $t) { $b(str_replace('{H}', (string) (int) $s['hours'], $t)); }
-		if ($s['hatter']) { $b('A Megbízó által választott háttér biztosítása, amely jelen esetben: ' . (trim((string) $s['bg']) !== '' ? $s['bg'] : '............................................')); }
+		if ($s['hatter']) { $b($T['bg'] . (trim((string) $s['bg']) !== '' ? $s['bg'] : '............................................')); }
 	}
-	foreach ($G['megbizott_common'] as $t) { $p($c['type'] === 'magan' ? str_replace('szakmai és céges jó hírét', 'jó hírét', $t) : $t); }
-	/* 3. a megbízó feladatai */
-	$H('A Megbízó feladatai és kötelezettségei');
+	foreach ($G['megbizott_common'] as $t) { $p($c['type'] === 'magan' ? str_replace($T['corp'][0], $T['corp'][1], $t) : $t); }
+	$H(2);
 	$p($G['megbizo_intro']); $p($G['megbizo_intro2']);
 	$seen = array();
-	foreach ($sel as $s) { foreach ($s['reqs'] as $r) { $k = mb_strtolower(trim($r)); if (isset($seen[$k])) { continue; } $seen[$k] = 1; $b($r . ($multi && !preg_match('/tájékoztatni/u', $r) ? ' (' . $s['name'] . ')' : '')); } }
+	foreach ($sel as $s) { foreach ($s['reqs'] as $r) { $k = mb_strtolower(trim($r)); if (isset($seen[$k])) { continue; } $seen[$k] = 1; $b($r . ($multi && !preg_match('/tájékoztatni|information to the Service Provider|Prior information/u', $r) ? ' (' . $s['name'] . ')' : '')); } }
 	foreach ($sel as $s) { foreach ($s['reqs_extra'] as $r) { $p($r); } }
 	if (array_filter($sel, function ($s) { return $s['transport']; })) { $p($G['transport']); }
-	$p($G['parking'] . ' ' . cp_ct_dev($G, 'damage', $join($devs)));
-	/* 4. díjazás */
-	$H('A Megbízott által nyújtott szolgáltatások díjazása');
+	$p($G['parking'] . ' ' . $dev('damage', array_values(array_unique(array_map(function ($s) { return $s['dev']; }, $sel)))));
+	$H(3);
 	$sum = 0; foreach ($sel as $s) { $sum += (float) $s['price']; }
-	$words = cp_ct_words($sum) . ' forint' . ($vat === 'aam' ? '' : ' + ÁFA');
+	$words = $lang === 'en' ? cp_ct_words_en($sum) . ' Hungarian forints' . ($vat === 'aam' ? '' : ' plus VAT') : cp_ct_words($sum) . ' forint' . ($vat === 'aam' ? '' : ' + ÁFA');
 	if ($multi) {
-		$p('Az 1. pontban rögzített szolgáltatások elvégzéséért a Megbízottat az alábbi megbízási díj illeti meg:');
-		$out[] = array('t', array_merge(array(array('Szolgáltatás', 'Díj')), array_map(function ($s) use ($vat) { return array($s['name'], cp_ct_money($s['price'], $vat)); }, $sel), array(array('Összesen', cp_ct_money($sum, $vat)))), 'grid');
-		$p('A megbízási díj összesen ' . cp_ct_money($sum, $vat) . ', azaz ' . $words . ', melyet a Megbízó az alábbi módon rendez:');
+		$p($T['feeN']);
+		$out[] = array('t', array_merge(array($T['svcH']), array_map(function ($s) use ($money) { return array($s['name'], $money($s['price'])); }, $sel), array(array($T['tot'], $money($sum)))), 'grid');
+		$p(sprintf($T['feeT'], $money($sum), $words));
 	} else {
-		$p('Az 1. pontban rögzített szolgáltatás elvégzéséért a Megbízottat megbízási díj illeti meg, amely ' . cp_ct_money($sum, $vat) . ', azaz ' . $words . ', melyet a Megbízó az alábbi módon rendez:');
+		$p(sprintf($T['fee1'], $money($sum), $words));
 	}
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
-	$opts = array('pre' => 'előre utalással', 'post' => 'halasztott fizetéssel, 8 napos fizetési határidővel') + ($cash ? array('cash' => 'helyszínen készpénzben') : array());
-	foreach ($opts as $k => $t) { $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
+	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
-	if ($tr > 0) {
-		$p('A kiszállási díj az alábbiak szerint alakul:');
-		$out[] = array('t', array(array('Település', 'Díj'), array($st['travel_city'], cp_ct_money($tr, $vat))), 'grid');
-	}
+	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'grid'); }
 	$p($G['late_interest']);
-	$p('A Megbízó tudomásul veszi, hogy a jelen szerződés szerinti szolgáltatás teljes ellenértéke ' . ($tr > 0 ? 'a megbízási díj és a kiszállási díj együttes összege, amely ' : '') . 'összesen ' . ($vat === 'aam' ? cp_ct_money($sum + $tr, $vat) : 'nettó ' . cp_ct_fmt($sum + $tr) . ' Ft + ÁFA') . '. ' . $G['acknowledge']);
+	$tot = $vat === 'aam' ? $money($sum + $tr) : ($lang === 'en' ? 'HUF ' . number_format($sum + $tr, 0, '.', ',') . ' net + VAT' : 'nettó ' . cp_ct_fmt($sum + $tr) . ' Ft + ÁFA');
+	$p(sprintf($T['total'], $tr > 0 ? $T['total_tr'] : '', $tot) . $G['acknowledge']);
 	$p($G['unforeseen']); $p($G['invoice_mod']);
-	/* 5. kiegészítő szolgáltatások */
 	$ex = array(); foreach ($sel as $s) { if ($s['extras']) { $ex[] = $s; } }
 	if ($ex) {
-		$H('Kiegészítő szolgáltatások');
-		foreach ($ex as $s) { if ($multi) { $out[] = array('sub', $s['name']); } foreach ($s['extras'] as $t) { $p(cp_ct_toks($t, $vat)); } }
+		$H(4);
+		foreach ($ex as $s) { if ($multi) { $out[] = array('sub', $s['name']); } foreach ($s['extras'] as $t) { $p(preg_replace_callback('/\{P:(\d+)\}/', function ($m) use ($money) { return $money((int) $m[1]); }, $t)); } }
 	}
-	/* kapcsolattartás */
-	$H('Kapcsolattartás');
+	$H(5);
 	$p($G['contact_intro']);
-	$p('Kapcsolattartó a megbízó részéről:');
-	$out[] = array('t', array(array('Név: ' . $st['contact']['name'], 'Tel.: ' . $st['contact']['tel'])), 'grid');
-	$p('Kapcsolattartó a megbízott részéről:');
-	$out[] = array('t', array(array('Név: ' . $I['contact'][0], 'Tel.: ' . $I['contact'][1])), 'grid');
-	/* teljesítés */
-	$H('Teljesítés igazolása és kifogáskezelés');
-	$custom = array_values(array_filter(array_map(function ($s) { return $s['teljesites']; }, $sel)));
+	$p($T['ctC']);
+	$out[] = array('t', array(array($T['nm'] . $st['contact']['name'], $T['tel'] . $st['contact']['tel'])), 'grid');
+	$p($T['ctP']);
+	$ic = $lang === 'en' ? array('Ákos Sebestyén', '+36 30 474 9447') : $I['contact'];
+	$out[] = array('t', array(array($T['nm'] . $ic[0], $T['tel'] . $ic[1])), 'grid');
+	$H(6);
 	$std = array_filter($sel, function ($s) { return $s['teljesites'] === ''; });
-	if ($std) { $p(cp_ct_dev($G, 'teljesites', $join(array_values(array_unique(array_map(function ($s) { return $s['tdev']; }, $std)))))); }
-	foreach ($custom as $t) { $p(($multi ? 'Rendezvényfotózás esetén: ' : '') . $t); }
-	$H('Lemondás és elállás'); foreach ($G['lemondas'] as $t) { $p($vat === 'aam' ? str_replace('megbízási díj nettó ', 'megbízási díj ', $t) : $t); }
-	$H('Vis maior'); foreach ($G['vis'] as $t) { $p($t); }
-	$H('Joghatóság és irányadó jog'); foreach ($G['jog'] as $t) { $p($t); }
-	$H('Egyéb rendelkezések');
+	if ($std) { $p($dev('teljesites', array_values(array_unique(array_map(function ($s) { return $s['tdev']; }, $std))))); }
+	foreach ($sel as $s) { if ($s['teljesites'] !== '') { $p(($multi ? $T['photo'] : '') . $s['teljesites']); } }
+	$H(7); foreach ($G['lemondas'] as $t) { $p($vat === 'aam' ? str_replace($T['net40'][0], $T['net40'][1], $t) : $t); }
+	$H(8); foreach ($G['vis'] as $t) { $p($t); }
+	$H(9); foreach ($G['jog'] as $t) { $p($t); }
+	$H(10);
 	$p($G['egyeb_ptk']); $p($G['gdpr']);
 	$m = array(); foreach ($sel as $s) { if ($s['media'] === 'kep' || $s['media'] === 'kepvideo') { $m['k'] = 1; } if ($s['media'] === 'video' || $s['media'] === 'kepvideo') { $m['v'] = 1; } }
-	if ($m) { $w = isset($m['k'], $m['v']) ? array('képeket és videókat', 'képek és videók') : (isset($m['k']) ? array('képeket', 'képek') : array('videókat', 'videók')); $p(str_replace(array('{MEDIA}', '{MEDIA2}'), $w, $G['storage'])); }
+	if ($m) { $w = $T['media'][isset($m['k'], $m['v']) ? 'kv' : (isset($m['k']) ? 'k' : 'v')]; $p(str_replace(array('{MEDIA}', '{MEDIA2}'), $w, $G['storage'])); }
 	foreach ($G['egyeb_post'] as $t) { $p($t); }
 	foreach ($sel as $s) { foreach ($s['extra_egyeb'] as $t) { $p($t); } }
 	if (trim((string) $st['note']) !== '') { $p($st['note']); }
-	$out[] = array('date', $st['place'] . ', ' . cp_ct_hudate($st['cdate']));
-	$left = $c['type'] === 'ceg' ? array($c['company'] !== '' ? $c['company'] : '………………………………', 'képviseli: ' . ($c['signer'] !== '' ? $c['signer'] : '………………………'), 'Megbízó') : array($c['name'] !== '' ? $c['name'] : '………………………………', 'Megbízó');
-	$out[] = array('sig', $left, array_merge($I['sign'], array('Megbízott')));
+	$out[] = array('date', $st['place'] . ', ' . cp_ct_date_l($st['cdate'], $lang));
+	$sign = $lang === 'en' ? ($vat === 'aam' ? array('Zsolt Gacsal / Crazyphoto') : array('INSIGNIS PLUS Kft.', 'represented by: Balázs Tóth, Managing Director')) : $I['sign'];
+	$left = $c['type'] === 'ceg' ? array($c['company'] !== '' ? $c['company'] : '………………………………', $T['rep'] . ($c['signer'] !== '' ? $c['signer'] : '………………………'), $T['signC']) : array($c['name'] !== '' ? $c['name'] : '………………………………', $T['signC']);
+	$out[] = array('sig', $left, array_merge($sign, array($T['signP'])));
 	return $out;
 }
+
 
 /* ------------------------------------------------------------ kimenetek: HTML (előnézet / nyomtatás) és Word */
 function cp_ct_html($blocks, $print = false) {
@@ -294,7 +344,7 @@ function cp_ct_state_in() {
 	$L = cp_ct_lib();
 	$s = function ($v, $max = 300) { return mb_substr(sanitize_text_field((string) $v), 0, $max); };
 	$c = (array) ($st['client'] ?? array());
-	$out = array('deal' => (int) ($st['deal'] ?? 0), 'issuer' => ($st['issuer'] ?? '') === 'EV' ? 'EV' : 'KFT', 'lang' => 'hu',
+	$out = array('deal' => (int) ($st['deal'] ?? 0), 'issuer' => ($st['issuer'] ?? '') === 'EV' ? 'EV' : 'KFT', 'lang' => ($st['lang'] ?? '') === 'en' ? 'en' : 'hu',
 		'client' => array('type' => ($c['type'] ?? '') === 'magan' ? 'magan' : 'ceg', 'company' => $s($c['company'] ?? ''), 'seat' => $s($c['seat'] ?? ''), 'reg' => $s($c['reg'] ?? '', 40), 'tax' => $s($c['tax'] ?? '', 40), 'signer' => $s($c['signer'] ?? ''), 'name' => $s($c['name'] ?? ''), 'address' => $s($c['address'] ?? '')),
 		'contact' => array('name' => $s($st['contact']['name'] ?? ''), 'tel' => $s($st['contact']['tel'] ?? '', 40)),
 		'venue' => $s($st['venue'] ?? ''), 'date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($st['date'] ?? '')) ? $st['date'] : '', 'start' => $s($st['start'] ?? '', 10), 'end' => $s($st['end'] ?? '', 10),
