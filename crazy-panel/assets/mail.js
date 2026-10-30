@@ -274,7 +274,9 @@
 	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe">&lt;' + esc(m[2]) + '&gt;</span>' : '<span class="ml-tn">' + esc(x) + '</span>'; }).join(', ');
 
 	/* a levelek és a szál eseményei időrendben */
-	const timeline = x => (x.msgs || []).map(m => ({ at: String(m.sent_at || ''), m: m })).concat((x.events || []).map(e => ({ at: String(e.created_at || ''), ev: e }))).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+	/* v1.78.3: alapból a legfrissebb levél van felül (a szál fejlécében átállítható, a böngésző megjegyzi) */
+	const newFirst = () => { try { return localStorage.getItem('cpmail_ord') !== 'old'; } catch (e) { return true; } };
+	const timeline = x => (x.msgs || []).map(m => ({ at: String(m.sent_at || ''), m: m })).concat((x.events || []).map(e => ({ at: String(e.created_at || ''), ev: e }))).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0) * (newFirst() ? -1 : 1));
 
 	/* minta (a postafiókok bekötéséig): csak a böngészőben, nem mentődik */
 	function demoData() {
@@ -464,7 +466,7 @@
 			'<select data-as aria-label="Felelős"><option value="">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (t.as === p.id ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' +
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
-			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
+			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3><button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
@@ -493,7 +495,7 @@
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
 		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));
 		/* v1.61: mobilon kék gyorsgomb a szál alján (Salesmate Quick Actions mintájára) */
-		const qa = rd.querySelector('[data-qa]'), lastM = () => { for (let i = tl.length - 1; i >= 0; i--) { if (tl[i].m) return tl[i].m; } return null; };
+		const qa = rd.querySelector('[data-qa]'), lastM = () => { let r = null; tl.forEach(i => { if (i.m && (!r || String(i.m.sent_at || '') >= String(r.sent_at || ''))) r = i.m; }); return r; };
 		const qaShow = on => { qa.hidden = !on; };
 		rd.querySelector('[data-tfab]').addEventListener('click', () => qaShow(true));
 		qa.querySelectorAll('[data-qax]').forEach(b => b.addEventListener('click', () => qaShow(false)));
@@ -561,6 +563,7 @@
 		if (window.CPKanban && t.id > 0) window.CPKanban.linked(kbl, { th: t.id });
 		const todo = rd.querySelector('[data-todo]');
 		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(rd.querySelector('[data-kbq]'), { title: t.subj, th: t.id, deal: d && d.id ? d.id : 0, onDone: () => window.CPKanban.linked(kbl, { th: t.id }) }));
+		rd.querySelector('[data-ord]').addEventListener('click', () => { try { localStorage.setItem('cpmail_ord', newFirst() ? 'old' : 'new'); } catch (e) { /* privát mód */ } drawThread(box, rd, x); });
 		const fd = rd.querySelector('[data-fromdeal]');
 		if (fd) fd.addEventListener('click', () => { const id = S.fromDeal.deal; S.fromDeal = null; if (/^#mail$/.test(location.hash) && history.length > 1) history.back(); else if (window.CPCrm && window.CPCrm.open) window.CPCrm.open(id); });
 		const od = rd.querySelector('[data-opendeal]');
