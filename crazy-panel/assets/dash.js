@@ -23,7 +23,7 @@
 	function toast(m, bad) {
 		let d = document.getElementById('cpx-toast');
 		if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); }
-		d.textContent = m; d.className = 'cpx-toast show' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 3500);
+		d.textContent = m; d.className = 'cpx-toast on' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 3500);
 	}
 	const go = tab => { if (window.CPXGo) window.CPXGo(tab); };
 	const dOnly = s => String(s || '').slice(0, 10);

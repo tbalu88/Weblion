@@ -23,7 +23,7 @@
 	function toast(m, bad) {
 		let d = document.getElementById('cpx-toast');
 		if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); }
-		d.textContent = m; d.className = 'cpx-toast show' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 5000);
+		d.textContent = m; d.className = 'cpx-toast on' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 5000);
 	}
 
 	const slot = () => (C.bil && C.bil.on ? '<section class="d3-c d3-bill" data-bill><h4>Számlázás</h4><p class="cpx-muted">Betöltés…</p></section>' : '');
@@ -94,7 +94,7 @@
 			'<label>Fizetési mód<select data-f="pay"><option value="wire_transfer">átutalás</option><option value="cash">készpénz</option><option value="bankcard">bankkártya</option><option value="elore_utalas">előre utalás</option></select></label></div>' +
 			'<label class="bl-row w">Megjegyzés a számlán<textarea data-f="comment" rows="2"></textarea></label>' +
 			'<h5>Kiküldés</h5><div class="bl-send">' + [['now', 'Kiállítás után azonnal elküldöm'], ['gallery', 'A galériával együtt (a Követés fül „Galéria” pipájára)' + (B.gallery ? ' – a galéria már ki van küldve, ezért azonnal megy' : '')], ['no', 'Nem küldöm ki (csak kiállítom)']].map(o => '<label class="bl-chk"><input type="radio" name="bl-send" value="' + o[0] + '"' + ((B.photo && type === 'invoice' ? 'gallery' : 'now') === o[0] ? ' checked' : '') + '> ' + o[1] + '</label>').join('') + '</div>' +
-			'</div><footer><span class="cpx-muted" data-warn></span><button type="button" class="cpx-btn ghost" data-x>Mégse</button><button type="button" class="cpx-btn ghost" data-prev hidden>Előnézet (PDF)</button><button type="button" class="cpx-btn" data-go>Kiállítás a Billingóban</button></footer></div>';
+			'<div class="bl-errbox" data-err hidden></div></div><footer><span class="cpx-muted" data-warn></span><button type="button" class="cpx-btn ghost" data-x>Mégse</button><button type="button" class="cpx-btn ghost" data-prev hidden>Előnézet (PDF)</button><button type="button" class="cpx-btn" data-go>Kiállítás a Billingóban</button></footer></div>';
 		document.body.appendChild(w);
 		const close = () => w.remove();
 		w.querySelectorAll('[data-x]').forEach(x => x.addEventListener('click', close));
@@ -120,13 +120,20 @@
 			const btn = ev.currentTarget, win = window.open('', '_blank');
 			btn.disabled = true;
 			try { const r = await post('cp_bil_issue', Object.assign(collect(), { preview: 1 })); const bin = atob(r.pdf), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); const url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' })); if (win) win.location = url; else window.open(url, '_blank'); }
-			catch (e) { if (win) win.close(); toast(e.message, true); }
+			catch (e) { if (win) win.close(); const eb = w.querySelector('[data-err]'); eb.textContent = e.message; eb.hidden = false; toast(e.message, true); }
 			btn.disabled = false;
 		});
 		w.querySelector('[data-add]').addEventListener('click', () => { items.push({ name: '', qty: 1, unit: 'db', price: 0, ptype: 'net', vat: vat0(), comment: '' }); drawItems(); });
 		w.querySelector('[data-f="prof"]').addEventListener('change', e => { prof = e.target.value; items.forEach(i => { i.vat = vat0(); }); drawItems(); provUi(); });
 		w.querySelector('[data-go]').addEventListener('click', async ev => {
 			const btn = ev.currentTarget, P = collect(), send = P.send, advSel = JSON.parse(P.advance), zz = B.profiles[prof].prov === 'szamlazz';
+			const errBox = w.querySelector('[data-err]'), fail = m => { errBox.textContent = m; errBox.hidden = false; errBox.scrollIntoView({ block: 'nearest' }); };
+			errBox.hidden = true;
+			itBox.querySelectorAll('.bad').forEach(x => x.classList.remove('bad'));
+			const badI = items.findIndex(i => !String(i.name).trim() || !(Number(i.qty) > 0) || !(Number(i.price) > 0));
+			if (badI >= 0) { const row = itBox.querySelector('[data-i="' + badI + '"]'); if (row) ['name', 'qty', 'price'].forEach(k => { const el = row.querySelector('[data-k="' + k + '"]'); const v = items[badI][k]; if (k === 'name' ? !String(v).trim() : !(Number(v) > 0)) el.classList.add('bad'); }); fail('A(z) ' + (badI + 1) + '. tételnél hiányzik a megnevezés, a mennyiség vagy az egységár (0 Ft nem lehet). A dealnek nincs értéke, ezért írd be az árat.'); return; }
+			if (!b.name || !b.post_code || !b.city || !b.address) { fail('A vevő neve és teljes címe (irányítószám, város, utca) kötelező.'); return; }
+			if (send !== 'no' && !/@/.test(b.emails)) { fail('A kiküldéshez kell a vevő e-mail-címe – vagy válaszd: „Nem küldöm ki”.'); return; }
 			if (zz && advSel.length > 1) { toast('A Számlázz.hu végszámlája egy előlegszámlára hivatkozhat – csak egyet jelölj be.', true); return; }
 			if (kind === 'final' && !advSel.length && !window.confirm('Nincs kijelölve beszámítandó előleg – sima számlaként állítod ki?')) return;
 			const tot = sumBox.textContent;
@@ -135,7 +142,7 @@
 			try {
 				const r = await post('cp_bil_issue', P);
 				toast(r.msg); close(); B.docs = r.docs.map(fix); draw(box, id, B);
-			} catch (e) { btn.disabled = false; provUi(); toast(e.message, true); }
+			} catch (e) { btn.disabled = false; provUi(); fail(e.message); toast(e.message, true); }
 		});
 	}
 	window.CPBill = { slot, mount };
@@ -150,7 +157,7 @@
 		'.bl-g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.bl-g label,.bl-row{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#6B6F78}.bl-g .w2{grid-column:span 2}.bl-g>*{min-width:0}.bl-g input,.bl-g select,.bl-row select,.bl-row textarea{width:100%;box-sizing:border-box}.bl-row{margin:4px 0}.bl-row small{color:#8A8F99}' +
 		'.bl-body input,.bl-body select,.bl-body textarea{font:14px Inter,sans-serif;border:1px solid #DDD9D2;border-radius:8px;padding:7px 8px;min-width:0;color:#141C33;background:#fff}' +
 		'.bl-ih,.bl-it{display:grid;grid-template-columns:minmax(0,3fr) 70px 80px 110px 84px 76px 30px;gap:6px;align-items:center}.bl-ih{font-size:11.5px;color:#8A8F99;padding:0 2px 2px}.bl-it{margin-bottom:8px}.bl-it .bl-ic{grid-column:1 / -2;font-size:12.5px;padding:5px 8px}' +
-		'.bl-del{border:0;background:#F3F1ED;border-radius:8px;height:32px;cursor:pointer}.bl-sum{margin:8px 0;font-size:14px}.bl-note{background:#FFF6E5;border-radius:10px;padding:8px 10px;margin:8px 0}' +
+		'.bl-errbox{margin:12px 0 4px;background:#FDECEA;color:#9B2C1F;border:1px solid #F3B6AE;border-radius:10px;padding:10px 12px;font-weight:600}.bl-body input.bad{border-color:#D93025;background:#FFF5F4}.bl-del{border:0;background:#F3F1ED;border-radius:8px;height:32px;cursor:pointer}.bl-sum{margin:8px 0;font-size:14px}.bl-note{background:#FFF6E5;border-radius:10px;padding:8px 10px;margin:8px 0}' +
 		'.bl-chk{display:flex;gap:8px;align-items:center;margin:4px 0;font-size:14px;color:#141C33}.bl-chk input{margin:0}' +
 		'.bl-card footer{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px;border-top:1px solid #EEEAE4}.bl-card footer span{margin-right:auto;font-size:12px}' +
 		'@media (max-width:760px){.bl-mod{align-items:flex-end}.bl-card{width:100vw;max-height:92vh;border-radius:18px 18px 0 0}.bl-g{grid-template-columns:1fr 1fr}.bl-ih{display:none}.bl-it{grid-template-columns:1fr 1fr 1fr;border:1px solid #EEEAE4;border-radius:10px;padding:8px}.bl-it [data-k="name"],.bl-it .bl-ic{grid-column:1 / -1}.bl-card footer span{display:none}}';
