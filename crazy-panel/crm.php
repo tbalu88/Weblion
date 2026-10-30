@@ -245,7 +245,7 @@ function cp_crm_users($refresh = false) {
 		$list = array();
 		foreach ($r['Data'] as $x) {
 			if (!isset($x['id'])) { continue; }
-			$list[(int) $x['id']] = array('n' => trim((isset($x['firstName']) ? $x['firstName'] : '') . ' ' . (isset($x['lastName']) ? $x['lastName'] : '')), 'a' => !empty($x['status']) ? 1 : 0);
+			$list[(int) $x['id']] = array('n' => trim((isset($x['firstName']) ? $x['firstName'] : '') . ' ' . (isset($x['lastName']) ? $x['lastName'] : '')), 'a' => (isset($x['isActive']) ? !empty($x['isActive']) : !empty($x['status'])) ? 1 : 0); /* a Salesmate az „isActive” mezőben adja */
 		}
 	}
 	update_option('cp_crm_users', array('t' => time(), 'list' => $list), false);
