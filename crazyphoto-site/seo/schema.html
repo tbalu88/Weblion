@@ -1,0 +1,41 @@
+<!-- Crazyphoto: szolgáltatás és csomagárak strukturált adatként (AI-láthatóság). Beillesztés: a fejlécbe (head), minden oldalon. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://crazyphoto.hu/#organization",
+      "name": "Crazyphoto",
+      "url": "https://crazyphoto.hu/",
+      "description": "Prémium fotóautomata (szelfigép) bérlés esküvőkre, születésnapokra, céges és privát rendezvényekre, Budapesten és országosan.",
+      "email": "info@crazyphoto.hu",
+      "telephone": "+36308441791",
+      "areaServed": { "@type": "Country", "name": "Magyarország" },
+      "contactPoint": { "@type": "ContactPoint", "contactType": "customer service", "telephone": "+36308441791", "email": "info@crazyphoto.hu", "availableLanguage": ["hu", "en"] },
+      "sameAs": ["https://www.facebook.com/crazyphoto.hu", "https://instagram.com/crazyphoto.hu", "https://eventcrazy.hu/"]
+    },
+    {
+      "@type": "Service",
+      "@id": "https://crazyphoto.hu/#service",
+      "name": "Fotóautomata (szelfigép) bérlés",
+      "serviceType": "Fotóautomata bérlés",
+      "description": "Érintőkijelzős fotóautomata tükörreflexes fényképezővel, stúdióvakuval és laborminőségű nyomtatóval. Minden csomagban korlátlan fotózás és nyomtatás, online galéria, választható fotófal, kellékszett és végig jelen lévő kezelő.",
+      "url": "https://crazyphoto.hu/",
+      "provider": { "@id": "https://crazyphoto.hu/#organization" },
+      "areaServed": { "@type": "Country", "name": "Magyarország" },
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Lakossági csomagajánlatok (alanyi adómentes, max. 150 fős rendezvényig)",
+        "itemListElement": [
+          { "@type": "Offer", "name": "Mini – 3 óra", "price": "99990", "priceCurrency": "HUF", "url": "https://crazyphoto.hu/" },
+          { "@type": "Offer", "name": "Medium Party – 4 óra", "price": "119990", "priceCurrency": "HUF", "url": "https://crazyphoto.hu/" },
+          { "@type": "Offer", "name": "Mega Party – 5 óra", "price": "139990", "priceCurrency": "HUF", "url": "https://crazyphoto.hu/" },
+          { "@type": "Offer", "name": "Carneval – 6 óra", "price": "159990", "priceCurrency": "HUF", "url": "https://crazyphoto.hu/" },
+          { "@type": "Offer", "name": "Extra óra", "price": "30000", "priceCurrency": "HUF", "url": "https://crazyphoto.hu/" }
+        ]
+      }
+    }
+  ]
+}
+</script>
