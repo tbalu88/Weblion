@@ -362,4 +362,23 @@
   .ml-qas>button[disabled]{opacity:.45;cursor:not-allowed}
   .ml-qas>button svg{width:20px;height:20px;flex:none;fill:none;stroke:#2F6FDB;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .ml-qas small{display:block;padding:4px 22px 0;color:var(--mu);font-size:12.5px}
+  /* v1.61.1: a levélíró ne lógjon ki oldalra; egysoros, görgethető gombsor */
+  .ml.v-compose .ml-note{display:none}
+  .ml-compose{max-width:100%;overflow-x:clip}
+  .ml-row{min-width:0}
+  .ml-chips{min-width:0}
+  .ml-chips input{min-width:60px}
+  .ml-chip{max-width:100%;min-width:0;overflow-wrap:anywhere;font-size:14px}
+  .ml-row .ml-link{font-size:12.5px;white-space:normal;text-align:right;max-width:72px;flex:none}
+  .ml-ctop>*{min-width:0;max-width:100%}
+  .ml-ed,.ml-area{max-width:100%;min-width:0}
+  .ml-area{overflow-x:auto}
+  .ml-area table{max-width:100%}
+  .ml-area{min-height:calc(100vh - 300px);min-height:calc(100dvh - 300px)}
+  .ml-send{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:10px 12px}
+  .ml-send::-webkit-scrollbar{display:none}
+  .ml-send>*{flex:none}
+  .ml-send .cpx-btn{height:38px;font-size:14px;padding:0 14px}
+  .ml-send .cpx-btn[disabled][title="Később"]{display:none}
 }
+
