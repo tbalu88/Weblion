@@ -23,7 +23,7 @@
 		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3500);
 	}
-	const SECS = [['me', 'Saját beállításaim', 0], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1], ['mail', 'Levelezés', 1], ['ai', 'AI', 1], ['panel', 'Salesmate és hátterek', 1], ['cut', 'Átállás', 1], ['wp', 'A WordPressben maradt', 1]];
+	const SECS = [['me', 'Saját beállításaim', 0], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1], ['mail', 'Levelezés', 1], ['ai', 'AI', 1], ['panel', 'Salesmate és hátterek', 1], ['cut', 'Átállás', 1], ['ct', 'Szerződésmodulok', 1], ['wp', 'A WordPressben maradt', 1]];
 	const secret = (name, has, ph) => '<input type="password" data-k="' + name + '" autocomplete="new-password" placeholder="' + esc(has ? 'beállítva – csak cseréhez írd be az újat' : ph) + '">' + (has ? '<label class="cs-chk"><input type="checkbox" data-k="' + name + '_clear"> törlés</label>' : '');
 	const sw = (k, on, label) => '<label class="cs-sw"><input type="checkbox" data-k="' + k + '"' + (on ? ' checked' : '') + '><span></span>' + label + '</label>';
 	const val = (box, k) => { const el = box.querySelector('[data-k="' + k + '"]'); if (!el) return ''; return el.type === 'checkbox' ? (el.checked ? 1 : '') : el.value; };
@@ -40,7 +40,7 @@
 		S.main.innerHTML = '<div class="cs"><nav class="cs-nav">' + (d.admin ? '' : '') + secs.map((s, i) => (i === 1 ? '<div class="cs-navh">Adminisztráció</div>' : '') + '<button type="button" data-sec="' + s[0] + '" class="' + (S.sec === s[0] ? 'on' : '') + '">' + s[1] + '</button>').join('') + '</nav><section class="cs-body" data-body></section></div>';
 		S.main.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => { S.sec = b.dataset.sec; try { localStorage.setItem('cpx_set_sec', S.sec); } catch (e) { /* privát mód */ } draw(); }));
 		const box = S.main.querySelector('[data-body]');
-		({ me: secMe, users: secUsers, vis: secVis, notif: secNotif, mail: secMail, ai: secAi, panel: secPanel, cut: secCut, wp: secWp })[S.sec](box, d);
+		({ me: secMe, users: secUsers, vis: secVis, notif: secNotif, mail: secMail, ai: secAi, panel: secPanel, cut: secCut, ct: secCt, wp: secWp })[S.sec](box, d);
 	}
 	/* mentés: a válasz friss adataival újrarajzol; a meghívó-linket megmutatja */
 	async function save(btn, action, params, after) {
@@ -230,6 +230,40 @@
 		box.querySelector('[data-save]').addEventListener('click', e => { if (!val(box, 'stage_write') && p.stage_write && !window.confirm('Kikapcsolod a Salesmate-be írást? Ezután a panelből nem lehet módosítani.')) return; save(e.currentTarget, 'cp_set_admin', { sec: 'panel', stage_write: val(box, 'stage_write'), backgrounds: val(box, 'backgrounds'), bg_pairs: val(box, 'bg_pairs') }); });
 	}
 	/* ------------------------------------------------------------ v1.70: átállás a Salesmate-ről */
+	/* v1.78: a szerződésszerkesztő szövegei (jogi alap, szolgáltatásmodulok, kiállítók) – az alap a Drive-sablonokból, itt átírható */
+	const CTL = { targy_intro: 'A megbízás tárgya – bevezető', feladat_intro: 'Megbízott feladatai – bevezető', megbizott_common: 'Megbízott általános vállalásai', megbizo_intro: 'Megbízó feladatai – 1. bekezdés', megbizo_intro2: 'Megbízó feladatai – 2. bekezdés', transport: 'Szállítás, telepítés', parking: 'Parkolás', damage: 'Kárfelelősség ({DEV} = eszköz)', late_interest: 'Késedelmi kamat', acknowledge: 'Díjazás elfogadása', unforeseen: 'Előre nem látható kiegészítő szolgáltatások', invoice_mod: 'Számlamódosítás', contact_intro: 'Kapcsolattartás – bevezető', teljesites: 'Teljesítés ({DEV} = eszköz)', lemondas: 'Lemondás és elállás', vis: 'Vis maior', jog: 'Joghatóság', egyeb_ptk: 'Egyéb – Ptk.', gdpr: 'Adatvédelem (GDPR)', storage: 'Kép-/videótárolás ({MEDIA})', egyeb_post: 'Egyéb – titoktartás, együttműködés',
+		name: 'Megnevezés (a szerkesztőben és a szerződés alcímeként)', line: '„Szolgáltatás:” sorban', hours: 'Alap óraszám', tasks: 'Megbízott feladatai ({H} = óra)', hatter: 'Van háttérválasztás', reqs: 'Megbízó biztosítja (felsorolás)', reqs_extra: 'Megbízó – további bekezdések', transport: 'Szállítás-bekezdés kell', dev: 'Eszköz megnevezése (kárfelelősség)', tdev: 'Eszköz megnevezése (teljesítés)', teljesites: 'Egyedi teljesítés-szöveg (üres = általános)', extras: 'Kiegészítő szolgáltatások ({P:30000} = ár)', cash: 'Helyszíni készpénz megengedett', media: 'Készül kép/videó (tárolási mondat)', extra_egyeb: 'Egyéb rendelkezések – további', rows: 'Adatok (soronként: Címke | érték)', sign: 'Aláírás (soronként)', contact: 'Kapcsolattartó (1. sor név, 2. sor telefon)' };
+	const CTLL = { transport: 'Szállítás, telepítés', teljesites: 'Teljesítés ({DEV} = eszköz)' };
+	async function secCt(box, d, part) {
+		box.innerHTML = '<h2>Szerződésmodulok</h2><div class="cpx-empty">Betöltés…</div>';
+		let x;
+		try { x = await post('cp_ct_lib_get', { part: part || S.ctPart || 'legal' }); } catch (e) { box.innerHTML = '<h2>Szerződésmodulok</h2><div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		S.ctPart = x.part;
+		const toText = (k, v) => Array.isArray(v) ? (k === 'rows' ? v.map(r => r.join(' | ')).join('\n') : v.join(k === 'sign' || k === 'contact' || k === 'reqs' || k === 'tasks' ? '\n' : '\n\n')) : String(v == null ? '' : v);
+		const fromText = (k, base, t) => { if (Array.isArray(base)) { if (k === 'rows') return t.split('\n').map(l => l.split('|').map(z => z.trim())).filter(r => r[0]); return (k === 'sign' || k === 'contact' || k === 'reqs' || k === 'tasks' ? t.split('\n') : t.split(/\n\s*\n/)).map(z => z.trim()).filter(Boolean); } if (typeof base === 'boolean') return t; if (typeof base === 'number') return Number(t); return t; };
+		const field = f => {
+			const lab = (x.part.indexOf('legal') === 0 && CTLL[f.k]) || CTL[f.k] || f.k, ov = f.over ? ' <span class="cs-tag">átírva</span>' : '';
+			let inp;
+			if (typeof f.base === 'boolean') inp = '<label class="cs-chk"><input type="checkbox" data-ctf="' + f.k + '"' + (f.v ? ' checked' : '') + '> igen</label>';
+			else if (f.k === 'media') inp = '<select data-ctf="media">' + [['', 'nincs'], ['kep', 'képek'], ['video', 'videók'], ['kepvideo', 'képek és videók']].map(o => '<option value="' + o[0] + '"' + (f.v === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
+			else if (typeof f.base === 'number') inp = '<input type="number" min="1" max="24" data-ctf="' + f.k + '" value="' + esc(f.v) + '" style="width:90px">';
+			else { const t = toText(f.k, f.v); inp = '<textarea data-ctf="' + f.k + '" rows="' + Math.min(14, Math.max(2, Math.ceil(t.length / 90) + (t.match(/\n/g) || []).length)) + '">' + esc(t) + '</textarea>'; }
+			return '<div class="cs-card ct-ed" data-row="' + f.k + '"><div class="ct-edh"><b>' + esc(lab) + '</b>' + ov + '</div>' + inp + '<div class="cs-bar"><button type="button" class="cpx-btn" data-ctsave="' + f.k + '">Mentés</button>' + (f.over ? '<button type="button" class="cpx-btn ghost" data-ctreset="' + f.k + '">Vissza az alapra</button>' : '') + '</div></div>';
+		};
+		box.innerHTML = '<style>.ct-ed textarea{width:100%;box-sizing:border-box;font:14px/1.45 Inter,sans-serif;border:1px solid #DDD9D2;border-radius:8px;padding:8px}.ct-edh{margin-bottom:6px}.cs-tag{background:#FFF1CC;color:#8A6400;border-radius:8px;padding:1px 7px;font-size:11.5px;margin-left:6px}[data-ctpart]{display:block;margin-top:4px;max-width:100%;font:14px Inter,sans-serif;padding:6px}</style><h2>Szerződésmodulok</h2><p class="cs-note">Itt írhatod át a szerződésszerkesztő szövegeit. Az alap a Drive-on lévő sablonokból jön; amit átírsz, az „átírva” jelölést kap, és a „Vissza az alapra” gombbal visszaállítható. A <b>{H}</b> (óraszám), <b>{P:30000}</b> (ár – kft.-nél nettó + ÁFA, egyéni vállalkozónál AAM bruttó formában íródik ki), <b>{DEV}</b> (eszköz) és <b>{MEDIA}</b> jelöléseket a panel tölti ki – ezeket hagyd benne. A felsorolásoknál soronként egy tétel, a bekezdéseknél üres sor választja el őket.' + (x.n_over ? ' Átírt mezők összesen: <b>' + x.n_over + '</b>.' : '') + '</p>' +
+			'<div class="cs-card"><label>Melyik rész?<select data-ctpart>' + x.parts.map(p => '<option value="' + esc(p[0]) + '"' + (p[0] === x.part ? ' selected' : '') + '>' + esc(p[1]) + '</option>').join('') + '</select></label></div>' + x.fields.map(field).join('');
+		box.querySelector('[data-ctpart]').addEventListener('change', e => secCt(box, d, e.target.value));
+		box.querySelectorAll('[data-ctsave]').forEach(b => b.addEventListener('click', async () => {
+			const f = x.fields.find(z => z.k === b.dataset.ctsave), el = box.querySelector('[data-ctf="' + f.k + '"]');
+			const v = el.type === 'checkbox' ? el.checked : fromText(f.k, f.base, el.value);
+			b.disabled = true;
+			try { const r = await post('cp_ct_lib_set', { part: x.part, field: f.k, value: JSON.stringify(v) }); toast(r.msg, r.warn); secCt(box, d, x.part); } catch (e) { b.disabled = false; toast(e.message, true); }
+		}));
+		box.querySelectorAll('[data-ctreset]').forEach(b => b.addEventListener('click', async () => {
+			if (!window.confirm('Visszaállítod ezt a mezőt az eredeti (sablon) szövegre?')) return;
+			try { const r = await post('cp_ct_lib_set', { part: x.part, field: b.dataset.ctreset, reset: 1 }); toast(r.msg); secCt(box, d, x.part); } catch (e) { toast(e.message, true); }
+		}));
+	}
 	async function secCut(box) {
 		box.innerHTML = '<h2>Átállás a Salesmate-ről</h2><div class="cpx-empty">Betöltés…</div>';
 		let x;

@@ -10,13 +10,22 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+function cp_ct_over() { $o = get_option('cp_ct_over', array()); return is_array($o) ? $o : array(); }
+function cp_ct_seed() { static $S = null; if ($S === null) { $f = __DIR__ . '/contract-seed.php'; $S = is_readable($f) ? ((include $f) ?: array()) : array(); } return $S; }
 function cp_ct_lib() {
 	static $L = null;
 	if ($L !== null) { return $L; }
-	$o = get_option('cp_ct_lib');
-	if (is_array($o) && !empty($o['services'])) { $L = $o; return $L; }
 	$f = __DIR__ . '/contract-seed.php';
 	$L = is_readable($f) ? ((include $f) ?: array()) : array();
+	/* v1.78: az admin javításai (Beállítások → Szerződésmodulok) az alap fölé kerülnek – amit nem írtak át, az az alap marad */
+	foreach (cp_ct_over() as $part => $fields) {
+		foreach ((array) $fields as $fk => $v) {
+			if ($part === 'legal' || $part === 'legal_en') { if (isset($L[$part])) { $L[$part][$fk] = $v; } }
+			elseif (strpos($part, 'svc:') === 0) { $k = substr($part, 4); if (isset($L['services'][$k])) { $L['services'][$k][$fk] = $v; } }
+			elseif (strpos($part, 'svc_en:') === 0) { $k = substr($part, 7); if (isset($L['services'][$k])) { $L['services'][$k]['en'][$fk] = $v; } }
+			elseif (strpos($part, 'iss:') === 0) { $k = substr($part, 4); if (isset($L['issuers'][$k])) { $L['issuers'][$k][$fk] = $v; } }
+		}
+	}
 	return $L;
 }
 
@@ -183,6 +192,7 @@ function cp_ct_build($st) {
 	$join = function ($a) use ($and) { return count($a) > 1 ? implode(', ', array_slice($a, 0, -1)) . $and . end($a) : (string) ($a[0] ?? ''); };
 	$dev = function ($key, $list) use ($G, $lang, $join) { $d = $join($list); return $lang === 'en' ? str_replace('{DEV}', $d, $G[$key]) : cp_ct_dev($G, $key, $d); };
 	$c = $st['client']; $R = $T['cl_rows'];
+	$out[] = array('logo', $st['issuer'] === 'EV' ? 'cp' : 'ec');
 	$out[] = array('title', $T['title']);
 	$p($T['between']);
 	$out[] = array('t', $c['type'] === 'ceg' ? array(array($R['company'], $c['company']), array($R['seat'], $c['seat']), array($R['reg'], $c['reg']), array($R['tax'], $c['tax'])) : array(array($R['name'], $c['name']), array($R['address'], $c['address'])), 'party');
@@ -191,9 +201,10 @@ function cp_ct_build($st) {
 	$p($T['prov_is']);
 	$H(0);
 	$p($multi ? str_replace($T['one'], $T['many'], $G['targy_intro']) : $G['targy_intro']);
-	$p($T['svc'] . implode(', ', array_map(function ($s) { return $s['line']; }, $sel)));
-	$p($T['venue'] . $st['venue']);
-	$p($T['dt'] . trim(cp_ct_date_l($st['date'], $lang) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
+	$lb = function ($l, $v) use (&$out) { $out[] = array('b', $l . $v, mb_strlen($l)); };
+	$lb($T['svc'], implode(', ', array_map(function ($s) { return $s['line']; }, $sel)));
+	$lb($T['venue'], $st['venue']);
+	$lb($T['dt'], trim(cp_ct_date_l($st['date'], $lang) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
 	$H(1);
 	$p($G['feladat_intro']);
 	foreach ($sel as $s) {
@@ -214,7 +225,7 @@ function cp_ct_build($st) {
 	$words = $lang === 'en' ? cp_ct_words_en($sum) . ' Hungarian forints' . ($vat === 'aam' ? '' : ' plus VAT') : cp_ct_words($sum) . ' forint' . ($vat === 'aam' ? '' : ' + ÁFA');
 	if ($multi) {
 		$p($T['feeN']);
-		$out[] = array('t', array_merge(array($T['svcH']), array_map(function ($s) use ($money) { return array($s['name'], $money($s['price'])); }, $sel), array(array($T['tot'], $money($sum)))), 'grid');
+		$out[] = array('t', array_merge(array($T['svcH']), array_map(function ($s) use ($money) { return array($s['name'], $money($s['price'])); }, $sel), array(array($T['tot'], $money($sum)))), 'gridh');
 		$p(sprintf($T['feeT'], $money($sum), $words));
 	} else {
 		$p(sprintf($T['fee1'], $money($sum), $words));
@@ -222,7 +233,7 @@ function cp_ct_build($st) {
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
 	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
-	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'grid'); }
+	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'gridh'); }
 	$p($G['late_interest']);
 	$tot = $vat === 'aam' ? $money($sum + $tr) : ($lang === 'en' ? 'HUF ' . number_format($sum + $tr, 0, '.', ',') . ' net + VAT' : 'nettó ' . cp_ct_fmt($sum + $tr) . ' Ft + ÁFA');
 	$p(sprintf($T['total'], $tr > 0 ? $T['total_tr'] : '', $tot) . $G['acknowledge']);
@@ -261,77 +272,118 @@ function cp_ct_build($st) {
 }
 
 
-/* ------------------------------------------------------------ kimenetek: HTML (előnézet / nyomtatás) és Word */
+/* ------------------------------------------------------------ kimenetek: HTML (előnézet / nyomtatás) és Word
+   A forma a korábbi Word-sablonokat követi: logó a fejlécben, kiskapitális cím, keretes táblázatok,
+   „1.” fejezetcímek és „2.1” alpontok függő behúzással, ● felsorolás, piros jelölőnégyzetek, oldalszám. */
+function cp_ct_num($blocks) {
+	$sec = 0; $m = 0; $o = array();
+	foreach ($blocks as $b) {
+		$b['n'] = ''; $b['in'] = $sec > 0;
+		if ($b[0] === 'h') { $sec++; $m = 0; $b['in'] = false; if (preg_match('/^(\d+\.)\s+(.*)$/su', (string) $b[1], $x)) { $b['n'] = $x[1]; $b[1] = $x[2]; } }
+		elseif ($b[0] === 'p' && $sec > 1) { $m++; $b['n'] = $sec . '.' . $m; }
+		elseif ($b[0] === 'date' || $b[0] === 'sig') { $b['in'] = false; }
+		$o[] = $b;
+	}
+	return $o;
+}
+function cp_ct_logo($k) { static $L = null; if ($L === null) { $f = __DIR__ . '/contract-logos.php'; $L = is_readable($f) ? ((include $f) ?: array()) : array(); } return isset($L[$k]) ? (string) base64_decode($L[$k]) : ''; }
 function cp_ct_html($blocks, $print = false) {
 	$e = function ($s) { return esc_html((string) $s); };
 	$h = '';
-	foreach ($blocks as $x) {
+	foreach (cp_ct_num($blocks) as $x) {
+		$in = $x['in'] ? ' in' : '';
 		switch ($x[0]) {
+			case 'logo': $l = cp_ct_logo($x[1]); if ($l !== '') { $h .= '<div class="lg"><img alt="" src="data:image/png;base64,' . base64_encode($l) . '"></div>'; } break;
 			case 'title': $h .= '<h1>' . $e($x[1]) . '</h1>'; break;
-			case 'h': $h .= '<h2>' . $e($x[1]) . '</h2>'; break;
-			case 'sub': $h .= '<h3>' . $e($x[1]) . '</h3>'; break;
-			case 'p': $h .= '<p>' . nl2br($e($x[1])) . '</p>'; break;
-			case 'b': $h .= '<p class="li">•&nbsp;' . $e($x[1]) . '</p>'; break;
-			case 'chk': $h .= '<p class="chk">' . $e($x[1]) . '</p>'; break;
+			case 'h': $h .= '<h2><b class="no">' . $e($x['n']) . '</b>' . $e($x[1]) . '</h2>'; break;
+			case 'sub': $h .= '<h3 class="in">' . $e($x[1]) . '</h3>'; break;
+			case 'p': $h .= $x['n'] !== '' ? '<p class="nm"><b class="no">' . $e($x['n']) . '</b>' . nl2br($e($x[1])) . '</p>' : '<p class="' . trim($in) . '">' . nl2br($e($x[1])) . '</p>'; break;
+			case 'b': $t = (string) $x[1]; $k = (int) ($x[2] ?? 0); $h .= '<p class="li' . $in . '">' . ($k ? '<b>' . $e(mb_substr($t, 0, $k)) . '</b>' . $e(mb_substr($t, $k)) : $e($t)) . '</p>'; break;
+			case 'chk': $t = (string) $x[1]; $h .= '<p class="chk' . $in . '"><b class="bx">' . $e(mb_substr($t, 0, 1)) . '</b> <b>' . $e(ltrim(mb_substr($t, 1))) . '</b></p>'; break;
 			case 'date': $h .= '<p class="dt">' . $e($x[1]) . '</p>'; break;
-			case 't': $h .= '<table class="' . $e($x[2]) . '">' . implode('', array_map(function ($r) use ($e) { return '<tr>' . implode('', array_map(function ($c) use ($e) { return '<td>' . $e($c) . '</td>'; }, $r)) . '</tr>'; }, $x[1])) . '</table>'; break;
-			case 'sig': $h .= '<table class="sig"><tr><td>………………………………<br>' . implode('<br>', array_map($e, $x[1])) . '</td><td>………………………………<br>' . implode('<br>', array_map($e, $x[2])) . '</td></tr></table>'; break;
+			case 't': $h .= '<table class="' . ($x[2] === 'party' ? 'party' : 'grid') . ($x[2] === 'gridh' ? ' hd' : '') . $in . '">' . implode('', array_map(function ($r) use ($e) { return '<tr>' . implode('', array_map(function ($c) use ($e) { return '<td>' . $e($c) . '</td>'; }, $r)) . '</tr>'; }, $x[1])) . '</table>'; break;
+			case 'sig':
+				$c = function ($l) use ($e) { $n = count($l); $o = ''; foreach ($l as $i => $s) { $o .= '<br>' . ($i === 0 || $i === $n - 1 ? '<b>' . $e($s) . '</b>' : $e($s)); } return '……………………………………' . $o; };
+				$h .= '<table class="sig"><tr><td>' . $c($x[1]) . '</td><td>' . $c($x[2]) . '</td></tr></table>'; break;
 		}
 	}
-	$R = array('h1' => 'text-align:center;font-size:18pt;margin:0 0 18px', 'h2' => 'font-size:12pt;margin:18px 0 6px', 'h3' => 'font-size:11pt;margin:10px 0 4px;text-decoration:underline', 'p' => 'margin:0 0 6px;text-align:justify', 'p.li' => 'padding-left:18px;text-indent:-12px', 'p.chk' => 'padding-left:14px', 'p.dt' => 'margin-top:18px',
-		'table' => 'border-collapse:collapse;margin:4px 0 10px', 'table.party td' => 'padding:2px 10px 2px 0;vertical-align:top', 'table.party td:first-child' => 'width:130px', 'table.grid td' => 'border:1px solid #888;padding:4px 10px', 'table.sig' => 'width:100%;margin-top:30px', 'table.sig td' => 'width:50%;text-align:center;vertical-align:top');
+	$R = array('.lg' => 'text-align:center;margin:0 0 14px', '.lg img' => 'width:122px;height:auto', 'h1' => 'text-align:center;font-size:14pt;font-variant:small-caps;margin:0 0 16px', 'h2' => 'font-size:11pt;margin:16px 0 6px;padding-left:46px;text-indent:-46px', 'b.no' => 'display:inline-block;width:46px;text-indent:0', 'h3' => 'font-size:11pt;margin:8px 0 4px;text-decoration:underline',
+		'p' => 'margin:0 0 6px;text-align:justify', 'p.nm' => 'padding-left:46px;text-indent:-46px', '.in' => 'margin-left:46px', 'p.li' => 'padding-left:22px;text-indent:-22px;margin-bottom:3px', 'p.li::before' => 'content:"●";display:inline-block;width:22px;text-indent:0;font-size:8pt;vertical-align:1px', 'p.li.in' => 'margin-left:66px', 'p.chk' => 'margin-bottom:2px', 'b.bx' => 'color:#e00', 'p.dt' => 'margin-top:28px;break-after:avoid',
+		'table' => 'border-collapse:collapse;margin:4px 0 10px;width:100%', 'table.in' => 'width:calc(100% - 46px)', 'table td' => 'border:1px solid #000;padding:2px 6px;vertical-align:top', 'table.party td:first-child' => 'width:32%', 'table.grid td' => 'width:50%', 'table.hd tr:first-child td' => 'font-weight:700', 'table.sig' => 'width:100%;margin-top:34px;break-inside:avoid', 'table.sig td' => 'border:0;width:50%;text-align:center;vertical-align:top');
 	$scope = $print ? '' : '.ct-doc ';
-	$css = '.ct-doc{font:11pt/1.45 Calibri,Arial,sans-serif;color:#111;max-width:760px;margin:0 auto;padding:28px 34px;background:#fff}';
+	$css = '.ct-doc{font:11pt/1.42 Calibri,Carlito,Arial,sans-serif;color:#000;max-width:800px;margin:0 auto;padding:26px 30px;background:#fff}';
 	foreach ($R as $sel => $dec) { $css .= $scope . $sel . '{' . $dec . '}'; }
 	/* az előnézet a panel oldalán jelenik meg: a panel stílusai ne hassanak rá */
-	if (!$print) { $css .= '.ct-doc h1,.ct-doc h2,.ct-doc h3,.ct-doc p,.ct-doc td{font-family:Calibri,Arial,sans-serif;color:#111;line-height:1.45;letter-spacing:0;font-weight:400}.ct-doc p,.ct-doc td{font-size:11pt}.ct-doc h1,.ct-doc h2,.ct-doc h3{font-weight:700}.ct-doc h1{font-size:18pt}.ct-doc h2{font-size:12pt}.ct-doc h3{font-size:11pt}'; }
+	if (!$print) { $css .= '.ct-doc h1,.ct-doc h2,.ct-doc h3,.ct-doc p,.ct-doc td{font-family:Calibri,Carlito,Arial,sans-serif;color:#000;line-height:1.42;letter-spacing:0;font-weight:400}.ct-doc p,.ct-doc td,.ct-doc h2,.ct-doc h3{font-size:11pt}.ct-doc h1,.ct-doc h2,.ct-doc h3,.ct-doc b{font-weight:700}.ct-doc h1{font-size:14pt}.ct-doc table.hd tr:first-child td{font-weight:700}.ct-doc b.bx{color:#e00}'; }
 	if (!$print) { return '<style>' . $css . '</style><div class="ct-doc">' . $h . '</div>'; }
 	$css .= 'body{margin:0}@media print{.ct-doc{padding:0;max-width:none}.noprint{display:none}}';
-	return '<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Megbízási szerződés</title><style>' . $css . '@page{size:A4;margin:18mm 16mm}</style></head><body><div class="noprint" style="padding:10px;text-align:center;background:#FFF6E5;font:14px Arial">Mentés PDF-ként: a nyomtatási ablakban válaszd a „Mentés PDF-ként” célt. <button onclick="window.print()">Nyomtatás / PDF</button></div><div class="ct-doc">' . $h . '</div><script>setTimeout(function(){window.print()},400)</script></body></html>';
+	return '<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Megbízási szerződés</title><style>' . $css . '@page{size:A4;margin:16mm 15mm 18mm}</style></head><body><div class="noprint" style="padding:10px;text-align:center;background:#FFF6E5;font:14px Arial">Mentés PDF-ként: a nyomtatási ablakban válaszd a „Mentés PDF-ként” célt. <button onclick="window.print()">Nyomtatás / PDF</button></div><div class="ct-doc">' . $h . '</div><script>setTimeout(function(){window.print()},400)</script></body></html>';
 }
+
 function cp_ct_docx($blocks) {
 	if (!class_exists('ZipArchive')) { return new WP_Error('cp_ct', 'A szerveren nincs ZipArchive – Word-fájl nem készíthető.'); }
 	$x = function ($s) { return htmlspecialchars((string) $s, ENT_XML1 | ENT_QUOTES, 'UTF-8'); };
-	$run = function ($t, $bold = false, $size = 0, $u = false) use ($x) {
-		$pr = ($bold ? '<w:b/>' : '') . ($u ? '<w:u w:val="single"/>' : '') . ($size ? '<w:sz w:val="' . $size . '"/>' : '');
-		$parts = explode("\n", (string) $t); $o = '';
-		foreach ($parts as $i => $pt) { $o .= ($i ? '<w:r><w:br/></w:r>' : '') . '<w:r>' . ($pr ? '<w:rPr>' . $pr . '</w:rPr>' : '') . '<w:t xml:space="preserve">' . $x($pt) . '</w:t></w:r>'; }
-		return $o;
+	/* $o: b (félkövér), u (aláhúzás), sz (méret, fél pont), caps (kiskapitális), red (piros) */
+	$run = function ($t, $o = array()) use ($x) {
+		$pr = (!empty($o['b']) ? '<w:b/><w:bCs/>' : '') . (!empty($o['caps']) ? '<w:smallCaps/>' : '') . (!empty($o['red']) ? '<w:color w:val="FF0000"/>' : '') . (!empty($o['u']) ? '<w:u w:val="single"/>' : '') . (!empty($o['sz']) ? '<w:sz w:val="' . $o['sz'] . '"/><w:szCs w:val="' . $o['sz'] . '"/>' : '');
+		$out = '';
+		foreach (explode("\n", (string) $t) as $i => $pt) { $out .= '<w:r>' . ($pr ? '<w:rPr>' . $pr . '</w:rPr>' : '') . ($i ? '<w:br/>' : '') . '<w:t xml:space="preserve">' . $x($pt) . '</w:t></w:r>'; }
+		return $out;
 	};
+	$tab = '<w:r><w:tab/></w:r>';
 	$par = function ($runs, $ppr = '') { return '<w:p>' . ($ppr ? '<w:pPr>' . $ppr . '</w:pPr>' : '') . $runs . '</w:p>'; };
-	$tbl = function ($rows, $grid) use ($run, $par) {
-		$b = $grid ? '<w:tblBorders><w:top w:val="single" w:sz="4" w:color="888888"/><w:left w:val="single" w:sz="4" w:color="888888"/><w:bottom w:val="single" w:sz="4" w:color="888888"/><w:right w:val="single" w:sz="4" w:color="888888"/><w:insideH w:val="single" w:sz="4" w:color="888888"/><w:insideV w:val="single" w:sz="4" w:color="888888"/></w:tblBorders>' : '';
-		$o = '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>' . $b . '<w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="' . ($grid ? 4500 : 2600) . '"/><w:gridCol w:w="' . ($grid ? 4500 : 6400) . '"/></w:tblGrid>';
-		foreach ($rows as $r) { $o .= '<w:tr>'; foreach ($r as $c) { $o .= '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>' . $par($run($c), '<w:spacing w:after="40"/>') . '</w:tc>'; } $o .= '</w:tr>'; }
-		return $o . '</w:tbl>' . $par('', '<w:spacing w:after="60"/>');
+	$IN = 700; $TW = 10206; /* behúzás és szövegszélesség (A4, 1,5 cm-es oldalmargó) */
+	$bd = '<w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>';
+	$tbl = function ($rows, $kind, $in) use ($run, $par, $bd, $IN, $TW) {
+		$w = $TW - ($in ? $IN : 0); $cw = $kind === 'party' ? array(3200, $w - 3200) : array(intdiv($w, 2), $w - intdiv($w, 2));
+		$o = '<w:tbl><w:tblPr><w:tblW w:w="' . $w . '" w:type="dxa"/>' . ($in ? '<w:tblInd w:w="' . $IN . '" w:type="dxa"/>' : '') . $bd . '<w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="20" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="' . $cw[0] . '"/><w:gridCol w:w="' . $cw[1] . '"/></w:tblGrid>';
+		foreach ($rows as $ri => $r) { $o .= '<w:tr>'; foreach (array_values($r) as $ci => $c) { $o .= '<w:tc><w:tcPr><w:tcW w:w="' . $cw[min($ci, 1)] . '" w:type="dxa"/></w:tcPr>' . $par($run($c, array('b' => $kind === 'gridh' && $ri === 0)), '<w:spacing w:before="0" w:after="0" w:line="252" w:lineRule="auto"/><w:jc w:val="left"/>') . '</w:tc>'; } $o .= '</w:tr>'; }
+		return $o . '</w:tbl>' . $par('', '<w:spacing w:before="0" w:after="0" w:line="120" w:lineRule="exact"/>');
 	};
-	$body = '';
-	foreach ($blocks as $b) {
+	$body = ''; $logo = '';
+	foreach (cp_ct_num($blocks) as $b) {
+		$ind = $b['in'] ? '<w:ind w:left="' . $IN . '"/>' : '';
 		switch ($b[0]) {
-			case 'title': $body .= $par($run($b[1], true, 32), '<w:jc w:val="center"/><w:spacing w:after="240"/>'); break;
-			case 'h': $body .= $par($run($b[1], true, 24), '<w:keepNext/><w:spacing w:before="240" w:after="80"/>'); break;
-			case 'sub': $body .= $par($run($b[1], true, 0, true), '<w:keepNext/><w:spacing w:before="120" w:after="40"/>'); break;
-			case 'p': $body .= $par($run($b[1]), '<w:jc w:val="both"/><w:spacing w:after="80"/>'); break;
-			case 'b': $body .= $par($run('•  ' . $b[1]), '<w:ind w:left="360" w:hanging="240"/><w:spacing w:after="40"/>'); break;
-			case 'chk': $body .= $par($run($b[1]), '<w:ind w:left="240"/><w:spacing w:after="40"/>'); break;
-			case 'date': $body .= $par($run($b[1]), '<w:spacing w:before="360" w:after="120"/>'); break;
-			case 't': $body .= $tbl($b[1], $b[2] === 'grid'); break;
+			case 'logo': $logo = cp_ct_logo($b[1]); $lk = $b[1]; break;
+			case 'title': $body .= $par($run($b[1], array('b' => 1, 'caps' => 1, 'sz' => 28)), '<w:jc w:val="center"/><w:spacing w:before="120" w:after="240"/>'); break;
+			case 'h': $body .= $par($run($b['n'], array('b' => 1)) . $tab . $run($b[1], array('b' => 1)), '<w:keepNext/><w:tabs><w:tab w:val="left" w:pos="' . $IN . '"/></w:tabs><w:spacing w:before="240" w:after="60"/><w:ind w:left="' . $IN . '" w:hanging="' . $IN . '"/><w:jc w:val="left"/>'); break;
+			case 'sub': $body .= $par($run($b[1], array('b' => 1, 'u' => 1)), '<w:keepNext/><w:spacing w:before="120" w:after="40"/>' . $ind); break;
+			case 'p':
+				if ($b['n'] !== '') { $body .= $par($run($b['n'], array('b' => 1)) . $tab . $run($b[1]), '<w:tabs><w:tab w:val="left" w:pos="' . $IN . '"/></w:tabs><w:spacing w:before="120"/><w:ind w:left="' . $IN . '" w:hanging="' . $IN . '"/><w:jc w:val="both"/>'); }
+				else { $body .= $par($run($b[1]), '<w:spacing w:before="120"/>' . $ind . '<w:jc w:val="both"/>'); }
+				break;
+			case 'b':
+				$l = ($b['in'] ? $IN : 0) + 360; $t = (string) $b[1]; $k = (int) ($b[2] ?? 0);
+				$body .= $par($run('●', array('sz' => 16)) . $tab . ($k ? $run(mb_substr($t, 0, $k), array('b' => 1)) . $run(mb_substr($t, $k)) : $run($t)), '<w:tabs><w:tab w:val="left" w:pos="' . $l . '"/></w:tabs><w:spacing w:before="40"/><w:ind w:left="' . $l . '" w:hanging="360"/><w:jc w:val="both"/>');
+				break;
+			case 'chk': $t = (string) $b[1]; $body .= $par($run(mb_substr($t, 0, 1), array('b' => 1, 'red' => 1)) . $run(' ' . ltrim(mb_substr($t, 1)), array('b' => 1)), '<w:spacing w:before="20"/>' . $ind); break;
+			case 'date': $body .= $par($run($b[1]), '<w:keepNext/><w:spacing w:before="480" w:after="240"/>'); break;
+			case 't': $body .= $tbl($b[1], $b[2], $b['in']); break;
 			case 'sig':
-				$cell = function ($lines) use ($run, $par) { return '<w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr>' . $par($run("………………………………\n" . implode("\n", $lines)), '<w:jc w:val="center"/>') . '</w:tc>'; };
-				$body .= $par('', '<w:spacing w:before="480"/>') . '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="4500"/><w:gridCol w:w="4500"/></w:tblGrid><w:tr>' . $cell($b[1]) . $cell($b[2]) . '</w:tr></w:tbl>';
+				$cell = function ($lines) use ($run, $par, $TW) { $n = count($lines); $o = $par($run('……………………………………'), '<w:jc w:val="center"/><w:spacing w:before="0"/>'); foreach ($lines as $i => $s) { $o .= $par($run($s, array('b' => $i === 0 || $i === $n - 1)), '<w:jc w:val="center"/><w:spacing w:before="0"/>'); } return '<w:tc><w:tcPr><w:tcW w:w="' . intdiv($TW, 2) . '" w:type="dxa"/></w:tcPr>' . $o . '</w:tc>'; };
+				$body .= $par('', '<w:keepNext/><w:spacing w:before="360"/>') . '<w:tbl><w:tblPr><w:tblW w:w="' . $TW . '" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="' . intdiv($TW, 2) . '"/><w:gridCol w:w="' . intdiv($TW, 2) . '"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>' . $cell($b[1]) . $cell($b[2]) . '</w:tr></w:tbl>';
 				break;
 		}
 	}
-	$doc = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' . $body . '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1021" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>';
-	$styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri" w:eastAsia="Calibri"/><w:sz w:val="22"/><w:lang w:val="hu-HU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>';
-	$ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
-	$rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
-	$drels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+	$W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+	$hdr = '';
+	if ($logo !== '') {
+		$sz = @getimagesizefromstring($logo); $cx = 1163930; $cy = $sz ? (int) round($cx * $sz[1] / $sz[0]) : 535407;
+		$hdr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ' . $W . ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' . $cx . '" cy="' . $cy . '"/><wp:docPr id="1" name="logo"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="logo.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p></w:hdr>';
+	}
+	$ftr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ' . $W . '><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>';
+	$doc = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ' . $W . '><w:body>' . $body . '<w:sectPr>' . ($hdr ? '<w:headerReference w:type="default" r:id="rId2"/>' : '') . '<w:footerReference w:type="default" r:id="rId3"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="454" w:footer="454" w:gutter="0"/></w:sectPr></w:body></w:document>';
+	$styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri" w:eastAsia="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="hu-HU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>';
+	$ct = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' . ($hdr ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : '') . '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>';
+	$R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
+	$rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' . $R . 'officeDocument" Target="word/document.xml"/></Relationships>';
+	$drels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' . $R . 'styles" Target="styles.xml"/>' . ($hdr ? '<Relationship Id="rId2" Type="' . $R . 'header" Target="header1.xml"/>' : '') . '<Relationship Id="rId3" Type="' . $R . 'footer" Target="footer1.xml"/></Relationships>';
 	$f = tempnam(get_temp_dir(), 'cpsz');
 	$z = new ZipArchive();
 	if ($z->open($f, ZipArchive::OVERWRITE) !== true) { return new WP_Error('cp_ct', 'A Word-fájl nem hozható létre.'); }
 	$z->addFromString('[Content_Types].xml', $ct); $z->addFromString('_rels/.rels', $rels); $z->addFromString('word/_rels/document.xml.rels', $drels);
-	$z->addFromString('word/document.xml', $doc); $z->addFromString('word/styles.xml', $styles);
+	$z->addFromString('word/document.xml', $doc); $z->addFromString('word/styles.xml', $styles); $z->addFromString('word/footer1.xml', $ftr);
+	if ($hdr) { $z->addFromString('word/header1.xml', $hdr); $z->addFromString('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' . $R . 'image" Target="media/logo.png"/></Relationships>'); $z->addFromString('word/media/logo.png', $logo); }
 	$z->close();
 	$data = (string) file_get_contents($f); @unlink($f);
 	return $data;
@@ -395,4 +447,62 @@ function cp_ct_ajax_file() {
 	header('Content-Type: text/html; charset=utf-8');
 	header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
 	echo cp_ct_html($blocks, true); exit;
+}
+
+/* ------------------------------------------------------------ v1.78: modulszöveg-szerkesztő (Beállítások → Szerződésmodulok, csak admin) */
+function cp_ct_edit_fields($part) {
+	if ($part === 'legal' || $part === 'legal_en') { return array_keys((array) (cp_ct_seed()[$part] ?? array())); }
+	if (strpos($part, 'svc:') === 0) { return array('name', 'line', 'hours', 'tasks', 'hatter', 'reqs', 'reqs_extra', 'transport', 'dev', 'tdev', 'teljesites', 'extras', 'cash', 'media', 'extra_egyeb'); }
+	if (strpos($part, 'svc_en:') === 0) { return array('name', 'line', 'tasks', 'reqs', 'reqs_extra', 'dev', 'tdev', 'teljesites', 'extras', 'extra_egyeb'); }
+	if (strpos($part, 'iss:') === 0) { return array('rows', 'sign', 'contact'); }
+	return array();
+}
+function cp_ct_part_val($L, $part) {
+	if ($part === 'legal' || $part === 'legal_en') { return (array) ($L[$part] ?? array()); }
+	if (strpos($part, 'svc:') === 0) { return (array) ($L['services'][substr($part, 4)] ?? array()); }
+	if (strpos($part, 'svc_en:') === 0) { return (array) ($L['services'][substr($part, 7)]['en'] ?? array()); }
+	if (strpos($part, 'iss:') === 0) { return (array) ($L['issuers'][substr($part, 4)] ?? array()); }
+	return array();
+}
+function cp_ct_ed_auth() { cp_el_auth(); cp_tab_need(array('beallitasok')); cp_admin_need(); }
+add_action('wp_ajax_nopriv_cp_ct_lib_get', 'cp_ct_ajax_lib_get');
+add_action('wp_ajax_cp_ct_lib_get', 'cp_ct_ajax_lib_get');
+function cp_ct_ajax_lib_get() {
+	cp_ct_ed_auth();
+	$L = cp_ct_lib(); $S = cp_ct_seed();
+	$parts = array(array('legal', 'Jogi alap – magyar'), array('legal_en', 'Jogi alap – angol'));
+	foreach ($S['order'] as $k) { $parts[] = array('svc:' . $k, $L['services'][$k]['name'] . ' – magyar'); $parts[] = array('svc_en:' . $k, $L['services'][$k]['name'] . ' – angol'); }
+	foreach ($L['issuers'] as $k => $i) { $parts[] = array('iss:' . $k, 'Kiállító: ' . $i['n']); }
+	$part = (string) ($_POST['part'] ?? 'legal');
+	$f = cp_ct_edit_fields($part); if (!$f) { $part = 'legal'; $f = cp_ct_edit_fields('legal'); }
+	$cur = cp_ct_part_val($L, $part); $base = cp_ct_part_val($S, $part); $ov = cp_ct_over()[$part] ?? array();
+	$fields = array();
+	foreach ($f as $k) { $fields[] = array('k' => $k, 'v' => $cur[$k] ?? '', 'base' => $base[$k] ?? '', 'over' => array_key_exists($k, $ov)); }
+	wp_send_json_success(array('parts' => $parts, 'part' => $part, 'fields' => $fields, 'n_over' => array_sum(array_map('count', cp_ct_over()))));
+}
+add_action('wp_ajax_nopriv_cp_ct_lib_set', 'cp_ct_ajax_lib_set');
+add_action('wp_ajax_cp_ct_lib_set', 'cp_ct_ajax_lib_set');
+function cp_ct_ajax_lib_set() {
+	cp_ct_ed_auth();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$part = (string) ($_POST['part'] ?? ''); $fk = (string) ($_POST['field'] ?? '');
+	if (!in_array($fk, cp_ct_edit_fields($part), true)) { cp_el_err('Ismeretlen mező.'); }
+	$O = cp_ct_over(); $warn = '';
+	if (!empty($_POST['reset'])) { unset($O[$part][$fk]); if (empty($O[$part])) { unset($O[$part]); } update_option('cp_ct_over', $O, false); wp_send_json_success(array('msg' => 'Visszaállítva az alapszövegre.')); }
+	$base = cp_ct_part_val(cp_ct_seed(), $part)[$fk] ?? '';
+	$v = json_decode(wp_unslash((string) ($_POST['value'] ?? 'null')), true);
+	$clean = function ($x) { return trim(mb_substr(sanitize_textarea_field((string) $x), 0, 4000)); };
+	if (is_bool($base)) { $v = !empty($v); }
+	elseif (is_int($base)) { $v = max(1, min(24, (int) $v)); }
+	elseif (is_array($base) && $fk === 'rows') { $v = array_values(array_filter(array_map(function ($r) use ($clean) { return is_array($r) ? array($clean($r[0] ?? ''), $clean($r[1] ?? '')) : null; }, (array) $v), function ($r) { return $r && $r[0] !== ''; })); }
+	elseif (is_array($base)) { $v = array_values(array_filter(array_map($clean, (array) $v), 'strlen')); }
+	elseif ($fk === 'media') { $v = in_array($v, array('', 'kep', 'video', 'kepvideo'), true) ? $v : ''; }
+	else { $v = $clean($v); }
+	/* a helyőrzők ({H}, {P:…}, {DEV}, {MEDIA}) maradjanak meg – különben figyelmeztet */
+	$tok = function ($x) { preg_match_all('/\{(?:H|DEV|MEDIA2?|P:\d+)\}/', is_array($x) ? wp_json_encode($x, JSON_UNESCAPED_UNICODE) : (string) $x, $m); return array_unique($m[0]); };
+	$miss = array_diff($tok($base), $tok($v));
+	if ($miss) { $warn = ' Figyelem: kimaradt a helyőrző: ' . implode(', ', $miss) . ' – ezek helyére a panel írja be az órát, az árat vagy az eszközt.'; }
+	$O[$part][$fk] = $v;
+	update_option('cp_ct_over', $O, false);
+	wp_send_json_success(array('msg' => 'Mentve – a következő szerződéstől érvényes.' . $warn, 'warn' => $warn !== ''));
 }

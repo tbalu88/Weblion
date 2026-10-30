@@ -1,0 +1,11 @@
+--- crazy-panel.b177.php	2026-10-30 16:54:19.778817463 +0000
++++ crazy-panel.php	2026-10-30 16:54:19.781705971 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.77.1');
++define('CP_PANEL_VER', '1.78.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
