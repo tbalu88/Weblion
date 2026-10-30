@@ -367,3 +367,7 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-drop{display:none}
 }
 
+
+/* v1.69: deal levélből */
+.crm-aist{margin:10px 0 4px;padding:8px 10px;border-radius:8px;background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83;font-size:13px}.crm-aist:empty{display:none}
+.crm-mv{display:flex;margin:6px 0 2px;color:var(--ink);font-weight:600}

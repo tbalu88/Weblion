@@ -971,8 +971,10 @@
 	}
 
 	/* ------------------------------------------------------------ új deal */
+	/* pre: szakasz neve, vagy (v1.69, levélből) { thread, msg, onCreated(id, row, moveThread) } */
 	async function newDeal(pre) {
-		pre = typeof pre === 'string' && STAGES.includes(pre) ? pre : STAGES[0];
+		const X = pre && typeof pre === 'object' ? pre : null;
+		pre = !X && typeof pre === 'string' && STAGES.includes(pre) ? pre : STAGES[0];
 		let vals = {};
 		const sh0 = sheet(sheetHead('Új deal') + '<div class="cpx-empty">Betöltés…</div>');
 		if (!sh0) return;
@@ -999,8 +1001,44 @@
 		let titleTouched = false;
 		q('title').addEventListener('input', () => { titleTouched = true; });
 		/* a deal neve magától: „[Crazyphoto] Név | dátum” (amíg kézzel át nem írod) */
-		const auto = () => { if (titleTouched) return; const n = q('c_name').value.trim(), dt = q('event_d').value; q('title').value = n ? '[Crazyphoto] ' + n + (dt ? ' | ' + dt : '') : ''; };
+		let brand = '[Crazyphoto]', yr = '';
+		const auto = () => { if (titleTouched) return; const n = q('c_name').value.trim(), dt = q('event_d').value; q('title').value = n ? brand + ' ' + n + (dt ? ' | ' + dt : (yr ? ' | ' + yr : '')) : ''; };
 		q('c_name').addEventListener('input', auto); q('event_d').addEventListener('input', auto); q('event_d').addEventListener('change', auto);
+		/* v1.69: deal egy levélből – ismert adatok azonnal, az AI-kiolvasás utána (csak az üres mezőkbe) */
+		if (X) {
+			form.querySelector('.crm-ebar').insertAdjacentHTML('beforebegin', '<p class="crm-aist" data-aist>Az adatok betöltése a levélből…</p><label class="crm-chk crm-mv"><input type="checkbox" data-mv checked> <span>A levélszál az új dealhez kerüljön</span></label>');
+			const touched = new Set();
+			form.querySelectorAll('[data-k]').forEach(el => el.addEventListener('input', () => touched.add(el.dataset.k)));
+			const set = (k, v) => { const el = q(k); if (!el || v === '' || v == null || v === 0 || touched.has(k)) return; if (el.dataset.multi !== undefined) { const L = [].concat(v); el.querySelectorAll('input').forEach(i => { if (L.includes(i.value)) i.checked = true; }); } else if (!el.value) el.value = String(v); };
+			const st = form.querySelector('[data-aist]');
+			const load1 = async ai => {
+				const r = await post('cp_ai_deal', { thread: X.thread, msg: X.msg || 0, ai: ai ? 1 : '', svc: (vals.services_ec || []).join('|') });
+				const k = r.known;
+				if (!ai) {
+					if (k.brand) brand = k.brand;
+					['c_name', 'c_email', 'c_mobile'].forEach(f => set(f, k[f]));
+					if (k.owner_id && q('owner_id').querySelector('option[value="' + k.owner_id + '"]')) q('owner_id').value = k.owner_id;
+					const mv = form.querySelector('.crm-mv span');
+					if (k.old_deal) mv.textContent = 'A levélszál az új dealhez kerüljön (most: ' + k.old_title + ')';
+					auto();
+				}
+				return r;
+			};
+			try {
+				await load1(false);
+				st.textContent = '✨ Az AI kiolvassa a levélből a rendezvény adatait…';
+				const r = await load1(true);
+				const a = r.ai;
+				if (a) {
+					['event_d', 'start_at', 'venue', 'guests', 'hours', 'service', 'services_ec'].forEach(f => set(f, a[f]));
+					if (!a.event_d && a.year) { yr = a.year + (a.month ? '-' + String(a.month).padStart(2, '0') : ''); }
+					const when = a.event_d ? '' : (a.year ? 'Időpont: ' + a.year + (a.month ? '. ' + ['január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december'][a.month - 1] : '') + ' (pontos dátum még nincs)' : 'Időpont: még nincs megadva');
+					set('note', [a.event_type ? 'Rendezvény: ' + a.event_type : '', when, a.summary, 'Forrás: levél – „' + r.known.subject + '”'].filter(Boolean).join('\n'));
+					auto();
+					st.textContent = '✨ Az AI kitöltötte, amit a levélből ki tudott olvasni – kérlek, ellenőrizd mentés előtt.';
+				} else st.textContent = r.aierr ? 'Az AI-kiolvasás nem sikerült (' + r.aierr + ') – a többit töltsd ki kézzel.' : (r.ai_on ? '' : 'Az AI nincs bekapcsolva – a levél adatait töltsd ki kézzel.');
+			} catch (er) { st.textContent = er.message; }
+		}
 		form.addEventListener('submit', async e => {
 			e.preventDefault();
 			const msg = sh0.querySelector('.crm-emsg');
@@ -1013,6 +1051,7 @@
 			try {
 				const r = await post('cp_crm_create', { d: JSON.stringify(d) });
 				toast('A deal létrejött (#' + r.id + ') – a Salesmate-ben is.');
+				if (X && X.onCreated) { const mv = form.querySelector('[data-mv]'); try { await X.onCreated(r.id, r.row, !!(mv && mv.checked)); } catch (er) { toast(er.message, true); } }
 				load();
 				openDeal(r.id);
 			} catch (err) { btn.disabled = false; msg.textContent = err.message; msg.className = 'crm-emsg err'; }
@@ -1039,5 +1078,5 @@
 
 	/* mélylink: #deals:leads = a Megkeresések nézet */
 	function deep(arg) { if (arg === 'leads') { S.mode = 'board'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
-	window.CPCrm = { view, status, refresh, open: id => openDeal(id), contact: id => openContact(id), company: id => openCompany(id), deep };
+	window.CPCrm = { view, status, refresh, newDeal, open: id => openDeal(id), contact: id => openContact(id), company: id => openCompany(id), deep };
 })();

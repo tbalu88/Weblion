@@ -517,12 +517,19 @@
 			const old = rd.querySelector('.ml-mmenu'); if (old) { old.remove(); if (old._b === b) return; }
 			const it = tl[Number(b.dataset.mmore)], m = it && it.m; if (!m) return;
 			const pop = document.createElement('div'); pop.className = 'ml-mmenu'; pop._b = b;
-			pop.innerHTML = ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>' + (t.folder === 'spam' ? '' : '<button type="button" data-k="spam">⛔ Spamnek jelölés</button>');
+			pop.innerHTML = (window.CPCrm && window.CPCrm.newDeal && C.crm && C.crm.on ? '<button type="button" data-k="deal">💼 Deal létrehozása ebből a levélből</button>' : '') + ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>' + (t.folder === 'spam' ? '' : '<button type="button" data-k="spam">⛔ Spamnek jelölés</button>');
 			b.parentNode.style.position = 'relative'; b.parentNode.appendChild(pop);
 			pop.querySelectorAll('[data-k]').forEach(x => x.addEventListener('click', async () => {
 				pop.remove();
 				const k = x.dataset.k;
-				if (k === 'fw') forward(m);
+				if (k === 'deal') {
+					/* v1.69: új deal a levélből (ismert adatok + AI), a szál kérésre átkerül alá */
+					window.CPCrm.newDeal({ thread: t.id, msg: m.id, onCreated: async (id, row, move) => {
+						if (move) await act('cp_mail_thread_set', { f: 'deal', v: String(id), _deal: { id: id, title: (row && row.title) || ('Deal #' + id), value: null, cn: (row && row.cn) || '', co: '', stage: (row && row.stage) || '' } });
+						post('cp_crm_note_add', { deal: id, body: 'Levélből létrehozva: „' + (t.subj || '') + '”' + (d && d.id && d.id !== id ? ' (előzmény: #' + d.id + ' ' + (d.title || '') + ')' : '') + '. A levelezés a panel Levelezés fülén' + (move ? ' ennél a dealnél' : '') + ' látható.' }).catch(() => {});
+					} });
+				}
+				else if (k === 'fw') forward(m);
 				else if (k === 'unread') { S.th = null; S.reading = false; bulk(box, [t.id], 'unread', ''); }
 				else if (k === 'copy') { const tmp = document.createElement('div'); tmp.innerHTML = m.body || ''; try { await navigator.clipboard.writeText(tmp.innerText.trim()); toast('A levél szövege a vágólapon.'); } catch (er) { toast('A másolás nem sikerült.', true); } }
 				else if (k === 'print') printMsg(m);
