@@ -239,7 +239,10 @@ function cp_bil_ajax_issue() {
 	set_transient($lk, 1, 60);
 	$pid = cp_bil_partner($p, $b);
 	if (is_wp_error($pid)) { delete_transient($lk); cp_el_err($pid->get_error_message(), 502); }
-	$body = array('partner_id' => $pid, 'block_id' => (int) $o['block'], 'type' => $type, 'fulfillment_date' => $ful, 'due_date' => $due, 'payment_method' => $pm, 'language' => 'hu', 'currency' => 'HUF', 'electronic' => true, 'paid' => false, 'items' => $lines, 'comment' => $cm);
+	/* v1.73.2: díjbekérőhöz a Billingo díjbekérő-tömbjét használja (ha van), minden máshoz a kiválasztott számlatömböt */
+	$blk = (int) $o['block'];
+	if ($type === 'proforma') { foreach ((array) $o['blocks'] as $x) { if (preg_match('/– proforma$/', (string) $x['n'])) { $blk = (int) $x['id']; break; } } }
+	$body = array('partner_id' => $pid, 'block_id' => $blk, 'type' => $type, 'fulfillment_date' => $ful, 'due_date' => $due, 'payment_method' => $pm, 'language' => 'hu', 'currency' => 'HUF', 'electronic' => true, 'paid' => false, 'items' => $lines, 'comment' => $cm);
 	if ((int) $o['bank'] > 0) { $body['bank_account_id'] = (int) $o['bank']; }
 	if ($adv) { $body['advance_invoice'] = $adv; }
 	if (!empty($b['po'])) { $body['settings'] = array('order_number' => mb_substr(sanitize_text_field((string) $b['po']), 0, 60)); }
