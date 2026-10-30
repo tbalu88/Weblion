@@ -67,11 +67,14 @@ function cp_gcal_desc_html($d) {
 	if (!preg_match('/<[a-z][^>]*>/i', $d)) { return nl2br(esc_html($d)); }
 	return wp_kses($d, array('a' => array('href' => true), 'b' => array(), 'strong' => array(), 'i' => array(), 'em' => array(), 'u' => array(), 'br' => array(), 'p' => array(), 'ul' => array(), 'ol' => array(), 'li' => array(), 'span' => array()));
 }
-function cp_gcal_pen($t) { return strpos((string) $t, '✏') !== false; }
+/* ceruzás bejegyzés: „[Ceruzás] ” a cím elején (a korábbi Salesmate-automatizmus jelölése; v1.72-től a panel teszi fel / veszi le) */
+define('CP_GCAL_PEN', '[Ceruzás] ');
+function cp_gcal_pen($t) { return mb_stripos((string) $t, '[ceruzás]') !== false || strpos((string) $t, '✏') !== false; }
+function cp_gcal_unpen($t) { return trim(preg_replace('/^\s*(\[ceruzás\]|✏️?)\s*/iu', '', (string) $t)); }
 
 /* nyers lista a tartományra (helyi dátumok, a „to” napot is beleértve); 90 mp-ig tárolva */
 function cp_gcal_events($from, $to, $force = false) {
-	$ck = 'cp_gcal_l_' . md5($from . '|' . $to . '|' . cp_gcal_opts()['cal']);
+	$ck = 'cp_gcal_l_' . md5($from . '|' . $to . '|' . cp_gcal_opts()['cal'] . '|' . (int) get_option('cp_gcal_gen', 0));
 	if (!$force) { $c = get_transient($ck); if (is_array($c)) { return $c; } }
 	$tz = wp_timezone();
 	$a = new DateTime($from . ' 00:00:00', $tz); $b = new DateTime($to . ' 00:00:00', $tz); $b->modify('+1 day');
@@ -150,7 +153,7 @@ function cp_gcal_plan($id) {
 	if ((int) $d['guests'] > 0) { $x[] = ' - Létszám: ' . (int) $d['guests'] . ' fő'; }
 	if ($x) { $L[] = '<br>Egyéb:<br>' . implode('<br>', $x); }
 	$L[] = '------------------------------------------------------------------------<br>bruttó = nettó + ÁFA<br>Hosszabbítás nettó 30 000 Ft / óra + ÁFA<br>Készenlét nettó  10 000 Ft / óra + ÁFA<br>Áttelepítés nettó  10 000 Ft / alkalom +ÁFA';
-	return array('title' => trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date, /* v1.71.1: a naptárban a deal neve a cím */ 'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L));
+	return array('title' => ($pen ? CP_GCAL_PEN : '') . (trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date), /* v1.71.1: a naptárban a deal neve a cím */ 'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L));
 }
 
 /* ------------------------------------------------------------ Naptár fül */
@@ -235,6 +238,78 @@ function cp_gcal_shadow() {
 	}
 }
 
+/* ------------------------------------------------------------ v1.72: ceruzás jelölés a panelből (a Salesmate-automatizmus leállt)
+ * „Szerződés kiküldve” → „[Ceruzás] ” a cím elé; továbblépéskor le; ha 3 óra után sincs bejegyzés, a panel létrehozza.
+ * Elvesztett deal bejegyzéséhez nem nyúl. Minden írás naplózva (WordPress → Beállítások → Crazy Google Naptár). */
+function cp_gcal_pen_on() { return !empty(cp_gcal_opts()['pen']); }
+function cp_gcal_wlog($a, $deal, $t) {
+	$l = get_option('cp_gcal_wlog', array()); if (!is_array($l)) { $l = array(); }
+	array_unshift($l, array('at' => time(), 'a' => $a, 'deal' => (int) $deal, 't' => mb_substr((string) $t, 0, 160)));
+	update_option('cp_gcal_wlog', array_slice($l, 0, 150), false);
+}
+function cp_gcal_body($p) {
+	$tz = wp_timezone();
+	$b = array('summary' => $p['title'], 'location' => $p['loc'], 'description' => $p['desc']);
+	if ($p['start'] !== '') {
+		$s = new DateTime($p['date'] . ' ' . $p['start'], $tz);
+		$e = clone $s; if ($p['end'] === '24:00') { $e = new DateTime($p['date'] . ' 00:00', $tz); $e->modify('+1 day'); } elseif ($p['end'] !== '') { $e = new DateTime($p['date'] . ' ' . $p['end'], $tz); if ($e <= $s) { $e->modify('+1 day'); } } else { $e->modify('+4 hours'); }
+		$b['start'] = array('dateTime' => $s->format(DATE_RFC3339), 'timeZone' => $tz->getName()); $b['end'] = array('dateTime' => $e->format(DATE_RFC3339), 'timeZone' => $tz->getName());
+	} else {
+		$b['start'] = array('date' => $p['date']); $b['end'] = array('date' => gmdate('Y-m-d', strtotime($p['date'] . ' 00:00:00 UTC') + DAY_IN_SECONDS));
+	}
+	return $b;
+}
+/* $dry: csak kiszámolja, mit tenne (darabszámok + deal-azonosítók) */
+function cp_gcal_pen_sync($dry = false) {
+	if (!cp_gcal_ok() || !function_exists('cp_crm_t') || (!$dry && !cp_gcal_pen_on())) { return null; }
+	if (!$dry && get_transient('cp_gcal_pen_lock')) { return null; }
+	if (!$dry) { set_transient('cp_gcal_pen_lock', 1, 300); }
+	global $wpdb;
+	$from = wp_date('Y-m-d'); $to = wp_date('Y-m-d', time() + 400 * DAY_IN_SECONDS);
+	$ev = cp_gcal_events($from, $to, true);
+	if (is_wp_error($ev)) { if (!$dry) { delete_transient('cp_gcal_pen_lock'); } return $ev; }
+	$deals = cp_gcal_deals($from, $to); list($bd, $bi) = cp_gcal_index($deals);
+	$PEN = cp_gcal_stages()[0];
+	$later = array('Szerződés aláírva', 'Adatlap kiküldve', 'Rendezvény felkészül', 'Pénzre várunk', 'Rendezvény lement (G&R)');
+	$out = array('add' => array(), 'remove' => array(), 'create' => array(), 'wait' => array(), 'err' => array());
+	$has = array();
+	foreach ($ev as $e) {
+		$id = cp_gcal_match($e, $bd, $bi); if (!$id) { continue; }
+		$d = $bi[$id]; $has[$id] = 1;
+		if ($d['status'] !== 'Open') { continue; }
+		$pen = cp_gcal_pen($e['t']); $new = null; $k = '';
+		if ($d['stage'] === $PEN && !$pen) { $new = CP_GCAL_PEN . $e['t']; $k = 'add'; }
+		elseif ($pen && in_array($d['stage'], $later, true)) { $new = cp_gcal_unpen($e['t']); $k = 'remove'; }
+		if ($new === null) { continue; }
+		$out[$k][] = $id;
+		if ($dry) { continue; }
+		$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($e['id']), array(), array('summary' => $new));
+		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+		cp_gcal_wlog($k === 'add' ? 'ceruzás fel' : 'ceruzás le', $id, $new);
+	}
+	$made = get_option('cp_gcal_made', array()); if (!is_array($made)) { $made = array(); }
+	foreach ($deals as $d) {
+		$id = (int) $d['id'];
+		if (isset($has[$id]) || $d['stage'] !== $PEN || $d['status'] !== 'Open' || $d['event_d'] < $from || isset($made[$id])) { continue; }
+		$since = (string) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage' AND new_val = %s", $id, $PEN));
+		if ($since !== '' && strtotime($since . ' UTC') > time() - 3 * HOUR_IN_SECONDS) { $out['wait'][] = $id; continue; }
+		$out['create'][] = $id;
+		if ($dry || $out['err']) { continue; }
+		$p = cp_gcal_plan($id); if (!$p || $p['date'] === '') { continue; }
+		$r = cp_gcal_req('POST', '/events', array(), cp_gcal_body($p));
+		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+		$made[$id] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
+		cp_gcal_wlog('bejegyzés létrehozva', $id, $p['title']);
+	}
+	if (!$dry) {
+		if ($out['add'] || $out['remove'] || $out['create']) { update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false); }
+		if ($out['err']) { update_option('cp_gcal_werr', array('at' => time(), 'msg' => $out['err'][0]), false); } else { delete_option('cp_gcal_werr'); }
+		delete_transient('cp_gcal_pen_lock');
+	}
+	return $out;
+}
+add_action('cp_crm_tick', function () { cp_gcal_pen_sync(false); }, 32);
+
 /* ------------------------------------------------------------ WordPress-admin: kulcs és naptár */
 add_action('admin_menu', function () { add_options_page('Crazy Google Naptár', 'Crazy Google Naptár', 'manage_options', 'cp-gcal', 'cp_gcal_admin_page'); });
 function cp_gcal_admin_page() {
@@ -245,6 +320,7 @@ function cp_gcal_admin_page() {
 		if ($do === 'save') {
 			$o = cp_gcal_opts();
 			$o['cal'] = sanitize_text_field(wp_unslash($_POST['cal'] ?? ''));
+			$o['pen'] = empty($_POST['pen']) ? 0 : 1;
 			$raw = '';
 			if (!empty($_FILES['key']['tmp_name']) && is_uploaded_file($_FILES['key']['tmp_name']) && (int) $_FILES['key']['size'] < 20000) { $raw = (string) file_get_contents($_FILES['key']['tmp_name']); }
 			elseif (trim((string) ($_POST['key_txt'] ?? '')) !== '') { $raw = (string) wp_unslash($_POST['key_txt']); }
@@ -276,8 +352,12 @@ function cp_gcal_admin_page() {
 		'<li>Ugyanott, lejjebb: <b>Naptár integrálása → Naptárazonosító</b> – másold be lent, majd <b>Mentés</b> és <b>Kapcsolat ellenőrzése</b>.</li></ol>';
 	echo '<form method="post" enctype="multipart/form-data">' . wp_nonce_field('cp_gcal_do', '_wpnonce', true, false) . '<table class="form-table">' .
 		'<tr><th>Naptárazonosító</th><td><input type="text" name="cal" class="regular-text" value="' . esc_attr($o['cal']) . '" placeholder="…@group.calendar.google.com"></td></tr>' .
+		'<tr><th>Ceruzás jelölés</th><td><label><input type="checkbox" name="pen" value="1"' . checked(cp_gcal_pen_on(), true, false) . '> a panel teszi fel a „[Ceruzás]” feliratot a „Szerződés kiküldve” dealek bejegyzésére, továbblépéskor leveszi, és ha 3 óra után sincs bejegyzés, létrehozza</label></td></tr>' .
 		'<tr><th>Szolgáltatásfiók</th><td>' . ($k ? '✅ kulcs feltöltve · <code>' . esc_html($k['email']) . '</code> <small>(ezzel a címmel oszd meg a naptárat)</small>' : '❌ nincs kulcs') . '</td></tr>' .
 		'<tr><th>' . ($k ? 'Új kulcsfájl' : 'Kulcsfájl (JSON)') . '</th><td><input type="file" name="key" accept=".json,application/json"><p class="description">Vagy illeszd be a fájl tartalmát:</p><textarea name="key_txt" rows="3" class="large-text code" autocomplete="off"></textarea><p class="description">A kulcsot a panel titkosan, csak a szerveren tárolja; a böngészőbe soha nem kerül ki.</p></td></tr>' .
 		'</table><p><button class="button button-primary" name="cp_gcal_do" value="save">Mentés</button> <button class="button" name="cp_gcal_do" value="test">Kapcsolat ellenőrzése</button>' .
-		($k ? ' <button class="button" name="cp_gcal_do" value="del" onclick="return confirm(\'Törlöd a kulcsot? A panel nem fér hozzá a naptárhoz.\')">Kulcs törlése</button>' : '') . '</p></form></div>';
+		($k ? ' <button class="button" name="cp_gcal_do" value="del" onclick="return confirm(\'Törlöd a kulcsot? A panel nem fér hozzá a naptárhoz.\')">Kulcs törlése</button>' : '') . '</p></form>';
+	$we = get_option('cp_gcal_werr'); if (is_array($we)) { echo '<div class="notice notice-error"><p>Utolsó írási hiba (' . esc_html(wp_date('Y.m.d. H:i', (int) $we['at'])) . '): ' . esc_html($we['msg']) . '</p></div>'; }
+	$wl = get_option('cp_gcal_wlog', array());
+	echo '<h2>A panel írásai a naptárban</h2>' . (is_array($wl) && $wl ? '<table class="widefat striped" style="max-width:900px"><thead><tr><th>Mikor</th><th>Mit</th><th>Deal</th><th>Cím</th></tr></thead><tbody>' . implode('', array_map(function ($x) { return '<tr><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $x['at'])) . '</td><td>' . esc_html($x['a']) . '</td><td>' . (int) $x['deal'] . '</td><td>' . esc_html($x['t']) . '</td></tr>'; }, array_slice($wl, 0, 60))) . '</tbody></table>' : '<p>Még nem írt semmit.</p>') . '</div>';
 }

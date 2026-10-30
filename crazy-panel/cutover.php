@@ -46,7 +46,7 @@ function cp_cut_feats() {
 		'flow_t2'     => array('T-2 nap: ÉRKEZÜNK levél', 'Levél a rendezvény előtt 2 nappal.', false),
 		'flow_lement' => array('Rendezvény lement', 'A rendezvény utáni napon a következő szakaszba.', false),
 		'flow_portal' => array('Ügyfélportál-meghívó', 'Meghívó levél az „Adatlap kiküldve” szakaszban.', false),
-		'calendar'    => array('Google Naptár (eventcrazy)', 'Bejegyzés ✏️-vel a „Szerződés kiküldve” szakaszban, aláíráskor a ✏️ lekerül (az árnyék a naptárat ellenőrzi).', false),
+		'calendar'    => array('Google Naptár (eventcrazy)', '„[Ceruzás]” bejegyzés a „Szerződés kiküldve” szakaszban, továbblépéskor a felirat lekerül – a Salesmate-automatizmus leállt, ezt a panel végzi (WordPress → Beállítások → Crazy Google Naptár).', false),
 		'mail_send'   => array('Levélküldés a panelből', 'Mindenki a panelből küld, megnyitás-követéssel.', false),
 	);
 }

@@ -89,7 +89,7 @@
 		if (!S.x) { m.innerHTML = h + (S.err ? '<div class="cpx-empty err">' + esc(S.err) + '<br><button class="cpx-btn" data-ref>Újra</button></div>' : '<div class="cpx-empty">Naptár betöltése…</div>') + '</div>'; bind(); return; }
 		if (S.err) h += '<div class="gc-warn err">' + esc(S.err) + '</div>';
 		const used = {}; (S.x.ev || []).forEach(e => { used[GC[e.col] ? e.col : 0] = (used[GC[e.col] ? e.col : 0] || 0) + 1; });
-		h += '<div class="gc-leg">' + Object.keys(used).map(k => '<span><i style="background:' + (GC[k] ? GC[k][0] : '#4C7BD9') + '"></i>' + (GC[k] ? GC[k][1] : 'alapszín') + ' <small>(' + used[k] + ')</small></span>').join('') + '<span class="gc-sm">a színek a Google Naptárból · halványabb: nem dealhez kötött</span></div>';
+		h += '<div class="gc-leg">' + Object.keys(used).map(k => '<span><i style="background:' + (GC[k] ? GC[k][0] : '#4C7BD9') + '"></i>' + (GC[k] ? GC[k][1] : 'alapszín') + ' <small>(' + used[k] + ')</small></span>').join('') + '<span class="gc-sm">a színek a Google Naptárból · szaggatott keret: [Ceruzás] · halványabb: nem dealhez kötött</span></div>';
 		const miss = S.x.miss || [];
 		if (miss.length) {
 			h += '<div class="gc-warn"><button type="button" class="gc-mh" data-miss aria-expanded="' + (S.missOpen ? 'true' : 'false') + '">⚠️ <span class="gc-mt"><b>' + miss.length + ' szerződéses deal</b> rendezvénye nincs a naptárban ebben a nézetben</span><span class="gc-ml">' + (S.missOpen ? 'Elrejtés' : 'Megnézem') + '</span></button>' +
