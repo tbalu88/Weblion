@@ -54,10 +54,12 @@ function cp_bil_profiles() { return array('KFT' => 'Kft. – Billingo', 'EV' => 
 function cp_bil_prov($p) { return $p === 'EV' ? 'szamlazz' : 'billingo'; }
 function cp_bil_opts($p) {
 	$o = get_option('cp_bil_' . $p, array());
-	return array_merge(array('block' => 0, 'bank' => 0, 'vat' => $p === 'EV' ? 'AAM' : '27%', 'due' => 8, 'blocks' => array(), 'banks' => array(), 'org' => '', 'prefix' => '', 'bank_name' => '', 'bank_acc' => ''), is_array($o) ? $o : array());
+	return array_merge(array('block' => 0, 'bank' => 0, 'vat' => $p === 'EV' ? 'AAM' : '27%', 'due' => 8, 'blocks' => array(), 'banks' => array(), 'org' => '', 'prefix' => '', 'bank_name' => '', 'bank_acc' => '', 'mode' => 'api'), is_array($o) ? $o : array());
 }
 function cp_bil_key($p) { return (string) get_option('cp_bil_key_' . $p, ''); }
-function cp_bil_ok($p) { $o = cp_bil_opts($p); return cp_bil_key($p) !== '' && (cp_bil_prov($p) === 'szamlazz' || (int) $o['block'] > 0); }
+/* v1.74: kézi mód (amikor nincs API-előfizetés): a panel előkészíti az adatokat, a számlát a kolléga állítja ki, a számot visszaírja */
+function cp_bil_manual($p) { return cp_bil_opts($p)['mode'] === 'manual'; }
+function cp_bil_ok($p) { $o = cp_bil_opts($p); if ($o['mode'] === 'manual') { return true; } return cp_bil_key($p) !== '' && (cp_bil_prov($p) === 'szamlazz' || (int) $o['block'] > 0); }
 function cp_bil_any() { foreach (array_keys(cp_bil_profiles()) as $p) { if (cp_bil_ok($p)) { return true; } } return false; }
 function cp_bil_gopts() { $o = get_option('cp_bil_g', array()); return array_merge(array('photo' => "fotó\nszelfi\nkarikatúra\nphoto\nautomata\nfotófal"), is_array($o) ? $o : array()); }
 
@@ -143,7 +145,7 @@ function cp_bil_ajax_deal() {
 	if (!$d) { cp_el_err('Nincs ilyen deal.', 404); }
 	$p = strtoupper((string) $d['ctype']) === 'EV' ? 'EV' : 'KFT';
 	$prof = array();
-	foreach (cp_bil_profiles() as $k => $n) { $o = cp_bil_opts($k); $prof[$k] = array('n' => $n, 'ok' => cp_bil_ok($k), 'vat' => $o['vat'], 'due' => (int) $o['due'], 'prov' => cp_bil_prov($k)); }
+	foreach (cp_bil_profiles() as $k => $n) { $o = cp_bil_opts($k); $prof[$k] = array('n' => $n, 'ok' => cp_bil_ok($k), 'vat' => $o['vat'], 'due' => (int) $o['due'], 'prov' => cp_bil_prov($k), 'manual' => $o['mode'] === 'manual'); }
 	$docs = array_map(function ($r) { $r['id'] = (int) $r['id']; $r['bid'] = (int) $r['bid']; $r['gross'] = (float) $r['gross']; $r['at'] = function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at']; return $r; }, cp_bil_docs((int) $d['id']));
 	wp_send_json_success(array('profile' => $p, 'ctype' => (string) $d['ctype'], 'profiles' => $prof, 'buyer' => cp_bil_buyer($d), 'items' => cp_bil_items($d, $p),
 		'photo' => cp_bil_photo($d), 'event_d' => (string) $d['event_d'], 'today' => wp_date('Y-m-d'), 'docs' => $docs, 'gallery' => (string) (get_option(CP_PANEL_TRACK . (int) $d['id'], array())['gl'] ?? '') === '1'));
@@ -204,10 +206,20 @@ function cp_bil_ajax_issue() {
 		}
 	}
 	$mode = (string) ($_POST['send'] ?? 'now'); if (!in_array($mode, array('now', 'gallery', 'no'), true)) { $mode = 'now'; }
+	if (cp_bil_manual($p)) { $mode = 'no'; }
 	$emails = array_values(array_filter(array_map('trim', preg_split('/[,;\s]+/', (string) $b['emails'])), 'is_email'));
 	if ($mode !== 'no' && !$emails) { cp_el_err('A kiküldéshez kell a vevő e-mail-címe (vagy válaszd: „nem küldöm ki”).'); }
 	$cm = sanitize_textarea_field(wp_unslash((string) ($_POST['comment'] ?? '')));
 	$who = function_exists('cp_pu_current') && cp_pu_current() ? cp_pu_current()['n'] : (function_exists('cp_panel_who') ? cp_panel_who() : '');
+	if (cp_bil_manual($p)) {
+		/* kézi mód: csak rögzíti a máshol kiállított bizonylatot (a számot a kolléga írja be) */
+		$num = mb_substr(sanitize_text_field(wp_unslash((string) ($_POST['number'] ?? ''))), 0, 60);
+		if ($num === '') { cp_el_err('Írd be a kiállított bizonylat számát.'); }
+		$gross = 0;
+		foreach ($lines as $l) { $r8 = preg_match('/^(\d+)%$/', $l['vat'], $m) ? (int) $m[1] / 100 : 0; $v = $l['unit_price'] * $l['quantity']; $gross += $l['unit_price_type'] === 'gross' ? $v : $v * (1 + $r8); }
+		$wpdb->insert(cp_bil_t(), array('deal_id' => (int) $d['id'], 'profile' => $p, 'type' => $type, 'number' => $num, 'gross' => round($gross), 'currency' => 'HUF', 'send_mode' => 'manual', 'emails' => implode(', ', $emails), 'created_by' => $who, 'created_at' => gmdate('Y-m-d H:i:s')));
+		wp_send_json_success(array('msg' => 'Rögzítve: ' . $num . '.', 'docs' => cp_bil_docs((int) $d['id'])));
+	}
 	if (cp_bil_prov($p) === 'szamlazz') {
 		$advNo = '';
 		if ($type === 'invoice' && !empty($_POST['advance'])) {
@@ -383,8 +395,10 @@ function cp_bil_admin_page() {
 				$o['block'] = (int) ($_POST['block'] ?? 0); $o['bank'] = (int) ($_POST['bank'] ?? 0);
 				$o['vat'] = in_array($_POST['vat'] ?? '', array('27%', '18%', '5%', '0%', 'AAM', 'TAM'), true) ? $_POST['vat'] : $o['vat'];
 				$o['due'] = max(0, min(90, (int) ($_POST['due'] ?? 8)));
+				$o['mode'] = ($_POST['mode'] ?? '') === 'manual' ? 'manual' : 'api';
 				foreach (array('prefix', 'bank_name', 'bank_acc') as $f) { if (isset($_POST[$f])) { $o[$f] = mb_substr(sanitize_text_field(wp_unslash((string) $_POST[$f])), 0, 60); } }
-				$do = 'test';
+				$do = $o['mode'] === 'manual' && cp_bil_key($p) === '' ? '' : 'test';
+				if ($do === '') { $msg = $p . ': elmentve (kézi mód).'; }
 			}
 			if ($do === 'del') { delete_option('cp_bil_key_' . $p); $o['blocks'] = array(); $o['banks'] = array(); $o['org'] = ''; $msg = $p . ': a kulcs törölve.'; }
 			if ($do === 'test' && cp_bil_prov($p) === 'szamlazz') {
@@ -421,6 +435,7 @@ function cp_bil_admin_page() {
 		$sel = function ($name, $list, $cur) { $h = '<select name="' . $name . '"><option value="0">–</option>'; foreach ($list as $x) { $h .= '<option value="' . (int) $x['id'] . '"' . selected((int) $cur, (int) $x['id'], false) . '>' . esc_html($x['n']) . '</option>'; } return $h . '</select>'; };
 		if (cp_bil_prov($p) === 'szamlazz') {
 			echo '<h2>' . esc_html($n) . ' <small>(' . $p . ')</small></h2><form method="post">' . wp_nonce_field('cp_bil_do', '_wpnonce', true, false) . '<input type="hidden" name="p" value="' . $p . '"><table class="form-table">' .
+				'<tr><th>Működés</th><td><label><input type="radio" name="mode" value="api"' . checked($o['mode'] !== 'manual', true, false) . '> <b>API</b> – a panel állítja ki és küldi el (ehhez API-s előfizetés kell)</label><br><label><input type="radio" name="mode" value="manual"' . checked($o['mode'] === 'manual', true, false) . '> <b>Kézi</b> – a panel előkészíti az adatokat (másolható), a számlát a számlázóban állítod ki, a számát visszaírod</label></td></tr>' .
 				'<tr><th>Számla Agent kulcs</th><td><input type="password" name="key" class="regular-text" autocomplete="new-password" placeholder="' . ($has ? '•••••••• (megadva – üresen hagyva marad)' : 'Számlázz.hu Számla Agent kulcs') . '"> ' . ($has ? '✅' : '❌ nincs') . '</td></tr>' .
 				'<tr><th>Számlaszám-előtag</th><td><input type="text" name="prefix" value="' . esc_attr($o['prefix']) . '" style="width:120px"> <small>(üresen: a Számlázz.hu alapbeállítása)</small></td></tr>' .
 				'<tr><th>Bank / bankszámla</th><td><input type="text" name="bank_name" value="' . esc_attr($o['bank_name']) . '" placeholder="bank neve"> <input type="text" name="bank_acc" value="' . esc_attr($o['bank_acc']) . '" placeholder="12345678-12345678-12345678" class="regular-text"> <small>(üresen: a Számlázz.hu-fiók adatai)</small></td></tr>' .
@@ -430,6 +445,7 @@ function cp_bil_admin_page() {
 			continue;
 		}
 		echo '<h2>' . esc_html($n) . ' <small>(' . $p . ')</small></h2><form method="post">' . wp_nonce_field('cp_bil_do', '_wpnonce', true, false) . '<input type="hidden" name="p" value="' . $p . '"><table class="form-table">' .
+			'<tr><th>Működés</th><td><label><input type="radio" name="mode" value="api"' . checked($o['mode'] !== 'manual', true, false) . '> <b>API</b> – a panel állítja ki és küldi el (ehhez API-s előfizetés kell)</label><br><label><input type="radio" name="mode" value="manual"' . checked($o['mode'] === 'manual', true, false) . '> <b>Kézi</b> – a panel előkészíti az adatokat (másolható), a számlát a számlázóban állítod ki, a számát visszaírod</label></td></tr>' .
 			'<tr><th>API-kulcs</th><td><input type="password" name="key" class="regular-text" autocomplete="new-password" placeholder="' . ($has ? '•••••••• (megadva – üresen hagyva marad)' : 'Billingo API v3 kulcs') . '"> ' . ($has ? '✅' . ($o['org'] ? ' ' . esc_html($o['org']) : '') : '❌ nincs') . '</td></tr>' .
 			'<tr><th>Számlatömb</th><td>' . ($o['blocks'] ? $sel('block', $o['blocks'], $o['block']) : '<em>a kulcs mentése után választható</em>') . '</td></tr>' .
 			'<tr><th>Bankszámla</th><td>' . ($o['banks'] ? $sel('bank', $o['banks'], $o['bank']) : '<em>a kulcs mentése után választható</em>') . '</td></tr>' .
