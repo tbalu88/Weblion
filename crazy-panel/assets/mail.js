@@ -515,14 +515,21 @@
 		const draft = S.reply || (() => { try { return JSON.parse(localStorage.getItem('cpmail_draft') || 'null'); } catch (e) { return null; } })();
 		S.reply = null;
 		const ctx = { thread: draft && draft.thread ? Number(draft.thread) : 0, subj: draft && draft.tsubj ? draft.tsubj : '', quote: draft && draft.quote ? draft.quote : '' };
+		const SON = !!(M.send && M.send.on);
 		box.innerHTML = '<div class="ml-compose">' +
+			/* v1.62: mobilon a Salesmate „Compose” fejléce: bezárás, cím, melléklet, küldés, továbbiak */
+			'<div class="ml-ctb"><button type="button" data-mx aria-label="Bezárás" title="Bezárás (a piszkozat megmarad)">✕</button><b>' + (ctx.thread ? 'Válasz' : 'Új levél') + '</b><button type="button" data-matt aria-label="Melléklet"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button><button type="button" class="ml-ctb-send" data-msend aria-label="Küldés"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M3 20l18-8L3 4l2 8z"/><path d="M5 12h8"/></svg></button><button type="button" data-mmore aria-label="Továbbiak">⋮</button></div>' +
+			'<div class="ml-qa" data-cqa hidden><div class="ml-qab" data-cqax></div><div class="ml-qas"><div class="ml-qah"><b>Továbbiak</b><button type="button" data-cqax aria-label="Bezárás">✕</button></div>' +
+			(ctx.thread && M.ai ? '<button type="button" data-mq="ai">✨ AI válasz</button>' : '') + '<button type="button" data-mq="deal">🔗 Deal csatolása</button>' + (C.portal && C.portal.on ? '<button type="button" data-mq="portal">📝 Ügyfélportál-link beszúrása</button>' : '') +
+			(SON ? '<button type="button" data-mq="test">🧪 Próbalevél magamnak</button>' : '') + '<button type="button" data-mq="prev">👁 Előnézet</button><button type="button" data-mq="save">💾 Piszkozat mentése</button>' +
+			(ctx.thread ? '<button type="button" data-mq="unthread">✉ Új levélként küldöm</button>' : '') + '<button type="button" data-mq="clear">🗑 Új, üres levél</button>' + (SON ? '' : '<small>A panelből küldés neked még nincs bekapcsolva.</small>') + '</div></div>' +
 			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>' + (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
-			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn>🔖 Sablon beszúrása ▾</button></span><div data-dp class="ml-grow"></div></div>' +
+			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span><div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Másolat</label><div class="ml-chips" data-ccv></div></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Rejtett</label><div class="ml-chips" data-bcc></div></div>' +
-			'<div class="ml-row"><label>Tárgy</label><input type="text" data-subj value="' + esc(draft ? draft.subject : '') + '"></div>' +
+			'<div class="ml-row ml-srow"><label>Tárgy</label><input type="text" data-subj placeholder="Tárgy" value="' + esc(draft ? draft.subject : '') + '"></div>' +
 			'<div data-ed></div>' +
 			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
 			'<button type="button" class="cpx-btn ghost" data-prev>Előnézet</button><button type="button" class="cpx-btn ghost" data-save>Piszkozat mentése</button><button type="button" class="ml-link" data-clear>Új, üres levél</button>' +
@@ -644,6 +651,26 @@
 			try { localStorage.setItem('cpmail_draft', JSON.stringify({ to: to.get(), cc: cc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '' })); toast('Piszkozat elmentve ezen a gépen.'); } catch (e) { toast('A piszkozatot nem sikerült menteni.', true); }
 		});
 		q('[data-clear]').addEventListener('click', () => { if (!window.confirm('Törlöd a levél tartalmát?')) return; try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ } drawCompose(box); });
+		/* v1.62: mobil fejléc és a „Továbbiak” lap – a meglévő gombokat hívja */
+		const cqa = q('[data-cqa]'), cqaShow = on => { cqa.hidden = !on; };
+		const clk = sel => { const el = q(sel); if (el) el.click(); };
+		q('[data-mx]').addEventListener('click', () => { clk('[data-save]'); S.view = 'inbox'; if (ctx.thread) { S.th = ctx.thread; S.reading = true; } view(S.main); });
+		q('[data-matt]').addEventListener('click', () => clk('[data-cmd="attach"]'));
+		q('[data-msend]').addEventListener('click', () => clk('[data-send]'));
+		q('[data-mmore]').addEventListener('click', () => cqaShow(true));
+		cqa.querySelectorAll('[data-cqax]').forEach(b => b.addEventListener('click', () => cqaShow(false)));
+		cqa.querySelectorAll('[data-mq]').forEach(b => b.addEventListener('click', () => {
+			cqaShow(false);
+			const k = b.dataset.mq;
+			if (k === 'ai') { clk('[data-cai]'); const h = q('[data-caip]'); if (h && !h.hidden) h.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+			else if (k === 'deal') { const c = q('.ml-compose'); c.classList.add('dp-on'); const i = q('[data-dp] input'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } }
+			else if (k === 'portal') clk('[data-cmd="portal"]');
+			else if (k === 'test') clk('[data-test]');
+			else if (k === 'prev') clk('[data-prev]');
+			else if (k === 'save') clk('[data-save]');
+			else if (k === 'unthread') { clk('[data-unthread]'); b.remove(); q('.ml-ctb b').textContent = 'Új levél'; }
+			else if (k === 'clear') clk('[data-clear]');
+		}));
 		q('[data-prev]').addEventListener('click', async () => {
 			const pv = q('.ml-prev');
 			try {
