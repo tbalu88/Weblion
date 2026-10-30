@@ -100,7 +100,7 @@ function cp_dash_ajax_data() {
 			FROM $D WHERE deleted_at IS NULL", cp_dash_utc($m0), cp_dash_utc($m0), cp_dash_utc($m0), cp_dash_utc($m0), wp_date('Y-m-01'), wp_date('Y-m-t')), ARRAY_A);
 		$out['kpi'] = array('open_n' => (int) $k['o_n'], 'open_v' => (float) $k['o_v'], 'won_n' => (int) $k['w_n'], 'won_v' => (float) $k['w_v'], 'new_n' => (int) $k['c_n'], 'lost_n' => (int) $k['l_n'], 'ev_n' => (int) $k['e_n']);
 	}
-	$out['can'] = array('deals' => cp_panel_can_x('deals'), 'mail' => cp_panel_can_x('mail'), 'feladatok' => cp_panel_can_x('feladatok'), 'naptar' => cp_panel_can_x('naptar'));
+	$out['can'] = array('deals' => cp_panel_can_x('deals'), 'mail' => cp_panel_can_x('mail'), 'feladatok' => cp_panel_can_x('feladatok'), 'naptar' => cp_panel_can_x('naptar'), 'gnaptar' => function_exists('cp_gcal_ok') && cp_panel_can_x('gnaptar'));
 	wp_send_json_success($out);
 }
 

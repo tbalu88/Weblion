@@ -46,12 +46,12 @@ function cp_cut_feats() {
 		'flow_t2'     => array('T-2 nap: ÉRKEZÜNK levél', 'Levél a rendezvény előtt 2 nappal.', false),
 		'flow_lement' => array('Rendezvény lement', 'A rendezvény utáni napon a következő szakaszba.', false),
 		'flow_portal' => array('Ügyfélportál-meghívó', 'Meghívó levél az „Adatlap kiküldve” szakaszban.', false),
-		'calendar'    => array('Google Naptár (eventcrazy)', 'Rendezvény-bejegyzés a „Szerződés kiküldve” szakaszban.', false),
+		'calendar'    => array('Google Naptár (eventcrazy)', 'Bejegyzés ✏️-vel a „Szerződés kiküldve” szakaszban, aláíráskor a ✏️ lekerül (az árnyék a naptárat ellenőrzi).', false),
 		'mail_send'   => array('Levélküldés a panelből', 'Mindenki a panelből küld, megnyitás-követéssel.', false),
 	);
 }
 function cp_cut_modes() { $m = get_option('cp_cut_modes', array()); return is_array($m) ? $m : array(); }
-function cp_cut_mode($k) { $m = cp_cut_modes(); return isset($m[$k]) ? (string) $m[$k] : ($k === 'forms_ec' || $k === 'forms_cp' ? 'shadow' : 'sm'); }
+function cp_cut_mode($k) { $m = cp_cut_modes(); return isset($m[$k]) ? (string) $m[$k] : ($k === 'forms_ec' || $k === 'forms_cp' || ($k === 'calendar' && function_exists('cp_gcal_ok') && cp_gcal_ok()) ? 'shadow' : 'sm'); }
 
 function cp_cut_log($feat, $ref, $plan, $deal = 0) {
 	if (!cp_cut_db_ok()) { return 0; }

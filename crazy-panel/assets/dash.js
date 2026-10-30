@@ -57,7 +57,7 @@
 		if (x.kpi) {
 			const k = x.kpi, tile = (n, l, s, tab) => '<button type="button" class="dh-kpi" data-go="' + tab + '"><b>' + n + '</b><span>' + l + '</span>' + (s ? '<small>' + s + '</small>' : '') + '</button>';
 			html += '<div class="dh-kpis">' + tile(k.new_n, 'Új deal ebben a hónapban', k.lost_n ? k.lost_n + ' elvesztett' : '', 'deals') + tile(k.won_n, 'Megnyert ebben a hónapban', k.won_v ? ft(k.won_v) : '', 'deals') +
-				tile(k.open_n, 'Nyitott deal', k.open_v ? ft(k.open_v) : '', 'deals') + tile(k.ev_n, 'Rendezvény ebben a hónapban', '', x.can.naptar ? 'naptar' : 'deals') + '</div>';
+				tile(k.open_n, 'Nyitott deal', k.open_v ? ft(k.open_v) : '', 'deals') + tile(k.ev_n, 'Rendezvény ebben a hónapban', '', x.can.gnaptar ? 'gnaptar' : x.can.naptar ? 'naptar' : 'deals') + '</div>';
 		}
 		html += '<div class="dh-grid">';
 		/* figyelmet igényel – javaslatok */
@@ -103,7 +103,7 @@
 		if (x.events) {
 			let last = '';
 			const ev = x.events.map(e => { const dl = dayLabel(e.d), hd = dl !== last ? '<li class="dh-day">' + esc(dl) + '</li>' : ''; last = dl; return hd + '<li><button type="button" data-deal="' + e.id + '"><b>' + (e.tm ? '<em class="dh-tm">' + esc(e.tm) + '</em>' : '') + esc(e.t) + '</b><small>' + [e.v, e.svc, e.op ? 'kezelő: ' + e.op : ''].filter(Boolean).map(esc).join(' · ') + '</small><span class="dh-tags">' + (e.st === 'Open' ? '<i class="dh-tag warn">még nyitott: ' + esc(e.stage) + '</i>' : '') + (e.p && e.p.total ? '<i class="dh-tag ' + (e.p.done >= e.p.total ? 'ok' : 'warn') + '">portál ' + e.p.done + '/' + e.p.total + '</i>' : '') + '</span></button></li>'; }).join('');
-			html += card('dh-ev', 'Közelgő rendezvények', ico('naptar'), x.events.length ? '<ul class="dh-list">' + ev + '</ul>' : empty('A következő 14 napban nincs rendezvény.'), (x.can.naptar ? '<button type="button" class="dh-link" data-go="naptar">Naptár →</button>' : ''));
+			html += card('dh-ev', 'Közelgő rendezvények', ico('naptar'), x.events.length ? '<ul class="dh-list">' + ev + '</ul>' : empty('A következő 14 napban nincs rendezvény.'), (x.can.gnaptar ? '<button type="button" class="dh-link" data-go="gnaptar">Naptár →</button>' : x.can.naptar ? '<button type="button" class="dh-link" data-go="naptar">Kapacitás →</button>' : ''));
 		}
 		html += '</div></div>';
 		m.innerHTML = html;
