@@ -1,0 +1,20 @@
+--- a/panel.js
++++ b/panel.js
+@@ -31,7 +31,8 @@
+   try { const h = sessionStorage.getItem('cp_after'); sessionStorage.removeItem('cp_after'); if (h && !location.hash) history.replaceState(null, '', h); } catch (e) { /* privát mód */ }
+   const DEEP = location.hash.indexOf(':') > 0 ? location.hash.slice(location.hash.indexOf(':') + 1) : '';
+   const S = {
+-    tab: location.hash.slice(1).split(':')[0],
++    /* v1.67: ha a telefon a háttérben bezárta a panelt, újranyitáskor az utolsó fülre tér vissza (12 órán belül) */
++    tab: location.hash.slice(1).split(':')[0] || (() => { try { const l = JSON.parse(localStorage.getItem('cpx_last') || 'null'); return l && Date.now() - l.at < 12 * 3600 * 1000 ? String(l.t) : ''; } catch (e) { return ''; } })(),
+     month: monthKey(today()),
+     day: today(),
+     cache: {},      // month -> {events, subs, at}
+@@ -235,6 +236,7 @@
+   window.CPXGo = tab => go(tab);
+   function go(tab) {
+     S.tab = tab;
++    try { localStorage.setItem('cpx_last', JSON.stringify({ t: tab, at: Date.now() })); } catch (e) { /* privát mód */ }
+     history.replaceState(null, '', '#' + tab);
+ 	if (tab === 'tarca' || tab === 'elszamolas') setTimeout(() => twTick(true), 50);
+     document.querySelectorAll('.cpx-tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));

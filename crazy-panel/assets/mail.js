@@ -13,7 +13,11 @@
 	try { if (localStorage.getItem('cpmail_so') === 'old') S.so = 'old'; } catch (e) { /* privát mód */ }
 	try { const v = localStorage.getItem('cpmail_view'); if (['inbox', 'compose', 'tpl'].includes(v)) S.view = v; } catch (e) { /* privát mód */ }
 
+	/* v1.67: a mappák / fülek listája gyorsítótárban – váltáskor azonnal megjelenik, a friss adat a háttérben jön */
+	const RO = ['cp_mail_threads', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview'];
+	S.lc = {}; S.lcAt = {};
 	async function post(action, params) {
+		if (!RO.includes(action)) { S.lc = {}; S.lcAt = {}; } /* bármilyen módosítás után friss lista */
 		const fd = new FormData();
 		fd.append('action', action);
 		fd.append('t', C.t);
@@ -158,6 +162,45 @@
 	const nl2br = s => esc(s).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="ml-men">@$1</b>');
 	const NOTE_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg>';
 	/* v1.54: a melléklet letöltése a postafiókból (képnél / PDF-nél megnyitás a böngészőben) */
+	/* v1.67: a bejövő levél eredeti (HTML) nézete – elzárt keretben: szkript nem fut, külső kép csak kérésre */
+	const HC = {};
+	let HV = 'html';
+	try { if (localStorage.getItem('cpmail_hv') === 'txt') HV = 'txt'; } catch (e) { /* privát mód */ }
+	function frameDoc(mid, html, imgs) {
+		const o = location.origin, att = i => (C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&view=1&t=' + encodeURIComponent(C.t)).replace(/&/g, '&amp;');
+		return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: ' + o + (imgs ? ' https: http:' : '') + '; font-src data:' + (imgs ? ' https:' : '') + '">' +
+			'<meta name="referrer" content="no-referrer"><base target="_blank"><style>html,body{margin:0;padding:0}body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1A1F2B;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blockquote{margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex}</style></head><body>' +
+			String(html).replace(/cpatt:(\d+)/g, (x, i) => att(i)) + '</body></html>';
+	}
+	function mountHtml(el, mid, imgs) {
+		const x = HC[mid];
+		if (el._txt === undefined) el._txt = el.innerHTML;
+		const bar = '<div class="ml-hv"><button type="button" data-hv="html" class="' + (HV === 'html' ? 'on' : '') + '">Eredeti</button><button type="button" data-hv="txt" class="' + (HV === 'txt' ? 'on' : '') + '">Szöveg</button></div>';
+		if (HV === 'txt') { el.innerHTML = bar + el._txt; }
+		else {
+			el.innerHTML = bar + (x.ext && !imgs ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-imgs>Képek megjelenítése</button></div>' : '') +
+				'<iframe class="ml-hf" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="A levél eredeti formájában"></iframe>';
+			const f = el.querySelector('iframe');
+			f.addEventListener('load', () => {
+				try {
+					const d = f.contentDocument, fit = () => { f.style.height = (d.documentElement.scrollHeight + 2) + 'px'; };
+					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
+					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
+				} catch (e) { f.style.height = '480px'; }
+			});
+			f.srcdoc = frameDoc(mid, x.html, imgs);
+			const ib = el.querySelector('[data-imgs]');
+			if (ib) ib.addEventListener('click', () => mountHtml(el, mid, true));
+		}
+		el.querySelectorAll('[data-hv]').forEach(b => b.addEventListener('click', () => { HV = b.dataset.hv; try { localStorage.setItem('cpmail_hv', HV); } catch (e) { /* privát mód */ } document.querySelectorAll('.ml-mb[data-hm]').forEach(m2 => { if (HC[m2.dataset.hm] && HC[m2.dataset.hm].html) mountHtml(m2, m2.dataset.hm, false); }); }));
+	}
+	function loadHtml(rd) {
+		rd.querySelectorAll('.ml-mb[data-hm]').forEach(el => {
+			const mid = el.dataset.hm;
+			if (HC[mid]) { if (HC[mid].html) mountHtml(el, mid, false); return; }
+			post('cp_mail_html', { id: mid }).then(x => { HC[mid] = x; if (x.html && el.isConnected) mountHtml(el, mid, false); }).catch(() => { /* marad a szöveges nézet */ });
+		});
+	}
 	const attUrl = (mid, i, n) => C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&t=' + encodeURIComponent(C.t) + (/\.(png|jpe?g|gif|webp|pdf)$/i.test(n || '') ? '&view=1' : '');
 	window.CPMailAtt = attUrl;
 	const CLIP_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>';
@@ -234,7 +277,19 @@
 		S.tab = S.tab || 'open';
 		let rows = [], counts = {}, un = {};
 		if (S.demo) { rows = (S.demoRows = S.demoRows || demoData()).filter(t => (S.folder === 'follow' ? t.fol.length : (t.folder || 'inbox') === S.folder) && (S.tab !== 'open' || t.st === 'open') && (S.tab !== 'unassigned' || !t.as)); un = { inbox: S.demoRows.filter(t => t.un && t.st === 'open' && (t.folder || 'inbox') === 'inbox').length }; counts = { inbox: S.demoRows.filter(t => t.st === 'open').length, follow: S.demoRows.filter(t => t.fol.length).length }; }
-		else { try { const r = await post('cp_mail_threads', { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so }); rows = r.rows; counts = r.counts || {}; un = r.un || {}; } catch (e) { rows = []; S.err = e.message; } }
+		else {
+			const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so }, key = JSON.stringify(P), c = S.lc[key];
+			let r = c;
+			if (!c) { box.querySelectorAll('.ml-items, .ml-list').forEach(x => x.classList.add('ml-busy')); try { r = await post('cp_mail_threads', P); S.lc[key] = r; S.lcAt[key] = Date.now(); } catch (e) { r = null; S.err = e.message; } }
+			/* a szomszédos fülek (Nyitott / Kiosztatlan / Mind) előre betöltve, hogy a váltás azonnali legyen */
+			if (!c && r) setTimeout(() => ['open', 'unassigned', 'all'].filter(x => x !== P.tab).forEach(x => { const Q = Object.assign({}, P, { tab: x }), k = JSON.stringify(Q); if (!S.lc[k]) post('cp_mail_threads', Q).then(n => { S.lc[k] = n; S.lcAt[k] = Date.now(); }).catch(() => {}); }), 300);
+			else if (Date.now() - (S.lcAt[key] || 0) > 4000) {
+				/* háttérfrissítés: ha változott és még ugyanezt nézed (nyitott levél nélkül), újrarajzol */
+				S.lcAt[key] = Date.now();
+				post('cp_mail_threads', P).then(n => { const same = JSON.stringify(n) === JSON.stringify(S.lc[key]); S.lc[key] = n; if (!same && box.isConnected && !S.th && JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so }) === key) drawInbox(box); }).catch(() => {});
+			}
+			if (r) { rows = r.rows; counts = r.counts || {}; un = r.un || {}; }
+		}
 		if (S.demo && S.so === 'old') rows = rows.slice().reverse();
 		S.rows = rows;
 		const ids = new Set(rows.map(t => t.id));
@@ -258,8 +313,9 @@
 				'<div class="ml-empty"><b>' + (M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (M.connected ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + '</div></section><div class="ml-split" data-split="c2" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
 			'<section class="ml-read" data-read></section><button type="button" class="ml-fab" data-fab aria-label="Új levél" title="Új levél"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button></div>';
 		layout(box);
-		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { S.folder = b.dataset.f; S.th = null; drawInbox(box); }));
-		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.tab; drawInbox(box); }));
+		const pick = (sel, b) => { box.querySelectorAll(sel).forEach(x => x.classList.toggle('on', x === b)); };
+		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { pick('[data-f]', b); S.folder = b.dataset.f; S.th = null; drawInbox(box); }));
+		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { pick('[data-tab]', b); S.tab = b.dataset.tab; drawInbox(box); }));
 		box.querySelector('.ml-box').addEventListener('change', e => { S.box = e.target.value; drawInbox(box); });
 		box.querySelector('[data-demo]').addEventListener('change', e => { S.demo = e.target.checked; S.th = null; drawInbox(box); });
 		let qt = null;
@@ -387,7 +443,7 @@
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
 			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.status ? '<span class="ml-dlv">' + esc(m.status) + ' ▾</span>' : '') + '</div>' +
 				(m.dir === 'out' && (m.status === 'idézetből' || m.status === 'ellenőrizetlen') ? '<div class="ml-unv" title="Ez a levél nem a postafiók Elküldött mappájából vagy a panelből származik, hanem egy bejövő levélből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen: ' + (m.status === 'idézetből' ? 'egy ügyféllevélben idézett szöveg' : 'a saját címünkről a Beérkezett mappába jött') + '</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button" disabled title="Törlés">' + DEL_I + '</button><button type="button" disabled title="Továbbiak">' + MORE_I + '</button></span>' + esc(hdate(m.sent_at)) + '</span></div>' +
-				'<div class="ml-mb">' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
+				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.body || '') + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
 		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); } catch (e) { toast(e.message, true); } };
@@ -405,6 +461,7 @@
 			S.reply = { to: toL, cc: ccL, subject: subj, body: quote, quote: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
 			S.view = 'compose'; view(S.main);
 		};
+		loadHtml(rd);
 		const tl = timeline(x);
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
 		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));

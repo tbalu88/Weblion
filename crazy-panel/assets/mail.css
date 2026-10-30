@@ -420,4 +420,13 @@
   .ml-chip i{flex:none}
   .ml-row .ml-chips{min-height:34px}
 }
+/* v1.67: betöltés jelzése mappaváltáskor */
+.ml-busy{opacity:.45;pointer-events:none;transition:opacity .15s}
+/* v1.67: eredeti (HTML) nézet */
+.ml-hv{display:inline-flex;gap:2px;background:#F1EDE7;border-radius:8px;padding:2px;margin:0 0 8px}
+.ml-hv button{border:0;background:transparent;border-radius:6px;padding:3px 10px;font:600 12px Inter,sans-serif;color:#6B6F78;cursor:pointer}
+.ml-hv button.on{background:#fff;color:#1A1F2B;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.ml-extbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#FFF8EC;border:1px solid #F3E1C4;border-radius:8px;padding:6px 10px;margin:0 0 8px;font-size:12.5px;color:#7A5A1E}
+.ml-extbar button{border:0;background:#fff;border:1px solid #E6D3B0;border-radius:6px;padding:3px 10px;font:600 12px Inter,sans-serif;color:#7A5A1E;cursor:pointer}
+.ml-hf{display:block;width:100%;border:0;min-height:60px;background:#fff}
 

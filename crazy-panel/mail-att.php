@@ -36,7 +36,7 @@ function cp_att_parts($mb, $uid) {
 		if ($type === 1 && !empty($part->parts)) { foreach ($part->parts as $i => $p) { $walk($p, ($num === '' ? '' : $num . '.') . ($i + 1)); } return; }
 		if ($fname !== '' && ($disp === 'attachment' || $type !== 0)) {
 			$types = array('text', 'multipart', 'message', 'application', 'audio', 'image', 'video', 'model', 'other');
-			$out[] = array('num' => $num === '' ? '1' : $num, 'n' => mb_substr($fname, 0, 120), 'mime' => ($types[$type] ?? 'application') . '/' . strtolower((string) ($part->subtype ?? 'octet-stream')), 'enc' => (int) $part->encoding, 'size' => (int) ($part->bytes ?? 0));
+			$out[] = array('num' => $num === '' ? '1' : $num, 'n' => mb_substr($fname, 0, 120), 'mime' => ($types[$type] ?? 'application') . '/' . strtolower((string) ($part->subtype ?? 'octet-stream')), 'enc' => (int) $part->encoding, 'size' => (int) ($part->bytes ?? 0), 'cid' => !empty($part->ifid) ? trim((string) $part->id, '<> ') : '');
 		}
 	};
 	if ($st) { $walk($st, ''); }
