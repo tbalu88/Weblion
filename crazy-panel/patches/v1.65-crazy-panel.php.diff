@@ -1,0 +1,35 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.64.0');
++define('CP_PANEL_VER', '1.65.1');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -754,6 +754,7 @@
+ 		'fl'         => function_exists('cp_flow_cfg') && cp_panel_can_x('flows') ? cp_flow_cfg() : array('on' => false),
+ 		'sr'         => array('on' => true),
+ 		'set'        => array('on' => cp_panel_can_x('beallitasok')),
++		'dash'       => array('on' => function_exists('cp_dash_ajax_data') && cp_panel_can_x('kezdolap')),
+ 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+@@ -774,6 +775,7 @@
+ 	if (!empty($cfg['nt']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/notify.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['dash']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/dash.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '<script src="' . esc_url(plugins_url('assets/mnav.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '</body></html>';
+@@ -3706,6 +3708,7 @@
+ require_once __DIR__ . '/mail-att.php';
+ require_once __DIR__ . '/settings.php';
+ require_once __DIR__ . '/portal-link.php';
++require_once __DIR__ . '/dashboard.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

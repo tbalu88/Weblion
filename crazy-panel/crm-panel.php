@@ -508,6 +508,11 @@ function cp_crm_save_data($id, $f, $c) {
 		}
 	}
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	/* v1.65: a rendezvény dátumának változása azonnal az ügyfélportálra is (határidő, lezárás / újranyitás) */
+	if (isset($body[cp_crm_sm_field('event_d')]) && function_exists('cp_portal_get_by_deal') && function_exists('cp_portal_sm_refresh') && function_exists('cp_portal_db_ready') && cp_portal_db_ready()) {
+		$pp = cp_portal_get_by_deal((string) $id);
+		if ($pp) { cp_portal_sm_refresh($pp, 0); }
+	}
 	return array('row' => cp_crm_row_out($id), 'warn' => implode('; ', $warn));
 }
 

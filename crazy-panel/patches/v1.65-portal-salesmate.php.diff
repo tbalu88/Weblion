@@ -1,0 +1,24 @@
+--- a/portal-salesmate.php
++++ b/portal-salesmate.php
+@@ -66,7 +66,7 @@
+ }
+ 
+ /* frissítés a Salesmate-ből (létrehozáskor, majd megnyitáskor legfeljebb 5 percenként); hibánál marad a régi */
+-function cp_portal_sm_refresh($portal, $max_age = 300) {
++function cp_portal_sm_refresh($portal, $max_age = 60) {
+ 	if (cp_portal_db_ts($portal->sm_synced_at) > time() - $max_age) { return $portal; }
+ 	$snap = cp_portal_sm_snapshot($portal->deal_id);
+ 	if (is_wp_error($snap)) {
+@@ -75,7 +75,11 @@
+ 	}
+ 	$data = array('sm' => $snap, 'sm_synced_at' => cp_portal_db_now());
+ 	$date_changed = $snap['date'] !== '' && $snap['date'] !== (string) $portal->event_date;
+-	if ($date_changed) { $data['event_date'] = $snap['date']; }
++	if ($date_changed) {
++		$data['event_date'] = $snap['date'];
++		/* v1.65: ha a rendezvény új dátuma még nem múlt el, a (dátum miatt) lezárt portál újra aktív */
++		if ($portal->status === 'lezart' && $snap['date'] >= cp_portal_today()) { $data['status'] = 'aktiv'; }
++	}
+ 	cp_portal_update($portal->id, $data);
+ 	$portal = cp_portal_get($portal->id);
+ 	if ($date_changed) { cp_portal_tokens_reexpire($portal); }

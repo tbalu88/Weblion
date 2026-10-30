@@ -1,0 +1,11 @@
+--- a/portal-panel.php
++++ b/portal-panel.php
+@@ -40,7 +40,7 @@
+ 		'errors' => array_slice(cp_portal_errors($deal_id), 0, 20),
+ 	);
+ 	if (!$portal) { return $out; }
+-	$portal = cp_portal_sm_refresh($portal, 600);
++	$portal = cp_portal_sm_refresh($portal, 60);
+ 	$rows = cp_portal_answer_rows($portal->id);
+ 	$answers = array();
+ 	$meta = array();
