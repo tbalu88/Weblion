@@ -191,13 +191,13 @@ function cp_set_ajax_admin() {
 				$o['users'] = array_values(array_filter(array_map('intval', (array) json_decode((string) $p('send_users', '[]'), true))));
 				$o['from_name'] = sanitize_text_field($p('from_name', 'EventCrazy')) ?: 'EventCrazy';
 				$o['sign'] = sanitize_textarea_field($p('sign'));
-				$o['host'] = preg_replace('/[^a-z0-9.\-]/i', '', (string) $p('host'));
-				$o['port'] = (int) $p('port', 465) ?: 465;
-				$o['secure'] = $p('secure') === 'tls' ? 'tls' : 'ssl';
+				/* v1.63: a kimenő szerver címe / portja csak a WordPress adminban állítható – különben a panelből egy idegen
+				 * szerverre irányítva az „SMTP-ellenőrzés” kiadná a postafiók jelszavát */
+				$hchg = preg_replace('/[^a-z0-9.\-]/i', '', (string) $p('host', $o['host'])) !== (string) $o['host'];
 				$o['append'] = $p('append') ? 1 : 0;
 				update_option('cp_send_opts', $o, false);
 			}
-			$msg = 'Levelezés mentve. Beérkezés: ' . ($on ? 'be' : 'ki') . '; küldés: ' . (!empty($o['on']) ? 'be (' . count($o['users']) . ' kolléga)' : 'ki') . '.';
+			$msg = (!empty($hchg) ? 'A kimenő szerver címe csak a WordPress adminban módosítható (Beállítások → Levelezés), ez nem változott. ' : '') . 'Levelezés mentve. Beérkezés: ' . ($on ? 'be' : 'ki') . '; küldés: ' . (!empty($o['on']) ? 'be (' . count($o['users']) . ' kolléga)' : 'ki') . '.';
 			break;
 		case 'smtp':
 			if (!function_exists('cp_send_mailer')) { cp_el_err('A küldés modul nincs betöltve.'); }

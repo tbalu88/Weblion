@@ -117,6 +117,7 @@ add_action('wp_ajax_nopriv_cp_mail_send', 'cp_send_ajax');
 add_action('wp_ajax_cp_mail_send', 'cp_send_ajax');
 function cp_send_ajax() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if (!cp_send_can($me)) { cp_el_err('A panelből küldés neked nincs bekapcsolva (próbaüzem). Küldj a Salesmate-ből.', 403); }

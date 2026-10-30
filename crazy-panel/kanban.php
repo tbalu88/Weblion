@@ -199,6 +199,7 @@ function cp_kb_cards_out($rows) {
 
 function cp_kb_req() {
 	cp_el_auth();
+	cp_tab_need(array('feladatok'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	if (!cp_kb_db_ok()) { cp_el_err('Az adatbázis még készül – próbáld újra egy perc múlva.', 503); }
 }

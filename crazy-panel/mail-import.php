@@ -248,7 +248,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $mid))) { return 'dup'; }
 	$from = cp_imp_addr($h->from ?? array()); $to = cp_imp_addr($h->to ?? array()); $cc = cp_imp_addr($h->cc ?? array());
 	$f = $from[0] ?? array('e' => '', 'n' => '');
-	$out = $sent || $f['e'] === $me;
+	$out = $sent || $f['e'] === $me; /* v1.63: a saját címünkről a Beérkezettbe jött levél feladója hamisítható → „ellenőrizetlen” jelölés */
 	if (!$out && cp_imp_is_bulk($hraw, $f['e'])) { return 'skip'; }
 	$other = $out ? ($to[0] ?? array('e' => '', 'n' => '')) : $f;
 	if ($other['e'] === '' || $other['e'] === $me) { return 'skip'; }
@@ -278,7 +278,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
+		'status' => (!$sent && $out) ? 'ellenőrizetlen' : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
 	if (!$out) {

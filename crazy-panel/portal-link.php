@@ -64,6 +64,7 @@ add_action('wp_ajax_nopriv_cp_portal_mail_link', 'cp_plk_ajax_link');
 add_action('wp_ajax_cp_portal_mail_link', 'cp_plk_ajax_link');
 function cp_plk_ajax_link() {
 	cp_el_auth();
+	cp_tab_need(array('mail', 'deals'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	if (!cp_plk_ready()) { cp_el_err('Az ügyfélportál nincs bekapcsolva.', 503); }
 	if (cp_portal_mode() !== 'on') { cp_el_err('Az ügyfélportál ki van kapcsolva (WP admin → Beállítások → Ügyfélportál).'); }

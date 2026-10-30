@@ -57,7 +57,7 @@ function cp_pu_set_cookie($uid) {
 	$u = cp_pu_get($uid);
 	if (!$u) { return; }
 	$exp = time() + 30 * DAY_IN_SECONDS;
-	setcookie(CP_PANEL_COOKIE, $exp . '|u|' . (int) $uid . '|' . cp_pu_sig($exp, $uid, $u), $exp, '/', '', is_ssl(), true);
+	cp_panel_setcookie($exp . '|u|' . (int) $uid . '|' . cp_pu_sig($exp, $uid, $u), $exp);
 	$d = cp_pu_data();
 	$d['list'][(int) $uid]['last'] = time();
 	cp_pu_save($d);

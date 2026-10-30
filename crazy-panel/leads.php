@@ -149,6 +149,7 @@ add_action('wp_ajax_nopriv_cp_lead_set', 'cp_lead_ajax_set');
 add_action('wp_ajax_cp_lead_set', 'cp_lead_ajax_set');
 function cp_lead_ajax_set() {
 	cp_el_auth();
+	cp_tab_need(array('deals'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_lead_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$st = sanitize_key(wp_unslash($_POST['st'] ?? ''));

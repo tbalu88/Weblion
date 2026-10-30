@@ -1,0 +1,42 @@
+--- a/portal-panel.php
++++ b/portal-panel.php
+@@ -97,6 +97,7 @@
+ add_action('wp_ajax_cp_portal_p_get', 'cp_portal_ajax_p_get');
+ function cp_portal_ajax_p_get() {
+ 	cp_el_auth();
++	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
+ 	wp_send_json_success(cp_portal_p_detail(cp_portal_p_deal_id()));
+ }
+ 
+@@ -104,6 +105,7 @@
+ add_action('wp_ajax_cp_portal_p_save', 'cp_portal_ajax_p_save');
+ function cp_portal_ajax_p_save() {
+ 	cp_el_auth();
++	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
+ 	$id = cp_portal_p_deal_id();
+ 	$portal = cp_portal_get_by_deal($id);
+ 	if (!$portal) { cp_el_err('Ehhez a dealhez nincs portál.', 404); }
+@@ -120,6 +122,7 @@
+ add_action('wp_ajax_cp_portal_p_create', 'cp_portal_ajax_p_send');
+ function cp_portal_ajax_p_send() {
+ 	cp_el_auth();
++	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
+ 	$id = cp_portal_p_deal_id();
+ 	$type = isset($_POST['type']) ? sanitize_key(wp_unslash($_POST['type'])) : '';
+ 	$r = cp_portal_send($id, $type);
+@@ -132,6 +135,7 @@
+ add_action('wp_ajax_cp_portal_p_link', 'cp_portal_ajax_p_link');
+ function cp_portal_ajax_p_link() {
+ 	cp_el_auth();
++	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
+ 	$id = cp_portal_p_deal_id();
+ 	$portal = cp_portal_get_by_deal($id);
+ 	if (!$portal) { cp_el_err('Ehhez a dealhez nincs portál.', 404); }
+@@ -165,6 +169,7 @@
+ add_action('wp_ajax_cp_portal_p_errors', 'cp_portal_ajax_p_errors');
+ function cp_portal_ajax_p_errors() {
+ 	cp_el_auth();
++	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
+ 	if (!empty($_POST['clear'])) { update_option('cp_portal_errors', array(), false); }
+ 	$q = get_option('cp_portal_smq', array());
+ 	wp_send_json_success(array('errors' => cp_portal_errors(), 'queue' => is_array($q) ? array_values($q) : array()));

@@ -131,7 +131,7 @@ function cp_ai_similar($tid, $text, $P) {
 	$out = array(); $seen = array();
 	foreach ($hits as $h) {
 		if (isset($seen[$h['thread_id']]) || count($out) >= 3) { continue; }
-		$rep = $wpdb->get_row($wpdb->prepare("SELECT body FROM $M WHERE thread_id = %d AND dir = 'out' AND sent_at >= %s ORDER BY sent_at, id LIMIT 1", $h['thread_id'], $h['sent_at']), ARRAY_A);
+		$rep = $wpdb->get_row($wpdb->prepare("SELECT body FROM $M WHERE thread_id = %d AND dir = 'out' AND status NOT IN ('idézetből', 'ellenőrizetlen') AND (imap_folder = '' OR imap_folder <> 'INBOX') AND sent_at >= %s ORDER BY sent_at, id LIMIT 1", $h['thread_id'], $h['sent_at']), ARRAY_A);
 		if (!$rep) { continue; }
 		$seen[$h['thread_id']] = 1;
 		$cn = (string) $wpdb->get_var($wpdb->prepare("SELECT contact_name FROM $T WHERE id = %d", $h['thread_id']));
@@ -206,10 +206,13 @@ function cp_ai_draft($tid, $wish = '') {
 	$j = json_decode($r, true);
 	if (!is_array($j) || !isset($j['reply_html'])) { return new WP_Error('parse', 'Az AI válasza nem volt értelmezhető – próbáld újra.'); }
 	$sign = $me !== '' ? $me : 'EventCrazy csapat';
-	$html = str_replace('[ALÁÍRÓ]', esc_html($sign), $P->show($j['reply_html']));
+	/* v1.63: az AI kimenete csak egyszerű szövegformázás lehet – kép, link, stílus nélkül. Egy bejövő levélbe rejtett
+	 * utasítás így nem tud külső képet / linket csempészni a piszkozatba, amely betöltéskor ügyféladatot küldene ki.
+	 * Szűrés a valódi adatok visszahelyezése előtt ÉS után is (a visszahelyezett adat sem lehet HTML). */
+	$html = str_replace('[ALÁÍRÓ]', esc_html($sign), cp_ai_plain_html($P->show(cp_ai_plain_html((string) $j['reply_html']))));
 	return array(
 		'subject' => $P->show((string) $j['subject']),
-		'html' => function_exists('cp_mail_clean') ? cp_mail_clean($html) : wp_kses_post($html),
+		'html' => cp_ai_plain_html($html),
 		'notes' => array_map(array($P, 'show'), array_map('strval', (array) $j['notes'])),
 		'missing' => array_map(array($P, 'show'), array_map('strval', (array) $j['missing'])),
 		'to' => $t['ce'],
@@ -220,6 +223,11 @@ function cp_ai_draft($tid, $wish = '') {
 
 add_action('wp_ajax_nopriv_cp_ai_draft', 'cp_ai_ajax_draft');
 add_action('wp_ajax_cp_ai_draft', 'cp_ai_ajax_draft');
+function cp_ai_plain_html($h) {
+	$ok = array('p' => array(), 'br' => array(), 'b' => array(), 'strong' => array(), 'i' => array(), 'em' => array(), 'u' => array(), 'ul' => array(), 'ol' => array(), 'li' => array(), 'blockquote' => array(), 'mark' => array());
+	return wp_kses((string) $h, $ok, array());
+}
+
 function cp_ai_ajax_draft() {
 	cp_el_auth();
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }

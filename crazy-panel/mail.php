@@ -255,6 +255,7 @@ add_action('wp_ajax_nopriv_cp_mail_tpls', 'cp_mail_ajax_tpls');
 add_action('wp_ajax_cp_mail_tpls', 'cp_mail_ajax_tpls');
 function cp_mail_ajax_tpls() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if (!cp_mail_db_ok()) { cp_el_err('Az adatbázis még készül – próbáld újra egy perc múlva.', 503); }
 	global $wpdb;
 	$rows = $wpdb->get_results('SELECT id, name, category, subject, body, updated_by, updated_at FROM ' . cp_mail_t() . ' WHERE deleted_at IS NULL ORDER BY category, name', ARRAY_A);
@@ -267,6 +268,7 @@ add_action('wp_ajax_nopriv_cp_mail_tpl_save', 'cp_mail_ajax_tpl_save');
 add_action('wp_ajax_cp_mail_tpl_save', 'cp_mail_ajax_tpl_save');
 function cp_mail_ajax_tpl_save() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
@@ -290,6 +292,7 @@ add_action('wp_ajax_nopriv_cp_mail_tpl_del', 'cp_mail_ajax_tpl_del');
 add_action('wp_ajax_cp_mail_tpl_del', 'cp_mail_ajax_tpl_del');
 function cp_mail_ajax_tpl_del() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$wpdb->update(cp_mail_t(), array('deleted_at' => gmdate('Y-m-d H:i:s'), 'updated_by' => function_exists('cp_panel_who') ? cp_panel_who() : ''), array('id' => (int) ($_POST['id'] ?? 0)));
@@ -301,6 +304,7 @@ add_action('wp_ajax_nopriv_cp_mail_preview', 'cp_mail_ajax_preview');
 add_action('wp_ajax_cp_mail_preview', 'cp_mail_ajax_preview');
 function cp_mail_ajax_preview() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	$vals = cp_mail_values(isset($_POST['deal']) ? (int) $_POST['deal'] : 0);
 	$sample = empty($_POST['deal']);
 	if ($sample) { foreach (cp_mail_vars() as $k => $x) { if ($vals[$k] === '') { $vals[$k] = $x[1]; } } }
@@ -316,6 +320,7 @@ add_action('wp_ajax_nopriv_cp_mail_deals', 'cp_mail_ajax_deals');
 add_action('wp_ajax_cp_mail_deals', 'cp_mail_ajax_deals');
 function cp_mail_ajax_deals() {
 	cp_el_auth();
+	cp_tab_need(array('mail', 'feladatok', 'deals'));
 	if (!function_exists('cp_crm_list_data')) { wp_send_json_success(array('rows' => array())); }
 	$r = cp_crm_list_data(array('q' => isset($_POST['q']) ? (string) wp_unslash($_POST['q']) : '', 'so' => 'mod'));
 	wp_send_json_success(array('rows' => array_map(function ($x) { return array('id' => $x['id'], 'title' => $x['title'], 'cn' => $x['cn'], 'ce' => $x['ce'], 'ev' => $x['ev']); }, array_slice($r['rows'], 0, 12))));
@@ -353,6 +358,7 @@ add_action('wp_ajax_nopriv_cp_mail_threads', 'cp_mail_ajax_threads');
 add_action('wp_ajax_cp_mail_threads', 'cp_mail_ajax_threads');
 function cp_mail_ajax_threads() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if (!cp_mail_db_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 	global $wpdb;
 	$w = array('1=1');
@@ -399,6 +405,7 @@ add_action('wp_ajax_nopriv_cp_mail_thread', 'cp_mail_ajax_thread');
 add_action('wp_ajax_cp_mail_thread', 'cp_mail_ajax_thread');
 function cp_mail_ajax_thread() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	global $wpdb;
 	$id = (int) ($_POST['id'] ?? 0);
 	/* megnyitáskor olvasott (a csapat közös postafiókjában mindenkinek) */
@@ -413,6 +420,7 @@ add_action('wp_ajax_nopriv_cp_mail_note_add', 'cp_mail_ajax_note_add');
 add_action('wp_ajax_cp_mail_note_add', 'cp_mail_ajax_note_add');
 function cp_mail_ajax_note_add() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$tid = (int) ($_POST['thread'] ?? 0);
@@ -431,6 +439,7 @@ add_action('wp_ajax_nopriv_cp_mail_note_del', 'cp_mail_ajax_note_del');
 add_action('wp_ajax_cp_mail_note_del', 'cp_mail_ajax_note_del');
 function cp_mail_ajax_note_del() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$n = $wpdb->get_row($wpdb->prepare('SELECT id, thread_id, author_uid FROM ' . cp_mail_t('notes') . ' WHERE id = %d', (int) ($_POST['id'] ?? 0)), ARRAY_A);
@@ -446,6 +455,7 @@ add_action('wp_ajax_nopriv_cp_mail_thread_set', 'cp_mail_ajax_thread_set');
 add_action('wp_ajax_cp_mail_thread_set', 'cp_mail_ajax_thread_set');
 function cp_mail_ajax_thread_set() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$id = (int) ($_POST['id'] ?? 0);
@@ -496,6 +506,7 @@ add_action('wp_ajax_nopriv_cp_mail_bulk', 'cp_mail_ajax_bulk');
 add_action('wp_ajax_cp_mail_bulk', 'cp_mail_ajax_bulk');
 function cp_mail_ajax_bulk() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
 	global $wpdb;
 	$T = cp_mail_t('threads');

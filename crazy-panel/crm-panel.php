@@ -51,12 +51,14 @@ function cp_crm_local($dt) {
 add_action('wp_ajax_nopriv_cp_crm_list', 'cp_crm_ajax_list');
 add_action('wp_ajax_cp_crm_list', 'cp_crm_ajax_list');
 function cp_crm_ajax_list() {
-	cp_crm_ajax_guard();
+	cp_crm_ajax_guard(array('deals'));
 	wp_send_json_success(cp_crm_list_data(wp_unslash($_REQUEST)));
 }
 
-function cp_crm_ajax_guard() {
+/* v1.63: $tabs – melyik fül(ek) engedik; alapból bármelyik ügyféladat-fül (a Deal-adatlap sok helyről nyílik) */
+function cp_crm_ajax_guard($tabs = null) {
 	cp_el_auth();
+	cp_tab_need($tabs === null ? cp_tabs_data() : $tabs);
 	if (!cp_crm_panel_on()) { cp_el_err('A CRM-adatok még töltődnek – próbáld újra pár perc múlva.', 503); }
 }
 
@@ -145,7 +147,7 @@ function cp_crm_sync_at() {
 add_action('wp_ajax_nopriv_cp_crm_board', 'cp_crm_ajax_board');
 add_action('wp_ajax_cp_crm_board', 'cp_crm_ajax_board');
 function cp_crm_ajax_board() {
-	cp_crm_ajax_guard();
+	cp_crm_ajax_guard(array('deals'));
 	wp_send_json_success(cp_crm_board_data(wp_unslash($_REQUEST)));
 }
 
@@ -217,7 +219,7 @@ function cp_crm_deal_data($id) {
 add_action('wp_ajax_nopriv_cp_crm_sync', 'cp_crm_ajax_sync');
 add_action('wp_ajax_cp_crm_sync', 'cp_crm_ajax_sync');
 function cp_crm_ajax_sync() {
-	cp_crm_ajax_guard();
+	cp_crm_ajax_guard(array('deals'));
 	$st = cp_crm_state();
 	if (empty($st['last_run']) || time() - (int) $st['last_run'] >= 60) { cp_crm_sync(true); }
 	wp_send_json_success(array('sync' => cp_crm_sync_at()));
@@ -340,7 +342,8 @@ function cp_crm_ajax_set() {
 add_action('wp_ajax_nopriv_cp_crm_delete', 'cp_crm_ajax_delete');
 add_action('wp_ajax_cp_crm_delete', 'cp_crm_ajax_delete');
 function cp_crm_ajax_delete() {
-	cp_crm_ajax_guard();
+	cp_crm_ajax_guard(array('deals'));
+	cp_admin_need(); /* v1.63: végleges törlés a Salesmate-ben – csak admin */
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
 	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;

@@ -1,0 +1,203 @@
+--- a/crazy-panel.php
++++ b/crazy-panel.php
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.62.0');
++define('CP_PANEL_VER', '1.63.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -97,6 +97,11 @@
+ 	nocache_headers();
+ 	header('X-Robots-Tag: noindex, nofollow', true);
+ 	header('Content-Type: text/html; charset=utf-8');
++	/* v1.63: a panel nem ágyazható be idegen oldalba, és a címét nem adja tovább külső oldalaknak */
++	header('X-Frame-Options: SAMEORIGIN');
++	header("Content-Security-Policy: frame-ancestors 'self'");
++	header('X-Content-Type-Options: nosniff');
++	header('Referrer-Policy: same-origin');
+ 
+ 	// kezelői adatlap (Elszámolás): jelszó nélkül, aláírt linkkel
+ 	if (isset($_GET['k'])) { cp_el_render_form((string) wp_unslash($_GET['k'])); exit; }
+@@ -114,7 +119,7 @@
+ 	}
+ 	if (isset($_GET['kilep'])) {
+ 		do_action('cp_audit_logout');
+-		setcookie(CP_PANEL_COOKIE, '', time() - 3600, '/', '', is_ssl(), true);
++		cp_panel_setcookie('', time() - 3600);
+ 		wp_safe_redirect(home_url('/' . $slug . '/'));
+ 		exit;
+ 	}
+@@ -203,10 +208,17 @@
+ 	delete_transient($key);
+ 	do_action('cp_audit_login', 0, $role);
+ 	$exp = time() + 30 * DAY_IN_SECONDS;
+-	setcookie(CP_PANEL_COOKIE, $exp . '|' . ($role === 'iroda' ? 'iroda|' : '') . cp_panel_sig($exp, $role), $exp, '/', '', is_ssl(), true);
++	cp_panel_setcookie($exp . '|' . ($role === 'iroda' ? 'iroda|' : '') . cp_panel_sig($exp, $role), $exp);
+ 	return '';
+ }
+ 
++/* v1.63: a belépési süti: HttpOnly, https-en Secure, SameSite=Lax (idegen oldalról indított kérésekhez nem megy) */
++function cp_panel_setcookie($val, $exp) {
++	$sec = is_ssl() || strpos((string) home_url(), 'https:') === 0;
++	if (PHP_VERSION_ID >= 70300) { setcookie(CP_PANEL_COOKIE, $val, array('expires' => $exp, 'path' => '/', 'secure' => $sec, 'httponly' => true, 'samesite' => 'Lax')); }
++	else { setcookie(CP_PANEL_COOKIE, $val, $exp, '/; samesite=Lax', '', $sec, true); }
++}
++
+ function cp_panel_csrf() {
+ 	return isset($_COOKIE[CP_PANEL_COOKIE]) ? substr(hash_hmac('sha256', 'csrf|' . wp_unslash($_COOKIE[CP_PANEL_COOKIE]), wp_salt('nonce')), 0, 32) : '';
+ }
+@@ -517,6 +529,7 @@
+ 	if (!cp_panel_authed() || !hash_equals(cp_panel_csrf(), isset($_REQUEST['t']) ? (string) wp_unslash($_REQUEST['t']) : '')) {
+ 		wp_send_json_error(array('msg' => 'auth'), 403);
+ 	}
++	cp_tab_need(cp_tabs_panel());
+ 	$from = isset($_REQUEST['from']) ? preg_replace('/[^0-9-]/', '', wp_unslash($_REQUEST['from'])) : '';
+ 	$to = isset($_REQUEST['to']) ? preg_replace('/[^0-9-]/', '', wp_unslash($_REQUEST['to'])) : '';
+ 	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) || $to < $from) {
+@@ -560,6 +573,7 @@
+ 	if (!cp_panel_authed() || !hash_equals(cp_panel_csrf(), isset($_POST['t']) ? (string) wp_unslash($_POST['t']) : '')) {
+ 		wp_send_json_error(array('msg' => 'auth'), 403);
+ 	}
++	cp_tab_need(cp_tabs_panel());
+ 	$d = isset($_POST['date']) ? preg_replace('/[^0-9-]/', '', wp_unslash($_POST['date'])) : '';
+ 	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { wp_send_json_error(array('msg' => 'Hibás dátum.'), 400); }
+ 	$n = isset($_POST['n']) ? max(0, min(50, (int) $_POST['n'])) : 0;
+@@ -633,6 +647,7 @@
+ 	if (!cp_panel_authed() || !hash_equals(cp_panel_csrf(), isset($_REQUEST['t']) ? (string) wp_unslash($_REQUEST['t']) : '')) {
+ 		wp_send_json_error(array('msg' => 'auth'), 403);
+ 	}
++	cp_tab_need(cp_tabs_panel());
+ 	// lista (frissítéshez): from/to
+ 	if (isset($_REQUEST['from'], $_REQUEST['to']) && !isset($_POST['id'])) {
+ 		$from = preg_replace('/[^0-9-]/', '', wp_unslash($_REQUEST['from']));
+@@ -940,6 +955,7 @@
+ 	if (!cp_panel_authed() || !hash_equals(cp_panel_csrf(), isset($_POST['t']) ? (string) wp_unslash($_POST['t']) : '')) {
+ 		wp_send_json_error(array('msg' => 'auth'), 403);
+ 	}
++	cp_tab_need(cp_tabs_panel());
+ 	$o = cp_panel_opts();
+ 	$signed = cp_panel_lines($o['signed_stages']);
+ 	$booked = cp_panel_lines($o['booked_stages']);
+@@ -1005,6 +1021,7 @@
+ 	if (!cp_panel_authed() || !hash_equals(cp_panel_csrf(), isset($_POST['t']) ? (string) wp_unslash($_POST['t']) : '')) {
+ 		wp_send_json_error(array('msg' => 'auth'), 403);
+ 	}
++	cp_tab_need(cp_tabs_panel());
+ 	$o = cp_panel_opts();
+ 	if (empty($o['bg_write']) || $o['f_bg'] === '') { wp_send_json_error(array('msg' => 'A háttér visszaírása ki van kapcsolva.'), 400); }
+ 	$id = isset($_POST['id']) ? preg_replace('/[^0-9]/', '', wp_unslash($_POST['id'])) : '';
+@@ -1840,6 +1857,20 @@
+ 	if (function_exists('cp_panel_can')) { return cp_panel_can($tab); }
+ 	return in_array($tab, array('stat', 'tarca', 'flows'), true) ? cp_panel_is_admin() : true;
+ }
++/* v1.63: a szerver is ellenőrzi, hogy a fiók láthatja-e az adott fület (nem csak a felület rejti el).
++ * Csoportok: a Deal-adatlap sok helyről nyílik, ezért az ügyféladatokat bármelyik ügyféladat-fül engedi. */
++function cp_tabs_panel() { return array('naptar', 'kovetes', 'hatterek', 'munkalap', 'elszamolas', 'ellenorzes', 'tarca'); }
++function cp_tabs_data() { return array_merge(array('deals', 'kapcsolatok', 'mail', 'feladatok'), cp_tabs_panel()); }
++function cp_panel_can_any($tabs) {
++	foreach ((array) $tabs as $t) { if (cp_panel_can_x($t)) { return true; } }
++	return false;
++}
++function cp_tab_need($tabs) {
++	if (!cp_panel_can_any($tabs)) { wp_send_json_error(array('msg' => 'Ehhez a funkcióhoz a fiókodnak nincs jogosultsága.'), 403); }
++}
++function cp_admin_need() {
++	if (!cp_panel_is_admin()) { wp_send_json_error(array('msg' => 'Ezt csak admin fiók teheti meg.'), 403); }
++}
+ function cp_tw_auth() {
+ 	cp_el_auth();
+ 	if (!cp_panel_can_x('tarca')) { wp_send_json_error(array('msg' => 'A Tárca nincs engedélyezve a fiókodnak.'), 403); }
+@@ -1877,6 +1908,7 @@
+ 	if (!cp_panel_authed()) { cp_el_err('auth', 403); }
+ 	$get = isset($_SERVER['REQUEST_METHOD']) && strtoupper($_SERVER['REQUEST_METHOD']) === 'GET';
+ 	if (!$get && !hash_equals(cp_panel_csrf(), isset($_REQUEST['t']) ? (string) wp_unslash($_REQUEST['t']) : '')) { cp_el_err('auth', 403); }
++	cp_tab_need(cp_tabs_panel());
+ 	return array(cp_el_req_postid(), 'panel');
+ }
+ 
+@@ -1894,6 +1926,7 @@
+ add_action('wp_ajax_cp_el_data', 'cp_el_ajax_data');
+ function cp_el_ajax_data() {
+ 	cp_el_auth();
++	cp_tab_need(cp_tabs_panel());
+ 	list($from, $to) = cp_el_range();
+ 	$c = cp_el_deals($from, $to, !empty($_REQUEST['refresh']));
+ 	if (is_wp_error($c)) { cp_el_err($c->get_error_message(), 502); }
+@@ -1967,6 +2000,7 @@
+ add_action('wp_ajax_cp_el_save', 'cp_el_ajax_save');
+ function cp_el_ajax_save() {
+ 	cp_el_auth();
++	cp_tab_need(cp_tabs_panel());
+ 	$id = cp_el_req_postid();
+ 	$i = cp_el_req_rid();
+ 	$fields = json_decode(isset($_POST['fields']) ? (string) wp_unslash($_POST['fields']) : '', true);
+@@ -2075,6 +2109,7 @@
+ add_action('wp_ajax_cp_el_row', 'cp_el_ajax_row');
+ function cp_el_ajax_row() {
+ 	cp_el_auth();
++	cp_tab_need(cp_tabs_panel());
+ 	$id = cp_el_req_postid();
+ 	$op = isset($_POST['op']) ? sanitize_key(wp_unslash($_POST['op'])) : '';
+ 	cp_el_lock_guard(cp_el_req_date('d') !== '' ? cp_el_req_date('d') : cp_el_s(cp_el_st_get($id), 'd'));
+@@ -2111,6 +2146,7 @@
+ add_action('wp_ajax_cp_el_manual', 'cp_el_ajax_manual');
+ function cp_el_ajax_manual() {
+ 	cp_el_auth();
++	cp_tab_need(cp_tabs_panel());
+ 	$op = isset($_POST['op']) ? sanitize_key(wp_unslash($_POST['op'])) : 'save';
+ 	$rid = isset($_POST['id']) ? (string) wp_unslash($_POST['id']) : '';
+ 	if ($rid !== '' && cp_el_id_ok($rid)) { cp_el_lock_guard(cp_el_s(cp_el_st_get($rid), 'd')); }
+@@ -2153,6 +2189,7 @@
+ add_action('wp_ajax_cp_el_kez', 'cp_el_ajax_kez');
+ function cp_el_ajax_kez() {
+ 	cp_el_auth();
++	cp_tab_need(array('elszamolas'));
+ 	$in = json_decode(isset($_POST['k']) ? (string) wp_unslash($_POST['k']) : '', true);
+ 	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
+ 	$name = mb_substr(sanitize_text_field(cp_el_s($in, 'name')), 0, 60);
+@@ -2193,6 +2230,7 @@
+ add_action('wp_ajax_cp_el_pay', 'cp_el_ajax_pay');
+ function cp_el_ajax_pay() {
+ 	cp_el_auth();
++	cp_tab_need(array('elszamolas'));
+ 	$items = isset($_POST['items']) && is_array($_POST['items']) ? array_map('sanitize_text_field', wp_unslash($_POST['items'])) : array();
+ 	$undo = !empty($_POST['undo']);
+ 	$payer = mb_substr(sanitize_text_field(cp_el_s(wp_unslash($_POST), 'payer')), 0, 60);
+@@ -2515,6 +2553,7 @@
+ add_action('wp_ajax_cp_el_lock', 'cp_el_ajax_lock');
+ function cp_el_ajax_lock() {
+ 	cp_el_auth();
++	cp_tab_need(array('elszamolas')); cp_admin_need();
+ 	$ym = isset($_POST['ym']) ? preg_replace('/[^0-9-]/', '', (string) wp_unslash($_POST['ym'])) : '';
+ 	if (!preg_match('/^\d{4}-\d{2}$/', $ym)) { cp_el_err('Hibás hónap.'); }
+ 	$l = cp_el_locks();
+@@ -2536,6 +2575,7 @@
+ add_action('wp_ajax_cp_el_geo', 'cp_el_ajax_geo');
+ function cp_el_ajax_geo() {
+ 	cp_el_auth();
++	cp_tab_need(cp_tabs_panel());
+ 	$loc = mb_substr(sanitize_text_field(cp_el_s(wp_unslash($_POST), 'loc')), 0, 300);
+ 	if ($loc === '') { cp_el_err('Nincs helyszín.'); }
+ 	if (!empty($_POST['retry'])) {
+@@ -3284,6 +3324,7 @@
+ add_action('wp_ajax_cp_el_import', 'cp_el_ajax_import');
+ function cp_el_ajax_import() {
+ 	cp_el_auth();
++	cp_tab_need(array('elszamolas')); cp_admin_need();
+ 	$data = json_decode(isset($_POST['data']) ? (string) wp_unslash($_POST['data']) : '', true);
+ 	if (!is_array($data) || !$data || count($data) > 150) { cp_el_err('Hibás kérés.'); }
+ 	$dry = !empty($_POST['dry']);
+@@ -3294,6 +3335,10 @@
+ 		if (!cp_el_id_ok($id) || !is_array($in) || empty($in['r']) || !is_array($in['r'])) { $res[$id] = 'hibás'; continue; }
+ 		$old = cp_el_st_get($id);
+ 		if (!empty($old['r']) && !$overwrite) { $res[$id] = 'kihagyva (már van adat)'; continue; }
++		/* v1.63: lezárt hónapot és kifizetett sort az import sem ír felül */
++		$od = (string) ($old['d'] ?? ''); $nd = preg_replace('/[^0-9-]/', '', cp_el_s($in, 'd'));
++		if ((preg_match('/^\d{4}-\d{2}/', $od) && cp_el_lock_of(substr($od, 0, 7))) || (preg_match('/^\d{4}-\d{2}/', $nd) && cp_el_lock_of(substr($nd, 0, 7)))) { $res[$id] = 'kihagyva (lezárt hónap)'; continue; }
++		if (!empty($old['r']) && array_filter((array) $old['r'], function ($r) { return is_array($r) && !empty($r['pd']); })) { $res[$id] = 'kihagyva (már kifizetett sor)'; continue; }
+ 		$st = array();
+ 		$d = preg_replace('/[^0-9-]/', '', cp_el_s($in, 'd'));
+ 		if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { $st['d'] = $d; }

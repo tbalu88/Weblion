@@ -132,6 +132,7 @@ add_action('wp_ajax_nopriv_cp_mail_upload', 'cp_att_ajax_upload');
 add_action('wp_ajax_cp_mail_upload', 'cp_att_ajax_upload');
 function cp_att_ajax_upload() {
 	cp_el_auth();
+	cp_tab_need(array('mail'));
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if (!function_exists('cp_send_can') || !cp_send_can($me)) { cp_el_err('A panelből küldés neked nincs bekapcsolva.', 403); }
 	if (empty($_FILES['f']) || !is_uploaded_file($_FILES['f']['tmp_name']) || (int) $_FILES['f']['error'] !== 0) { cp_el_err('A feltöltés nem sikerült.'); }
