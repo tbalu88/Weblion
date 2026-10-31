@@ -7,3 +7,7 @@
   „Verziók és változások” táblázat tetejére (dátum · verzió · változás). Megszűnő funkciót töröld az útmutatóból,
   és jelöld a változásnaplóban.
 - Az útmutató nyelve magyar, felhasználói szemszögből (mit hol talál, lépésről lépésre), technikai részletek nélkül.
+
+## Félretett ötletek
+- A félretett UX-/fejlesztési javaslatok a `docs/ux-otlettar.md` fájlban vannak. Ha a felhasználó új javaslatokat kér,
+  ezeket is ajánld fel (az újak mellett); ami elkészült, azt töröld onnan.
