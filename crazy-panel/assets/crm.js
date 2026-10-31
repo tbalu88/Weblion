@@ -395,14 +395,17 @@
 		names.forEach(s => {
 			const l = col[s] || [];
 			const v = l.reduce((a, r) => a + (r.value || 0), 0);
+			/* v1.82.2: az ajánlat előtti dealek becsült ára külön összegezve (~), a tényleges értékekhez nem adódik hozzá */
+			const ve = l.reduce((a, r) => a + (!(r.value > 0) && r.est ? r.est.p : 0), 0), nve = l.filter(r => !(r.value > 0) && r.est).length;
+			const veH = ve ? '<span class="crm-est" title="' + esc('Becsült összeg ' + nve + ' ajánlat előtti dealre (a kalkulátor alapján) – a tényleges értékekhez nem adódik hozzá') + '">~' + esc(money(ve, 'HUF')) + '</span>' : '';
 			if (S.fold.includes(s) && !MOB) {
 				h += '<section class="crm-col folded" data-stage="' + esc(s) + '"><button type="button" class="crm-unfold" data-fold="' + esc(s) + '" title="Oszlop kinyitása"><span>' + esc(s) + '</span><b>' + l.length + '</b></button></section>';
 				return;
 			}
 			const pend = s === STAGES[0] && S.pend && !S.qf.length ? S.pend.rows.filter(x => !S.q || hit({ title: x.n, cn: x.n, ce: x.e, cp: x.p }, S.q)) : [];
 			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span><span class="crm-chb">' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '<button type="button" class="crm-add crm-fold" data-fold="' + esc(s) + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(s) + '">‹</button></span></div>' +
-				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + '</small>' +
-				'<div class="crm-mh"><b>' + esc(s) + '</b><small>' + esc(money(v)) + ' • ' + l.length + ' deal</small>' + prog(names.indexOf(s)) + '</div></header><div class="crm-cards">' +
+				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + veH + '</small>' +
+				'<div class="crm-mh"><b>' + esc(s) + '</b><small>' + (v || !ve ? esc(money(v)) : '') + (ve ? (v ? ' + ' : '') + veH : '') + ' • ' + l.length + ' deal</small>' + prog(names.indexOf(s)) + '</div></header><div class="crm-cards">' +
 				pend.map(x => { const ev = x.f['Deal.dateCustomField1'] || '', sv = x.f['Deal.multiSelectCustomField3'] || ''; return '<article class="crm-card crm-pend" data-lead="' + x.id + '" tabindex="0"><div class="crm-ct"><span class="crm-lnew">új</span> ' + esc(x.n || x.e || 'Névtelen') + '</div><div class="crm-cl">' + (ev ? '<span>' + esc(shortD(ev)) + '</span><i>•</i>' : '') + '<span class="cpx-muted">' + esc(sv || x.form || 'weboldal') + '</span></div><div class="crm-pw">⏳ Salesmate-szinkronra vár · ' + esc(agoLead(x.at)) + '<button type="button" class="crm-px" data-pdel="' + x.id + '" title="Elvetés (spam / teszt)">×</button></div></article>'; }).join('');
 			l.forEach(r => {
 				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
