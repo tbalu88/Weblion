@@ -415,3 +415,11 @@ a.d3-who:hover{background:#F6F3EE}
 /* v1.82: becsült ár a csempén (ajánlat előtt) */
 .crm-est{color:#7A5B00;background:#FFF3C4;border-radius:6px;padding:0 6px;font-weight:600;cursor:help}
 .crm-est sup{font-size:9px;margin-left:1px;color:#9A7A20}
+/* v1.83: gyors jegyzet a csempéről */
+.crm-qnb{margin-left:auto;border:0;background:transparent;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#6B6F78;cursor:pointer;opacity:.45;transition:opacity .12s,background .12s;flex:none}
+.crm-qnb svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.crm-card:hover .crm-qnb,.crm-qnb:focus-visible{opacity:1}.crm-qnb:hover{background:#EFEBE5;color:#141C33}
+.crm-qn{margin-top:8px;border-top:1px solid #EEEAE4;padding-top:8px;cursor:default}
+.crm-qn textarea{width:100%;box-sizing:border-box;border:1px solid #DDD9D2;border-radius:8px;padding:6px 8px;font:13px/1.4 Inter,sans-serif;resize:vertical}
+.crm-qnf{display:flex;align-items:center;gap:6px;margin-top:6px}.crm-qnf small{color:#8A8E96;font-size:11px;margin-right:auto}.crm-qnf .cpx-btn{padding:5px 10px;font-size:12.5px}
+@media (max-width:760px){.crm-qnb{opacity:1}}

@@ -239,8 +239,8 @@
 	}
 	function bindOpen(box) {
 		box.querySelectorAll('[data-id]').forEach(r => {
-			r.addEventListener('click', e => { if (e.target.closest('a, .crm-cbc, .crm-cb')) return; openDeal(Number(r.dataset.id)); });
-			r.addEventListener('keydown', e => { if (e.key === 'Enter') openDeal(Number(r.dataset.id)); });
+			r.addEventListener('click', e => { if (e.target.closest('a, .crm-cbc, .crm-cb, .crm-qnb, .crm-qn')) return; openDeal(Number(r.dataset.id)); });
+			r.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.crm-qn')) openDeal(Number(r.dataset.id)); });
 		});
 	}
 
@@ -422,7 +422,7 @@
 					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
 					'<div class="crm-cl">' + valHtml(r) + '<i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
-					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + '</div></article>';
+					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + '</div></article>';
 			});
 			if (!l.length) h += '<div class="crm-none">Nincs deal</div>';
 			h += '</div></section>';
@@ -433,6 +433,7 @@
 		box.innerHTML = h;
 		bindOpen(box);
 		bindDrag(box);
+		box.querySelectorAll('[data-qnote]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); quickNote(b); }));
 		box.querySelectorAll('[data-fold]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const s = b.dataset.fold; S.fold = S.fold.includes(s) ? S.fold.filter(x => x !== s) : S.fold.concat([s]); save(); redrawBoard(); }));
 		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
 		const fab = box.querySelector('[data-fab]');
@@ -477,6 +478,26 @@
 		});
 		/* a tábla szélénél vízszintesen görget húzás közben */
 		bd.addEventListener('dragover', e => { if (!dragId) return; const r = bd.getBoundingClientRect(); if (e.clientX < r.left + 70) bd.scrollLeft -= 20; else if (e.clientX > r.right - 70) bd.scrollLeft += 20; });
+	}
+	/* v1.83: gyors jegyzet a csempéről (a Salesmate-be is beíródik, mint az adatlapon) */
+	function quickNote(btn) {
+		const card = btn.closest('.crm-card'), id = Number(btn.dataset.qnote);
+		const open = card.querySelector('.crm-qn'); if (open) { open.remove(); return; }
+		document.querySelectorAll('.crm-qn').forEach(x => x.remove());
+		const f = document.createElement('div'); f.className = 'crm-qn';
+		f.innerHTML = '<textarea rows="3" placeholder="Jegyzet a dealhez… (Ctrl+Enter: mentés, Esc: mégse)"></textarea><div class="crm-qnf"><small>A Salesmate-be is beíródik.</small><button type="button" class="cpx-btn ghost" data-qx>Mégse</button><button type="button" class="cpx-btn" data-qs>Mentés</button></div>';
+		card.appendChild(f); card.setAttribute('draggable', 'false');
+		const ta = f.querySelector('textarea'), close = () => { f.remove(); if (W) card.setAttribute('draggable', 'true'); };
+		f.addEventListener('click', e => e.stopPropagation()); f.addEventListener('mousedown', e => e.stopPropagation());
+		const save = async () => {
+			const v = ta.value.trim(); if (!v) { ta.focus(); return; }
+			const b = f.querySelector('[data-qs]'); b.disabled = true; b.textContent = 'Mentés…';
+			try { await post('cp_crm_note_add', { deal: id, body: v }); close(); toast('Jegyzet mentve – a Salesmate-be is.'); } catch (er) { b.disabled = false; b.textContent = 'Mentés'; toast(er.message, true); }
+		};
+		f.querySelector('[data-qs]').addEventListener('click', save);
+		f.querySelector('[data-qx]').addEventListener('click', close);
+		ta.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } if (e.key === 'Escape') { e.preventDefault(); close(); } });
+		ta.focus();
 	}
 	function redrawBoard() {
 		const box = S.main && S.main.querySelector('#crm-body');
