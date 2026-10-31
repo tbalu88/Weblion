@@ -115,7 +115,7 @@ function cp_est_geocode($v) {
 	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
 		if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; $a = (array) ($j[0]['address'] ?? array()); $name = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? ''); break; }
 	}
-	if (!$hit) { return array('km' => 0, 't' => time()); }
+	if (!$hit) { return array('km' => 0, 'n' => '', 't' => time()); }
 	$name = sanitize_text_field(mb_substr($name, 0, 60));
 	/* Budapestre esik (pl. „budapets”-ből javítva): a budapesti kiszállási díj jár, nem km-alapú */
 	if (mb_strtolower($name) === 'budapest' || mb_strpos(mb_strtolower($name), 'budapest') === 0) { return array('km' => 0, 'bp' => 1, 'n' => 'Budapest', 't' => time()); }
