@@ -1,0 +1,226 @@
+<!--
+  Crazyphoto árkalkulátor – a https://crazyphoto.hu/arkalkulator/ oldal Elementor HTML-moduljának tartalma
+  (jelölés + stílus + szkript), 2026-10-31-én mentve az élő oldalról (utolsó módosítás az oldalon: 2026-10-01).
+  Visszaállítás: Elementor → HTML modul, ezt a teljes tartalmat beilleszteni. A WP Rocket késleltető jelölését
+  (type="rocketlazyloadscript") eltávolítottam, hogy önmagában is fusson.
+  Függőségek az oldalon: a Salesmate-űrlap (formId 6fe1df29-…) és a window.cpLoadForm / SalesmateFormsV1 –
+  az „Ajánlatot kérek ezzel” gomb ebbe írja az összeállítást.
+-->
+<div id="cpcalc" class="cpc">
+  <div class="cpc-head">
+    <span class="cpc-eyebrow">Árkalkulátor</span>
+    <h2 class="cpc-title">Mennyibe kerül a ti bulitok?</h2>
+    <p class="cpc-lead">Állítsd össze pár kattintással, és azonnal látod a becsült végösszeget – kiszállással együtt.</p>
+  </div>
+
+  <div class="cpc-grid">
+    <div class="cpc-main">
+      <div class="cpc-step">
+        <div class="cpc-label"><b>1</b> Melyik élményt kéritek?</div>
+        <div class="cpc-seg" role="radiogroup" aria-label="Szolgáltatás">
+          <button type="button" class="is-on" data-mode="selfie" role="radio" aria-checked="true">Szelfigép</button>
+          <button type="button" data-mode="spin" role="radio" aria-checked="false">360 Spinner</button>
+          <button type="button" data-mode="both" role="radio" aria-checked="false">Mindkettő <em>−15%</em></button>
+        </div>
+      </div>
+
+      <div class="cpc-step">
+        <div class="cpc-label"><b>2</b> Csomag</div>
+        <div data-pkgwrap></div>
+      </div>
+
+      <div class="cpc-step">
+        <div class="cpc-label"><b>3</b> Hány vendég lesz?</div>
+        <div class="cpc-sel">
+          <select data-guests aria-label="Létszám">
+            <option value="0">150 főig</option>
+            <option value="1">151–200 fő (+5 000 Ft)</option>
+            <option value="2">201–300 fő (+7 500 Ft)</option>
+            <option value="3">301–500 fő (+10 000 Ft)</option>
+            <option value="4">501–1000 fő (+20 000 Ft)</option>
+            <option value="-1">1000 fő felett (egyedi ajánlat)</option>
+          </select>
+        </div>
+        <div class="cpc-hint2">150 fő felett létszám-felárat számolunk, 1000 fő felett egyedi ajánlatot adunk.</div>
+      </div>
+
+      <div class="cpc-step">
+        <div class="cpc-label"><b>4</b> Hol lesz a rendezvény?</div>
+        <div class="cpc-loc">
+          <input type="text" data-loc placeholder="Település vagy irányítószám" autocomplete="off" aria-label="Település vagy irányítószám">
+          <button type="button" data-loc-go>Számol</button>
+        </div>
+        <div class="cpc-locres" data-locres aria-live="polite"></div>
+      </div>
+
+      <div class="cpc-step">
+        <div class="cpc-label"><b>5</b> Kiegészítők <span class="cpc-hint">(nem kötelező)</span></div>
+        <div data-extras></div>
+      </div>
+    </div>
+
+    <aside class="cpc-sum" aria-label="Összesítő">
+      <div class="cpc-sum-card">
+        <div class="cpc-sum-title">Becsült végösszeg</div>
+        <div class="cpc-total" data-total>–</div>
+        <ul class="cpc-lines" data-lines></ul>
+        <p class="cpc-note" data-note></p>
+        <button type="button" class="cpc-cta" data-cta>Ajánlatot kérek ezzel</button>
+        <p class="cpc-fine">Extra óra a helyszínen, igény szerint: szelfigép 30 000 Ft/óra, 360 Spinner 40 000 Ft/óra. Lakossági megrendelőknek alanyi adómentes, nem terheli ÁFA. Céges megrendelésre és a karácsonyi időszakra egyedi ajánlatot adunk.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="cpc-mbar" data-mbar aria-hidden="true"><div><small>Becsült végösszeg</small><b data-mtotal>–</b></div><button type="button" data-mcta>Ajánlatkérés</button></div>
+
+  <div class="cpc-form" data-formwrap hidden>
+    <h3 class="cpc-form-title">Ajánlatkérés</h3>
+    <p class="cpc-form-lead">Az összeállításodat beírtuk az űrlapba – már csak az elérhetőségeid hiányoznak.</p>
+    <div id="_sm_webform_"></div>
+  </div>
+</div>
+
+<style>
+#cpcalc{--o:#E8894A;--a:#F2B35B;--g:linear-gradient(120deg,#E8894A 0%,#F2B35B 100%);--n:#141C33;--ink:#1A1F2B;--mu:#5B6275;--li:#ECE6DE;--bg:#FBF8F4;--ti:#FDEBD8;font-family:Roboto,system-ui,sans-serif;color:var(--ink);max-width:1180px;margin:0 auto}
+#cpcalc *{box-sizing:border-box}
+#cpcalc .cpc-head{text-align:center;max-width:680px;margin:0 auto 36px}
+#cpcalc .cpc-eyebrow{display:inline-block;font:700 12px/1 "Plus Jakarta Sans",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--o);margin-bottom:10px}
+#cpcalc .cpc-title{font:800 clamp(28px,3.4vw,42px)/1.1 "Plus Jakarta Sans",sans-serif;letter-spacing:-.02em;color:#fff;margin:0 0 10px}
+#cpcalc .cpc-lead{color:rgba(255,255,255,.78);font-size:16.5px;line-height:1.6;margin:0}
+#cpcalc .cpc-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
+#cpcalc .cpc-main{background:#fff;border:1px solid var(--li);border-radius:24px;padding:8px 26px;box-shadow:0 22px 48px -32px rgba(20,28,51,.4)}
+#cpcalc .cpc-step{padding:20px 0;border-bottom:1px solid #F1ECE5}
+#cpcalc .cpc-step:last-child{border-bottom:0}
+#cpcalc .cpc-label{font:700 16px "Plus Jakarta Sans",sans-serif;color:var(--n);margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#cpcalc .cpc-label b{width:26px;height:26px;border-radius:50%;background:var(--ti);color:var(--o);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+#cpcalc .cpc-hint{font:500 13px Roboto,sans-serif;color:var(--mu)}
+#cpcalc .cpc-hint2{font-size:13px;color:var(--mu);margin-top:8px}
+#cpcalc .cpc-sub{font:700 12px "Plus Jakarta Sans",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin:4px 0 8px}
+#cpcalc .cpc-sub:not(:first-child){margin-top:16px}
+#cpcalc button{font-family:"Plus Jakarta Sans",sans-serif;cursor:pointer}
+#cpcalc .cpc-seg{display:inline-flex;background:#F4EFE9;border-radius:999px;padding:4px;flex-wrap:wrap}
+#cpcalc .cpc-seg button{border:0;background:transparent;padding:10px 18px;border-radius:999px;font-weight:700;font-size:14.5px;color:var(--mu)}
+#cpcalc .cpc-seg button em{font-style:normal;color:var(--o);margin-left:2px}
+#cpcalc .cpc-seg button.is-on{background:#fff;color:var(--n);box-shadow:0 4px 12px -4px rgba(20,28,51,.25)}
+#cpcalc .cpc-pkgs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#cpcalc .cpc-pkg{border:1.5px solid var(--li);background:#fff;border-radius:16px;padding:14px 12px;text-align:left;transition:border-color .15s,box-shadow .15s}
+#cpcalc .cpc-pkg:hover{border-color:var(--a)}
+#cpcalc .cpc-pkg.is-on{border-color:var(--o);box-shadow:0 0 0 3px var(--ti)}
+#cpcalc .cpc-pkg .n{display:block;font-weight:800;font-size:15px;color:var(--n)}
+#cpcalc .cpc-pkg .h{display:block;font:500 12.5px Roboto,sans-serif;color:var(--mu);margin:2px 0 8px}
+#cpcalc .cpc-pkg .p{display:block;font-weight:800;font-size:16px;color:var(--o)}
+#cpcalc .cpc-sel select{height:46px;min-width:220px;border:1.5px solid var(--li);border-radius:12px;padding:0 40px 0 14px;font:600 15px Roboto,sans-serif;color:var(--ink);background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235B6275' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 14px center;-webkit-appearance:none;appearance:none}
+#cpcalc .cpc-sel select:focus{outline:0;border-color:var(--o);box-shadow:0 0 0 3px var(--ti)}
+#cpcalc .cpc-loc{display:flex;gap:8px;max-width:520px}
+#cpcalc .cpc-loc input{flex:1;min-width:0;height:46px;border:1.5px solid var(--li);border-radius:12px;padding:0 14px;font:16px Roboto,sans-serif;color:var(--ink);background:#fff}
+#cpcalc .cpc-loc input:focus{outline:0;border-color:var(--o);box-shadow:0 0 0 3px var(--ti)}
+#cpcalc .cpc-loc button{height:46px;padding:0 20px;border:0;border-radius:12px;background:var(--n);color:#fff;font-weight:700}
+#cpcalc .cpc-locres{font-size:14px;color:var(--mu);margin-top:8px;min-height:20px}
+#cpcalc .cpc-locres b{color:var(--ink)}
+#cpcalc .cpc-locres.is-err{color:#C0392B}
+#cpcalc .cpc-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#cpcalc .cpc-x{display:flex;align-items:center;gap:10px;border:1.5px solid var(--li);border-radius:14px;padding:10px 12px;background:#fff;text-align:left;font-weight:600;font-size:14px;color:var(--ink)}
+#cpcalc .cpc-x .c{flex:0 0 20px;height:20px;border-radius:6px;border:1.5px solid #D8D0C5;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+#cpcalc .cpc-x .t{flex:1;min-width:0}
+#cpcalc .cpc-x .p{font:700 13px Roboto,sans-serif;color:var(--mu);white-space:nowrap}
+#cpcalc .cpc-x.is-on{border-color:var(--o);background:#FFF8F1}
+#cpcalc .cpc-x.is-on .c{background:var(--g);border-color:transparent}
+#cpcalc .cpc-sum{position:sticky;top:90px}
+#cpcalc .cpc-sum-card{background:var(--n);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:24px;box-shadow:0 26px 50px -28px rgba(20,28,51,.6)}
+#cpcalc .cpc-sum-title{font:700 13px "Plus Jakarta Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+#cpcalc .cpc-total{font:800 40px/1.1 "Plus Jakarta Sans",sans-serif;letter-spacing:-.02em;margin:6px 0 14px;background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent}
+#cpcalc .cpc-lines{list-style:none;margin:0 0 12px;padding:0;font-size:14px}
+#cpcalc .cpc-lines li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.82)}
+#cpcalc .cpc-lines li span:last-child{white-space:nowrap;color:#fff;font-weight:600}
+#cpcalc .cpc-lines li.is-disc span{color:#7EE2A8!important}
+#cpcalc .cpc-note{font-size:13px;color:#F2B35B;margin:0 0 14px}
+#cpcalc .cpc-note:empty{display:none}
+#cpcalc .cpc-cta{width:100%;height:52px;border:0;border-radius:999px;background:var(--g);color:var(--ink);font-weight:800;font-size:16px;box-shadow:0 14px 28px -14px rgba(232,137,74,.9)}
+#cpcalc .cpc-cta:hover{filter:brightness(1.04)}
+#cpcalc .cpc-fine{font-size:12px;line-height:1.5;color:rgba(255,255,255,.55);margin:14px 0 0}
+#cpcalc .cpc-form{margin-top:36px;background:#fff;border:1px solid var(--li);border-radius:24px;padding:28px 20px;scroll-margin-top:90px}
+#cpcalc .cpc-form-title{font:800 28px "Plus Jakarta Sans",sans-serif;color:var(--n);text-align:center;margin:0 0 6px}
+#cpcalc .cpc-form-lead{text-align:center;color:var(--mu);margin:0 0 18px}
+#cpcalc #_sm_webform_{min-height:600px}
+#cpcalc #_sm_webform_:has(iframe){min-height:0}
+#cpcalc .cpc-mbar{display:none}
+@media (max-width:1024px){
+ #cpcalc .cpc-grid{grid-template-columns:1fr}#cpcalc .cpc-sum{position:static}
+ #cpcalc .cpc-mbar{display:flex;position:fixed;left:12px;right:12px;bottom:12px;z-index:9997;align-items:center;justify-content:space-between;gap:12px;background:rgba(20,28,51,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:18px;padding:10px 10px 10px 16px;box-shadow:0 18px 40px -12px rgba(0,0,0,.45);transform:translateY(160%);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+ #cpcalc .cpc-mbar.is-on{transform:none}
+ #cpcalc .cpc-mbar small{display:block;font:600 10.5px "Plus Jakarta Sans",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+ #cpcalc .cpc-mbar b{font:800 20px "Plus Jakarta Sans",sans-serif;color:#F2B35B}
+ #cpcalc .cpc-mbar button{height:44px;padding:0 18px;border:0;border-radius:999px;background:var(--g);color:var(--ink);font-weight:800;font-size:14.5px;white-space:nowrap}
+}
+@media (max-width:767px){
+ #cpcalc .cpc-main{padding:4px 16px;border-radius:20px}
+ #cpcalc .cpc-pkgs{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #cpcalc .cpc-extras{grid-template-columns:1fr}
+ #cpcalc .cpc-seg{display:flex}#cpcalc .cpc-seg button{flex:1 1 auto;padding:10px 12px;font-size:14px}
+ #cpcalc .cpc-sel select{width:100%}
+ #cpcalc .cpc-total{font-size:34px}
+ #cpcalc .cpc-sum-card{padding:20px;border-radius:20px}
+}
+</style>
+
+<script>
+(function(){
+var ORIGIN={lat:47.4577,lon:19.0424};  /* Budapest XI., Barázda utca – innen számoljuk a távolságot */
+var KM_PRICE=130, ROUND_TRIP=2, BOTH_DISC=0.15, GUEST_FEE=[0,5000,7500,10000,20000],GUEST_LBL=['','151–200 fő','201–300 fő','301–500 fő','501–1000 fő'];
+var M={
+ selfie:{label:'Szelfigép',formId:'6fe1df29-8099-4ca3-b715-2fa372698e78',pkgField:'Deal.textCustomField18',
+  pkgs:[{n:'Mini',h:3,p:99990,bud:5000,opt:'Mini - 3 óra - Korlátlan'},{n:'Medium Party',h:4,p:119990,bud:5000,opt:'Medium - 4 óra - Korlátlan'},{n:'Mega Party',h:5,p:139990,bud:0,opt:'Mega - 5 óra - Korlátlan'},{n:'Carneval',h:6,p:159990,bud:0,opt:'Carneval - 6 óra - Korlátlan'}],
+  extras:[{n:'Brandingelt fotófal',p:70000},{n:'Brandingelt gépház',p:80000},{n:'Egyedi indítóképernyő',p:5000},{n:'Egyedi fotósablon-design',p:4990},{n:'Hűtőmágnes',p:8000,from:1},{n:'Greenbox fotózás',p:50000},{n:'Vendégkönyv',p:11500},{n:'CrazyMelange élőzene',p:99990,from:1}]},
+ spin:{label:'360 Spinner',formId:'76712892-d762-4f1e-8200-a0afd764f71a',pkgField:'Deal.textCustomField14',
+  pkgs:[{n:'Mini',h:3,p:169990,bud:5000,opt:'Mini Party - 3 óra'},{n:'Medium Party',h:4,p:179990,bud:5000,opt:'Medium Party - 4 óra'},{n:'Mega Party',h:5,p:194990,bud:5000,opt:'Mega Party - 5 óra'},{n:'Carneval',h:6,p:219990,bud:5000,opt:'Carneval - 6 óra'}],
+  extras:[{n:'Advanced kellékszett',p:19990,grp:'kit'},{n:'Professional kellékszett',p:34990,grp:'kit'},{n:'TV-s megjelenítés',p:24990},{n:'Brandingelt színpad',p:49900},{n:'Egyedi videósablon',p:5000}],
+  bundle:{items:[0,2,3],n:'Összes extra (Advanced kellékszett, TV, brandingelt színpad)',p:79990}}
+};
+var root=document.getElementById('cpcalc');if(!root)return;
+var S={mode:'selfie',pkg:{selfie:1,spin:1},guests:0,loc:null,ex:{}};
+function ft(n){var s=n<0?'−':'';return s+Math.round(Math.abs(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' Ft'}
+function q(s){return root.querySelector(s)}
+function machines(){return S.mode==='both'?['selfie','spin']:[S.mode]}
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function renderPkgs(){var w=q('[data-pkgwrap]');w.innerHTML='';machines().forEach(function(k){var m=M[k];if(S.mode==='both')w.appendChild(el('div','cpc-sub',m.label));var c=el('div','cpc-pkgs');m.pkgs.forEach(function(p,i){var b=el('button','cpc-pkg'+(i===S.pkg[k]?' is-on':''));b.type='button';b.setAttribute('aria-pressed',i===S.pkg[k]);b.appendChild(el('span','n',p.n));b.appendChild(el('span','h',p.h+' óra'));b.appendChild(el('span','p',ft(p.p)));b.onclick=function(){S.pkg[k]=i;renderPkgs();calc()};c.appendChild(b)});w.appendChild(c)})}
+function renderExtras(){var w=q('[data-extras]');w.innerHTML='';machines().forEach(function(k){var m=M[k];if(S.mode==='both')w.appendChild(el('div','cpc-sub',m.label));var c=el('div','cpc-extras');m.extras.forEach(function(x,i){var key=k+':'+i,on=!!S.ex[key];var b=el('button','cpc-x'+(on?' is-on':''));b.type='button';b.setAttribute('aria-pressed',on);b.appendChild(el('span','c','✓'));b.appendChild(el('span','t',x.n));b.appendChild(el('span','p',ft(x.p)+(x.from?'-tól':'')));b.onclick=function(){var nv=!S.ex[key];if(nv&&x.grp){m.extras.forEach(function(y,j){if(y.grp===x.grp)S.ex[k+':'+j]=false})}S.ex[key]=nv;renderExtras();calc()};c.appendChild(b)});w.appendChild(c)})}
+function calc(){var ms=machines(),lines=[],tot=0,from=false,pk=0,notes=[];
+ ms.forEach(function(k){var p=M[k].pkgs[S.pkg[k]];lines.push([M[k].label+' – '+p.n+' ('+p.h+' óra)',p.p]);tot+=p.p;pk+=p.p});
+ if(ms.length===2){var d=-Math.round(pk*BOTH_DISC/10)*10;lines.push(['Csomagkedvezmény (2 szolgáltatás) −15%',d,null,'disc']);tot+=d}
+ if(S.guests>0){var g=(GUEST_FEE[S.guests]||0);lines.push(['Létszám-felár ('+GUEST_LBL[S.guests]+')',g]);tot+=g}
+ if(S.guests<0)notes.push('1000 fő feletti rendezvényre egyedi ajánlatot adunk.');
+ if(S.loc){if(S.loc.bud){var bf=0;ms.forEach(function(k){bf=Math.max(bf,M[k].pkgs[S.pkg[k]].bud)});lines.push(['Kiszállás Budapesten',bf,bf?null:'ingyenes']);tot+=bf}else{var km=S.loc.km*ROUND_TRIP,kv=km*KM_PRICE;lines.push(['Kiszállás ('+S.loc.name+', ~'+km+' km oda-vissza)',kv]);tot+=kv}}else notes.push('Add meg a helyszínt a kiszállási díjhoz.');
+ ms.forEach(function(k){var m=M[k],sel=m.extras.map(function(x,i){return !!S.ex[k+':'+i]}),used={};if(m.bundle&&m.bundle.items.every(function(i){return sel[i]})){lines.push([m.bundle.n,m.bundle.p]);tot+=m.bundle.p;m.bundle.items.forEach(function(i){used[i]=1})}m.extras.forEach(function(x,i){if(sel[i]&&!used[i]){lines.push([x.n+(x.from?' (-tól)':''),x.p]);tot+=x.p;if(x.from)from=true}})});
+ if(from)notes.push('A „-tól” árú tételek végösszege a mennyiségtől függ.');
+ var ul=q('[data-lines]');ul.innerHTML='';lines.forEach(function(l){var li=el('li',l[3]==='disc'?'is-disc':'');li.appendChild(el('span','',l[0]));li.appendChild(el('span','',l[2]||ft(l[1])));ul.appendChild(li)});
+ var tt=(from?'kb. ':'')+ft(tot);q('[data-total]').textContent=tt;q('[data-mtotal]').textContent=tt;q('[data-note]').textContent=notes.join(' ');S.total=tot;S.lines=lines;S.from=from}
+root.querySelectorAll('[data-mode]').forEach(function(b){b.onclick=function(){S.mode=b.getAttribute('data-mode');root.querySelectorAll('[data-mode]').forEach(function(x){var on=x===b;x.classList.toggle('is-on',on);x.setAttribute('aria-checked',on)});renderPkgs();renderExtras();calc()}});
+q('[data-guests]').addEventListener('change',function(){S.guests=parseInt(this.value,10);calc()});
+var res=q('[data-locres]'),inp=q('[data-loc]'),busy=false,last='';
+function msg(h,err){res.classList.toggle('is-err',!!err);res.innerHTML=h}
+function budOk(){S.loc={bud:true,km:0,name:'Budapest'};msg('<b>Budapest</b> – a kiszállás csomagtól függően 5 000 Ft vagy ingyenes.');calc()}
+function route(lat,lon,name){return fetch('https://router.project-osrm.org/route/v1/driving/'+ORIGIN.lon+','+ORIGIN.lat+';'+lon+','+lat+'?overview=false').then(function(r){return r.json()}).then(function(o){if(!o.routes||!o.routes.length)throw 'nr';var km=Math.round(o.routes[0].distance/1000);S.loc={bud:false,km:km,name:name};msg('<b></b> – kb. '+km+' km tőlünk (oda-vissza '+(km*2)+' km × '+KM_PRICE+' Ft).');res.querySelector('b').textContent=name;calc()})}
+function look(){var v=inp.value.trim();if(!v||busy||v===last)return;last=v;
+ var pc=/^\d{4}$/.test(v);
+ if(pc&&v.charAt(0)==='1'){budOk();return}
+ if(!pc&&(/^(budapest|bp\.?)(\b|$)/i.test(v)||/^\d{4}\s*budapest/i.test(v))){budOk();return}
+ busy=true;msg('Távolság számolása…');
+ var url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&accept-language=hu&'+(pc?'country=hu&postalcode='+v:'countrycodes=hu&q='+encodeURIComponent(v));
+ fetch(url).then(function(r){return r.json()}).then(function(a){if(!a||!a.length)throw 'nf';var g=a[0],ad=g.address||{};var name=ad.city||ad.town||ad.village||ad.municipality||g.name||v;if(ad.city==='Budapest'||ad.state==='Budapest'){busy=false;budOk();return}return route(g.lat,g.lon,(pc?v+' ':'')+name).then(function(){busy=false})})
+ .catch(function(){busy=false;last='';S.loc=null;calc();msg(pc?'Ehhez az irányítószámhoz nem találtunk települést – próbáld a település nevével.':'Ezt a települést nem találtuk – próbáld irányítószámmal.',true)})}
+q('[data-loc-go]').onclick=function(){last='';look()};inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();last='';look()}});inp.addEventListener('blur',look);
+var loaded=null;
+function summary(){var t=S.lines.map(function(l){return l[0]+': '+(l[2]||ft(l[1]))}).join('; ');return 'Árkalkulátor – '+t+'. Becsült összeg: '+(S.from?'kb. ':'')+ft(S.total)}
+function formKey(){return S.mode==='spin'?'spin':'selfie'}
+function guestsNum(){var g=S.guests;return g<0?1001:([150,200,300,500,1000][g]||150)}
+function fill(){if(!window.SalesmateFormsV1)return false;var k=formKey(),m=M[k],fs=window.SalesmateFormsV1.getForms()||[],f=null;for(var i=fs.length-1;i>=0;i--){var id=fs[i].formId||(fs[i].getFormId&&fs[i].getFormId());if(id===m.formId){f=fs[i];break}}if(!f)return false;
+ function set(n,v){try{f.setFieldValue(n,v)}catch(e){}}
+ set(m.pkgField,m.pkgs[S.pkg[k]].opt);set('Deal.textCustomField3',summary());if(S.loc&&S.loc.name)set('Deal.textCustomField1',S.loc.name);if(k==='selfie')set('Deal.intCustomField1',String(guestsNum()));return true}
+function loadForm(){var id=M[formKey()].formId,w=q('[data-formwrap]');w.hidden=false;if(loaded===id){fill();return}var div=document.getElementById('_sm_webform_');div.innerHTML='';loaded=id;var W={formId:id,divId:'_sm_webform_',linkName:'studioframes.salesmate.io'};W.loadElement=div;window.loadFormScript=window.loadFormScript||function(){(window.loadFormScript.q=window.loadFormScript.q||[]).push(arguments)};function go(){window.SmFormSettings.loadForm(W)}if(window.SmFormSettings){go()}else{var n=document.createElement('script');n.onload=go;n.src='https://studioframes.salesmate.io/webforms.js';n.async=1;document.head.appendChild(n)}var c=0,t=setInterval(function(){if(fill()||++c>60)clearInterval(t)},500)}
+window.addEventListener('sm-form-event:on-ready',function(){fill()});
+q('[data-cta]').onclick=function(){loadForm();setTimeout(function(){q('[data-formwrap]').scrollIntoView({behavior:'smooth',block:'start'})},60)};
+q('[data-mcta]').onclick=function(){q('[data-cta]').click()};
+(function(){var bar=q('[data-mbar]'),card=q('.cpc-sum-card'),fw=q('[data-formwrap]'),main=q('.cpc-main'),vis={card:false,form:false,main:false};function upd(){bar.classList.toggle('is-on',vis.main&&!vis.card&&!vis.form)}if(!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.target===card)vis.card=e.isIntersecting;else if(e.target===fw)vis.form=e.isIntersecting;else vis.main=e.isIntersecting});upd()},{threshold:0});io.observe(card);io.observe(fw);io.observe(main)})();
+renderPkgs();renderExtras();calc();
+})();
+</script>
