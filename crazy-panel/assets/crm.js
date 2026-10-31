@@ -560,6 +560,23 @@
 			bd.style.height = (c.offsetHeight + 96) + 'px';
 		};
 		bd.style.overflowY = 'hidden';
+		/* v1.83.5: az aktuális szakasz fejléce görgetéskor a felső sáv alatt rögzül (az oszlop a vízszintes görgetés miatt nem tud „sticky” lenni) */
+		document.querySelectorAll('.crm-stk').forEach(x => x.remove());
+		const stk = document.createElement('div'); stk.className = 'crm-stk'; stk.hidden = true; document.body.appendChild(stk);
+		stk.addEventListener('click', () => window.scrollTo({ top: Math.max(0, bd.getBoundingClientRect().top + window.scrollY - 70), behavior: 'smooth' }));
+		let cur = null;
+		const head = () => {
+			if (!bd.isConnected) { stk.remove(); window.removeEventListener('scroll', head); return; }
+			const mid = bd.getBoundingClientRect().left + bd.clientWidth / 2;
+			const c = cols.reduce((best, x) => { const r = x.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid); return d < best.d ? { x: x, d: d } : best; }, { x: cols[0], d: Infinity }).x;
+			const top = document.querySelector('.cpx-top'), tb = top ? Math.max(0, top.getBoundingClientRect().bottom) : 0;
+			const h = c.querySelector('header'), mh = c.querySelector('.crm-mh');
+			const show = h && mh && h.getBoundingClientRect().bottom < tb + 4 && c.getBoundingClientRect().bottom > tb + 80;
+			if (show && cur !== c) { stk.innerHTML = mh.innerHTML; cur = c; }
+			stk.style.top = tb + 'px'; stk.hidden = !show;
+		};
+		window.addEventListener('scroll', head, { passive: true });
+		bd.addEventListener('scroll', () => { cur = null; head(); }, { passive: true });
 		bd.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(fit, 90); }, { passive: true });
 		if (window.ResizeObserver) { const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(fit, 30); }); cols.forEach(c => ro.observe(c)); }
 		fit();

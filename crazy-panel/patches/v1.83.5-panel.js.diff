@@ -1,0 +1,10 @@
+--- panel.b1832.js	2026-10-31 11:17:47.853571810 +0000
++++ panel.js	2026-10-31 11:17:47.870802760 +0000
+@@ -247,6 +247,7 @@
+     closeModal();
+     /* v1.83.2: a nyitva hagyott deal-/kontakt-adatlap jelzése ne rejtse el az új fül tartalmát */
+     const mm = document.getElementById('cpx-main'); if (mm) { mm.classList.remove('crm-pg-on'); const pg = mm.querySelector(':scope > .crm-page'); if (pg) pg.remove(); }
++    document.querySelectorAll('.crm-stk').forEach(x => x.remove());
+     render();
+   }
+ 

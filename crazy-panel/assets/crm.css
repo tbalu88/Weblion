@@ -441,3 +441,10 @@ a.d3-who:hover{background:#F6F3EE}
   .crm-board .crm-cards{overflow:visible;max-height:none}
   .crm-board{padding-bottom:96px}
 }
+/* v1.83.5: rögzített szakasz-fejléc mobilon */
+.crm-stk{position:fixed;left:0;right:0;z-index:30;background:#fff;border-bottom:1px solid #E6E2DC;box-shadow:0 4px 12px -8px rgba(20,28,51,.35);display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px 6px;cursor:pointer}
+.crm-stk[hidden]{display:none}
+.crm-stk b{font:700 15.5px Inter,sans-serif;text-align:center}
+.crm-stk small{color:#6B6F78;font-size:13px}
+.crm-stk .crm-prog{margin-top:6px}
+@media (min-width:761px){.crm-stk{display:none!important}}
