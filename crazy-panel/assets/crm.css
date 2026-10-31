@@ -394,3 +394,21 @@ a.d3-who:hover{background:#F6F3EE}
   .d3-ti .d3-ts{margin-top:4px}
   .d3-tx{font-size:13.5px;line-height:1.45}
 }
+/* v1.78.8: egységes deal-gombsor */
+.d3-ab{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border:1px solid #E1DDD6;border-radius:10px;background:#fff;color:#141C33;font:600 13px Inter,sans-serif;text-decoration:none;cursor:pointer;white-space:nowrap;box-sizing:border-box}
+.d3-ab:hover{background:#F6F4F0}
+.d3-ab svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.d3-ab.d3-won{color:#216E4E}
+.d3-ab.bad{color:#B42318}
+.d3-ab.pri{background:#141C33;border-color:#141C33;color:#fff}
+.d3-ab.pri:hover{background:#26304D}
+.d3-acts .d3-ab[disabled]{opacity:.5;cursor:default}
+@media (max-width:760px){
+  .d3-acts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+  .d3-acts .d3-ab{grid-column:span 2}
+  .d3-acts .d3-ab.pri,.d3-acts .d3-ab[data-todo]{grid-column:span 3;order:-1}
+  .d3-acts .crm-st{grid-column:1/-1;justify-self:start}
+  .d3-acts.open .crm-st{display:none}
+  .d3-ab{height:38px;padding:0 6px;font-size:13px;gap:5px;min-width:0}
+  .d3-ab span{overflow:hidden;text-overflow:ellipsis}
+}

@@ -641,6 +641,9 @@
 		}
 		else closePage(false);
 	});
+	const AIs = p => '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
+	const AI = { ok: AIs('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), no: AIs('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'), undo: AIs('<path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 12"/>'), edit: AIs('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), todo: AIs('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>'), ext: AIs('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>') };
+	const ab = (cls, attr, ico, txt) => '<button type="button" class="d3-ab' + (cls ? ' ' + cls : '') + '" ' + attr + '>' + ico + '<span>' + txt + '</span></button>';
 	const head360 = (t, back, did) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '<button type="button" class="d3-back" data-close>← Vissza</button>') + '<h3>' + t + '</h3>' +
 		(did ? '<span class="d3-no" title="A deal egyedi sorszáma (a Salesmate-ben is ez)">#' + Number(did) + '</span><button type="button" class="cpx-btn ghost d3-link" data-dlink="' + Number(did) + '" title="A deal saját linkje – elküldhető, könyvjelzőzhető">🔗 <span>Link</span></button>' : '') +
 		'<button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>';
@@ -849,11 +852,12 @@
 		const otherCo = (x.co_deals || []).filter(o => o.id !== d.id && !otherCt.some(z => z.id === o.id));
 		const ph = c ? (c.mobile || c.phone) : '';
 		let h = head360(esc(d.title || 'Deal #' + d.id), back, d.id) +
-			'<div class="d3-top">' + stageBar(d) + '<div class="d3-acts">' + stBadge(d) +
-			(W && !d.deleted_at ? (d.status === 'Open' ? '<button class="cpx-btn ghost d3-won" type="button" data-mvst="Won">✓ Megnyert</button><button class="cpx-btn ghost bad" type="button" data-mvst="Lost">✗ Elvesztett</button>' : '<button class="cpx-btn ghost" type="button" data-mvst="Open">Újranyitás</button>') : '') +
-			(R.edit && !d.deleted_at ? '<button class="cpx-btn" type="button" data-edit>Szerkesztés</button>' : '') +
-			(window.CPKanban ? '<button class="cpx-btn ghost" type="button" data-todo title="Teendő felvétele a Feladatokba">☑ Teendő</button>' : '') +
-			(smUrl ? '<a class="cpx-btn ghost" href="' + esc(smUrl) + '" target="_blank" rel="noopener">Salesmate ↗</a>' : '') + '</div></div>' +
+			'<div class="d3-top">' + stageBar(d) + '<div class="d3-acts' + (d.status === 'Open' ? ' open' : '') + '">' + stBadge(d) +
+			/* v1.78.8: egységes gombsor – azonos méret és stílus, vonalas ikonok */
+			(W && !d.deleted_at ? (d.status === 'Open' ? ab('d3-won', 'data-mvst="Won"', AI.ok, 'Megnyert') + ab('bad', 'data-mvst="Lost"', AI.no, 'Elvesztett') : ab('', 'data-mvst="Open"', AI.undo, 'Újranyitás')) : '') +
+			(R.edit && !d.deleted_at ? ab('pri', 'data-edit', AI.edit, 'Szerkesztés') : '') +
+			(window.CPKanban ? ab('', 'data-todo title="Teendő felvétele a Feladatokba"', AI.todo, 'Teendő') : '') +
+			(smUrl ? '<a class="d3-ab" href="' + esc(smUrl) + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + AI.ext + '<span>Salesmate</span></a>' : '') + '</div></div>' +
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
