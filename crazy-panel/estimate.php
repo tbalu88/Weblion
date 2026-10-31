@@ -23,7 +23,12 @@ function cp_est_prices() {
 function cp_est_norm_venue($v) { return trim(mb_strtolower(preg_replace('/\s+/u', ' ', (string) $v))); }
 function cp_est_is_bp($v) {
 	$v = cp_est_norm_venue($v);
-	return $v !== '' && (preg_match('/(^|\D)1\d{3}(\D|$)/', $v) && !preg_match('/(^|\D)[2-9]\d{3}(\D|$)/', $v) || preg_match('/\b(budapest|bp\.?)\b/u', $v));
+	if ($v === '') { return false; }
+	if (preg_match('/(^|\D)[2-9]\d{3}(\D|$)/', $v)) { return false; }
+	if (preg_match('/(^|\D)1\d{3}(\D|$)/', $v) || preg_match('/\b(budapest\w*|bp\.?)(\b|$)/u', $v)) { return true; }
+	/* elütések: „budapets”, „budaepst”, „bduapest” – szavanként legfeljebb 2 betű eltérés (ékezet nélkül) */
+	foreach (preg_split('/[^\p{L}]+/u', remove_accents($v)) as $w) { if (strlen($w) >= 6 && strlen($w) <= 11 && levenshtein($w, 'budapest') <= 2) { return true; } }
+	return false;
 }
 function cp_est_geo_get($v) { $g = get_option('cp_est_geo', array()); $k = md5(cp_est_norm_venue($v)); return is_array($g) && isset($g[$k]) ? $g[$k] : null; }
 
@@ -59,7 +64,8 @@ function cp_est_deal($d) {
 	$km = (int) ($d['km_fee'] ?? 0); $venue = (string) ($d['venue'] ?? ''); $geo = null;
 	if ($km > 0) { $lines[] = 'Kiszállás (a dealben megadva): ' . cp_est_ft($km); $tot += $km; }
 	elseif (cp_est_is_bp($venue)) { $lines[] = 'Kiszállás Budapesten: ' . ($bud ? cp_est_ft($bud) : 'ingyenes'); $tot += $bud; }
-	elseif ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['km'])) { $kmv = (int) $geo['km'] * $P['trip']; $fee = $kmv * $P['km']; $lines[] = 'Kiszállás (~' . $kmv . ' km oda-vissza): ' . cp_est_ft($fee); $tot += $fee; }
+	elseif ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['bp'])) { $lines[] = 'Kiszállás Budapesten' . (!empty($geo['n']) ? ' (felismerve: ' . $geo['n'] . ')' : '') . ': ' . ($bud ? cp_est_ft($bud) : 'ingyenes'); $tot += $bud; }
+	elseif ($venue !== '' && is_array($geo) && !empty($geo['km'])) { $kmv = (int) $geo['km'] * $P['trip']; $fee = $kmv * $P['km']; $lines[] = 'Kiszállás (' . (!empty($geo['n']) ? $geo['n'] . ', ' : '') . '~' . $kmv . ' km oda-vissza): ' . cp_est_ft($fee); $tot += $fee; }
 	else { $lines[] = $venue === '' ? 'Kiszállás nélkül (nincs helyszín)' : (is_array($geo ?? null) ? 'Kiszállás nélkül (a helyszínt nem találtam a térképen – írd be a települést vagy irányítószámot)' : 'Kiszállás nélkül (a távolság számolása folyamatban, 10 percen belül frissül)'); $approx = true; }
 	return array('p' => (int) $tot, 'a' => $approx ? 1 : 0, 'l' => $lines);
 }
@@ -79,6 +85,47 @@ function cp_est_for_rows($rows) {
 	return $out;
 }
 
+/* egy helyszín feloldása: település (elütéstűrően) és útvonalhossz Budapest XI.-ből; a tick és a próba közös */
+function cp_est_geocode($v) {
+	$P = cp_est_prices(); $ua = array('User-Agent' => 'CrazyPanel/1.0 (eventcrazy.hu; info@eventcrazy.hu)', 'Accept-Language' => 'hu');
+	/* irányítószám, ha van; különben a teljes szöveg, majd az első vesszőig tartó rész */
+	$qs = array();
+	if (preg_match('/(^|\D)([1-9]\d{3})(\D|$)/', $v, $m)) { $qs[] = array('postalcode' => $m[2], 'country' => 'hu'); }
+	$qs[] = array('q' => $v, 'countrycodes' => 'hu'); $first = trim(explode(',', $v)[0]); if ($first !== $v) { $qs[] = array('q' => $first, 'countrycodes' => 'hu'); }
+	$hit = null; $name = '';
+	/* 1) irányítószám (pontos) – 2) Photon: elütéstűrő kereső, településre és helyszínnévre is („Szegd”, „Hotel Ozon, Matrahaza”) – 3) Nominatim */
+	if (isset($qs[0]['postalcode'])) {
+	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $qs[0]), 'https://nominatim.openstreetmap.org/search'), array('timeout' => 12, 'headers' => $ua));
+	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
+		if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; $a = (array) ($j[0]['address'] ?? array()); $name = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? ''); }
+		array_shift($qs);
+	}
+	if (!$hit) {
+	$r = wp_remote_get(add_query_arg(array('q' => $v, 'limit' => 1, 'lat' => 47.2, 'lon' => 19.4, 'bbox' => '16.1,45.7,22.9,48.6'), 'https://photon.komoot.io/api/'), array('timeout' => 12, 'headers' => $ua));
+	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
+	$f = $j['features'][0] ?? null;
+		if ($f && strtoupper((string) ($f['properties']['countrycode'] ?? '')) === 'HU' && isset($f['geometry']['coordinates'][1])) {
+		$hit = array('lat' => $f['geometry']['coordinates'][1], 'lon' => $f['geometry']['coordinates'][0]);
+		$pp = $f['properties']; $name = (string) (in_array($pp['type'] ?? '', array('city', 'town', 'village', 'county', 'district', 'locality'), true) ? ($pp['name'] ?? '') : ($pp['city'] ?? $pp['name'] ?? ''));
+		}
+	}
+	foreach ($hit ? array() : $qs as $i => $q) {
+		sleep(2);
+	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $q), 'https://nominatim.openstreetmap.org/search'), array('timeout' => 12, 'headers' => $ua));
+	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
+		if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; $a = (array) ($j[0]['address'] ?? array()); $name = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? ''); break; }
+	}
+	if (!$hit) { return array('km' => 0, 't' => time()); }
+	$name = sanitize_text_field(mb_substr($name, 0, 60));
+	/* Budapestre esik (pl. „budapets”-ből javítva): a budapesti kiszállási díj jár, nem km-alapú */
+	if (mb_strtolower($name) === 'budapest' || mb_strpos(mb_strtolower($name), 'budapest') === 0) { return array('km' => 0, 'bp' => 1, 'n' => 'Budapest', 't' => time()); }
+	$o = $P['origin'];
+	$r = wp_remote_get('https://router.project-osrm.org/route/v1/driving/' . $o[1] . ',' . $o[0] . ';' . (float) $hit['lon'] . ',' . (float) $hit['lat'] . '?overview=false', array('timeout' => 12, 'headers' => $ua));
+	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
+	$m = isset($j['routes'][0]['distance']) ? (float) $j['routes'][0]['distance'] : 0;
+	return array('km' => $m > 0 ? (int) round($m / 1000) : 0, 'n' => $name, 't' => time());
+}
+
 /* távolság a háttérben: 10 percenként legfeljebb 2 új helyszín (a Nominatim szabálya: max. 1 kérés / mp, azonosító fejléccel) */
 add_action('cp_crm_tick', 'cp_est_geo_tick', 40);
 function cp_est_geo_tick() {
@@ -92,26 +139,11 @@ function cp_est_geo_tick() {
 		if ($n >= 2) { break; }
 		if (cp_est_is_bp($v)) { continue; }
 		$k = md5(cp_est_norm_venue($v));
-		if (isset($G[$k]) && (!empty($G[$k]['km']) || (time() - (int) ($G[$k]['t'] ?? 0)) < DAY_IN_SECONDS)) { continue; }
+		/* a v1.82.1 előtti (elütést nem tűrő) sikertelen keresést azonnal újrapróbálja; egyébként a sikertelent naponta egyszer */
+		if (isset($G[$k]) && (!empty($G[$k]['km']) || !empty($G[$k]['bp']) || (isset($G[$k]['n']) && (time() - (int) ($G[$k]['t'] ?? 0)) < DAY_IN_SECONDS))) { continue; }
 		$n++;
 		if ($n > 1) { sleep(2); }
-		/* irányítószám, ha van; különben a teljes szöveg, majd az első vesszőig tartó rész */
-		$qs = array();
-		if (preg_match('/(^|\D)([1-9]\d{3})(\D|$)/', $v, $m)) { $qs[] = array('postalcode' => $m[2], 'country' => 'hu'); }
-		$qs[] = array('q' => $v, 'countrycodes' => 'hu'); $first = trim(explode(',', $v)[0]); if ($first !== $v) { $qs[] = array('q' => $first, 'countrycodes' => 'hu'); }
-		$hit = null;
-		foreach ($qs as $i => $q) {
-			if ($i) { sleep(2); }
-			$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1), $q), 'https://nominatim.openstreetmap.org/search'), array('timeout' => 12, 'headers' => $ua));
-			$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
-			if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; break; }
-		}
-		if (!$hit) { $G[$k] = array('km' => 0, 't' => time()); continue; }
-		$o = $P['origin'];
-		$r = wp_remote_get('https://router.project-osrm.org/route/v1/driving/' . $o[1] . ',' . $o[0] . ';' . (float) $hit['lon'] . ',' . (float) $hit['lat'] . '?overview=false', array('timeout' => 12, 'headers' => $ua));
-		$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
-		$m = isset($j['routes'][0]['distance']) ? (float) $j['routes'][0]['distance'] : 0;
-		$G[$k] = array('km' => $m > 0 ? (int) round($m / 1000) : 0, 't' => time());
+		$G[$k] = cp_est_geocode($v);
 	}
 	if ($n) { if (count($G) > 400) { $G = array_slice($G, -300, null, true); } update_option('cp_est_geo', $G, false); }
 }
