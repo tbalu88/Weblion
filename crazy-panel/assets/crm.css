@@ -381,3 +381,16 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-no{flex:none;font:700 13px Inter,sans-serif;color:#4A5163;background:#EEEAE4;border-radius:8px;padding:4px 9px;user-select:all}
 .crm-pg .d3-link{flex:none;padding:5px 10px;font-size:13px}
 @media (max-width:760px){.crm-pg .cpx-sheet-h h3{font-size:16px}.crm-pg .d3-link span{display:none}.crm-pg .d3-no{font-size:12px;padding:3px 6px}.crm-pg .cpx-sheet-h .cpx-x{display:none}}
+/* v1.78.7: sorkizárt szöveg az idővonalon és a jegyzetekben; mobilon kisebb margók, az ikon csak a címsor mellett, a szöveg a teljes szélességet kitölti */
+.d3-tx{text-align:justify;hyphens:auto;-webkit-hyphens:auto}
+@media (max-width:760px){
+  .crm-page{margin:0 -6px}
+  .crm-pg .d3-m,.crm-pg .d3-c{padding:10px 7px}
+  .d3-ti{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:8px;row-gap:2px;padding:8px 8px;align-items:center}
+  .d3-ti>i{width:24px;height:24px}
+  .d3-ti>div{display:contents}
+  .d3-ti .d3-tt{grid-column:2}
+  .d3-ti .d3-ts,.d3-ti .d3-tx,.d3-ti>div>:not(.d3-tt){grid-column:1/-1}
+  .d3-ti .d3-ts{margin-top:4px}
+  .d3-tx{font-size:13.5px;line-height:1.45}
+}
