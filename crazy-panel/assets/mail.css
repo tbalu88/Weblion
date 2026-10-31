@@ -457,3 +457,18 @@
   .ml-read .ml-subjh{padding:6px 6px 4px}
   .ml-read .ml-rtool{padding:6px 5px}
 }
+/* v1.78.6: rendezett levélfejléc mobilon – feladó és cím egy-egy sorban, egy jelvény, alul dátum balra, gombok jobbra */
+@media (max-width:760px){
+  .ml-read .ml-mh{gap:8px;align-items:flex-start}
+  .ml-read .ml-mh .ml-av.lg{width:32px;height:32px;font-size:14px;flex:none}
+  .ml-read .ml-from{display:block;line-height:1.3}
+  .ml-read .ml-from>span:first-child{display:block;font-weight:700;font-size:15px}
+  .ml-read .ml-from .ml-fe{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  .ml-read .ml-from .ml-dlv{display:inline-block;margin:4px 0 0}
+  .ml-read .ml-unv{display:inline-block;margin-top:5px;font-size:11.5px;padding:2px 8px}
+  .ml-read .ml-to{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+  .ml-read .ml-mt{flex-basis:100%;margin-top:6px}
+  .ml-read .ml-md{order:-1;font-size:12.5px;color:#8A8E96}
+  .ml-read .ml-ma{gap:4px}
+  .ml-read .ml-ma button{padding:6px 8px}
+}
