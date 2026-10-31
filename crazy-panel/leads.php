@@ -42,7 +42,9 @@ function cp_lead_db_ok() { return get_option('cp_lead_db_ver') === CP_LEAD_DB_VE
 add_action('wp_footer', function () {
 	if (is_admin() || !cp_lead_db_ok()) { return; }
 	$u = esc_url_raw(admin_url('admin-ajax.php'));
-	echo "<script>(function(){if(window.__cpLead)return;window.__cpLead=1;window.addEventListener('SM_FORM_SUBMITTED',function(e){try{var d=e.detail||{},b=new FormData();b.append('action','cp_lead_in');b.append('form',d.formId||'');b.append('fname',d.formName||'');b.append('data',JSON.stringify(d.formData||{}));b.append('page',location.href.slice(0,250));var u=" . wp_json_encode($u) . ";if(navigator.sendBeacon&&navigator.sendBeacon(u,b))return;fetch(u,{method:'POST',body:b,keepalive:true,credentials:'omit'});}catch(x){}});})();</script>";
+	/* v1.81.1: a régi SM_FORM_SUBMITTED mellett a Salesmate új űrlapfelületének (SalesmateFormsV1) beküldés-eseményére is figyel,
+	   a mezőket onnan olvassa ki; ugyanazt a beküldést 15 mp-en belül csak egyszer küldi */
+	echo "<script>(function(){if(window.__cpLead)return;window.__cpLead=1;var u=" . wp_json_encode($u) . ",last=0;function send(id,nm,data,ev){if(Date.now()-last<15000)return;last=Date.now();try{var b=new FormData();b.append('action','cp_lead_in');b.append('form',id||'');b.append('fname',nm||'');b.append('data',JSON.stringify(data||{}));b.append('page',location.href.slice(0,250));b.append('ev',ev);if(navigator.sendBeacon&&navigator.sendBeacon(u,b))return;fetch(u,{method:'POST',body:b,keepalive:true,credentials:'omit'});}catch(x){}}window.addEventListener('SM_FORM_SUBMITTED',function(e){var d=e.detail||{};send(d.formId,d.formName,d.formData||{},'legacy');});window.addEventListener('sm-form-event:on-submission:success',function(e){var d=e.detail||{},f=null;try{(window.SalesmateFormsV1?SalesmateFormsV1.getForms():[]).forEach(function(x){if(x.getInstanceId()===d.instanceId)f=x;});}catch(x){}send(d.formId,f?f.getFormName():'',f?f.getFormFieldValues():[],'v1');});})();</script>";
 }, 99);
 
 /* a formData egységes név → érték listává (a Salesmate tömböt vagy objektumot is küldhet) */
