@@ -130,3 +130,37 @@ function cp_sx_ajax_act() {
 	$m = is_array($r) ? (string) ($r['msg'] ?? '') : (string) $r;
 	wp_send_json_success(array('msg' => $m !== '' ? $m : 'Kész.', 'out' => $out, 'data' => cp_sx_out($key)));
 }
+
+/* ------------------------------------------------------------ v1.79.2: a WordPress-adminban egyetlen „Crazy panel beállítások” menüpont, fülekkel
+   A régi oldalak a Beállítások menüből kikerülnek, de a címük változatlanul működik (a tartalmuk és a mentésük ugyanaz),
+   és mindegyik tetején ugyanaz a fülsor látszik. */
+function cp_sx_wp_tabs() {
+	return array('cp-settings' => 'Áttekintés', 'cp-panel' => 'Foglaltsági panel', 'cp-crm' => 'Salesmate CRM', 'cp-panel-users' => 'Felhasználók', 'cp-mail-import' => 'Levelezés', 'cp-gcal' => 'Google Naptár', 'cp-billingo' => 'Számlázás', 'cp-ai' => 'AI', 'cp-el' => 'Kezelői elszámolás', 'cp-portal' => 'Ügyfélportál', 'cp-st' => 'Statisztikák', 'cp-st-dg' => 'Összesítők');
+}
+add_action('admin_menu', function () {
+	foreach (array_keys(cp_sx_wp_tabs()) as $slug) { if ($slug !== 'cp-settings') { remove_submenu_page('options-general.php', $slug); } }
+	add_menu_page('Crazy panel beállítások', 'Crazy panel beállítások', 'manage_options', 'cp-settings', 'cp_sx_wp_hub', 'dashicons-admin-generic', 81);
+}, 9999);
+/* a régi oldalakon is a „Crazy panel beállítások” menüpont legyen kijelölve */
+add_filter('parent_file', function ($pf) { global $plugin_page; if ($plugin_page && isset(cp_sx_wp_tabs()[$plugin_page])) { $GLOBALS['submenu_file'] = 'cp-settings'; return 'cp-settings'; } return $pf; });
+function cp_sx_wp_url($slug) { return $slug === 'cp-settings' ? admin_url('admin.php?page=cp-settings') : admin_url('options-general.php?page=' . $slug); }
+add_action('all_admin_notices', function () {
+	global $plugin_page;
+	if (!$plugin_page || !isset(cp_sx_wp_tabs()[$plugin_page]) || !current_user_can('manage_options')) { return; }
+	echo '<div class="wrap" style="margin-bottom:0"><h1 style="margin-bottom:8px">Crazy panel beállítások</h1><nav class="nav-tab-wrapper" style="margin-bottom:6px">';
+	foreach (cp_sx_wp_tabs() as $slug => $n) { echo '<a class="nav-tab' . ($slug === $plugin_page ? ' nav-tab-active' : '') . '" href="' . esc_url(cp_sx_wp_url($slug)) . '">' . esc_html($n) . '</a>'; }
+	echo '</nav></div>';
+});
+function cp_sx_wp_hub() {
+	if (!current_user_can('manage_options')) { return; }
+	$panel = home_url('/' . (function_exists('cp_panel_opts') ? (cp_panel_opts()['slug'] ?? 'crazy-panel') : 'crazy-panel') . '/#beallitasok');
+	echo '<div class="wrap"><p style="font-size:14px;max-width:760px">A beállítások nagy része már a <b>Crazy panelben</b> van (Beállítások fül, adminoknak): felhasználók, láthatóság, értesítések, Salesmate-kapcsolat, levelezés, Google Naptár, AI, számlázás, kapacitás és szakaszok, kezelői elszámolás, ügyfélportál, statisztikák, összesítők.</p>';
+	echo '<p><a class="button button-primary button-hero" href="' . esc_url($panel) . '" target="_blank" rel="noopener">Beállítások megnyitása a Crazy panelben ↗</a></p>';
+	echo '<h2>Ami csak itt, a WordPressben állítható</h2><ul style="list-style:disc;margin-left:20px;font-size:14px">';
+	echo '<li><a href="' . esc_url(cp_sx_wp_url('cp-mail-import')) . '">Levelezés</a> – a postafiók- és a kimenő levelezőszerver címe, a régi levelek importja, sablonok betöltése</li>';
+	echo '<li><a href="' . esc_url(cp_sx_wp_url('cp-panel')) . '">Foglaltsági panel</a> – a közös admin/irodai jelszó, a panel címe, Salesmate-diagnosztika</li>';
+	echo '<li><a href="' . esc_url(cp_sx_wp_url('cp-st')) . '">Statisztikák</a> – a Google Ads-szkript és új kulcsa</li>';
+	echo '<li><a href="' . esc_url(cp_sx_wp_url('cp-el')) . '">Kezelői elszámolás</a> – a kezelői naptár Google Apps Script kódja</li>';
+	echo '<li><a href="' . esc_url(cp_sx_wp_url('cp-portal')) . '">Ügyfélportál</a> – a Salesmate-webhook címe</li>';
+	echo '</ul><p style="color:#646970">A többi fül ugyanazt mutatja, mint a panel – tartaléknak maradt itt, ha a panel nem érhető el.</p></div>';
+}
