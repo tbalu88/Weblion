@@ -1,0 +1,122 @@
+--- panel.b180.js	2026-10-31 08:53:26.944281857 +0000
++++ panel.js	2026-10-31 08:55:21.866798890 +0000
+@@ -335,15 +335,24 @@
+     head.appendChild(monthNav(render));
+     head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg ok"></span>3+ szabad<span class="lg mid"></span>1–2 szabad<span class="lg full"></span>betelt<span class="lg pend"></span>függő ajánlat<span class="lg risk">!</span>több ajánlat, mint szabad gép'));
+     main.appendChild(head);
+-    /* v1.80: átláthatóbb havi nézet – az egész csempe színes, nagy szám a szabad gépeknek, kétszínű sáv (foglalt + függő), kockázatjelzés */
++    /* v1.81: nézet (hónap / év) és szűrő (mind / kockázatos / van szabad gép) – a böngésző megjegyzi */
++    const ls = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
++    S.calView = S.calView || ls('cpx_calv', 'month'); S.calFilter = S.calFilter || ls('cpx_calf', 'all');
++    const tb = el('div', { class: 'cpx-caltb' }, '<div class="seg" role="group" aria-label="Nézet">' + [['month', 'Hónap'], ['year', 'Év']].map(x => '<button type="button" data-cv="' + x[0] + '" class="' + (S.calView === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
++      '<div class="seg" role="group" aria-label="Szűrő">' + [['all', 'Minden nap'], ['risk', 'Kockázatos'], ['free', 'Van szabad gép']].map(x => '<button type="button" data-cf="' + x[0] + '" class="' + (S.calFilter === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>');
++    tb.querySelectorAll('[data-cv]').forEach(b => b.addEventListener('click', () => { S.calView = b.dataset.cv; try { localStorage.setItem('cpx_calv', S.calView); } catch (e) { /* privát mód */ } render(); }));
++    tb.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => { S.calFilter = b.dataset.cf; try { localStorage.setItem('cpx_calf', S.calFilter); } catch (e) { /* privát mód */ } render(); }));
++    main.appendChild(tb);
+     if (!document.getElementById('cpx-cal2-css')) document.head.appendChild(el('style', { id: 'cpx-cal2-css' }, CAL2_CSS));
++    if (S.calView === 'year') { viewYear(main); return; }
++    /* v1.80: átláthatóbb havi nézet – az egész csempe színes, nagy szám a szabad gépeknek, kétszínű sáv (foglalt + függő), kockázatjelzés */
+     const c = S.cache[S.month];
+     const [from, to] = monthRange(S.month);
+     // összesítő
+     let bookedN = 0, pendN = 0, fullDays = 0, riskDays = 0;
+     c.events.forEach(e => { if (e.state === 'booked') bookedN++; else pendN++; });
+     const grid = el('div', { class: 'cpx-cal v2' });
+-    HU_DAYS.forEach(d => grid.appendChild(el('div', { class: 'cpx-dow' }, d)));
++    HU_DAYS.forEach((d, i) => grid.appendChild(el('div', { class: 'cpx-dow' + (i >= 5 ? ' we' : '') }, d)));
+     const first = parseYmd(from);
+     const lead = (first.getDay() + 6) % 7;
+     for (let i = 0; i < lead; i++) grid.appendChild(el('div', { class: 'cpx-day blank' }));
+@@ -358,11 +367,13 @@
+       /* kockázat: több függő ajánlat, mint amennyi gép még szabad (ha mind igent mond, nem fér bele) */
+       const risk = !past && ((I.pSelfie > Math.max(0, I.freeS)) || (I.pSpin > Math.max(0, I.freeP)));
+       if (risk) riskDays++;
+-      const cell = el('button', { class: 'cpx-day ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (risk ? ' risk' : ''), 'data-date': date, title: risk ? 'Több függő ajánlat van, mint szabad gép – ha mind igent mond, nem fér bele.' : '' });
++      const wd = parseYmd(date).getDay(), we = wd === 0 || wd === 6;
++      const dim = (S.calFilter === 'risk' && !risk) || (S.calFilter === 'free' && (past || I.freeS <= 0));
++      const cell = el('button', { class: 'cpx-day ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (risk ? ' risk' : '') + (we ? ' we' : '') + (dim ? ' dim' : ''), 'data-date': date, title: risk ? 'Több függő ajánlat van, mint szabad gép – ha mind igent mond, nem fér bele.' : '' });
+       const pctS = I.capS ? Math.min(100, Math.round(100 * I.selfie / I.capS)) : 100;
+       const pctP = I.capS ? Math.min(100 - pctS, Math.round(100 * I.pSelfie / I.capS)) : 0;
+       const pend = I.pSelfie + I.pSpin;
+-      cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + (I.subs ? '<span class="sub">+' + I.subs + ' alv.</span>' : '') + (pend ? '<span class="pend">' + pend + '<span> ajánlat</span></span>' : '') + (risk ? '<em class="rk" aria-label="kockázat">!</em>' : '') + '</div>' +
++      cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + (I.subs ? '<span class="sub" title="Alvállalkozói gép erre a napra – a szabad gépek közé beszámít">+' + I.subs + ' alv.</span>' : '') + (pend ? '<span class="pend">' + pend + '<span> ajánlat</span></span>' : '') + (risk ? '<em class="rk" aria-label="kockázat">!</em>' : '') + '</div>' +
+         '<div class="big"><b>' + Math.max(0, I.freeS) + '</b><span>szabad<small> / ' + I.capS + ' szelfigép</small></span></div>' +
+         '<div class="bar"><i style="width:' + pctS + '%"></i><u style="width:' + pctP + '%"></u></div>' +
+         '<div class="ft"><span class="spn' + (I.freeP <= 0 ? ' no' : '') + '">Spinner <b>' + Math.max(0, I.freeP) + '</b>/' + I.capP + '</span></div>';
+@@ -374,6 +385,32 @@
+     main.appendChild(grid);
+   }
+   const kpi = (l, v) => '<div class="kpi"><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>';
++  /* v1.81: évnézet – 12 kis hónap a kiválasztott évből, színes napokkal; kattintásra a hónap és a nap nyílik */
++  async function viewYear(main) {
++    const y = S.month.slice(0, 4), ms = Array.from({ length: 12 }, (_, i) => y + '-' + pad(i + 1));
++    const wrap = el('div', { class: 'cpx-year' }, '<div class="cpx-empty">Az év adatainak betöltése…</div>');
++    main.appendChild(wrap);
++    try { await Promise.all(ms.map(m => load(m))); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(S.err || e.message) + '</div>'; return; }
++    if (!wrap.isConnected) return;
++    const tdy = today(); let risky = 0, full = 0, booked = 0;
++    wrap.innerHTML = '<div class="yh">' + y + '</div>' + ms.map(m => {
++      const [from, to] = monthRange(m), lead = (parseYmd(from).getDay() + 6) % 7, last = parseYmd(to).getDate();
++      let h = '<div class="ym"><button type="button" class="ymh" data-ym="' + m + '">' + HU_MONTHS[Number(m.slice(5)) - 1] + '</button><div class="yg">' + HU_DAYS.map((d, i) => '<span class="yd' + (i >= 5 ? ' we' : '') + '">' + d.slice(0, 1) + '</span>').join('');
++      for (let i = 0; i < lead; i++) h += '<span></span>';
++      for (let d = 1; d <= last; d++) {
++        const date = m + '-' + pad(d), I = dayInfo(m, date), past = date < tdy;
++        const lvl = I.freeS <= 0 ? 'full' : I.freeS <= 2 ? 'mid' : 'ok';
++        const risk = !past && ((I.pSelfie > Math.max(0, I.freeS)) || (I.pSpin > Math.max(0, I.freeP)));
++        if (risk) risky++; if (I.freeS <= 0) full++; booked += I.selfie;
++        const dim = (S.calFilter === 'risk' && !risk) || (S.calFilter === 'free' && (past || I.freeS <= 0));
++        h += '<button type="button" class="yc ' + lvl + (past ? ' past' : '') + (risk ? ' risk' : '') + (date === tdy ? ' today' : '') + (dim ? ' dim' : '') + (I.selfie || I.pSelfie ? ' has' : '') + '" data-yd="' + date + '" title="' + esc(huDate(date) + ': ' + Math.max(0, I.freeS) + ' szabad szelfigép, ' + I.selfie + ' foglalás' + (I.pSelfie + I.pSpin ? ', ' + (I.pSelfie + I.pSpin) + ' ajánlat' : '')) + '">' + d + '</button>';
++      }
++      return h + '</div></div>';
++    }).join('') + '';
++    wrap.insertAdjacentHTML('afterbegin', '<div class="cpx-kpis">' + kpi('Foglalás az évben', booked) + kpi('Betelt nap', full) + kpi('Kockázatos nap', risky) + '</div>');
++    wrap.querySelectorAll('[data-yd]').forEach(b => b.addEventListener('click', () => { const d = b.dataset.yd; S.month = d.slice(0, 7); S.calView = 'month'; try { localStorage.setItem('cpx_calv', 'month'); } catch (e) { /* privát mód */ } render().then(() => openDay(d)); }));
++    wrap.querySelectorAll('[data-ym]').forEach(b => b.addEventListener('click', () => { S.month = b.dataset.ym; S.calView = 'month'; try { localStorage.setItem('cpx_calv', 'month'); } catch (e) { /* privát mód */ } render(); }));
++  }
+   const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
+     '.cpx-cal.v2 .cpx-day{border:1.5px solid transparent;border-left-width:1.5px;gap:4px;transition:transform .08s}' +
+     '.cpx-cal.v2 .cpx-day:hover{transform:translateY(-1px);border-color:rgba(20,28,51,.35)}' +
+@@ -395,6 +432,18 @@
+     '.cpx-cal.v2 .spn b{color:#141C33}.cpx-cal.v2 .spn.no{color:#B42318}.cpx-cal.v2 .spn.no b{color:#B42318}' +
+     '.cpx-cal.v2 .ft{white-space:nowrap}.cpx-cal.v2 .pend{margin:0;white-space:nowrap;background:#FFF3C4;color:#7A5B00;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}' +
+     '.lg.risk{background:#D97706;color:#fff;font:800 9px/12px Inter,sans-serif;text-align:center}' +
++    '.cpx-caltb{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}.cpx-caltb .seg{display:inline-flex;background:#EFEBE5;border-radius:10px;padding:3px;gap:2px}' +
++    '.cpx-caltb .seg button{white-space:nowrap;border:0;background:transparent;font:600 13px Inter,sans-serif;color:#4A4F5A;padding:6px 12px;border-radius:8px;cursor:pointer}.cpx-caltb .seg button.on{background:#fff;color:#141C33;box-shadow:0 1px 2px rgba(20,28,51,.15)}' +
++    '.cpx-cal.v2 .cpx-dow.we{color:#141C33;font-weight:800}.cpx-cal.v2 .cpx-day.we:not(.past){box-shadow:inset 0 3px 0 rgba(20,28,51,.18)}.cpx-cal.v2 .cpx-day.we.today{box-shadow:0 0 0 2.5px #141C33,inset 0 3px 0 rgba(20,28,51,.18)}' +
++    '.cpx-cal.v2 .cpx-day.dim,.cpx-year .yc.dim{opacity:.22;filter:grayscale(.6)}' +
++    '.cpx-cal.v2 .dn .sub{display:inline-block!important;background:#6B4FD6;color:#fff;font:700 10.5px Inter,sans-serif;border-radius:999px;padding:1px 7px}' +
++    '.cpx-year{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.cpx-year .cpx-kpis,.cpx-year .yh,.cpx-year .cpx-empty{grid-column:1/-1}.cpx-year .yh{font:800 20px "Plus Jakarta Sans",sans-serif}' +
++    '.cpx-year .ym{background:#fff;border:1px solid #E6E2DC;border-radius:12px;padding:10px}.cpx-year .ymh{border:0;background:none;font:800 15px "Plus Jakarta Sans",sans-serif;text-transform:capitalize;padding:0 0 6px;cursor:pointer;color:#141C33}' +
++    '.cpx-year .yg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.cpx-year .yd{font:600 10.5px Inter,sans-serif;color:#8A8E96;text-align:center}.cpx-year .yd.we{color:#141C33}' +
++    '.cpx-year .yc{border:0;border-radius:6px;font:600 11.5px Inter,sans-serif;aspect-ratio:1;cursor:pointer;padding:0;color:#3D4250}.cpx-year .yc.ok{background:#E3F4E9}.cpx-year .yc.ok.has{background:#BFE3CB}.cpx-year .yc.mid{background:#F6D38E;color:#6B3F00}.cpx-year .yc.full{background:#E8806F;color:#fff}' +
++    '.cpx-year .yc.past{background:#F1EFEB;color:#B0ACA5}.cpx-year .yc.risk{box-shadow:inset 0 0 0 2px #D97706}.cpx-year .yc.today{box-shadow:0 0 0 2px #141C33}.cpx-year .yc:hover{outline:2px solid #141C33}' +
++    '.cpx-dsec{display:flex;align-items:center;gap:8px;margin:14px 0 6px}.cpx-dsec h4{margin:0}.cpx-dwarn{background:#FFF1DC;border:1px solid #F0C982;color:#7A4A00;border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0}' +
++    '.evrow.link{cursor:pointer}.evrow.link:hover{background:#FAF8F5}.evrow .go{float:right;font-size:12px;color:#2F5BD8;font-weight:600}' +
+     '@media (max-width:760px){.cpx-cal.v2 .big b{font-size:18px}.cpx-cal.v2 .big span,.cpx-cal.v2 .spn{display:none}.cpx-cal.v2 .ft{justify-content:flex-start}.cpx-cal.v2 .pend span{display:none}.cpx-cal.v2 .dn .tg{display:none}.cpx-cal.v2 .dn .rk{display:none}.cpx-cal.v2 .bar{height:5px}}';
+ 
+   function openDay(date) {
+@@ -408,10 +457,14 @@
+       capBox('Szelfigép', I.selfie, I.capS, I.pSelfie) + capBox('360 Spinner', I.spin, I.capP, I.pSpin) +
+       '<div class="cpx-subs"><span>Alvállalkozói slot erre a napra</span><div class="stepper"><button data-s="-1">−</button><b id="cpx-subn">' + I.subs + '</b><button data-s="1">+</button></div></div>' +
+       '</div>' +
+-      '<h4>Rendezvények (' + I.ev.length + ')</h4>' + (I.ev.length ? I.ev.map(evRow).join('') : '<p class="cpx-muted">Erre a napra még nincs rendezvény.</p>') +
++      /* v1.81: külön a foglalások és a függő ajánlatok; a sorra kattintva megnyílik a deal */
++      ((I.pSelfie > Math.max(0, I.freeS) || I.pSpin > Math.max(0, I.freeP)) && date >= today() ? '<div class="cpx-dwarn"><b>Figyelem:</b> erre a napra több függő ajánlat van (' + (I.pSelfie + I.pSpin) + '), mint szabad gép (' + Math.max(0, I.freeS) + ' szelfigép, ' + Math.max(0, I.freeP) + ' spinner). Ha mind igent mond, nem fér bele – érdemes alvállalkozót bevonni vagy az ajánlatokat priorizálni.</div>' : '') +
++      '<div class="cpx-dsec"><h4>Foglalások (' + I.ev.filter(e => e.state === 'booked').length + ')</h4></div>' + (I.ev.some(e => e.state === 'booked') ? I.ev.filter(e => e.state === 'booked').map(evRow).join('') : '<p class="cpx-muted">Erre a napra még nincs foglalás.</p>') +
++      (I.ev.some(e => e.state !== 'booked') ? '<div class="cpx-dsec"><h4>Függő ajánlatok (' + I.ev.filter(e => e.state !== 'booked').length + ')</h4></div>' + I.ev.filter(e => e.state !== 'booked').map(evRow).join('') : '') +
+       '<h4>Hátterek ezen a napon</h4>' + (dayBgs.length ? dayBgs.map(e => '<div class="bgline"><span class="chip ' + (e.state === 'booked' ? 'taken' : 'pend') + '">' + esc(e.bg) + '</span><span>' + (e.state === 'booked' ? '<b>foglalt</b>' : '<b>csak ajánlatban</b> – még nem foglalt') + ' · ' + esc(e.title) + (partnerOf(e.bg) ? ' · <i>' + (e.state === 'booked' ? 'a párja is foglalt' : 'a párját is foglalná') + ': ' + esc(partnerOf(e.bg)) + '</i>' : '') + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra még senki nem választott hátteret.</p>') +
+       '<div class="cpx-sheet-f"><button class="cpx-btn" id="cpx-goSheet">Napi munkalap</button><button class="cpx-btn ghost" id="cpx-goCheck">Gyors ellenőrzés erre a napra</button></div></div>';
+     dlg.hidden = false;
++    if (window.CPCrm && window.CPCrm.open) dlg.querySelectorAll('.evrow[data-deal]').forEach(r => { r.classList.add('link'); r.insertAdjacentHTML('afterbegin', '<span class="go">Deal megnyitása →</span>'); r.addEventListener('click', ev => { if (ev.target.closest('a,button,input,select')) return; closeModal(); window.CPCrm.open(Number(r.dataset.deal)); }); });
+     dlg.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', async () => {
+       const n = Math.max(0, (I.subs || 0) + Number(b.dataset.s));
+       b.disabled = true;
+@@ -433,7 +486,7 @@
+     return '<div class="capbox ' + (free <= 0 ? 'full' : free <= 2 ? 'mid' : 'ok') + '"><span>' + label + '</span><b>' + Math.max(0, free) + ' szabad</b><small>' + used + ' foglalt / ' + cap + ' kapacitás' + (pend ? ' · ' + pend + ' függő' : '') + '</small></div>';
+   }
+   function evRow(e) {
+-    return '<div class="evrow ' + e.state + '"><div><b>' + esc(e.title || 'Deal #' + e.id) + '</b> ' + stateBadge(e) + '</div><small>' +
++    return '<div class="evrow ' + e.state + '"' + (Number(e.id) > 0 ? ' data-deal="' + Number(e.id) + '"' : '') + '><div><b>' + esc(e.title || 'Deal #' + e.id) + '</b> ' + stateBadge(e) + '</div><small>' +
+       [e.time, kindLabel(e), e.loc, e.bg ? 'Háttér: ' + e.bg : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
+       (e.state === 'booked' ? prepLine(e) : '') + '</div>';
+   }
