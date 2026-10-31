@@ -448,3 +448,18 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-stk small{color:#6B6F78;font-size:13px}
 .crm-stk .crm-prog{margin-top:6px}
 @media (min-width:761px){.crm-stk{display:none!important}}
+/* v1.84: kapacitásjelzés a dealen */
+.crm-cap{display:inline-block;border-radius:6px;padding:0 7px;font:600 12px/1.6 Inter,sans-serif;cursor:help;white-space:nowrap}
+.crm-cap.ok{background:#E3F4E9;color:#1E6B40}.crm-cap.mid{background:#FCEBCB;color:#8A4B00}.crm-cap.full{background:#F9D5D0;color:#B42318}
+.crm-cap.risk{box-shadow:inset 0 0 0 1.5px #D97706}
+.d3-cap{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 8px}.d3-cap small{color:#8A8E96;font-size:11.5px}.d3-cap .crm-cap{font-size:13px}
+.d3-offer{width:100%;margin:2px 0 10px}
+/* v1.84: helyben szerkesztés */
+.crm-360 [data-ik]{cursor:text;border-radius:6px;transition:background .12s}
+.crm-360 [data-ik]:not(.ik-on):hover{background:#F6F4F0;box-shadow:0 0 0 3px #F6F4F0}
+.crm-360 dd[data-ik]:not(.ik-on):hover::after{content:" ✎";color:#9AA0AE;font-size:12px}
+.ik-ed{display:flex;align-items:center;gap:4px;width:100%}
+.ik-ed input,.ik-ed select,.ik-ed textarea{flex:1;min-width:0;font:14px Inter,sans-serif;padding:5px 8px;border:1.5px solid #141C33;border-radius:8px;background:#fff}
+.ik-ed button{flex:none;width:30px;height:30px;border-radius:8px;border:1px solid #E1DDD6;background:#fff;cursor:pointer;font-size:14px}
+.ik-ed .ik-ok{background:#141C33;border-color:#141C33;color:#fff}
+.d3-val.ik-on{font-size:16px}

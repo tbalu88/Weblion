@@ -172,6 +172,8 @@ function cp_crm_board_data($a) {
 	}
 	/* v1.82: becsült ár az ajánlat előtti dealekre (estimate.php) */
 	if ($out && function_exists('cp_est_for_rows')) { $E = cp_est_for_rows($out); foreach ($out as &$x) { if (isset($E[$x['id']])) { $x['est'] = $E[$x['id']]; } } unset($x); }
+	/* v1.84: kapacitás a rendezvény napján (capacity.php) – az első két szakasz jövőbeli dealjeinél */
+	if ($out && function_exists('cp_cap_for_rows')) { $K = cp_cap_for_rows($out); foreach ($out as &$x) { if (isset($K[$x['id']])) { $x['cap'] = $K[$x['id']]; } } unset($x); }
 	return array('rows' => $out, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
 }
 
@@ -194,6 +196,7 @@ function cp_crm_deal_data($id) {
 	foreach (array('closed_at', 'last_note_at', 'last_comm_at', 'created_at', 'modified_at', 'start_at', 'synced_at', 'deleted_at') as $k) { $deal[$k] = cp_crm_local($deal[$k]); }
 	/* v1.83.2: ajánlat előtt (első szakasz, érték nélkül) becsült ár, mint a csempén */
 	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && !((float) $deal['value'] > 0) && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } }
+	if (function_exists('cp_cap_day') && $deal['status'] === 'Open' && !empty($deal['event_d']) && $deal['event_d'] >= wp_date('Y-m-d')) { $k = cp_cap_day($deal['event_d']); if ($k) { $deal['cap'] = $k; } }
 	$deal['owner'] = cp_crm_user_name($deal['owner_id']);
 	$deal['created_by_n'] = cp_crm_user_name($deal['created_by']);
 	$deal['modified_by_n'] = cp_crm_user_name($deal['modified_by']);

@@ -1,0 +1,19 @@
+--- crazy-panel.b1835.php	2026-10-31 11:40:17.656498533 +0000
++++ crazy-panel.php	2026-10-31 11:40:17.671983912 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.83.5');
++define('CP_PANEL_VER', '1.84.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3716,6 +3716,7 @@
+ require_once __DIR__ . '/settings-x.php';
+ require_once __DIR__ . '/settings-x-defs.php';
+ require_once __DIR__ . '/estimate.php';
++require_once __DIR__ . '/capacity.php';
+ require_once __DIR__ . '/portal-link.php';
+ require_once __DIR__ . '/dashboard.php';
+ require_once __DIR__ . '/gcal.php';

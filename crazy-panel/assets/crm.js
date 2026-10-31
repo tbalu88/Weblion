@@ -18,6 +18,9 @@
 	const huDT = s => s ? s.slice(0, 4) + '.' + s.slice(5, 7) + '.' + s.slice(8, 10) + '. ' + s.slice(11, 16) : '';
 	const uname = id => (USERS[String(id)] || {}).n || (id ? '#' + id : '');
 	const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
+	/* v1.84: kapacitás a rendezvény napján – „1 szabad · 9 ajánlat”; a csempén csak szűkös vagy kockázatos napnál */
+	const capTip = k => 'Kapacitás ' + k.d.replace(/-/g, '.') + '.: ' + Math.max(0, k.fs) + ' szabad szelfigép a ' + k.cs + '-ből' + (k.sub ? ' (benne ' + k.sub + ' alvállalkozói)' : '') + ', ' + Math.max(0, k.fp) + ' szabad spinner a ' + k.cp + '-ből; függő ajánlat: ' + (k.ps + k.pp) + (k.risk ? '\nFigyelem: több a függő ajánlat, mint a szabad gép.' : '');
+	const capHtml = (k, full) => !k || (!full && k.lvl === 'ok' && !k.risk) ? '' : '<span class="crm-cap ' + k.lvl + (k.risk ? ' risk' : '') + '" title="' + esc(capTip(k)) + '">' + (k.fs <= 0 ? 'betelt' : k.fs + ' szabad') + (k.ps + k.pp ? ' · ' + (k.ps + k.pp) + ' ajánlat' : '') + (k.risk ? ' !' : '') + '</span>';
 	/* v1.82: ajánlat előtt az érték helyett becsült ár (~), a részletek rámutatva */
 	const valHtml = r => r.est ? '<span class="crm-est" title="' + esc('Becsült ár a kalkulátor alapján' + (r.est.a ? ' (hiányos adatokból)' : '') + ':\n' + r.est.l.join('\n')) + '">~' + esc(money(r.est.p, 'HUF')) + (r.est.a ? '<sup>?</sup>' : '') + '</span>' : '<span>' + esc(money(r.value, r.cur)) + '</span>';
 	/* a cím végén álló egynapos dátum („| 2026-11-27”) elhagyható, mert a rendezvény dátuma külön is látszik; a többnaposat („2026-10-29/30”) meghagyjuk */
@@ -422,6 +425,7 @@
 					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
 					'<div class="crm-cl">' + valHtml(r) + '<i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
+					(capHtml(r.cap, false) ? '<div class="crm-cl">' + capHtml(r.cap, false) + '</div>' : '') +
 					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + '</div></article>';
 			});
 			if (!l.length) h += '<div class="crm-none">Nincs deal</div>';
@@ -631,8 +635,8 @@
 		if (/^(services_|extras|tags)/.test(k)) return String(v).split(' | ').map(x => '<span class="crm-tag">' + esc(x) + '</span>').join(' ');
 		return esc(v).replace(/\n/g, '<br>');
 	}
-	function dl(d, keys) {
-		const rows = keys.map(k => { const v = fmtVal(k, d[k], d); return v ? '<dt>' + esc(LBL[k] || k) + '</dt><dd>' + v + '</dd>' : ''; }).join('');
+	function dl(d, keys, inl) {
+		const rows = keys.map(k => { const v = fmtVal(k, d[k], d); return v ? '<dt>' + esc(LBL[k] || k) + '</dt><dd' + (inl ? ikA(k) : '') + '>' + v + '</dd>' : ''; }).join('');
 		return rows ? '<dl class="crm-dl">' + rows + '</dl>' : '';
 	}
 	function sheet(html) {
@@ -877,7 +881,7 @@
 	const NOSHOW = ['id', 'title', 'currency', 'contact_id', 'company_id', 'raw', 'via', 'synced_at', 'deleted_at', 'created_at', 'modified_at', 'created_by', 'modified_by', 'created_by_n', 'modified_by_n', 'owner', 'last_comm_at', 'last_comm_mode', 'last_note_at', 'rotten_d', 'win_prob', 'description', 'closed_stage', 'pkg_old', 'pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg'];
 	function fieldGroups(d) {
 		const used = new Set(NOSHOW);
-		let h = GROUPS.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1]); return b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : ''; }).join('');
+		let h = GROUPS.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : ''; }).join('');
 		const rest = Object.keys(d).filter(k => !used.has(k) && d[k] != null && d[k] !== '' && LBL[k]);
 		const pk = ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'].filter(k => d[k]);
 		if (rest.length || pk.length) h += '<details class="d3-g"><summary>Egyéb</summary>' + dl(d, rest.concat(pk)) + '</details>';
@@ -922,9 +926,9 @@
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
-			'<aside class="d3-l"><section class="d3-c d3-sum"><div class="d3-val">' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár a kalkulátor alapján' + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div><dl class="crm-dl">' +
-				(d.event_d ? '<dt>Rendezvény</dt><dd>' + esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '') + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd>' + esc(d.venue) + '</dd>' : '') +
-				'<dt>Felelős</dt><dd>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd>' + esc(d.service) + '</dd>' : '') + '</dl></section>' +
+			'<aside class="d3-l"><section class="d3-c d3-sum"><div class="d3-val"' + ikA('value', d) + '>' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár a kalkulátor alapján' + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div>' + (d.cap ? '<div class="d3-cap">' + capHtml(d.cap, true) + '<small>' + esc('a rendezvény napján (' + d.cap.cs + ' szelfigép, ' + d.cap.cp + ' spinner)') + '</small></div>' : '') + (d.est && !(d.value > 0) && W && c && c.email && window.CPMail && window.CPMail.compose ? '<button type="button" class="cpx-btn d3-offer" data-offer' + (window.CPMail.canSend && !window.CPMail.canSend() ? ' disabled title="A levélküldés a panelből neked nincs bekapcsolva (Beállítások → Levelezés)"' : '') + '>Ajánlat küldése ezzel az árral</button>' : '') + '<dl class="crm-dl">' +
+				(d.event_d ? '<dt>Rendezvény</dt><dd' + ikA('event_d', d) + '>' + esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '') + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd' + ikA('venue', d) + '>' + esc(d.venue) + '</dd>' : '') +
+				'<dt>Felelős</dt><dd' + ikA('owner_id', d) + '>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd' + ikA('source', d) + '>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd' + ikA('service', d) + '>' + esc(d.service) + '</dd>' : '') + '</dl></section>' +
 			'<section class="d3-c"><h4>Kontakt</h4>' + (c ? '<a href="#" class="d3-who" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span><span><b>' + esc(c.name || c.email) + '</b><small>' + (otherCt.length ? (otherCt.length + 1) + ' deal · ' + (x.ct_stats ? x.ct_stats.won : 0) + ' megnyert' : 'első deal') + '</small></span></a><dl class="crm-dl">' +
 				(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a></dd>' : '') +
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
@@ -955,6 +959,24 @@
 		if (window.CPContract) window.CPContract.mount(sh, x);
 		bindCommon(sh, self);
 		bindBack(sh, back);
+		bindInline(sh, x, back);
+		/* v1.84: „Ajánlat küldése” – előtöltött levél a becsült árral; küldés után a deal „Ajánlat kiküldve” lesz, értéke a becsült ár */
+		const ob = sh.querySelector('[data-offer]');
+		if (ob) ob.addEventListener('click', () => {
+			const first = (c.first_name || (c.name || '').trim().split(/\s+/).slice(-1)[0] || '').trim();
+			/* csak az árat adó sorok, a belső megjegyzések nélkül */
+			const lines = (d.est.l || []).filter(l => /:\s*[−-]?[\d\s]+ Ft$|ingyenes$/.test(l)).map(l => l.replace(/ – nincs megadva csomag[^:]*/, '').replace(/ \(felismerve: [^)]*\)/, '').replace(' (a dealben megadva)', ''));
+			const body = '<p>Kedves ' + esc(first || 'Ügyfelünk') + '!</p><p>Köszönjük megkeresésedet! ' + (d.event_d ? 'A ' + esc(huD(d.event_d)) + ' rendezvényedre' : 'Rendezvényedre') + ' az alábbi ajánlatot adjuk' + (d.venue ? ' (helyszín: ' + esc(d.venue) + ')' : '') + ':</p>' +
+				'<ul>' + lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul><p><b>Végösszeg: ' + esc(money(d.est.p, 'HUF')) + '</b></p>' +
+				'<p>Lakossági megrendelés esetén az árak alanyi adómentesek, ÁFA-t nem tartalmaznak; céges megrendelésnél egyedi ajánlatot adunk. Hosszabbítás a helyszínen is kérhető.</p>' +
+				'<p>Ha megfelel, válaszolj erre a levélre, és küldjük a szerződést.</p>';
+			const nextSt = STAGES[1] || 'Ajánlat kiküldve', val = d.est.p;
+			hideModal(); closePage();
+			window.CPMail.compose({ to: [c.email], subject: 'Ajánlat – ' + (d.title || ''), body: body, deal: d.id, dealTitle: d.title, onSent: async () => {
+				try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ value: String(val) }), c: '{}' }); await post('cp_crm_move', { id: d.id, to: nextSt }); toast('A deal „' + nextSt + '” szakaszba került, értéke ' + money(val, 'HUF') + '.'); }
+				catch (e) { toast('A levél elment, de a deal frissítése nem sikerült: ' + e.message + ' – állítsd át kézzel.', true); }
+			} });
+		});
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
 		const kbl = sh.querySelector('[data-kbl]');
@@ -1038,6 +1060,36 @@
 	];
 	const CEDIT = [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Mobil', 'tel'], ['phone', 'Telefon', 'tel']];
 	const timeOf = v => (v && /\d{2}:\d{2}/.test(v) ? v.match(/\d{2}:\d{2}/)[0] : '');
+	/* v1.84: helyben szerkesztés – az adatlapon az értékre kattintva (egy mező, ugyanaz a mentés, mint a Szerkesztés ablaké) */
+	const EDIT_T = {}; EDIT.forEach(sec => sec[1].forEach(f => { EDIT_T[f[0]] = f; }));
+	function ikA(k, d) { const f = EDIT_T[k]; return R.edit && f && f[2] !== 'multi' && !(d && d.deleted_at) ? ' data-ik="' + k + '" title="Kattints a szerkesztéshez"' : ''; }
+	function bindInline(sh, x, back) {
+		const d = x.deal;
+		sh.addEventListener('click', e => {
+			const el = e.target.closest('[data-ik]');
+			if (!el || el.classList.contains('ik-on') || e.target.closest('a, button, input, select, textarea, .crm-est')) return;
+			const k = el.dataset.ik, f = EDIT_T[k], type = f[2], cur = editVal(d, k), old = el.innerHTML;
+			let inp;
+			if (type === 'user') inp = '<select data-iv>' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(cur)).map(i => [i, USERS[i].n])), String(cur || '')) + '</select>';
+			else if (type === 'area') inp = '<textarea data-iv rows="3">' + esc(cur) + '</textarea>';
+			else inp = '<input data-iv type="' + ({ date: 'date', time: 'time', int: 'number', num: 'number', email: 'email', tel: 'tel' }[type] || 'text') + '"' + (type === 'num' ? ' step="0.5"' : '') + ' value="' + esc(cur) + '">';
+			el.classList.add('ik-on');
+			el.innerHTML = '<span class="ik-ed">' + inp + '<button type="button" class="ik-ok" title="Mentés (Enter)">✓</button><button type="button" class="ik-x" title="Mégse (Esc)">✕</button></span>';
+			const iv = el.querySelector('[data-iv]'); iv.focus(); if (iv.select && type !== 'date' && type !== 'time') iv.select();
+			const cancel = () => { el.classList.remove('ik-on'); el.innerHTML = old; };
+			const save = async () => {
+				const v = iv.value.trim();
+				if (v === cur) { cancel(); return; }
+				if (k === 'title' && !v) { toast('A név nem lehet üres.', true); return; }
+				el.querySelectorAll('button').forEach(b => { b.disabled = true; });
+				try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ [k]: v }), c: '{}' }); toast((f[1] || k) + ' mentve – a Salesmate-be is.'); openDeal(d.id, back, true); }
+				catch (er) { el.querySelectorAll('button').forEach(b => { b.disabled = false; }); toast(er.message, true); }
+			};
+			el.querySelector('.ik-ok').addEventListener('click', ev => { ev.stopPropagation(); save(); });
+			el.querySelector('.ik-x').addEventListener('click', ev => { ev.stopPropagation(); cancel(); });
+			iv.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); cancel(); } if (ev.key === 'Enter' && (type !== 'area' || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); } });
+		});
+	}
 	function editVal(d, k) { const v = d[k]; if (v == null) return ''; if (k === 'start_at') return timeOf(v); if (k === 'value' || k === 'extension') return String(Number(v)); return String(v); }
 	async function editDeal(sh, x) {
 		const d = x.deal, c = x.contact || {};

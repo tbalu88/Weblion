@@ -767,6 +767,8 @@
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
+				/* v1.84: a hívó (pl. „Ajánlat küldése” a dealen) értesítése a sikeres küldésről */
+				if (S.onSent) { const f = S.onSent; S.onSent = null; try { f(r); } catch (x) { /* a levél elment */ } }
 				open(r.thread);
 			} catch (e) { b.disabled = false; b.textContent = old; toast(e.message, true); }
 		};
@@ -923,5 +925,7 @@
 
 	/* v1.35: egy levélszál megnyitása más fülről (pl. a Feladatok kártyájáról) */
 	function open(id, o) { S.view = 'inbox'; S.th = id; S.forceTh = id; S.fromDeal = o && o.deal ? { th: id, deal: o.deal } : null; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
-	window.CPMail = { view, status, open, refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
+	/* v1.84: új levél előtöltve más fülről (címzett, tárgy, törzs, deal), küldés utáni visszahívással */
+	function compose(o) { S.reply = { to: o.to || [], cc: [], subject: o.subject || '', body: o.body || '', quote: '', thread: 0, tsubj: '', deal: o.deal || 0, dealTitle: o.dealTitle || '' }; S.onSent = o.onSent || null; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
+	window.CPMail = { view, status, open, compose, canSend: () => !!(M.send && M.send.on), refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
 })();
