@@ -1,0 +1,78 @@
+--- panel.b178.js	2026-10-31 08:33:26.493848634 +0000
++++ panel.js	2026-10-31 08:35:10.484196054 +0000
+@@ -333,14 +333,16 @@
+     main.innerHTML = '';
+     const head = el('div', { class: 'cpx-head' });
+     head.appendChild(monthNav(render));
+-    head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg ok"></span>3+ szabad<span class="lg mid"></span>1–2 szabad<span class="lg full"></span>betelt<span class="lg pend"></span>függő ajánlat'));
++    head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg ok"></span>3+ szabad<span class="lg mid"></span>1–2 szabad<span class="lg full"></span>betelt<span class="lg pend"></span>függő ajánlat<span class="lg risk">!</span>több ajánlat, mint szabad gép'));
+     main.appendChild(head);
++    /* v1.80: átláthatóbb havi nézet – az egész csempe színes, nagy szám a szabad gépeknek, kétszínű sáv (foglalt + függő), kockázatjelzés */
++    if (!document.getElementById('cpx-cal2-css')) document.head.appendChild(el('style', { id: 'cpx-cal2-css' }, CAL2_CSS));
+     const c = S.cache[S.month];
+     const [from, to] = monthRange(S.month);
+     // összesítő
+-    let bookedN = 0, pendN = 0, fullDays = 0;
++    let bookedN = 0, pendN = 0, fullDays = 0, riskDays = 0;
+     c.events.forEach(e => { if (e.state === 'booked') bookedN++; else pendN++; });
+-    const grid = el('div', { class: 'cpx-cal' });
++    const grid = el('div', { class: 'cpx-cal v2' });
+     HU_DAYS.forEach(d => grid.appendChild(el('div', { class: 'cpx-dow' }, d)));
+     const first = parseYmd(from);
+     const lead = (first.getDay() + 6) % 7;
+@@ -352,21 +354,48 @@
+       const I = dayInfo(S.month, date);
+       if (I.freeS <= 0) fullDays++;
+       const lvl = I.freeS <= 0 ? 'full' : I.freeS <= 2 ? 'mid' : 'ok';
+-      const cell = el('button', { class: 'cpx-day ' + lvl + (date < tdy ? ' past' : '') + (date === tdy ? ' today' : ''), 'data-date': date });
++      const past = date < tdy;
++      /* kockázat: több függő ajánlat, mint amennyi gép még szabad (ha mind igent mond, nem fér bele) */
++      const risk = !past && ((I.pSelfie > Math.max(0, I.freeS)) || (I.pSpin > Math.max(0, I.freeP)));
++      if (risk) riskDays++;
++      const cell = el('button', { class: 'cpx-day ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (risk ? ' risk' : ''), 'data-date': date, title: risk ? 'Több függő ajánlat van, mint szabad gép – ha mind igent mond, nem fér bele.' : '' });
+       const pctS = I.capS ? Math.min(100, Math.round(100 * I.selfie / I.capS)) : 100;
+-      cell.innerHTML = '<div class="dn">' + d + (I.subs ? '<span class="sub">+' + I.subs + ' alv.</span>' : '') + '</div>' +
+-        '<div class="row"><span>Szelfi</span><b>' + Math.max(0, I.freeS) + '</b><small>/' + I.capS + ' szabad</small></div>' +
+-        '<div class="bar"><i style="width:' + pctS + '%"></i></div>' +
+-        '<div class="row sp"><span>Spinner</span><b>' + Math.max(0, I.freeP) + '</b><small>/' + I.capP + '</small></div>' +
+-        (I.pSelfie + I.pSpin ? '<div class="pend">' + (I.pSelfie + I.pSpin) + '<span> függő</span></div>' : '');
++      const pctP = I.capS ? Math.min(100 - pctS, Math.round(100 * I.pSelfie / I.capS)) : 0;
++      const pend = I.pSelfie + I.pSpin;
++      cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + (I.subs ? '<span class="sub">+' + I.subs + ' alv.</span>' : '') + (pend ? '<span class="pend">' + pend + '<span> ajánlat</span></span>' : '') + (risk ? '<em class="rk" aria-label="kockázat">!</em>' : '') + '</div>' +
++        '<div class="big"><b>' + Math.max(0, I.freeS) + '</b><span>szabad<small> / ' + I.capS + ' szelfigép</small></span></div>' +
++        '<div class="bar"><i style="width:' + pctS + '%"></i><u style="width:' + pctP + '%"></u></div>' +
++        '<div class="ft"><span class="spn' + (I.freeP <= 0 ? ' no' : '') + '">Spinner <b>' + Math.max(0, I.freeP) + '</b>/' + I.capP + '</span></div>';
+       cell.addEventListener('click', () => openDay(date));
+       grid.appendChild(cell);
+     }
+     main.appendChild(el('div', { class: 'cpx-kpis' },
+-      kpi('Foglalás a hónapban', bookedN) + kpi('Függő ajánlat', pendN) + kpi('Betelt nap', fullDays) + kpi('Saját gép / spinner', C.capSelfie + ' / ' + C.capSpin)));
++      kpi('Foglalás a hónapban', bookedN) + kpi('Függő ajánlat', pendN) + kpi('Betelt nap', fullDays) + kpi('Kockázatos nap', riskDays) + kpi('Saját gép / spinner', C.capSelfie + ' / ' + C.capSpin)));
+     main.appendChild(grid);
+   }
+   const kpi = (l, v) => '<div class="kpi"><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>';
++  const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
++    '.cpx-cal.v2 .cpx-day{border:1.5px solid transparent;border-left-width:1.5px;gap:4px;transition:transform .08s}' +
++    '.cpx-cal.v2 .cpx-day:hover{transform:translateY(-1px);border-color:rgba(20,28,51,.35)}' +
++    '.cpx-cal.v2 .cpx-day.ok{background:#E3F4E9;border-color:#BFE3CB}' +
++    '.cpx-cal.v2 .cpx-day.mid{background:#FCEBCB;border-color:#F0C982}' +
++    '.cpx-cal.v2 .cpx-day.full{background:#F9D5D0;border-color:#EBA59B}' +
++    '.cpx-cal.v2 .cpx-day.past{background:#F1EFEB;border-color:#E6E2DC;opacity:.6}' +
++    '.cpx-cal.v2 .cpx-day.today{box-shadow:0 0 0 2.5px #141C33}' +
++    '.cpx-cal.v2 .cpx-day.risk{box-shadow:inset 0 0 0 2px #D97706}.cpx-cal.v2 .cpx-day.today.risk{box-shadow:0 0 0 2.5px #141C33,inset 0 0 0 2px #D97706}' +
++    '.cpx-cal.v2 .dn{gap:6px;justify-content:flex-start}.cpx-cal.v2 .dn>span:first-child{margin-right:auto}' +
++    '.cpx-cal.v2 .dn .tg{font:700 10.5px Inter,sans-serif;font-style:normal;background:#141C33;color:#fff;border-radius:999px;padding:1px 7px;order:-1;margin-left:6px}' +
++    '.cpx-cal.v2 .dn .rk{font:800 12px Inter,sans-serif;font-style:normal;width:18px;height:18px;border-radius:50%;background:#D97706;color:#fff;display:inline-flex;align-items:center;justify-content:center}' +
++    '.cpx-cal.v2 .big{display:flex;align-items:baseline;gap:6px;line-height:1}.cpx-cal.v2 .big b{font:800 26px "Plus Jakarta Sans",sans-serif;color:#141C33}' +
++    '.cpx-cal.v2 .big span{font:600 12.5px Inter,sans-serif;color:#3D4250}.cpx-cal.v2 .big small{font-weight:500;color:#6B6F78}' +
++    '.cpx-cal.v2 .full .big b{color:#B42318}.cpx-cal.v2 .mid .big b{color:#9A5B00}.cpx-cal.v2 .ok .big b{color:#1E6B40}' +
++    '.cpx-cal.v2 .bar{display:flex;height:7px;background:rgba(255,255,255,.75)}.cpx-cal.v2 .bar i{background:#141C33}' +
++    '.cpx-cal.v2 .bar u{display:block;height:100%;background:repeating-linear-gradient(135deg,#E9B949 0 4px,#F6D987 4px 8px)}' +
++    '.cpx-cal.v2 .ft{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto;font-size:12px;color:#4A4F5A}' +
++    '.cpx-cal.v2 .spn b{color:#141C33}.cpx-cal.v2 .spn.no{color:#B42318}.cpx-cal.v2 .spn.no b{color:#B42318}' +
++    '.cpx-cal.v2 .ft{white-space:nowrap}.cpx-cal.v2 .pend{margin:0;white-space:nowrap;background:#FFF3C4;color:#7A5B00;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}' +
++    '.lg.risk{background:#D97706;color:#fff;font:800 9px/12px Inter,sans-serif;text-align:center}' +
++    '@media (max-width:760px){.cpx-cal.v2 .big b{font-size:18px}.cpx-cal.v2 .big span,.cpx-cal.v2 .spn{display:none}.cpx-cal.v2 .ft{justify-content:flex-start}.cpx-cal.v2 .pend span{display:none}.cpx-cal.v2 .dn .tg{display:none}.cpx-cal.v2 .dn .rk{display:none}.cpx-cal.v2 .bar{height:5px}}';
+ 
+   function openDay(date) {
+     const m = monthKey(date);
