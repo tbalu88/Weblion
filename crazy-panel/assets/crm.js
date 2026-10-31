@@ -887,7 +887,7 @@
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
-			'<aside class="d3-l"><section class="d3-c d3-sum"><div class="d3-val">' + esc(money(d.value, d.currency)) + '</div><dl class="crm-dl">' +
+			'<aside class="d3-l"><section class="d3-c d3-sum"><div class="d3-val">' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár a kalkulátor alapján' + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div><dl class="crm-dl">' +
 				(d.event_d ? '<dt>Rendezvény</dt><dd>' + esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '') + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd>' + esc(d.venue) + '</dd>' : '') +
 				'<dt>Felelős</dt><dd>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd>' + esc(d.service) + '</dd>' : '') + '</dl></section>' +
 			'<section class="d3-c"><h4>Kontakt</h4>' + (c ? '<a href="#" class="d3-who" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span><span><b>' + esc(c.name || c.email) + '</b><small>' + (otherCt.length ? (otherCt.length + 1) + ' deal · ' + (x.ct_stats ? x.ct_stats.won : 0) + ' megnyert' : 'első deal') + '</small></span></a><dl class="crm-dl">' +
