@@ -42,6 +42,7 @@ function cp_set_data() {
 	$ai = function_exists('cp_ai_opts') ? cp_ai_opts() : array();
 	$po = cp_panel_opts();
 	$x += array(
+		'sx' => function_exists('cp_sx_sections') ? array_keys(cp_sx_sections()) : array(),
 		'users' => cp_set_users_out(), 'roles' => cp_pu_roles(), 'sm_users' => $sm, 'tabs' => $tabs, 'vis' => $vis, 'shared_on' => cp_pu_shared_on(), 'notif' => $nt,
 		'mail' => array('sync_on' => get_option('cp_imp_sync_on') === '1', 'sync_last' => !empty($sy['last']) ? wp_date('Y.m.d. H:i', (int) $sy['last']) : '', 'sync_n' => (int) ($sy['n'] ?? 0), 'sync_err' => (string) ($sy['err'] ?? ''),
 			'imap' => array('host' => $io['host'] ?? '', 'user' => $io['user'] ?? '', 'pw' => function_exists('cp_imp_pw') && cp_imp_pw() !== ''),

@@ -65,7 +65,7 @@ function cp_audit_actions() {
 		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'),
 		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_note_add' => array('deal', 'Jegyzet a dealen'), 'cp_crm_note_del' => array('deal', 'Deal-jegyzet törlése'), 'cp_crm_act_save' => array('deal', 'Tevékenység mentése'), 'cp_crm_act_done' => array('deal', 'Tevékenység kész / visszanyitva'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
 		'cp_mail_note_add' => array('levelezes', 'Jegyzet a levélszálon'), 'cp_mail_note_del' => array('levelezes', 'Jegyzet törlése'), 'cp_mail_thread_set' => array('levelezes', 'Levélszál módosítása'),
-		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_send' => array('levelezes', 'Levél küldése a panelből'), 'cp_set_me' => array('rendszer', 'Saját beállítások'), 'cp_set_admin' => array('rendszer', 'Beállítás módosítása'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
+		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_send' => array('levelezes', 'Levél küldése a panelből'), 'cp_set_me' => array('rendszer', 'Saját beállítások'), 'cp_set_admin' => array('rendszer', 'Beállítás módosítása'), 'cp_sx_set' => array('rendszer', 'Beállítás módosítása'), 'cp_sx_act' => array('rendszer', 'Beállítási művelet'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
 		'cp_kb_card_save' => array('feladatok', 'Kártya mentése'), 'cp_kb_card_move' => array('feladatok', 'Kártya áthelyezése'), 'cp_kb_comment' => array('feladatok', 'Hozzászólás'),
 		'cp_kb_list_save' => array('feladatok', 'Lista módosítása'), 'cp_kb_board_save' => array('feladatok', 'Tábla módosítása'),
 		'cp_lead_set' => array('deal', 'Megkeresés jelölése'), 'cp_flow_set' => array('rendszer', 'Automatizmus kapcsolása'),
@@ -141,6 +141,15 @@ function cp_audit_summary($action, $p) {
 	}
 	/* beállítások: csak a terület és a művelet – titok (kulcs, webhook, aláírás) nem kerül a naplóba */
 	if ($action === 'cp_set_me') { return array('', ($p['op'] ?? '') === 'pwlink' ? 'jelszó-link kérése' : 'név / aláírás / értesítés mentése'); }
+	/* v1.79: a panelbe hozott WordPress-beállítások – csak a csoport és a módosított mezők neve, érték (főleg titok) soha */
+	if ($action === 'cp_sx_set' || $action === 'cp_sx_act') {
+		$sec = sanitize_key((string) ($p['sec'] ?? '')); $S = function_exists('cp_sx_sections') ? (cp_sx_sections()[$sec] ?? null) : null;
+		$x = $S ? $S['n'] : $sec;
+		if ($action === 'cp_sx_act') { foreach ($S['acts'] ?? array() as $a) { if ($a['k'] === ($p['act'] ?? '')) { $x .= ' · ' . $a['l']; } } return array('', $x); }
+		$v = json_decode(wp_unslash((string) ($p['vals'] ?? '')), true); $ls = array();
+		foreach ($S['fields'] ?? array() as $f) { if (is_array($v) && (($f['t'] === 'secret' && (trim((string) ($v[$f['k']] ?? '')) !== '' || !empty($v[$f['k'] . '_clear']))))) { $ls[] = ($f['l'] ?? $f['k']) . (!empty($v[$f['k'] . '_clear']) ? ' törölve' : ' cserélve'); } }
+		return array('', $x . ($ls ? ' · ' . implode(', ', $ls) : ''));
+	}
 	if ($action === 'cp_set_admin') {
 		$secn = array('user' => 'Felhasználók', 'vis' => 'Láthatóság', 'shared' => 'Közös jelszavak', 'notif' => 'Értesítések', 'mail' => 'Levelezés', 'smtp' => 'SMTP-ellenőrzés', 'ai' => 'AI', 'panel' => 'Salesmate és hátterek', 'sig' => 'Aláírás')[$p['sec'] ?? ''] ?? ($p['sec'] ?? '');
 		$x = $secn;

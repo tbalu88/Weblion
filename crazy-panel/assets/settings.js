@@ -23,7 +23,11 @@
 		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3500);
 	}
-	const SECS = [['me', 'Saját beállításaim', 0], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1], ['mail', 'Levelezés', 1], ['ai', 'AI', 1], ['panel', 'Salesmate és hátterek', 1], ['cut', 'Átállás', 1], ['ct', 'Szerződésmodulok', 1], ['wp', 'A WordPressben maradt', 1]];
+	/* v1.79: csoportosítva; az „x:” kezdetűek a WordPress-adminból áthozott oldalak (közös mezőleírásból, settings-x.php) */
+	const SECS = [['me', 'Saját beállításaim', 0], ['-', 'Csapat', 1], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1],
+		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiókok, import', 1], ['x:gcal', 'Google Naptár', 1], ['ai', 'AI', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
+		['-', 'Működés', 1], ['x:core', 'Kapacitás, szakaszok', 1], ['x:el', 'Kezelői elszámolás', 1], ['x:portal', 'Ügyfélportál', 1], ['ct', 'Szerződésmodulok', 1], ['cut', 'Átállás', 1],
+		['-', 'Statisztika', 1], ['x:stat', 'Statisztikák', 1], ['x:digest', 'Összesítők', 1], ['wp', 'Tartalék: WordPress', 1]];
 	const secret = (name, has, ph) => '<input type="password" data-k="' + name + '" autocomplete="new-password" placeholder="' + esc(has ? 'beállítva – csak cseréhez írd be az újat' : ph) + '">' + (has ? '<label class="cs-chk"><input type="checkbox" data-k="' + name + '_clear"> törlés</label>' : '');
 	const sw = (k, on, label) => '<label class="cs-sw"><input type="checkbox" data-k="' + k + '"' + (on ? ' checked' : '') + '><span></span>' + label + '</label>';
 	const val = (box, k) => { const el = box.querySelector('[data-k="' + k + '"]'); if (!el) return ''; return el.type === 'checkbox' ? (el.checked ? 1 : '') : el.value; };
@@ -35,11 +39,12 @@
 		draw();
 	}
 	function draw() {
-		const d = S.d, secs = SECS.filter(s => !s[2] || d.admin);
-		if (!secs.some(s => s[0] === S.sec)) S.sec = 'me';
-		S.main.innerHTML = '<div class="cs"><nav class="cs-nav">' + (d.admin ? '' : '') + secs.map((s, i) => (i === 1 ? '<div class="cs-navh">Adminisztráció</div>' : '') + '<button type="button" data-sec="' + s[0] + '" class="' + (S.sec === s[0] ? 'on' : '') + '">' + s[1] + '</button>').join('') + '</nav><section class="cs-body" data-body></section></div>';
+		const d = S.d, X = d.sx || [], secs = SECS.filter(s => (!s[2] || d.admin) && (s[0].indexOf('x:') !== 0 || X.includes(s[0].slice(2))));
+		if (!secs.some(s => s[0] === S.sec && s[0] !== '-')) S.sec = 'me';
+		S.main.innerHTML = '<div class="cs"><nav class="cs-nav">' + secs.map(s => s[0] === '-' ? '<div class="cs-navh">' + s[1] + '</div>' : '<button type="button" data-sec="' + s[0] + '" class="' + (S.sec === s[0] ? 'on' : '') + '">' + s[1] + '</button>').join('') + '</nav><section class="cs-body" data-body></section></div>';
 		S.main.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => { S.sec = b.dataset.sec; try { localStorage.setItem('cpx_set_sec', S.sec); } catch (e) { /* privát mód */ } draw(); }));
 		const box = S.main.querySelector('[data-body]');
+		if (S.sec.indexOf('x:') === 0) { secX(box, S.sec.slice(2)); return; }
 		({ me: secMe, users: secUsers, vis: secVis, notif: secNotif, mail: secMail, ai: secAi, panel: secPanel, cut: secCut, ct: secCt, wp: secWp })[S.sec](box, d);
 	}
 	/* mentés: a válasz friss adataival újrarajzol; a meghívó-linket megmutatja */
@@ -292,6 +297,44 @@
 			box.querySelector('[data-recheck]').addEventListener('click', async () => { try { x = await post('cp_cut_get', { check: 1 }); draw(); toast('Egyeztetve.'); } catch (e) { toast(e.message, true); } });
 		};
 		draw();
+	}
+	/* ------------------------------------------------------------ v1.79: a WordPress-adminból áthozott beállítások (közös mezőleírásból) */
+	async function secX(box, key, pre) {
+		let x = pre;
+		if (!x) { box.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; try { x = await post('cp_sx_get', { sec: key }); } catch (e) { box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; } }
+		if (S.sec !== 'x:' + key) return;
+		const fld = f => {
+			const id = 'sx_' + f.k, lab = '<label class="cs-lbl" for="' + id + '">' + esc(f.l) + (f.t === 'secret' ? ' ' + (f.has ? '<span class="cs-st ok">beállítva</span>' : '<span class="cs-st bad">nincs</span>') : '') + '</label>', h = f.h ? '<p class="cs-note">' + f.h + '</p>' : '';
+			if (f.t === 'info') return '<div class="sx-f"><span class="cs-lbl">' + esc(f.l) + '</span><div class="sx-info">' + esc(f.v) + '</div>' + h + '</div>';
+			if (f.t === 'sw') return '<div class="sx-f">' + sw(f.k, f.v === '1' || f.v === 1, esc(f.l)) + h + '</div>';
+			if (f.t === 'secret') return '<div class="sx-f">' + lab + secret(f.k, f.has, f.ph || '') + h + '</div>';
+			if (f.t === 'sel') return '<div class="sx-f">' + lab + '<select id="' + id + '" data-k="' + f.k + '">' + (f.o || []).map(o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(f.v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>' + h + '</div>';
+			if (f.t === 'area') return '<div class="sx-f">' + lab + '<textarea id="' + id + '" data-k="' + f.k + '" rows="' + (f.rows || 4) + '" placeholder="' + esc(f.ph || '') + '">' + esc(f.v) + '</textarea>' + h + '</div>';
+			if (f.t === 'num') return '<div class="sx-f">' + lab + '<input id="' + id + '" type="number" data-k="' + f.k + '" value="' + esc(f.v) + '"' + (f.min != null ? ' min="' + f.min + '"' : '') + (f.max != null ? ' max="' + f.max + '"' : '') + ' step="' + (f.step || 'any') + '">' + h + '</div>';
+			return '<div class="sx-f">' + lab + '<input id="' + id + '" type="text" data-k="' + f.k + '" value="' + esc(f.v) + '" placeholder="' + esc(f.ph || '') + '">' + h + '</div>';
+		};
+		/* mezők csoportokban (g); csoport nélkül egy kártya */
+		const groups = []; x.fields.forEach(f => { const g = f.g || ''; let G = groups.find(z => z.g === g); if (!G) { G = { g: g, f: [] }; groups.push(G); } G.f.push(f); });
+		box.innerHTML = '<style>.sx-f{margin:0 0 12px}.sx-f input[type=text],.sx-f input[type=number],.sx-f input[type=password],.sx-f select,.sx-f textarea{width:100%;box-sizing:border-box;max-width:560px}.sx-f textarea{max-width:none;font:13px/1.45 ui-monospace,Menlo,monospace}.sx-info{font-size:13.5px;white-space:pre-wrap}.sx-stat{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin:0}.sx-stat dt{color:#6B6F78}.sx-stat dd{margin:0}.sx-stat .ok{color:#216E4E}.sx-stat .bad{color:#B42318}.sx-acts{display:flex;flex-wrap:wrap;gap:8px}.sx-wp{font-size:12.5px;color:#6B6F78;margin-top:14px}</style>' +
+			'<h2>' + esc(x.n) + '</h2>' + (x.d ? '<p class="cs-note">' + x.d + '</p>' : '') +
+			(x.info.length ? '<div class="cs-card"><h3>Állapot</h3><dl class="sx-stat">' + x.info.map(i => '<dt>' + esc(i[0]) + '</dt><dd class="' + esc(i[2] || '') + '">' + esc(i[1]) + '</dd>').join('') + '</dl></div>' : '') +
+			groups.map(G => '<div class="cs-card">' + (G.g ? '<h3>' + esc(G.g) + '</h3>' : '') + G.f.map(fld).join('') + '</div>').join('') +
+			(x.save ? '<div class="cs-bar"><button type="button" class="cpx-btn" data-sxsave>Mentés</button></div>' : '') +
+			(x.acts.length ? '<div class="cs-card"><h3>Műveletek</h3><div class="sx-acts">' + x.acts.map(a => '<button type="button" class="cpx-btn ghost' + (a.bad ? ' bad' : '') + '" data-sxact="' + esc(a.k) + '">' + esc(a.l) + '</button>').join('') + '</div></div>' : '') +
+			(x.wp ? '<p class="sx-wp">Tartalék: ugyanez a WordPress-adminban is elérhető (<a href="' + esc(x.wp) + '" target="_blank" rel="noopener">megnyitás ↗</a>).</p>' : '');
+		const sb = box.querySelector('[data-sxsave]');
+		if (sb) sb.addEventListener('click', async () => {
+			const v = {}; x.fields.forEach(f => { if (f.t === 'info') return; v[f.k] = val(box, f.k); if (f.t === 'secret') v[f.k + '_clear'] = val(box, f.k + '_clear'); });
+			if (x.fields.some(f => f.t === 'secret' && v[f.k + '_clear']) && !window.confirm('Biztosan törlöd a kijelölt titkos kulcsot? A kapcsolódó funkció leáll.')) return;
+			sb.disabled = true; sb.textContent = 'Mentés…';
+			try { const r = await post('cp_sx_set', { sec: key, vals: JSON.stringify(v) }); toast(r.msg); secX(box, key, r.data); } catch (e) { sb.disabled = false; sb.textContent = 'Mentés'; toast(e.message, true); }
+		});
+		box.querySelectorAll('[data-sxact]').forEach(b => b.addEventListener('click', async () => {
+			const a = x.acts.find(z => z.k === b.dataset.sxact);
+			if (a.c && !window.confirm(a.c)) return;
+			b.disabled = true;
+			try { const r = await post('cp_sx_act', { sec: key, act: a.k }); toast(r.msg); secX(box, key, r.data); } catch (e) { b.disabled = false; toast(e.message, true); }
+		}));
 	}
 	function secWp(box, d) {
 		box.innerHTML = '<h2>A WordPressben maradt beállítások</h2><p class="cs-note">Ezek ritkán változnak, vagy titkos kulcsot / tömeges műveletet tartalmaznak, ezért egyelőre a WordPress-adminban vannak (WordPress-belépés kell).</p><ul class="cs-wp">' + d.wp.map(w => '<li><a href="' + esc(w.u) + '" target="_blank" rel="noopener">' + esc(w.n) + ' ↗</a></li>').join('') + '</ul>';
