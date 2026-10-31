@@ -447,3 +447,13 @@
   .ml-mmenu button{font-size:16px;padding:14px 16px}
 }
 
+/* v1.78.5: mobilon a levélolvasóban feleakkora oldalmargó, hogy több hely jusson a szövegnek */
+@media (max-width:760px){
+  .ml-inbox.reading .ml-read{margin:0 -6px}
+  .ml-read .ml-thread{padding:6px 5px}
+  .ml-read .ml-msg{padding:12px 7px}
+  .ml-read .ml-dcard{padding:10px 7px}
+  .ml-read .ml-ncard{padding-left:7px;padding-right:7px}
+  .ml-read .ml-subjh{padding:6px 6px 4px}
+  .ml-read .ml-rtool{padding:6px 5px}
+}
