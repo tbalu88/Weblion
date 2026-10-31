@@ -456,6 +456,7 @@
 		box.querySelectorAll('[data-arr]').forEach(b => b.addEventListener('click', () => bd.scrollBy({ left: Number(b.dataset.arr) * 250, behavior: 'smooth' })));
 		bd.addEventListener('scroll', arr, { passive: true });
 		fitBoard(); arr();
+		if (MOB) mobFit(bd);
 	}
 	/* húzás a szakaszok között, illetve a Megnyert / Elvesztett mezőre */
 	function bindDrag(box) {
@@ -546,6 +547,23 @@
 		return ok;
 	}
 	/* az oszlopok a képernyő aljáig érjenek (a saját görgetésük így mindig elérhető) */
+	/* v1.83.4: mobilon a tábla magassága mindig a látható szakaszé – a rövid szakasz alatt nem lehet tovább görgetni
+	   (a szomszédos, hosszabb oszlop nem nyújtja meg az oldalt); oldalra húzáskor és a tartalom változásakor igazodik */
+	function mobFit(bd) {
+		const cols = Array.from(bd.querySelectorAll('.crm-col'));
+		if (!cols.length) return;
+		let t = 0;
+		const fit = () => {
+			if (!bd.isConnected) return;
+			const mid = bd.getBoundingClientRect().left + bd.clientWidth / 2;
+			const c = cols.reduce((best, x) => { const r = x.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid); return d < best.d ? { x: x, d: d } : best; }, { x: cols[0], d: Infinity }).x;
+			bd.style.height = (c.offsetHeight + 96) + 'px';
+		};
+		bd.style.overflowY = 'hidden';
+		bd.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(fit, 90); }, { passive: true });
+		if (window.ResizeObserver) { const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(fit, 30); }); cols.forEach(c => ro.observe(c)); }
+		fit();
+	}
 	function fitBoard() {
 		const bd = S.main && S.main.querySelector('.crm-board');
 		if (!bd) return;
