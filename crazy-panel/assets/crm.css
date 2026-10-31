@@ -412,3 +412,6 @@ a.d3-who:hover{background:#F6F3EE}
   .d3-ab{height:38px;padding:0 6px;font-size:13px;gap:5px;min-width:0}
   .d3-ab span{overflow:hidden;text-overflow:ellipsis}
 }
+/* v1.82: becsült ár a csempén (ajánlat előtt) */
+.crm-est{color:#7A5B00;background:#FFF3C4;border-radius:6px;padding:0 6px;font-weight:600;cursor:help}
+.crm-est sup{font-size:9px;margin-left:1px;color:#9A7A20}

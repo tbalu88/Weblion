@@ -170,6 +170,8 @@ function cp_crm_board_data($a) {
 		foreach ($out as &$x) { $x['na'] = isset($na[$x['id']]) ? $na[$x['id']] : ''; }
 		unset($x);
 	}
+	/* v1.82: becsült ár az ajánlat előtti dealekre (estimate.php) */
+	if ($out && function_exists('cp_est_for_rows')) { $E = cp_est_for_rows($out); foreach ($out as &$x) { if (isset($E[$x['id']])) { $x['est'] = $E[$x['id']]; } } unset($x); }
 	return array('rows' => $out, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
 }
 
