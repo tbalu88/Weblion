@@ -423,3 +423,13 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-qn textarea{width:100%;box-sizing:border-box;border:1px solid #DDD9D2;border-radius:8px;padding:6px 8px;font:13px/1.4 Inter,sans-serif;resize:vertical}
 .crm-qnf{display:flex;align-items:center;gap:6px;margin-top:6px}.crm-qnf small{color:#8A8E96;font-size:11px;margin-right:auto}.crm-qnf .cpx-btn{padding:5px 10px;font-size:12.5px}
 @media (max-width:760px){.crm-qnb{opacity:1}}
+/* v1.83.1: az adatlap gombjai a felső gombsorhoz igazodnak – a fő gomb sötétkék, egyszínű (a narancs színátmenet helyett), a többi fehér, kerettel */
+.crm-360 .cpx-btn{height:38px;padding:0 16px;border-radius:10px;font:600 14px Inter,sans-serif;gap:6px;box-shadow:none;transition:background .12s,border-color .12s}
+.crm-360 .cpx-btn:not(.ghost){background:#141C33;color:#fff;border:1px solid #141C33}
+.crm-360 .cpx-btn:not(.ghost):hover{background:#26304D;border-color:#26304D}
+.crm-360 .cpx-btn:not(.ghost)[disabled]{background:#9AA0AE;border-color:#9AA0AE;cursor:default}
+.crm-360 .cpx-btn.ghost{background:#fff;border:1px solid #E1DDD6;color:#141C33}
+.crm-360 .cpx-btn.ghost:hover{background:#F6F4F0}
+.crm-360 .cpx-btn.ghost.bad,.crm-360 .cpx-btn.crm-del{color:#B42318}
+.crm-360 .cpx-btn.crm-del:not(.ghost){background:#fff;border-color:#F1C7C2}
+.crm-360 .cpx-btn.sm{height:32px;padding:0 12px;font-size:13px}
