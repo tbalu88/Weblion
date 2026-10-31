@@ -380,6 +380,32 @@ function cp_szl_issue_row($row, $send) {
 
 /* ------------------------------------------------------------ WordPress-admin */
 add_action('admin_menu', function () { add_options_page('Crazy számlázás', 'Crazy számlázás', 'manage_options', 'cp-billingo', 'cp_bil_admin_page'); });
+/* kapcsolatpróba (Billingo: számlatömbök, bankszámlák, cégnév betöltése; Számlázz.hu: kulcsellenőrzés) – a WordPress-oldal és a panel közös */
+function cp_bil_test($p, &$o) {
+	$msg = ''; $err = '';
+	if (cp_bil_prov($p) === 'szamlazz') {
+		/* próbalekérdezés egy nem létező számlára: a kulcs hibáját a Számlázz.hu külön jelzi */
+		$x = cp_bil_key($p) === '' ? new WP_Error('cp_bil', 'Nincs megadva Számla Agent kulcs.') : cp_szl_post('action-szamla_agent_xml', '<?xml version="1.0" encoding="UTF-8"?><xmlszamlaxml xmlns="http://www.szamlazz.hu/xmlszamlaxml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamlaxml https://www.szamlazz.hu/szamla/docs/xsds/agentxml/xmlszamlaxml.xsd"><szamlaagentkulcs>' . htmlspecialchars(cp_bil_key($p), ENT_XML1) . '</szamlaagentkulcs><szamlaszam>CRAZYPANEL-TESZT-0</szamlaszam></xmlszamlaxml>');
+		$m = is_wp_error($x) ? $x->get_error_message() : 'rendben';
+		if (preg_match('/bejelentkez|kulcs|jelsz|felhaszn|login/iu', $m)) { $err = $p . ': a Számlázz.hu nem fogadta el a kulcsot – ' . $m; }
+		else { $msg = $p . ': a Számlázz.hu elfogadta a kulcsot (próbalekérdezés egy nem létező számlára: ' . $m . ').'; }
+	}
+	else {
+		$bl = cp_bil_req($p, 'GET', '/document-blocks', array('per_page' => 100));
+		$ba = is_wp_error($bl) ? $bl : cp_bil_req($p, 'GET', '/bank-accounts', array('per_page' => 100));
+		$og = is_wp_error($ba) ? $ba : cp_bil_req($p, 'GET', '/organization');
+		if (is_wp_error($og)) { $err = $og->get_error_message(); }
+		else {
+			$o['blocks'] = array_map(function ($x) { return array('id' => (int) $x['id'], 'n' => (string) $x['name'] . (!empty($x['prefix']) ? ' (' . $x['prefix'] . ')' : '') . (!empty($x['type']) ? ' – ' . $x['type'] : '')); }, (array) ($bl['data'] ?? array()));
+			$o['banks'] = array_map(function ($x) { return array('id' => (int) $x['id'], 'n' => (string) $x['name'] . ' ' . (string) ($x['account_number'] ?? '')); }, (array) ($ba['data'] ?? array()));
+			$o['org'] = sanitize_text_field((string) ($og['name'] ?? ''));
+			if (!$o['block'] && $o['blocks']) { $o['block'] = $o['blocks'][0]['id']; }
+			if (!$o['bank'] && $o['banks']) { $o['bank'] = $o['banks'][0]['id']; }
+			$msg = $p . ': a Billingo-fiók elérhető (' . $o['org'] . '), ' . count($o['blocks']) . ' számlatömb, ' . count($o['banks']) . ' bankszámla.';
+		}
+	}
+	return array($msg, $err);
+}
 function cp_bil_admin_page() {
 	if (!current_user_can('manage_options')) { return; }
 	$msg = ''; $err = '';
@@ -401,28 +427,7 @@ function cp_bil_admin_page() {
 				if ($do === '') { $msg = $p . ': elmentve (kézi mód).'; }
 			}
 			if ($do === 'del') { delete_option('cp_bil_key_' . $p); $o['blocks'] = array(); $o['banks'] = array(); $o['org'] = ''; $msg = $p . ': a kulcs törölve.'; }
-			if ($do === 'test' && cp_bil_prov($p) === 'szamlazz') {
-				/* próbalekérdezés egy nem létező számlára: a kulcs hibáját a Számlázz.hu külön jelzi */
-				$x = cp_bil_key($p) === '' ? new WP_Error('cp_bil', 'Nincs megadva Számla Agent kulcs.') : cp_szl_post('action-szamla_agent_xml', '<?xml version="1.0" encoding="UTF-8"?><xmlszamlaxml xmlns="http://www.szamlazz.hu/xmlszamlaxml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamlaxml https://www.szamlazz.hu/szamla/docs/xsds/agentxml/xmlszamlaxml.xsd"><szamlaagentkulcs>' . htmlspecialchars(cp_bil_key($p), ENT_XML1) . '</szamlaagentkulcs><szamlaszam>CRAZYPANEL-TESZT-0</szamlaszam></xmlszamlaxml>');
-				$m = is_wp_error($x) ? $x->get_error_message() : 'rendben';
-				if (preg_match('/bejelentkez|kulcs|jelsz|felhaszn|login/iu', $m)) { $err = $p . ': a Számlázz.hu nem fogadta el a kulcsot – ' . $m; }
-				else { $msg = $p . ': a Számlázz.hu elfogadta a kulcsot (próbalekérdezés egy nem létező számlára: ' . $m . ').'; }
-				$do = '';
-			}
-			if ($do === 'test') {
-				$bl = cp_bil_req($p, 'GET', '/document-blocks', array('per_page' => 100));
-				$ba = is_wp_error($bl) ? $bl : cp_bil_req($p, 'GET', '/bank-accounts', array('per_page' => 100));
-				$og = is_wp_error($ba) ? $ba : cp_bil_req($p, 'GET', '/organization');
-				if (is_wp_error($og)) { $err = $og->get_error_message(); }
-				else {
-					$o['blocks'] = array_map(function ($x) { return array('id' => (int) $x['id'], 'n' => (string) $x['name'] . (!empty($x['prefix']) ? ' (' . $x['prefix'] . ')' : '') . (!empty($x['type']) ? ' – ' . $x['type'] : '')); }, (array) ($bl['data'] ?? array()));
-					$o['banks'] = array_map(function ($x) { return array('id' => (int) $x['id'], 'n' => (string) $x['name'] . ' ' . (string) ($x['account_number'] ?? '')); }, (array) ($ba['data'] ?? array()));
-					$o['org'] = sanitize_text_field((string) ($og['name'] ?? ''));
-					if (!$o['block'] && $o['blocks']) { $o['block'] = $o['blocks'][0]['id']; }
-					if (!$o['bank'] && $o['banks']) { $o['bank'] = $o['banks'][0]['id']; }
-					$msg = $p . ': a Billingo-fiók elérhető (' . $o['org'] . '), ' . count($o['blocks']) . ' számlatömb, ' . count($o['banks']) . ' bankszámla.';
-				}
-			}
+			if ($do === 'test') { list($m2, $e2) = cp_bil_test($p, $o); if ($m2 !== '') { $msg = $m2; } if ($e2 !== '') { $err = $e2; } }
 			update_option('cp_bil_' . $p, $o, false);
 		}
 	}

@@ -1,0 +1,20 @@
+--- crazy-panel.b1788.php	2026-10-31 08:13:02.252491097 +0000
++++ crazy-panel.php	2026-10-31 08:15:25.225386055 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.78.8');
++define('CP_PANEL_VER', '1.79.1');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3713,6 +3713,8 @@
+ require_once __DIR__ . '/mail-send.php';
+ require_once __DIR__ . '/mail-att.php';
+ require_once __DIR__ . '/settings.php';
++require_once __DIR__ . '/settings-x.php';
++require_once __DIR__ . '/settings-x-defs.php';
+ require_once __DIR__ . '/portal-link.php';
+ require_once __DIR__ . '/dashboard.php';
+ require_once __DIR__ . '/gcal.php';

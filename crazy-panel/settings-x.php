@@ -62,9 +62,12 @@ function cp_sx_clean($f, $v) {
 			$o = is_callable($f['o']) ? call_user_func($f['o']) : $f['o'];
 			$ok = array_map(function ($x) { return (string) $x[0]; }, $o);
 			return in_array((string) $v, $ok, true) ? (string) $v : (string) ($f['def'] ?? ($ok[0] ?? ''));
-		case 'area': return trim(sanitize_textarea_field((string) $v));
-		default: return trim(sanitize_text_field((string) $v));
+		case 'area': $v = trim(sanitize_textarea_field((string) $v)); break;
+		default: $v = trim(sanitize_text_field((string) $v));
 	}
+	if (isset($f['strip'])) { $v = preg_replace($f['strip'], '', $v); }
+	if (isset($f['max_len'])) { $v = mb_substr($v, 0, $f['max_len']); }
+	return $v;
 }
 function cp_sx_save($key, $vals) {
 	$S = cp_sx_sections()[$key] ?? null;
@@ -76,10 +79,12 @@ function cp_sx_save($key, $vals) {
 			$new = trim((string) ($vals[$f['k']] ?? ''));
 			if (!empty($vals[$f['k'] . '_clear'])) { $new = ''; $clear = true; } else { $clear = false; }
 			if ($new === '' && !$clear) { continue; }
+			if (!$clear && isset($f['chk'])) { $r = call_user_func($f['chk'], $new); if (is_wp_error($r)) { return $r; } $new = $r; }
 			if (isset($f['set'])) { $r = call_user_func($f['set'], $new); if (is_wp_error($r)) { return $r; } $changed[] = $f['k']; continue; }
 			$v = $new;
 		} else {
 			$v = cp_sx_clean($f, $vals[$f['k']]);
+			if (isset($f['chk'])) { $r = call_user_func($f['chk'], $v); if (is_wp_error($r)) { return $r; } $v = $r; }
 			if (isset($f['set'])) { $r = call_user_func($f['set'], $v); if (is_wp_error($r)) { return $r; } $changed[] = $f['k']; continue; }
 		}
 		if (empty($f['opt'])) { continue; }
@@ -121,5 +126,7 @@ function cp_sx_ajax_act() {
 	if (!$a) { cp_el_err('Ismeretlen művelet.'); }
 	$r = call_user_func($a['fn']);
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message()); }
-	wp_send_json_success(array('msg' => is_string($r) && $r !== '' ? $r : 'Kész.', 'data' => cp_sx_out($key)));
+	$out = is_array($r) ? (string) ($r['out'] ?? '') : '';
+	$m = is_array($r) ? (string) ($r['msg'] ?? '') : (string) $r;
+	wp_send_json_success(array('msg' => $m !== '' ? $m : 'Kész.', 'out' => $out, 'data' => cp_sx_out($key)));
 }

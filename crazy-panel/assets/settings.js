@@ -25,7 +25,7 @@
 	}
 	/* v1.79: csoportosítva; az „x:” kezdetűek a WordPress-adminból áthozott oldalak (közös mezőleírásból, settings-x.php) */
 	const SECS = [['me', 'Saját beállításaim', 0], ['-', 'Csapat', 1], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1],
-		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiókok, import', 1], ['x:gcal', 'Google Naptár', 1], ['ai', 'AI', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
+		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiók', 1], ['x:gcal', 'Google Naptár', 1], ['ai', 'AI', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
 		['-', 'Működés', 1], ['x:core', 'Kapacitás, szakaszok', 1], ['x:el', 'Kezelői elszámolás', 1], ['x:portal', 'Ügyfélportál', 1], ['ct', 'Szerződésmodulok', 1], ['cut', 'Átállás', 1],
 		['-', 'Statisztika', 1], ['x:stat', 'Statisztikák', 1], ['x:digest', 'Összesítők', 1], ['wp', 'Tartalék: WordPress', 1]];
 	const secret = (name, has, ph) => '<input type="password" data-k="' + name + '" autocomplete="new-password" placeholder="' + esc(has ? 'beállítva – csak cseréhez írd be az újat' : ph) + '">' + (has ? '<label class="cs-chk"><input type="checkbox" data-k="' + name + '_clear"> törlés</label>' : '');
@@ -299,7 +299,7 @@
 		draw();
 	}
 	/* ------------------------------------------------------------ v1.79: a WordPress-adminból áthozott beállítások (közös mezőleírásból) */
-	async function secX(box, key, pre) {
+	async function secX(box, key, pre, out) {
 		let x = pre;
 		if (!x) { box.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; try { x = await post('cp_sx_get', { sec: key }); } catch (e) { box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; } }
 		if (S.sec !== 'x:' + key) return;
@@ -315,12 +315,13 @@
 		};
 		/* mezők csoportokban (g); csoport nélkül egy kártya */
 		const groups = []; x.fields.forEach(f => { const g = f.g || ''; let G = groups.find(z => z.g === g); if (!G) { G = { g: g, f: [] }; groups.push(G); } G.f.push(f); });
-		box.innerHTML = '<style>.sx-f{margin:0 0 12px}.sx-f input[type=text],.sx-f input[type=number],.sx-f input[type=password],.sx-f select,.sx-f textarea{width:100%;box-sizing:border-box;max-width:560px}.sx-f textarea{max-width:none;font:13px/1.45 ui-monospace,Menlo,monospace}.sx-info{font-size:13.5px;white-space:pre-wrap}.sx-stat{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin:0}.sx-stat dt{color:#6B6F78}.sx-stat dd{margin:0}.sx-stat .ok{color:#216E4E}.sx-stat .bad{color:#B42318}.sx-acts{display:flex;flex-wrap:wrap;gap:8px}.sx-wp{font-size:12.5px;color:#6B6F78;margin-top:14px}</style>' +
+		box.innerHTML = '<style>.sx-f{margin:0 0 12px}.sx-f input[type=text],.sx-f input[type=number],.sx-f input[type=password],.sx-f select,.sx-f textarea{width:100%;box-sizing:border-box;max-width:560px}.sx-f textarea{max-width:none;font:13px/1.45 ui-monospace,Menlo,monospace}.sx-info{font-size:13.5px;white-space:pre-wrap}.sx-stat{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin:0}.sx-stat dt{color:#6B6F78}.sx-stat dd{margin:0}.sx-stat .ok{color:#216E4E}.sx-stat .bad{color:#B42318}.sx-acts{display:flex;flex-wrap:wrap;gap:8px}.sx-wp{font-size:12.5px;color:#6B6F78;margin-top:14px}.sx-f .cs-lbl{flex-direction:row;align-items:center;flex-wrap:wrap}.sx-f .cs-lbl .cs-st{align-self:center;min-width:0;margin:0 0 0 4px;padding:1px 8px}.sx-out{white-space:pre-wrap;font:12.5px/1.45 ui-monospace,Menlo,monospace;background:#F6F4F0;border-radius:8px;padding:10px;margin:0;max-height:420px;overflow:auto}</style>' +
 			'<h2>' + esc(x.n) + '</h2>' + (x.d ? '<p class="cs-note">' + x.d + '</p>' : '') +
 			(x.info.length ? '<div class="cs-card"><h3>Állapot</h3><dl class="sx-stat">' + x.info.map(i => '<dt>' + esc(i[0]) + '</dt><dd class="' + esc(i[2] || '') + '">' + esc(i[1]) + '</dd>').join('') + '</dl></div>' : '') +
 			groups.map(G => '<div class="cs-card">' + (G.g ? '<h3>' + esc(G.g) + '</h3>' : '') + G.f.map(fld).join('') + '</div>').join('') +
 			(x.save ? '<div class="cs-bar"><button type="button" class="cpx-btn" data-sxsave>Mentés</button></div>' : '') +
 			(x.acts.length ? '<div class="cs-card"><h3>Műveletek</h3><div class="sx-acts">' + x.acts.map(a => '<button type="button" class="cpx-btn ghost' + (a.bad ? ' bad' : '') + '" data-sxact="' + esc(a.k) + '">' + esc(a.l) + '</button>').join('') + '</div></div>' : '') +
+			(out ? '<div class="cs-card"><h3>Eredmény</h3><pre class="sx-out">' + esc(out) + '</pre></div>' : '') +
 			(x.wp ? '<p class="sx-wp">Tartalék: ugyanez a WordPress-adminban is elérhető (<a href="' + esc(x.wp) + '" target="_blank" rel="noopener">megnyitás ↗</a>).</p>' : '');
 		const sb = box.querySelector('[data-sxsave]');
 		if (sb) sb.addEventListener('click', async () => {
@@ -333,7 +334,7 @@
 			const a = x.acts.find(z => z.k === b.dataset.sxact);
 			if (a.c && !window.confirm(a.c)) return;
 			b.disabled = true;
-			try { const r = await post('cp_sx_act', { sec: key, act: a.k }); toast(r.msg); secX(box, key, r.data); } catch (e) { b.disabled = false; toast(e.message, true); }
+			try { const r = await post('cp_sx_act', { sec: key, act: a.k }); toast(r.msg); secX(box, key, r.data, r.out); } catch (e) { b.disabled = false; toast(e.message, true); }
 		}));
 	}
 	function secWp(box, d) {
