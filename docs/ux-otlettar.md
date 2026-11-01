@@ -10,7 +10,6 @@ a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen 
 | 5 | Telepíthető app (PWA): kezdőképernyő-ikon, teljes képernyő, gyorsabb indulás; push-értesítés új ajánlatkérésnél és megemlítésnél | ~1 nap |
 | 6 | Deal-adatlap mobilon fülekre bontva (Áttekintés · Idővonal · Ügyfél · Pénzügy), rögzített gombsor | ~1 nap |
 | 8 | „Következő lépés” sáv szakaszonként (pl. Szerződés kiküldve után 3 nappal: rákérdezni az aláírásra), egy kattintással teendő | ~0,5 nap |
-| 9 | Levéllista húzás-gesztusai mobilon (balra archivál, jobbra lezár) | ~0,5 nap |
 | 10 | Sablonok „/” jellel a válaszmezőben, a deal adataival kitöltve (név, dátum, becsült ár) | ~0,5 nap |
 | 11 | Egységes gombstílus minden fülön (a deal-adatlap sötétkék gombjai a Kezdőlapon, Kapacitáson, Levelezésben is) | ~0,5 nap |
 | 12 | Sötét mód (a telefon beállítása szerint) | ~1 nap |
