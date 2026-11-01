@@ -1,0 +1,8 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v55/panel.b1881.css	2026-11-01 08:01:51.791199609 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v55/panel.css	2026-11-01 08:01:51.791199609 +0000
+@@ -708,3 +708,5 @@
+ .cpx-toast{left:16px;right:16px;margin:0 auto;width:fit-content;max-width:520px;text-align:center;transform:translateY(30px);border-radius:16px}
+ .cpx-toast.on{transform:translateY(0)}
+ @media (max-width:760px){.cpx-toast{font-size:15px;padding:12px 18px}body.mn-on:not(.mn-hide) .cpx-toast{bottom:calc(76px + env(safe-area-inset-bottom))}}
++/* v1.88.2: iPhone-on a 16px-nél kisebb betűs mezőbe koppintva a Safari ránagyít és úgy marad – mobilon minden beviteli mező legalább 16px */
++@media (max-width:760px){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,select{font-size:max(16px,1em)!important}}
