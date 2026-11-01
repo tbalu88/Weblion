@@ -1,0 +1,10 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v55/panel.b1880.css	2026-11-01 07:57:42.153597797 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v55/panel.css	2026-11-01 07:57:42.158768204 +0000
+@@ -704,3 +704,7 @@
+ }
+ .cpx-matrix th.sticky small.pair{display:block;font-weight:500;font-size:11px;color:var(--mu);white-space:nowrap}
+ .cpx-matrix td.full.via{opacity:.75}
++/* v1.88.1: felugró üzenet – teljes szélességig nő (két oldalt 16px), középre igazítva; mobilon az alsó menüsor fölött */
++.cpx-toast{left:16px;right:16px;margin:0 auto;width:fit-content;max-width:520px;text-align:center;transform:translateY(30px);border-radius:16px}
++.cpx-toast.on{transform:translateY(0)}
++@media (max-width:760px){.cpx-toast{font-size:15px;padding:12px 18px}body.mn-on:not(.mn-hide) .cpx-toast{bottom:calc(76px + env(safe-area-inset-bottom))}}
