@@ -230,6 +230,11 @@ function cp_imp_addr($list) {
 	return $out;
 }
 /* automatikus / tömeges levél? (hírlevél, értesítő, visszapattanó) */
+/* v1.89: '' = rendes levél, 'promo' = tömegküldés (hírlevél, leiratkozási linkes megkeresés) → Promóciók mappa, 'skip' = rendszerértesítés (nem kell) */
+function cp_imp_kind($hraw, $from) {
+	if (preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|info@facebookmail|.*@(facebookmail|linkedin|google|accounts\.google|salesmate))/i', $from)) { return 'skip'; }
+	return cp_imp_is_bulk($hraw, $from) ? 'promo' : '';
+}
 function cp_imp_is_bulk($hraw, $from) {
 	/* v1.88.4: a Feedback-ID és az X-Auto-Response-Suppress normál, gépi üzleti levelekben is szerepel (számlázó / beszerzési rendszerek) – ezek nem számítanak tömegesnek */
 	if (preg_match('/^(list-unsubscribe|list-id|auto-submitted:\s*auto|precedence:\s*(bulk|list|junk))/mi', $hraw)) { return true; }
@@ -250,7 +255,9 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$from = cp_imp_addr($h->from ?? array()); $to = cp_imp_addr($h->to ?? array()); $cc = cp_imp_addr($h->cc ?? array());
 	$f = $from[0] ?? array('e' => '', 'n' => '');
 	$out = $sent || $f['e'] === $me; /* v1.63: a saját címünkről a Beérkezettbe jött levél feladója hamisítható → „ellenőrizetlen” jelölés */
-	if (!$out && cp_imp_is_bulk($hraw, $f['e'])) { return 'skip'; }
+	$kind = $out ? '' : cp_imp_kind($hraw, $f['e']);
+	if ($kind === 'skip') { return 'skip'; }
+	$promo = $kind === 'promo';
 	$other = $out ? ($to[0] ?? array('e' => '', 'n' => '')) : $f;
 	if ($other['e'] === '' || $other['e'] === $me) { return 'skip'; }
 	$subj = cp_imp_hdr($h->subject ?? '');
@@ -273,9 +280,9 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 			$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE c.email = %s AND d.deleted_at IS NULL ORDER BY ABS(DATEDIFF(d.created_at, %s)) LIMIT 1', $other['e'], $at));
 		}
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
-			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $live ? 'inbox' : 'archive', 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
+			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
-		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $live ? 'inbox' : 'archive');
+		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'));
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
@@ -299,11 +306,11 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$upd = array('msg_count' => (int) $t['msg_count'] + $add);
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
 	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
-	if ($live && !$out && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
+	if ($live && !$out && !$promo && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	/* v1.86: a szál követői értesítést kapnak az ügyfél új leveléről (csengő; ha be van állítva, Pumble is) – csak friss, élő beérkezésnél */
-	if ($live && !$out && ($t['folder'] ?? '') !== 'spam' && !empty($t['followers']) && $ts > time() - 3 * DAY_IN_SECONDS && function_exists('cp_notify')) {
+	if ($live && !$out && !$promo && ($t['folder'] ?? '') !== 'spam' && !empty($t['followers']) && $ts > time() - 3 * DAY_IN_SECONDS && function_exists('cp_notify')) {
 		foreach (array_unique(array_filter(array_map('intval', explode(',', (string) $t['followers'])))) as $fu) {
 			cp_notify($fu, 'mail_follow', 'új levelet írt a követett szálba: „' . mb_substr($subj !== '' ? $subj : '(nincs tárgy)', 0, 100) . '”', 'mail:' . (int) $t['id'], $f['n'] !== '' ? $f['n'] : $f['e']);
 		}
