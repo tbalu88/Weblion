@@ -492,3 +492,12 @@
   .ml-mm .ml-qas button.on{color:#2F6FDB;font-weight:700}
   .ml-mm .ml-qas button.on::after{content:" ✓"}
 }
+/* v1.87: olvasatlan levelek jobb láthatósága – halványkék sor, kék szegély, nagyobb pötty, kék idő, sötétebb előnézet */
+.ml-item.un{background:#EEF4FF;box-shadow:inset 4px 0 0 #2F6FDB}
+.ml-item.un:hover{background:#E4EDFD}
+.ml-item.un.on{background:#E1EBFC}
+.ml-item.un .ml-i1 b::before{width:9px;height:9px;margin-right:7px;vertical-align:0}
+.ml-item.un .ml-i1 small{color:#2F6FDB;font-weight:700}
+.ml-item.un .ml-i3>span{color:#3A4357}
+/* a kék csak az olvasatlané: a kijelölt (megnyitott) sor semleges szürke, sötét szegéllyel */
+.ml-item.on{background:#F1EEE9;box-shadow:inset 4px 0 0 #1F2A44}
