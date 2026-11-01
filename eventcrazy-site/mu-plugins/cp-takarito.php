@@ -27,6 +27,10 @@ function cpt_route(WP_REST_Request $req) {
 			case 'report': return cpt_report();
 			case 'verify': return cpt_verify((array) $req->get_param('refs'));
 			case 'inlomtar': $st = preg_replace('/[^0-9-]/', '', (string) $req->get_param('stamp')); $b = cpt_dir() . '/' . $st . '/uploads/'; $h = array(); foreach ((array) $req->get_param('refs') as $r) { $r = str_replace('..', '', (string) $r); if ($r !== '' && is_file($b . $r)) { $h[] = $r; } } return array('lomtarban' => $h);
+			case 'regen': return cpt_regen((string) $req->get_param('do'));
+			case 'env': return cpt_env();
+			case 'compress': return cpt_compress((string) $req->get_param('confirm'), (int) $req->get_param('max'));
+			case 'uncompress': return cpt_uncompress((string) $req->get_param('stamp'));
 			case 'why': return cpt_why((int) $req->get_param('post'), (string) $req->get_param('file'));
 			case 'quarantine': return cpt_quarantine((string) $req->get_param('confirm'));
 			case 'restore': return cpt_restore((string) $req->get_param('stamp'));
@@ -204,6 +208,93 @@ function cpt_why($post, $file) {
 	$out['file_in_cand'] = array(); foreach (($p['cand'] ?? array()) as $c) { if (in_array($file, $c['files'], true)) { $out['file_in_cand'][] = $c['id']; } }
 	$out['file_in_orph'] = in_array($file, array_column($p['orph'] ?? array(), 'file'), true);
 	return $out;
+}
+
+/* hiányzó képméretek: azoknál a (nem kukás) képeknél, ahol a meta-adatban szereplő méretfájl nincs meg, de az eredeti igen – do=igen esetén újragenerálja */
+function cpt_regen($do) {
+	global $wpdb; $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $t0 = microtime(true);
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+	$rows = $wpdb->get_results("SELECT p.ID, a.meta_value f, m.meta_value md FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} a ON a.post_id = p.ID AND a.meta_key = '_wp_attached_file' LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_attachment_metadata' WHERE p.post_type = 'attachment' AND p.post_status <> 'trash' AND p.post_mime_type LIKE 'image/%'", ARRAY_A);
+	$need = array(); $done = 0; $fail = 0;
+	foreach ($rows as $r) {
+		$md = maybe_unserialize($r['md']); $dir = dirname($r['f']); $miss = 0;
+		if (!is_file($up . '/' . $r['f'])) { continue; }
+		foreach ((array) ($md['sizes'] ?? array()) as $sz) { if (!empty($sz['file']) && !is_file($up . '/' . ($dir === '.' ? '' : $dir . '/') . $sz['file'])) { $miss++; } }
+		if (!$miss) { continue; }
+		$need[] = array('id' => (int) $r['ID'], 'hiany' => $miss);
+		if ($do === 'igen' && microtime(true) - $t0 < 40) {
+			$new = wp_generate_attachment_metadata((int) $r['ID'], $up . '/' . $r['f']);
+			if (is_array($new) && !empty($new)) { wp_update_attachment_metadata((int) $r['ID'], $new); $done++; } else { $fail++; }
+		}
+	}
+	return array('hianyos_kep' => count($need), 'hianyzo_meret' => array_sum(array_column($need, 'hiany')), 'ujrageneralva' => $done, 'sikertelen' => $fail);
+}
+
+/* tömörítési lehetőségek felmérése */
+function cpt_env() {
+	$up = wp_normalize_path(wp_get_upload_dir()['basedir']); $s = array('jpg_eredeti_500k_felett' => array(0, 0), 'png_500k_felett' => array(0, 0), 'kep_2560px_felett' => array(0, 0));
+	foreach ((array) glob($up . '/[0-9][0-9][0-9][0-9]/[0-9][0-9]/*') as $p) {
+		if (!is_file($p) || preg_match('/-\d{2,4}x\d{2,4}\./', $p)) { continue; }
+		$sz = filesize($p); $e = strtolower(pathinfo($p, PATHINFO_EXTENSION));
+		if (in_array($e, array('jpg', 'jpeg'), true) && $sz > 512000) { $s['jpg_eredeti_500k_felett'][0]++; $s['jpg_eredeti_500k_felett'][1] += $sz; }
+		if ($e === 'png' && $sz > 512000) { $s['png_500k_felett'][0]++; $s['png_500k_felett'][1] += $sz; }
+		if (in_array($e, array('jpg', 'jpeg', 'png'), true) && $sz > 300000) { $d = @getimagesize($p); if ($d && max($d[0], $d[1]) > 2560) { $s['kep_2560px_felett'][0]++; $s['kep_2560px_felett'][1] += $sz; } }
+	}
+	foreach ($s as $k => $v) { $s[$k] = array($v[0], round($v[1] / 1048576, 1)); }
+	return $s + array('imagick' => extension_loaded('imagick'), 'gd' => extension_loaded('gd'), 'editor' => (function () { $e = wp_get_image_editor(__FILE__); return is_wp_error($e) ? _wp_image_editor_choose(array('mime_type' => 'image/jpeg')) : get_class($e); })(), 'jpeg_quality' => apply_filters('jpeg_quality', 82, 'image_resize'), 'big_image_threshold' => apply_filters('big_image_size_threshold', 2560, array(0, 0), '', 0));
+}
+
+/* képtömörítés helyben (a fájlnév nem változik): >2560 px → 2560 px; JPG 82-es minőség; PNG veszteségmentes. Csak ha ≥10% a nyereség.
+   Az eredeti mentése: _lomtar/<stamp>-tomorites/uploads/… Részletekben fut (hívásonként ~40 mp), a manifest tömörítés-<stamp>.json. */
+function cpt_compress($confirm, $max = 0) {
+	if ($confirm !== 'igen') { throw new \Exception('A tömörítéshez confirm=igen kell.'); }
+	if (!extension_loaded('imagick')) { throw new \Exception('Nincs Imagick.'); }
+	$t0 = microtime(true); $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $recent = time() - 14 * DAY_IN_SECONDS;
+	$cur = null; foreach ((array) glob(cpt_dir() . '/tomorites-*.json') as $f) { $m = json_decode((string) file_get_contents($f), true); if (is_array($m) && empty($m['kesz'])) { $cur = $m; break; } }
+	if (!$cur) {
+		$list = array();
+		foreach ((array) glob($up . '/[0-9][0-9][0-9][0-9]/[0-9][0-9]/*') as $p) {
+			if (!is_file($p) || preg_match('/-\d{2,4}x\d{2,4}\.[a-z]+$/i', $p) || filemtime($p) > $recent) { continue; }
+			$e = strtolower(pathinfo($p, PATHINFO_EXTENSION)); if (!in_array($e, array('jpg', 'jpeg', 'png'), true) || filesize($p) < 300000) { continue; }
+			$list[] = substr(wp_normalize_path($p), strlen($up) + 1);
+		}
+		$cur = array('stamp' => gmdate('Ymd-His'), 'at' => time(), 'list' => $list, 'pos' => 0, 'done' => array(), 'skip' => 0, 'err' => 0, 'elotte' => 0, 'utana' => 0, 'kesz' => false);
+	}
+	$bk = cpt_dir() . '/' . $cur['stamp'] . '-tomorites/uploads/';
+	$did = 0;
+	while ($cur['pos'] < count($cur['list']) && microtime(true) - $t0 < 40 && (!$max || $did < $max)) {
+		$did++;
+		$rel = $cur['list'][$cur['pos']++]; $p = $up . '/' . $rel; if (!is_file($p)) { continue; }
+		try {
+			$old = filesize($p); $e = strtolower(pathinfo($p, PATHINFO_EXTENSION)); $tmp = $p . '.cptmp';
+			$im = new Imagick($p);
+			if ($im->getNumberImages() > 1) { $im->clear(); $cur['skip']++; continue; }
+			$ori = $im->getImageOrientation();
+			if ($ori > 1) { if (method_exists($im, 'autoOrient')) { $im->autoOrient(); } else { $im->clear(); $cur['skip']++; continue; } }
+			$w = $im->getImageWidth(); $h = $im->getImageHeight();
+			if (max($w, $h) > 2560) { $im->resizeImage($w >= $h ? 2560 : 0, $h > $w ? 2560 : 0, Imagick::FILTER_LANCZOS, 1); }
+			$icc = null; try { $icc = $im->getImageProfile('icc'); } catch (\Throwable $x) { $icc = null; }
+			$im->stripImage(); if ($icc) { $im->profileImage('icc', $icc); }
+			if ($e === 'png') { $im->setImageCompressionQuality(95); $im->setOption('png:compression-level', '9'); $im->setOption('png:compression-filter', '5'); }
+			else { $im->setImageCompression(Imagick::COMPRESSION_JPEG); $im->setImageCompressionQuality(82); $im->setSamplingFactors(array('2x2', '1x1', '1x1')); $im->setInterlaceScheme(Imagick::INTERLACE_PLANE); }
+			$fmt = $e === 'png' ? 'png' : 'jpeg'; $im->setImageFormat($fmt); $im->writeImage($fmt . ':' . $tmp); $im->clear();
+			$new = is_file($tmp) ? filesize($tmp) : 0;
+			if ($new > 0 && $new < $old * 0.9 && @getimagesize($tmp)) {
+				wp_mkdir_p(dirname($bk . $rel)); if (!@copy($p, $bk . $rel)) { @unlink($tmp); $cur['err']++; continue; }
+				if (@rename($tmp, $p)) { $cur['done'][] = $rel; $cur['elotte'] += $old; $cur['utana'] += $new; } else { @unlink($tmp); $cur['err']++; }
+			} else { @unlink($tmp); $cur['skip']++; }
+		} catch (\Throwable $x) { $cur['err']++; if (isset($tmp) && is_file($tmp)) { @unlink($tmp); } }
+	}
+	if ($cur['pos'] >= count($cur['list'])) { $cur['kesz'] = true; if (function_exists('rocket_clean_domain')) { rocket_clean_domain(); } }
+	cpt_put('tomorites-' . $cur['stamp'], $cur);
+	return array('stamp' => $cur['stamp'], 'utolso' => array_slice($cur['done'], -min(5, count($cur['done']))), 'osszes' => count($cur['list']), 'feldolgozva' => $cur['pos'], 'tomoritve' => count($cur['done']), 'kihagyva' => $cur['skip'], 'hiba' => $cur['err'], 'megtakaritas_mb' => round(($cur['elotte'] - $cur['utana']) / 1048576, 1), 'kesz' => $cur['kesz']);
+}
+function cpt_uncompress($stamp) {
+	$stamp = preg_replace('/[^0-9-]/', '', $stamp); $m = cpt_get('tomorites-' . $stamp); if (!$m) { throw new \Exception('Nincs ilyen tömörítés.'); }
+	$up = wp_normalize_path(wp_get_upload_dir()['basedir']); $bk = cpt_dir() . '/' . $stamp . '-tomorites/uploads/'; $n = 0;
+	foreach ($m['done'] as $rel) { if (is_file($bk . $rel) && @rename($bk . $rel, $up . '/' . $rel)) { $n++; } }
+	$m['visszaallitva'] = time(); $m['kesz'] = true; cpt_put('tomorites-' . $stamp, $m);
+	return array('visszaallitva' => $n);
 }
 
 function cpt_quarantine($confirm) {
