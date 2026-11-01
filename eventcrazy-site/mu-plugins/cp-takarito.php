@@ -32,6 +32,28 @@ function cpt_route(WP_REST_Request $req) {
 			case 'compress': return cpt_compress((string) $req->get_param('confirm'), (int) $req->get_param('max'));
 			case 'compstat': $st = preg_replace('/[^0-9-]/', '', (string) $req->get_param('stamp')); $bk = cpt_dir() . '/' . $st . '-tomorites/uploads/'; $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $a = 0; $b = 0; $n = 0; if (is_dir($bk)) { foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($bk, FilesystemIterator::SKIP_DOTS)) as $f) { if (!$f->isFile()) { continue; } $rel = substr(wp_normalize_path($f->getPathname()), strlen(wp_normalize_path($bk))); $n++; $a += $f->getSize(); $b += is_file($up . '/' . $rel) ? filesize($up . '/' . $rel) : 0; } } return array('tomoritett_kep' => $n, 'elotte_mb' => round($a / 1048576, 1), 'utana_mb' => round($b / 1048576, 1), 'megtakaritas_mb' => round(($a - $b) / 1048576, 1));
 			case 'uncompress': return cpt_uncompress((string) $req->get_param('stamp'));
+			case 'ls': $pat = preg_replace('/[^A-Za-z0-9_.\-]/', '', (string) $req->get_param('pat')); $mo = preg_replace('#[^0-9/]#', '', (string) $req->get_param('month')); if (strlen($pat) < 4 || !preg_match('#^\d{4}/\d{2}$#', $mo)) { throw new \Exception('pat (min. 4) és month (ÉÉÉÉ/HH) kell'); } $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $o = array('uploads' => array(), 'lomtar' => array());
+				foreach ((array) glob($up . '/' . $mo . '/*' . $pat . '*') as $f) { $o['uploads'][] = basename($f) . ' (' . round(filesize($f) / 1024) . ' KB)'; }
+				foreach ((array) glob(cpt_dir() . '/*/uploads/' . $mo . '/*' . $pat . '*') as $f) { $o['lomtar'][] = basename(dirname(dirname(dirname(dirname($f))))) . ': ' . basename($f); }
+				return $o;
+			case 'att': global $wpdb; $pat = preg_replace('/[^A-Za-z0-9_.\-]/', '', (string) $req->get_param('pat')); if (strlen($pat) < 6) { throw new \Exception('pat min. 6'); } $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $o = array();
+				foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT p.ID, p.post_status, m.meta_value f FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file' WHERE p.post_type = 'attachment' AND m.meta_value LIKE %s", '%' . $wpdb->esc_like($pat) . '%'), ARRAY_A) as $r) { $o[] = array('id' => (int) $r['ID'], 'status' => $r['post_status'], 'file' => $r['f'], 'letezik' => is_file($up . '/' . $r['f'])); }
+				return $o;
+			case 'eldata': return cpt_eldata((array) $req->get_param('repl'), (array) $req->get_param('drop'), (string) $req->get_param('confirm'));
+			case 'grep': global $wpdb; $q = (string) $req->get_param('q'); if (strlen($q) < 6) { throw new \Exception('q min. 6'); } $l = '%' . $wpdb->esc_like($q) . '%'; $o = array();
+				$o['posts'] = $wpdb->get_results($wpdb->prepare("SELECT ID, post_type, post_status, LEFT(post_title, 60) t FROM {$wpdb->posts} WHERE post_content LIKE %s AND post_type <> 'revision' LIMIT 30", $l), ARRAY_A);
+				$o['postmeta'] = $wpdb->get_results($wpdb->prepare("SELECT m.post_id, m.meta_key, p.post_type, p.post_status, LEFT(p.post_title, 60) t FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE m.meta_value LIKE %s AND p.post_type <> 'revision' LIMIT 40", $l), ARRAY_A);
+				$o['options'] = $wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_value LIKE %s LIMIT 30", $l));
+				foreach ((array) $wpdb->get_col($wpdb->prepare('SHOW TABLES LIKE %s', '%yoast%')) as $tb) { $n = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$tb` WHERE " . implode(' OR ', array_map(function ($c) use ($wpdb, $l) { return $wpdb->prepare("`$c` LIKE %s", $l); }, array_filter((array) $wpdb->get_col("SHOW COLUMNS FROM `$tb`"), function ($c) { return true; })))); if ($n) { $o['tabla:' . $tb] = $n; } }
+				return $o;
+			case 'attmd': $id = (int) $req->get_param('id'); $md = wp_get_attachment_metadata($id); $sz = array(); foreach ((array) ($md['sizes'] ?? array()) as $k => $v) { $sz[$k] = $v['file'] ?? ''; } $src = wp_get_attachment_image_src($id, 'medium_large'); return array('file' => get_post_meta($id, '_wp_attached_file', true), 'md_file' => $md['file'] ?? null, 'original' => $md['original_image'] ?? null, 'sizes' => $sz, 'src_medium_large' => $src ? $src[0] : null, 'guid' => get_post_field('guid', $id));
+			case 'codegrep': $q = (string) $req->get_param('q'); if (strlen($q) < 6) { throw new \Exception('q min. 6'); } $o = array(); $t0 = microtime(true);
+				foreach (array(WP_PLUGIN_DIR, get_theme_root(), WPMU_PLUGIN_DIR, ABSPATH . '.htaccess', WP_CONTENT_DIR . '/uploads/.htaccess') as $d) {
+					if (is_file($d)) { if (strpos((string) file_get_contents($d), $q) !== false) { $o[] = str_replace(ABSPATH, '', $d); } continue; }
+					if (!is_dir($d)) { continue; }
+					foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d, FilesystemIterator::SKIP_DOTS)) as $f) { if (microtime(true) - $t0 > 40) { $o[] = '…(időkorlát)'; break 2; } if ($f->isFile() && $f->getSize() < 2097152 && preg_match('/\.(php|js|htaccess)$/i', $f->getFilename()) && strpos((string) file_get_contents($f->getPathname()), $q) !== false) { $o[] = str_replace(wp_normalize_path(ABSPATH), '', wp_normalize_path($f->getPathname())); } }
+				}
+				return array_slice($o, 0, 40);
 			case 'why': return cpt_why((int) $req->get_param('post'), (string) $req->get_param('file'));
 			case 'quarantine': return cpt_quarantine((string) $req->get_param('confirm'));
 			case 'restore': return cpt_restore((string) $req->get_param('stamp'));
@@ -297,6 +319,39 @@ function cpt_uncompress($stamp) {
 	if (is_dir($bk)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($bk, FilesystemIterator::SKIP_DOTS)); foreach ($it as $f) { if (!$f->isFile()) { continue; } $rel = substr(wp_normalize_path($f->getPathname()), strlen(wp_normalize_path($bk))); if (@rename($f->getPathname(), $up . '/' . $rel)) { $n++; } } }
 	$m['visszaallitva'] = time(); $m['kesz'] = true; cpt_put('tomorites-' . $stamp, $m);
 	return array('visszaallitva' => $n);
+}
+
+/* Elementor-adatok javítása: repl = {régi részlet: új részlet} minden szöveges értékben; drop = részletek, amelyeket tartalmazó, csak URL-t tároló értéket ürít (pl. hiányzó videó).
+   confirm=igen nélkül csak megszámolja. Mentés: _lomtar/eldata-<időbélyeg>.json */
+function cpt_eldata($repl, $drop, $confirm) {
+	global $wpdb; $repl = array_filter($repl, function ($v, $k) { return is_string($k) && strlen($k) >= 8 && is_string($v); }, ARRAY_FILTER_USE_BOTH); $drop = array_values(array_filter($drop, function ($d) { return is_string($d) && strlen($d) >= 6; }));
+	if (!$repl && !$drop) { throw new \Exception('Nincs mit cserélni.'); }
+	$likes = array(); foreach (array_merge(array_keys($repl), $drop) as $k) { $likes[] = $wpdb->prepare('m.meta_value LIKE %s', '%' . $wpdb->esc_like($k) . '%'); }
+	$rows = $wpdb->get_results("SELECT m.meta_id, m.post_id, p.post_type, p.post_status, p.post_title FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE m.meta_key = '_elementor_data' AND p.post_type <> 'revision' AND (" . implode(' OR ', $likes) . ')', ARRAY_A);
+	$bak = array(); $out = array(); $tot = array('csere' => 0, 'urites' => 0, 'html_benne' => 0);
+	foreach ($rows as $r) {
+		$raw = get_post_meta((int) $r['post_id'], '_elementor_data', true); $d = json_decode((string) $raw, true); if (!is_array($d)) { continue; }
+		$c = array('csere' => 0, 'urites' => 0, 'html_benne' => 0);
+		array_walk_recursive($d, function (&$v) use ($repl, $drop, &$c) {
+			if (!is_string($v)) { return; }
+			foreach ($drop as $dp) { if (strpos($v, $dp) !== false) { if (preg_match('#^\s*https?://\S+\s*$#', $v)) { $v = ''; $c['urites']++; return; } $c['html_benne']++; } }
+			foreach ($repl as $a => $b) { $n = substr_count($v, $a); if ($n) { $v = str_replace($a, $b, $v); $c['csere'] += $n; } }
+		});
+		if (!$c['csere'] && !$c['urites']) { $out[] = array('post' => (int) $r['post_id'], 'cim' => $r['post_title'], 'statusz' => $r['post_status']) + $c; continue; }
+		foreach ($c as $k => $v) { $tot[$k] += $v; }
+		$out[] = array('post' => (int) $r['post_id'], 'cim' => $r['post_title'], 'statusz' => $r['post_status']) + $c;
+		if ($confirm === 'igen') {
+			$bak[(int) $r['post_id']] = $raw;
+			update_post_meta((int) $r['post_id'], '_elementor_data', wp_slash(wp_json_encode($d)));
+			delete_post_meta((int) $r['post_id'], '_elementor_element_cache');
+			if (function_exists('rocket_clean_post')) { rocket_clean_post((int) $r['post_id']); }
+		}
+	}
+	if ($confirm === 'igen' && $bak) {
+		cpt_put('eldata-' . gmdate('Ymd-His'), $bak);
+		if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) { \Elementor\Plugin::$instance->files_manager->clear_cache(); }
+	}
+	return array('mentve' => $confirm === 'igen', 'osszes' => $tot, 'oldalak' => $out);
 }
 
 function cpt_quarantine($confirm) {
