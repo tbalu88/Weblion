@@ -30,6 +30,7 @@ function cpt_route(WP_REST_Request $req) {
 			case 'regen': return cpt_regen((string) $req->get_param('do'));
 			case 'env': return cpt_env();
 			case 'compress': return cpt_compress((string) $req->get_param('confirm'), (int) $req->get_param('max'));
+			case 'compstat': $st = preg_replace('/[^0-9-]/', '', (string) $req->get_param('stamp')); $bk = cpt_dir() . '/' . $st . '-tomorites/uploads/'; $up = wp_normalize_path(wp_get_upload_dir()['basedir']); $a = 0; $b = 0; $n = 0; if (is_dir($bk)) { foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($bk, FilesystemIterator::SKIP_DOTS)) as $f) { if (!$f->isFile()) { continue; } $rel = substr(wp_normalize_path($f->getPathname()), strlen(wp_normalize_path($bk))); $n++; $a += $f->getSize(); $b += is_file($up . '/' . $rel) ? filesize($up . '/' . $rel) : 0; } } return array('tomoritett_kep' => $n, 'elotte_mb' => round($a / 1048576, 1), 'utana_mb' => round($b / 1048576, 1), 'megtakaritas_mb' => round(($a - $b) / 1048576, 1));
 			case 'uncompress': return cpt_uncompress((string) $req->get_param('stamp'));
 			case 'why': return cpt_why((int) $req->get_param('post'), (string) $req->get_param('file'));
 			case 'quarantine': return cpt_quarantine((string) $req->get_param('confirm'));
@@ -292,7 +293,8 @@ function cpt_compress($confirm, $max = 0) {
 function cpt_uncompress($stamp) {
 	$stamp = preg_replace('/[^0-9-]/', '', $stamp); $m = cpt_get('tomorites-' . $stamp); if (!$m) { throw new \Exception('Nincs ilyen tömörítés.'); }
 	$up = wp_normalize_path(wp_get_upload_dir()['basedir']); $bk = cpt_dir() . '/' . $stamp . '-tomorites/uploads/'; $n = 0;
-	foreach ($m['done'] as $rel) { if (is_file($bk . $rel) && @rename($bk . $rel, $up . '/' . $rel)) { $n++; } }
+	/* a mentési mappa teljes tartalmából (akkor is, ha egy megszakadt részlet könyvelése elveszett) */
+	if (is_dir($bk)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($bk, FilesystemIterator::SKIP_DOTS)); foreach ($it as $f) { if (!$f->isFile()) { continue; } $rel = substr(wp_normalize_path($f->getPathname()), strlen(wp_normalize_path($bk))); if (@rename($f->getPathname(), $up . '/' . $rel)) { $n++; } } }
 	$m['visszaallitva'] = time(); $m['kesz'] = true; cpt_put('tomorites-' . $stamp, $m);
 	return array('visszaallitva' => $n);
 }
