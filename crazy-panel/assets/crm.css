@@ -441,12 +441,15 @@ a.d3-who:hover{background:#F6F3EE}
   .crm-board .crm-cards{overflow:visible;max-height:none}
   .crm-board{padding-bottom:96px}
 }
-/* v1.83.5: rögzített szakasz-fejléc mobilon */
-.crm-stk{position:fixed;left:0;right:0;z-index:30;background:#fff;border-bottom:1px solid #E6E2DC;box-shadow:0 4px 12px -8px rgba(20,28,51,.35);display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px 6px;cursor:pointer}
-.crm-stk[hidden]{display:none}
-.crm-stk b{font:700 15.5px Inter,sans-serif;text-align:center}
-.crm-stk small{color:#6B6F78;font-size:13px}
-.crm-stk .crm-prog{margin-top:6px}
+/* v1.83.5 → v1.88.3: rögzített szakasz-fejléc mobilon – a tábla fölött, position:sticky (a böngésző rögzíti, nem JS) */
+.crm-stk{display:none}
+@media (max-width:760px){
+  .crm-stk{display:flex;position:-webkit-sticky;position:sticky;top:54px;z-index:30;margin:0 -12px 8px;background:#fff;border-bottom:1px solid #E6E2DC;box-shadow:0 4px 12px -8px rgba(20,28,51,.35);flex-direction:column;align-items:center;gap:2px;padding:9px 14px 7px;cursor:pointer}
+  .crm-stk b{font:700 16px Inter,sans-serif;text-align:center}
+  .crm-stk small{color:#6B6F78;font-size:13.5px}
+  .crm-stk .crm-prog{margin-top:7px;max-width:420px}
+  .crm-board .crm-col>header{display:none}
+}
 @media (min-width:761px){.crm-stk{display:none!important}}
 /* v1.84: kapacitásjelzés a dealen */
 .crm-cap{display:inline-block;border-radius:6px;padding:0 7px;font:600 12px/1.6 Inter,sans-serif;cursor:help;white-space:nowrap}
