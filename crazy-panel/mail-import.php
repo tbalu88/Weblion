@@ -231,7 +231,8 @@ function cp_imp_addr($list) {
 }
 /* automatikus / tömeges levél? (hírlevél, értesítő, visszapattanó) */
 function cp_imp_is_bulk($hraw, $from) {
-	if (preg_match('/^(list-unsubscribe|list-id|auto-submitted:\s*auto|precedence:\s*(bulk|list|junk)|x-auto-response-suppress|feedback-id)/mi', $hraw)) { return true; }
+	/* v1.88.4: a Feedback-ID és az X-Auto-Response-Suppress normál, gépi üzleti levelekben is szerepel (számlázó / beszerzési rendszerek) – ezek nem számítanak tömegesnek */
+	if (preg_match('/^(list-unsubscribe|list-id|auto-submitted:\s*auto|precedence:\s*(bulk|list|junk))/mi', $hraw)) { return true; }
 	return (bool) preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|news(letter)?|info@facebookmail|.*@(facebookmail|linkedin|google|accounts\.google|mailchimp|mailerlite|salesmate))/i', $from);
 }
 
