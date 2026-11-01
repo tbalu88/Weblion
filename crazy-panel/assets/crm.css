@@ -466,3 +466,14 @@ a.d3-who:hover{background:#F6F3EE}
 .ik-ed button{flex:none;width:30px;height:30px;border-radius:8px;border:1px solid #E1DDD6;background:#fff;cursor:pointer;font-size:14px}
 .ik-ed .ik-ok{background:#141C33;border-color:#141C33;color:#fff}
 .d3-val.ik-on{font-size:16px}
+/* v1.90: kontakt / cég szerkesztése */
+.d3-eedit{margin-top:10px}
+.d3-eform{padding:4px 2px}
+.crm-copk{position:relative;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.crm-copk input[type=search]{flex:1;min-width:180px}
+.crm-copl{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:#fff;border:1px solid var(--li);border-radius:10px;box-shadow:0 12px 28px -12px rgba(20,28,51,.35);display:flex;flex-direction:column;padding:4px;max-height:260px;overflow:auto}
+.crm-copl[hidden]{display:none}
+.crm-copl button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:500 14px Inter,sans-serif;color:var(--ink);cursor:pointer}
+.crm-copl button:hover{background:#F4F1EC}
+.crm-copl small{color:var(--mu);font-weight:400}
+@media (max-width:760px){.d3-eform .crm-eg{grid-template-columns:1fr}}

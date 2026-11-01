@@ -124,13 +124,64 @@ function cp_d360_ajax_company() {
 	cp_crm_ajax_guard();
 	global $wpdb;
 	$id = (int) ($_REQUEST['id'] ?? 0);
-	$co = $id ? $wpdb->get_row($wpdb->prepare('SELECT id, name, website, phone, type FROM ' . cp_crm_t('companies') . ' WHERE id = %d', $id), ARRAY_A) : null;
+	$co = $id ? $wpdb->get_row($wpdb->prepare('SELECT id, name, website, phone, type, description FROM ' . cp_crm_t('companies') . ' WHERE id = %d', $id), ARRAY_A) : null;
 	if (!$co) { cp_el_err('Nincs ilyen cég a panel adatai között.', 404); }
 	$contacts = (array) $wpdb->get_results($wpdb->prepare('SELECT id, name, email, phone, mobile FROM ' . cp_crm_t('contacts') . ' WHERE company_id = %d AND deleted_at IS NULL ORDER BY name LIMIT 100', $id), ARRAY_A);
 	$deals = cp_d360_deals($wpdb->prepare('d.company_id = %d OR c.company_id = %d', $id, $id));
 	$em = array_values(array_filter(array_map(function ($c) { return strtolower((string) $c['email']); }, $contacts)));
 	$mail = $em ? cp_d360_mail('contact_email IN (' . implode(',', array_map(function ($e) use ($wpdb) { return $wpdb->prepare('%s', $e); }, array_slice($em, 0, 50))) . ')', 40) : array('threads' => array(), 'msgs' => array(), 'notes' => array(), 'files' => array());
 	wp_send_json_success(array('company' => $co, 'contacts' => $contacts, 'deals' => $deals, 'stats' => cp_d360_stats($deals), 'mail' => $mail));
+}
+
+/* v1.90: kontakt / cég szerkesztése – a Salesmate-be ír, visszaolvas, és a panel saját táblájába is elmenti */
+add_action('wp_ajax_nopriv_cp_crm_entity_save', 'cp_d360_ajax_entity_save');
+add_action('wp_ajax_cp_crm_entity_save', 'cp_d360_ajax_entity_save');
+function cp_d360_ajax_entity_save() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	global $wpdb;
+	$k = sanitize_key(wp_unslash($_POST['k'] ?? ''));
+	$id = (int) ($_POST['id'] ?? 0);
+	$f = json_decode((string) wp_unslash($_POST['f'] ?? ''), true);
+	if (!in_array($k, array('ct', 'co'), true) || $id <= 0 || !is_array($f)) { cp_el_err('Hibás kérés.'); }
+	$tab = cp_crm_t($k === 'ct' ? 'contacts' : 'companies');
+	if (!$wpdb->get_var($wpdb->prepare("SELECT id FROM $tab WHERE id = %d", $id))) { cp_el_err('Nincs ilyen ' . ($k === 'ct' ? 'kontakt.' : 'cég.'), 404); }
+	$str = function ($v, $n) { return mb_substr(trim(sanitize_text_field((string) $v)), 0, $n); };
+	$tel = function ($v) { return mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) $v), 0, 40); };
+	$b = array(); $chk = array();
+	if ($k === 'ct') {
+		if (array_key_exists('name', $f)) { $n = $str($f['name'], 190); if ($n === '') { cp_el_err('A kontakt neve nem lehet üres.'); } $b['firstName'] = ''; $b['lastName'] = $n; $chk['name'] = $n; }
+		if (array_key_exists('email', $f)) { $e = trim((string) $f['email']); if ($e !== '' && !is_email($e)) { cp_el_err('Érvénytelen e-mail-cím.'); } $b['email'] = sanitize_email($e); $chk['email'] = $b['email']; }
+		foreach (array('mobile', 'phone') as $x) { if (array_key_exists($x, $f)) { $b[$x] = $tel($f[$x]); $chk[$x] = $b[$x]; } }
+		if (array_key_exists('city', $f)) { $b['billingCity'] = $str($f['city'], 100); $chk['billingCity'] = $b['billingCity']; }
+		if (array_key_exists('description', $f)) { $b['description'] = mb_substr(trim(sanitize_textarea_field((string) $f['description'])), 0, 5000); }
+		if (array_key_exists('company_id', $f)) {
+			$cid = (int) $f['company_id'];
+			if ($cid && !$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('companies') . ' WHERE id = %d', $cid))) { cp_el_err('Nincs ilyen cég.'); }
+			$b['company'] = $cid ?: null;
+		}
+	} else {
+		if (array_key_exists('name', $f)) { $n = $str($f['name'], 190); if ($n === '') { cp_el_err('A cég neve nem lehet üres.'); } $b['name'] = $n; $chk['name'] = $n; }
+		if (array_key_exists('website', $f)) { $w = trim((string) $f['website']); $b['website'] = $w === '' ? '' : mb_substr(esc_url_raw(preg_match('#^https?://#i', $w) ? $w : 'https://' . $w), 0, 255); $chk['website'] = $b['website']; }
+		if (array_key_exists('phone', $f)) { $b['phone'] = $tel($f['phone']); $chk['phone'] = $b['phone']; }
+		if (array_key_exists('description', $f)) { $b['description'] = mb_substr(trim(sanitize_textarea_field((string) $f['description'])), 0, 5000); }
+	}
+	if (!$b) { cp_el_err('Nincs mit menteni.'); }
+	$path = '/apis/' . ($k === 'ct' ? 'contact' : 'company') . '/v4/' . $id;
+	$put = cp_sm_request('PUT', $path, $b);
+	if (is_wp_error($put)) { cp_el_err('A Salesmate nem fogadta a módosítást: ' . $put->get_error_message(), 502); }
+	$g = cp_sm_request('GET', $path);
+	$d = is_wp_error($g) ? null : (isset($g['Data']) ? $g['Data'] : $g);
+	$warn = array();
+	if (!is_array($d)) { $warn[] = 'a Salesmate-be beírtam, de a visszaolvasás nem sikerült – frissíts egy perc múlva'; }
+	else {
+		$L = array('name' => 'név', 'email' => 'e-mail', 'mobile' => 'mobil', 'phone' => 'telefon', 'billingCity' => 'város', 'website' => 'weboldal');
+		foreach ($chk as $x => $v) { $got = trim(cp_panel_str(isset($d[$x]) ? $d[$x] : '')); if ($got !== $v && !($x === 'website' && rtrim($got, '/') === rtrim($v, '/'))) { $warn[] = ($L[$x] ?? $x) . ' nem úgy maradt meg, ahogy beírtad'; } }
+		cp_crm_store($k === 'ct' ? 'contact' : 'company', array($d), 'get');
+	}
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success(array('warn' => implode('; ', $warn)));
 }
 
 /* cég- / kontaktkereső a deal-lista szűrőjéhez */

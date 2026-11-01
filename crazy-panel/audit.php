@@ -63,6 +63,7 @@ add_action('cp_audit_logout', function () { cp_audit_add('rendszer', 'logout', '
 function cp_audit_actions() {
 	return array(
 		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'),
+		'cp_crm_entity_save' => array('deal', 'Kontakt / cég szerkesztése'),
 		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_note_add' => array('deal', 'Jegyzet a dealen'), 'cp_crm_note_del' => array('deal', 'Deal-jegyzet törlése'), 'cp_crm_act_save' => array('deal', 'Tevékenység mentése'), 'cp_crm_act_done' => array('deal', 'Tevékenység kész / visszanyitva'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
 		'cp_mail_note_add' => array('levelezes', 'Jegyzet a levélszálon'), 'cp_mail_note_del' => array('levelezes', 'Jegyzet törlése'), 'cp_mail_thread_set' => array('levelezes', 'Levélszál módosítása'),
 		'cp_mail_bulk' => array('levelezes', 'Tömeges művelet levélszálakon'), 'cp_mail_send' => array('levelezes', 'Levél küldése a panelből'), 'cp_set_me' => array('rendszer', 'Saját beállítások'), 'cp_set_admin' => array('rendszer', 'Beállítás módosítása'), 'cp_sx_set' => array('rendszer', 'Beállítás módosítása'), 'cp_sx_act' => array('rendszer', 'Beállítási művelet'), 'cp_mail_tpl_save' => array('levelezes', 'Sablon mentése'), 'cp_mail_tpl_del' => array('levelezes', 'Sablon törlése'), 'cp_ai_draft' => array('levelezes', 'AI-piszkozat kérése'),
@@ -93,6 +94,12 @@ function cp_audit_summary($action, $p) {
 		if (!empty($p['body'])) { $parts[] = '„' . mb_substr(preg_replace('/\s+/u', ' ', (string) $p['body']), 0, 100) . '”'; }
 		if ($action === 'cp_crm_note_del') { $parts[] = 'jegyzet #' . (int) ($p['id'] ?? 0); }
 		return array($obj, implode(' · ', $parts));
+	}
+	if ($action === 'cp_crm_entity_save' && function_exists('cp_crm_t')) {
+		$ct = ($p['k'] ?? '') === 'ct'; $id = (int) ($p['id'] ?? 0);
+		$t = $id ? $name(cp_crm_t($ct ? 'contacts' : 'companies'), 'name', $id) : '';
+		$f = json_decode((string) ($p['f'] ?? ''), true);
+		return array(($ct ? 'contact:' : 'company:') . $id, ($ct ? 'kontakt' : 'cég') . ($t !== '' ? ': ' . $t : '') . (is_array($f) ? ' · mezők: ' . implode(', ', array_keys($f)) : ''));
 	}
 	if (strpos($action, 'cp_crm_') === 0 || $action === 'cp_panel_setstage') {
 		$id = (int) ($p['id'] ?? $p['deal'] ?? 0);

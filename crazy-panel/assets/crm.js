@@ -1005,6 +1005,65 @@
 		bindBack(sh, back);
 		sh.querySelector('[data-filt]').addEventListener('click', () => filterTo(k, id, name));
 	}
+	/* v1.90: kontakt / cég szerkesztése (a Salesmate-be is beíródik) */
+	const EDB = '<button type="button" class="cpx-btn ghost sm d3-eedit" data-eedit>✎ Szerkesztés</button>';
+	function bindEntityEdit(sh, fn) { const b = sh.querySelector('[data-eedit]'); if (b) b.addEventListener('click', fn); }
+	function editEntity(sh, k, id, back, cur, coName) {
+		const ct = k === 'ct';
+		const F = ct ? [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Mobil', 'tel'], ['phone', 'Telefon', 'tel'], ['city', 'Város', 'text'], ['company_id', 'Cég', 'co'], ['description', 'Leírás / megjegyzés', 'area']]
+			: [['name', 'Cégnév', 'text'], ['website', 'Weboldal', 'text'], ['phone', 'Telefon', 'tel'], ['description', 'Leírás / megjegyzés', 'area']];
+		const field = f => {
+			const nm = ' data-k="' + f[0] + '"', v = cur[f[0]] || '';
+			let inp;
+			if (f[2] === 'area') inp = '<textarea rows="4"' + nm + '>' + esc(v) + '</textarea>';
+			else if (f[2] === 'co') inp = '<span class="crm-copk"><input type="hidden"' + nm + ' value="' + esc(v) + '"><input type="search" data-cos placeholder="Cég keresése (min. 2 betű)…" value="' + esc(coName) + '" autocomplete="off"><button type="button" class="cpx-btn ghost sm" data-cox' + (v ? '' : ' hidden') + '>× Nincs cég</button><span class="crm-copl" hidden></span></span>';
+			else inp = '<input type="' + ({ email: 'email', tel: 'tel' }[f[2]] || 'text') + '"' + nm + ' value="' + esc(v) + '"' + (f[0] === 'name' ? ' required' : '') + '>';
+			return '<label class="crm-ef"><span>' + esc(f[1]) + (f[0] === 'name' ? ' *' : '') + '</span>' + inp + '</label>';
+		};
+		sh.innerHTML = head360((ct ? 'Kontakt' : 'Cég') + ' szerkesztése: ' + esc(cur.name || ''), back) + '<form class="crm-edit d3-eform" novalidate><div class="crm-eg">' + F.map(field).join('') + '</div>' +
+			'<p class="crm-ro">Mentéskor csak a megváltozott mezők íródnak be, a Salesmate-be is.' + (ct ? ' A cég csak meglévő cégre állítható.' : '') + '</p>' +
+			'<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-cancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
+		bindBack(sh, back);
+		sh.scrollTop = 0;
+		const reopen = () => (ct ? openContact : openCompany)(id, back);
+		const form = sh.querySelector('form');
+		sh.querySelector('[data-cancel]').onclick = reopen;
+		/* cégválasztó: keresés a meglévő cégek között */
+		const cos = form.querySelector('[data-cos]');
+		if (cos) {
+			const hid = form.querySelector('[data-k="company_id"]'), pl = form.querySelector('.crm-copl'), cx = form.querySelector('[data-cox]');
+			let qt = 0, seq = 0;
+			cos.addEventListener('input', () => {
+				clearTimeout(qt);
+				const q = cos.value.trim();
+				if (q.length < 2) { pl.hidden = true; return; }
+				qt = setTimeout(async () => {
+					const my = ++seq; let r;
+					try { r = await post('cp_crm_who', { q: q }); } catch (e) { return; }
+					if (my !== seq) return;
+					const rows = (r.rows || []).filter(x => x.k === 'co').slice(0, 8);
+					pl.innerHTML = rows.length ? rows.map(x => '<button type="button" data-coid="' + x.id + '">' + esc(x.n) + (x.c ? ' <small>' + x.c + ' deal</small>' : '') + '</button>').join('') : '<small class="cpx-muted">Nincs ilyen cég.</small>';
+					pl.hidden = false;
+					pl.querySelectorAll('[data-coid]').forEach(b => b.addEventListener('click', () => { hid.value = b.dataset.coid; cos.value = b.firstChild.textContent; pl.hidden = true; cx.hidden = false; }));
+				}, 250);
+			});
+			cx.addEventListener('click', () => { hid.value = ''; cos.value = ''; cx.hidden = true; pl.hidden = true; });
+		}
+		form.addEventListener('submit', async e => {
+			e.preventDefault();
+			const ch = {}, msg = sh.querySelector('.crm-emsg');
+			form.querySelectorAll('[data-k]').forEach(el => { const v = el.value.trim(); if (v !== String(cur[el.dataset.k] || '')) ch[el.dataset.k] = v; });
+			if (!Object.keys(ch).length) { msg.textContent = 'Nem változott semmi.'; return; }
+			if (ch.name !== undefined && !ch.name) { msg.textContent = 'A név nem lehet üres.'; return; }
+			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Mentés…';
+			try {
+				const r = await post('cp_crm_entity_save', { k: k, id: id, f: JSON.stringify(ch) });
+				toast(r.warn ? 'Mentve, de: ' + r.warn : 'Mentve – a Salesmate-ben is.', !!r.warn);
+				if (window.CPContacts) window.CPContacts.refresh();
+				reopen();
+			} catch (err) { btn.disabled = false; msg.textContent = err.message; msg.className = 'crm-emsg err'; }
+		});
+	}
 	async function openContact(id, back) {
 		const sh = sheet360(head360('Kontakt', back) + '<div class="cpx-empty">Betöltés…</div>');
 		if (!sh) return;
@@ -1016,8 +1075,9 @@
 			(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a>' + (c.mobile && c.phone && c.phone !== c.mobile ? ' · ' + esc(c.phone) : '') + '</dd>' : '') +
 			(co ? '<dt>Cég</dt><dd><a href="#" data-co="' + co.id + '">' + esc(co.name) + '</a></dd>' : '') + (c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.tags ? '<dt>Címkék</dt><dd>' + esc(c.tags) + '</dd>' : '') +
 			(c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '<dt>Felvéve</dt><dd>' + esc(huDT(c.created_at)) + '</dd></dl>' +
-			(c.description ? '<div class="crm-desc">' + nl(c.description) + '</div>' : '');
+			(c.description ? '<div class="crm-desc">' + nl(c.description) + '</div>' : '') + EDB;
 		entityView(sh, esc(c.name || c.email), back, info, x, 'ct', id, c.name || c.email, '');
+		bindEntityEdit(sh, () => editEntity(sh, 'ct', id, back, { name: c.name || '', email: c.email || '', mobile: c.mobile || '', phone: c.phone || '', city: c.city || '', company_id: co ? String(co.id) : '', description: c.description || '' }, co ? co.name : ''));
 	}
 	async function openCompany(id, back) {
 		const sh = sheet360(head360('Cég', back) + '<div class="cpx-empty">Betöltés…</div>');
@@ -1027,9 +1087,10 @@
 		try { x = await post('cp_crm_company', { id: id }); } catch (e) { sh.innerHTML = head360('Cég', back) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); return; }
 		const co = x.company;
 		const info = '<div class="d3-who big"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>Cég' + (co.type ? ' · ' + esc(co.type) : '') + '</small></span></div><dl class="crm-dl">' +
-			(safeUrl(co.website) ? '<dt>Weboldal</dt><dd><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></dd>' : '') + (co.phone ? '<dt>Telefon</dt><dd>' + esc(co.phone) + '</dd>' : '') + '</dl>';
+			(safeUrl(co.website) ? '<dt>Weboldal</dt><dd><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></dd>' : '') + (co.phone ? '<dt>Telefon</dt><dd>' + esc(co.phone) + '</dd>' : '') + '</dl>' + (co.description ? '<div class="crm-desc">' + nl(co.description) + '</div>' : '') + EDB;
 		const extra = '<section class="d3-c"><h4>Kontaktok <small>' + x.contacts.length + '</small></h4>' + (x.contacts.length ? '<ul class="d3-team">' + x.contacts.map(c => '<li><a href="#" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span>' + esc(c.name || c.email) + '</a><small>' + esc(c.email || '') + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>';
 		entityView(sh, esc(co.name), back, info, x, 'co', id, co.name, extra);
+		bindEntityEdit(sh, () => editEntity(sh, 'co', id, back, { name: co.name || '', website: co.website || '', phone: co.phone || '', description: co.description || '' }, ''));
 	}
 	/* a deal-listában: cég / kontakt szerinti szűrés kereséssel */
 	function whoPicker(btn) {
