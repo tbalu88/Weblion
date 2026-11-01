@@ -445,7 +445,13 @@
 		return { t: t, msgs: t._msgs, notes: t._notes, events: t._ev || [], deal: t._deal };
 	}
 
+	/* v1.86.1: mobilon a megnyitott levél előzménylépést kap, így a visszalegyintés / Android vissza gomb a listára visz, nem lép ki */
+	const isMob = () => !!(window.matchMedia && window.matchMedia('(max-width:760px)').matches);
+	window.addEventListener('popstate', () => {
+		if (S.reading && !(history.state && history.state.cpMailTh) && typeof S.closeTh === 'function' && document.querySelector('.ml-inbox.reading')) S.closeTh();
+	});
 	async function openThread(box, id) {
+		if (isMob() && !(history.state && history.state.cpMailTh)) history.pushState(Object.assign({}, history.state || {}, { cpMailTh: id }), '', location.href);
 		const rd = box.querySelector('[data-read]');
 		S.reading = true;
 		const ib = box.querySelector('.ml-inbox'); if (ib) ib.classList.add('reading');
@@ -537,7 +543,9 @@
 		qa.querySelector('[data-qr]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, false); });
 		qa.querySelector('[data-qra]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, true); });
 		const bk = rd.querySelector('[data-back]');
-		if (bk) bk.addEventListener('click', () => { S.reading = false; S.th = null; box.querySelectorAll('.ml-item.on').forEach(x => x.classList.remove('on')); const ib = box.querySelector('.ml-inbox'); if (ib) ib.classList.remove('reading'); const it = box.querySelector('.ml-item[data-th="' + t.id + '"]'); if (it) it.scrollIntoView({ block: 'center' }); });
+		/* v1.86.1: a „Vissza” gomb és a böngésző visszalépése (mobilon visszalegyintés) ugyanazt csinálja: vissza a levéllistára */
+		S.closeTh = () => { S.reading = false; S.th = null; box.querySelectorAll('.ml-item.on').forEach(x => x.classList.remove('on')); const ib = box.querySelector('.ml-inbox'); if (ib) ib.classList.remove('reading'); const it = box.querySelector('.ml-item[data-th="' + t.id + '"]'); if (it) it.scrollIntoView({ block: 'center' }); };
+		if (bk) bk.addEventListener('click', () => { if (history.state && history.state.cpMailTh) history.back(); else S.closeTh(); });
 		/* v1.67.1: üzenetenkénti gombok – törlés (a szál a Kukába) és Továbbiak (továbbítás, olvasatlan, másolás, nyomtatás) */
 		rd.querySelectorAll('[data-mdel]').forEach(b => b.addEventListener('click', () => {
 			if (!window.confirm((tl.filter(i => i.m).length > 1 ? 'Ez a levél egy levélszál része – az egész szálat a Kukába teszed?' : 'A levelet a Kukába teszed?') + '\n\n(Csak a panelben – a postafiókban és a Salesmate-ben megmarad; a Kukából visszaállítható.)')) return;
