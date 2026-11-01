@@ -370,6 +370,8 @@ function cp_mail_ajax_threads() {
 	$tab = sanitize_key(wp_unslash($_POST['tab'] ?? 'open'));
 	if ($tab === 'open') { $w[] = "status = 'open'"; }
 	if ($tab === 'unassigned') { $w[] = 'assignee_uid IS NULL'; }
+	/* v1.88: „Csak olvasatlan” gyorsszűrő */
+	if (($_POST['un'] ?? '') === '1') { $w[] = '(seen_at IS NULL OR seen_at < last_at)'; }
 	$box = sanitize_key(wp_unslash($_POST['box'] ?? ''));
 	if ($box !== '') { $w[] = $wpdb->prepare('mailbox = %s', $box); }
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));

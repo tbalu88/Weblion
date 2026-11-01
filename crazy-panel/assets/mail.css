@@ -501,3 +501,23 @@
 .ml-item.un .ml-i3>span{color:#3A4357}
 /* a kék csak az olvasatlané: a kijelölt (megnyitott) sor semleges szürke, sötét szegéllyel */
 .ml-item.on{background:#F1EEE9;box-shadow:inset 4px 0 0 #1F2A44}
+/* v1.88: „Olvasatlan” gyorsszűrő a fülek mellett */
+.ml-tabs .ml-unf{margin-left:auto;align-self:center;border:1px solid var(--li);border-radius:999px;padding:2px 10px;color:var(--mu);cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-bottom:1px solid var(--li)}
+.ml-tabs .ml-unf::before{content:'';width:7px;height:7px;border-radius:50%;background:#2F6FDB}
+.ml-tabs .ml-unf b{background:#2F6FDB;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:16px}
+.ml-tabs .ml-unf.on{background:#2F6FDB;border-color:#2F6FDB;color:#fff}
+.ml-tabs .ml-unf.on::before{background:#fff}
+.ml-tabs .ml-unf.on b{background:#fff;color:#2F6FDB}
+/* v1.88: legyintés a listában (mobil) */
+.ml-items{position:relative}
+.ml-item.sw{position:relative;z-index:1;will-change:transform}
+.ml-swbg{position:absolute;left:0;right:0;z-index:0;display:flex;align-items:center;padding:0 22px;font:700 14px Inter,sans-serif;color:#fff;background:#2F6FDB}
+.ml-swbg.l{justify-content:flex-end;background:#1E8E5A}
+.ml-swbg.l.bk{background:#5B6578}
+.ml-swbg span{opacity:.75;transition:transform .15s,opacity .15s}
+.ml-swbg.go span{opacity:1;transform:scale(1.12)}
+@media (max-width:760px){
+  .ml-list .ml-tabs{gap:16px;padding:0 12px 0 16px}
+  .ml-list .ml-tabs .ml-unf{font:600 13px Inter,sans-serif;padding:4px 9px;border-bottom:1px solid var(--li);margin-left:auto;white-space:nowrap;flex:none}
+  .ml-list .ml-tabs .ml-unf.on{border-color:#2F6FDB;color:#fff}
+}
