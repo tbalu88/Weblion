@@ -472,3 +472,21 @@
   .ml-read .ml-ma{gap:4px}
   .ml-read .ml-ma button{padding:6px 8px}
 }
+/* v1.85: letisztult mobil levélnézet – keskeny fejléc ikonokkal, lebegő menük, alul válasz-gombok */
+.ml-rbar,.ml-bi{display:none}
+@media (max-width:760px){
+  .ml-inbox.reading .ml-rtool,.ml-inbox.reading .ml-tfab{display:none!important}
+  .ml:has(.ml-inbox.reading) .ml-note{display:none}
+  .ml-backbar{gap:4px;padding:4px 6px}
+  .ml-backbar span{flex:1;min-width:0}
+  .ml-bi{display:inline-flex;align-items:center;justify-content:center;flex:none;width:40px;height:40px;border:0;background:transparent;border-radius:10px;color:#2F6FDB;cursor:pointer}
+  .ml-bi svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .ml-bi.on{background:#E8EFFC}
+  .ml-bi[data-mmn] svg{fill:currentColor;stroke:none}
+  .ml-mm .ml-qas button.on{color:#2F6FDB;font-weight:700}
+  .ml-mm .ml-qas button.on::after{content:" ✓"}
+  .ml-rbar{display:flex;gap:8px;padding:12px 2px 4px;flex-wrap:wrap}
+  .ml-rbar button{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;border:1px solid #DDE1E8;border-radius:999px;background:#fff;font:600 14px Inter,sans-serif;color:#141C33;cursor:pointer;white-space:nowrap}
+  .ml-rbar button[disabled]{opacity:.45}
+  .ml-rbar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+}
