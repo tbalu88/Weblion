@@ -265,7 +265,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$fmt = function ($l) { return implode(', ', array_map(function ($a) { return $a['n'] !== '' ? $a['n'] . ' <' . $a['e'] . '>' : $a['e']; }, $l)); };
 	/* szál: ugyanaz a partner + ugyanaz a (Re:/Fwd: nélküli) tárgy */
 	$tkey = md5($other['e'] . '|' . cp_imp_norm_subj($subj));
-	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
+	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder, followers FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
 	if (!$t) {
 		$deal = 0;
 		if (function_exists('cp_crm_t')) {
@@ -301,6 +301,12 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($live && !$out && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
+	/* v1.86: a szál követői értesítést kapnak az ügyfél új leveléről (csengő; ha be van állítva, Pumble is) – csak friss, élő beérkezésnél */
+	if ($live && !$out && ($t['folder'] ?? '') !== 'spam' && !empty($t['followers']) && $ts > time() - 3 * DAY_IN_SECONDS && function_exists('cp_notify')) {
+		foreach (array_unique(array_filter(array_map('intval', explode(',', (string) $t['followers'])))) as $fu) {
+			cp_notify($fu, 'mail_follow', 'új levelet írt a követett szálba: „' . mb_substr($subj !== '' ? $subj : '(nincs tárgy)', 0, 100) . '”', 'mail:' . (int) $t['id'], $f['n'] !== '' ? $f['n'] : $f['e']);
+		}
+	}
 	return 'ok';
 }
 

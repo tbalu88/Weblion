@@ -43,14 +43,15 @@ function cp_nt_hook_set($k, $v) { if (function_exists('cp_st_secret_set')) { cp_
 function cp_nt_hook_ok($u) { return (bool) preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', (string) $u); }
 
 /* értesítés egy kollégának. $hash: a panelen belüli cél (pl. „feladatok:12”, „mail:3”). Saját magunknak nem megy. */
-function cp_notify($uid, $kind, $text, $hash) {
+function cp_notify($uid, $kind, $text, $hash, $by_name = null) {
 	global $wpdb;
 	$uid = (int) $uid;
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($uid <= 0 || $uid === $me || !cp_nt_db_ok() || !function_exists('cp_pu_get')) { return; }
 	$u = cp_pu_get($uid);
 	if (!$u || empty($u['a'])) { return; }
-	$by = function_exists('cp_panel_who') ? cp_panel_who() : '';
+	/* v1.86: háttérfolyamatból (pl. beérkező levél) a feladó neve adható meg; különben a bejelentkezett kolléga */
+	$by = $by_name !== null ? (string) $by_name : (function_exists('cp_panel_who') ? cp_panel_who() : '');
 	$text = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $text)), 0, 400);
 	/* ugyanarról ugyanannak 2 percen belül csak egyszer (pl. több mentés egymás után) */
 	if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_nt_t() . ' WHERE uid = %d AND kind = %s AND link = %s AND text = %s AND created_at >= %s', $uid, $kind, $hash, $text, gmdate('Y-m-d H:i:s', time() - 120)))) { return; }
