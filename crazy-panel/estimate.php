@@ -44,7 +44,7 @@ function cp_est_deal($d) {
 	/* csak a deal-névből: „[Crazyphoto] …” – a crazyphoto.hu főszolgáltatása a szelfigép */
 	if (!$ms && preg_match('/^\[crazyphoto(\.hu)?\]/i', (string) ($d['title'] ?? '')) && trim((string) ($d['services_ec'] ?? '')) === '') { $ms[] = 'selfie'; $guess = true; }
 	/* v1.91: EventCrazy-s ajánlatkérés (a Crazyphoto-mezők üresek, az EventCrazy-szolgáltatásmező kitöltve) – EventCrazy-árlista */
-	if (!$ms && trim((string) ($d['services_ec'] ?? '')) !== '' && function_exists('cp_est_ec_deal')) { return cp_est_ec_deal($d); }
+	if (!$ms && trim((string) ($d['services_ec'] ?? '')) !== '' && function_exists('cp_est_ec_deal')) { return cp_est_ec_deal($d, cp_est_private($d)); }
 	if (!$ms) { return null; }
 	$hours = (int) ($d['hours'] ?? 0);
 	$lines = array(); $tot = 0; $pk = 0; $approx = $guess; $bud = 0;
@@ -71,6 +71,14 @@ function cp_est_deal($d) {
 	else { $lines[] = $venue === '' ? 'Kiszállás nélkül (nincs helyszín)' : (is_array($geo ?? null) ? 'Kiszállás nélkül (a helyszínt nem találtam a térképen – írd be a települést vagy irányítószámot)' : 'Kiszállás nélkül (a távolság számolása folyamatban, 10 percen belül frissül)'); $approx = true; }
 	return array('p' => (int) $tot, 'a' => $approx ? 1 : 0, 'l' => $lines);
 }
+/* v1.91.1: ingyenes levelezőről (Gmail, Freemail, Citromail…) érkező ajánlatkérés = magánszemély → Crazyphoto-árak */
+function cp_est_private($d) {
+	$e = strtolower(trim((string) ($d['ce'] ?? '')));
+	if ($e === '' && !empty($d['contact_id']) && function_exists('cp_crm_t')) { global $wpdb; $e = strtolower(trim((string) $wpdb->get_var($wpdb->prepare('SELECT email FROM ' . cp_crm_t('contacts') . ' WHERE id = %d', (int) $d['contact_id'])))); }
+	$dom = substr(strrchr($e, '@') ?: '', 1);
+	if ($dom === '') { return false; }
+	return (bool) preg_match('/^(gmail\.com|googlemail\.com|freemail\.hu|citromail\.hu|indamail\.hu|vipmail\.hu|mailbox\.hu|t-online\.hu|upcmail\.hu|chello\.hu|invitel\.hu|digikabel\.hu|monornet\.hu|externet\.hu|(yahoo|ymail|hotmail|outlook|live|msn|gmx|aol|icloud|me|mac|proton|protonmail|tutanota|zoho|mail|yandex)\.[a-z.]+)$/', $dom);
+}
 function cp_est_ft($n) { return ($n < 0 ? '−' : '') . number_format(abs((float) $n), 0, ',', ' ') . ' Ft'; }
 
 /* a csempékhez: az első szakasz érték nélküli nyitott dealjei */
@@ -81,7 +89,8 @@ function cp_est_for_rows($rows) {
 	if (!$ids) { return array(); }
 	global $wpdb;
 	$out = array();
-	foreach ((array) $wpdb->get_results('SELECT id, title, service, package, pkg_fix, spinner_pkg, services_cp, services_ec, hours, guests, venue, km_fee FROM ' . cp_crm_t('deals') . ' WHERE id IN (' . implode(',', $ids) . ')', ARRAY_A) as $d) {
+	/* v1.91.1: a rendezvény dátuma (szezon / nap) és a kapcsolattartó e-mail-címe (magánszemély-e) is kell */
+	foreach ((array) $wpdb->get_results('SELECT d.id, d.title, d.service, d.package, d.pkg_fix, d.spinner_pkg, d.services_cp, d.services_ec, d.hours, d.guests, d.venue, d.km_fee, d.event_d, d.contact_id, c.email ce FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id IN (' . implode(',', $ids) . ')', ARRAY_A) as $d) {
 		$e = cp_est_deal($d); if ($e) { $out[(int) $d['id']] = $e; }
 	}
 	return $out;

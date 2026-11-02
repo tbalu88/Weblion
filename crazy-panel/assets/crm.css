@@ -477,3 +477,7 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-copl button:hover{background:#F4F1EC}
 .crm-copl small{color:var(--mu);font-weight:400}
 @media (max-width:760px){.d3-eform .crm-eg{grid-template-columns:1fr}}
+/* v1.91.1: a becsült ár ÁFA-jelölése (+ ÁFA: nettó EventCrazy-ár; bruttó: magánszemély, Crazyphoto-ár) */
+.crm-vat{font-size:.72em;font-weight:700;margin-left:4px;padding:0 4px;border-radius:4px;background:#F2E3A8;color:#5C4400;white-space:nowrap;vertical-align:1px}
+.crm-vat.br{background:#E3F1E7;color:#1E5E3F}
+.crm-cl .crm-est{flex:none;overflow:visible;display:inline-flex;align-items:center}

@@ -42,31 +42,62 @@ function cp_est_ec_col($date, &$note) {
 	$season = $m >= 5 && $m <= 9; if ($m === 12) { $season = true; $note = 'december az árlistában nincs – szezonális árral számolva'; }
 	return ($season ? 2 : 0) + ($dow >= 5 ? 1 : 0);
 }
-function cp_est_ec_deal($d) {
+/* az árlistás tételek sorai és összege (kiszállás nélkül); $mult = 1.27: bruttó (magánszemélynek) */
+function cp_est_ec_items($keys, $d, $mult, &$approx, &$bud) {
+	$P = cp_est_ec_prices(); $note = ''; $col = cp_est_ec_col((string) ($d['event_d'] ?? ''), $note);
+	$colN = array('off-szezon, hétköznap', 'off-szezon, hétvége', 'szezon, hétköznap', 'szezon, hétvége')[$col];
+	$h = (int) ($d['hours'] ?? 0); $lines = array(); $tot = 0; if ($note !== '') { $approx = true; }
+	if ($h <= 0) { $h = 3; $approx = true; $hn = ' – nincs megadva óraszám, 3 órával számolva'; } else { $hn = ''; }
+	$br = $mult > 1 ? ', bruttó' : '';
+	foreach ($keys as $k => $orig) {
+		$M = $P[$k];
+		if (!empty($M['flat'])) { $p = $M['flat'][$col]; $lab = $M['n'] . ' (' . $colN . $br . ')'; }
+		else {
+			$hh = max(3, $h); $t = $M['t'];
+			if ($hh <= 10) { $p = $t[$hh][$col]; } else { $p = $t[10][$col] + ($hh - 10) * ($t[10][$col] - $t[9][$col]); $approx = true; }
+			$lab = $M['n'] . ' – ' . $hh . ' óra (' . $colN . $br . ')' . ($h < 3 ? ' – legalább 3 óra' : '') . $hn . (!empty($M['feltetelezes']) ? ' – ' . $M['feltetelezes'] : '');
+			if (!empty($M['feltetelezes'])) { $approx = true; }
+		}
+		$p = (int) round($p * $mult / 10) * 10;
+		$lines[] = $lab . ': ' . cp_est_ft($p); $tot += $p; $bud += $M['bp'];
+	}
+	if ($note !== '') { $lines[] = 'Megjegyzés: ' . $note; }
+	return array($tot, $lines);
+}
+function cp_est_ec_deal($d, $private = false) {
 	$P = cp_est_ec_prices(); $T = cp_est_prices();
 	$vals = array_values(array_unique(array_filter(array_map('trim', explode('|', (string) ($d['services_ec'] ?? ''))))));
 	$keys = array(); $custom = array();
 	foreach ($vals as $v) { $k = cp_est_ec_key($v); if ($k && isset($P[$k])) { $keys[$k] = $v; } elseif (!preg_match('/visszahiv|egyeb/i', remove_accents($v))) { $custom[] = $v; } }
 	if (!$keys) { return null; }
-	$note = ''; $col = cp_est_ec_col((string) ($d['event_d'] ?? ''), $note);
-	$colN = array('off-szezon, hétköznap', 'off-szezon, hétvége', 'szezon, hétköznap', 'szezon, hétvége')[$col];
-	$h = (int) ($d['hours'] ?? 0); $approx = $note !== ''; $lines = array(); $tot = 0; $bud = 0;
-	if ($h <= 0) { $h = 3; $approx = true; $hn = ' – nincs megadva óraszám, 3 órával számolva'; } else { $hn = ''; }
-	foreach ($keys as $k => $orig) {
-		$M = $P[$k];
-		if (!empty($M['flat'])) { $p = $M['flat'][$col]; $lines[] = $M['n'] . ' (' . $colN . '): ' . cp_est_ft($p); }
-		else {
-			$hh = max(3, $h); $t = $M['t'];
-			if ($hh <= 10) { $p = $t[$hh]; } else { $p = $t[10][$col] + ($hh - 10) * ($t[10][$col] - $t[9][$col]); $approx = true; }
-			$p = is_array($p) ? $p[$col] : $p;
-			$lines[] = $M['n'] . ' – ' . $hh . ' óra (' . $colN . ')' . ($h < 3 ? ' – legalább 3 óra' : '') . $hn . (!empty($M['feltetelezes']) ? ' – ' . $M['feltetelezes'] : '') . ': ' . cp_est_ft($p);
-			if (!empty($M['feltetelezes'])) { $approx = true; }
+	$approx = false; $bud = 0; $lines = array(); $tot = 0;
+	/* magánszemély (ingyenes e-mail-cím): a Crazyphoto-kínálatban is meglévő szolgáltatás (szelfigép, 360 spinner) Crazyphoto-áron, a többi EventCrazy-áron bruttóban */
+	if ($private) {
+		$cpk = array_intersect_key($keys, array('szelfigep' => 1, 'spinner' => 1)); $rest = array_diff_key($keys, $cpk);
+		$lines[] = 'Magánszemély (ingyenes e-mail-cím) – Crazyphoto-árak, bruttó';
+		if ($cpk) {
+			$c = $d; $c['services_ec'] = ''; $c['package'] = $c['pkg_fix'] = $c['services_cp'] = ''; $c['spinner_pkg'] = '';
+			$c['service'] = implode(' | ', array_map(function ($k) { return $k === 'spinner' ? '360 spinner' : 'szelfigép'; }, array_keys($cpk)));
+			$c['title'] = '';
+			$R = cp_est_deal($c);
+			if ($R) { $tot += $R['p']; $approx = $approx || !empty($R['a']); foreach ($R['l'] as $l) { $lines[] = $l; } }
 		}
-		$tot += $p; $bud += $M['bp'];
+		if ($rest) {
+			list($t2, $l2) = cp_est_ec_items($rest, $d, 1.27, $approx, $bud); $tot += $t2;
+			$lines[] = 'Csak EventCrazy-kínálatban (EventCrazy-ár + 27% ÁFA):'; foreach ($l2 as $l) { $lines[] = $l; }
+			if (!$cpk) {
+				$venue = (string) ($d['venue'] ?? ''); $geo = null;
+				if (cp_est_is_bp($venue) || ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['bp']))) { $f = (int) round($bud * 1.27 / 10) * 10; $lines[] = 'Kiszállás Budapesten (bruttó): ' . cp_est_ft($f); $tot += $f; }
+				elseif ($venue !== '' && is_array($geo) && !empty($geo['km'])) { $kmv = (int) $geo['km'] * $T['trip']; $f = (int) round($kmv * $T['km'] * 1.27 / 10) * 10; $lines[] = 'Kiszállás (' . (!empty($geo['n']) ? $geo['n'] . ', ' : '') . '~' . $kmv . ' km oda-vissza, bruttó): ' . cp_est_ft($f); $tot += $f; }
+				else { $lines[] = 'Kiszállás nélkül'; $approx = true; }
+			}
+		}
+		foreach ($custom as $cc) { $lines[] = $cc . ': egyedi ár (nincs az árlistában)'; $approx = true; }
+		return array('p' => (int) $tot, 'a' => $approx ? 1 : 0, 'l' => $lines, 'v' => $rest ? 'pb' : 'p');
 	}
+	list($tot, $lines) = cp_est_ec_items($keys, $d, 1, $approx, $bud);
 	if (count($keys) + count($custom) >= 3) { $bud = 15000; }
 	foreach ($custom as $c) { $lines[] = $c . ': egyedi ár (nincs az árlistában)'; $approx = true; }
-	if ($note !== '') { $lines[] = 'Megjegyzés: ' . $note; }
 	$km = (int) ($d['km_fee'] ?? 0); $venue = (string) ($d['venue'] ?? ''); $geo = null;
 	if ($km > 0) { $lines[] = 'Kiszállás (a dealben megadva): ' . cp_est_ft($km); $tot += $km; }
 	elseif (cp_est_is_bp($venue) || ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['bp']))) { $lines[] = 'Kiszállás Budapesten: ' . cp_est_ft($bud); $tot += $bud; }
