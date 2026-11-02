@@ -521,3 +521,10 @@
   .ml-list .ml-tabs .ml-unf{font:600 13px Inter,sans-serif;padding:4px 9px;border-bottom:1px solid var(--li);margin-left:auto;white-space:nowrap;flex:none}
   .ml-list .ml-tabs .ml-unf.on{border-color:#2F6FDB;color:#fff}
 }
+/* v1.95: „Link másolása” – rámutatáskor a sor jobb felső sarkában, a megnyitott levél eszköztárán */
+.ml-item{position:relative}
+.ml-cl{position:absolute;top:6px;right:8px;display:none;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;background:#fff;border:1px solid var(--li);color:#4A5470;cursor:pointer;box-shadow:0 2px 6px -3px rgba(20,28,51,.3)}
+.ml-cl svg,.ml-clb svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ml-cl:hover{color:#2F6FDB;border-color:#2F6FDB}
+@media (hover:hover){.ml-item:hover .ml-cl{display:inline-flex}.ml-item:hover .ml-i1 small{visibility:hidden}}
+.ml-clb{display:inline-flex;align-items:center;justify-content:center}
