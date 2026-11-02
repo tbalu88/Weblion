@@ -228,6 +228,12 @@ function cp_portal_bg_html($portal, $cur, $dis) {
 			'<b>' . esc_html($b['name']) . '</b>' . ($b['free'] ? '' : '<small>közben foglalt lett</small>') . '</span></label>';
 	}
 	$h .= '</div></div>';
+	/* v1.92: a hátteret a kollégák már rögzítették a foglaláshoz */
+	$dbg = function_exists('cp_portal_deal_bg') ? cp_portal_deal_bg($portal) : '';
+	if ($dbg !== '' && cp_panel_lc($cur) === cp_panel_lc($dbg)) {
+		$h .= '<p class="cpp-note cpp-bgset">✓ A hátteret már egyeztettük veletek: <b>' . esc_html($dbg) . '</b>. Ha mégis másikat szeretnétek, válasszátok ki – a kollégáink felveszik veletek a kapcsolatot.</p>';
+		return $h;
+	}
 	$h .= '<p class="cpp-bgwarn">Ha később döntesz: a lista mindig csak az aznap még szabad hátteret mutatja, a mások által lefoglalt hátterek automatikusan eltűnnek – így előfordulhat, hogy a most kiszemelt háttér addigra már nem lesz elérhető.</p>';
 	if ($o['unknown']) { $h .= '<p class="cpp-note">A foglaltságot most nem tudtuk ellenőrizni – a választásodat egyeztetjük.</p>'; }
 	return $h;

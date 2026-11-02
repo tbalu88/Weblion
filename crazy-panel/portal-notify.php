@@ -138,6 +138,16 @@ function cp_portal_pumble_guests($portal, $gi) {
 	return $r;
 }
 
+/* v1.92: az ügyfél más hátteret választott a portálon, mint ami a dealen rögzítve van – a deal nem változott, a kollégák döntenek */
+function cp_portal_pumble_bg_diff($portal, $deal_bg, $chosen) {
+	$t = '🖼 Az ügyfél más hátteret választott – ' . cp_portal_pumble_head($portal) . "\n";
+	$t .= 'A dealen rögzítve: ' . $deal_bg . ' · az ügyfél választása: ' . $chosen . " – a deal nem változott, egyeztessetek, és ha kell, állítsátok át.\n";
+	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$r = cp_portal_pumble($t);
+	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: háttér-eltérés', $r->get_error_message()); }
+	return $r;
+}
+
 /* az ügyfél egyedi fotósablont kér (díjköteles) – a leírás és a logó a panelen */
 function cp_portal_pumble_custom_tpl($portal) {
 	$a = cp_portal_answers($portal->id);

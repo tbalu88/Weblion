@@ -29,11 +29,38 @@ function cp_plk_summary($deal_id) {
 		'flags' => array_values(array_map(function ($f) { return array('t' => $f['text'] ?? '', 'tone' => $f['tone'] ?? ''); }, (array) ($s['flags'] ?? array()))), 'bg' => (string) ($s['bg'] ?? ''), 'sb' => !empty($s['sb']));
 }
 
+/* v1.92: a portálválaszok és a deal eltérései: [{k, l, p (portál), d (deal), f (deal-mező), v (beírandó érték)}] */
+function cp_plk_diff($deal_id, $d) {
+	$p = cp_portal_get_by_deal((string) $deal_id);
+	if (!$p || !function_exists('cp_portal_answers')) { return array(); }
+	$a = cp_portal_answers($p->id); $out = array();
+	$add = function ($k, $l, $pv, $dv, $v) use (&$out) { $out[] = array('k' => $k, 'l' => $l, 'p' => (string) $pv, 'd' => (string) $dv, 'f' => $k, 'v' => $v); };
+	$ad = isset($a['event_date']) && is_string($a['event_date']) ? $a['event_date'] : '';
+	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $ad) && $ad !== (string) ($d['event_d'] ?? '')) { $add('event_d', 'Dátum', $ad, $d['event_d'] ?? '', $ad); }
+	$sch = isset($a['schedule']) ? (array) $a['schedule'] : array();
+	$ps = (string) ($sch['start'] ?? ''); $pe = (string) ($sch['end'] ?? '');
+	$ds = !empty($d['start_at']) ? substr((string) $d['start_at'], 11, 5) : '';
+	$okt = function ($t) { return (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t); };
+	if ($okt($ps) && $ps !== $ds) { $add('start_at', 'Kezdés', $ps, $ds, $ps); }
+	if ($okt($ps) && $okt($pe)) {
+		$mins = ((int) substr($pe, 0, 2) * 60 + (int) substr($pe, 3, 2) - (int) substr($ps, 0, 2) * 60 - (int) substr($ps, 3, 2) + 1440) % 1440;
+		$h = round($mins / 60, 1); $dh = (float) ($d['hours'] ?? 0);
+		if ($h > 0 && abs($h - $dh) >= 0.5) { $add('hours', 'Óraszám', $h, $dh > 0 ? $dh : '', (int) round($h)); }
+	}
+	$g = isset($a['guests_type_dress']) && is_array($a['guests_type_dress']) ? (int) ($a['guests_type_dress']['guests'] ?? 0) : 0;
+	if ($g > 0 && $g !== (int) ($d['guests'] ?? 0)) { $add('guests', 'Létszám', $g, (int) ($d['guests'] ?? 0) ?: '', $g); }
+	$b = isset($a['background']) && is_string($a['background']) ? trim($a['background']) : '';
+	if ($b !== '' && cp_panel_lc($b) !== cp_panel_lc(trim((string) ($d['background'] ?? '')))) { $add('background', 'Háttér', $b, $d['background'] ?? '', $b); }
+	return $out;
+}
+
 /* a deal-adatlap: portál-összefoglaló + események az idővonalra */
 add_filter('cp_crm_deal_data', function ($x) {
 	if (!cp_plk_ready()) { return $x; }
 	$id = (string) $x['deal']['id'];
 	$x['portal'] = cp_plk_summary($id);
+	/* v1.92: amit az ügyfél a portálon másképp adott meg, mint ami a dealen van – a deal-adatlapon „Átveszem” gombbal beírható */
+	if (is_array($x['portal']) && empty($x['portal']['none'])) { $x['portal']['diff'] = cp_plk_diff($id, (array) $x['deal']); }
 	$ev = array();
 	$p = cp_portal_get_by_deal($id);
 	if ($p) {

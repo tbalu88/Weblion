@@ -481,3 +481,8 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-vat{font-size:.72em;font-weight:700;margin-left:4px;padding:0 4px;border-radius:4px;background:#F2E3A8;color:#5C4400;white-space:nowrap;vertical-align:1px}
 .crm-vat.br{background:#E3F1E7;color:#1E5E3F}
 .crm-cl .crm-est{flex:none;overflow:visible;display:inline-flex;align-items:center}
+/* v1.92: portál–deal eltérés */
+.d3-pdiff{margin:8px 0;padding:8px 10px;border-radius:10px;background:#FFF6E0;border:1px solid #F2D58A;font-size:13px}
+.d3-pdiff>b{display:block;margin-bottom:4px;color:#6E5600}
+.d3-pdr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0}
+.d3-pdr small{color:#8A8E96}

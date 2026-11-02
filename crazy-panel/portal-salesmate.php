@@ -57,6 +57,8 @@ function cp_portal_sm_snapshot($deal_id) {
 		'selfie'   => $sp,
 		'spin'     => $spin,
 		'venue'    => cp_panel_str(cp_panel_get($d, $p['f_loc'])),
+		/* v1.92: a dealen rögzített háttér (Hátterek fül / deal-szerkesztés / iroda) – a portál ezt mutatja, és nem írja felül */
+		'bg'       => !empty($p['f_bg']) ? trim(cp_panel_str(cp_panel_get($d, $p['f_bg']))) : '',
 		'guests'   => cp_panel_str(cp_panel_get($d, $p['f_guests'])),
 		'owner'    => cp_panel_str(cp_panel_get($d, 'owner')),
 		'stage'    => cp_panel_str(cp_panel_get($d, 'stage')),

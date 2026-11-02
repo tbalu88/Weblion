@@ -106,7 +106,17 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 		cp_portal_sm_queue($portal->deal_id, 'venue', cp_portal_venue_text(cp_portal_answers($portal->id)));
 	}
 	if ($key === 'background') {
-		cp_portal_sm_queue($portal->deal_id, 'bg', (string) $new);
+		/* v1.92: ha a dealen már van (a kollégák által rögzített) háttér, az ügyfél választása – a „Később döntök” is – nem írja felül:
+		   eltérésnél a kollégák jelzést kapnak, és ők döntenek. Az iroda (panel) módosítása továbbra is beíródik. */
+		$dbg = cp_portal_deal_bg($portal);
+		if ($by === 'ugyfel' && $dbg !== '') {
+			if ($new !== null && (string) $new !== '' && cp_panel_lc((string) $new) !== cp_panel_lc($dbg)) {
+				$pp = $portal; $nv = (string) $new;
+				cp_portal_defer(function () use ($pp, $dbg, $nv) { cp_portal_pumble_bg_diff($pp, $dbg, $nv); });
+			}
+		} else {
+			cp_portal_sm_queue($portal->deal_id, 'bg', (string) $new);
+		}
 	}
 	return array_merge($res, array('value' => $new, 'saved_at' => $saved_at, 'log_id' => $log_id));
 }
@@ -204,7 +214,33 @@ function cp_portal_prefill($portal) {
 	}
 	$gu = cp_portal_orig_guests($portal);
 	if ($gu > 0) { $out['guests_type_dress'] = array('guests' => $gu); }
+	/* v1.92: a dealen már rögzített háttér és helyszín – az ügyfelet ne kérdezzük újra */
+	$bg = cp_portal_bg_real(isset($sm['bg']) ? (string) $sm['bg'] : '');
+	if ($bg !== '') { $out['background'] = $bg; }
+	$ven = isset($sm['venue']) ? trim((string) $sm['venue']) : '';
+	if ($ven !== '') { $out['venue_address'] = cp_portal_venue_split($ven); }
 	return (object) $out;
+}
+/* a deal egysoros helyszíne → portál „név” + „pontos cím” (ha az első tag nem cím, az a név) */
+function cp_portal_venue_split($v) {
+	$v = trim(preg_replace('/\s+/u', ' ', (string) $v));
+	$parts = array_map('trim', explode(',', $v, 2));
+	if (count($parts) === 2 && $parts[0] !== '' && $parts[1] !== '' && !preg_match('/\d/', $parts[0])) { return array('name' => mb_substr($parts[0], 0, 200), 'address' => mb_substr($parts[1], 0, 200)); }
+	return array('address' => mb_substr($v, 0, 200));
+}
+/* v1.92: a dealen rögzített háttér (a portál pillanatképe szerint) – csak ha valódi, a háttérlistában szereplő háttér
+   (a Salesmate „Még nem tudom” és hasonló helykitöltő értékei nem számítanak rögzítettnek) */
+function cp_portal_deal_bg($portal) {
+	$sm = is_array($portal->sm ?? null) ? $portal->sm : (array) ($portal->sm ?? array());
+	return cp_portal_bg_real(isset($sm['bg']) ? (string) $sm['bg'] : '');
+}
+/* a háttérlista szerinti pontos név, vagy '' ha nem valódi háttér */
+function cp_portal_bg_real($name) {
+	$name = trim((string) $name);
+	if ($name === '' || !function_exists('cp_portal_bg_list')) { return ''; }
+	$k = cp_panel_lc($name);
+	foreach (cp_portal_bg_list() as $b) { if (cp_panel_lc($b['name']) === $k) { return (string) $b['name']; } }
+	return '';
 }
 
 /* ------------------------------------------------------------ létszám: az ajánlatkérésben (Salesmate) szereplő vs. a megadott */

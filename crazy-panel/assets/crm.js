@@ -807,6 +807,8 @@
 			'<div class="d3-pbar"><i style="width:' + pct + '%"></i></div><p class="d3-sub"><b>' + s.done + '/' + s.total + '</b> kötelező kérdés · szerződéshez: ' + s.cd + '/' + s.ct + (s.deadline ? ' · határidő: <b>' + esc(s.deadline) + '</b>' + (s.passed ? ' (lezárva)' : '') : '') + '</p>' +
 			(s.flags && s.flags.length ? '<div class="d3-pflags">' + s.flags.map(f => '<span class="d3-q ' + esc(f.tone) + '">' + esc(f.t) + '</span>').join('') + '</div>' : '') +
 			(s.missing && s.missing.length ? '<p class="d3-sub">Hiányzik: ' + esc(s.missing.join(', ')) + '</p>' : '') +
+			/* v1.92: eltérés a portál és a deal között – egy kattintással átvehető */
+			(s.diff && s.diff.length ? '<div class="d3-pdiff"><b>Az ügyfél a portálon mást adott meg:</b>' + s.diff.map((f, i) => '<div class="d3-pdr"><span>' + esc(f.l) + ': <b>' + esc(f.k === 'event_d' ? huD(f.p) : f.p) + '</b> <small>(a dealen: ' + esc(f.d === '' ? 'üres' : f.k === 'event_d' ? huD(f.d) : f.d) + ')</small></span><button type="button" class="cpx-btn ghost sm" data-pdiff="' + i + '">Átveszem</button></div>').join('') + '</div>' : '') +
 			'<p class="d3-sub">' + (s.last_open ? 'Az ügyfél utoljára megnyitotta: ' + esc(huDT(s.last_open)) : 'Az ügyfél még nem nyitotta meg.') + '</p>' +
 			'<div class="d3-pact"><button type="button" class="cpx-btn" data-popen>Adatlap megnyitása</button><button type="button" class="cpx-btn ghost" data-plink>Link másolása</button><button type="button" class="cpx-btn ghost" data-pmail>Új link e-mailben</button></div></section>';
 	}
@@ -828,6 +830,13 @@
 			catch (e) { toast(e.message, true); }
 			pl.disabled = false;
 		});
+		/* v1.92: portál-eltérés átvétele a dealbe (a Salesmate-be is) */
+		sh.querySelectorAll('[data-pdiff]').forEach(b => b.addEventListener('click', async () => {
+			const f = ((x.portal || {}).diff || [])[Number(b.dataset.pdiff)]; if (!f) return;
+			b.disabled = true;
+			try { const r = await post('cp_crm_save', { id: id, f: JSON.stringify({ [f.f]: String(f.v) }), c: '{}' }); toast(r.warn ? 'Átvéve, de: ' + r.warn : f.l + ' átvéve a dealbe – a Salesmate-ben is.', !!r.warn); reopen(); }
+			catch (e) { b.disabled = false; toast(e.message, true); }
+		}));
 		const pm = sh.querySelector('[data-pmail]');
 		if (pm) pm.addEventListener('click', async () => { if (!window.confirm('Új belépőlinket küldök e-mailben az ügyfélnek. Mehet?')) return; pm.disabled = true; try { const r = await call('cp_portal_p_link', { op: 'send' }); toast(r.msg || 'Elküldve.'); reopen(); } catch (e) { pm.disabled = false; toast(e.message, true); } });
 	}
