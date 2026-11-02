@@ -144,6 +144,17 @@ function cp_crm_sync_at() {
 
 /* ------------------------------------------------------------ AJAX: pipeline-tábla */
 
+/* v1.94: könnyű „változott-e valami?” lekérdezés a Deal-ek nézet automatikus frissítéséhez (új / módosult deal, új megkeresés) */
+add_action('wp_ajax_nopriv_cp_crm_stamp', 'cp_crm_ajax_stamp');
+add_action('wp_ajax_cp_crm_stamp', 'cp_crm_ajax_stamp');
+function cp_crm_ajax_stamp() {
+	cp_crm_ajax_guard();
+	global $wpdb;
+	$d = $wpdb->get_row('SELECT COUNT(*) n, MAX(modified_at) m FROM ' . cp_crm_t('deals') . ' WHERE deleted_at IS NULL', ARRAY_A);
+	$l = function_exists('cp_lead_t') ? $wpdb->get_row('SELECT COUNT(*) n, MAX(id) m, SUM(status = \'new\') nw FROM ' . cp_lead_t(), ARRAY_A) : array();
+	wp_send_json_success(array('k' => md5(wp_json_encode(array($d, $l))), 'n' => (int) ($d['n'] ?? 0), 'ln' => (int) ($l['n'] ?? 0)));
+}
+
 add_action('wp_ajax_nopriv_cp_crm_board', 'cp_crm_ajax_board');
 add_action('wp_ajax_cp_crm_board', 'cp_crm_ajax_board');
 function cp_crm_ajax_board() {

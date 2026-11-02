@@ -99,6 +99,7 @@
 	}
 
 	function view(main) {
+		autoStart();
 		S.main = main;
 		main.innerHTML = '<div class="crm">' + head() + '<div class="crm-body" id="crm-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		bindHead(main);
@@ -1316,6 +1317,29 @@
 		S.loading = false;
 		if (live()) load(); else setStatus();
 	}
+
+	/* v1.94: automatikus frissítés – percenként (és amikor visszatérsz a fülre) megnézi, jött-e új deal / megkeresés, vagy módosult-e valami;
+	   ha igen, csendben újratölti a listát / táblát (görgetés megmarad). Nem frissít, ha épp nyitva van egy deal, ablak vagy szerkesztés. */
+	const AUTO = { t: 0, k: '', n: 0, ln: 0, busy: false };
+	const autoBlocked = () => !!(document.hidden || !live() || S.loading || document.querySelector('#cpx-main > .crm-page') || (document.getElementById('cpx-modal') && !document.getElementById('cpx-modal').hidden)
+		|| (document.activeElement && document.activeElement.closest && document.activeElement.closest('#crm-body textarea, #crm-body input:not([type=search]), #crm-body select')) || (S.main && S.main.querySelector('.crm-qn')));
+	async function autoTick() {
+		if (AUTO.busy || autoBlocked()) return;
+		AUTO.busy = true;
+		try {
+			const r = await post('cp_crm_stamp', {});
+			if (AUTO.k && r.k !== AUTO.k && !autoBlocked()) {
+				const dn = r.n - AUTO.n, dl = r.ln - AUTO.ln;
+				const y = window.scrollY, bd = S.main && S.main.querySelector('.crm-board'), x = bd ? bd.scrollLeft : 0;
+				await load();
+				window.scrollTo(0, y); const bd2 = S.main && S.main.querySelector('.crm-board'); if (bd2) bd2.scrollLeft = x;
+				if (dn > 0 || dl > 0) toast(dn > 0 ? dn + ' új deal érkezett – a nézet frissült.' : dl + ' új megkeresés érkezett – a nézet frissült.');
+			}
+			AUTO.k = r.k; AUTO.n = r.n; AUTO.ln = r.ln;
+		} catch (e) { /* csendben – a következő körben újra */ }
+		AUTO.busy = false;
+	}
+	function autoStart() { if (AUTO.t) return; AUTO.t = setInterval(autoTick, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) autoTick(); }); setTimeout(autoTick, 4000); }
 
 	/* mélylink: #deals:leads = a Megkeresések nézet */
 	function deep(arg) { if (arg === 'leads') { S.mode = 'board'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
