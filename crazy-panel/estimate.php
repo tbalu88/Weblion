@@ -43,6 +43,8 @@ function cp_est_deal($d) {
 	$guess = false;
 	/* csak a deal-névből: „[Crazyphoto] …” – a crazyphoto.hu főszolgáltatása a szelfigép */
 	if (!$ms && preg_match('/^\[crazyphoto(\.hu)?\]/i', (string) ($d['title'] ?? '')) && trim((string) ($d['services_ec'] ?? '')) === '') { $ms[] = 'selfie'; $guess = true; }
+	/* v1.91: EventCrazy-s ajánlatkérés (a Crazyphoto-mezők üresek, az EventCrazy-szolgáltatásmező kitöltve) – EventCrazy-árlista */
+	if (!$ms && trim((string) ($d['services_ec'] ?? '')) !== '' && function_exists('cp_est_ec_deal')) { return cp_est_ec_deal($d); }
 	if (!$ms) { return null; }
 	$hours = (int) ($d['hours'] ?? 0);
 	$lines = array(); $tot = 0; $pk = 0; $approx = $guess; $bud = 0;
