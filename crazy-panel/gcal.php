@@ -301,8 +301,37 @@ function cp_gcal_pen_sync($dry = false) {
 		$made[$id] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
 		cp_gcal_wlog('bejegyzés létrehozva', $id, $p['title']);
 	}
+	/* v1.93: a panel által létrehozott bejegyzések követik a deal változását (dátum, kezdés, óraszám, helyszín, leírás);
+	   elvesztett dealnél „[ELVESZETT]” jelölés kerül a cím elé (nem töröljük). A kézzel felvett bejegyzésekhez nem nyúlunk. */
+	$out['update'] = array(); $out['lost'] = array();
+	if ($made && !$out['err']) {
+		$byEv = array(); foreach ($ev as $e) { $byEv[$e['id']] = $e; }
+		$ids = array_map('intval', array_keys($made));
+		$st = array(); foreach ((array) $wpdb->get_results('SELECT id, status FROM ' . cp_crm_t('deals') . ' WHERE id IN (' . implode(',', $ids ?: array(0)) . ')', ARRAY_A) as $r) { $st[(int) $r['id']] = (string) $r['status']; }
+		foreach ($made as $did => $eid) {
+			$did = (int) $did; if (!isset($byEv[$eid])) { continue; }
+			$e = $byEv[$eid];
+			if (($st[$did] ?? '') === 'Lost') {
+				if (mb_stripos($e['t'], '[ELVESZETT]') === 0) { continue; }
+				$out['lost'][] = $did; if ($dry) { continue; }
+				$nt = '[ELVESZETT] ' . cp_gcal_unpen($e['t']);
+				$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), array('summary' => $nt));
+				if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+				cp_gcal_wlog('elvesztett deal jelölve', $did, $nt); continue;
+			}
+			$p = cp_gcal_plan($did); if (!$p || $p['date'] === '') { continue; }
+			$chg = substr($e['s'], 0, 10) !== $p['date'] || ($p['start'] !== '' && ($e['ad'] || substr($e['s'], 11, 5) !== $p['start'])) || ($p['start'] === '' && !$e['ad'])
+				|| ($p['end'] !== '' && $p['end'] !== '24:00' && !$e['ad'] && substr($e['e'], 11, 5) !== $p['end']) || trim($e['loc']) !== trim((string) $p['loc']);
+			if (!$chg) { continue; }
+			$out['update'][] = $did; if ($dry) { continue; }
+			$b = cp_gcal_body($p); $b['summary'] = $e['t'];  /* a cím (ceruzás jelöléssel) marad – azt a fenti rész kezeli */
+			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), $b);
+			if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+			cp_gcal_wlog('bejegyzés frissítve (a deal változott)', $did, $e['t']);
+		}
+	}
 	if (!$dry) {
-		if ($out['add'] || $out['remove'] || $out['create']) { update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false); }
+		if ($out['add'] || $out['remove'] || $out['create'] || $out['update'] || $out['lost']) { update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false); }
 		if ($out['err']) { update_option('cp_gcal_werr', array('at' => time(), 'msg' => $out['err'][0]), false); } else { delete_option('cp_gcal_werr'); }
 		delete_transient('cp_gcal_pen_lock');
 	}

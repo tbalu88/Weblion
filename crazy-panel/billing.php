@@ -310,11 +310,24 @@ function cp_bil_tick() {
 	foreach ((array) $wpdb->get_results("SELECT id, deal_id FROM $T WHERE send_mode = 'gallery' AND sent_at IS NULL AND (bid IS NOT NULL OR (req IS NOT NULL AND number = '')) ORDER BY id LIMIT 20", ARRAY_A) as $r) {
 		if ((string) (get_option(CP_PANEL_TRACK . (int) $r['deal_id'], array())['gl'] ?? '') === '1') { cp_bil_send((int) $r['id']); }
 	}
-	foreach ((array) $wpdb->get_results("SELECT id, profile, bid FROM $T WHERE bid IS NOT NULL AND profile = 'KFT' AND pay NOT IN ('paid') AND (checked_at IS NULL OR checked_at < NOW() - INTERVAL 1 HOUR) AND created_at > NOW() - INTERVAL 120 DAY ORDER BY checked_at LIMIT 15", ARRAY_A) as $r) {
+	foreach ((array) $wpdb->get_results("SELECT id, profile, bid, deal_id FROM $T WHERE bid IS NOT NULL AND profile = 'KFT' AND pay NOT IN ('paid') AND (checked_at IS NULL OR checked_at < NOW() - INTERVAL 1 HOUR) AND created_at > NOW() - INTERVAL 120 DAY ORDER BY checked_at LIMIT 15", ARRAY_A) as $r) {
 		$x = cp_bil_req($r['profile'], 'GET', '/documents/' . (int) $r['bid']);
 		$u = array('checked_at' => gmdate('Y-m-d H:i:s'));
 		if (!is_wp_error($x)) { $u['pay'] = (string) ($x['payment_status'] ?? ''); if (!empty($x['invoice_number'])) { $u['number'] = (string) $x['invoice_number']; } if (!empty($x['paid_date'])) { $u['pay_at'] = substr((string) $x['paid_date'], 0, 10) . ' 12:00:00'; } }
 		$wpdb->update($T, $u, array('id' => (int) $r['id']));
+		if (($u['pay'] ?? '') === 'paid') { cp_bil_mark_paid((int) $r['deal_id']); }
+	}
+}
+/* v1.93: kifizetett bizonylat → a dealen „Bejött az utalás? = Igen” (a Salesmate-be is), a Követés díjbekérő-pipája „ok” – így a kintlévőség-riasztás sem jelez tovább */
+function cp_bil_mark_paid($deal_id) {
+	if ($deal_id <= 0) { return; }
+	$tr = get_option(CP_PANEL_TRACK . $deal_id, array()); if (!is_array($tr)) { $tr = array(); }
+	if (($tr['dj'] ?? '') !== 'ok') { $tr['dj'] = 'ok'; update_option(CP_PANEL_TRACK . $deal_id, $tr, false); }
+	global $wpdb;
+	$cur = function_exists('cp_crm_t') ? (string) $wpdb->get_var($wpdb->prepare('SELECT paid FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal_id)) : '';
+	if ($cur !== 'Igen' && function_exists('cp_crm_save_data') && !empty(cp_panel_opts()['stage_write'])) {
+		$r = cp_crm_save_data($deal_id, array('paid' => 'Igen'), array());
+		if (is_wp_error($r) && function_exists('cp_audit_add')) { cp_audit_add('szamlazas', 'paid_sync', 'Fizetés visszaírása sikertelen', 'deal:' . $deal_id, $r->get_error_message()); }
 	}
 }
 

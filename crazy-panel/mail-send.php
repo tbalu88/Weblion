@@ -137,9 +137,11 @@ function cp_send_ajax() {
 	$deal = (int) ($_POST['deal'] ?? 0) ?: ($t ? (int) $t['deal_id'] : 0);
 	$vals = cp_mail_values($deal);
 	/* v1.59: a {{Deal.ugyfelportal_link}} mindig friss, működő portál-link (a régi linkek nem kérhetők vissza) */
-	if ($deal && function_exists('cp_plk_ready') && cp_plk_ready() && stripos((string) wp_unslash($_POST['body'] ?? '') . (string) wp_unslash($_POST['subject'] ?? ''), 'ugyfelportal_link') !== false) {
+	/* v1.93: a {{portal.link}} változó is (eddig a Salesmate régi mezőjét olvasta, ami üres vagy elavult lehetett) */
+	$pv = (string) wp_unslash($_POST['body'] ?? '') . (string) wp_unslash($_POST['subject'] ?? '');
+	if ($deal && function_exists('cp_plk_ready') && cp_plk_ready() && (stripos($pv, 'ugyfelportal_link') !== false || stripos($pv, 'portal.link') !== false)) {
 		$pp = cp_portal_get_by_deal((string) $deal);
-		if ($pp) { $u = cp_portal_issue_link($pp); if (!is_wp_error($u)) { $vals['Deal.ugyfelportal_link'] = $u; } }
+		if ($pp) { $u = cp_portal_issue_link($pp); if (!is_wp_error($u)) { $vals['Deal.ugyfelportal_link'] = $u; $vals['portal.link'] = $u; } }
 	}
 	$subj = trim(cp_mail_render(sanitize_text_field(wp_unslash($_POST['subject'] ?? '')), $vals, false));
 	if ($subj === '') { cp_el_err('Add meg a tárgyat.'); }

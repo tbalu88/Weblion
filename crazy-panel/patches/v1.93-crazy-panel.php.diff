@@ -1,0 +1,31 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-02 07:42:41.563779993 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v64/crazy-panel.php	2026-11-02 07:51:16.678927168 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.92.0');
++define('CP_PANEL_VER', '1.93.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -902,6 +902,8 @@
+ function cp_panel_flush_cache() {
+ 	global $wpdb;
+ 	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_cp\\_panel\\_d\\_%' OR option_name LIKE '\\_transient\\_timeout\\_cp\\_panel\\_d\\_%'");
++	/* v1.93: a portál napi háttérfoglaltsága is (különben a portál még 5 percig a régi foglaltságot mutatja) */
++	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_cp\\_portal\\_bgday\\_%' OR option_name LIKE '\\_transient\\_timeout\\_cp\\_portal\\_bgday\\_%'");
+ }
+ 
+ 
+@@ -1077,7 +1079,10 @@
+ 			wp_send_json_error(array('msg' => 'A Salesmate nem fogadta el ezt az értéket (jelenleg: „' . $now . '”). Lehet, hogy a Háttér mező legördülő listájában nincs ilyen opció.'), 502);
+ 		}
+ 	}
++	/* v1.93: a panel saját deal-táblája és az ügyfélportál is azonnal frissüljön (különben a deal-adatlap és a portál a következő szinkronig a régit mutatja) */
++	if (!is_wp_error($chk) && isset($d) && is_array($d) && function_exists('cp_crm_store')) { cp_crm_store('deal', array($d), 'get'); }
+ 	cp_panel_flush_cache();
++	if (function_exists('cp_portal_get_by_deal') && function_exists('cp_portal_sm_refresh') && function_exists('cp_portal_db_ready') && cp_portal_db_ready()) { $pp = cp_portal_get_by_deal((string) $id); if ($pp) { cp_portal_sm_refresh($pp, 0); } }
+ 	wp_send_json_success(array('id' => $id, 'bg' => $now !== null ? $now : $bg, 'verified' => $now !== null));
+ }
+ 
