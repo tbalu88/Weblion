@@ -1,0 +1,19 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-02 09:47:47.970014570 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v67/crazy-panel.php	2026-11-02 13:41:19.281367583 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.95.0');
++define('CP_PANEL_VER', '1.96.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3722,6 +3722,7 @@
+ require_once __DIR__ . '/settings-x-defs.php';
+ require_once __DIR__ . '/estimate.php';
+ require_once __DIR__ . '/estimate-ec.php';
++require_once __DIR__ . '/company-suggest.php';
+ require_once __DIR__ . '/capacity.php';
+ require_once __DIR__ . '/portal-link.php';
+ require_once __DIR__ . '/dashboard.php';

@@ -905,6 +905,36 @@
 		const i = STAGES.indexOf(d.stage);
 		return '<div class="d3-stages' + (d.status === 'Won' ? ' won' : d.status === 'Lost' ? ' lost' : '') + '">' + STAGES.map((s, k) => '<button type="button" data-stg="' + esc(s) + '" class="' + (k < i ? 'done' : k === i ? 'cur' : '') + '"' + (W && d.status === 'Open' && !d.deleted_at && k !== i ? '' : ' disabled') + ' title="' + esc(s) + (W && d.status === 'Open' && k !== i ? ' – kattints az áthelyezéshez' : '') + '"><span>' + esc(s) + '</span></button>').join('') + '</div>';
 	}
+	async function coSuggest(box, did, reload) {
+		let r;
+		try { r = await post('cp_crm_co_suggest', { id: did }); } catch (e) { return; }
+		if (!box.isConnected || !r || r.why !== 'ok') return;
+		const rows = r.rows || [];
+		const form = (n, w) => {
+			box.innerHTML = '<div class="d3-cosf"><label>Cégnév<input type="text" data-cn maxlength="190" value="' + esc(n || '') + '"></label><label>Weboldal<input type="text" data-cw maxlength="255" value="' + esc(w || '') + '"></label>' +
+				'<div class="d3-cosb"><button type="button" class="cpx-btn" data-cok>Létrehozás és hozzárendelés</button><button type="button" class="cpx-btn ghost" data-cno>Mégse</button></div><small>Új cég jön létre a Salesmate-ben (ha már van ilyen nevű, azt kapja meg), és a kontakthoz és a deal-hez is hozzárendelem.</small></div>';
+			const i = box.querySelector('[data-cn]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+			box.querySelector('[data-cno]').addEventListener('click', draw);
+			box.querySelector('[data-cok]').addEventListener('click', () => apply({ name: i.value.trim(), website: box.querySelector('[data-cw]').value.trim() }, box.querySelector('[data-cok]')));
+		};
+		const apply = async (p, btn) => {
+			if (p.name !== undefined && p.name.length < 2) { toast('Add meg a cég nevét.', true); return; }
+			if (btn) { btn.disabled = true; btn.textContent = 'Mentés…'; }
+			try { const o = await post('cp_crm_co_apply', Object.assign({ id: did }, p)); toast(o.warn ? 'Hozzárendelve, de: ' + o.warn : 'A cég hozzárendelve a kontakthoz és a deal-hez.', !!o.warn); reload(); }
+			catch (e) { toast(e.message, true); if (btn) { btn.disabled = false; btn.textContent = 'Újra'; } }
+		};
+		function draw() {
+			box.innerHTML = '<div class="d3-cosh">✨ Javasolt cég <small>@' + esc(r.dom) + '</small></div>' +
+				(rows.length ? rows.map((x, k) => '<div class="d3-cosr"><span><b>' + esc(x.n) + '</b><small>' + esc(x.src) + '</small></span><button type="button" class="cpx-btn" data-cosk="' + k + '" title="' + (x.id ? 'Hozzárendelés ehhez a meglévő céghez' : 'Átnézed a nevet, majd létrehozod') + '">' + (x.id ? '✓ Hozzárendelés' : '✓ Jóváhagyás…') + '</button></div>').join('') : '<p class="cpx-muted">Az aláírásból és a weboldalból nem találtam cégnevet.</p>') +
+				'<button type="button" class="d3-cosm" data-cosm>' + (rows.length ? 'Más név megadása' : '+ Cég megadása') + '</button>';
+			box.querySelectorAll('[data-cosk]').forEach(b => b.addEventListener('click', () => {
+				const x = rows[Number(b.dataset.cosk)];
+				if (x.id) apply({ co: x.id }, b); else form(x.n, x.w);
+			}));
+			box.querySelector('[data-cosm]').addEventListener('click', () => form('', 'https://' + r.dom));
+		}
+		draw();
+	}
 	async function openDeal(id, back, fromHist) {
 		if (!fromHist) pushDeal(id);
 		if (S.pend && S.pend.fresh && S.pend.fresh[id]) { const lid = S.pend.fresh[id]; delete S.pend.fresh[id]; post('cp_lead_set', { id: lid, st: 'seen' }).catch(() => {}); if (S.mode === 'board' && S.board) setTimeout(redrawBoard, 0); }
@@ -944,7 +974,7 @@
 			'<section class="d3-c"><h4>Kontakt</h4>' + (c ? '<a href="#" class="d3-who" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span><span><b>' + esc(c.name || c.email) + '</b><small>' + (otherCt.length ? (otherCt.length + 1) + ' deal · ' + (x.ct_stats ? x.ct_stats.won : 0) + ' megnyert' : 'első deal') + '</small></span></a><dl class="crm-dl">' +
 				(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a></dd>' : '') +
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
-			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>') + '</section>' +
+			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>' + (W && c && c.email && !d.deleted_at ? '<div class="d3-cos" data-cos></div>' : '')) + '</section>' +
 			'<section class="d3-c"><h4>Adatok</h4>' + fieldGroups(d) + '<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section></aside>' +
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
@@ -989,6 +1019,9 @@
 				catch (e) { toast('A levél elment, de a deal frissítése nem sikerült: ' + e.message + ' – állítsd át kézzel.', true); }
 			} });
 		});
+		/* v1.96: cégjavaslat a domainből / aláírásból / weboldalból – csak jóváhagyás után kerül a Salesmate-be */
+		const cos = sh.querySelector('[data-cos]');
+		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
 		const kbl = sh.querySelector('[data-kbl]');

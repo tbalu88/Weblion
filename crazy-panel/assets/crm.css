@@ -486,3 +486,20 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-pdiff>b{display:block;margin-bottom:4px;color:#6E5600}
 .d3-pdr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0}
 .d3-pdr small{color:#8A8E96}
+/* v1.96: cégjavaslat a Cég kártyán */
+.d3-cos{margin-top:10px;border:1px dashed #D9CFF5;background:#FAF8FF;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.d3-cos:empty{display:none}
+.d3-cosh{font-weight:700;font-size:13px;color:#4B3A8C}
+.d3-cosh small{font-weight:500;color:var(--mu);margin-left:4px}
+.d3-cosr{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.d3-cosr>span{display:flex;flex-direction:column;min-width:0}
+.d3-cosr b{font-size:14px;overflow-wrap:anywhere}
+.d3-cosr small{font-size:11.5px;color:var(--mu)}
+.d3-cosr .cpx-btn{height:32px;padding:0 11px;font-size:12.5px;flex:none}
+.d3-cosm{align-self:flex-start;background:none;border:0;padding:0;color:#2F6FDB;font:600 12.5px Inter,sans-serif;cursor:pointer}
+.d3-cosf{display:flex;flex-direction:column;gap:8px}
+.d3-cosf label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mu)}
+.d3-cosf input{height:36px;border:1px solid var(--li);border-radius:9px;padding:0 10px;font:500 14px Inter,sans-serif;color:inherit;background:#fff}
+.d3-cosf small{font-size:11.5px;color:var(--mu)}
+.d3-cosb{display:flex;gap:8px;flex-wrap:wrap}
+.d3-cosb .cpx-btn{height:34px;font-size:13px}
