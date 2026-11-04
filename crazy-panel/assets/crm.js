@@ -541,7 +541,7 @@
 		try {
 			const x = await post('cp_crm_move', Object.assign({ id: id }, p));
 			if (x.row && S.board) { const i = S.board.rows.findIndex(y => y.id === id); if (i >= 0) S.board.rows[i] = x.row; }
-			toast(x.changed ? 'Kész – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már ott volt.');
+			toast(x.warn ? x.warn : (x.changed ? 'Kész – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már ott volt.'), !!x.warn);
 			ok = true;
 		} catch (e) {
 			if (r && old) Object.assign(r, old);

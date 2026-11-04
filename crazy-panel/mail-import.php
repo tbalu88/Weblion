@@ -232,13 +232,13 @@ function cp_imp_addr($list) {
 /* automatikus / tömeges levél? (hírlevél, értesítő, visszapattanó) */
 /* v1.89: '' = rendes levél, 'promo' = tömegküldés (hírlevél, leiratkozási linkes megkeresés) → Promóciók mappa, 'skip' = rendszerértesítés (nem kell) */
 function cp_imp_kind($hraw, $from) {
-	if (preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|info@facebookmail|.*@(facebookmail|linkedin|google|accounts\.google|salesmate))/i', $from)) { return 'skip'; }
+	if (preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?@|info@facebookmail|.*@(facebookmail\.com|linkedin\.com|google\.com|accounts\.google\.com|.*\.salesmate\.io|salesmatemail\.com))/i', $from)) { return 'skip'; }
 	return cp_imp_is_bulk($hraw, $from) ? 'promo' : '';
 }
 function cp_imp_is_bulk($hraw, $from) {
 	/* v1.88.4: a Feedback-ID és az X-Auto-Response-Suppress normál, gépi üzleti levelekben is szerepel (számlázó / beszerzési rendszerek) – ezek nem számítanak tömegesnek */
 	if (preg_match('/^(list-unsubscribe|list-id|auto-submitted:\s*auto|precedence:\s*(bulk|list|junk))/mi', $hraw)) { return true; }
-	return (bool) preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|news(letter)?|info@facebookmail|.*@(facebookmail|linkedin|google|accounts\.google|mailchimp|mailerlite|salesmate))/i', $from);
+	return (bool) preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?@|news(letter)?@|info@facebookmail|.*@(.*\.)?(facebookmail\.com|linkedin\.com|google\.com|mailchimp\.com|mcsv\.net|mailerlite\.com|salesmatemail\.com|salesmate\.io)$)/i', $from);
 }
 
 /* ------------------------------------------------------------ v1.98: levélszál ↔ deal
@@ -356,7 +356,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
-	if (!$out) {
+	if (!$out && !(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE thread_id = %d AND dir = 'out' AND status <> 'idézetből' AND sent_at <= %s", (int) $t['id'], $at))) {
+		/* v1.99.2: csak ha a szálban még nincs meg a saját (panelből vagy az Elküldöttből átvett) levelünk – különben kétszer látszana */
 		$qr = cp_imp_quoted_reply($acc['plain'] ?? '', $acc['html'] ?? null);
 		if ($qr) {
 			$qmid = md5('q|' . $tkey . '|' . mb_strtolower(preg_replace('/\W+/u', '', mb_substr($qr['text'], 0, 400))));
@@ -372,11 +373,16 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
 	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
 	if ($live && !$out && !$promo && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
+	/* v1.99.2: az ügyfél új levele mindig olvasatlanná teszi a szálat – akkor is, ha késve kézbesítették (régebbi dátummal) */
+	if ($live && !$out && !$promo) { $upd['seen_at'] = null; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	/* v1.86: a szál követői értesítést kapnak az ügyfél új leveléről (csengő; ha be van állítva, Pumble is) – csak friss, élő beérkezésnél */
-	if ($live && !$out && !$promo && ($t['folder'] ?? '') !== 'spam' && !empty($t['followers']) && $ts > time() - 3 * DAY_IN_SECONDS && function_exists('cp_notify')) {
-		foreach (array_unique(array_filter(array_map('intval', explode(',', (string) $t['followers'])))) as $fu) {
+	/* v1.99.2: a követők mellett a szál felelőse is értesítést kap; a régiség a beérkezés idejéhez mérve (késve kézbesített levélnél is szól) */
+	$as = (int) $wpdb->get_var($wpdb->prepare("SELECT assignee_uid FROM $T WHERE id = %d", (int) $t['id']));
+	$notif = array_unique(array_filter(array_merge(array_map('intval', explode(',', (string) ($t['followers'] ?? ''))), array($as))));
+	if ($live && !$out && !$promo && ($t['folder'] ?? '') !== 'spam' && $notif && $ts > time() - 10 * DAY_IN_SECONDS && function_exists('cp_notify')) {
+		foreach ($notif as $fu) {
 			cp_notify($fu, 'mail_follow', 'új levelet írt a követett szálba: „' . mb_substr($subj !== '' ? $subj : '(nincs tárgy)', 0, 100) . '”', 'mail:' . (int) $t['id'], $f['n'] !== '' ? $f['n'] : $f['e']);
 		}
 	}

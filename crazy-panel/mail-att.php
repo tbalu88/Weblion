@@ -115,6 +115,22 @@ function cp_att_ajax_get() {
 	if (!$loc) { cp_att_fail('A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).'); }
 	$mb = cp_imp_open($loc[0]);
 	if (is_wp_error($mb)) { cp_att_fail('A postafiókhoz nem sikerült csatlakozni: ' . $mb->get_error_message(), 502); }
+	/* v1.99.2: a tárolt helyen tényleg ez a levél van-e (a szerver újraszámozhatja a leveleket) – különben újrakeresés Message-ID alapján */
+	if (!empty($m['mid'])) {
+		$hraw = (string) @imap_fetchheader($mb, $loc[1], FT_UID);
+		$hh = $hraw !== '' ? @imap_rfc822_parse_headers($hraw) : null;
+		$got = $hh && !empty($hh->message_id) ? md5(trim($hh->message_id)) : ($hraw !== '' ? md5($hraw) : '');
+		if ($got !== $m['mid']) {
+			imap_close($mb);
+			global $wpdb;
+			$wpdb->update(cp_mail_t('messages'), array('imap_folder' => '', 'imap_uid' => null), array('id' => (int) $m['id']));
+			$m['imap_folder'] = ''; $m['imap_uid'] = null;
+			$loc = cp_att_locate($m);
+			if (!$loc) { cp_att_fail('A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).'); }
+			$mb = cp_imp_open($loc[0]);
+			if (is_wp_error($mb)) { cp_att_fail('A postafiókhoz nem sikerült csatlakozni: ' . $mb->get_error_message(), 502); }
+		}
+	}
 	$parts = cp_att_parts($mb, $loc[1]);
 	/* elsősorban a sorszám, ha a név is egyezik; különben név szerint */
 	$p = isset($parts[$i]) && $parts[$i]['n'] === $a['n'] ? $parts[$i] : null;

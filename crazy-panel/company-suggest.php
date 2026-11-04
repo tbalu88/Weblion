@@ -143,6 +143,9 @@ function cp_cos_ajax_apply() {
 	$id = (int) ($_POST['id'] ?? 0);
 	$d = $wpdb->get_row($wpdb->prepare('SELECT id, contact_id, company_id FROM ' . cp_crm_t('deals') . ' WHERE id = %d AND deleted_at IS NULL', $id), ARRAY_A);
 	if (!$d) { cp_el_err('Nincs ilyen deal.', 404); }
+	/* v1.99.2: közben valaki már rendelt hozzá céget? (két kolléga egyszerre) – nem írjuk felül */
+	$cco = $d['contact_id'] ? (int) $wpdb->get_var($wpdb->prepare('SELECT company_id FROM ' . cp_crm_t('contacts') . ' WHERE id = %d', (int) $d['contact_id'])) : 0;
+	if ((int) $d['company_id'] || $cco) { cp_el_err('Ehhez a dealhez / kontakthoz közben már hozzárendeltek egy céget – frissítsd az adatlapot.'); }
 	$CO = cp_crm_t('companies');
 	$cid = (int) ($_POST['co'] ?? 0);
 	$warn = array();
@@ -154,15 +157,26 @@ function cp_cos_ajax_apply() {
 		$w = trim((string) wp_unslash($_POST['website'] ?? ''));
 		$w = $w === '' ? '' : mb_substr(esc_url_raw(preg_match('#^https?://#i', $w) ? $w : 'https://' . $w), 0, 255);
 		/* ha közben már van ilyen nevű cég, azt használjuk – ne legyen kettő */
-		$cid = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $CO WHERE deleted_at IS NULL AND LOWER(name) = LOWER(%s) LIMIT 1", $name));
+		/* azonos cég a cégforma / írásjelek / kis-nagybetű különbségeitől eltekintve („Foo Kft” = „Foo Kft.”) */
+		$cid = 0; $nk = cp_cos_norm($name);
+		$w1 = explode(' ', $nk)[0] ?? '';
+		if ($w1 !== '') {
+			foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, name FROM $CO WHERE deleted_at IS NULL AND name LIKE %s LIMIT 60", '%' . $wpdb->esc_like($w1) . '%'), ARRAY_A) as $c) { if (cp_cos_norm($c['name']) === $nk) { $cid = (int) $c['id']; break; } }
+		}
+		/* két kolléga egyszerre ugyanazt hozná létre: rövid zár */
+		if (!$cid && !add_option('cp_cos_lk_' . md5($nk), time(), '', 'no')) {
+			if ((int) get_option('cp_cos_lk_' . md5($nk)) > time() - 60) { cp_el_err('Ezt a céget épp most hozza létre valaki – frissíts pár másodperc múlva.'); }
+			update_option('cp_cos_lk_' . md5($nk), time(), false);
+		}
 		if (!$cid) {
 			$r = cp_sm_request('POST', '/apis/company/v4', array_filter(array('name' => $name, 'website' => $w), function ($v) { return $v !== ''; }));
-			if (is_wp_error($r)) { cp_el_err('A céget nem sikerült létrehozni a Salesmate-ben: ' . $r->get_error_message(), 502); }
+			if (is_wp_error($r)) { delete_option('cp_cos_lk_' . md5($nk)); cp_el_err('A céget nem sikerült létrehozni a Salesmate-ben: ' . $r->get_error_message(), 502); }
 			$cid = cp_crm_new_id($r);
-			if (!$cid) { cp_el_err('A cég létrejött, de a Salesmate nem adta vissza az azonosítóját – 10 percen belül megjelenik, akkor rendeld hozzá kézzel.', 502); }
+			if (!$cid) { delete_option('cp_cos_lk_' . md5($nk)); cp_el_err('A cég létrejött, de a Salesmate nem adta vissza az azonosítóját – 10 percen belül megjelenik, akkor rendeld hozzá kézzel.', 502); }
 		}
 		$g = cp_sm_request('GET', '/apis/company/v4/' . $cid);
 		if (!is_wp_error($g)) { cp_crm_store('company', array(isset($g['Data']) ? $g['Data'] : $g), 'get'); }
+		delete_option('cp_cos_lk_' . md5($nk));
 	}
 	/* kontakt */
 	if ($d['contact_id']) {
@@ -172,9 +186,10 @@ function cp_cos_ajax_apply() {
 	}
 	/* deal */
 	$p = cp_sm_request('PUT', '/apis/deal/v4/' . $id, array('primaryCompany' => $cid));
-	if (is_wp_error($p)) { $warn[] = 'a deal-hez nem sikerült hozzárendelni (' . $p->get_error_message() . ')'; }
+	$dealok = !is_wp_error($p);
+	if (!$dealok) { $warn[] = 'a deal-hez nem sikerült hozzárendelni (' . $p->get_error_message() . ')'; }
 	elseif (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
-	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'company', 'old_val' => '', 'new_val' => (string) $wpdb->get_var($wpdb->prepare("SELECT name FROM $CO WHERE id = %d", $cid)), 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	if ($dealok && !$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'company_id' AND at >= %s", $id, gmdate('Y-m-d H:i:s', time() - 120)))) $wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'company', 'old_val' => '', 'new_val' => (string) $wpdb->get_var($wpdb->prepare("SELECT name FROM $CO WHERE id = %d", $cid)), 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	wp_send_json_success(array('co' => $cid, 'warn' => implode('; ', $warn)));
 }

@@ -70,12 +70,11 @@ function cp_portal_tick() {
 
 		// emlékeztetők: csak ha hiányzik kötelező, és a portál már létezett az emlékeztető időpontjában
 		if ($missing && $now < $di['deadline']) {
-			foreach (array('reminder_1', 'reminder_2') as $type) {
-				$at = $di[$type];
-				if ($at && $now >= $at && $created <= $at) {
-					cp_portal_notify_once($p, $type, 'email', function () use ($p, $type) { return cp_portal_send_client_mail($p, $type); });
-				}
-			}
+			/* v1.99.2: kiesés után ne menjen ki egyszerre mindkét emlékeztető – csak a legutóbbi esedékes; a lekésett első kimarad */
+			$due = '';
+			foreach (array('reminder_1', 'reminder_2') as $type) { $at = $di[$type]; if ($at && $now >= $at && $created <= $at) { $due = $type; } }
+			if ($due === 'reminder_2' && $di['reminder_1']) { cp_portal_notify_once($p, 'reminder_1', 'email', function () { return 'kihagyva – a második emlékeztető ment ki helyette'; }); }
+			if ($due !== '') { cp_portal_notify_once($p, $due, 'email', function () use ($p, $due) { return cp_portal_send_client_mail($p, $due); }); }
 		}
 		// határidő után az első futáskor: hiányos adatlap → iroda, Pumble
 		if ($missing && $now >= $di['deadline']) {
@@ -142,9 +141,18 @@ function cp_portal_retention($today = null) {
 
 	$cut30 = cp_portal_ymd_add($today, -CP_PORTAL_KEEP_FORM_DAYS);
 	$cut3y = cp_portal_ymd_add($today, -CP_PORTAL_KEEP_CONSENT_YEARS * 365 - 1);
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT id, event_date FROM $P WHERE event_date < %s", $cut30));
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT id, event_date, deal_id FROM $P WHERE event_date < %s", $cut30));
 	foreach ($rows as $p) {
 		$pid = (int) $p->id;
+		/* v1.99.2: ha a dealen közben későbbre tették a rendezvényt (a portál még a régi dátumot tudja), nem törlünk – frissítjük a portált */
+		if (function_exists('cp_crm_t') && !empty($p->deal_id)) {
+			$nd = (string) $wpdb->get_var($wpdb->prepare('SELECT event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d AND deleted_at IS NULL', (int) $p->deal_id));
+			if ($nd !== '' && $nd >= $cut30) {
+				$pp = function_exists('cp_portal_get') ? cp_portal_get($pid) : null;
+				if ($pp && function_exists('cp_portal_sm_refresh')) { cp_portal_sm_refresh($pp, 0); }
+				continue;
+			}
+		}
 		$answers = cp_portal_answers($pid);
 		$consent = isset($answers['retention_consent']['given']) && $answers['retention_consent']['given'];
 		$form_due = !$consent || $p->event_date < $cut3y;

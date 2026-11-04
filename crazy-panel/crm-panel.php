@@ -287,7 +287,20 @@ function cp_crm_ajax_move() {
 	/* ügyfélportál: a „Szerződés aláírva” szakaszba lépéskor (mint a Követés fülön) */
 	$signed = cp_panel_lines($o['signed_stages']);
 	if ($to !== '' && $signed && cp_panel_lc($to) === cp_panel_lc($signed[0]) && function_exists('cp_portal_defer')) { cp_portal_defer(function () use ($id) { cp_portal_on_stage($id, '', 'panel'); }); }
-	wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => true));
+	/* v1.99.2: foglalt szakaszba / megnyertre lépéskor: a deal háttere aznap szabad-e még (két deal ugyanazzal az egyetlen háttérrel) */
+	$warn = '';
+	$booked = array_map('cp_panel_lc', cp_panel_lines($o['booked_stages']));
+	if ((($to !== '' && in_array(cp_panel_lc($to), $booked, true)) || $st === 'Won') && $o['f_bg'] !== '' && function_exists('cp_portal_bg_taken')) {
+		$bg = cp_panel_str(cp_panel_get($chk, $o['f_bg'])); $day = cp_panel_norm_date(cp_panel_get($chk, $o['f_date']));
+		$k = cp_panel_lc($bg);
+		if ($k !== '' && $k !== 'még nem tudom' && $day !== '') {
+			$qty = 0; foreach (cp_panel_bg_list() as $b) { if (cp_panel_lc($b['name']) === $k) { $qty = (int) $b['qty']; } }
+			$taken = cp_portal_bg_taken($day, (string) $id);
+			if ($taken === null) { $warn = 'A háttér („' . $bg . '”) foglaltságát most nem sikerült ellenőrizni – nézd meg a Hátterek fülön.'; }
+			elseif ($qty > 0 && isset($taken[$k]) && $taken[$k] >= $qty) { $warn = '⚠ A(z) „' . $bg . '” háttér ' . $day . '-n már foglalt egy másik dealnél – egyeztessétek (Hátterek fül).'; }
+		}
+	}
+	wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => true, 'warn' => $warn));
 }
 
 function cp_crm_row_out($id) {

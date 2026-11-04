@@ -59,6 +59,7 @@ function cp_ai_call($system, $messages, $schema = null, $max_tokens = 8000) {
 /* ------------------------------------------------------------ álnevesítés */
 class CP_AI_Pseudo {
 	public $map = array();   // jelölő => valódi érték
+	public $pre = '';        // v1.99.2: előtag (a minta-levelek külön jelölőkészlete: „PÉLDA-”), hogy ne keveredjen a mostani ügyfélével
 	private $rev = array();  // valódi érték (kisbetűs) => jelölő
 	private $n = array();
 	private $names = array();
@@ -74,7 +75,7 @@ class CP_AI_Pseudo {
 		$k = mb_strtolower($val);
 		if (isset($this->rev[$k])) { return $this->rev[$k]; }
 		$this->n[$kind] = ($this->n[$kind] ?? 0) + 1;
-		$t = '[' . $kind . $this->n[$kind] . ']';
+		$t = '[' . $this->pre . $kind . $this->n[$kind] . ']';
 		$this->map[$t] = $val; $this->rev[$k] = $t;
 		return $t;
 	}
@@ -83,7 +84,7 @@ class CP_AI_Pseudo {
 		$s = preg_replace_callback('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/u', function ($m) { return $this->tok('EMAIL', $m[0]); }, $s);
 		$s = preg_replace_callback('/\b\d{8}-\d{8}(?:-\d{8})?\b|\bHU\d{2}(?:\s?\d{4}){6}\b/u', function ($m) { return $this->tok('SZÁMLASZÁM', $m[0]); }, $s);
 		$s = preg_replace_callback('/\b\d{8}-\d-\d{2}\b/u', function ($m) { return $this->tok('ADÓSZÁM', $m[0]); }, $s);
-		$s = preg_replace_callback('/(?<![\d\w])(?:\+36|0036|06)[\s\/\-]?\(?\d{1,2}\)?[\s\/\-]?\d{3}[\s\-]?\d{3,4}(?![\d])/u', function ($m) { return $this->tok('TEL', $m[0]); }, $s);
+		$s = preg_replace_callback('/(?<![\d\w])(?:\+36|0036|06)[\s\/\-]?\(?\d{1,2}\)?[\s\/\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2,3}(?![\d])|(?<![\d\w])(?:\+36|0036|06)[\s\/\-]?\(?\d{1,2}\)?[\s\/\-]?\d{3}[\s\-]?\d{3,4}(?![\d])|(?<![\d\w])\+(?!36)\d{1,3}[\s\-]?\(?\d{1,4}\)?(?:[\s\-]?\d{2,4}){2,4}(?![\d])/u', function ($m) { return $this->tok('TEL', $m[0]); }, $s);
 		/* a hosszabb nevek előbb, hogy a „Kiss Anna” egyben cserélődjön */
 		usort($this->names, function ($a, $b) { return mb_strlen($b[0]) - mb_strlen($a[0]); });
 		foreach ($this->names as $x) {
@@ -122,6 +123,10 @@ function cp_ai_text($html, $max = 4000) {
  * rá adott válaszunkkal – legfeljebb 3 pár, más szálakból. */
 function cp_ai_similar($tid, $text, $P) {
 	global $wpdb;
+	/* v1.99.2: a korábbi (más ügyfelekkel folytatott) levélváltások saját jelölőket kapnak ([PÉLDA-…]), amelyeket a panel
+	 * soha nem cserél vissza valódi adatra – így egy másik ügyfél neve / elérhetősége nem kerülhet a piszkozatba */
+	$Q = new CP_AI_Pseudo(); $Q->pre = 'PÉLDA-';
+	foreach (cp_mail_people() as $pp) { $Q->add_name($pp['n'], 'KOLLÉGA'); }
 	$M = cp_mail_t('messages'); $T = cp_mail_t('threads');
 	$words = array_slice(array_unique(array_filter(preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($text)), function ($w) { return mb_strlen($w) >= 4; })), 0, 60);
 	if (count($words) < 3) { return array(); }
@@ -135,8 +140,8 @@ function cp_ai_similar($tid, $text, $P) {
 		if (!$rep) { continue; }
 		$seen[$h['thread_id']] = 1;
 		$cn = (string) $wpdb->get_var($wpdb->prepare("SELECT contact_name FROM $T WHERE id = %d", $h['thread_id']));
-		if ($cn !== '') { $P->add_name($cn, 'NÉV'); }
-		$out[] = "ÜGYFÉL ÍRTA:\n" . $P->hide(cp_ai_text($h['body'], 1500)) . "\nMI VÁLASZOLTUNK:\n" . $P->hide(cp_ai_text($rep['body'], 2500));
+		if ($cn !== '') { $Q->add_name($cn, 'NÉV'); }
+		$out[] = "ÜGYFÉL ÍRTA:\n" . $Q->hide(cp_ai_text($h['body'], 1500)) . "\nMI VÁLASZOLTUNK:\n" . $Q->hide(cp_ai_text($rep['body'], 2500));
 	}
 	return $out;
 }
@@ -167,7 +172,7 @@ function cp_ai_draft($tid, $wish = '') {
 	$msgs = array_slice((array) $x['msgs'], -12);
 	$conv = array();
 	foreach ($msgs as $m) {
-		$conv[] = '--- ' . ($m['dir'] === 'in' ? 'ÜGYFÉL ÍRTA' : 'MI ÍRTUK') . ' (' . $m['sent_at'] . ')' . ($m['attachments'] ? ' [melléklet: ' . implode(', ', array_map(function ($a) { return $a['n'] ?? ''; }, $m['attachments'])) . ']' : '') . "\n" . $P->hide(cp_ai_text($m['body']));
+		$conv[] = '--- ' . ($m['dir'] === 'in' ? 'ÜGYFÉL ÍRTA' : 'MI ÍRTUK') . ' (' . $m['sent_at'] . ')' . ($m['attachments'] ? ' [melléklet: ' . $P->hide(implode(', ', array_map(function ($a) { return $a['n'] ?? ''; }, $m['attachments']))) . ']' : '') . "\n" . $P->hide(cp_ai_text($m['body']));
 	}
 	$notes = array();
 	foreach ((array) $x['notes'] as $n) { $notes[] = '- ' . $P->hide($n['body']); }
@@ -182,7 +187,7 @@ function cp_ai_draft($tid, $wish = '') {
 	}
 	$sys_rules = "Az EventCrazy csapatának tapasztalt ügyfélkapcsolati munkatársa vagy. Az EventCrazy rendezvényszolgáltató: fotóautomaták, fotófalak és hátterek, 360 spinner, szelfigép, AI-fotó, DJ, karaoke és egyéb rendezvényes szolgáltatások (márkái: EventCrazy, Crazyphoto, Studio Frames).\n" .
 		"Feladat: írj válaszpiszkozatot az ügyfél legutóbbi levelére, magyarul, abban a hangnemben, ahogy a csapat szokott (a sablonok és a korábbi válaszaink stílusát kövesd: kedves, közvetlen, segítőkész, rövid bekezdések). A megszólítást és a tegezés / magázás formáját az ügyfél leveléhez és a korábbi váltáshoz igazítsd.\n" .
-		"Szabályok:\n- Csak olyan tényt, árat, dátumot, szabad időpontot vagy feltételt írj, ami a levelekben, a jegyzetekben, a deal adataiban vagy a sablonokban szerepel. Ami hiányzik, azt jelöld így: [KITÖLTENDŐ: mit kell ide írni], és vedd fel a „missing” listába.\n- A [NÉV1], [ÜGYFÉL1], [KOLLÉGA1], [EMAIL1], [TEL1] stb. jelölők valódi adatokat takarnak: pontosan így, változatlanul használd őket, ne találj ki helyettük nevet vagy elérhetőséget.\n- Ha egy sablon illik a helyzethez, arra építs (a {{változó}} jelölőket a deal adataiból töltsd ki, ha megvannak, különben [KITÖLTENDŐ]).\n- Ne ígérj kedvezményt, ne fogadj el lemondást vagy visszatérítést, és ne vállalj kötelezettséget, ami nincs leírva – ilyenkor írd, hogy egyeztetünk, és jelezd a „notes”-ban.\n- A belső jegyzetek a csapat saját megjegyzései: felhasználhatod őket, de ne idézd szó szerint az ügyfélnek.\n- A választ egyszerű HTML-ben add: <p> bekezdések, szükség esetén <ul><li>, <b>. Aláírásként: „Üdvözlettel:<br>[ALÁÍRÓ]” (a nevet a panel írja be).\n" .
+		"Szabályok:\n- Csak olyan tényt, árat, dátumot, szabad időpontot vagy feltételt írj, ami a levelekben, a jegyzetekben, a deal adataiban vagy a sablonokban szerepel. Ami hiányzik, azt jelöld így: [KITÖLTENDŐ: mit kell ide írni], és vedd fel a „missing” listába.\n- A [NÉV1], [ÜGYFÉL1], [KOLLÉGA1], [EMAIL1], [TEL1] stb. jelölők valódi adatokat takarnak: pontosan így, változatlanul használd őket, ne találj ki helyettük nevet vagy elérhetőséget.\n- A [PÉLDA-…] jelölők a korábbi, MÁS ügyfelekkel folytatott levelekből valók: ezeket soha ne használd a válaszban.\n- Ha egy sablon illik a helyzethez, arra építs (a {{változó}} jelölőket a deal adataiból töltsd ki, ha megvannak, különben [KITÖLTENDŐ]).\n- Ne ígérj kedvezményt, ne fogadj el lemondást vagy visszatérítést, és ne vállalj kötelezettséget, ami nincs leírva – ilyenkor írd, hogy egyeztetünk, és jelezd a „notes”-ban.\n- A belső jegyzetek a csapat saját megjegyzései: felhasználhatod őket, de ne idézd szó szerint az ügyfélnek.\n- A választ egyszerű HTML-ben add: <p> bekezdések, szükség esetén <ul><li>, <b>. Aláírásként: „Üdvözlettel:<br>[ALÁÍRÓ]” (a nevet a panel írja be).\n" .
 		($o['style'] !== '' ? "A csapat külön kérése a stílusra:\n" . $o['style'] . "\n" : '');
 	$system = array(
 		array('type' => 'text', 'text' => $sys_rules),

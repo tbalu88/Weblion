@@ -66,7 +66,16 @@ function cp_portal_mail_name($n) {
  * A link minden levélhez újonnan készül (az adatbázisban csak hash van, a régi linket nem tudjuk visszaadni). */
 function cp_portal_send_client_mail($portal, $type, $force = false) {
 	if (!$force && cp_portal_mode() === 'off') { return new WP_Error('off', 'Az ügyfélportál ki van kapcsolva – levél nem megy ki.'); }
-	$portal = cp_portal_sm_refresh($portal, 3600);
+	/* v1.99.2: emlékeztető előtt friss adat, és ne menjen elvesztett / törölt deal ügyfelének */
+	$auto = in_array($type, array('reminder_1', 'reminder_2', 'overdue'), true);
+	$portal = cp_portal_sm_refresh($portal, $auto ? 0 : 3600);
+	if ($auto && function_exists('cp_crm_t')) {
+		global $wpdb;
+		$dr = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $portal->deal_id), ARRAY_A);
+		if (!$dr || !empty($dr['deleted_at'])) { return new WP_Error('gone', 'A deal már nincs meg (törölték vagy összevonták) – emlékeztető nem megy ki.'); }
+		if ($dr['status'] === 'Lost') { return new WP_Error('lost', 'A deal elvesztett – emlékeztető nem megy ki.'); }
+		if (!empty($portal->event_date) && (string) $portal->event_date < cp_portal_today()) { return new WP_Error('past', 'A rendezvény már elmúlt – emlékeztető nem megy ki.'); }
+	}
 	$to = isset($portal->sm['email']) ? (string) $portal->sm['email'] : '';
 	if ($to === '') { return new WP_Error('no_email', 'A deal kapcsolattartójának nincs e-mail-címe a Salesmate-ben.'); }
 	$link = cp_portal_issue_link($portal);
