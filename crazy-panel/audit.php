@@ -62,7 +62,7 @@ add_action('cp_audit_logout', function () { cp_audit_add('rendszer', 'logout', '
 /* ------------------------------------------------------------ a módosító panelműveletek: terület, címke, összefoglaló */
 function cp_audit_actions() {
 	return array(
-		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'),
+		'cp_crm_move' => array('deal', 'Szakaszváltás / állapot'), 'cp_crm_set' => array('deal', 'Tömeges mezőírás'), 'cp_crm_delete' => array('deal', 'Deal törlése'), 'cp_crm_people_delete' => array('deal', 'Kontaktok / cégek törlése'),
 		'cp_crm_entity_save' => array('deal', 'Kontakt / cég szerkesztése'), 'cp_crm_co_apply' => array('deal', 'Cég hozzárendelése (javaslatból)'),
 		'cp_crm_save' => array('deal', 'Deal szerkesztése'), 'cp_crm_note_add' => array('deal', 'Jegyzet a dealen'), 'cp_crm_note_del' => array('deal', 'Deal-jegyzet törlése'), 'cp_crm_act_save' => array('deal', 'Tevékenység mentése'), 'cp_crm_act_done' => array('deal', 'Tevékenység kész / visszanyitva'), 'cp_crm_create' => array('deal', 'Új deal'), 'cp_crm_sync' => array('deal', 'Kézi szinkron'),
 		'cp_mail_note_add' => array('levelezes', 'Jegyzet a levélszálon'), 'cp_mail_note_del' => array('levelezes', 'Jegyzet törlése'), 'cp_mail_thread_set' => array('levelezes', 'Levélszál módosítása'),

@@ -203,3 +203,60 @@ function cp_srch_people_data($a) {
 	unset($r);
 	return array('rows' => $rows, 'total' => $total, 'p' => $p, 'n' => $n, 'kind' => $kind);
 }
+
+/* ------------------------------------------------------------ v2.2: kijelölt kontaktok / cégek törlése (csak admin)
+ * A Salesmate-ből is töröl (onnan a „Lomtár”-ból 30 napig visszaállítható). Kontaktnál a hozzá tartozó deal-ek csak
+ * akkor törlődnek, ha a kérés ezt kifejezetten kéri (deals=1); különben a deal-es kontakt kimarad. */
+add_action('wp_ajax_nopriv_cp_crm_people_delete', 'cp_srch_ajax_people_delete');
+add_action('wp_ajax_cp_crm_people_delete', 'cp_srch_ajax_people_delete');
+function cp_srch_ajax_people_delete() {
+	cp_crm_ajax_guard();
+	if (!cp_srch_can('kapcsolatok')) { cp_el_err('Ehhez a fülhöz nincs hozzáférésed.', 403); }
+	cp_admin_need();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	if ((string) wp_unslash($_POST['ok'] ?? '') !== 'TÖRLÉS') { cp_el_err('Hibás megerősítés.'); }
+	$kind = ($_POST['kind'] ?? '') === 'co' ? 'co' : 'ct';
+	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_POST['ids'] ?? '')))))), 0, 100);
+	if (!$ids) { cp_el_err('Nincs kijelölve semmi.'); }
+	$withDeals = !empty($_POST['deals']);
+	@set_time_limit(280);
+	global $wpdb; $D = cp_crm_t('deals'); $C = cp_crm_t('contacts'); $CO = cp_crm_t('companies');
+	$who = function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel';
+	$gone = function ($r) { $d = is_wp_error($r) ? null : (isset($r['Data']) ? $r['Data'] : $r); return is_wp_error($r) || !is_array($d) || empty($d['id']) || !empty($d['isDeleted']) || !empty($d['deletedAt']); };
+	$out = array('ok' => 0, 'deals' => 0, 'skip' => array(), 'err' => array());
+	$t0 = time();
+	foreach ($ids as $id) {
+		if (time() - $t0 > 240) { $out['err'][] = '#' . $id . ': időkorlát – a maradékot indítsd újra'; break; }
+		if ($kind === 'ct') {
+			$row = $wpdb->get_row($wpdb->prepare("SELECT id, name, email FROM $C WHERE id = %d AND deleted_at IS NULL", $id), ARRAY_A);
+			if (!$row) { continue; }
+			$dl = array_map('intval', (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE contact_id = %d AND deleted_at IS NULL", $id)));
+			if ($dl && !$withDeals) { $out['skip'][] = ($row['name'] ?: $row['email']) . ' (' . count($dl) . ' deal)'; continue; }
+			$bad = false;
+			foreach ($dl as $did) {
+				$r = cp_sm_request('DELETE', '/apis/deal/v4/' . $did);
+				if (is_wp_error($r) || !$gone(cp_sm_request('GET', '/apis/deal/v4/' . $did))) { $out['err'][] = 'deal #' . $did . ': ' . (is_wp_error($r) ? $r->get_error_message() : 'a Salesmate nem törölte'); $bad = true; continue; }
+				$wpdb->update($D, array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $did));
+				$wpdb->insert(cp_crm_t('history'), array('deal_id' => $did, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve (a kontakttal együtt)', 'by_user' => $who, 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+				$out['deals']++;
+			}
+			if ($bad) { $out['skip'][] = ($row['name'] ?: $row['email']) . ' (egy deal-je nem törlődött)'; continue; }
+			$r = cp_sm_request('DELETE', '/apis/contact/v4/' . $id);
+			if (is_wp_error($r) || !$gone(cp_sm_request('GET', '/apis/contact/v4/' . $id))) { $out['err'][] = ($row['name'] ?: '#' . $id) . ': ' . (is_wp_error($r) ? $r->get_error_message() : 'a Salesmate nem törölte'); continue; }
+			$wpdb->update($C, array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
+		} else {
+			$row = $wpdb->get_row($wpdb->prepare("SELECT id, name FROM $CO WHERE id = %d AND deleted_at IS NULL", $id), ARRAY_A);
+			if (!$row) { continue; }
+			$r = cp_sm_request('DELETE', '/apis/company/v4/' . $id);
+			if (is_wp_error($r) || !$gone(cp_sm_request('GET', '/apis/company/v4/' . $id))) { $out['err'][] = ($row['name'] ?: '#' . $id) . ': ' . (is_wp_error($r) ? $r->get_error_message() : 'a Salesmate nem törölte'); continue; }
+			$wpdb->update($CO, array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
+			/* a kapcsolódó kontaktok / deal-ek cég nélkül maradnak (a Salesmate is így teszi) */
+			$wpdb->query($wpdb->prepare("UPDATE $C SET company_id = NULL WHERE company_id = %d", $id));
+			$wpdb->query($wpdb->prepare("UPDATE $D SET company_id = NULL WHERE company_id = %d", $id));
+		}
+		$out['ok']++;
+	}
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success($out);
+}

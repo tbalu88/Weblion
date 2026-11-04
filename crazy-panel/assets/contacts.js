@@ -9,7 +9,10 @@
 	const money = v => !v ? '–' : Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft';
 	const ini = n => String(n || '').split(/[\s@]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 	const AVC = ['#F6B48F', '#93D5B4', '#A9C1F6', '#E3B5E6', '#F3D27F', '#9FD8E5', '#F2A5A5'];
-	const S = { kind: 'ct', q: '', so: 'recent', only: true, p: 0, data: null, err: '', main: null, seq: 0 };
+	const S = { kind: 'ct', q: '', so: 'recent', only: true, p: 0, data: null, err: '', main: null, seq: 0, sel: new Map() };
+	/* v2.2: kijelölés és törlés – csak admin, ha a Salesmate-be írás be van kapcsolva */
+	const DEL = C.role === 'admin' && !!(C.crm && C.crm.write);
+	function toast(t, bad) { let d = document.getElementById('cpx-toast'); if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); } d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 8000 : 4000); }
 	try { const k = JSON.parse(localStorage.getItem('cpx_people') || '{}'); if (k.kind === 'co' || k.kind === 'ct') S.kind = k.kind; if (typeof k.so === 'string') S.so = k.so; if (typeof k.only === 'boolean') S.only = k.only; } catch (e) { /* privát mód */ }
 	const save = () => { try { localStorage.setItem('cpx_people', JSON.stringify({ kind: S.kind, so: S.so, only: S.only })); } catch (e) { /* privát mód */ } };
 
@@ -31,7 +34,7 @@
 			'<input type="search" data-q placeholder="' + (S.kind === 'ct' ? 'Keresés: név, e-mail, telefon, város, cég' : 'Keresés: cégnév, weboldal') + '" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<select data-so aria-label="Rendezés">' + SORTS.map(x => '<option value="' + x[0] + '"' + (S.so === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
 			'<label class="crm-chk"><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
-		main.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { if (S.kind === b.dataset.k) return; S.kind = b.dataset.k; S.p = 0; save(); view(main); }));
+		main.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { if (S.kind === b.dataset.k) return; S.kind = b.dataset.k; S.p = 0; S.sel.clear(); save(); view(main); }));
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); S.p = 0; load(); }, 300); });
 		main.querySelector('[data-so]').addEventListener('change', e => { S.so = e.target.value; S.p = 0; save(); load(); });
@@ -47,20 +50,54 @@
 		if (my !== S.seq) return;
 		S.data = r;
 		const pages = Math.max(1, Math.ceil(r.total / r.n)), ct = r.kind === 'ct';
+		const allOn = r.rows.length && r.rows.every(x => S.sel.has(x.id));
 		body.innerHTML = '<div class="pp-n">' + r.total.toLocaleString('hu-HU') + (ct ? ' kontakt' : ' cég') + (pages > 1 ? ' · ' + (r.p + 1) + '. oldal / ' + pages : '') + '</div>' +
-			(r.rows.length ? '<div class="pp-tw"><table class="pp-t"><thead><tr><th>' + (ct ? 'Kontakt' : 'Cég') + '</th><th>' + (ct ? 'Cég' : 'Kontaktok') + '</th><th class="r">Deal</th><th class="r">Megnyert</th><th class="r">Bevétel</th><th>Legutóbbi rendezvény</th></tr></thead><tbody>' +
-				r.rows.map(x => '<tr tabindex="0" data-id="' + x.id + '"><td><span class="pp-av' + (ct ? '' : ' sq') + '" style="background:' + AVC[x.id % AVC.length] + '">' + esc(ini(x.name || x.email)) + '</span><span class="pp-nm"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(ct ? [x.name && x.email !== x.name ? x.email : '', x.mobile || x.phone, x.city].filter(Boolean).join(' · ') : (x.website || '')) + '</small></span></td>' +
-					'<td>' + (ct ? (x.co ? '<a href="#" data-co="' + x.co_id + '">' + esc(x.co) + '</a>' : '<span class="cpx-muted">–</span>') : x.cts) + '</td><td class="r">' + x.n + (x.open ? ' <small class="pp-open">' + x.open + ' nyitott</small>' : '') + '</td><td class="r">' + x.won + '</td><td class="r">' + esc(money(x.won_v)) + '</td><td>' + esc(huD(x.last_ev)) + '</td></tr>').join('') + '</tbody></table></div>' +
+			(DEL && S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button><button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '') +
+			(r.rows.length ? '<div class="pp-tw"><table class="pp-t"><thead><tr>' + (DEL ? '<th class="pp-ck"><input type="checkbox" data-all aria-label="Az oldal összes sorának kijelölése"' + (allOn ? ' checked' : '') + '></th>' : '') + '<th>' + (ct ? 'Kontakt' : 'Cég') + '</th><th class="pp-hm">' + (ct ? 'Cég' : 'Kontaktok') + '</th><th class="r">Deal</th><th class="r pp-hm">Megnyert</th><th class="r">Bevétel</th><th class="pp-hm">Legutóbbi rendezvény</th></tr></thead><tbody>' +
+				r.rows.map(x => '<tr tabindex="0" data-id="' + x.id + '"' + (S.sel.has(x.id) ? ' class="ck"' : '') + '>' + (DEL ? '<td class="pp-ck"><input type="checkbox" data-ck="' + x.id + '" aria-label="Kijelölés"' + (S.sel.has(x.id) ? ' checked' : '') + '></td>' : '') + '<td class="pp-nc"><span class="pp-av' + (ct ? '' : ' sq') + '" style="background:' + AVC[x.id % AVC.length] + '">' + esc(ini(x.name || x.email)) + '</span><span class="pp-nm"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(ct ? [x.name && x.email !== x.name ? x.email : '', x.mobile || x.phone, x.city].filter(Boolean).join(' · ') : (x.website || '')) + '</small></span></td>' +
+					'<td class="pp-hm">' + (ct ? (x.co ? '<a href="#" data-co="' + x.co_id + '">' + esc(x.co) + '</a>' : '<span class="cpx-muted">–</span>') : x.cts) + '</td><td class="r">' + x.n + (x.open ? ' <small class="pp-open">' + x.open + ' nyitott</small>' : '') + '</td><td class="r pp-hm">' + x.won + '</td><td class="r">' + esc(money(x.won_v)) + '</td><td class="pp-hm">' + esc(huD(x.last_ev)) + '</td></tr>').join('') + '</tbody></table></div>' +
 				(pages > 1 ? '<div class="pp-pg"><button type="button" class="cpx-btn ghost" data-pg="-1"' + (r.p ? '' : ' disabled') + '>← Előző</button><button type="button" class="cpx-btn ghost" data-pg="1"' + (r.p + 1 < pages ? '' : ' disabled') + '>Következő →</button></div>' : '') :
 				'<p class="cpx-muted">' + (S.q ? 'Nincs találat.' : 'Még nincs ' + (ct ? 'kontakt' : 'cég') + '.') + '</p>');
 		body.querySelectorAll('tr[data-id]').forEach(tr => {
 			const go = () => { const id = Number(tr.dataset.id); if (ct) window.CPCrm.contact(id); else window.CPCrm.company(id); };
-			tr.addEventListener('click', e => { if (e.target.closest('[data-co]')) return; go(); });
+			tr.addEventListener('click', e => { if (e.target.closest('[data-co]') || e.target.closest('.pp-ck')) return; go(); });
 			tr.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 		});
 		body.querySelectorAll('[data-co]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); window.CPCrm.company(Number(a.dataset.co)); }));
 		body.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); window.scrollTo(0, 0); }));
+		if (DEL) {
+			const redraw = () => { const y = window.scrollY; load().then(() => window.scrollTo(0, y)); };
+			body.querySelectorAll('[data-ck]').forEach(c => c.addEventListener('change', () => { const x = r.rows.find(z => z.id === Number(c.dataset.ck)); if (c.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); redraw(); }));
+			const all = body.querySelector('[data-all]');
+			if (all) all.addEventListener('change', () => { r.rows.forEach(x => { if (all.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); }); redraw(); });
+			const clr = body.querySelector('[data-clr]'); if (clr) clr.addEventListener('click', () => { S.sel.clear(); redraw(); });
+			const del = body.querySelector('[data-del]'); if (del) del.addEventListener('click', () => delSel(ct));
+		}
 		if (window.CPXStatus) window.CPXStatus();
+	}
+	async function delSel(ct) {
+		const L = Array.from(S.sel.values()), n = L.length, what = ct ? 'kontakt' : 'cég';
+		if (!n) return;
+		const withD = ct ? L.filter(x => Number(x.n) > 0) : [], dn = withD.reduce((a, x) => a + Number(x.n), 0);
+		const names = L.slice(0, 8).map(x => '• ' + (x.name || x.email || '#' + x.id)).join('\n') + (n > 8 ? '\n… és még ' + (n - 8) : '');
+		if (!window.confirm('Törlöd a kijelölt ' + n + ' ' + what + 'ot?\n\n' + names + '\n\nA Salesmate-ből is törlődnek (ott a Lomtárból 30 napig visszaállíthatók).' + (!ct ? '\nA hozzájuk tartozó kontaktok és deal-ek megmaradnak, csak cég nélkül.' : ''))) return;
+		let deals = false;
+		if (withD.length) {
+			deals = window.confirm(withD.length + ' kijelölt kontakthoz összesen ' + dn + ' deal tartozik.\n\nOK = a deal-jeik is törlődnek.\nMégse = ezek a kontaktok kimaradnak (a deal nélküliek törlődnek).');
+		}
+		const typed = window.prompt('A törlés végleges. A megerősítéshez írd be: TÖRLÉS', '');
+		if (typed === null) return;
+		if (typed.trim().toUpperCase() !== 'TÖRLÉS') { toast('Nem a „TÖRLÉS” szót írtad be – nem töröltem semmit.', true); return; }
+		toast('Törlés folyamatban… (' + n + ' ' + what + ')');
+		try {
+			const r = await post('cp_crm_people_delete', { kind: ct ? 'ct' : 'co', ids: L.map(x => x.id).join(','), deals: deals ? 1 : '', ok: 'TÖRLÉS' });
+			let m = r.ok + ' ' + what + ' törölve' + (r.deals ? ', ' + r.deals + ' deal is' : '') + '.';
+			if (r.skip && r.skip.length) m += ' Kimaradt: ' + r.skip.slice(0, 5).join(', ') + (r.skip.length > 5 ? '…' : '') + '.';
+			if (r.err && r.err.length) m += ' Hiba: ' + r.err.slice(0, 3).join('; ');
+			toast(m, !!(r.err && r.err.length));
+			S.sel.clear();
+		} catch (e) { toast(e.message, true); }
+		load();
 	}
 	function status(s) { s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function refresh() { if (S.main && S.main.isConnected) await load(); }
@@ -71,8 +108,10 @@
 		'.pp-n{font-size:12.5px;color:#6B6F78;margin-bottom:6px}.pp-tw{background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:auto}.pp-t{width:100%;border-collapse:collapse;font-size:13px}' +
 		'.pp-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#8A8E96;padding:8px 10px;border-bottom:1px solid #E6E3DE;background:#FAF8F5;white-space:nowrap}.pp-t th.r,.pp-t td.r{text-align:right;white-space:nowrap}' +
 		'.pp-t td{padding:7px 10px;border-bottom:1px solid #F0ECE6;vertical-align:middle}.pp-t tbody tr{cursor:pointer}.pp-t tbody tr:hover{background:#FAF8F5}.pp-t tbody tr:focus-visible{outline:2px solid #2F5BD8;outline-offset:-2px}' +
-		'.pp-t td:first-child{display:flex;align-items:center;gap:10px;min-width:240px}.pp-av{flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 11.5px Inter,sans-serif;color:#1A1F2B}.pp-av.sq{border-radius:8px}' +
+		'.pp-t td.pp-nc{display:flex;align-items:center;gap:10px;min-width:240px}.pp-av{flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 11.5px Inter,sans-serif;color:#1A1F2B}.pp-av.sq{border-radius:8px}' +
 		'.pp-nm{min-width:0}.pp-nm b{display:block;font-weight:600}.pp-nm small{display:block;color:#8A8E96;font-size:12px}.pp-t a{color:#2F5BD8;text-decoration:none;font-weight:600}.pp-open{color:#2F5BD8;font-size:11.5px}.pp-pg{display:flex;gap:8px;justify-content:center;margin-top:10px}' +
-		'@media (max-width:760px){.pp-t th:nth-child(2),.pp-t td:nth-child(2),.pp-t th:nth-child(4),.pp-t td:nth-child(4),.pp-t th:nth-child(6),.pp-t td:nth-child(6){display:none}.pp-t td:first-child{min-width:0}}';
+		'.pp-t td.pp-ck,.pp-t th.pp-ck{width:34px;padding-right:0;min-width:0;display:table-cell}.pp-ck input{width:17px;height:17px;cursor:pointer;accent-color:#2F5BD8}.pp-t tbody tr.ck{background:#EEF3FD}' +
+		'.pp-bulk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#EEF3FD;border:1px solid #C9D6FB;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px}.pp-bulk b{margin-right:auto}.pp-bulk .cpx-btn{height:32px;font-size:12.5px}' +
+		'@media (max-width:760px){.pp-t .pp-hm{display:none}.pp-t td.pp-nc{min-width:0}.pp-ck input{width:20px;height:20px}}';
 	document.head.appendChild(css);
 })();
