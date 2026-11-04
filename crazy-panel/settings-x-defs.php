@@ -144,6 +144,31 @@ add_filter('cp_sx_sections', function ($S) {
 		);
 	}
 
+	/* ---------------- v2.1: Google Drive mentés */
+	if (function_exists('cp_gdb_opts')) {
+		$S['gdrive'] = array('n' => 'Google Drive mentés',
+			'd' => 'A 6 óránkénti adatbázis-mentések (mindkét weboldal) jelszavas, AES-256 titkosítású ZIP-ként a Google Drive-ra is felkerülnek. Feltétel: a Google Naptár szolgáltatásfiókját add hozzá a közös meghajtóhoz „Tartalomkezelő” szerepkörrel, és a mappa NE legyen nyilvános. A jelszót jegyezd fel biztos helyre: nélküle a mentés nem nyitható meg, és a panel sem tudja megmondani.',
+			'info' => function () {
+				$st = cp_gdb_state(); $o = cp_gdb_opts(); $k = function_exists('cp_gcal_key') ? cp_gcal_key() : null;
+				$x = array(array('Szolgáltatásfiók (ezt add hozzá a meghajtóhoz)', $k ? $k['email'] : 'nincs – előbb a Google Naptár kulcsa kell', $k ? '' : 'bad'));
+				$x[] = array('Állapot', $o['on'] === '1' ? 'bekapcsolva – 15 percenként ellenőrzi, van-e új mentés' : 'kikapcsolva', $o['on'] === '1' ? 'ok' : '');
+				$x[] = array('Mentési jelszó', cp_gdb_pass() !== '' ? 'megadva' : 'nincs megadva – addig nem tölt fel', cp_gdb_pass() !== '' ? 'ok' : 'bad');
+				if (!empty($st['last'])) { $x[] = array('Utolsó feltöltés', cp_sx_dt($st['last']) . ' · ' . ($st['last_name'] ?? '') . ' (' . ($st['last_mb'] ?? '?') . ' MB)', 'ok'); }
+				if (!empty($st['err'])) { $x[] = array('Utolsó hiba', cp_sx_dt($st['err_at'] ?? 0) . ' – ' . $st['err'], 'bad'); }
+				return $x;
+			},
+			'fields' => array(
+				array('k' => 'on', 't' => 'sw', 'l' => 'Feltöltés a Google Drive-ra (6 óránként, mindkét weboldal)', 'opt' => 'cp_gdb', 'sub' => 'on'),
+				array('k' => 'folder', 't' => 'text', 'l' => 'Drive-mappa azonosítója (a mappa linkjéből)', 'opt' => 'cp_gdb', 'sub' => 'folder', 'def' => '1wN0hY77ih9rOV9Y8rnQaX0J7vxQ1Cs8S', 'chk' => function ($v) { $v = trim((string) $v); if (preg_match('#/folders/([A-Za-z0-9_-]{10,})#', $v, $m)) { $v = $m[1]; } return preg_match('/^[A-Za-z0-9_-]{10,80}$/', $v) ? $v : new WP_Error('cp_sx', 'Ez nem Drive-mappa azonosító (vagy link).'); }),
+				array('k' => 'pass', 't' => 'secret', 'l' => 'Mentési jelszó (legalább 12 karakter – ezzel nyitható meg a ZIP)', 'has' => function () { return cp_gdb_pass() !== ''; }, 'set' => function ($v) { if ($v !== '' && strlen($v) < 12) { return new WP_Error('cp_sx', 'A jelszó legyen legalább 12 karakter.'); } cp_st_secret_set('gdb_pass', $v); }),
+			),
+			'acts' => array(
+				array('k' => 'test', 'l' => 'Kapcsolatpróba', 'fn' => function () { $o = cp_gdb_opts(); $r = cp_gdb_check_folder($o['folder']); return is_wp_error($r) ? $r : 'A szolgáltatásfiók eléri a mappát, és a mappa nem nyilvános.'; }),
+				array('k' => 'now', 'l' => 'Feltöltés most', 'fn' => function () { delete_transient('cp_gdb_at'); $m = cp_gdb_tick(true); return strpos($m, 'Hiba:') === 0 ? new WP_Error('cp_sx', $m) : $m; }),
+			),
+		);
+	}
+
 	/* ---------------- Google Naptár */
 	if (function_exists('cp_gcal_opts')) {
 		$S['gcal'] = array('n' => 'Google Naptár', 'wp' => 'cp-gcal',

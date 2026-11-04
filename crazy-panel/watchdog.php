@@ -39,6 +39,12 @@ function cp_wd_tick() {
 		if (!empty($ms['err']) && (int) ($ms['err_at'] ?? 0) > (int) ($ms['last'] ?? 0)) { $issues['backup'] = 'A napi adatbázis-mentés hibát adott: „' . mb_substr((string) $ms['err'], 0, 120) . '”.'; }
 		elseif (!empty($ms['last']) && $now - (int) $ms['last'] > 30 * HOUR_IN_SECONDS) { $issues['backup'] = 'A napi adatbázis-mentés ' . floor(($now - (int) $ms['last']) / 3600) . ' órája nem készült el.'; }
 	}
+	/* Google Drive mentés (ha be van kapcsolva) */
+	if (function_exists('cp_gdb_opts') && cp_gdb_opts()['on'] === '1') {
+		$gs = cp_gdb_state();
+		if (!empty($gs['err']) && (int) ($gs['err_at'] ?? 0) > (int) ($gs['last'] ?? 0)) { $issues['gdrive'] = 'A Google Drive-ra mentés nem sikerült: „' . mb_substr((string) $gs['err'], 0, 140) . '”.'; }
+		elseif (!empty($gs['last']) && $now - (int) $gs['last'] > 14 * HOUR_IN_SECONDS) { $issues['gdrive'] = 'A Google Drive-ra ' . floor(($now - (int) $gs['last']) / 3600) . ' órája nem került fel mentés.'; }
+	}
 	$sent = isset($w['sent']) && is_array($w['sent']) ? $w['sent'] : array();
 	foreach ($issues as $k => $msg) {
 		if (!empty($sent[$k]) && $now - (int) $sent[$k] < 6 * HOUR_IN_SECONDS) { continue; }
@@ -52,7 +58,7 @@ function cp_wd_tick() {
 	update_option('cp_wd', $w, false);
 }
 function cp_wd_label($k) {
-	$L = array('mail_err' => 'a levelek letöltése', 'mail_cron' => 'a háttérütemező', 'mail_quiet' => 'újra érkeznek levelek', 'crm' => 'a Salesmate-szinkron', 'backup' => 'a napi mentés');
+	$L = array('mail_err' => 'a levelek letöltése', 'mail_cron' => 'a háttérütemező', 'mail_quiet' => 'újra érkeznek levelek', 'crm' => 'a Salesmate-szinkron', 'backup' => 'a napi mentés', 'gdrive' => 'a Google Drive mentés');
 	return $L[$k] ?? $k;
 }
 /* a csend hossza csak munkaidőben számolva (H–P 8:00–18:00, budapesti idő) */

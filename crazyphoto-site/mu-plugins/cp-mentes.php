@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Crazy – napi adatbázis-mentés
- * Description: Minden éjjel 3 óra körül a teljes WordPress-adatbázist (a Crazy panel minden adatával) tömörítve elmenti a tárhely webgyökerén KÍVÜLI mappába (böngészőből nem érhető el). Megőrzés: 14 nap, valamint minden hónap első napi mentése fél évig.
- * Version: 1.0
+ * Description: 6 óránként (3, 9, 15, 21 óra körül) a teljes WordPress-adatbázist (a Crazy panel minden adatával) tömörítve elmenti a tárhely webgyökerén KÍVÜLI mappába (böngészőből nem érhető el); a Crazy panel innen tölti fel titkosítva a Google Drive-ra. Megőrzés helyben: az utolsó 2 nap minden mentése, 14 napig napi egy, fél évig havi egy.
+ * Version: 1.1
  */
 if (!defined('ABSPATH')) { exit; }
 
@@ -15,13 +15,17 @@ function cp_mentes_dir() {
 }
 function cp_mentes_state() { $s = get_option('cp_mentes_state', array()); return is_array($s) ? $s : array(); }
 
-/* ütemezés: minden nap 03:17 (Budapest) */
+/* ütemezés: 6 óránként, 03:17 / 09:17 / 15:17 / 21:17 (Budapest) */
+add_filter('cron_schedules', function ($s) { $s['cp_6h'] = array('interval' => 6 * HOUR_IN_SECONDS, 'display' => '6 óránként (Crazy mentés)'); return $s; });
 add_action('init', function () {
-	if (wp_next_scheduled('cp_mentes_daily')) { return; }
+	if (wp_next_scheduled('cp_mentes_daily')) { wp_clear_scheduled_hook('cp_mentes_daily'); }
+	if (wp_next_scheduled('cp_mentes_6h')) { return; }
 	$tz = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone('Europe/Budapest');
-	$d = new DateTime('tomorrow 03:17', $tz);
-	wp_schedule_event($d->getTimestamp(), 'daily', 'cp_mentes_daily');
+	$best = null;
+	foreach (array('today 03:17', 'today 09:17', 'today 15:17', 'today 21:17', 'tomorrow 03:17') as $t) { $d = new DateTime($t, $tz); if ($d->getTimestamp() > time() + 60) { $best = $d->getTimestamp(); break; } }
+	wp_schedule_event($best, 'cp_6h', 'cp_mentes_6h');
 });
+add_action('cp_mentes_6h', 'cp_mentes_run');
 add_action('cp_mentes_daily', 'cp_mentes_run');
 
 function cp_mentes_run() {
@@ -38,7 +42,7 @@ function cp_mentes_run() {
 		if (!is_dir($dir) && !wp_mkdir_p($dir)) { throw new Exception('A mentési mappa nem hozható létre.'); }
 		@chmod(dirname($dir), 0700); @chmod($dir, 0700);
 		@file_put_contents($dir . '/.htaccess', "Require all denied\nDeny from all\n");
-		$file = $dir . '/' . DB_NAME . '-' . wp_date('Y-m-d') . '.sql.gz';
+		$file = $dir . '/' . DB_NAME . '-' . wp_date('Y-m-d-H') . '.sql.gz';
 		$tmp = $file . '.tmp';
 		$method = cp_mentes_mysqldump($tmp) ? 'mysqldump' : '';
 		if ($method === '') { cp_mentes_php_dump($tmp); $method = 'php'; }
@@ -102,13 +106,18 @@ function cp_mentes_php_dump($out) {
 	gzclose($gz);
 }
 
-/* megőrzés: az utolsó 14 nap + minden hónap 1-jei mentése fél évig */
+/* megőrzés: az utolsó 2 nap minden mentése; 14 napig naponta az első; fél évig a hónap első napjának első mentése */
 function cp_mentes_prune($dir) {
-	foreach ((array) glob($dir . '/*.sql.gz') as $f) {
-		if (!preg_match('/-(\d{4})-(\d{2})-(\d{2})\.sql\.gz$/', $f, $m)) { continue; }
-		$age = (time() - strtotime($m[1] . '-' . $m[2] . '-' . $m[3] . ' 12:00:00')) / DAY_IN_SECONDS;
-		if ($age <= CP_MENTES_KEEP_DAYS) { continue; }
-		if ($m[3] === '01' && $age <= CP_MENTES_KEEP_MONTHLY_DAYS) { continue; }
+	$files = (array) glob($dir . '/*.sql.gz'); sort($files);
+	$dayFirst = array();
+	foreach ($files as $f) {
+		if (!preg_match('/-(\d{4})-(\d{2})-(\d{2})(?:-(\d{2}))?\.sql\.gz$/', $f, $m)) { continue; }
+		$day = $m[1] . '-' . $m[2] . '-' . $m[3];
+		$age = (time() - filemtime($f)) / DAY_IN_SECONDS;
+		$first = !isset($dayFirst[$day]); $dayFirst[$day] = 1;
+		if ($age <= 2) { continue; }
+		if ($first && $age <= CP_MENTES_KEEP_DAYS) { continue; }
+		if ($first && $m[3] === '01' && $age <= CP_MENTES_KEEP_MONTHLY_DAYS) { continue; }
 		@unlink($f);
 	}
 	foreach ((array) glob($dir . '/*.tmp') as $f) { if (filemtime($f) < time() - DAY_IN_SECONDS) { @unlink($f); } }
