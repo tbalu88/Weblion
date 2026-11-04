@@ -33,7 +33,7 @@
 		main.innerHTML = '<div class="pp"><div class="pp-h"><div class="crm-seg"><button type="button" data-k="ct" class="' + (S.kind === 'ct' ? 'on' : '') + '">Kontaktok</button><button type="button" data-k="co" class="' + (S.kind === 'co' ? 'on' : '') + '">Cégek</button></div>' +
 			'<input type="search" data-q placeholder="' + (S.kind === 'ct' ? 'Keresés: név, e-mail, telefon, város, cég' : 'Keresés: cégnév, weboldal') + '" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<select data-so aria-label="Rendezés">' + SORTS.map(x => '<option value="' + x[0] + '"' + (S.so === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
-			'<label class="crm-chk"><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
+			'<label class="crm-chk" title="Keresés közben mindenkit mutat"><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		main.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { if (S.kind === b.dataset.k) return; S.kind = b.dataset.k; S.p = 0; S.sel.clear(); save(); view(main); }));
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); S.p = 0; load(); }, 300); });
@@ -46,12 +46,13 @@
 		if (!main || !main.isConnected) return;
 		const body = main.querySelector('.pp-body');
 		let r;
-		try { r = await post('cp_crm_people', { kind: S.kind, q: S.q, so: S.so, only: S.only ? 1 : '', p: S.p }); S.err = ''; } catch (e) { if (my === S.seq) { S.err = e.message; body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; } return; }
+		/* v2.2.1: keresés közben a „Csak akiknek van deal-je” szűrő nem rejti el a találatokat (deal nélküli kontaktot is megtalál) */
+		try { r = await post('cp_crm_people', { kind: S.kind, q: S.q, so: S.so, only: S.only && !S.q ? 1 : '', p: S.p }); S.err = ''; } catch (e) { if (my === S.seq) { S.err = e.message; body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; } return; }
 		if (my !== S.seq) return;
 		S.data = r;
 		const pages = Math.max(1, Math.ceil(r.total / r.n)), ct = r.kind === 'ct';
 		const allOn = r.rows.length && r.rows.every(x => S.sel.has(x.id));
-		body.innerHTML = '<div class="pp-n">' + r.total.toLocaleString('hu-HU') + (ct ? ' kontakt' : ' cég') + (pages > 1 ? ' · ' + (r.p + 1) + '. oldal / ' + pages : '') + '</div>' +
+		body.innerHTML = '<div class="pp-n">' + r.total.toLocaleString('hu-HU') + (ct ? ' kontakt' : ' cég') + (pages > 1 ? ' · ' + (r.p + 1) + '. oldal / ' + pages : '') + (S.q && S.only ? ' · keresésnél a deal nélküliek is látszanak' : '') + '</div>' +
 			(DEL && S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button><button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '') +
 			(r.rows.length ? '<div class="pp-tw"><table class="pp-t"><thead><tr>' + (DEL ? '<th class="pp-ck"><input type="checkbox" data-all aria-label="Az oldal összes sorának kijelölése"' + (allOn ? ' checked' : '') + '></th>' : '') + '<th>' + (ct ? 'Kontakt' : 'Cég') + '</th><th class="pp-hm">' + (ct ? 'Cég' : 'Kontaktok') + '</th><th class="r">Deal</th><th class="r pp-hm">Megnyert</th><th class="r">Bevétel</th><th class="pp-hm">Legutóbbi rendezvény</th></tr></thead><tbody>' +
 				r.rows.map(x => '<tr tabindex="0" data-id="' + x.id + '"' + (S.sel.has(x.id) ? ' class="ck"' : '') + '>' + (DEL ? '<td class="pp-ck"><input type="checkbox" data-ck="' + x.id + '" aria-label="Kijelölés"' + (S.sel.has(x.id) ? ' checked' : '') + '></td>' : '') + '<td class="pp-nc"><span class="pp-av' + (ct ? '' : ' sq') + '" style="background:' + AVC[x.id % AVC.length] + '">' + esc(ini(x.name || x.email)) + '</span><span class="pp-nm"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(ct ? [x.name && x.email !== x.name ? x.email : '', x.mobile || x.phone, x.city].filter(Boolean).join(' · ') : (x.website || '')) + '</small></span></td>' +
