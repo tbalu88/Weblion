@@ -382,7 +382,8 @@ function cp_crm_ajax_delete() {
 	$res = cp_sm_request('DELETE', '/apis/deal/v4/' . $id);
 	if (is_wp_error($res)) { cp_el_err($res->get_error_message(), 502); }
 	$chk = cp_sm_get_deal($id);
-	$gone = is_wp_error($chk) || empty($chk) || !cp_panel_get($chk, 'id');
+	/* v2.1.2: a Salesmate a törölt deal-t „isDeleted / deletedAt” jelöléssel még visszaadja */
+	$gone = is_wp_error($chk) || empty($chk) || !cp_panel_get($chk, 'id') || !empty($chk['isDeleted']) || !empty($chk['deletedAt']);
 	if (!$gone) { cp_el_err('A Salesmate nem törölte a dealt.', 502); }
 	global $wpdb;
 	$wpdb->update(cp_crm_t('deals'), array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));

@@ -230,7 +230,8 @@ function cp_crm_row($m, $r, $via) {
 	$row['raw'] = wp_json_encode($r, JSON_UNESCAPED_UNICODE);
 	$row['via'] = $via;
 	$row['synced_at'] = gmdate('Y-m-d H:i:s');
-	$row['deleted_at'] = null;
+	/* v2.1.2: a Salesmate-ben törölt (isDeleted) rekord a panelben is törölt marad */
+	$row['deleted_at'] = (!empty($r['isDeleted']) || !empty($r['deletedAt'])) ? gmdate('Y-m-d H:i:s') : null;
 	return $row;
 }
 
