@@ -1,0 +1,46 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-04 08:16:36.553947800 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v71/crazy-panel.php	2026-11-04 08:17:27.769953656 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '1.98.1');
++define('CP_PANEL_VER', '1.98.2');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -185,10 +185,16 @@
+ 	$key = 'cp_panel_fail_' . md5(cp_panel_client_ip());
+ 	$fails = (int) get_transient($key);
+ 	if ($fails >= 6) { return 'Túl sok sikertelen próbálkozás. Próbáld újra 15 perc múlva.'; }
++	/* v1.98.2: fiókonkénti (e-mail) és összesített korlát – az IP-címek cserélgetése ellen */
++	$all = (int) get_transient('cp_panel_fail_all');
+ 	/* v1.29: személyes fiók (e-mail + jelszó) */
+ 	if ($email !== '' && function_exists('cp_pu_login')) {
++		$ekey = 'cp_panel_failm_' . md5(strtolower(trim($email)));
++		$ef = (int) get_transient($ekey);
++		if ($ef >= 8) { return 'Ehhez a fiókhoz túl sok sikertelen próbálkozás érkezett. Próbáld újra 30 perc múlva, vagy kérj új jelszót.'; }
+ 		$uid = cp_pu_login($email, $pw);
+-		if (is_wp_error($uid)) { set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS); do_action('cp_audit_login_fail', $email); return $uid->get_error_message(); }
++		if (is_wp_error($uid)) { set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS); set_transient($ekey, $ef + 1, 30 * MINUTE_IN_SECONDS); set_transient('cp_panel_fail_all', $all + 1, HOUR_IN_SECONDS); do_action('cp_audit_login_fail', $email); return $uid->get_error_message(); }
++		delete_transient($ekey);
+ 		delete_transient($key);
+ 		cp_pu_set_cookie($uid);
+ 		do_action('cp_audit_login', (int) $uid, '');
+@@ -196,12 +202,16 @@
+ 	}
+ 	if (function_exists('cp_pu_shared_on') && !cp_pu_shared_on()) { return 'Add meg az e-mail-címedet és a saját jelszavadat.'; }
+ 	if ($o['pw_hash'] === '') { return 'A panel jelszava még nincs beállítva (WordPress admin → Beállítások → Foglaltsági panel).'; }
++	/* a közös (név nélküli) jelszó: óránként összesen legfeljebb 30 hibás próbálkozás – utána egy órára zárva (a személyes fiókok működnek) */
++	if ($all >= 30) { return 'A közös jelszavas belépés most átmenetileg zárva (sok hibás próbálkozás). Lépj be a saját e-mail-címeddel és jelszavaddal.'; }
+ 	require_once ABSPATH . WPINC . '/class-phpass.php';
+ 	$role = '';
+ 	if (wp_check_password($pw, $o['pw_hash'])) { $role = 'admin'; }
+ 	elseif ($o['pw_hash_office'] !== '' && wp_check_password($pw, $o['pw_hash_office'])) { $role = 'iroda'; }
+ 	if ($role === '') {
+ 		set_transient($key, $fails + 1, 15 * MINUTE_IN_SECONDS);
++		set_transient('cp_panel_fail_all', $all + 1, HOUR_IN_SECONDS);
++		if ($all + 1 === 30 && function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'login_lock', 'Közös jelszavas belépés zárva 1 órára (30 hibás próbálkozás)', '', ''); }
+ 		do_action('cp_audit_login_fail', '');
+ 		return 'Hibás jelszó.';
+ 	}

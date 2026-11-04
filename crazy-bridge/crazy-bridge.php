@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Crazy Claude-híd
  * Description: Biztonságos REST híd: Claude a felhőből (a te géped nélkül) olvashatja és szerkesztheti a bővítmények / sablonok fájljait. Írás előtt szintaxist ellenőriz, mentést készít, és ha utána az oldal hibára fut, automatikusan visszaállítja a fájlt. Kulcs nélkül semmit nem enged.
- * Version: 1.1.2
+ * Version: 1.1.3
  * Author: Crazyphoto / EventCrazy
  * Requires PHP: 7.4
  * Text Domain: crazy-bridge
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CB_VER', '1.1.2');
+define('CB_VER', '1.1.3');
 define('CB_OPT', 'crazy_bridge');
 define('CB_LOG', 'crazy_bridge_log');
 define('CB_NS', 'crazy-bridge/v1');
@@ -55,6 +55,20 @@ function cb_is_rest() {
 	return strpos($uri, '/' . rest_get_url_prefix() . '/') !== false;
 }
 
+/* v1.1.3: a kulcs csak a híd saját végpontjaira (crazy-bridge/v1/…) léptet be – a WordPress többi REST-útvonalára nem */
+function cb_is_bridge_route() {
+	$r = isset($_GET['rest_route']) ? (string) $_GET['rest_route'] : '';
+	if ($r === '') {
+		$uri = isset($_SERVER['REQUEST_URI']) ? (string) wp_parse_url((string) $_SERVER['REQUEST_URI'], PHP_URL_PATH) : '';
+		$pre = '/' . rest_get_url_prefix() . '/';
+		$i = strpos($uri, $pre);
+		if ($i === false) { return false; }
+		$r = substr($uri, $i + strlen($pre) - 1);
+	}
+	$r = '/' . ltrim(rawurldecode($r), '/');
+	return strpos($r, '/crazy-bridge/v1/') === 0 || $r === '/crazy-bridge/v1';
+}
+
 function cb_req_token() {
 	$h = '';
 	foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $k) {
@@ -72,7 +86,7 @@ function cb_req_token() {
 
 add_filter('determine_current_user', 'cb_auth', 30);
 function cb_auth($uid) {
-	if (!empty($uid) || !cb_is_rest()) { return $uid; }
+	if (!empty($uid) || !cb_is_rest() || !cb_is_bridge_route()) { return $uid; }
 	$tok = cb_req_token();
 	if ($tok === '') { return $uid; }
 	$o = cb_opts();
