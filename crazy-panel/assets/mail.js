@@ -777,6 +777,8 @@
 		return { get: () => list.slice(), add: x => { if (x && !list.includes(x)) { list.push(x); draw(); } } };
 	}
 	async function drawCompose(box) {
+		/* v2.0.1: egy megírt levél = egy küldési azonosító; ugyanazzal a szerver nem küld kétszer (dupla kattintás, újrapróbálás hiba után) */
+		const sendId = 'sx' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 		let tpls = [];
 		try { tpls = await loadTpls(); } catch (e) { /* sablon nélkül is írható */ }
 		let deal = null;
@@ -895,7 +897,7 @@
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
 			try {
-				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(',') });
+				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				try { localStorage.removeItem('cpmail_draft'); } catch (e) { /* privát mód */ }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);

@@ -573,6 +573,7 @@ function cp_imp_sync_run() {
 	$st = cp_imp_state();
 	if (!empty($st['running']) || get_transient('cp_imp_lock') || get_transient('cp_imp_sync_lock')) { return; }
 	set_transient('cp_imp_sync_lock', 1, 240);
+	if (function_exists('set_time_limit')) { @set_time_limit(150); }
 	$sy = get_option('cp_imp_sync', array());
 	if (!is_array($sy)) { $sy = array(); }
 	$t0 = time();
@@ -590,15 +591,24 @@ function cp_imp_sync_run() {
 		}
 		sort($uids);
 		$max = (int) ($sy['uid'] ?? 0);
-		foreach (array_slice($uids, 0, 300) as $uid) {
+		$done = 0; $todo = array_slice($uids, 0, 300);
+		foreach ($todo as $uid) {
 			if (time() - $t0 > 100) { break; }
 			try { $r = cp_imp_one($mb, $uid, false, true, 'INBOX'); } catch (\Throwable $e) { $r = 'err'; }
 			if ($r === 'ok') { $sy['n'] = (int) ($sy['n'] ?? 0) + 1; }
-			$max = max($max, $uid);
+			/* v2.0.1: hibás levél: újrapróbálás a következő körökben (legfeljebb 3×), utána kihagyva és megjegyezve */
+			if ($r === 'err') {
+				$ec = isset($sy['errs'][$uid]) ? (int) $sy['errs'][$uid] + 1 : 1;
+				if ($ec < 3) { $sy['errs'][$uid] = $ec; break; }
+				$sy['skipped'][] = $uid; $sy['skipped'] = array_slice($sy['skipped'], -50); unset($sy['errs'][$uid]);
+			}
+			$max = max($max, $uid); $done++;
+			/* 25 levelenként az állás mentése (ha a futás félbeszakad, ne kezdje elölről) */
+			if ($done % 25 === 0) { $sy['uid'] = $max; $sy['uv'] = (int) $uv; update_option('cp_imp_sync', $sy, false); }
 		}
 		imap_errors(); imap_alerts();
 		imap_close($mb);
-		if ((empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) && count($uids) <= 300 && $info) { $max = max($max, (int) $info->uidnext - 1); }
+		if ((empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) && count($uids) <= 300 && $done === count($todo) && $info) { $max = max($max, (int) $info->uidnext - 1); }
 		$sy['uid'] = $max; $sy['uv'] = $uv; $sy['err'] = '';
 	} catch (\Throwable $e) {
 		$sy['err'] = mb_substr($e->getMessage(), 0, 200);

@@ -470,6 +470,8 @@ function cp_st_store_deals($raw, $backfill) {
 	$pl = cp_panel_lc($p['pipeline']);
 	$rows = array();
 	foreach ($raw as $r) {
+		/* v2.0.1: csak a fő pipeline (a Todo / Ügynökség pipeline deal-jei ne torzítsák a statisztikát) */
+		if ($pl !== '' && is_array($r)) { $rp = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'pipeline'))); if ($rp !== '' && $rp !== $pl) { continue; } }
 		$m = cp_st_map_deal($r, $now);
 		if (!$m) { continue; }
 		$rows[$m['id']] = $m;

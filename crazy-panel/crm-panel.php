@@ -567,12 +567,22 @@ function cp_crm_ajax_create() {
 	if (!in_array($stage, cp_crm_stages(), true)) { $stage = cp_crm_stages()[0]; }
 	global $wpdb;
 	/* kontakt: ha van már ilyen e-mail-cím, azt használjuk */
-	$cid = $email !== '' ? (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $email)) : 0;
+	$cid = 0;
+	/* v2.0.1: közös e-mail-cím (pl. info@ceg.hu): csak akkor ugyanaz a kontakt, ha a név is egyezik (vagy nincs megadva) – különben új kontakt */
+	if ($email !== '') {
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT id, name FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 10', $email), ARRAY_A) as $c) {
+			$nn = function ($x) { return trim(preg_replace('/\s+/u', ' ', mb_strtolower((string) $x))); };
+			if ($name === '' || $nn($c['name']) === $nn($name) || $nn($c['name']) === '') { $cid = (int) $c['id']; break; }
+		}
+	}
 	if (!$cid) {
 		$cr = cp_sm_request('POST', '/apis/contact/v4', array_filter(array('firstName' => '', 'lastName' => $name, 'email' => $email, 'mobile' => $phone), function ($v) { return $v !== ''; }));
 		if (is_wp_error($cr)) { cp_el_err('A kontaktot nem sikerült létrehozni: ' . $cr->get_error_message(), 502); }
 		$cid = cp_crm_new_id($cr);
 		if (!$cid) { cp_el_err('A kontakt létrejött, de a Salesmate nem adta vissza az azonosítóját: ' . mb_substr(wp_json_encode($cr), 0, 200), 502); }
+		/* v2.0.1: a kontakt azonnal a saját táblába is – ha a deal létrehozása most elakad, az újrapróbálás ne hozzon létre második kontaktot */
+		$cg0 = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
+		if (!is_wp_error($cg0)) { cp_crm_store('contact', array(isset($cg0['Data']) ? $cg0['Data'] : $cg0), 'get'); }
 	}
 	$F = cp_crm_edit_fields();
 	$date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $g('event_d')) ? $g('event_d') : '';

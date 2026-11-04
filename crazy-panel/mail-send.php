@@ -123,6 +123,14 @@ function cp_send_ajax() {
 	if (!cp_send_can($me)) { cp_el_err('A panelből küldés neked nincs bekapcsolva (próbaüzem). Küldj a Salesmate-ből.', 403); }
 	global $wpdb;
 	$test = !empty($_POST['test']);
+	/* v2.0.1: dupla küldés ellen – ugyanaz a küldési azonosító 30 percen belül csak egyszer */
+	$sid = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['sid'] ?? '')));
+	$sidk = $sid !== '' ? 'cp_send_sid_' . md5($me . '|' . $sid) : '';
+	if ($sidk !== '' && !$test) {
+		$prev = get_transient($sidk);
+		if ($prev === 'sending') { cp_el_err('Ez a levél épp most megy ki – várj pár másodpercet, és frissítsd a levélszálat.'); }
+		if (is_array($prev)) { wp_send_json_success($prev + array('dup' => 1)); }
+	}
 	$u = function_exists('cp_pu_get') ? cp_pu_get($me) : null;
 	$to = $test ? cp_send_addrs($u ? $u['e'] : '') : cp_send_addrs(wp_unslash($_POST['to'] ?? ''));
 	$cc = $test ? array() : cp_send_addrs(wp_unslash($_POST['cc'] ?? ''));
@@ -174,11 +182,15 @@ function cp_send_ajax() {
 		$m->XMailer = 'Crazy panel';
 		foreach ($atts as $x) { $m->addAttachment($x['path'], $x['n'], 'base64', $x['mime']); }
 		if ($t && !$test) { $pid = cp_send_parent_id((int) $t['id']); if ($pid !== '') { $m->addCustomHeader('In-Reply-To', $pid); $m->addCustomHeader('References', $pid); } }
+		if ($sidk !== '' && !$test) { set_transient($sidk, 'sending', 120); }
 		$m->send();
 		$mime = $m->getSentMIMEMessage();
 	} catch (\Throwable $e) {
+		if ($sidk !== '') { delete_transient($sidk); }
 		cp_el_err('A levél nem ment el: ' . mb_substr($e->getMessage(), 0, 200), 502);
 	}
+	/* elment: innentől ugyanez az azonosító nem küldhet újra (ha az Elküldött-mentés vagy a válasz elakad is) */
+	if ($sidk !== '' && !$test) { set_transient($sidk, array('thread' => $t ? (int) $t['id'] : 0, 'warn' => ''), 30 * MINUTE_IN_SECONDS); }
 	set_transient('cp_send_n' . $me, $n + 1, HOUR_IN_SECONDS);
 	$warn = !empty($o['append']) && !$test ? cp_send_append($mime) : '';
 	if ($test) { wp_send_json_success(array('test' => 1, 'to' => $to[0])); }
@@ -205,6 +217,7 @@ function cp_send_ajax() {
 	$wpdb->insert(cp_mail_t('messages'), $row);
 	$wpdb->update($T, array('msg_count' => (int) $t['msg_count'] + 1, 'last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => 'send', 'text' => 'Levél elküldve a panelből: ' . mb_substr(implode(', ', $to), 0, 200), 'author_uid' => $me, 'author' => $who, 'created_at' => $now));
+	if ($sidk !== '') { set_transient($sidk, array('thread' => (int) $t['id'], 'warn' => $warn), 30 * MINUTE_IN_SECONDS); }
 	wp_send_json_success(array('thread' => (int) $t['id'], 'warn' => $warn));
 }
 
