@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_MAIL_DB_VER', '8');
+define('CP_MAIL_DB_VER', '9');
 
 function cp_mail_t($name = 'templates') {
 	global $wpdb;
@@ -77,6 +77,7 @@ add_action('init', function () {
   imap_folder varchar(120) NOT NULL DEFAULT '',
   imap_uid int(10) unsigned NULL,
   html mediumtext NULL,
+  reply_to varchar(190) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   KEY thread_id (thread_id),
   KEY mid (mid),
@@ -390,7 +391,7 @@ function cp_mail_thread_full($id) {
 	global $wpdb;
 	$t = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $id), ARRAY_A);
 	if (!$t) { return null; }
-	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
+	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, ' . ((int) get_option('cp_mail_db_ver') >= 9 ? 'reply_to' : "'' reply_to") . ', CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
 	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); }
 	unset($m);
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);
@@ -401,6 +402,21 @@ function cp_mail_thread_full($id) {
 	unset($e);
 	$deal = $t['deal_id'] && function_exists('cp_crm_row_out') ? cp_crm_row_out((int) $t['deal_id']) : null;
 	if ($deal && function_exists('cp_plk_chip')) { $deal['portal'] = cp_plk_chip((int) $t['deal_id']); }
+	/* v1.98: figyelmeztetés, ha a szál dealje elvesztett / lezajlott / törölt – és ajánlat az ügyfél nyitott dealjére */
+	if ($deal && function_exists('cp_crm_t')) {
+		$dr = $wpdb->get_row($wpdb->prepare('SELECT status, event_d, deleted_at FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $t['deal_id']), ARRAY_A);
+		$w = '';
+		if ($dr && !empty($dr['deleted_at'])) { $w = 'Ez a deal törölve lett.'; }
+		elseif ($dr && $dr['status'] === 'Lost') { $w = 'Ez a deal elvesztett.'; }
+		elseif ($dr && $dr['status'] === 'Won' && !empty($dr['event_d']) && $dr['event_d'] < wp_date('Y-m-d')) { $w = 'Ennek a dealnek a rendezvénye már lezajlott (' . $dr['event_d'] . ').'; }
+		if ($w !== '') {
+			$deal['warn'] = $w . ' Válaszkor a sablon ennek a dealnek az adataival (dátum, helyszín, ár, portállink) tölt ki.';
+			$alt = function_exists('cp_imp_pick_deal') ? cp_imp_pick_deal((string) $t['contact_email'], gmdate('Y-m-d H:i:s')) : 0;
+			if ($alt && $alt !== (int) $t['deal_id'] && $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $alt)) === 'Open') {
+				$deal['alt'] = array('id' => $alt, 'title' => (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $alt)));
+			}
+		}
+	}
 	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal);
 }
 

@@ -190,7 +190,9 @@ function cp_send_ajax() {
 	$plain = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($html)));
 	if (!$t) {
 		$tkey = md5(strtolower($to[0]) . '|' . (function_exists('cp_imp_norm_subj') ? cp_imp_norm_subj($subj) : mb_strtolower($subj)));
-		$t = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
+		$t = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE tkey = %s ORDER BY id DESC LIMIT 1", $tkey), ARRAY_A);
+		/* v1.98: kukában / spamben lévő, 60 napnál régebbi vagy másik dealhez tartozó szálba nem fűzzük – új szál indul */
+		if ($t && (in_array($t['folder'], array('trash', 'spam'), true) || ($t['last_at'] && strtotime($t['last_at'] . ' UTC') < time() - 60 * DAY_IN_SECONDS) || ($deal && $t['deal_id'] && (int) $t['deal_id'] !== (int) $deal))) { $t = null; }
 		if (!$t) {
 			$cn = $vals['kontakt.email'] !== '' && strtolower($vals['kontakt.email']) === strtolower($to[0]) ? (string) $vals['kontakt.nev'] : '';
 			$wpdb->insert($T, array('mailbox' => $i['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($cn, 0, 190), 'contact_email' => $to[0], 'deal_id' => $deal ?: null, 'followers' => '', 'tags' => '', 'status' => 'open', 'folder' => 'sent', 'snippet' => mb_substr($plain, 0, 200), 'msg_count' => 0, 'has_attach' => 0, 'last_at' => $now, 'created_at' => $now, 'tkey' => $tkey, 'src' => 'panel', 'seen_at' => $now));

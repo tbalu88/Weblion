@@ -539,3 +539,6 @@
 @keyframes mlspin{to{transform:rotate(360deg)}}
 .ml-newp{position:sticky;top:0;z-index:2;margin:6px auto;align-self:center;border:0;background:#2F6FDB;color:#fff;font:600 12.5px Inter,sans-serif;border-radius:999px;padding:6px 14px;cursor:pointer;box-shadow:0 6px 16px -8px rgba(47,111,219,.8)}
 @media (max-width:760px){.ml-list .ml-qw{order:-1;margin:12px 12px 0}.ml-list .ml-qw .ml-q{margin:0;width:100%}.ml-list .ml-qw.rf .ml-q{padding-right:46px}.ml-rf{width:36px;height:36px;right:4px}.ml-rf svg{width:18px;height:18px}}
+/* v1.98: figyelmeztetés lezárt / elvesztett / törölt dealnél */
+.ml-dwarn{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:#FFF4E5;border:1px solid #F5C98B;color:#7A4A00;font-size:12.5px;line-height:1.4;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ml-dwarn .cpx-btn{height:28px;font-size:12px;padding:0 10px}

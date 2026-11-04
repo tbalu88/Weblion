@@ -241,6 +241,60 @@ function cp_imp_is_bulk($hraw, $from) {
 	return (bool) preg_match('/^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?|news(letter)?|info@facebookmail|.*@(facebookmail|linkedin|google|accounts\.google|mailchimp|mailerlite|salesmate))/i', $from);
 }
 
+/* ------------------------------------------------------------ v1.98: levélszál ↔ deal
+ * – új szálnál: az ügyfél NYITOTT dealjei közül a legfrissebb; ha nincs nyitott, a levél idejéhez legközelebb létrehozott
+ * – egy automatikusan kötött szál (nem kézzel csatolt, nem a panelből indított) átkerül az ügyfél nyitott dealjére,
+ *   ha a mostani deal elvesztett / megnyert-lezárt / törölt, vagy még nincs deal (pl. a levél előbb jött, mint a deal)
+ * – két nyitott deal között nem vált (azt a kolléga dönti el kézzel) */
+define('CP_IMP_GAP_DAYS', 60);
+/* saját címeink / domainjeink (kollégák, a másik márka) – ezek nem ügyfelek */
+function cp_imp_ours($e) {
+	$d = strtolower(substr(strrchr((string) $e, '@') ?: '', 1));
+	return in_array($d, array('eventcrazy.hu', 'crazyphoto.hu', 'studioframes.hu'), true) || preg_match('/(^|\.)salesmate(mail)?\.(io|com)$/', $d);
+}
+/* továbbított levélben az eredeti feladó („From: / Feladó: / Von: Név <cím>”) */
+function cp_imp_fwd_sender($plain, $html) {
+	$t = $plain !== '' ? $plain : html_entity_decode(wp_strip_all_tags(preg_replace('#<(br|/p|/div)\s*/?>#i', "\n", (string) $html)), ENT_QUOTES, 'UTF-8');
+	if (!preg_match('/(?:^|\n)\s*(?:\*?\s*)(?:From|Feladó|Von|De)\s*:\s*\*?\s*([^\n<]*?)\s*[<\[]?(?:mailto:)?([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})[>\]]?/u', mb_substr($t, 0, 20000), $m)) { return null; }
+	return array('e' => strtolower($m[2]), 'n' => trim($m[1], " \t\"'*"));
+}
+function cp_imp_pick_deal($email, $at) {
+	if (!function_exists('cp_crm_t') || $email === '') { return 0; }
+	global $wpdb;
+	return (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE c.email = %s AND d.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY (d.status = 'Open') DESC, IF(d.status = 'Open', UNIX_TIMESTAMP(d.created_at), 0) DESC, ABS(DATEDIFF(d.created_at, %s)) LIMIT 1", strtolower($email), $at));
+}
+function cp_imp_deal_manual($tid) {
+	global $wpdb;
+	return (bool) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'deal'", $tid))
+		|| (string) $wpdb->get_var($wpdb->prepare('SELECT src FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid)) === 'panel';
+}
+function cp_imp_relink($tid, $email, $at) {
+	if (!function_exists('cp_crm_t')) { return; }
+	global $wpdb;
+	$cur = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid));
+	if ($cur) {
+		$d = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $cur), ARRAY_A);
+		if ($d && $d['status'] === 'Open' && empty($d['deleted_at'])) { return; }
+	}
+	if (cp_imp_deal_manual($tid)) { return; }
+	$best = cp_imp_pick_deal($email, $at);
+	if (!$best || $best === $cur) { return; }
+	$st = (string) $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
+	if ($cur && $st !== 'Open') { return; } /* lezártról csak nyitottra visz át */
+	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $best), array('id' => $tid));
+	$title = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
+	$wpdb->insert(cp_mail_t('events'), array('thread_id' => $tid, 'kind' => 'autodeal', 'text' => mb_substr(($cur ? 'Deal automatikusan áthelyezve (az ügyfél nyitott dealje): ' : 'Deal automatikusan csatolva: ') . ($title !== '' ? $title : '#' . $best), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+}
+/* az utolsó 30 nap automatikusan kötött szálai: deal nélküli vagy lezárt/törölt dealen ülő → újrakötés (15 percenként) */
+function cp_imp_relink_recent() {
+	if (!function_exists('cp_crm_t') || get_transient('cp_imp_relink_at')) { return; }
+	set_transient('cp_imp_relink_at', 1, 15 * MINUTE_IN_SECONDS);
+	global $wpdb;
+	$T = cp_mail_t('threads'); $E = cp_mail_t('events'); $D = cp_crm_t('deals');
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.status <> 'Open' OR d.deleted_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 200", gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS)), ARRAY_A);
+	foreach ($rows as $r) { cp_imp_relink((int) $r['id'], $r['contact_email'], $r['last_at']); }
+}
+
 /* egy levél (UID) átvétele; visszaad: 'ok' | 'dup' | 'skip' */
 function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	global $wpdb;
@@ -259,6 +313,12 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($kind === 'skip') { return 'skip'; }
 	$promo = $kind === 'promo';
 	$other = $out ? ($to[0] ?? array('e' => '', 'n' => '')) : $f;
+	/* v1.98: kimenőnél az első nem saját címzett (a kollégák, saját címeink nem „ügyfelek”) */
+	if ($out) { foreach (array_merge($to, $cc) as $a) { if (!cp_imp_ours($a['e'])) { $other = $a; break; } } }
+	/* v1.98: Reply-To – ha egy rendszer (űrlap, foglaló) a saját címéről küld, de a válasz az ügyfélnek megy */
+	$rt = cp_imp_addr($h->reply_to ?? array());
+	$rto = '';
+	if (!$out && count($rt) === 1 && $rt[0]['e'] !== $f['e'] && !cp_imp_ours($rt[0]['e'])) { $rto = $rt[0]['e']; $other = array('e' => $rt[0]['e'], 'n' => $rt[0]['n'] !== '' ? $rt[0]['n'] : ''); }
 	if ($other['e'] === '' || $other['e'] === $me) { return 'skip'; }
 	$subj = cp_imp_hdr($h->subject ?? '');
 	$ts = isset($h->date) ? (int) strtotime($h->date) : 0;
@@ -268,17 +328,22 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$acc = array('att' => array());
 	if ($st) { cp_imp_walk($mb, $uid, $st, '', $acc); }
 	$text = cp_imp_clean_text($acc['plain'] ?? '', $acc['html'] ?? null);
+	/* v1.98: kolléga (saját domain) továbbította az ügyfél levelét → az eredeti feladó az „ügyfél”, neki megy a válasz */
+	if (!$out && $rto === '' && cp_imp_ours($f['e'])) {
+		$orig = cp_imp_fwd_sender((string) ($acc['plain'] ?? ''), $acc['html'] ?? null);
+		if ($orig && !cp_imp_ours($orig['e'])) { $other = $orig; $rto = $orig['e']; }
+	}
 	if ($text === '' && !$acc['att']) { return 'skip'; }
 	$body = '<p>' . str_replace("\n", '<br>', esc_html($text)) . '</p>';
 	$fmt = function ($l) { return implode(', ', array_map(function ($a) { return $a['n'] !== '' ? $a['n'] . ' <' . $a['e'] . '>' : $a['e']; }, $l)); };
 	/* szál: ugyanaz a partner + ugyanaz a (Re:/Fwd: nélküli) tárgy */
 	$tkey = md5($other['e'] . '|' . cp_imp_norm_subj($subj));
-	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder, followers FROM $T WHERE tkey = %s", $tkey), ARRAY_A);
+	/* v1.98: a legutóbbi ilyen szál – ha 60 napnál régebben volt benne levél, új megkeresésnek számít (új szál, friss deal) */
+	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder, followers, deal_id, src FROM $T WHERE tkey = %s ORDER BY id DESC LIMIT 1", $tkey), ARRAY_A);
+	if ($t && $t['last_at'] && strtotime($t['last_at'] . ' UTC') < strtotime($at . ' UTC') - CP_IMP_GAP_DAYS * DAY_IN_SECONDS) { $t = null; }
+	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at); }
 	if (!$t) {
-		$deal = 0;
-		if (function_exists('cp_crm_t')) {
-			$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE c.email = %s AND d.deleted_at IS NULL ORDER BY ABS(DATEDIFF(d.created_at, %s)) LIMIT 1', $other['e'], $at));
-		}
+		$deal = cp_imp_pick_deal($other['e'], $at);
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
@@ -286,7 +351,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => (!$sent && $out) ? 'ellenőrizetlen' : '', 'sent_at' => $at, 'mid' => $mid)
+		'status' => (!$sent && $out) ? 'ellenőrizetlen' : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 9 && $rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
 		/* v1.67: az eredeti HTML szűrve (a beágyazott képek a mellékletek sorszámára hivatkozva) */
 		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	$add = 1;
@@ -535,6 +600,7 @@ function cp_imp_sync_run() {
 	$sy['last'] = time();
 	update_option('cp_imp_sync', $sy, false);
 	delete_transient('cp_imp_sync_lock');
+	try { cp_imp_relink_recent(); } catch (\Throwable $e) { /* a következő körben újra */ }
 }
 
 /* v1.97: „Letöltés most” – a Levelezés ↻ gombja azonnal lekéri az új leveleket (nem várja meg az 5 perces ütemet).
