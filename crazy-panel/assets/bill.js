@@ -43,17 +43,20 @@
 		if (B.docs.length) {
 			h += '<ul class="bl-docs">' + B.docs.map(d => {
 				const p = PAY[d.pay] || ['', ''];
-				const szl = (B.profiles[d.profile] || {}).prov === 'szamlazz', pend = Number(d.pending) === 1, man = d.send_mode === 'manual';
+				const szl = (B.profiles[d.profile] || {}).prov === 'szamlazz', pend = Number(d.pending) === 1, man = d.send_mode === 'manual', doubt = /^\[\?\]/.test(d.err || '');
 				const st = man ? 'kézzel kiállítva' + (B.photo && !B.gallery ? ' · ⏳ küldd ki a galériával' : '') : d.sent_at ? 'kiküldve' : (pend ? '⏳ előkészítve – a galéria kiküldésekor állítja ki és küldi el' : (d.send_mode === 'gallery' ? '⏳ a galériával megy ki' : 'nincs kiküldve'));
 				return '<li><div><b>' + esc(TYPES[d.type] || d.type) + '</b> ' + esc(d.number || '') + ' · ' + ft(d.gross) + (p[0] ? ' <span class="bl-pay ' + p[1] + '">' + p[0] + '</span>' : '') +
 					'<small>' + esc(d.profile) + ' · ' + esc(d.at || '') + (d.created_by ? ' · ' + esc(d.created_by) : '') + ' · ' + esc(st) + (d.err ? ' · <span class="bl-err">' + esc(d.err) + '</span>' : '') + '</small></div>' +
-					'<div class="bl-da">' + (pend || man ? '' : '<button type="button" class="cpx-btn ghost" data-bopen="' + d.id + '">Megnyitás</button>') + (!man && !d.sent_at && (!szl || pend) ? '<button type="button" class="cpx-btn ghost" data-bsend="' + d.id + '">' + (pend ? 'Kiállítás és küldés most' : 'Küldés most') + '</button>' : '') + '</div></li>';
+					'<div class="bl-da">' + (doubt ? '<button type="button" class="cpx-btn" data-bdm="' + d.id + '" title="A számlázóban megtaláltad – beírod a számát">Létrejött…</button><button type="button" class="cpx-btn ghost" data-bdn="' + d.id + '" title="A számlázóban nincs ilyen – újra kiállítható">Nem jött létre</button>' : '') + (doubt || pend || man ? '' : '<button type="button" class="cpx-btn ghost" data-bopen="' + d.id + '">Megnyitás</button>') + (!doubt && !man && !d.sent_at && (!szl || pend) ? '<button type="button" class="cpx-btn ghost" data-bsend="' + d.id + '">' + (pend ? 'Kiállítás és küldés most' : 'Küldés most') + '</button>' : '') + '</div></li>';
 			}).join('') + '</ul>';
 		}
 		if (anyOk) h += '<div class="d3-pact">' + ['invoice', 'advance', 'proforma'].map(t => '<button type="button" class="cpx-btn' + (t === 'invoice' ? '' : ' ghost') + '" data-bnew="' + t + '">' + TYPES[t] + '</button>').join('') +
 			(adv.length ? '<button type="button" class="cpx-btn" data-bnew="final">Végszámla (előleg beszámításával)</button>' : '') + '</div>';
 		box.innerHTML = h;
 		box.querySelectorAll('[data-bnew]').forEach(b => b.addEventListener('click', () => form(box, id, B, b.dataset.bnew)));
+		const doubtAct = async (rowId, p) => { try { const r = await post('cp_bil_act', Object.assign({ row: rowId, op: 'doubt' }, p)); toast(r.msg); B.docs = r.docs.map(fix); draw(box, id, B); } catch (e) { toast(e.message, true); } };
+		box.querySelectorAll('[data-bdm]').forEach(b => b.addEventListener('click', () => { const n = window.prompt('A számlázóban létrejött bizonylat száma:'); if (n && n.trim()) doubtAct(b.dataset.bdm, { res: 'made', number: n.trim() }); }));
+		box.querySelectorAll('[data-bdn]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Megnézted a számlázóban, és ez a bizonylat NEM jött létre?')) doubtAct(b.dataset.bdn, { res: 'none' }); }));
 		box.querySelectorAll('[data-bsend]').forEach(b => b.addEventListener('click', async () => {
 			const d = B.docs.find(z => String(z.id) === b.dataset.bsend);
 			if (!window.confirm((Number(d.pending) === 1 ? 'Kiállítod és elküldöd most a Számlázz.hu-n?' : 'Elküldöd most?') + '\n\n' + (TYPES[d.type] || '') + ' ' + (d.number || '') + ' → ' + (d.emails || ''))) return;
@@ -156,9 +159,16 @@
 			if (!window.confirm(TYPES[kind] + ' kiállítása ' + (zz ? 'a Számlázz.hu-n' : 'a Billingóban') + ' (' + B.profiles[prof].n + ')\n\nVevő: ' + b.name + (b.taxcode ? ' (' + b.taxcode + ')' : '') + '\n' + tot + '\nKiküldés: ' + ({ now: 'azonnal → ' + b.emails, gallery: zz ? 'a galéria kiküldésekor állítja ki és küldi el' : 'a galériával együtt', no: 'nem megy ki' }[send]) + '\n\nMehet?')) return;
 			btn.disabled = true; btn.textContent = 'Kiállítás…';
 			try {
-				const r = await post('cp_bil_issue', P);
-				toast(r.msg); close(); B.docs = r.docs.map(fix); draw(box, id, B);
-			} catch (e) { btn.disabled = false; provUi(); fail(e.message); toast(e.message, true); }
+				let r;
+				/* v1.98: ha egy korábbi ilyen bizonylat bizonytalanul végződött, csak kifejezett megerősítéssel */
+				try { r = await post('cp_bil_issue', P); }
+				catch (e) {
+					if (!/^DOUBT\|/.test(e.message)) throw e;
+					if (!window.confirm(e.message.slice(6) + '\n\nBiztosan NEM jött létre, és most kiállítod?')) { btn.disabled = false; provUi(); return; }
+					r = await post('cp_bil_issue', Object.assign({}, P, { doubt_ok: 1 }));
+				}
+				toast(r.msg, !!r.bad); close(); B.docs = r.docs.map(fix); draw(box, id, B);
+			} catch (e) { btn.disabled = false; provUi(); fail(e.message.replace(/^DOUBT\|/, '')); toast(e.message.replace(/^DOUBT\|/, ''), true); }
 		});
 	}
 	window.CPBill = { slot, mount };

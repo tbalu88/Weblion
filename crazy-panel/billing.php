@@ -48,6 +48,23 @@ add_action('init', function () {
 }, 7);
 function cp_bil_db_ok() { return get_option('cp_bil_db_ver') === CP_BIL_DB_VER; }
 
+/* v1.98: dupla számla ellen
+ * – „bizonytalan” hiba: hálózati hiba / időtúllépés / szerverhiba (5xx) – a számlázó lehet, hogy MÉGIS kiállította.
+ *   Ilyenkor a sor megmarad „[?]” jelöléssel, semmi nem próbálja újra magától; egy kolléga dönti el (létrejött / nem jött létre).
+ * – atomi zár (az options tábla egyedi kulcsa), nem transient */
+define('CP_BIL_DOUBT', '[?] ');
+function cp_bil_unclear($msg) { return new WP_Error('cp_bil_unclear', $msg); }
+function cp_bil_is_unclear($e) { return is_wp_error($e) && $e->get_error_code() === 'cp_bil_unclear'; }
+function cp_bil_lock($k, $ttl) {
+	$k = 'cp_bil_lk_' . $k;
+	if (add_option($k, time() + $ttl, '', 'no')) { return true; }
+	$v = (int) get_option($k);
+	if ($v && $v < time()) { delete_option($k); return add_option($k, time() + $ttl, '', 'no'); }
+	return false;
+}
+function cp_bil_unlock($k) { delete_option('cp_bil_lk_' . $k); }
+function cp_bil_doubt_msg($e) { return CP_BIL_DOUBT . 'Nem biztos, hogy létrejött (' . mb_substr($e->get_error_message(), 0, 160) . '). Nézd meg a számlázóban, és jelöld itt: létrejött / nem jött létre.'; }
+
 /* ------------------------------------------------------------ beállítások */
 function cp_bil_profiles() { return array('KFT' => 'Kft. – Billingo', 'EV' => 'Egyéni vállalkozó – Számlázz.hu'); }
 /* v1.73.1: az egyéni vállalkozó a Számlázz.hu-n számláz (Számla Agent), a kft. a Billingón */
@@ -69,12 +86,13 @@ function cp_bil_req($p, $method, $path, $query = array(), $body = null) {
 	$args = array('method' => $method, 'timeout' => 25, 'headers' => array('X-API-KEY' => $k, 'Accept' => 'application/json', 'Content-Type' => 'application/json'));
 	if ($body !== null) { $args['body'] = wp_json_encode($body); }
 	$r = wp_remote_request(CP_BIL_API . $path . ($query ? '?' . http_build_query($query) : ''), $args);
-	if (is_wp_error($r)) { return new WP_Error('cp_bil', 'A Billingo nem érhető el: ' . $r->get_error_message()); }
+	if (is_wp_error($r)) { return $method === 'POST' ? cp_bil_unclear('A Billingo nem válaszolt: ' . $r->get_error_message()) : new WP_Error('cp_bil', 'A Billingo nem érhető el: ' . $r->get_error_message()); }
 	$code = (int) wp_remote_retrieve_response_code($r);
 	$raw = wp_remote_retrieve_body($r);
 	$j = json_decode($raw, true);
 	if ($code === 401) { return new WP_Error('cp_bil', 'A Billingo elutasította az API-kulcsot (' . $p . ').'); }
 	if ($code === 429) { return new WP_Error('cp_bil', 'A Billingo most túl sok kérést kapott – próbáld újra egy perc múlva.'); }
+	if ($code >= 500 && $method === 'POST') { return cp_bil_unclear('Billingo szerverhiba (' . $code . ')'); }
 	if ($code >= 300) {
 		$m = is_array($j) ? (string) ($j['error']['message'] ?? $j['message'] ?? '') : '';
 		if (is_array($j) && !empty($j['errors']) && is_array($j['errors'])) { $m .= ' ' . implode(' ', array_map(function ($e) { return is_array($e) ? (string) ($e['message'] ?? wp_json_encode($e)) : (string) $e; }, array_slice($j['errors'], 0, 4))); }
@@ -129,6 +147,14 @@ function cp_bil_items($d, $p) {
 function cp_bil_docs($deal) {
 	global $wpdb;
 	return (array) $wpdb->get_results($wpdb->prepare('SELECT id, profile, bid, type, number, gross, currency, send_mode, sent_at, pay, pay_at, emails, created_by, created_at, err, (req IS NOT NULL AND number = \'\') pending FROM ' . cp_bil_t() . ' WHERE deal_id = %d ORDER BY id DESC', $deal), ARRAY_A);
+}
+
+/* amíg egy bizonytalan kiállítás nincs tisztázva, ugyanarra a dealre ugyanilyen bizonylat csak kifejezett megerősítéssel */
+function cp_bil_doubt_guard($deal, $type) {
+	global $wpdb;
+	if (!empty($_POST['doubt_ok'])) { return; }
+	$n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_bil_t() . " WHERE deal_id = %d AND type = %s AND number = '' AND err LIKE %s", $deal, $type, $wpdb->esc_like(CP_BIL_DOUBT) . '%'));
+	if ($n) { cp_el_err('DOUBT|Ennél a dealnél egy korábbi ilyen bizonylat kiállítása bizonytalanul végződött – lehet, hogy már létezik. Előbb nézd meg a számlázóban, és jelöld a bizonylatsoron (létrejött / nem jött létre).'); }
 }
 
 /* ------------------------------------------------------------ végpontok (deal adatlap) */
@@ -234,23 +260,25 @@ function cp_bil_ajax_issue() {
 			if (is_wp_error($x)) { cp_el_err($x->get_error_message(), 502); }
 			wp_send_json_success(array('pdf' => base64_encode($x['pdf'])));
 		}
-		$lk = 'cp_bil_lock_' . (int) $d['id'] . '_' . $type;
-		if (get_transient($lk)) { cp_el_err('Ez a bizonylat épp most készült – frissítsd az adatlapot.'); }
-		set_transient($lk, 1, 60);
+		$lk = 'iss_' . (int) $d['id'] . '_' . $type;
+		cp_bil_doubt_guard((int) $d['id'], $type);
+		if (!cp_bil_lock($lk, 120)) { cp_el_err('Ez a bizonylat épp most készül – frissítsd az adatlapot.'); }
 		$galDone = (string) (get_option(CP_PANEL_TRACK . (int) $d['id'], array())['gl'] ?? '') === '1';
 		$wpdb->insert(cp_bil_t(), array('deal_id' => (int) $d['id'], 'profile' => $p, 'type' => $type, 'number' => '', 'currency' => 'HUF', 'send_mode' => $mode, 'emails' => implode(', ', $emails), 'req' => wp_json_encode($req, JSON_UNESCAPED_UNICODE), 'created_by' => $who, 'created_at' => gmdate('Y-m-d H:i:s')));
 		$row = (int) $wpdb->insert_id;
 		if ($mode === 'gallery' && !$galDone) { wp_send_json_success(array('msg' => 'Előkészítve: a Számlázz.hu a galéria kiküldésekor (Követés fül, „Galéria” pipa) állítja ki és küldi el.', 'docs' => cp_bil_docs((int) $d['id']))); }
 		$x = cp_szl_issue_row($row, $mode !== 'no');
-		if (is_wp_error($x)) { $wpdb->delete(cp_bil_t(), array('id' => $row)); delete_transient($lk); cp_el_err($x->get_error_message(), 502); }
+		if (cp_bil_is_unclear($x)) { cp_bil_unlock($lk); wp_send_json_success(array('msg' => '⚠ ' . cp_bil_doubt_msg($x), 'bad' => 1, 'docs' => cp_bil_docs((int) $d['id']))); }
+		if (is_wp_error($x)) { $wpdb->delete(cp_bil_t(), array('id' => $row)); cp_bil_unlock($lk); cp_el_err($x->get_error_message(), 502); }
+		/* siker: a zár 2 percig marad – a dupla kattintás ne állítson ki még egyet */
 		wp_send_json_success(array('msg' => 'Kiállítva a Számlázz.hu-n: ' . $x . ($mode !== 'no' ? '. A Számlázz.hu elküldte: ' . implode(', ', $emails) . '.' : '.'), 'docs' => cp_bil_docs((int) $d['id'])));
 	}
 	/* kétszeri kattintás ellen: ugyanarra a dealre ugyanaz a típus 60 mp-en belül csak egyszer */
-	$lk = 'cp_bil_lock_' . (int) $d['id'] . '_' . $type;
-	if (get_transient($lk)) { cp_el_err('Ez a bizonylat épp most készült – frissítsd az adatlapot.'); }
-	set_transient($lk, 1, 60);
+	$lk = 'iss_' . (int) $d['id'] . '_' . $type;
+	cp_bil_doubt_guard((int) $d['id'], $type);
+	if (!cp_bil_lock($lk, 120)) { cp_el_err('Ez a bizonylat épp most készül – frissítsd az adatlapot.'); }
 	$pid = cp_bil_partner($p, $b);
-	if (is_wp_error($pid)) { delete_transient($lk); cp_el_err($pid->get_error_message(), 502); }
+	if (is_wp_error($pid)) { cp_bil_unlock($lk); cp_el_err($pid->get_error_message(), 502); }
 	/* v1.73.2: díjbekérőhöz a Billingo díjbekérő-tömbjét használja (ha van), minden máshoz a kiválasztott számlatömböt */
 	$blk = (int) $o['block'];
 	if ($type === 'proforma') { foreach ((array) $o['blocks'] as $x) { if (preg_match('/– proforma$/', (string) $x['n'])) { $blk = (int) $x['id']; break; } } }
@@ -259,7 +287,12 @@ function cp_bil_ajax_issue() {
 	if ($adv) { $body['advance_invoice'] = $adv; }
 	if (!empty($b['po'])) { $body['settings'] = array('order_number' => mb_substr(sanitize_text_field((string) $b['po']), 0, 60)); }
 	$r = cp_bil_req($p, 'POST', '/documents', array(), $body);
-	if (is_wp_error($r)) { delete_transient($lk); cp_el_err($r->get_error_message(), 502); }
+	if (cp_bil_is_unclear($r)) {
+		$wpdb->insert(cp_bil_t(), array('deal_id' => (int) $d['id'], 'profile' => $p, 'type' => $type, 'number' => '', 'currency' => 'HUF', 'send_mode' => $mode, 'emails' => implode(', ', $emails), 'created_by' => $who, 'created_at' => gmdate('Y-m-d H:i:s'), 'err' => cp_bil_doubt_msg($r)));
+		cp_bil_unlock($lk);
+		wp_send_json_success(array('msg' => '⚠ ' . cp_bil_doubt_msg($r), 'bad' => 1, 'docs' => cp_bil_docs((int) $d['id'])));
+	}
+	if (is_wp_error($r)) { cp_bil_unlock($lk); cp_el_err($r->get_error_message(), 502); }
 	$wpdb->insert(cp_bil_t(), array('deal_id' => (int) $d['id'], 'profile' => $p, 'bid' => (int) ($r['id'] ?? 0), 'type' => $type, 'number' => (string) ($r['invoice_number'] ?? ''), 'gross' => (float) ($r['gross_total'] ?? 0), 'currency' => 'HUF',
 		'send_mode' => $mode, 'pay' => (string) ($r['payment_status'] ?? ''), 'emails' => implode(', ', $emails), 'created_by' => $who, 'created_at' => gmdate('Y-m-d H:i:s')));
 	$row = (int) $wpdb->insert_id;
@@ -295,6 +328,23 @@ function cp_bil_ajax_act() {
 	$r = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_bil_t() . ' WHERE id = %d', (int) ($_POST['row'] ?? 0)), ARRAY_A);
 	if (!$r) { cp_el_err('Nincs ilyen bizonylat.', 404); }
 	$op = (string) ($_POST['op'] ?? '');
+	/* v1.98: bizonytalan kiállítás tisztázása – „létrejött” (a számmal) vagy „nem jött létre” (Számlázz.hu: újra kiállítható; Billingo: a sor törlődik) */
+	if ($op === 'doubt') {
+		if (strpos((string) $r['err'], CP_BIL_DOUBT) !== 0) { cp_el_err('Ez a bizonylat nincs bizonytalan állapotban.'); }
+		$res = (string) ($_POST['res'] ?? '');
+		if ($res === 'made') {
+			$num = mb_substr(sanitize_text_field(wp_unslash((string) ($_POST['number'] ?? ''))), 0, 60);
+			if ($num === '') { cp_el_err('Írd be a létrejött bizonylat számát.'); }
+			$wpdb->update(cp_bil_t(), array('number' => $num, 'err' => null, 'sent_at' => $r['send_mode'] === 'now' ? gmdate('Y-m-d H:i:s') : null), array('id' => (int) $r['id']));
+			wp_send_json_success(array('msg' => 'Rögzítve: ' . $num . '.', 'docs' => cp_bil_docs((int) $r['deal_id'])));
+		}
+		if ($res === 'none') {
+			if (cp_bil_prov($r['profile']) === 'szamlazz' && !empty($r['req'])) { $wpdb->update(cp_bil_t(), array('err' => null), array('id' => (int) $r['id'])); $m = 'Rendben – a bizonylat újra kiállítható („Kiállítás és küldés most”).'; }
+			else { $wpdb->delete(cp_bil_t(), array('id' => (int) $r['id'])); $m = 'Rendben – a sor törölve, a bizonylat újra kiállítható.'; }
+			wp_send_json_success(array('msg' => $m, 'docs' => cp_bil_docs((int) $r['deal_id'])));
+		}
+		cp_el_err('Hibás kérés.');
+	}
 	if ($op === 'send') { $s = cp_bil_send((int) $r['id']); if (is_wp_error($s)) { cp_el_err($s->get_error_message(), 502); } wp_send_json_success(array('msg' => 'Elküldve: ' . $r['emails'], 'docs' => cp_bil_docs((int) $r['deal_id']))); }
 	if ($op === 'url' && cp_bil_prov($r['profile']) === 'szamlazz') { if ((string) $r['url'] === '') { cp_el_err('Ehhez a számlához nincs link (a Számlázz.hu felületén nyisd meg).'); } wp_send_json_success(array('url' => esc_url_raw((string) $r['url']))); }
 	if ($op === 'url') { $x = cp_bil_req($r['profile'], 'GET', '/documents/' . (int) $r['bid'] . '/public-url'); if (is_wp_error($x)) { cp_el_err($x->get_error_message(), 502); } wp_send_json_success(array('url' => esc_url_raw((string) ($x['public_url'] ?? '')))); }
@@ -307,7 +357,7 @@ function cp_bil_tick() {
 	if (!cp_bil_db_ok() || !cp_bil_any()) { return; }
 	global $wpdb;
 	$T = cp_bil_t();
-	foreach ((array) $wpdb->get_results("SELECT id, deal_id FROM $T WHERE send_mode = 'gallery' AND sent_at IS NULL AND (bid IS NOT NULL OR (req IS NOT NULL AND number = '')) ORDER BY id LIMIT 20", ARRAY_A) as $r) {
+	foreach ((array) $wpdb->get_results("SELECT id, deal_id FROM $T WHERE send_mode = 'gallery' AND sent_at IS NULL AND (bid IS NOT NULL OR (req IS NOT NULL AND number = '')) AND (err IS NULL OR err NOT LIKE '[?]%') ORDER BY id LIMIT 20", ARRAY_A) as $r) {
 		if ((string) (get_option(CP_PANEL_TRACK . (int) $r['deal_id'], array())['gl'] ?? '') === '1') { cp_bil_send((int) $r['id']); }
 	}
 	foreach ((array) $wpdb->get_results("SELECT id, profile, bid, deal_id FROM $T WHERE bid IS NOT NULL AND profile = 'KFT' AND pay NOT IN ('paid') AND (checked_at IS NULL OR checked_at < NOW() - INTERVAL 1 HOUR) AND created_at > NOW() - INTERVAL 120 DAY ORDER BY checked_at LIMIT 15", ARRAY_A) as $r) {
@@ -324,6 +374,15 @@ function cp_bil_mark_paid($deal_id) {
 	$tr = get_option(CP_PANEL_TRACK . $deal_id, array()); if (!is_array($tr)) { $tr = array(); }
 	if (($tr['dj'] ?? '') !== 'ok') { $tr['dj'] = 'ok'; update_option(CP_PANEL_TRACK . $deal_id, $tr, false); }
 	global $wpdb;
+	/* v1.98: „fizetve” csak ha a kifizetett összeg fedezi a deal értékét (egy előleg vagy részlet még nem teljes fizetés);
+	 * a díjbekérő-pipa (dj) ettől függetlenül „ok”, mert a díjbekérőt kifizették */
+	$val = function_exists('cp_crm_t') ? (float) $wpdb->get_var($wpdb->prepare('SELECT value FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal_id)) : 0;
+	if ($val > 0) {
+		$T = cp_bil_t();
+		$maxp = (float) $wpdb->get_var($wpdb->prepare("SELECT MAX(gross) FROM $T WHERE deal_id = %d AND pay = 'paid'", $deal_id));
+		$sum = (float) $wpdb->get_var($wpdb->prepare("SELECT SUM(gross) FROM $T WHERE deal_id = %d AND pay = 'paid' AND type IN ('advance', 'invoice')", $deal_id));
+		if ($maxp < 0.98 * $val && $sum < 0.98 * $val) { return; }
+	}
 	$cur = function_exists('cp_crm_t') ? (string) $wpdb->get_var($wpdb->prepare('SELECT paid FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal_id)) : '';
 	if ($cur !== 'Igen' && function_exists('cp_crm_save_data') && !empty(cp_panel_opts()['stage_write'])) {
 		$r = cp_crm_save_data($deal_id, array('paid' => 'Igen'), array());
@@ -336,9 +395,10 @@ function cp_szl_post($action, $xml) {
 	$bd = '----cpszl' . wp_generate_password(20, false, false);
 	$body = '--' . $bd . "\r\nContent-Disposition: form-data; name=\"" . $action . "\"; filename=\"request.xml\"\r\nContent-Type: text/xml\r\n\r\n" . $xml . "\r\n--" . $bd . "--\r\n";
 	$r = wp_remote_post('https://www.szamlazz.hu/szamla/', array('timeout' => 45, 'headers' => array('Content-Type' => 'multipart/form-data; boundary=' . $bd), 'body' => $body));
-	if (is_wp_error($r)) { return new WP_Error('cp_bil', 'A Számlázz.hu nem érhető el: ' . $r->get_error_message()); }
+	if (is_wp_error($r)) { return cp_bil_unclear('A Számlázz.hu nem válaszolt: ' . $r->get_error_message()); }
 	$h = wp_remote_retrieve_headers($r);
 	if (!empty($h['szlahu_error_code'])) { return new WP_Error('cp_bil', 'Számlázz.hu hiba (' . sanitize_text_field((string) $h['szlahu_error_code']) . '): ' . sanitize_text_field(urldecode(str_replace('+', ' ', (string) ($h['szlahu_error'] ?? ''))))); }
+	if ((int) wp_remote_retrieve_response_code($r) >= 500) { return cp_bil_unclear('Számlázz.hu szerverhiba (' . (int) wp_remote_retrieve_response_code($r) . ')'); }
 	if ((int) wp_remote_retrieve_response_code($r) !== 200) { return new WP_Error('cp_bil', 'Számlázz.hu hiba (' . (int) wp_remote_retrieve_response_code($r) . ').'); }
 	return array('h' => $h, 'body' => (string) wp_remote_retrieve_body($r));
 }
@@ -382,12 +442,13 @@ function cp_szl_issue_row($row, $send) {
 	global $wpdb;
 	$r = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_bil_t() . ' WHERE id = %d', $row), ARRAY_A);
 	if (!$r || $r['number'] !== '' || empty($r['req'])) { return new WP_Error('cp_bil', 'Ez a számla már ki van állítva.'); }
-	$lk = 'cp_szl_row_' . (int) $row; if (get_transient($lk)) { return new WP_Error('cp_bil', 'A kiállítás folyamatban.'); } set_transient($lk, 1, 120);
+	if (strpos((string) $r['err'], CP_BIL_DOUBT) === 0) { return new WP_Error('cp_bil', 'Ennél a számlánál nem biztos, hogy az előző kiállítás nem sikerült – előbb nézd meg a Számlázz.hu-ban, és jelöld: létrejött / nem jött létre.'); }
+	$lk = 'szl_row_' . (int) $row; if (!cp_bil_lock($lk, 180)) { return new WP_Error('cp_bil', 'A kiállítás folyamatban.'); }
 	$q = json_decode((string) $r['req'], true);
 	$x = cp_szl_issue($r['profile'], $q, $send ? 'send' : 'quiet');
-	delete_transient($lk);
-	if (is_wp_error($x)) { $wpdb->update(cp_bil_t(), array('err' => $x->get_error_message()), array('id' => (int) $row)); return $x; }
+	if (is_wp_error($x)) { $wpdb->update(cp_bil_t(), array('err' => cp_bil_is_unclear($x) ? cp_bil_doubt_msg($x) : $x->get_error_message()), array('id' => (int) $row)); cp_bil_unlock($lk); return $x; }
 	$wpdb->update(cp_bil_t(), array('number' => $x['number'] !== '' ? $x['number'] : '(kiállítva)', 'gross' => $x['gross'], 'url' => $x['url'], 'sent_at' => $send ? gmdate('Y-m-d H:i:s') : null, 'err' => null), array('id' => (int) $row));
+	cp_bil_unlock($lk);
 	return $x['number'];
 }
 
