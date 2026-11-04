@@ -1,4 +1,4 @@
-/* Crazy panel – Kapcsolatok fül (v1.49): kontaktok és cégek, a deal-jeik számával és a megnyert összeggel */
+/* Crazy panel – Kapcsolatok fül (v1.49): kontaktok és cégek, a deal-jeik számával és a megnyert összeggel; v2.4: duplikátum-javaslatok és összevonás */
 (function () {
 	'use strict';
 	const C = window.CPX || {};
@@ -9,9 +9,11 @@
 	const money = v => !v ? '–' : Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft';
 	const ini = n => String(n || '').split(/[\s@]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 	const AVC = ['#F6B48F', '#93D5B4', '#A9C1F6', '#E3B5E6', '#F3D27F', '#9FD8E5', '#F2A5A5'];
-	const S = { kind: 'ct', q: '', so: 'recent', only: true, p: 0, data: null, err: '', main: null, seq: 0, sel: new Map() };
+	const S = { kind: 'ct', q: '', so: 'recent', only: true, p: 0, data: null, err: '', main: null, seq: 0, sel: new Map(), dup: false, dupN: { ct: null, co: null } };
 	/* v2.2: kijelölés és törlés – csak admin, ha a Salesmate-be írás be van kapcsolva */
 	const DEL = C.role === 'admin' && !!(C.crm && C.crm.write);
+	/* v2.4: összevonás – ugyanígy csak admin; a javaslatokat mindenki látja és jelölheti „Nem ugyanaz”-nak */
+	const MRG = DEL;
 	function toast(t, bad) { let d = document.getElementById('cpx-toast'); if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); } d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 8000 : 4000); }
 	try { const k = JSON.parse(localStorage.getItem('cpx_people') || '{}'); if (k.kind === 'co' || k.kind === 'ct') S.kind = k.kind; if (typeof k.so === 'string') S.so = k.so; if (typeof k.only === 'boolean') S.only = k.only; } catch (e) { /* privát mód */ }
 	const save = () => { try { localStorage.setItem('cpx_people', JSON.stringify({ kind: S.kind, so: S.so, only: S.only })); } catch (e) { /* privát mód */ } };
@@ -32,16 +34,21 @@
 		S.main = main;
 		main.innerHTML = '<div class="pp"><div class="pp-h"><div class="crm-seg"><button type="button" data-k="ct" class="' + (S.kind === 'ct' ? 'on' : '') + '">Kontaktok</button><button type="button" data-k="co" class="' + (S.kind === 'co' ? 'on' : '') + '">Cégek</button></div>' +
 			'<input type="search" data-q placeholder="' + (S.kind === 'ct' ? 'Keresés: név, e-mail, telefon, város, cég' : 'Keresés: cégnév, weboldal') + '" value="' + esc(S.q) + '" aria-label="Keresés">' +
-			'<select data-so aria-label="Rendezés">' + SORTS.map(x => '<option value="' + x[0] + '"' + (S.so === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
-			'<label class="crm-chk" title="Keresés közben mindenkit mutat"><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
+			'<select data-so aria-label="Rendezés"' + (S.dup ? ' style="display:none"' : '') + '>' + SORTS.map(x => '<option value="' + x[0] + '"' + (S.so === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
+			'<label class="crm-chk" title="Keresés közben mindenkit mutat"' + (S.dup ? ' style="display:none"' : '') + '><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label>' +
+			'<button type="button" class="cpx-btn ghost pp-dupb' + (S.dup ? ' on' : '') + '" data-dup title="A rendszer által talált lehetséges duplikátumok">⧉ Duplikátumok<span class="pp-dupn" data-dupn></span></button></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		main.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { if (S.kind === b.dataset.k) return; S.kind = b.dataset.k; S.p = 0; S.sel.clear(); save(); view(main); }));
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); S.p = 0; load(); }, 300); });
 		main.querySelector('[data-so]').addEventListener('change', e => { S.so = e.target.value; S.p = 0; save(); load(); });
 		main.querySelector('[data-only]').addEventListener('change', e => { S.only = e.target.checked; S.p = 0; save(); load(); });
+		main.querySelector('[data-dup]').addEventListener('click', () => { S.dup = !S.dup; view(main); });
+		if (S.dup) { main.querySelector('[data-q]').placeholder = 'Szűrés a javaslatok között (név, e-mail, cég)'; }
+		dupBadge();
 		load();
 	}
 	async function load() {
+		if (S.dup) return loadDup();
 		const my = ++S.seq, main = S.main;
 		if (!main || !main.isConnected) return;
 		const body = main.querySelector('.pp-body');
@@ -53,7 +60,7 @@
 		const pages = Math.max(1, Math.ceil(r.total / r.n)), ct = r.kind === 'ct';
 		const allOn = r.rows.length && r.rows.every(x => S.sel.has(x.id));
 		body.innerHTML = '<div class="pp-n">' + r.total.toLocaleString('hu-HU') + (ct ? ' kontakt' : ' cég') + (pages > 1 ? ' · ' + (r.p + 1) + '. oldal / ' + pages : '') + (S.q && S.only ? ' · keresésnél a deal nélküliek is látszanak' : '') + '</div>' +
-			(DEL && S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button><button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '') +
+			(DEL && S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button>' + (MRG ? '<button type="button" class="cpx-btn" data-mrg' + (S.sel.size < 2 || S.sel.size > 6 ? ' disabled title="2–6 rekordot jelölj ki"' : '') + '>⇄ Összevonás</button>' : '') + '<button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '') +
 			(r.rows.length ? '<div class="pp-tw"><table class="pp-t"><thead><tr>' + (DEL ? '<th class="pp-ck"><input type="checkbox" data-all aria-label="Az oldal összes sorának kijelölése"' + (allOn ? ' checked' : '') + '></th>' : '') + '<th>' + (ct ? 'Kontakt' : 'Cég') + '</th><th class="pp-hm">' + (ct ? 'Cég' : 'Kontaktok') + '</th><th class="r">Deal</th><th class="r pp-hm">Megnyert</th><th class="r">Bevétel</th><th class="pp-hm">Legutóbbi rendezvény</th></tr></thead><tbody>' +
 				r.rows.map(x => '<tr tabindex="0" data-id="' + x.id + '"' + (S.sel.has(x.id) ? ' class="ck"' : '') + '>' + (DEL ? '<td class="pp-ck"><input type="checkbox" data-ck="' + x.id + '" aria-label="Kijelölés"' + (S.sel.has(x.id) ? ' checked' : '') + '></td>' : '') + '<td class="pp-nc"><span class="pp-av' + (ct ? '' : ' sq') + '" style="background:' + AVC[x.id % AVC.length] + '">' + esc(ini(x.name || x.email)) + '</span><span class="pp-nm"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(ct ? [x.name && x.email !== x.name ? x.email : '', x.mobile || x.phone, x.city].filter(Boolean).join(' · ') : (x.website || '')) + '</small></span></td>' +
 					'<td class="pp-hm">' + (ct ? (x.co ? '<a href="#" data-co="' + x.co_id + '">' + esc(x.co) + '</a>' : '<span class="cpx-muted">–</span>') : x.cts) + '</td><td class="r">' + x.n + (x.open ? ' <small class="pp-open">' + x.open + ' nyitott</small>' : '') + '</td><td class="r pp-hm">' + x.won + '</td><td class="r">' + esc(money(x.won_v)) + '</td><td class="pp-hm">' + esc(huD(x.last_ev)) + '</td></tr>').join('') + '</tbody></table></div>' +
@@ -73,6 +80,7 @@
 			if (all) all.addEventListener('change', () => { r.rows.forEach(x => { if (all.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); }); redraw(); });
 			const clr = body.querySelector('[data-clr]'); if (clr) clr.addEventListener('click', () => { S.sel.clear(); redraw(); });
 			const del = body.querySelector('[data-del]'); if (del) del.addEventListener('click', () => delSel(ct));
+			const mb = body.querySelector('[data-mrg]'); if (mb) mb.addEventListener('click', () => mergeDlg(ct ? 'ct' : 'co', Array.from(S.sel.keys())));
 		}
 		if (window.CPXStatus) window.CPXStatus();
 	}
@@ -100,6 +108,82 @@
 		} catch (e) { toast(e.message, true); }
 		load();
 	}
+
+	/* ------------------------------------------------------------ v2.4: lehetséges duplikátumok és összevonás */
+	const LVL = { 'erős': 'hi', 'közepes': 'md', 'gyenge': 'lo' };
+	async function dupBadge(force) {
+		const k = S.kind, el = () => S.main && S.main.querySelector('[data-dupn]');
+		if (S.dupN[k] == null || force) { try { const r = await post('cp_crm_dups', { kind: k }); S.dupN[k] = r.n; } catch (e) { return; } }
+		const b = el(); if (b && S.kind === k) b.textContent = S.dupN[k] ? String(S.dupN[k]) : '';
+	}
+	function recHtml(x, ct) {
+		const sub = ct ? [x.email, x.mobile || x.phone, x.co, x.city].filter(Boolean) : [x.website, x.phone, x.cts ? x.cts + ' kontakt' : ''].filter(Boolean);
+		return '<div class="pd-r"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(sub.join(' · ')) + '</small><small class="pd-m">' + x.n + ' deal' + (x.last_ev ? ' · utolsó rendezvény: ' + esc(huD(x.last_ev)) : '') + ' · létrehozva: ' + esc(huD(x.created_at)) + '</small></div>';
+	}
+	async function loadDup(fresh) {
+		const my = ++S.seq, main = S.main;
+		if (!main || !main.isConnected) return;
+		const body = main.querySelector('.pp-body'), ct = S.kind === 'ct';
+		let r;
+		try { r = await post('cp_crm_dups', { kind: S.kind, fresh: fresh ? 1 : '' }); S.err = ''; } catch (e) { if (my === S.seq) { S.err = e.message; body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; } return; }
+		if (my !== S.seq) return;
+		S.dupN[S.kind] = r.n; dupBadge();
+		const q = S.q.toLowerCase();
+		const L = !q ? r.pairs : r.pairs.filter(p => [p.A, p.B].some(x => [x.name, x.email, x.co, x.website].filter(Boolean).join(' ').toLowerCase().includes(q)));
+		body.innerHTML = '<div class="pp-n">' + (r.n ? r.n + ' lehetséges duplikátum-pár' + (q ? ' · ' + L.length + ' illik a szűrésre' : '') : 'Nincs lehetséges duplikátum') + ' · <a href="#" data-fresh>Újrakeresés</a>' + (MRG ? '' : ' · összevonni admin fiókkal lehet') + '</div>' +
+			'<p class="pd-help">A rendszer azonos e-mail-cím, telefonszám, név' + (ct ? '' : ', cégnév, weboldal vagy céges e-mail-domain') + ' alapján javasol. Amelyik nem ugyanaz, jelöld „Nem ugyanaz”-nak – többet nem jön elő.</p>' +
+			L.map(p => '<div class="pd" data-a="' + p.a + '" data-b="' + p.b + '"><div class="pd-h"><span class="pd-l ' + (LVL[p.lvl] || 'lo') + '">' + esc(p.lvl) + '</span><span class="pd-w">' + esc(p.why.join(' · ')) + '</span></div>' +
+				'<div class="pd-g"><a href="#" data-open="' + p.A.id + '">' + recHtml(p.A, ct) + '</a><span class="pd-x" aria-hidden="true">⇄</span><a href="#" data-open="' + p.B.id + '">' + recHtml(p.B, ct) + '</a></div>' +
+				'<div class="pd-b"><button type="button" class="cpx-btn ghost" data-ign>Nem ugyanaz</button>' + (MRG ? '<button type="button" class="cpx-btn" data-m>⇄ Összevonás…</button>' : '') + '</div></div>').join('');
+		body.querySelector('[data-fresh]').addEventListener('click', e => { e.preventDefault(); body.innerHTML = '<div class="cpx-empty">Keresés…</div>'; loadDup(true); });
+		body.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const id = Number(a.dataset.open); if (ct) window.CPCrm.contact(id); else window.CPCrm.company(id); }));
+		body.querySelectorAll('.pd').forEach(d => {
+			const a = Number(d.dataset.a), b = Number(d.dataset.b);
+			d.querySelector('[data-ign]').addEventListener('click', async () => {
+				try { await post('cp_crm_dup_ignore', { kind: S.kind, a, b }); d.remove(); S.dupN[S.kind] = Math.max(0, (S.dupN[S.kind] || 1) - 1); dupBadge(); toast('Megjegyeztem: ez a kettő nem ugyanaz.'); } catch (e) { toast(e.message, true); }
+			});
+			const m = d.querySelector('[data-m]'); if (m) m.addEventListener('click', () => mergeDlg(S.kind, [a, b]));
+		});
+		if (window.CPXStatus) window.CPXStatus();
+	}
+	function closeDlg() { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } }
+	async function mergeDlg(kind, ids) {
+		const ct = kind === 'ct', m = document.getElementById('cpx-modal');
+		if (!m) return;
+		let rows;
+		try { rows = (await post('cp_crm_merge_info', { kind, ids: ids.join(',') })).rows; } catch (e) { toast(e.message, true); return; }
+		if (rows.length < 2) { toast('Ezek közül legalább az egyik közben megszűnt – frissítem a listát.', true); load(); return; }
+		/* alapból a több deal-es, egyenlőségnél a régebbi marad meg */
+		let keep = rows.slice().sort((x, y) => (y.n - x.n) || (x.id - y.id))[0].id;
+		const what = ct ? 'kontakt' : 'cég', whatHoz = ct ? 'kontakthoz' : 'céghez';
+		const draw = () => {
+			const others = rows.filter(x => x.id !== keep), moved = others.reduce((a, x) => a + x.n, 0) + (ct ? 0 : others.reduce((a, x) => a + (x.cts || 0), 0));
+			m.innerHTML = '<div class="cpx-sheet pd-dlg" role="dialog" aria-modal="true" aria-label="' + what + 'ok összevonása"><div class="cpx-sheet-h"><h3>' + (ct ? 'Kontaktok' : 'Cégek') + ' összevonása</h3><button class="cpx-x" type="button" data-x aria-label="Bezárás">×</button></div>' +
+				'<p class="pd-help">Válaszd ki, melyik ' + what + ' maradjon meg. A többi adatai ebbe kerülnek, utána a többi törlődik.</p>' +
+				rows.map(x => '<label class="pd-opt' + (x.id === keep ? ' on' : '') + '"><input type="radio" name="pdk" value="' + x.id + '"' + (x.id === keep ? ' checked' : '') + '>' + recHtml(x, ct) + (x.id === keep ? '<span class="pd-keep">Megmarad</span>' : '<span class="pd-gone">Beleolvad</span>') + '</label>').join('') +
+				'<div class="pd-what"><b>Mi történik?</b><ul>' +
+				'<li>' + (moved ? (ct ? moved + ' deal' : (others.reduce((a, x) => a + x.n, 0) + ' deal és ' + others.reduce((a, x) => a + (x.cts || 0), 0) + ' kontakt')) + ' átkerül a megmaradó ' + whatHoz + '.' : 'A beleolvadó ' + whatHoz + ' nem tartozik deal' + (ct ? '' : ' vagy kontakt') + '.') + '</li>' +
+				'<li>A megmaradó ' + what + ' üres mezőit (' + (ct ? 'e-mail, telefon, cég, város' : 'weboldal, telefon') + ') a többiből tölti ki; az eltérő ' + (ct ? 'e-mail-cím és telefonszám' : 'weboldal és telefon') + ' a leírásba kerül, nem vész el.</li>' +
+				'<li>A beleolvadó ' + what + ' törlődik (a Salesmate-ben a Lomtárból 30 napig visszaállítható). Ha valamit nem sikerül áthelyezni, nem törlöm.</li></ul></div>' +
+				'<div class="pd-b"><button type="button" class="cpx-btn ghost" data-x>Mégse</button><button type="button" class="cpx-btn" data-go>⇄ Összevonás</button></div></div>';
+			m.hidden = false;
+			m.querySelectorAll('[data-x]').forEach(b => b.addEventListener('click', closeDlg));
+			m.querySelectorAll('input[name=pdk]').forEach(r => r.addEventListener('change', () => { keep = Number(r.value); draw(); }));
+			m.querySelector('[data-go]').addEventListener('click', async ev => {
+				const b = ev.currentTarget; b.disabled = true; b.textContent = 'Összevonás folyamatban…';
+				try {
+					const r = await post('cp_crm_merge', { kind, keep, ids: rows.map(x => x.id).filter(i => i !== keep).join(',') });
+					let t = r.ok ? r.ok + ' ' + what + ' összevonva' + (r.moved ? ', ' + r.moved + ' deal áthelyezve' : '') + '.' : 'Nem történt összevonás.';
+					if (r.err && r.err.length) t += ' ' + r.err.join(' ');
+					if (r.warn && r.warn.length) t += ' (' + r.warn.slice(0, 3).join('; ') + ')';
+					toast(t, !!(r.err && r.err.length));
+					closeDlg(); S.sel.clear(); S.dupN = { ct: null, co: null }; load(); dupBadge();
+				} catch (e) { b.disabled = false; b.textContent = '⇄ Összevonás'; toast(e.message, true); }
+			});
+		};
+		draw();
+		m.onclick = e => { if (e.target === m) closeDlg(); };
+	}
 	function status(s) { s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function refresh() { if (S.main && S.main.isConnected) await load(); }
 	window.CPContacts = { view, status, refresh };
@@ -113,6 +197,13 @@
 		'.pp-nm{min-width:0}.pp-nm b{display:block;font-weight:600}.pp-nm small{display:block;color:#8A8E96;font-size:12px}.pp-t a{color:#2F5BD8;text-decoration:none;font-weight:600}.pp-open{color:#2F5BD8;font-size:11.5px}.pp-pg{display:flex;gap:8px;justify-content:center;margin-top:10px}' +
 		'.pp-t td.pp-ck,.pp-t th.pp-ck{width:34px;padding-right:0;min-width:0;display:table-cell}.pp-ck input{width:17px;height:17px;cursor:pointer;accent-color:#2F5BD8}.pp-t tbody tr.ck{background:#EEF3FD}' +
 		'.pp-bulk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#EEF3FD;border:1px solid #C9D6FB;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px}.pp-bulk b{margin-right:auto}.pp-bulk .cpx-btn{height:32px;font-size:12.5px}' +
-		'@media (max-width:760px){.pp-t .pp-hm{display:none}.pp-t td.pp-nc{min-width:0}.pp-ck input{width:20px;height:20px}}';
+		'.pp-dupb.on{background:#141C33;color:#fff;border-color:#141C33}.pp-dupn{font-weight:700;color:#C2410C;margin-left:5px}.pp-dupn:empty{display:none}.pp-dupb.on .pp-dupn{color:#FDBA74}.pd-help{font-size:12.5px;color:#6B6F78;margin:0 0 10px}' +
+		'.pd{background:#fff;border:1px solid #E6E3DE;border-radius:12px;padding:10px 12px;margin-bottom:8px}.pd-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;font-size:12.5px;color:#4A4F5A}' +
+		'.pd-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:6px;padding:2px 7px}.pd-l.hi{background:#FDE7DA;color:#B4400E}.pd-l.md{background:#FDF3D2;color:#8A6200}.pd-l.lo{background:#EEF0F3;color:#5B6170}' +
+		'.pd-g{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch}.pd-g>a{text-decoration:none;color:inherit;border:1px solid #F0ECE6;border-radius:9px;padding:8px 10px;background:#FAF8F5}.pd-g>a:hover{border-color:#C9D6FB}.pd-x{align-self:center;color:#8A8E96;font-size:18px}' +
+		'.pd-r b{display:block;font-weight:600;font-size:13.5px}.pd-r small{display:block;color:#6B6F78;font-size:12px;overflow-wrap:anywhere}.pd-r small.pd-m{color:#8A8E96;margin-top:2px}.pd-b{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}.pd-b .cpx-btn{height:32px;font-size:12.5px}' +
+		'.pd-dlg{max-width:620px}.pd-opt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid #E6E3DE;border-radius:10px;padding:9px 11px;margin-bottom:8px;cursor:pointer}.pd-opt.on{border-color:#2F5BD8;background:#F3F6FE}.pd-opt input{margin-top:3px;accent-color:#2F5BD8}.pd-opt .pd-r{flex:1;min-width:0}' +
+		'.pd-keep,.pd-gone{flex:none;font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;align-self:center}.pd-keep{background:#DDF3E6;color:#17663A}.pd-gone{background:#EEF0F3;color:#5B6170}.pd-what{font-size:13px;background:#FAF8F5;border-radius:10px;padding:9px 12px;margin:10px 0}.pd-what ul{margin:6px 0 0;padding-left:18px}.pd-what li{margin:3px 0}' +
+		'@media (max-width:760px){.pd-g{grid-template-columns:1fr}.pd-x{justify-self:center;transform:rotate(90deg)}.pp-t .pp-hm{display:none}.pp-t td.pp-nc{min-width:0}.pp-ck input{width:20px;height:20px}}';
 	document.head.appendChild(css);
 })();
