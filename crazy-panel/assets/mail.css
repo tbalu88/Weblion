@@ -542,3 +542,14 @@
 /* v1.98: figyelmeztetés lezárt / elvesztett / törölt dealnél */
 .ml-dwarn{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:#FFF4E5;border:1px solid #F5C98B;color:#7A4A00;font-size:12.5px;line-height:1.4;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .ml-dwarn .cpx-btn{height:28px;font-size:12px;padding:0 10px}
+/* v2.3.1: a levéllista feje tömörebb (számítógépen) – kereső és rendezés egy sorban, a fülek sora nem lóg ki, így több hely jut a leveleknek */
+@media (min-width:761px){
+  .ml-list{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto minmax(0,1fr);column-gap:6px;align-items:center}
+  .ml-list>.ml-qw{grid-column:1;grid-row:1;min-width:0}
+  .ml-list>.ml-mbar{grid-column:2;grid-row:1;margin:0}
+  .ml-list>.ml-mbar select{height:32px;padding:0 8px}
+  .ml-list>.ml-tabs,.ml-list>.ml-selbar,.ml-list>.ml-items,.ml-list>.ml-empty{grid-column:1/-1}
+  .ml-list>.ml-items{align-self:stretch}
+  .ml-list .ml-tabs{flex-wrap:wrap;row-gap:4px;gap:12px;align-items:center;margin-top:6px}
+  .ml-list .ml-tabs .ml-unf{white-space:nowrap;flex:none;padding:2px 9px}
+}
