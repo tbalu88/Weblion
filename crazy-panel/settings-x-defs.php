@@ -37,6 +37,7 @@ add_filter('cp_sx_sections', function ($S) {
 				$st = cp_crm_state(); $o = array();
 				$live = function_exists('cp_crm_source_on') && cp_crm_source_on();
 				$o[] = array('A fülek adatforrása', $live ? 'a panel saját táblái' : (get_option('cp_crm_source', '1') === '1' ? 'átmenetileg a Salesmate (a szinkron 30 percnél régebben futott, vagy az áthozatal tart)' : 'a Salesmate (kikapcsolva)'), $live ? 'ok' : 'bad');
+				$o[] = array('Fő rendszer', get_option('cp_crm_primary') === '1' ? 'a panel – a Salesmate kikapcsolva (' . cp_sx_dt((int) get_option('cp_crm_primary_at')) . ' óta)' : 'a Salesmate – a panel tükrözi', get_option('cp_crm_primary') === '1' ? 'ok' : '');
 				$o[] = array('Utolsó szinkron', cp_sx_dt($st['last_run'] ?? 0) . (isset($st['last_calls']) ? ' · ' . (int) $st['last_calls'] . ' API-hívás' : ''), '');
 				foreach (array('deal' => 'Deal-ek', 'contact' => 'Kontaktok', 'company' => 'Cégek', 'activity' => 'Tevékenységek') as $m => $l) {
 					if (!isset($st[$m . '_n']) && !isset($st[$m . '_sm'])) { continue; }
@@ -76,6 +77,21 @@ add_filter('cp_sx_sections', function ($S) {
 				}),
 				array('k' => 'ping', 'l' => 'Kapcsolatpróba', 'fn' => function () { return array('msg' => 'Lefutott.', 'out' => function_exists('cp_panel_diag') ? (string) cp_panel_diag('ping') : ''); }),
 				array('k' => 'flush', 'l' => 'Gyorsítótár ürítése', 'fn' => function () { if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); } delete_transient('cp_panel_webbg'); return 'A gyorsítótár kiürítve.'; }),
+				/* v2.0: átállás – a panel a fő rendszer (a Salesmate lemondása előtt / után) */
+				array('k' => 'primary_on', 'l' => (get_option('cp_crm_primary') === '1' ? '✓ A panel a fő rendszer' : 'A panel legyen a fő rendszer (Salesmate kikapcsolása)'), 'c' => 'Ezután MINDEN mentés (deal, kontakt, cég, tevékenység, jegyzet) csak a panelbe kerül, a Salesmate-be semmi nem megy, és a Salesmate-ből sem jön adat. Csak a Salesmate lemondásakor kapcsold be (előtte: utolsó teljes szinkron és teljes Salesmate-mentés). Bekapcsolod?', 'fn' => function () {
+					if (get_option('cp_crm_primary') === '1') { return 'Már be van kapcsolva.'; }
+					if (function_exists('cp_crm_sync')) { cp_crm_sync(true); } /* utolsó szinkron a váltás előtt */
+					update_option('cp_crm_primary', '1', false); update_option('cp_crm_primary_at', time(), false);
+					if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'crm_primary', 'A panel lett a fő rendszer (Salesmate kikapcsolva)', '', ''); }
+					if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+					return 'Kész: mostantól a panel a fő rendszer.';
+				}),
+				array('k' => 'primary_off', 'l' => 'Vissza: a Salesmate a fő rendszer', 'c' => 'Visszakapcsolod a Salesmate-et? Ami a panelben a fő-rendszer üzemmód alatt változott, az a Salesmate-ben NINCS meg – a következő szinkron a Salesmate adataival felülírhatja. Csak akkor, ha tudod, mit csinálsz.', 'fn' => function () {
+					if (get_option('cp_crm_primary') !== '1') { return 'Nincs bekapcsolva.'; }
+					update_option('cp_crm_primary', '0', false);
+					if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'crm_primary', 'A Salesmate újra a fő rendszer', '', ''); }
+					return 'A Salesmate újra a fő rendszer.';
+				}),
 			),
 		);
 	}
