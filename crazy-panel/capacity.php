@@ -20,7 +20,7 @@ function cp_cap_month($m, $cached_only = false) {
 	if ($c === false && $cached_only && !(function_exists('cp_crm_source_on') && cp_crm_source_on())) { return $mem[$m] = null; }
 	if ($c === false) {
 		$info = null; $rows = cp_sm_fetch_range($from, $to, $info);
-		if (is_wp_error($rows)) { return $mem[$m] = array(); }
+		if (is_wp_error($rows)) { return $mem[$m] = null; } /* v1.99.1: hiba esetén „ismeretlen” (nem „minden szabad”) */
 		$ev = array_values(array_filter(cp_panel_normalize($rows), function ($e) use ($from, $to) { return $e['date'] >= $from && $e['date'] <= $to; }));
 		$c = array('events' => $ev, 'at' => time(), 'mode' => $info['mode'] ?? '', 'calls' => $info['calls'] ?? 0);
 		set_transient($ck, $c, max(1, (int) $o['cache_min']) * MINUTE_IN_SECONDS);

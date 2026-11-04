@@ -365,7 +365,10 @@ function cp_crm_unlock() {
 
 /* ------------------------------------------------------------ egy szinkron-kör */
 
+/* v1.99.1: „A panel a fő rendszer” – a Salesmate lemondása után: a saját táblák a véglegesek, Salesmate-szinkron nincs */
+function cp_crm_primary() { return get_option('cp_crm_primary') === '1'; }
 function cp_crm_sync($manual = false) {
+	if (cp_crm_primary()) { return 'A panel a fő rendszer – Salesmate-szinkron nincs.'; }
 	if (!function_exists('cp_sm_request') || !cp_crm_db_ok()) { return 'Az adatbázis még nem kész.'; }
 	if (!cp_crm_lock()) { return 'Már fut egy szinkron.'; }
 	@set_time_limit(240);

@@ -114,6 +114,10 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 				$pp = $portal; $nv = (string) $new;
 				cp_portal_defer(function () use ($pp, $dbg, $nv) { cp_portal_pumble_bg_diff($pp, $dbg, $nv); });
 			}
+		} elseif ($by === 'ugyfel' && $new !== null && (string) $new !== '' && function_exists('cp_portal_bg_taken') && cp_portal_bg_taken($portal->event_date, $portal->deal_id) === null) {
+			/* v1.99.1: a foglaltság most nem ellenőrizhető → nem írjuk a dealre (dupla foglalás veszélye), a kollégák egyeztetik */
+			$pp = $portal; $nv = (string) $new;
+			cp_portal_defer(function () use ($pp, $nv) { if (function_exists('cp_portal_pumble')) { cp_portal_pumble('🎨 ' . cp_portal_pumble_head($pp) . ': az ügyfél a(z) „' . $nv . '” hátteret választotta, de a foglaltságot most nem lehetett ellenőrizni – nézzétek meg, szabad-e, és rögzítsétek a dealen.'); } });
 		} else {
 			cp_portal_sm_queue($portal->deal_id, 'bg', (string) $new);
 		}

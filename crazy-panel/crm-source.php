@@ -20,7 +20,8 @@ function cp_crm_source_on() {
 	if (function_exists('cp_crm_importing') && cp_crm_importing()) { return $on; }
 	$st = cp_crm_state();
 	$p = cp_panel_opts();
-	if (empty($st['last_ok']) || time() - (int) $st['last_ok'] > 30 * MINUTE_IN_SECONDS) { return $on; }
+	/* v1.99.1: ha a panel a fő rendszer, a frissességet nem nézzük (nincs mihez képest) – soha nem esik vissza a Salesmate-re */
+	if (!(function_exists('cp_crm_primary') && cp_crm_primary()) && (empty($st['last_ok']) || time() - (int) $st['last_ok'] > 30 * MINUTE_IN_SECONDS)) { return $on; }
 	/* a rendezvény dátuma a saját táblában az event_d oszlop (dateCustomField1) */
 	if ($p['f_date'] !== cp_crm_spec('deal')['event_d'][0]) { return $on; }
 	$on = true;
