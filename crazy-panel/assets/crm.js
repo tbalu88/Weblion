@@ -220,7 +220,7 @@
 		d.rows.forEach((r, i) => {
 			h += '<tr class="crm-row' + (i % 2 ? ' g1' : '') + (SEL.has(r.id) ? ' sel' : '') + '" data-id="' + r.id + '" tabindex="0">' +
 				'<td class="crm-cbc"><input type="checkbox" class="crm-cb" data-cb="' + r.id + '"' + (SEL.has(r.id) ? ' checked' : '') + ' aria-label="Kijelölés"></td>' +
-				'<td data-l="Deal"><b>' + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
+				'<td data-l="Deal"><b>' + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
 				'<td data-l="Kapcsolat">' + contactCell(r) + '</td>' +
 				'<td data-l="Rendezvény">' + evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') + '</td>' +
 				'<td data-l="Csomag">' + (r.pkg ? esc(r.pkg) : '<span class="cpx-muted">–</span>') + (r.svc ? '<small>' + esc(r.svc) + '</small>' : '') + '</td>' +
@@ -420,7 +420,7 @@
 				const act = r.na ? (r.na < now ? '<span class="crm-na late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑ lejárt</span>' : '<span class="crm-na" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑ ' + esc(shortD(r.na.slice(0, 10))) + '</span>') : '<span class="crm-na none" title="Nincs ütemezett teendő">⚑ nincs teendő</span>';
 				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
 				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
-				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + esc(shortTitle(r)) + '</div>';
+				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
 				if (S.dense && !MOB) {
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
@@ -935,6 +935,31 @@
 		}
 		draw();
 	}
+	/* v2.5: visszatérő ügyfél – a kontakt és a cég korábbi deal-jeiből */
+	function retBadge(list, c) {
+		const seen = new Set(), L = list.filter(o => !seen.has(o.id) && seen.add(o.id));
+		if (!L.length) return '';
+		const won = L.filter(o => o.status === 'Won'), v = won.reduce((a, o) => a + Number(o.value || 0), 0);
+		const last = won.map(o => o.event_d).filter(Boolean).sort().pop();
+		if (won.length) return '<div class="d3-ret" title="A kontakt és a cége korábbi deal-jei – lent, a „Korábbi munkák” alatt">🔁 <b>Visszatérő ügyfél</b> · ' + won.length + ' megnyert rendezvény' + (v ? ' (' + esc(money(v)) + ')' : '') + (last ? ' · utoljára ' + esc(huD(last)) : '') + '</div>';
+		return '<div class="d3-ret lo">↺ Korábban már érdeklődött (' + L.length + ' deal, még nem rendelt)</div>';
+	}
+	async function trvCard(box, d, reload) {
+		let r;
+		try { r = await post('cp_crm_trv', { id: d.id }); } catch (e) { box.innerHTML = '<small class="cpx-muted">A kiszállási díjat most nem tudom kiszámolni.</small>'; return; }
+		if (!box.isConnected) return;
+		const cur = Number(r.cur || 0);
+		if (!r.ok) { box.innerHTML = '<div class="d3-trvh">🚐 Kiszállás</div><small class="cpx-muted">' + esc(r.msg || '') + '</small>'; return; }
+		const fee = r.fee == null ? null : Number(r.fee), same = fee != null && fee === cur;
+		box.innerHTML = '<div class="d3-trvh">🚐 Kiszállási díj' + (fee != null ? ': <b>' + (fee ? esc(money(fee)) : 'ingyenes') + '</b>' + (r.vat ? ' <small>(' + esc(r.vat) + ')</small>' : '') : '') + '</div><small class="cpx-muted">' + esc(r.how) + '</small>' +
+			(fee != null && W && !same ? '<div class="d3-trvb">' + (cur ? '<small>A dealen most: ' + esc(money(cur)) + '</small>' : '') + '<button type="button" class="cpx-btn sm" data-trvs>' + (cur ? 'Átírom erre' : 'Beírom a dealbe') + '</button></div>' : same && cur ? '<small class="d3-trvok">✓ A dealen is ennyi szerepel.</small>' : '');
+		const b = box.querySelector('[data-trvs]');
+		if (b) b.addEventListener('click', async () => {
+			b.disabled = true; b.textContent = 'Mentés…';
+			try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ km_fee: String(fee) }), c: '{}' }); toast('A kiszállási díj (' + (fee ? money(fee) : '0 Ft') + ') beírva a dealbe – a Salesmate-ben is.'); reload(); }
+			catch (e) { b.disabled = false; b.textContent = 'Újra'; toast(e.message, true); }
+		});
+	}
 	async function openDeal(id, back, fromHist) {
 		if (!fromHist) pushDeal(id);
 		if (S.pend && S.pend.fresh && S.pend.fresh[id]) { const lid = S.pend.fresh[id]; delete S.pend.fresh[id]; post('cp_lead_set', { id: lid, st: 'seen' }).catch(() => {}); if (S.mode === 'board' && S.board) setTimeout(redrawBoard, 0); }
@@ -968,9 +993,9 @@
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
-			'<aside class="d3-l"><section class="d3-c d3-sum"><div class="d3-val"' + ikA('value', d) + '>' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár ' + estSrc(d.est) + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár' + (d.est.v === 'ec' ? ' (nettó, + ÁFA)' : (d.est.v === 'p' || d.est.v === 'pb') ? ' (bruttó – magánszemély, Crazyphoto-árak)' : '') + ' – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div>' + (d.cap ? '<div class="d3-cap">' + capHtml(d.cap, true) + '<small>' + esc('a rendezvény napján (' + d.cap.cs + ' szelfigép, ' + d.cap.cp + ' spinner)') + '</small></div>' : '') + (d.est && !(d.value > 0) && W && c && c.email && window.CPMail && window.CPMail.compose ? '<button type="button" class="cpx-btn d3-offer" data-offer' + (window.CPMail.canSend && !window.CPMail.canSend() ? ' disabled title="A levélküldés a panelből neked nincs bekapcsolva (Beállítások → Levelezés)"' : '') + '>Ajánlat küldése ezzel az árral</button>' : '') + '<dl class="crm-dl">' +
+			'<aside class="d3-l"><section class="d3-c d3-sum">' + retBadge(otherCt.concat(otherCo), c) + '<div class="d3-val"' + ikA('value', d) + '>' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár ' + estSrc(d.est) + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár' + (d.est.v === 'ec' ? ' (nettó, + ÁFA)' : (d.est.v === 'p' || d.est.v === 'pb') ? ' (bruttó – magánszemély, Crazyphoto-árak)' : '') + ' – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div>' + (d.cap ? '<div class="d3-cap">' + capHtml(d.cap, true) + '<small>' + esc('a rendezvény napján (' + d.cap.cs + ' szelfigép, ' + d.cap.cp + ' spinner)') + '</small></div>' : '') + (d.est && !(d.value > 0) && W && c && c.email && window.CPMail && window.CPMail.compose ? '<button type="button" class="cpx-btn d3-offer" data-offer' + (window.CPMail.canSend && !window.CPMail.canSend() ? ' disabled title="A levélküldés a panelből neked nincs bekapcsolva (Beállítások → Levelezés)"' : '') + '>Ajánlat küldése ezzel az árral</button>' : '') + '<dl class="crm-dl">' +
 				(d.event_d ? '<dt>Rendezvény</dt><dd' + ikA('event_d', d) + '>' + esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '') + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd' + ikA('venue', d) + '>' + esc(d.venue) + '</dd>' : '') +
-				'<dt>Felelős</dt><dd' + ikA('owner_id', d) + '>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd' + ikA('source', d) + '>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd' + ikA('service', d) + '>' + esc(d.service) + '</dd>' : '') + '</dl></section>' +
+				'<dt>Felelős</dt><dd' + ikA('owner_id', d) + '>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd' + ikA('source', d) + '>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd' + ikA('service', d) + '>' + esc(d.service) + '</dd>' : '') + '</dl>' + (d.venue && !d.deleted_at ? '<div class="d3-trv" data-trv><small class="cpx-muted">Kiszállási díj számolása…</small></div>' : '') + '</section>' +
 			'<section class="d3-c"><h4>Kontakt</h4>' + (c ? '<a href="#" class="d3-who" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span><span><b>' + esc(c.name || c.email) + '</b><small>' + (otherCt.length ? (otherCt.length + 1) + ' deal · ' + (x.ct_stats ? x.ct_stats.won : 0) + ' megnyert' : 'első deal') + '</small></span></a><dl class="crm-dl">' +
 				(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a></dd>' : '') +
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
@@ -1019,6 +1044,9 @@
 				catch (e) { toast('A levél elment, de a deal frissítése nem sikerült: ' + e.message + ' – állítsd át kézzel.', true); }
 			} });
 		});
+		/* v2.5: kiszállási díj a helyszínből (Crazyphoto-árkalkulátor szabályai) */
+		const trv = sh.querySelector('[data-trv]');
+		if (trv) trvCard(trv, d, () => openDeal(id, back));
 		/* v1.96: cégjavaslat a domainből / aláírásból / weboldalból – csak jóváhagyás után kerül a Salesmate-be */
 		const cos = sh.querySelector('[data-cos]');
 		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
@@ -1259,8 +1287,8 @@
 		const inp = (k, label, type, extra) => '<label class="crm-ef"><span>' + esc(label) + '</span>' + (type === 'area' ? '<textarea rows="3" data-k="' + k + '"></textarea>' : '<input type="' + type + '" data-k="' + k + '"' + (extra || '') + '>') + '</label>';
 		const multi = k => '<span class="crm-multi" data-k="' + k + '" data-multi>' + (vals[k] || []).map(v => '<label><input type="checkbox" value="' + esc(v) + '"> ' + esc(v) + '</label>').join('') + '</span>';
 		let h = sheetHead('Új deal') + '<form class="crm-edit" novalidate>' +
-			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefon', 'tel') + '</div>' +
-			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül.</p>' +
+			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefon', 'tel') + '<input type="hidden" data-k="c_id"></div><div class="crm-dupc" data-dupc hidden></div>' +
+			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül. Ha hasonló kontaktot találok, itt jelzem.</p>' +
 			'<h4>Rendezvény</h4><div class="crm-eg">' + inp('event_d', 'Rendezvény dátuma', 'date') + inp('start_at', 'Kezdés (óra:perc)', 'time') + inp('venue', 'Helyszín', 'text') + inp('guests', 'Tervezett létszám', 'number') + inp('hours', 'Rendelkezésre állás (óra)', 'number') +
 			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
 			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>' +
@@ -1279,6 +1307,33 @@
 		let brand = '[Crazyphoto]', yr = '';
 		const auto = () => { if (titleTouched) return; const n = q('c_name').value.trim(), dt = q('event_d').value; q('title').value = n ? brand + ' ' + n + (dt ? ' | ' + dt : (yr ? ' | ' + yr : '')) : ''; };
 		q('c_name').addEventListener('input', auto); q('event_d').addEventListener('input', auto); q('event_d').addEventListener('change', auto);
+		/* v2.5: duplikátum-figyelés – ha már van ilyen kontakt, ahhoz lehet rendelni a dealt */
+		const dupc = form.querySelector('[data-dupc]');
+		let dupT = null, dupSeq = 0, dupNo = new Set();
+		const dupDraw = rows => {
+			const pick = Number(q('c_id').value || 0), P = rows.find(x => x.id === pick);
+			if (P) { dupc.hidden = false; dupc.innerHTML = '<div class="crm-dupok">✓ A deal a meglévő kontakthoz kerül: <b>' + esc(P.name || P.email) + '</b> (' + P.n + ' deal)<button type="button" class="ml-link" data-dupu>mégse, új kontakt</button></div>'; dupc.querySelector('[data-dupu]').addEventListener('click', () => { dupNo.add(pick); q('c_id').value = ''; dupDraw(rows); }); return; }
+			const L = rows.filter(x => !dupNo.has(x.id));
+			dupc.hidden = !L.length;
+			dupc.innerHTML = L.length ? '<div class="crm-duph">⚠ Már van hasonló kontakt – ha ő az, rendeld hozzá, így nem lesz duplikátum:</div>' + L.map(x => '<div class="crm-dupr"><span><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc([x.email, x.mobile || x.phone, x.co, x.n + ' deal' + (x.last_ev ? ', utolsó rendezvény: ' + huD(x.last_ev) : '')].filter(Boolean).join(' · ')) + '</small><small class="crm-dupw">' + esc(x.why.join(', ')) + '</small></span><span class="crm-dupb"><button type="button" class="cpx-btn sm" data-dupp="' + x.id + '">Ehhez rendelem</button><button type="button" class="ml-link" data-dupx="' + x.id + '">nem ő</button></span></div>').join('') : '';
+			dupc.querySelectorAll('[data-dupp]').forEach(b => b.addEventListener('click', () => {
+				const x = rows.find(z => z.id === Number(b.dataset.dupp));
+				q('c_id').value = String(x.id);
+				if (!q('c_email').value && x.email) q('c_email').value = x.email;
+				if (!q('c_mobile').value && (x.mobile || x.phone)) q('c_mobile').value = x.mobile || x.phone;
+				dupDraw(rows);
+			}));
+			dupc.querySelectorAll('[data-dupx]').forEach(b => b.addEventListener('click', () => { dupNo.add(Number(b.dataset.dupx)); dupDraw(rows); }));
+		};
+		const dupCheck = () => {
+			clearTimeout(dupT);
+			dupT = setTimeout(async () => {
+				const my = ++dupSeq, n = q('c_name').value.trim(), e = q('c_email').value.trim(), ph = q('c_mobile').value.trim();
+				if (n.length < 5 && e.length < 5 && ph.replace(/\D/g, '').length < 8) { if (!q('c_id').value) { dupc.hidden = true; } return; }
+				try { const r = await post('cp_crm_dup_check', { name: n, email: e, phone: ph }); if (my === dupSeq && form.isConnected) dupDraw(r.rows || []); } catch (er) { /* a figyelő nélkül is létrehozható */ }
+			}, 500);
+		};
+		['c_name', 'c_email', 'c_mobile'].forEach(k => q(k).addEventListener('input', dupCheck));
 		/* v1.69: deal egy levélből – ismert adatok azonnal, az AI-kiolvasás utána (csak az üres mezőkbe) */
 		if (X) {
 			form.querySelector('.crm-ebar').insertAdjacentHTML('beforebegin', '<p class="crm-aist" data-aist>Az adatok betöltése a levélből…</p><label class="crm-chk crm-mv"><input type="checkbox" data-mv checked> <span>A levélszál az új dealhez kerüljön</span></label>');
@@ -1292,6 +1347,7 @@
 				if (!ai) {
 					if (k.brand) brand = k.brand;
 					['c_name', 'c_email', 'c_mobile'].forEach(f => set(f, k[f]));
+					dupCheck();
 					if (k.owner_id && q('owner_id').querySelector('option[value="' + k.owner_id + '"]')) q('owner_id').value = k.owner_id;
 					const mv = form.querySelector('.crm-mv span');
 					if (k.old_deal) mv.textContent = 'A levélszál az új dealhez kerüljön (most: ' + k.old_title + ')';

@@ -183,6 +183,8 @@ function cp_crm_board_data($a) {
 	}
 	/* v1.82: becsült ár az ajánlat előtti dealekre (estimate.php) */
 	if ($out && function_exists('cp_est_for_rows')) { $E = cp_est_for_rows($out); foreach ($out as &$x) { if (isset($E[$x['id']])) { $x['est'] = $E[$x['id']]; } } unset($x); }
+	/* v2.5: visszatérő ügyfél (loyal.php) */
+	if ($out && function_exists('cp_ret_for_rows')) { $RT = cp_ret_for_rows($out); foreach ($out as &$x) { if (isset($RT[$x['id']])) { $x['ret'] = $RT[$x['id']]; } } unset($x); }
 	/* v1.84: kapacitás a rendezvény napján (capacity.php) – az első két szakasz jövőbeli dealjeinél */
 	if ($out && function_exists('cp_cap_for_rows')) { $K = cp_cap_for_rows($out); foreach ($out as &$x) { if (isset($K[$x['id']])) { $x['cap'] = $K[$x['id']]; } } unset($x); }
 	return array('rows' => $out, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
@@ -569,8 +571,11 @@ function cp_crm_ajax_create() {
 	global $wpdb;
 	/* kontakt: ha van már ilyen e-mail-cím, azt használjuk */
 	$cid = 0;
+	/* v2.5: a duplikátum-figyelőben kiválasztott meglévő kontakt */
+	$pick = (int) $g('c_id');
+	if ($pick && $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('contacts') . ' WHERE id = %d AND deleted_at IS NULL', $pick))) { $cid = $pick; }
 	/* v2.0.1: közös e-mail-cím (pl. info@ceg.hu): csak akkor ugyanaz a kontakt, ha a név is egyezik (vagy nincs megadva) – különben új kontakt */
-	if ($email !== '') {
+	if (!$cid && $email !== '') {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT id, name FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 10', $email), ARRAY_A) as $c) {
 			$nn = function ($x) { return trim(preg_replace('/\s+/u', ' ', mb_strtolower((string) $x))); };
 			if ($name === '' || $nn($c['name']) === $nn($name) || $nn($c['name']) === '') { $cid = (int) $c['id']; break; }

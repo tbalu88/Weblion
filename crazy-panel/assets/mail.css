@@ -553,3 +553,7 @@
   .ml-list .ml-tabs{flex-wrap:wrap;row-gap:4px;gap:12px;align-items:center;margin-top:6px}
   .ml-list .ml-tabs .ml-unf{white-space:nowrap;flex:none;padding:2px 9px}
 }
+/* v2.5: visszatérő ügyfél a levélszálnál */
+.ml-ret{display:block;width:100%;text-align:left;margin:6px 0 0;padding:7px 10px;border-radius:10px;background:#E8F6EE;border:1px solid #B9E2C9;color:#17663A;font:12.5px/1.4 Inter,sans-serif;cursor:pointer}
+.ml-ret.lo{background:#F3F4F6;border-color:#E2E4E8;color:#4A4F5A}
+.ml-ret:hover{filter:brightness(.98)}

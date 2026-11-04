@@ -363,3 +363,45 @@ function cp_mrg_log($kind, $kid, $lid) {
 	$l[] = array('k' => $kind, 'keep' => (int) $kid, 'gone' => (int) $lid, 'at' => time(), 'by' => function_exists('cp_panel_who') ? cp_panel_who() : '');
 	update_option('cp_merge_log', array_slice($l, -2000), false);
 }
+
+/* ------------------------------------------------------------ v2.5 (N4): duplikátum-figyelés új deal / kontakt létrehozásakor */
+add_action('wp_ajax_nopriv_cp_crm_dup_check', 'cp_mrg_ajax_check');
+add_action('wp_ajax_cp_crm_dup_check', 'cp_mrg_ajax_check');
+function cp_mrg_ajax_check() {
+	cp_crm_ajax_guard();
+	wp_send_json_success(array('rows' => cp_mrg_check((string) wp_unslash($_REQUEST['name'] ?? ''), (string) wp_unslash($_REQUEST['email'] ?? ''), (string) wp_unslash($_REQUEST['phone'] ?? ''))));
+}
+function cp_mrg_check($name, $email, $phone) {
+	global $wpdb;
+	$C = cp_crm_t('contacts');
+	$e = cp_mrg_email($email); $p = cp_mrg_phone($phone); $n = cp_mrg_name($name);
+	$hit = array();
+	if ($e !== '') {
+		$dom = substr(strrchr($e, '@'), 1);
+		$like = $dom === 'gmail.com' ? array('%@gmail.com', '%@googlemail.com') : array('%@' . $dom);
+		foreach ($like as $lk) {
+			foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, email FROM $C WHERE deleted_at IS NULL AND email LIKE %s LIMIT 3000", $lk), ARRAY_A) as $r) { if (cp_mrg_email($r['email']) === $e) { $hit[(int) $r['id']][] = 'azonos e-mail-cím'; } }
+		}
+	}
+	if ($p !== '') {
+		$pl = '%' . $wpdb->esc_like(substr($p, -7)) . '%';
+		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, phone, mobile FROM $C WHERE deleted_at IS NULL AND (REPLACE(REPLACE(REPLACE(mobile, ' ', ''), '-', ''), '/', '') LIKE %s OR REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '/', '') LIKE %s) LIMIT 50", $pl, $pl), ARRAY_A) as $r) {
+			if (cp_mrg_phone($r['mobile']) === $p || cp_mrg_phone($r['phone']) === $p) { $hit[(int) $r['id']][] = 'azonos telefonszám'; }
+		}
+	}
+	if ($n !== '') {
+		$w = explode(' ', $n);
+		$q = "SELECT id, name FROM $C WHERE deleted_at IS NULL";
+		foreach ($w as $x) { $q .= $wpdb->prepare(" AND CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE %s", '%' . $wpdb->esc_like($x) . '%'); }
+		foreach ((array) $wpdb->get_results($q . ' LIMIT 30', ARRAY_A) as $r) { if (cp_mrg_name($r['name']) === $n) { $hit[(int) $r['id']][] = 'azonos név'; } }
+	}
+	if (!$hit) { return array(); }
+	/* a csak névegyezés gyenge: csak akkor jelez, ha nincs erősebb találat, és legfeljebb 3 */
+	$strong = array_filter($hit, function ($l) { return count(array_diff($l, array('azonos név'))) > 0; });
+	$pick = $strong ? $strong : array_slice($hit, 0, 3, true);
+	$det = cp_mrg_details('ct', array_keys($pick));
+	$out = array();
+	foreach ($pick as $id => $why) { if (isset($det[$id])) { $out[] = array_merge($det[$id], array('why' => array_values(array_unique($why)))); } }
+	usort($out, function ($a, $b) { return (count($b['why']) - count($a['why'])) ?: ($b['n'] - $a['n']); });
+	return array_slice($out, 0, 5);
+}

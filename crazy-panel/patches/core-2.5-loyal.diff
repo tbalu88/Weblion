@@ -1,0 +1,19 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-04 15:06:52.424932157 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v84/crazy-panel.php	2026-11-04 15:29:59.123484456 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.4');
++define('CP_PANEL_VER', '2.5');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3729,6 +3729,7 @@
+ require_once __DIR__ . '/deal360.php';
+ require_once __DIR__ . '/search.php';
+ require_once __DIR__ . '/merge.php';
++require_once __DIR__ . '/loyal.php';
+ require_once __DIR__ . '/dealact.php';
+ require_once __DIR__ . '/mail-send.php';
+ require_once __DIR__ . '/mail-att.php';

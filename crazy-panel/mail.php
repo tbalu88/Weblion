@@ -417,7 +417,9 @@ function cp_mail_thread_full($id) {
 			}
 		}
 	}
-	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal);
+	/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
+	$ret = function_exists('cp_ret_by_email') ? cp_ret_by_email((string) $t['contact_email'], (int) $t['deal_id']) : null;
+	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal, 'ret' => $ret);
 }
 
 add_action('wp_ajax_nopriv_cp_mail_thread', 'cp_mail_ajax_thread');
