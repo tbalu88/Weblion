@@ -139,6 +139,33 @@
 	}
 
 	/* ------------------------------------------------------------ fő nézet */
+	/* v1.97: a lista percenként magától frissül (ha a fül látható); nyitott levél vagy kijelölés mellett nem rajzol újra,
+	 * csak a lista tetején jelzi: „Új levél érkezett – frissítés” */
+	const sig = r => JSON.stringify(((r && r.rows) || []).map(t => [t.id, t.at, t.cnt, t.un, t.st, t.as]));
+	function autoTick() {
+		if (document.hidden || S.demo || S.view !== 'inbox' || !S.main || !S.main.isConnected) return;
+		const box = S.main.querySelector('.ml-body');
+		if (!box || !box.querySelector('.ml-items')) return;
+		const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' }, key = JSON.stringify(P);
+		post('cp_mail_threads', P).then(n => {
+			if (JSON.stringify(P) !== JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' })) return;
+			const old = S.lc[key];
+			if (old && sig(old) === sig(n)) return;
+			S.lc[key] = n; S.lcAt[key] = Date.now();
+			if (!box.isConnected) return;
+			const ae = document.activeElement, typing = !!ae && box.contains(ae) && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+			if (!S.th && !S.sel.size && !typing) { drawInbox(box); return; }
+			const it = box.querySelector('.ml-items');
+			if (it && !it.querySelector('[data-newp]')) {
+				it.insertAdjacentHTML('afterbegin', '<button type="button" class="ml-newp" data-newp>↑ Új levél érkezett – frissítés</button>');
+				it.querySelector('[data-newp]').addEventListener('click', () => drawInbox(box));
+			}
+		}).catch(() => {});
+	}
+	if (M.sync) {
+		setInterval(autoTick, 60000);
+		document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(autoTick, 800); });
+	}
 	function view(main) {
 		S.main = main;
 		const seg = [['inbox', 'Postafiók'], ['compose', 'Új levél'], ['tpl', 'Sablonok']].map(x => '<button type="button" data-v="' + x[0] + '" class="' + (S.view === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('');
@@ -336,7 +363,7 @@
 			'<nav class="ml-folders">' + F.map(f => '<button type="button" data-f="' + f[0] + '" class="' + (S.folder === f[0] ? 'on' : '') + '"><span>' + f[1] + '</span><b' + (un[f[0]] ? ' class="u" title="' + un[f[0]] + ' olvasatlan"' : '') + '>' + (counts[f[0]] || '') + '</b></button>').join('') + '</nav>' +
 			/* a „Minta megtekintése” csak a postafiókok bekötése előtt kell (kitalált levelekkel próbálható ki a felület) */
 			(demoOk() ? '<label class="ml-demo"><input type="checkbox" data-demo' + (S.demo ? ' checked' : '') + '> Minta megtekintése</label>' : '') + '</aside><div class="ml-split" data-split="c1" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
-			'<section class="ml-list"><input type="search" class="ml-q" placeholder="Keresés a levelek között" value="' + esc(S.mq || '') + '">' +
+			'<section class="ml-list"><div class="ml-qw' + (M.sync && !S.demo ? ' rf' : '') + '"><input type="search" class="ml-q" placeholder="Keresés a levelek között" value="' + esc(S.mq || '') + '">' + (M.sync && !S.demo ? '<button type="button" class="ml-rf" data-rf aria-label="Levelek letöltése most" title="Levelek letöltése most (magától is frissül: a postafiókból 5 percenként, a lista percenként)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>' : '') + '</div>' +
 			/* v1.60: mobilon mappa-választó (a mappaoszlop helyett) és rendezés */
 			'<div class="ml-mbar"><select class="ml-fsel" data-fsel aria-label="Mappa">' + F.map(f => '<option value="' + f[0] + '"' + (S.folder === f[0] ? ' selected' : '') + '>' + f[1] + (counts[f[0]] ? ' (' + counts[f[0]] + ')' : '') + '</option>').join('') + '' + (demoOk() ? '<option value="__demo">' + (S.demo ? '✓ ' : '') + 'Minta megtekintése</option>' : '') + '</select>' +
 			'<select class="ml-ssel" data-sort aria-label="Rendezés"><option value="new"' + (S.so === 'new' ? ' selected' : '') + '>Legújabb</option><option value="old"' + (S.so === 'old' ? ' selected' : '') + '>Legrégebbi</option></select></div>' +
@@ -356,6 +383,14 @@
 		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { pick('[data-tab]', b); S.tab = b.dataset.tab; drawInbox(box); }));
 		box.querySelector('.ml-box').addEventListener('change', e => { S.box = e.target.value; drawInbox(box); });
 		box.querySelector('[data-unf]').addEventListener('click', () => { S.unf = !S.unf; S.th = null; drawInbox(box); });
+		const rf = box.querySelector('[data-rf]');
+		if (rf) rf.addEventListener('click', async () => {
+			if (rf.classList.contains('spin')) return;
+			rf.classList.add('spin');
+			try { const r = await post('cp_mail_fetch_now', {}); S.lc = {}; S.lcAt = {}; toast(r.new ? r.new + ' új levél érkezett.' : 'Nincs új levél – minden letöltve.'); }
+			catch (e) { toast(e.message, true); }
+			if (box.isConnected) drawInbox(box);
+		});
 		/* v1.88: legyintés a listában (mobil): jobbra olvasott/olvasatlan, balra archiválás (Archív/Kuka/Spam mappában: visszaállítás) */
 		if (isMob()) box.querySelectorAll('.ml-item[data-th]').forEach(b => swipeRow(box, b));
 		if (box.querySelector('[data-demo]')) box.querySelector('[data-demo]').addEventListener('change', e => { S.demo = e.target.checked; S.th = null; drawInbox(box); });

@@ -536,3 +536,22 @@ function cp_imp_sync_run() {
 	update_option('cp_imp_sync', $sy, false);
 	delete_transient('cp_imp_sync_lock');
 }
+
+/* v1.97: „Letöltés most” – a Levelezés ↻ gombja azonnal lekéri az új leveleket (nem várja meg az 5 perces ütemet).
+ * Ugyanaz a csak olvasó szinkron, mint az időzített; legfeljebb 20 másodpercenként egyszer. */
+add_action('wp_ajax_nopriv_cp_mail_fetch_now', 'cp_imp_ajax_fetch_now');
+add_action('wp_ajax_cp_mail_fetch_now', 'cp_imp_ajax_fetch_now');
+function cp_imp_ajax_fetch_now() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if (get_option('cp_imp_sync_on') !== '1') { cp_el_err('A folyamatos beérkezés nincs bekapcsolva (Beállítások → Levelezés).'); }
+	$sy0 = get_option('cp_imp_sync', array());
+	$n0 = (int) ($sy0['n'] ?? 0);
+	if (!get_transient('cp_imp_fetch_rl') && !get_transient('cp_imp_sync_lock')) {
+		set_transient('cp_imp_fetch_rl', 1, 20);
+		cp_imp_sync_run();
+	}
+	$sy = get_option('cp_imp_sync', array());
+	if (!empty($sy['err'])) { cp_el_err('A postafiók most nem érhető el: ' . $sy['err'], 502); }
+	wp_send_json_success(array('new' => max(0, (int) ($sy['n'] ?? 0) - $n0), 'last' => (int) ($sy['last'] ?? 0)));
+}

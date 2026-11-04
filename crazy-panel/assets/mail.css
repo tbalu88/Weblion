@@ -528,3 +528,14 @@
 .ml-cl:hover{color:#2F6FDB;border-color:#2F6FDB}
 @media (hover:hover){.ml-item:hover .ml-cl{display:inline-flex}.ml-item:hover .ml-i1 small{visibility:hidden}}
 .ml-clb{display:inline-flex;align-items:center;justify-content:center}
+/* v1.97: ↻ Levelek letöltése most (a keresőmezőben jobbra) + „Új levél érkezett” jelzés */
+.ml-qw{position:relative;flex:none;display:flex}
+.ml-qw.rf .ml-q{padding-right:38px}
+.ml-rf{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:26px;height:26px;padding:0;border:0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--mu);cursor:pointer;background:transparent}
+.ml-rf:hover{color:#2F6FDB;background:#EEF3FD}
+.ml-rf svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ml-rf.spin{color:#2F6FDB}
+.ml-rf.spin svg{animation:mlspin .9s linear infinite}
+@keyframes mlspin{to{transform:rotate(360deg)}}
+.ml-newp{position:sticky;top:0;z-index:2;margin:6px auto;align-self:center;border:0;background:#2F6FDB;color:#fff;font:600 12.5px Inter,sans-serif;border-radius:999px;padding:6px 14px;cursor:pointer;box-shadow:0 6px 16px -8px rgba(47,111,219,.8)}
+@media (max-width:760px){.ml-list .ml-qw{order:-1;margin:12px 12px 0}.ml-list .ml-qw .ml-q{margin:0;width:100%}.ml-list .ml-qw.rf .ml-q{padding-right:46px}.ml-rf{width:36px;height:36px;right:4px}.ml-rf svg{width:18px;height:18px}}
