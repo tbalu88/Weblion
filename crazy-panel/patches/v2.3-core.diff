@@ -1,0 +1,35 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-04 09:58:55.476231057 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v81/crazy-panel.php	2026-11-04 10:21:42.176683223 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.2.1');
++define('CP_PANEL_VER', '2.3.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -771,6 +771,7 @@
+ 		'bil'        => array('on' => function_exists('cp_bil_ajax_deal') && cp_panel_can_x('szamlazas')),
+ 		'ct'         => array('on' => function_exists('cp_ct_ajax_get') && cp_panel_can_x('deals')),
+ 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
++		'wl'         => function_exists('cp_wl_cfg') ? cp_wl_cfg() : array('on' => false),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+@@ -793,6 +794,7 @@
+ 	if (!empty($cfg['dash']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/dash.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['ct']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contract.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['bil']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/bill.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['wl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/worklog.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['gcal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/gcal.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '<script src="' . esc_url(plugins_url('assets/mnav.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+@@ -3738,6 +3740,7 @@
+ require_once __DIR__ . '/watchdog.php';
+ require_once __DIR__ . '/sm-local.php';
+ require_once __DIR__ . '/gdrive-backup.php';
++require_once __DIR__ . '/worklog.php';
+ require_once __DIR__ . '/capacity.php';
+ require_once __DIR__ . '/portal-link.php';
+ require_once __DIR__ . '/dashboard.php';

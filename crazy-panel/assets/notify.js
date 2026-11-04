@@ -42,6 +42,7 @@
 	function go(link) {
 		const i = String(link).indexOf(':'), tab = i < 0 ? link : link.slice(0, i), arg = i < 0 ? '' : link.slice(i + 1);
 		if (tab === 'mail' && window.CPMail && window.CPMail.open) { window.CPMail.open(Number(arg)); return; }
+		if (tab === 'munkanaplo' && window.CPWorklog) { window.CPWorklog.open(arg); return; }
 		if (tab === 'deals' && window.CPCrm) { if (window.CPXGo) window.CPXGo('deals'); setTimeout(() => window.CPCrm.deep && window.CPCrm.deep(arg), 60); return; }
 		if (tab === 'feladatok' && window.CPKanban) {
 			if (window.CPXGo) window.CPXGo('feladatok');
