@@ -112,7 +112,7 @@
 		const k = S.kind, J = k === 'jelentkezo';
 		const L = S.rows.filter(x => x.kind === k && (S.inact || x.active) && (!q || [x.name, x.email, x.phone, x.plate, x.note, x.extra].join(' ').toLowerCase().includes(q)));
 		const miss = J ? 0 : L.filter(x => x.active && x.miss.length).length;
-		const head = ['Név', 'Telefon', 'E-mail'].concat(k === 'kezelo' ? ['Autó', 'Gépek'] : ['Autó'], J ? ['Felvétel'] : [], [J ? 'Megjegyzés' : 'Egyéb'], J ? [] : ['Adatok', 'Közelgő']);
+		const head = ['Név', 'Telefon', 'E-mail'].concat(k === 'kezelo' ? ['Autó', 'Gépek'] : ['Autó'], J ? ['Felvétel'] : [], [J ? 'Megjegyzés' : 'Egyéb'], J ? [] : ['Közelgő']);
 		main.querySelector('.kz-body').innerHTML = S.err ? '<div class="cpx-empty err">' + esc(S.err) + '</div>' :
 			'<div class="kz-n">' + L.length + ' fő' + (miss ? ' · <b class="kz-warn">' + miss + ' főnél hiányzik személyes adat</b>' : '') + (S.reveal ? ' · <span class="kz-open">🔓 személyes adatok láthatók (naplózva)</span>' : '') + '</div>' +
 			'<div class="kz-tw"><table class="kz-t kz-r"><thead><tr><th class="kz-fl"></th>' + head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
@@ -122,7 +122,7 @@
 					: '<td class="kz-nw">' + (x.has_car ? '✓ van' : '<span class="cpx-muted">–</span>') + '</td>') +
 				(J ? '<td class="kz-chips">' + Object.keys(PRC).map(p => '<span class="kz-chip ' + (x.proc.includes(p) ? 'ok' : 'no') + '">' + (x.proc.includes(p) ? '✓ ' : '') + esc(PRC[p].replace('Telefonos egyeztetés', 'Telefon').replace('Személyes interjú', 'Interjú')) + '</span>').join('') + '</td>' : '') +
 				'<td class="kz-ex">' + esc(x.extra || '') + '</td>' +
-				(J ? '' : sensCell(x) + '<td class="kz-nw">' + (x.up.length ? '<button type="button" class="kz-link" data-more>' + x.up.length + ' · ' + esc(huD(x.up[0].event_d)) + '</button>' : '<span class="cpx-muted">–</span>') + '</td>') +
+				(J ? '' : '<td class="kz-nw">' + (x.up.length ? '<button type="button" class="kz-link" data-more>' + x.up.length + ' · ' + esc(huD(x.up[0].event_d)) + '</button>' : '<span class="cpx-muted">–</span>') + '</td>') +
 				'</tr>' +
 				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (head.length + 1) + '">' + detailRead(x) + '</td></tr>' : '')).join('') +
 			'</tbody></table></div>';
@@ -131,7 +131,10 @@
 		if (window.CPXStatus) window.CPXStatus();
 	}
 	function detailRead(x) {
-		return '<div class="kz-d"><div>' + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') +
+		const n = SK.length - x.miss.length;
+		const sens = x.kind === 'jelentkezo' ? '' : S.reveal ? '<div class="kz-sr">' + SK.map(k => '<div><small>' + esc(SENS[k]) + ':</small> ' + ((x.sens || {})[k] ? esc(x.sens[k]) : '<span class="kz-warn">hiányzik</span>') + '</div>').join('') + '</div>'
+			: '<p class="' + (x.miss.length ? 'kz-warn' : 'kz-open') + '">Személyes adatok: ' + n + '/' + SK.length + ' megvan' + (x.miss.length ? ' – hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) : '') + (K.admin ? ' <small class="cpx-muted">(megtekintés: „Személyes adatok megjelenítése”)</small>' : '') + '</p>';
+		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') +
 			'<p class="cpx-muted">' + (x.active ? 'Aktív' : 'Inaktív') + ' · ' + esc(KINDS[x.kind] || '') + (x.el ? ' · elszámolás: ' + esc(x.el.name) + ' (' + x.el.rate + ' Ft/óra)' : '') + (x.updated ? ' · módosítva: ' + esc(x.updated) + (x.by ? ' (' + esc(x.by) + ')' : '') : '') + '</p></div>' +
 			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + ' – ' + esc(u.title) + '</a></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
