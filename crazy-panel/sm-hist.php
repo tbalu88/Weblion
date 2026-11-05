@@ -189,11 +189,26 @@ const oFetch = window.fetch;
 window.fetch = function (u, o) { try { const h = new Headers((o && o.headers) || {}); h.forEach((v, k) => grab(k, v)); } catch (e) {} return oFetch.apply(this, arguments); };
 stat('Kattints most a Salesmate-ben bármelyik menüpontra (pl. Deals), hogy a program megkapja a belépést…');
 for (let i = 0; i < 120 && !Object.keys(H).some(k => k.toLowerCase() === 'accesstoken'); i++) await new Promise(r => setTimeout(r, 500));
-XMLHttpRequest.prototype.setRequestHeader = oSet; window.fetch = oFetch;
+/* a figyelő bekapcsolva marad: ha a Salesmate frissíti a belépési kulcsot, a program is az újat használja */
 if (!Object.keys(H).some(k => k.toLowerCase() === 'accesstoken')) { stat('Nem kaptam belépést – frissítsd az oldalt (F5), futtasd újra a programot, és utána kattints a Deals menüre.'); return; }
 stat('Belépés rendben (' + Object.keys(H).join(', ') + '). Indul…');
 let errs = 0;
-const get = async p => { for (let t = 0; t < 3; t++) { const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000); try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include', signal: ac.signal }); clearTimeout(to); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (!r.ok) { errs++; if (errs <= 8) log('HTTP ' + r.status + ': ' + p.slice(0, 90)); return null; } const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { clearTimeout(to); errs++; if (errs <= 8) log('hiba (' + (e.name || e.message) + '): ' + p.slice(0, 80)); await new Promise(z => setTimeout(z, 1500)); } } return null; };
+let tokAt = H.accessToken || H.accesstoken || '', wait403 = null, bad403 = 0, stop = false;
+const curTok = () => H.accessToken || H.accesstoken || '';
+/* 403: a kulcs lejárt → megvárjuk, amíg a Salesmate újat használ (egy kattintás a felületen), utána folytatjuk */
+const refresh = async () => {
+	if (wait403) return wait403;
+	wait403 = (async () => {
+		const old = curTok();
+		stat('A Salesmate belépési kulcsa lejárt. Kattints a Salesmate-ben egy menüpontra (pl. Deals), és a program magától folytatja…');
+		for (let i = 0; i < 600 && curTok() === old; i++) await new Promise(r => setTimeout(r, 500));
+		if (curTok() === old) { stop = true; stat('Nem kaptam új belépési kulcsot – a program megállt. Frissítsd az oldalt (F5), és indítsd újra (a kész fájlok megmaradnak).'); }
+		wait403 = null;
+	})();
+	return wait403;
+};
+const get = async p => { if (stop) return null; for (let t = 0; t < 3; t++) { if (wait403) await wait403; if (stop) return null; const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000); try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include', signal: ac.signal }); clearTimeout(to); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (r.status === 401 || r.status === 403) { bad403++; if (bad403 > 40) { stop = true; stat('A Salesmate folyamatosan elutasítja a kéréseket (403) – a program megállt. Küldj képet erről a dobozról.'); return null; } await refresh(); continue; } bad403 = 0; if (!r.ok) { errs++; if (errs <= 8) log('HTTP ' + r.status + ': ' + p.slice(0, 90)); return null; } const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { clearTimeout(to); errs++; if (errs <= 8) log('hiba (' + (e.name || e.message) + '): ' + p.slice(0, 80)); await new Promise(z => setTimeout(z, 1500)); } } return null; };
+const gap = () => new Promise(r => setTimeout(r, 250));
 const TYPES = 'EmailReceived,EmailSent,ScheduledEmail,TeamInboxConversationEmailSent,TeamInboxConversationEmailReceived,SequenceEmailSent,SequenceEmailReceived,SequenceTeamInboxEmailSent,SequenceTeamInboxEmailReceived,MarketingAutomationEmailSent';
 const pad = n => String(n).padStart(2, '0');
 const loc = x => { const d = new Date(typeof x === 'number' || /^\d+$/.test(String(x)) ? Number(x) : x); if (isNaN(d)) return ''; const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Budapest', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).reduce((a, q) => (a[q.type] = q.value, a), {}); return p.year + '-' + p.month + '-' + p.day + ' ' + (p.hour === '24' ? '00' : p.hour) + ':' + p.minute; };
@@ -239,8 +254,12 @@ const one = async id => {
 };
 /* 4 deal egyszerre */
 let next = 0;
-const worker = async () => { while (next < IDS.length) { const id = IDS[next++]; try { await one(id); } catch (e) { errs++; log('deal #' + id + ': ' + e.message); } } };
-await Promise.all([worker(), worker(), worker(), worker()]);
+const worker = async () => { while (next < IDS.length && !stop) { const id = IDS[next++]; try { await one(id); } catch (e) { errs++; log('deal #' + id + ': ' + e.message); } await gap(); } };
+/* először egyetlen deal próbaként – ha az sem megy, nem indítunk tömegesen */
+await worker1();
+async function worker1() { if (!IDS.length) return; const id = IDS[next++]; await one(id); if (bad403 && !stop) log('Az első deal 403-at kapott – várom az új kulcsot.'); }
+if (!stop) await Promise.all([worker(), worker()]);
+XMLHttpRequest.prototype.setRequestHeader = oSet; window.fetch = oFetch;
 save();
 stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + part + ' fájl a Letöltések mappában (salesmate-levelek-01.json …). ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (errs ? errs + ' hibás kérés. ' : '') + '\nMost töltsd be a fájlokat a panel admin oldalán („Fájlok betöltése”).');
 })();
