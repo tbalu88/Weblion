@@ -22,3 +22,13 @@ Ha egy dealnél nincs levél, akkor: { "deal": 12345, "emails": [] }.
 
 A kapott JSON-t illeszd be ugyanott („Levelek átvétele”). Ami már megvan a panelben, nem kerül be kétszer, így
 nyugodtan újra beilleszthető. A levelek a dealhez kötve, „Salesmate-archívum” jelöléssel jelennek meg (archivált szálként).
+
+## Automatikus átvétel (ajánlott, egy futás)
+1. https://eventcrazy.hu/wp-admin/options-general.php?page=cp-mail-import → alul „Automatikus átvétel” → **Program létrehozása**
+   → a megjelenő szöveget másold ki (kattints bele, Ctrl+A, Ctrl+C). 48 óráig érvényes.
+2. Chrome-ban nyisd meg a Salesmate-et (belépve), nyomd meg az **F12**-t → **Console** fül. Ha a Chrome kéri, írd be: `allow pasting`, Enter.
+3. Illeszd be a programot (Ctrl+V), Enter. Ha kéri, kattints a Salesmate-ben bármelyik menüpontra (pl. Deals).
+4. A konzolban látod a haladást („120 / 1408 deal kész…”). A lapot hagyd nyitva, amíg ki nem írja: **KÉSZ**.
+   Ha a panelnek nem tudta elküldeni, a végén letölt egy `salesmate-levelek.json` fájlt → az admin oldalon „Fájlok betöltése”.
+A Salesmate-ben semmit nem módosít; a friss (14 napon belüli) olvasatlan beszélgetéseket kihagyja, hogy ott ne legyenek olvasottnak jelölve.
+Ha megszakad, egyszerűen futtasd újra (új programmal): ami már bekerült, nem duplázódik.
