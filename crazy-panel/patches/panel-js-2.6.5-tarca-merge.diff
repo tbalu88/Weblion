@@ -1,0 +1,20 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-05 11:22:38.746704078 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v93/panel.js	2026-11-05 12:18:02.822517545 +0000
+@@ -2295,6 +2295,17 @@
+ 			});
+ 		}
+ 		all.forEach(x => { x.a = +x.a || 0; x.o = +x.o || 0; });
++		/* v2.6.5: az Elszámolásból jövő bérek: ha a kezelő neve csak itt, utólag derült ki, az azonos napú, azonos kezelős sorok egybe kerülnek */
++		const grp = new Map(), merged = [];
++		all.forEach(x => {
++			if (x.src !== 'el' || x.c !== 'bér' || !x.k || x.k === 'Kezelő') { merged.push(x); return; }
++			const key = x.d + '|' + x.k, g = grp.get(key);
++			if (!g) { x._n = parseInt(x.n, 10) || 1; x._who = x.t.replace(/^.*? bér(?: – | )?/, '').replace(/^\((.*)\)$/, '$1'); grp.set(key, x); merged.push(x); return; }
++			g.a += x.a; g._n += parseInt(x.n, 10) || 1; g.refs = (g.refs || []).concat(x.refs || []); if (x.ref) g.refs.push(x.ref);
++			const w = x.t.replace(/^.*? bér(?: – | )?/, '').replace(/^\((.*)\)$/, '$1'); if (w) g._who = g._who ? g._who + ', ' + w : w;
++			g.t = g.k + ' bér – ' + g._who; g.n = g._n + ' tétel az Elszámolásból';
++		});
++		all.length = 0; merged.forEach(x => all.push(x));
+ 		all.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.o - b.o));
+ 		let run = 0;
+ 		all.forEach(x => { run += x.a; x.run = run; });
