@@ -37,11 +37,14 @@ function cp_smh_import($raw) {
 	$T = cp_mail_t('threads'); $M = cp_mail_t('messages'); $D = cp_crm_t('deals'); $C = cp_crm_t('contacts');
 	$o = cp_imp_opts(); $me = strtolower($o['user']);
 	$st = array('deal' => 0, 'new' => 0, 'dup' => 0, 'bad' => 0, 'nodeal' => 0);
+	/* a már feldolgozott dealek (levél nélküliek is) – az újraindított program ezeket kihagyja */
+	$doneIds = get_option('cp_smh_done', array()); if (!is_array($doneIds)) { $doneIds = array(); }
 	foreach (array_slice($j, 0, 300) as $x) {
 		$did = (int) ($x['deal'] ?? 0);
 		$d = $did ? $wpdb->get_row($wpdb->prepare("SELECT d.id, c.name cn, c.email ce FROM $D d LEFT JOIN $C c ON c.id = d.contact_id WHERE d.id = %d", $did), ARRAY_A) : null;
 		if (!$d) { $st['nodeal']++; continue; }
 		$st['deal']++;
+		$doneIds[$did] = 1;
 		foreach (array_slice((array) ($x['emails'] ?? array()), 0, 200) as $e) {
 			if (!is_array($e)) { $st['bad']++; continue; }
 			$from = cp_smh_addr_list($e['from'] ?? ''); $to = cp_smh_addr_list($e['to'] ?? ''); $cc = cp_smh_addr_list($e['cc'] ?? '');
@@ -91,6 +94,7 @@ function cp_smh_import($raw) {
 			$st['new']++;
 		}
 	}
+	update_option('cp_smh_done', $doneIds, false);
 	$log = get_option('cp_smh_log', array()); if (!is_array($log)) { $log = array(); }
 	$log[] = array('t' => time(), 'deal' => $st['deal'], 'new' => $st['new'], 'dup' => $st['dup']);
 	update_option('cp_smh_log', array_slice($log, -200), false);
@@ -161,7 +165,9 @@ function cp_smh_script($all) {
 	update_option('cp_smh_tok', array('h' => hash('sha256', $k), 'exp' => time() + 2 * DAY_IN_SECONDS), false);
 	$ids = array();
 	$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
+	$doneIds = get_option('cp_smh_done', array()); if (!is_array($doneIds)) { $doneIds = array(); }
 	foreach (cp_smh_deals() as $d) {
+		if (isset($doneIds[(int) $d['id']])) { continue; }
 		if (!$all && $d['lcm'] !== 'Email') { continue; }
 		if (!$all && (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T t JOIN $M m ON m.thread_id = t.id WHERE t.deal_id = %d AND m.dir = 'out' AND m.status <> 'idézetből'", $d['id']))) { continue; }
 		$ids[] = (int) $d['id'];
