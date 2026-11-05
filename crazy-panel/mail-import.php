@@ -351,7 +351,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => (!$sent && $out) ? 'ellenőrizetlen' : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 9 && $rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
+		'status' => (!$sent && $out) ? (cp_imp_sm_copy($hraw, $me) ? 'Salesmate-ből küldve' : 'ellenőrizetlen') : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 9 && $rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
 		/* v1.67: az eredeti HTML szűrve (a beágyazott képek a mellékletek sorszámára hivatkozva) */
 		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	$add = 1;
@@ -636,4 +636,12 @@ function cp_imp_ajax_fetch_now() {
 	$sy = get_option('cp_imp_sync', array());
 	if (!empty($sy['err'])) { cp_el_err('A postafiók most nem érhető el: ' . $sy['err'], 502); }
 	wp_send_json_success(array('new' => max(0, (int) ($sy['n'] ?? 0) - $n0), 'last' => (int) ($sy['last'] ?? 0)));
+}
+
+/* v2.5.2: a Salesmate-ből (SMTP-n, a saját fiókunkkal) küldött levél másolata (Auto BCC) – a mi szerverünk hitelesített
+ * küldőként jegyezte fel (cPanel/Exim fejléc), és a levél a Salesmate-ből jött → nem „ellenőrizetlen”, hanem „Salesmate-ből küldve” */
+function cp_imp_sm_copy($hraw, $me) {
+	$q = preg_quote($me, '/');
+	$auth = preg_match('/^X-(Authenticated-Sender|Get-Message-Sender-Via):[^\n]*' . $q . '/mi', $hraw) || preg_match('/authenticated_id:\s*' . $q . '/i', $hraw);
+	return $auth && (bool) preg_match('/salesmate/i', $hraw);
 }
