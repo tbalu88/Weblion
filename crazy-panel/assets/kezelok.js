@@ -10,7 +10,9 @@
 	const huD = s => { if (!s) return ''; const p = String(s).slice(0, 10).split('-').map(Number); return MON[p[1] - 1] + ' ' + p[2] + '.'; };
 	const SENS = K.sens || {};
 	const SK = Object.keys(SENS);
-	const S = { rows: [], el: [], reveal: false, q: '', inact: false, main: null, err: '', open: 0 };
+	const SKL = K.skills || {}, PRC = K.procs || {}, KINDS = K.kinds || { kezelo: 'Kezelők' };
+	const S = { rows: [], el: [], reveal: false, q: '', inact: false, main: null, err: '', open: 0, kind: 'kezelo' };
+	try { const k = localStorage.getItem('cpx_kz_kind'); if (KINDS[k]) S.kind = k; } catch (e) { /* privát mód */ }
 	async function post(action, params) {
 		const fd = new FormData(); fd.append('action', action); fd.append('t', C.t);
 		Object.keys(params || {}).forEach(k => fd.append(k, params[k]));
@@ -20,13 +22,21 @@
 		return j.data;
 	}
 	function toast(t, bad) { let d = document.getElementById('cpx-toast'); if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); } d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 7000 : 2500); }
-	const COLS = [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['phone', 'Telefon', 'tel'], ['plate', 'Autó rendszám', 'text']].concat(SK.map(k => [k, SENS[k], 'text', 1]));
+	/* oszlopok csoportonként: [mező, fejléc, típus, személyes?] – típus: text/email/tel, car (lenyíló), chk (igen/nem), sk:<gép>, pr:<lépés> */
+	const SENSC = SK.map(k => [k, SENS[k], 'text', 1]);
+	const colsFor = kind => kind === 'kezelo' ? [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['phone', 'Telefon', 'tel'], ['plate', 'Rendszám', 'text'], ['car', 'Autó típusa', 'car']].concat(Object.keys(SKL).map(k => ['sk:' + k, SKL[k], 'sk']), [['extra', 'Egyéb', 'text']], SENSC)
+		: kind === 'host' ? [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['phone', 'Telefon', 'tel'], ['has_car', 'Autó', 'chk'], ['extra', 'Egyéb', 'text']].concat(SENSC)
+		: [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['phone', 'Telefon', 'tel'], ['has_car', 'Autó', 'chk']].concat(Object.keys(PRC).map(k => ['pr:' + k, PRC[k], 'pr']), [['extra', 'Megjegyzés', 'text']]);
+	let COLS = colsFor(S.kind);
 	async function load() {
 		try { const r = await post('cp_kz_list', { reveal: S.reveal ? 1 : '' }); S.rows = r.rows; S.el = r.el; S.err = ''; } catch (e) { S.err = e.message; }
 		draw();
 	}
 	function cell(x, c) {
 		const [k, , type, sens] = c;
+		if (type === 'sk' || type === 'pr') { const key = k.slice(3), on = (type === 'sk' ? x.skills : x.proc).includes(key); return '<td class="kz-c"><input type="checkbox" data-' + type + '="' + key + '"' + (on ? ' checked' : '') + ' aria-label="' + esc(c[1]) + '"></td>'; }
+		if (type === 'chk') return '<td class="kz-c"><input type="checkbox" data-f="' + k + '"' + (x[k] ? ' checked' : '') + ' aria-label="' + esc(c[1]) + '"></td>';
+		if (type === 'car') return '<td><select data-f="car" class="kz-car ' + esc(x.car) + '" aria-label="Autó típusa"><option value="">–</option><option value="szemely"' + (x.car === 'szemely' ? ' selected' : '') + '>személy</option><option value="teher"' + (x.car === 'teher' ? ' selected' : '') + '>teher</option></select></td>';
 		if (sens && !S.reveal) {
 			const has = (x.have || []).includes(k);
 			return '<td class="kz-s ' + (has ? 'ok' : 'no') + '" title="' + (has ? 'Megadva – a megtekintéshez: „Személyes adatok megjelenítése”' : 'Hiányzik') + '">' + (has ? '•••' : 'hiányzik') + '</td>';
@@ -38,14 +48,20 @@
 	function draw() {
 		const main = S.main; if (!main || !main.isConnected) return;
 		const q = S.q.toLowerCase();
-		const L = S.rows.filter(x => (S.inact || x.active) && (!q || [x.name, x.email, x.phone, x.plate, x.note].join(' ').toLowerCase().includes(q)));
-		const miss = S.rows.filter(x => x.active && x.miss.length).length;
+		COLS = colsFor(S.kind);
+		const cnt = k => S.rows.filter(x => x.kind === k && (S.inact || x.active)).length;
+		main.querySelector('.kz-seg').innerHTML = Object.keys(KINDS).map(k => '<button type="button" data-kind="' + k + '" class="' + (S.kind === k ? 'on' : '') + '">' + esc(KINDS[k]) + ' <small>' + cnt(k) + '</small></button>').join('');
+		main.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => { S.kind = b.dataset.kind; S.open = 0; try { localStorage.setItem('cpx_kz_kind', S.kind); } catch (e) { /* privát mód */ } draw(); }));
+		const L = S.rows.filter(x => x.kind === S.kind && (S.inact || x.active) && (!q || [x.name, x.email, x.phone, x.plate, x.note, x.extra].join(' ').toLowerCase().includes(q)));
+		const miss = S.kind === 'jelentkezo' ? 0 : L.filter(x => x.active && x.miss.length).length;
+		const J = S.kind === 'jelentkezo';
 		main.querySelector('.kz-body').innerHTML = S.err ? '<div class="cpx-empty err">' + esc(S.err) + '</div>' :
 			'<div class="kz-n">' + L.length + ' kezelő' + (miss ? ' · <b class="kz-warn">' + miss + ' kezelőnél hiányzik személyes adat</b>' : '') + (S.reveal ? ' · <span class="kz-open">🔓 a személyes adatok láthatók – a megtekintés naplózva</span>' : '') + '</div>' +
-			'<div class="kz-tw"><table class="kz-t"><thead><tr><th class="kz-fl"></th>' + COLS.map(c => '<th' + (c[3] ? ' class="kz-sh"' : '') + '>' + esc(c[1]) + '</th>').join('') + '<th>Elszámolás</th><th>Közelgő</th><th></th></tr></thead><tbody>' +
+			'<div class="kz-tw"><table class="kz-t"><thead><tr><th class="kz-fl"></th>' + COLS.map(c => '<th' + (c[3] ? ' class="kz-sh"' : (c[2] === 'sk' || c[2] === 'pr' || c[2] === 'chk') ? ' class="kz-ch"' : '') + '>' + esc(c[1]) + '</th>').join('') + (J ? '<th></th>' : '<th>Elszámolás</th><th>Közelgő</th>') + '<th></th></tr></thead><tbody>' +
 			L.map(x => '<tr data-id="' + x.id + '" class="' + (x.flag ? 'fl-' + x.flag : '') + (x.active ? '' : ' off') + '"><td class="kz-fl"><button type="button" data-flag title="Jelölés (szín) váltása" aria-label="Jelölés">●</button></td>' + COLS.map(c => cell(x, c)).join('') +
+				(J ? '<td><button type="button" class="cpx-btn sm" data-hire title="Áthelyezés a Kezelők közé">→ Kezelő lett</button></td>' :
 				'<td><select data-f="el_id" aria-label="Kezelői elszámolás"><option value="">–</option>' + S.el.map(e => '<option value="' + esc(e.id) + '"' + (e.id === x.el_id ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select></td>' +
-				'<td class="kz-up">' + (x.up.length ? '<button type="button" class="kz-link" data-up>' + x.up.length + ' rendezvény<small>' + esc(huD(x.up[0].event_d)) + '</small></button>' : '<span class="cpx-muted">–</span>') + '</td>' +
+				'<td class="kz-up">' + (x.up.length ? '<button type="button" class="kz-link" data-up>' + x.up.length + ' rendezvény<small>' + esc(huD(x.up[0].event_d)) + '</small></button>' : '<span class="cpx-muted">–</span>') + '</td>') +
 				'<td class="kz-act"><button type="button" class="kz-link" data-more title="Megjegyzés, elérhetőség, törlés">⋯</button></td></tr>' +
 				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (COLS.length + 4) + '">' + detail(x) + '</td></tr>' : '')).join('') +
 			'</tbody></table></div>';
@@ -54,7 +70,8 @@
 	}
 	function detail(x) {
 		return '<div class="kz-d"><div><label>Megjegyzés<textarea data-f="note" rows="2">' + esc(x.note) + '</textarea></label>' +
-			'<label class="kz-chk"><input type="checkbox" data-f="active"' + (x.active ? ' checked' : '') + '> Aktív kezelő</label>' +
+			'<label class="kz-chk"><input type="checkbox" data-f="active"' + (x.active ? ' checked' : '') + '> Aktív</label>' +
+			'<label class="kz-chk">Csoport: <select data-f="kind">' + Object.keys(KINDS).map(k => '<option value="' + k + '"' + (x.kind === k ? ' selected' : '') + '>' + esc(KINDS[k]) + '</option>').join('') + '</select></label>' +
 			(x.miss.length ? '<p class="kz-warn">Hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) + '</p>' : '') +
 			'<p class="cpx-muted">' + (x.phone ? '<a href="tel:' + esc(x.phone.replace(/[^\d+]/g, '')) + '">📞 Hívás</a> · ' : '') + (x.email ? '<a href="mailto:' + esc(x.email) + '">✉ E-mail</a> · ' : '') + (x.el ? 'Elszámolás: ' + esc(x.el.name) + ' (' + esc(x.el.role) + ', ' + x.el.rate + ' Ft/óra) · ' : '') + 'Módosítva: ' + esc(x.updated || '') + (x.by ? ' (' + esc(x.by) + ')' : '') + '</p>' +
 			(K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
@@ -80,10 +97,18 @@
 					const k = inp.dataset.f, v = inp.type === 'checkbox' ? (inp.checked ? 1 : 0) : inp.value.trim();
 					if (k === 'name' && !v) { toast('A név nem lehet üres.', true); inp.value = x.name; return; }
 					const r = await save(id, { [k]: v }, inp);
-					if (r && (k === 'el_id' || k === 'active' || k === 'name')) draw();
+					if (r && (k === 'el_id' || k === 'active' || k === 'name' || k === 'kind')) draw();
+					if (r && k === 'car') inp.className = 'kz-car ' + r.car;
 				});
 				if (inp.tagName === 'INPUT') inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
 			});
+			/* gépenkénti tudás / felvételi lépések: a sor összes pipája együtt mentődik */
+			['sk', 'pr'].forEach(t => tr.querySelectorAll('[data-' + t + ']').forEach(cb => cb.addEventListener('change', async () => {
+				const v = Array.from(tr.querySelectorAll('[data-' + t + ']:checked')).map(z => z.dataset[t]).join(',');
+				await save(id, { [t === 'sk' ? 'skills' : 'proc']: v }, cb.closest('td'));
+			})));
+			const hire = tr.querySelector('[data-hire]');
+			if (hire) hire.addEventListener('click', async () => { if (!window.confirm(x.name + ' átkerül a Kezelők közé. Mehet?')) return; if (await save(id, { kind: 'kezelo' })) { toast(x.name + ' mostantól a Kezelők között van.'); draw(); } });
 			const fl = tr.querySelector('[data-flag]');
 			if (fl) fl.addEventListener('click', async () => { const o = ['', 'red', 'yellow', 'green']; const n = o[(o.indexOf(x.flag) + 1) % o.length]; if (await save(id, { flag: n })) draw(); });
 			const more = tr.querySelector('[data-more]'), up = tr.querySelector('[data-up]');
@@ -95,10 +120,10 @@
 	}
 	function view(main) {
 		S.main = main;
-		main.innerHTML = '<div class="kz"><div class="kz-h"><input type="search" data-q placeholder="Keresés: név, e-mail, telefon, rendszám" value="' + esc(S.q) + '" aria-label="Keresés">' +
+		main.innerHTML = '<div class="kz"><div class="kz-h"><div class="crm-seg kz-seg"></div><input type="search" data-q placeholder="Keresés: név, e-mail, telefon, rendszám" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<label class="crm-chk"><input type="checkbox" data-inact' + (S.inact ? ' checked' : '') + '> Inaktívak is</label>' +
 			(K.admin ? '<button type="button" class="cpx-btn ghost" data-rev>' + (S.reveal ? '🔒 Személyes adatok elrejtése' : '🔓 Személyes adatok megjelenítése') + '</button>' + (K.csv ? '<a class="cpx-btn ghost" href="' + esc(K.csv) + '" title="Minden adat letöltése (CSV) – naplózva">⬇ CSV</a>' : '') : '') +
-			'<button type="button" class="cpx-btn" data-new>+ Új kezelő</button></div>' +
+			'<button type="button" class="cpx-btn" data-new>+ Új</button></div>' +
 			'<p class="kz-help">Minden mező közvetlenül szerkeszthető: kattints bele, írd át, és Enterrel vagy kattintással máshova mentődik. A személyes azonosítókat titkosítva tároljuk, csak admin látja és módosíthatja.</p><div class="kz-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); draw(); }, 200); });
@@ -107,7 +132,7 @@
 		if (rv) rv.addEventListener('click', () => { S.reveal = !S.reveal; view(main); });
 		main.querySelector('[data-new]').addEventListener('click', async () => {
 			const n = (window.prompt('Az új kezelő neve:', '') || '').trim(); if (!n) return;
-			const r = await save(0, { name: n }); if (r) { S.open = r.id; draw(); toast('Felvéve – töltsd ki a többi adatát.'); }
+			const r = await save(0, { name: n, kind: S.kind }); if (r) { S.open = r.id; draw(); toast('Felvéve – töltsd ki a többi adatát.'); }
 		});
 		load();
 	}
@@ -115,7 +140,8 @@
 	window.CPKezelok = { view, status };
 
 	const css = document.createElement('style');
-	css.textContent = '.kz{max-width:100%}.kz-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.kz-h input[type=search]{flex:1;min-width:200px;border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13px Inter,sans-serif}.kz-help{font-size:12.5px;color:#6B6F78;margin:0 0 8px}' +
+	css.textContent = '.kz-c{text-align:center}.kz-c input{width:17px!important;min-width:0!important;height:17px;accent-color:#2E7D32;cursor:pointer}.kz-t th.kz-ch{font-size:10.5px;text-align:center;white-space:normal;min-width:56px;max-width:86px}.kz-car{min-width:100px!important;border-radius:999px!important;text-align:center}.kz-car.szemely{background:#DDF3E6!important;color:#17663A}.kz-car.teher{background:#3B2F2A!important;color:#fff}.kz-c.saving{background:#FFF8E1}.kz-c.saved{background:#E8F6EE}' +
+		'.kz{max-width:100%}.kz-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.kz-h input[type=search]{flex:1;min-width:200px;border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13px Inter,sans-serif}.kz-help{font-size:12.5px;color:#6B6F78;margin:0 0 8px}' +
 		'.kz-n{font-size:12.5px;color:#6B6F78;margin-bottom:6px}.kz-warn{color:#B4400E}.kz-open{color:#17663A}.kz-tw{background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:auto}' +
 		'.kz-t{border-collapse:collapse;font-size:13px;min-width:100%}.kz-t th{background:#E9F3E2;color:#2D4A1E;font-size:11.5px;text-align:left;padding:7px 6px;border-bottom:1px solid #D4E6C6;white-space:nowrap;position:sticky;top:0}.kz-t th.kz-sh{background:#F1F5EC}' +
 		'.kz-t td{border-bottom:1px solid #F0ECE6;padding:2px 3px;vertical-align:middle}.kz-t input,.kz-t select{width:100%;min-width:110px;border:1px solid transparent;border-radius:6px;padding:6px 6px;font:13px Inter,sans-serif;background:transparent;color:#141C33}' +

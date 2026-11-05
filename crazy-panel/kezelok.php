@@ -9,8 +9,13 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_KZ_DB_VER', '1');
+define('CP_KZ_DB_VER', '2');
 function cp_kz_t() { global $wpdb; return $wpdb->prefix . 'crazy_kezelok'; }
+/* v2.6.1: csoport, gépenkénti tudás, autó, felvételi lépések (az új kezelői táblázat szerint) */
+function cp_kz_kinds() { return array('kezelo' => 'Kezelők', 'host' => 'Host/Hostess', 'jelentkezo' => 'Jelentkezők'); }
+function cp_kz_skills() { return array('selfie' => 'Selfie', 'spinner' => 'Spinner', 'stand' => 'Stand', 'tukor' => 'Tükör', 'robot' => 'Robot', 'vr' => 'VR', 'overhead' => 'Overhead', 'vip' => 'VIP', 'catchit' => 'Catch It'); }
+function cp_kz_procs() { return array('phone' => 'Telefonos egyeztetés', 'interview' => 'Személyes interjú', 'trial' => 'Próbamunka'); }
+function cp_kz_csv_ok($v, $allowed) { return implode(',', array_values(array_intersect(array_keys($allowed), array_map('trim', explode(',', (string) $v))))); }
 function cp_kz_sens_keys() { return array('taj' => 'TAJ', 'idcard' => 'Személyi ig. szám', 'taxid' => 'Adóazonosító', 'mother' => 'Anyja neve', 'address' => 'Lakcím', 'birth' => 'Születési hely és idő'); }
 add_action('init', function () {
 	if (get_option('cp_kz_db_ver') === CP_KZ_DB_VER) { return; }
@@ -25,6 +30,12 @@ add_action('init', function () {
   sens text NULL,
   sens_have varchar(120) NOT NULL DEFAULT '',
   el_id varchar(40) NOT NULL DEFAULT '',
+  kind varchar(12) NOT NULL DEFAULT 'kezelo',
+  car varchar(12) NOT NULL DEFAULT '',
+  has_car tinyint(1) NOT NULL DEFAULT 0,
+  skills varchar(200) NOT NULL DEFAULT '',
+  extra varchar(255) NOT NULL DEFAULT '',
+  proc varchar(60) NOT NULL DEFAULT '',
   note text NULL,
   flag varchar(12) NOT NULL DEFAULT '',
   active tinyint(1) NOT NULL DEFAULT 1,
@@ -41,7 +52,7 @@ function cp_kz_ok() { return get_option('cp_kz_db_ver') === CP_KZ_DB_VER && func
 function cp_kz_cfg() {
 	$on = cp_kz_ok() && function_exists('cp_panel_can') && cp_panel_can('kezelok');
 	$adm = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
-	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
+	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
 }
 function cp_kz_auth($admin = false) {
 	cp_el_auth();
@@ -72,6 +83,7 @@ function cp_kz_out($r, $reveal) {
 	$el = $r['el_id'] !== '' && function_exists('cp_el_kez_find') ? cp_el_kez_find($r['el_id']) : null;
 	$have = $r['sens_have'] === '' ? array() : explode(',', $r['sens_have']);
 	$x = array('id' => (int) $r['id'], 'name' => $r['name'], 'email' => $r['email'], 'phone' => $r['phone'], 'plate' => $r['plate'], 'note' => (string) $r['note'], 'flag' => $r['flag'], 'active' => (int) $r['active'],
+		'kind' => $r['kind'] ?: 'kezelo', 'car' => $r['car'], 'has_car' => (int) $r['has_car'], 'skills' => $r['skills'] === '' ? array() : explode(',', $r['skills']), 'extra' => $r['extra'], 'proc' => $r['proc'] === '' ? array() : explode(',', $r['proc']),
 		'el_id' => $r['el_id'], 'el' => $el ? array('name' => $el['name'], 'role' => $el['role'], 'rate' => (int) $el['rate']) : null,
 		'have' => $have, 'miss' => array_values(array_diff(array_keys(cp_kz_sens_keys()), $have)), 'updated' => function_exists('cp_crm_local') ? cp_crm_local($r['updated_at']) : $r['updated_at'], 'by' => $r['updated_by']);
 	$x['up'] = cp_kz_upcoming(array($r['name'], $el ? $el['name'] : '', $el ? ($el['sm'] ?? '') : ''), 6);
@@ -112,6 +124,12 @@ function cp_kz_ajax_save() {
 	if (array_key_exists('flag', $f)) { $set['flag'] = in_array($f['flag'], array('', 'red', 'yellow', 'green'), true) ? $f['flag'] : ''; }
 	if (array_key_exists('active', $f)) { $set['active'] = empty($f['active']) ? 0 : 1; }
 	if (array_key_exists('el_id', $f)) { $set['el_id'] = sanitize_key((string) $f['el_id']); }
+	if (array_key_exists('kind', $f)) { $set['kind'] = isset(cp_kz_kinds()[$f['kind']]) ? $f['kind'] : 'kezelo'; }
+	if (array_key_exists('car', $f)) { $set['car'] = in_array($f['car'], array('', 'szemely', 'teher'), true) ? $f['car'] : ''; }
+	if (array_key_exists('has_car', $f)) { $set['has_car'] = empty($f['has_car']) ? 0 : 1; }
+	if (array_key_exists('skills', $f)) { $set['skills'] = cp_kz_csv_ok($f['skills'], cp_kz_skills()); }
+	if (array_key_exists('proc', $f)) { $set['proc'] = cp_kz_csv_ok($f['proc'], cp_kz_procs()); }
+	if (array_key_exists('extra', $f)) { $set['extra'] = $s('extra', 255); }
 	/* személyes azonosítók: csak admin */
 	$sk = array_intersect(array_keys($f), array_keys(cp_kz_sens_keys()));
 	if ($sk) {
@@ -130,7 +148,7 @@ function cp_kz_ajax_save() {
 		$wpdb->insert($T, $set + array('created_at' => gmdate('Y-m-d H:i:s'), 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T")));
 		$id = (int) $wpdb->insert_id;
 	}
-	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys($f)))); }
+	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys($f)))); }
 	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
 	wp_send_json_success(array('row' => cp_kz_out($r, cp_panel_is_admin() && !empty($_POST['reveal']))));
 }
@@ -157,7 +175,8 @@ add_action('wp_ajax_cp_kz_csv', function () {
 	header('Content-Type: text/csv; charset=utf-8');
 	header('Content-Disposition: attachment; filename="kezelok-' . wp_date('Y-m-d') . '.csv"');
 	$fh = fopen('php://output', 'w'); fwrite($fh, "\xEF\xBB\xBF");
-	fputcsv($fh, array_merge(array('Név', 'E-mail', 'Telefon', 'Rendszám'), array_values(cp_kz_sens_keys()), array('Megjegyzés', 'Aktív')), ';');
-	foreach ($rows as $r) { $sv = cp_kz_sens_get($r); $o = array($r['name'], $r['email'], $r['phone'], $r['plate']); foreach (array_keys(cp_kz_sens_keys()) as $k) { $o[] = $sv[$k] ?? ''; } $o[] = $r['note']; $o[] = $r['active'] ? 'igen' : 'nem'; fputcsv($fh, $o, ';'); }
+	fputcsv($fh, array_merge(array('Csoport', 'Név', 'E-mail', 'Telefon', 'Rendszám', 'Autó', 'Tudás', 'Egyéb'), array_values(cp_kz_sens_keys()), array('Megjegyzés', 'Aktív')), ';');
+	$KN = cp_kz_kinds(); $SKL = cp_kz_skills();
+	foreach ($rows as $r) { $sv = cp_kz_sens_get($r); $o = array($KN[$r['kind']] ?? $r['kind'], $r['name'], $r['email'], $r['phone'], $r['plate'], $r['car'] !== '' ? $r['car'] : ($r['has_car'] ? 'van' : ''), implode(', ', array_map(function ($k) use ($SKL) { return $SKL[$k] ?? $k; }, array_filter(explode(',', $r['skills'])))), $r['extra']); foreach (array_keys(cp_kz_sens_keys()) as $k) { $o[] = $sv[$k] ?? ''; } $o[] = $r['note']; $o[] = $r['active'] ? 'igen' : 'nem'; fputcsv($fh, $o, ';'); }
 	fclose($fh); exit;
 });
