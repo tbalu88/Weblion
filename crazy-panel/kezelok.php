@@ -97,7 +97,7 @@ function cp_kz_ajax_list() {
 	cp_kz_auth();
 	global $wpdb;
 	$reveal = !empty($_POST['reveal']) && cp_panel_is_admin();
-	$rows = (array) $wpdb->get_results('SELECT * FROM ' . cp_kz_t() . ' ORDER BY active DESC, pos, name', ARRAY_A);
+	$rows = (array) $wpdb->get_results('SELECT * FROM ' . cp_kz_t() . ' ORDER BY pos, name', ARRAY_A);
 	if ($reveal && function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'kz_reveal', 'Kezelők személyes adatainak megtekintése', '', count($rows) . ' kezelő'); }
 	$el = function_exists('cp_el_kez_all') ? array_map(function ($k) { return array('id' => (string) $k['id'], 'name' => $k['name'], 'role' => $k['role']); }, cp_el_kez_all()) : array();
 	wp_send_json_success(array('rows' => array_map(function ($r) use ($reveal) { return cp_kz_out($r, $reveal); }, $rows), 'el' => $el, 'reveal' => $reveal ? 1 : 0));
@@ -151,6 +151,19 @@ function cp_kz_ajax_save() {
 	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys($f)))); }
 	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
 	wp_send_json_success(array('row' => cp_kz_out($r, cp_panel_is_admin() && !empty($_POST['reveal']))));
+}
+/* v2.6.3: sorrend (húzással) – a kapott azonosítók sorrendjében */
+add_action('wp_ajax_nopriv_cp_kz_order', 'cp_kz_ajax_order');
+add_action('wp_ajax_cp_kz_order', 'cp_kz_ajax_order');
+function cp_kz_ajax_order() {
+	cp_kz_auth();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$ids = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_POST['ids'] ?? ''))))));
+	if (!$ids || count($ids) > 500) { cp_el_err('Hibás kérés.'); }
+	foreach ($ids as $i => $id) { $wpdb->update(cp_kz_t(), array('pos' => $i + 1), array('id' => $id)); }
+	if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'kz_order', 'Kezelők sorrendje', '', count($ids) . ' sor'); }
+	wp_send_json_success(array('ok' => 1));
 }
 add_action('wp_ajax_nopriv_cp_kz_delete', 'cp_kz_ajax_delete');
 add_action('wp_ajax_cp_kz_delete', 'cp_kz_ajax_delete');

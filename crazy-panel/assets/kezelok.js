@@ -59,7 +59,7 @@
 		main.querySelector('.kz-body').innerHTML = S.err ? '<div class="cpx-empty err">' + esc(S.err) + '</div>' :
 			'<div class="kz-n">' + L.length + ' kezelő' + (miss ? ' · <b class="kz-warn">' + miss + ' kezelőnél hiányzik személyes adat</b>' : '') + (S.reveal ? ' · <span class="kz-open">🔓 a személyes adatok láthatók – a megtekintés naplózva</span>' : '') + '</div>' +
 			'<div class="kz-tw"><table class="kz-t"><thead><tr><th class="kz-fl"></th>' + COLS.map(c => '<th' + (c[3] ? ' class="kz-sh"' : (c[2] === 'sk' || c[2] === 'pr' || c[2] === 'chk') ? ' class="kz-ch"' : '') + '>' + esc(c[1]) + '</th>').join('') + (J ? '<th></th>' : '<th>Elszámolás</th><th>Közelgő</th>') + '</tr></thead><tbody>' +
-			L.map(x => '<tr data-id="' + x.id + '" class="' + (x.flag ? 'fl-' + x.flag : '') + (x.active ? '' : ' off') + '"><td class="kz-fl"><button type="button" class="kz-tog" data-more aria-expanded="' + (S.open === x.id) + '" title="Részletek">' + (S.open === x.id ? '▾' : '▸') + '</button></td>' + COLS.map(c => cell(x, c)).join('') +
+			L.map(x => '<tr data-id="' + x.id + '" class="' + (x.flag ? 'fl-' + x.flag : '') + (x.active ? '' : ' off') + '"><td class="kz-fl kz-flw"><span class="kz-drag" title="Húzd a sorrend módosításához" aria-label="Áthelyezés">⠿</span><button type="button" class="kz-tog" data-more aria-expanded="' + (S.open === x.id) + '" title="Részletek">' + (S.open === x.id ? '▾' : '▸') + '</button></td>' + COLS.map(c => cell(x, c)).join('') +
 				(J ? '<td><button type="button" class="cpx-btn sm" data-hire title="Áthelyezés a Kezelők közé">→ Kezelő lett</button></td>' :
 				'<td><select data-f="el_id" aria-label="Kezelői elszámolás"><option value="">–</option>' + S.el.map(e => '<option value="' + esc(e.id) + '"' + (e.id === x.el_id ? ' selected' : '') + '>' + esc(e.name) + '</option>').join('') + '</select></td>' +
 				'<td class="kz-up">' + (x.up.length ? '<button type="button" class="kz-link" data-up>' + x.up.length + ' rendezvény<small>' + esc(huD(x.up[0].event_d)) + '</small></button>' : '<span class="cpx-muted">–</span>') + '</td>') +
@@ -67,7 +67,36 @@
 				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (COLS.length + 3) + '">' + detail(x) + '</td></tr>' : '')).join('') +
 			'</tbody></table></div>';
 		bind();
+		dnd(main);
 		if (window.CPXStatus) window.CPXStatus();
+	}
+	/* húzás: csak szerkesztés módban, a ⠿ fogantyúnál fogva; elengedéskor az aktuális csoport új sorrendje mentődik */
+	function dnd(main) {
+		const tb = main.querySelector('.kz-t tbody'); if (!tb) return;
+		let drag = null;
+		tb.querySelectorAll('tr[data-id]').forEach(tr => {
+			const h = tr.querySelector('.kz-drag');
+			h.addEventListener('mousedown', () => { tr.draggable = true; });
+			h.addEventListener('touchstart', () => { tr.draggable = true; }, { passive: true });
+			tr.addEventListener('dragstart', e => { if (!tr.draggable) { e.preventDefault(); return; } drag = tr; S.open = 0; const d = tr.nextElementSibling; if (d && d.classList.contains('kz-det')) d.remove(); tr.classList.add('kz-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', tr.dataset.id); } catch (er) { /* régi böngésző */ } });
+			tr.addEventListener('dragend', async () => {
+				tr.draggable = false; tr.classList.remove('kz-dragging'); tb.querySelectorAll('.kz-over').forEach(z => z.classList.remove('kz-over'));
+				if (!drag) return; drag = null;
+				const vis = Array.from(tb.querySelectorAll('tr[data-id]')).map(z => Number(z.dataset.id));
+				/* a többi (más csoport, rejtett inaktív, szűrésből kimaradt) a helyén marad: a látható sorok sorrendje a saját helyeikre kerül */
+				const slots = S.rows.map((x, i) => vis.includes(x.id) ? i : -1).filter(i => i >= 0);
+				const byId = new Map(S.rows.map(x => [x.id, x]));
+				const nr = S.rows.slice(); slots.forEach((si, k) => { nr[si] = byId.get(vis[k]); });
+				const same = nr.every((x, i) => x === S.rows[i]); if (same) return;
+				S.rows = nr;
+				try { await post('cp_kz_order', { ids: S.rows.map(x => x.id).join(',') }); toast('Sorrend mentve.'); } catch (e) { toast(e.message, true); load(); }
+			});
+			tr.addEventListener('dragover', e => {
+				if (!drag || drag === tr) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+				const r = tr.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+				tb.insertBefore(drag, after ? tr.nextSibling : tr);
+			});
+		});
 	}
 
 	/* ------------------------------------------------------------ v2.6.2: olvasó nézet – tömör, semmi nem kattintható át véletlenül */
@@ -188,7 +217,7 @@
 		'.kz-t td{border-bottom:1px solid #F0ECE6;padding:2px 3px;vertical-align:middle}.kz-t input,.kz-t select{width:100%;min-width:110px;border:1px solid transparent;border-radius:6px;padding:6px 6px;font:13px Inter,sans-serif;background:transparent;color:#141C33}' +
 		'.kz-t input:hover,.kz-t select:hover{border-color:#E6E3DE}.kz-t input:focus,.kz-t select:focus{border-color:#2F5BD8;background:#fff;outline:none}.kz-t input[data-f=name]{font-weight:600;min-width:150px}.kz-t input[data-f=email]{min-width:190px}.kz-t td.kz-sv input{min-width:120px}.kz-t input[data-f=address]{min-width:230px}' +
 		'.kz-t input.saving{background:#FFF8E1}.kz-t input.saved,.kz-t select.saved{background:#E8F6EE}.kz-s{font-size:12px;text-align:center;white-space:nowrap}.kz-s.ok{color:#17663A}.kz-s.no{color:#B4400E;background:#FDF1EC}' +
-		'.kz-fl{width:28px;text-align:center}.kz-tog{border:0;background:none;cursor:pointer;color:#6B6F78;font-size:13px;width:24px;height:24px;border-radius:6px}.kz-tog:hover{background:#F0ECE6;color:#141C33}.kz-fl button{border:0;background:none;cursor:pointer;font-size:15px;color:#D0CCC5}tr.fl-red td{background:#FBE9E7}tr.fl-red .kz-fl button{color:#D84315}tr.fl-yellow td{background:#FFF8E1}tr.fl-yellow .kz-fl button{color:#F9A825}tr.fl-green td{background:#EAF6EC}tr.fl-green .kz-fl button{color:#2E7D32}tr.off td{opacity:.55}' +
+		'.kz-fl{width:28px;text-align:center}.kz-flw{width:46px;white-space:nowrap}.kz-drag{cursor:grab;color:#B5B0A8;font-size:14px;padding:0 3px;user-select:none}.kz-drag:hover{color:#141C33}tr.kz-dragging td{opacity:.45;background:#EEF3FD!important}.kz-tog{border:0;background:none;cursor:pointer;color:#6B6F78;font-size:13px;width:24px;height:24px;border-radius:6px}.kz-tog:hover{background:#F0ECE6;color:#141C33}.kz-fl button{border:0;background:none;cursor:pointer;font-size:15px;color:#D0CCC5}tr.fl-red td{background:#FBE9E7}tr.fl-red .kz-fl button{color:#D84315}tr.fl-yellow td{background:#FFF8E1}tr.fl-yellow .kz-fl button{color:#F9A825}tr.fl-green td{background:#EAF6EC}tr.fl-green .kz-fl button{color:#2E7D32}tr.off td{opacity:.55}' +
 		'.kz-link{border:0;background:none;color:#2F5BD8;cursor:pointer;font:600 12.5px Inter,sans-serif;text-align:left;white-space:nowrap}.kz-link small{display:block;color:#8A8E96;font-weight:500}.kz-act{width:30px}' +
 		'.kz-det td{background:#FAF8F5!important}.kz-d{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:8px 6px}.kz-d label{display:block;font-size:12px;color:#6B6F78}.kz-d textarea{width:100%;border:1px solid #E6E3DE;border-radius:8px;padding:6px;font:13px Inter,sans-serif}.kz-d ul{margin:6px 0;padding-left:18px}.kz-d li{margin:3px 0}.kz-chk{display:flex!important;gap:6px;align-items:center;margin:6px 0;color:#141C33!important;font-size:13px!important}.kz-d input[type=checkbox]{width:auto;min-width:0;accent-color:#2F5BD8}.kz-d select{width:auto!important;min-width:150px!important;border:1px solid #E6E3DE!important;background:#fff!important}' +
 		'@media (max-width:760px){.kz-d{grid-template-columns:1fr}}';
