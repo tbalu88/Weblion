@@ -1,0 +1,23 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-05 12:38:16.461219801 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v97.php	2026-11-05 12:41:04.386421232 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.6.6');
++define('CP_PANEL_VER', '2.6.7');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -2154,6 +2154,11 @@
+ 		if ($k !== '' && cp_el_kez_find($k)) { $row['k'] = $k; }
+ 		$st['r'][] = $row;
+ 		cp_el_log($st, 'panel', $row['i'], 'row', '', 'új kezelő-sor');
++	} elseif ($op === 'hide' || $op === 'unhide') {
++		/* v2.6.7: a rendezvény kivétele az elszámolásból – a dealt nem érinti */
++		foreach ((isset($st['r']) && is_array($st['r'])) ? $st['r'] : array() as $r) { if ($op === 'hide' && !empty($r['pd'])) { cp_el_err('Kifizetett tételt nem lehet kivenni – előbb vond vissza a kifizetést.'); } }
++		if ($op === 'hide') { $st['hid'] = 1; $st['hid_by'] = function_exists('cp_panel_who') ? cp_panel_who() : ''; $st['hid_at'] = time(); } else { unset($st['hid'], $st['hid_by'], $st['hid_at']); }
++		cp_el_log($st, 'panel', 'r0', 'row', '', $op === 'hide' ? 'kivéve az elszámolásból' : 'visszaállítva');
+ 	} elseif ($op === 'del') {
+ 		$i = cp_el_req_rid();
+ 		if ($i === 'r0') { cp_el_err('A fő kezelő sora nem törölhető.'); }

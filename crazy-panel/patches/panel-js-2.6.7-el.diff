@@ -1,0 +1,80 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-05 12:18:21.702197375 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v96/panel.js	2026-11-05 12:41:25.816621120 +0000
+@@ -1390,7 +1390,7 @@
+ 	head.appendChild(monthNav(render));
+ 	const tools = el('div', { class: 'cpx-trk-tools' });
+ 	tools.innerHTML = '<select id="el-kf" class="el-sel" aria-label="Szűrés kezelőre"><option value="">Minden kezelő</option></select>' +
+-		'<div class="seg sm" id="el-only">' + [['', 'Mind'], ['miss', 'Hiányos'], ['open', 'Nem fizetett']].map(x => '<button data-v="' + x[0] + '" class="' + (EL.only === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
++		'<div class="seg sm" id="el-only">' + [['', 'Mind'], ['miss', 'Hiányos'], ['open', 'Nem fizetett'], ['hid', 'Elrejtett']].map(x => '<button data-v="' + x[0] + '" class="' + (EL.only === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+ 		'<input type="search" id="el-q" placeholder="Keresés: ügyfél, helyszín…" value="' + esc(EL.q) + '">' +
+ 		'<button class="cpx-btn ghost" id="el-kez">Kezelők</button>' +
+ 		'<button class="cpx-btn ghost" id="el-man">+ Kézi tétel</button>' +
+@@ -1425,7 +1425,11 @@
+ 	const draw = () => {
+ 		const c = EL.cache[S.month];
+ 		if (!c) return;
+-		const all = elLines(S.month);
++		const allL = elLines(S.month);
++		/* v2.6.7: az elszámolásból kivett (elrejtett) rendezvények – csak az „Elrejtett” szűrőn látszanak, az összegekbe nem számítanak */
++		const isHid = L => !!((c.store[L.d.id] || {}).hid);
++		const hidN = new Set(allL.filter(isHid).map(L => L.d.id)).size;
++		const all = allL.filter(L => EL.only === 'hid' ? isHid(L) : !isHid(L));
+ 		fillKf(all);
+ 		const tdy = today();
+ 		const locked = !!c.lock;
+@@ -1434,7 +1438,7 @@
+ 		EL.busy = busy;
+ 		const q = fold(EL.q);
+ 		const vis = all.filter(L => (!EL.kf || (EL.kf === '-' ? !elKeyOf(L) : elKeyOf(L) === EL.kf)) &&
+-			(!EL.only || (EL.only === 'miss' ? L.miss.length : !L.paid)) &&
++			(!EL.only || EL.only === 'hid' || (EL.only === 'miss' ? L.miss.length : !L.paid)) &&
+ 			(!q || fold(L.d.who + ' ' + L.d.title + ' ' + L.d.loc + ' ' + elKezName(L) + ' ' + (L.row.no || '')).includes(q)));
+ 		const deals = new Set(all.map(L => L.d.id));
+ 		const noKez = all.filter(L => !L.kid && !L.unk).length;
+@@ -1526,6 +1530,7 @@
+ 		else if (act === 'ok') elSave(L, { ok: L.ok ? '' : '1' });
+ 		else if (act === 'pay') { if (L.paid) { if (confirm('Visszavonod a kifizetést?\n' + (elKezName(L) || '') + ' – ' + L.d.who + ' (' + L.row.pd + ', ' + (L.row.pb || '') + ')')) elPay([L], true); } else payModal([L], elKezName(L)); }
+ 		else if (act === 'mdel') elManualDel(L.d);
++		else if (act === 'hide' || act === 'unhide') elHide(L, act === 'hide');
+ 		else if (act === 'medit') manualModal(L.d);
+ 	});
+ 	sum.addEventListener('click', ev => {
+@@ -1619,10 +1624,12 @@
+ 	if (first) {
+ 		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="' + esc(C.sm + d.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(d.who) + '</a>') + '</div>' +
+ 			'<small>' + esc(sub) + '</small>' + (PORTAL && !d.manual ? window.CPPortal.flags(((EL.cache[S.month] || {}).portal || {})[d.id], 'elszamolas') : '') + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
+-			'<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button><button type="button" class="el-a" data-act="link" title="Kezelői adatlap linkjének másolása">Link ⧉</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="add" title="Még egy kezelő ehhez a rendezvényhez">+ kezelő</button>' +
++			'<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button><button type="button" class="el-a" data-act="link" title="Kezelői adatlap linkjének másolása">Link ⧉</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="add" title="Még egy kezelő ehhez a rendezvényhez">+ kezelő</button>' + (((EL.cache[S.month] || {}).store || {})[d.id] && EL.cache[S.month].store[d.id].hid ? '<button type="button" class="el-a" data-act="unhide" title="Visszakerül az elszámolásba">↺ visszaállítás</button>' : '<button type="button" class="el-a" data-act="hide" title="Kivétel az elszámolásból (pl. ha nem a mi kezelőnk dolgozott rajta) – a dealt nem érinti">× sor törlése</button>') +
+ 			(d.manual ? '<button type="button" class="el-a" data-act="medit">✎ tétel</button><button type="button" class="el-a" data-act="mdel">törlés</button>' : '')) + '</div>';
+ 	} else {
+-		who = '<div class="nm el-sub">↳ ' + esc(d.who) + '</div><div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="del" title="Kezelő-sor törlése">× sor törlése</button>') + '</div>';
++		/* v2.6.7: az alsorban is a dátum, időpont, szolgáltatás és a helyszín */
++		const dd = d.date ? String(d.date).slice(5).replace('-', '.') + '.' : '';
++		who = '<div class="nm el-sub">↳ ' + esc(d.who) + '</div><small>' + esc([dd, sub].filter(Boolean).join(' · ')) + '</small>' + (locS ? '<small class="el-loc" title="' + esc(locS) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') + '<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="del" title="Kezelő-sor törlése">× sor törlése</button>') + '</div>';
+ 	}
+ 	const pmT = row.pm === 'keszpenz' ? 'készpénz' : row.pm === 'atutalas' ? 'átutalás' : '';
+ 	const pdiff = L.paid && elHas(row.pv) && Math.round(L.tot) !== Math.round(elNum(row.pv));
+@@ -1733,6 +1740,14 @@
+ 	if (EL.draw) EL.draw();
+ }
+ 
++/* v2.6.7: rendezvény kivétele az elszámolásból (a dealt és a Salesmate-et nem érinti; az „Elrejtett” szűrőn visszaállítható) */
++async function elHide(L, on) {
++	if (elLocked()) { toast(EL_LOCK_MSG); if (EL.draw) EL.draw(); return; }
++	if (on && !confirm('Kiveszed az elszámolásból: ' + L.d.who + ' (' + L.d.date + ')?\n\nA deal nem változik, csak itt nem jelenik meg és nem számít bele az összegekbe. Az „Elrejtett” szűrőn visszaállítható.')) return;
++	try { const res = await elPost({ action: 'cp_el_row', op: on ? 'hide' : 'unhide', id: L.d.id, d: L.d.date }); elApply(L.d.id, res); toast(on ? 'Kivéve az elszámolásból – az „Elrejtett” szűrőn visszaállítható.' : 'Visszakerült az elszámolásba.'); }
++	catch (e) { alert('Nem sikerült: ' + e.message); }
++	if (EL.draw) EL.draw();
++}
+ async function elDelRow(L) {
+ 	if (elLocked()) { toast(EL_LOCK_MSG); if (EL.draw) EL.draw(); return; }
+ 	try {
+@@ -1981,7 +1996,7 @@
+ 	const m = S.month;
+ 	const [y, mo] = m.split('-').map(Number);
+ 	const label = y + '. ' + HU_MONTHS[mo - 1];
+-	const all = elLines(m);
++	const all = elLines(m).filter(L => !((c.store[L.d.id] || {}).hid));
+ 	const tot = all.reduce((s, L) => s + L.tot, 0);
+ 	if (undo) {
+ 		if (!confirm('Újranyitod: ' + label + '?\nUtána a tételek a panelben és a kezelői adatlapokon is ismét módosíthatók.')) return;
