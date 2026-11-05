@@ -170,7 +170,15 @@ function cp_smh_script($all) {
 /* Crazy panel – Salesmate-levelek átvétele. Csak olvas a Salesmate-ből; a leveleket a Crazy panelnek küldi. */
 (async () => {
 const IDS = __IDS__, DEST = __DEST__, H = {};
-const log = (...a) => console.log('%c[Crazy]', 'color:#c2410c;font-weight:bold', ...a);
+/* a Salesmate elnémítja a konzolt – a haladás egy dobozban látszik az oldal jobb alsó sarkában */
+const box = document.createElement('div');
+box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:380px;max-height:50vh;overflow:auto;background:#141C33;color:#fff;font:13px/1.45 system-ui,sans-serif;padding:12px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);white-space:pre-wrap';
+box.innerHTML = '<b style="color:#FDBA74">Crazy panel – levelek átvétele</b>\n';
+document.body.appendChild(box);
+const st = document.createElement('div'); box.appendChild(st);
+const lg = document.createElement('div'); lg.style.cssText = 'margin-top:6px;opacity:.8;font-size:12px'; box.appendChild(lg);
+const log = (...a) => { const t = a.join(' '); lg.textContent = (t + '\n' + lg.textContent).slice(0, 3000); };
+const stat = t => { st.textContent = t; };
 /* a belépési fejlécek: a Salesmate saját kéréseiből olvassuk ki (a böngészőn kívülre nem kerülnek) */
 const want = ['accesstoken', 'x-linkname', 'x-workspace-id', 'isimpersonate'];
 const grab = (k, v) => { if (want.includes(String(k).toLowerCase())) H[k] = v; };
@@ -178,11 +186,13 @@ const oSet = XMLHttpRequest.prototype.setRequestHeader;
 XMLHttpRequest.prototype.setRequestHeader = function (k, v) { grab(k, v); return oSet.apply(this, arguments); };
 const oFetch = window.fetch;
 window.fetch = function (u, o) { try { const h = new Headers((o && o.headers) || {}); h.forEach((v, k) => grab(k, v)); } catch (e) {} return oFetch.apply(this, arguments); };
-log('Kattints most a Salesmate-ben bármelyik menüpontra (pl. Deals), hogy a program megkapja a belépést…');
+stat('Kattints most a Salesmate-ben bármelyik menüpontra (pl. Deals), hogy a program megkapja a belépést…');
 for (let i = 0; i < 120 && !Object.keys(H).some(k => k.toLowerCase() === 'accesstoken'); i++) await new Promise(r => setTimeout(r, 500));
 XMLHttpRequest.prototype.setRequestHeader = oSet; window.fetch = oFetch;
-if (!Object.keys(H).some(k => k.toLowerCase() === 'accesstoken')) { log('Nem kaptam belépést – frissítsd az oldalt, és futtasd újra.'); return; }
-const get = async p => { for (let t = 0; t < 4; t++) { try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include' }); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (!r.ok) return null; const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { await new Promise(z => setTimeout(z, 1500)); } } return null; };
+if (!Object.keys(H).some(k => k.toLowerCase() === 'accesstoken')) { stat('Nem kaptam belépést – frissítsd az oldalt (F5), futtasd újra a programot, és utána kattints a Deals menüre.'); return; }
+stat('Belépés rendben (' + Object.keys(H).join(', ') + '). Indul…');
+let errs = 0;
+const get = async p => { for (let t = 0; t < 3; t++) { const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000); try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include', signal: ac.signal }); clearTimeout(to); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (!r.ok) { errs++; if (errs <= 8) log('HTTP ' + r.status + ': ' + p.slice(0, 90)); return null; } const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { clearTimeout(to); errs++; if (errs <= 8) log('hiba (' + (e.name || e.message) + '): ' + p.slice(0, 80)); await new Promise(z => setTimeout(z, 1500)); } } return null; };
 const TYPES = 'EmailReceived,EmailSent,ScheduledEmail,TeamInboxConversationEmailSent,TeamInboxConversationEmailReceived,SequenceEmailSent,SequenceEmailReceived,SequenceTeamInboxEmailSent,SequenceTeamInboxEmailReceived,MarketingAutomationEmailSent';
 const pad = n => String(n).padStart(2, '0');
 const loc = x => { const d = new Date(typeof x === 'number' || /^\d+$/.test(String(x)) ? Number(x) : x); if (isNaN(d)) return ''; const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Budapest', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).reduce((a, q) => (a[q.type] = q.value, a), {}); return p.year + '-' + p.month + '-' + p.day + ' ' + (p.hour === '24' ? '00' : p.hour) + ':' + p.minute; };
@@ -220,11 +230,11 @@ for (let i = 0; i < IDS.length; i++) {
 		}
 	}
 	out.push({ deal: id, emails });
-	if (out.length >= 15) await flush();
-	if (i % 10 === 0) log((i + 1) + ' / ' + IDS.length + ' deal kész, ' + mails + ' levél' + (skipped ? ', ' + skipped + ' friss olvasatlan beszélgetés kihagyva' : ''));
+	if (out.length >= 5) await flush();
+	stat((i + 1) + ' / ' + IDS.length + ' deal kész · ' + mails + ' levél · ' + sent + ' deal elküldve a panelnek' + (skipped ? ' · ' + skipped + ' friss olvasatlan kihagyva' : '') + (errs ? ' · ' + errs + ' hibás kérés' : '') + '\nHagyd nyitva ezt a lapot.');
 }
 await flush(true);
-log('KÉSZ: ' + IDS.length + ' deal, ' + mails + ' levél. ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : ''));
+stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + sent + ' deal a panelben. ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (errs ? errs + ' hibás kérés. ' : '') + 'Ezt a dobozt az oldal frissítése eltünteti.');
 if (failed.length) { const b = new Blob([JSON.stringify(failed)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'salesmate-levelek.json'; document.body.appendChild(a); a.click(); log('A panelnek nem ment el ' + failed.length + ' deal – letöltöttem fájlként (salesmate-levelek.json): töltsd be a panel Levelezés oldalán.'); }
 })();
 JS;
