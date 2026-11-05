@@ -1,6 +1,6 @@
 # Salesmate-levelek kigyűjtése (Claude a Chrome-ban)
 
-Előkészítés: WP-admin → Beállítások → Crazy levelezés → „Salesmate-levelek átvétele” → **Deal-lista letöltése (CSV)**.
+Előkészítés: https://eventcrazy.hu/wp-admin/options-general.php?page=cp-mail-import (WP-admin → Beállítások → Crazy panel → Levelezés fül), alul „Salesmate-levelek átvétele” → **Deal-lista letöltése (CSV)**.
 A lista elején a nyitott dealek vannak; a „mar_atveve” oszlop mutatja, melyik van már kész.
 
 Ezt másold be a Chrome-bővítményben futó Claude-nak (a Salesmate-be belépve), a CSV soraival együtt (egyszerre 20–30 deal):
