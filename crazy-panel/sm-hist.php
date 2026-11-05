@@ -133,8 +133,9 @@ add_action('cp_imp_admin_after', function () {
 	echo '<p>A Salesmate-ből küldött leveleket a Salesmate nem teszi a postafiókba, és nem is exportálja. A Chrome-bővítményben futó Claude dealenként kigyűjti őket; a kapott JSON-t ide illeszd be (egyszerre akár 20–50 deal). Ami már megvan a panelben, nem kerül be kétszer. A Salesmate-et nem érinti.</p>';
 	echo '<p><a class="button" href="' . esc_url(wp_nonce_url(admin_url('options-general.php?page=cp-mail-import&cp_smh_list=1'), 'cp_smh_list')) . '">Deal-lista letöltése (' . (int) $n . ' deal, CSV)</a></p>';
 	echo '<form method="post">' . wp_nonce_field('cp_smh_do', '_wpnonce', true, false) . '<textarea name="cp_smh_json" rows="10" class="large-text code" placeholder="[ { &quot;deal&quot;: 23346, &quot;emails&quot;: [ { &quot;dir&quot;: &quot;out&quot;, &quot;from&quot;: &quot;EventCrazy <info@eventcrazy.hu>&quot;, &quot;to&quot;: &quot;…&quot;, &quot;date&quot;: &quot;2026-11-02 12:18&quot;, &quot;subject&quot;: &quot;…&quot;, &quot;body&quot;: &quot;…&quot; } ] } ]"></textarea><p><button class="button button-primary">Levelek átvétele</button></p></form>';
-	echo '<form method="post" enctype="multipart/form-data">' . wp_nonce_field('cp_smh_do', '_wpnonce', true, false) . '<p>Vagy a program által letöltött fájl(ok): <input type="file" name="cp_smh_files[]" accept=".json,application/json" multiple> <button class="button">Fájlok betöltése</button></p></form>';
-	echo '<h3>Automatikus átvétel (ajánlott)</h3><p>A program a Salesmate-oldalon, a te belépéseddel fut: dealenként lekéri a leveleket, és egyenesen ide küldi (ha a böngésző ezt nem engedi, a végén letölthető fájlt ad, azt fent töltsd be). A Salesmate-ben semmit nem módosít; a még olvasatlan, friss beszélgetéseket kihagyja, hogy ott ne legyenek olvasottnak jelölve. A kulcsa 48 óráig érvényes.</p>';
+	echo '<p><b>A program által letöltött fájlok</b> (salesmate-levelek-01.json, -02.json …): <input type="file" id="cp-smh-files" accept=".json,application/json" multiple> <button type="button" class="button button-primary" id="cp-smh-go">Fájlok betöltése</button></p><pre id="cp-smh-out" style="background:#f6f7f7;padding:8px;max-height:260px;overflow:auto;display:none"></pre>';
+	echo '<script>(function(){var u=' . wp_json_encode(rest_url('crazy-panel/v1/smh')) . ',n=' . wp_json_encode(wp_create_nonce('wp_rest')) . ',o=document.getElementById("cp-smh-out");document.getElementById("cp-smh-go").addEventListener("click",async function(){var fs=document.getElementById("cp-smh-files").files;if(!fs.length){alert("Válaszd ki a fájlokat.");return;}this.disabled=true;o.style.display="block";var tot=0;for(var f of fs){var j;try{j=JSON.parse(await f.text());}catch(e){o.textContent+=f.name+": nem érvényes JSON\n";continue;}if(!Array.isArray(j)){j=j.deals||[];}for(var i=0;i<j.length;i+=20){var part=j.slice(i,i+20);try{var r=await fetch(u,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"text/plain;charset=UTF-8","X-WP-Nonce":n},body:JSON.stringify(part)});var x=await r.json();o.textContent+=f.name+" ["+(i+1)+"–"+(i+part.length)+"]: "+(x.msg||("HTTP "+r.status))+"\n";}catch(e){o.textContent+=f.name+" ["+(i+1)+"]: hiba – "+e.message+"\n";}o.scrollTop=o.scrollHeight;}tot++;}o.textContent+="Kész: "+tot+" fájl.\n";this.disabled=false;});})();</script>';
+	echo '<h3>Automatikus átvétel (ajánlott)</h3><p>A program a Salesmate-oldalon, a te belépéseddel fut: dealenként lekéri a leveleket, és 100 dealenként egy fájlt ment a Letöltések mappába; a fájlokat fent, a „Fájlok betöltése” gombbal töltsd be (egyszerre többet is kijelölhetsz). A Salesmate-ben semmit nem módosít; a még olvasatlan, friss beszélgetéseket kihagyja, hogy ott ne legyenek olvasottnak jelölve. A kulcsa 48 óráig érvényes.</p>';
 	echo '<form method="post">' . wp_nonce_field('cp_smh_do', '_wpnonce', true, false) . '<label><input type="checkbox" name="cp_smh_all" value="1"> az összes deal (nem csak azok, ahol a panelből hiányzik a kimenő levél)</label><p><button class="button button-primary" name="cp_smh_prog" value="1">Program létrehozása</button></p></form>';
 	if ($prog !== '') { echo '<p><b>Másold ki az egészet</b> (kattints bele, Ctrl+A, Ctrl+C), és futtasd a Salesmate-oldalon – lépések a panel útmutatójában.</p><textarea rows="12" class="large-text code" readonly onclick="this.select()">' . esc_textarea($prog) . '</textarea>'; }
 	$log = (array) get_option('cp_smh_log', array());
@@ -148,7 +149,7 @@ function cp_smh_token_ok($k) {
 }
 add_action('rest_api_init', function () {
 	register_rest_route('crazy-panel/v1', '/smh', array('methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function ($req) {
-		if (!cp_smh_token_ok((string) $req->get_param('k'))) { return new WP_REST_Response(array('ok' => 0, 'msg' => 'Lejárt vagy hibás kulcs – hozz létre új programot a panelben.'), 403); }
+		if (!cp_smh_token_ok((string) $req->get_param('k')) && !current_user_can('manage_options')) { return new WP_REST_Response(array('ok' => 0, 'msg' => 'Lejárt vagy hibás kulcs – hozz létre új programot a panelben.'), 403); }
 		@set_time_limit(120);
 		$msg = cp_smh_import((string) $req->get_body());
 		return new WP_REST_Response(array('ok' => 1, 'msg' => $msg), 200);
@@ -199,15 +200,17 @@ const loc = x => { const d = new Date(typeof x === 'number' || /^\d+$/.test(Stri
 const ad = a => !a ? '' : (a.name ? a.name + ' <' + a.address + '>' : (a.address || ''));
 const ads = l => (l || []).map(ad).filter(Boolean).join(', ');
 const fresh = Date.now() - 14 * 864e5;
-const out = []; let sent = 0, skipped = 0, mails = 0, failed = [];
-const flush = async (last) => {
+const out = []; let saved = 0, skipped = 0, mails = 0, done = 0, part = 0;
+/* a böngésző a Salesmate-oldalról nem enged más címre küldeni → 100 dealenként fájl (Letöltések mappa); a panel admin oldalán kell betölteni */
+const save = () => {
 	if (!out.length) return;
-	const batch = out.splice(0, out.length);
-	try { const r = await oFetch(DEST, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(batch) }); const j = await r.json(); log(j.msg || ('HTTP ' + r.status)); if (!j.ok) throw new Error(j.msg || 'hiba'); sent += batch.length; }
-	catch (e) { log('A panelnek küldés nem sikerült (' + e.message + ') – a végén fájlként töltheted le.'); failed = failed.concat(batch); }
+	const batch = out.splice(0, out.length); part++;
+	const b = new Blob([JSON.stringify(batch)], { type: 'application/json' });
+	const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'salesmate-levelek-' + String(part).padStart(2, '0') + '.json'; document.body.appendChild(a); a.click(); a.remove();
+	saved += batch.length; log('Mentve: salesmate-levelek-' + String(part).padStart(2, '0') + '.json (' + batch.length + ' deal)');
 };
-for (let i = 0; i < IDS.length; i++) {
-	const id = IDS[i], emails = [];
+const one = async id => {
+	const emails = [];
 	const convs = new Map();
 	for (let from = 0; from < 500; from += 50) {
 		const d = await get('/apis/timeline/v4/activity-feed/module/4/object/' + id + '/past-timeline-entries?rows=50&from=' + from + '&filterBy=emails&activitiesToQuery=' + TYPES);
@@ -230,12 +233,16 @@ for (let i = 0; i < IDS.length; i++) {
 		}
 	}
 	out.push({ deal: id, emails });
-	if (out.length >= 5) await flush();
-	stat((i + 1) + ' / ' + IDS.length + ' deal kész · ' + mails + ' levél · ' + sent + ' deal elküldve a panelnek' + (skipped ? ' · ' + skipped + ' friss olvasatlan kihagyva' : '') + (errs ? ' · ' + errs + ' hibás kérés' : '') + '\nHagyd nyitva ezt a lapot.');
-}
-await flush(true);
-stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + sent + ' deal a panelben. ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (errs ? errs + ' hibás kérés. ' : '') + 'Ezt a dobozt az oldal frissítése eltünteti.');
-if (failed.length) { const b = new Blob([JSON.stringify(failed)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'salesmate-levelek.json'; document.body.appendChild(a); a.click(); log('A panelnek nem ment el ' + failed.length + ' deal – letöltöttem fájlként (salesmate-levelek.json): töltsd be a panel Levelezés oldalán.'); }
+	done++;
+	if (out.length >= 100) save();
+	stat(done + ' / ' + IDS.length + ' deal kész · ' + mails + ' levél · ' + part + ' fájl mentve' + (skipped ? ' · ' + skipped + ' friss olvasatlan kihagyva' : '') + (errs ? ' · ' + errs + ' hibás kérés' : '') + '\nHagyd nyitva ezt a lapot. Ha a Chrome rákérdez, engedélyezd a több fájl letöltését.');
+};
+/* 4 deal egyszerre */
+let next = 0;
+const worker = async () => { while (next < IDS.length) { const id = IDS[next++]; try { await one(id); } catch (e) { errs++; log('deal #' + id + ': ' + e.message); } } };
+await Promise.all([worker(), worker(), worker(), worker()]);
+save();
+stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + part + ' fájl a Letöltések mappában (salesmate-levelek-01.json …). ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (errs ? errs + ' hibás kérés. ' : '') + '\nMost töltsd be a fájlokat a panel admin oldalán („Fájlok betöltése”).');
 })();
 JS;
 	return str_replace(array('__IDS__', '__DEST__'), array(wp_json_encode($ids), wp_json_encode($url)), $js);

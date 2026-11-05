@@ -28,7 +28,7 @@ nyugodtan újra beilleszthető. A levelek a dealhez kötve, „Salesmate-archív
    → a megjelenő szöveget másold ki (kattints bele, Ctrl+A, Ctrl+C). 48 óráig érvényes.
 2. Chrome-ban nyisd meg a Salesmate-et (belépve), nyomd meg az **F12**-t → **Console** fül. Ha a Chrome kéri, írd be: `allow pasting`, Enter.
 3. Illeszd be a programot (Ctrl+V), Enter. Ha kéri, kattints a Salesmate-ben bármelyik menüpontra (pl. Deals).
-4. A konzolban látod a haladást („120 / 1408 deal kész…”). A lapot hagyd nyitva, amíg ki nem írja: **KÉSZ**.
-   Ha a panelnek nem tudta elküldeni, a végén letölt egy `salesmate-levelek.json` fájlt → az admin oldalon „Fájlok betöltése”.
+4. A jobb alsó sarokban egy dobozban látod a haladást. A program 100 dealenként egy fájlt ment a Letöltések mappába (salesmate-levelek-01.json …); ha a Chrome rákérdez, engedélyezd a több fájl letöltését. A lapot hagyd nyitva, amíg ki nem írja: **KÉSZ**.
+5. Az admin oldalon a „Fájlok betöltése” résznél jelöld ki az összes letöltött fájlt, és nyomd meg a gombot (a betöltés akár közben is mehet, a már kész fájlokkal).
 A Salesmate-ben semmit nem módosít; a friss (14 napon belüli) olvasatlan beszélgetéseket kihagyja, hogy ott ne legyenek olvasottnak jelölve.
 Ha megszakad, egyszerűen futtasd újra (új programmal): ami már bekerült, nem duplázódik.
