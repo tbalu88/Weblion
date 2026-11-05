@@ -79,6 +79,50 @@
 		}));
 	}
 
+	/* v2.7.6: külön oldal (#ertesitesek) a felugró ablak helyett */
+	const V = { lim: 60, un: false, main: null };
+	const kindIco = k => (String(k).indexOf('mail') === 0 ? '✉' : k === 'lead' ? '★' : k === 'deal_note' ? '💬' : '☑');
+	function dayKey(s) {
+		const d = new Date(String(s).replace(' ', 'T')), t = new Date(); t.setHours(0, 0, 0, 0);
+		const x = new Date(d); x.setHours(0, 0, 0, 0);
+		const diff = Math.round((t - x) / 86400000);
+		if (diff === 0) return 'Ma';
+		if (diff === 1) return 'Tegnap';
+		return x.getFullYear() + '. ' + String(x.getMonth() + 1).padStart(2, '0') + '. ' + String(x.getDate()).padStart(2, '0') + '.';
+	}
+	const hm = s => String(s).slice(11, 16);
+	async function view(main) {
+		V.main = main || V.main;
+		const m = V.main;
+		if (!m) return;
+		if (!m.querySelector('.ntp')) m.innerHTML = '<div class="ntp"><div class="ntp-h"><h2>Értesítések</h2><div class="ntp-tools"></div></div><div class="ntp-l"><div class="cpx-ntn">Betöltés…</div></div></div>';
+		let x;
+		try { x = await post('cp_nt_list', { lim: V.lim, un: V.un ? 1 : '' }); } catch (e) { m.querySelector('.ntp-l').innerHTML = '<div class="cpx-ntn">' + esc(e.message) + '</div>'; return; }
+		if (!m.isConnected || !m.querySelector('.ntp')) return;
+		S.n = x.unread || 0; badge();
+		m.querySelector('.ntp-tools').innerHTML = '<div class="ntp-seg"><button type="button" data-f="0" class="' + (V.un ? '' : 'on') + '">Mind</button><button type="button" data-f="1" class="' + (V.un ? 'on' : '') + '">Olvasatlan' + (S.n ? ' <b>' + S.n + '</b>' : '') + '</button></div><button type="button" class="cpx-btn ghost" data-all' + (S.n ? '' : ' disabled') + '>✓ Mind olvasott</button>';
+		const l = m.querySelector('.ntp-l');
+		if (x.off) { l.innerHTML = '<div class="cpx-ntn">Értesítéseket személyes fiókkal kapsz.</div>'; return; }
+		let last = '', h = '';
+		(x.rows || []).forEach(n => {
+			const k = dayKey(n.created_at);
+			if (k !== last) { h += (last ? '</div>' : '') + '<div class="ntp-d">' + esc(k) + '</div><div class="ntp-g">'; last = k; }
+			h += '<button type="button" class="ntp-i' + (n.read ? '' : ' new') + '" data-id="' + n.id + '" data-link="' + esc(n.link) + '"><span class="ntp-k">' + kindIco(n.kind) + '</span><span class="ntp-t"><b>' + esc(n.by_name || 'Valaki') + '</b> ' + esc(n.text) + '</span><span class="ntp-a">' + esc(hm(n.created_at)) + '</span></button>';
+		});
+		if (last) h += '</div>';
+		l.innerHTML = h ? h + (x.more ? '<button type="button" class="ntp-more" data-more>Régebbi értesítések</button>' : '') : '<div class="cpx-ntn">' + (V.un ? 'Nincs olvasatlan értesítésed.' : 'Még nincs értesítésed. Ha valaki megemlít (@Neved), rád oszt egy kártyát vagy levelet, vagy új ajánlatkérés érkezik, itt látod.') + '</div>';
+		m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { V.un = b.dataset.f === '1'; V.lim = 60; view(); }));
+		const all = m.querySelector('[data-all]');
+		if (all) all.addEventListener('click', async () => { try { const r = await post('cp_nt_read', { all: 1 }); S.n = r.unread; badge(); view(); } catch (e) { /* később */ } });
+		const mb = m.querySelector('[data-more]');
+		if (mb) mb.addEventListener('click', () => { mb.disabled = true; mb.textContent = 'Betöltés…'; V.lim += 100; view(); });
+		l.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', async () => {
+			if (b.classList.contains('new')) { b.classList.remove('new'); try { const r = await post('cp_nt_read', { id: b.dataset.id }); S.n = r.unread; badge(); } catch (e) { /* később */ } }
+			go(b.dataset.link);
+		}));
+	}
+	function openPage() { if (window.CPXGo) { V.lim = 60; window.CPXGo('ertesitesek'); } else { open(); } }
+
 	function mount() {
 		const host = document.querySelector('.cpx-top-r');
 		if (!host) return false;
@@ -89,7 +133,7 @@
 		b.innerHTML = ICO + '<span>Értesítések</span><b class="cpx-bell-n" hidden></b>';
 		const st = host.querySelector('#cpx-status');
 		host.insertBefore(b, st ? st.nextSibling : host.firstChild);
-		b.addEventListener('click', e => { e.stopPropagation(); open(); });
+		b.addEventListener('click', e => { e.stopPropagation(); openPage(); });
 		S.btn = b;
 		badge();
 		return true;
@@ -100,9 +144,17 @@
 		'.cpx-nth{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #EEEAE4;font-size:14px}.cpx-nth button{border:0;background:none;color:#2F5BD8;font:600 12.5px Inter,sans-serif;cursor:pointer}' +
 		'.cpx-ntl{overflow-y:auto}.cpx-nti{display:flex;gap:10px;width:100%;border:0;border-bottom:1px solid #F2EFEA;background:#fff;text-align:left;padding:9px 14px;cursor:pointer;font:13px/1.4 Inter,sans-serif;color:#141C33}' +
 		'.cpx-nti:hover{background:#FAF8F5}.cpx-nti.new{background:#EEF3FD}.cpx-nti.new:hover{background:#E4ECFC}.cpx-nti small{display:block;color:#8A8E96;font-size:11.5px;margin-top:2px}.cpx-ntk{flex:none;width:18px;color:#6B6F78}' +
-		'.cpx-ntn{padding:18px 14px;color:#6B6F78;font-size:13px}';
+		'.cpx-ntn{padding:18px 14px;color:#6B6F78;font-size:13px}' +
+		'.ntp{max-width:820px;margin:0 auto;padding:4px 0 40px}.ntp-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px}.ntp-h h2{margin:0;font:800 22px "Plus Jakarta Sans",Inter,sans-serif;color:#141C33}' +
+		'.ntp-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ntp-seg{display:inline-flex;background:#F1EDE7;border-radius:999px;padding:3px}.ntp-seg button{border:0;background:none;border-radius:999px;padding:6px 14px;font:600 13px Inter,sans-serif;color:#5B6275;cursor:pointer}.ntp-seg button.on{background:#fff;color:#141C33;box-shadow:0 1px 2px rgba(20,28,51,.12)}.ntp-seg b{background:#E8553E;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px}' +
+		'.ntp-d{font:700 11.5px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#8A8E96;margin:18px 4px 6px}.ntp-g{background:#fff;border:1px solid #E6E3DE;border-radius:14px;overflow:hidden}' +
+		'.ntp-i{display:flex;align-items:flex-start;gap:12px;width:100%;border:0;border-bottom:1px solid #F2EFEA;background:#fff;text-align:left;padding:12px 16px;cursor:pointer;font:14px/1.45 Inter,sans-serif;color:#141C33}.ntp-i:last-child{border-bottom:0}.ntp-i:hover{background:#FAF8F5}' +
+		'.ntp-i.new{background:#EEF3FD}.ntp-i.new:hover{background:#E4ECFC}.ntp-i.new .ntp-t:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#2F5BD8;margin-right:7px;vertical-align:2px}' +
+		'.ntp-k{flex:none;width:22px;text-align:center;color:#6B6F78;font-size:15px}.ntp-t{flex:1;min-width:0;overflow-wrap:anywhere}.ntp-a{flex:none;color:#8A8E96;font-size:12px;padding-top:2px}' +
+		'.ntp-more{display:block;width:100%;margin:14px 0 0;padding:11px;border:1px dashed #E2DDD5;border-radius:12px;background:transparent;color:#5B6275;font:600 13px Inter,sans-serif;cursor:pointer}.ntp-more[disabled]{opacity:.6}' +
+		'@media (max-width:600px){.ntp-h h2{font-size:19px}.ntp-i{padding:12px}}';
 	document.head.appendChild(css);
 	let tries = 0;
 	const t = setInterval(() => { if (mount() || ++tries > 50) { clearInterval(t); poll(); setInterval(() => { if (!document.hidden) poll(); }, 60000); } }, 200);
-	window.CPNotify = { go, poll };
+	window.CPNotify = { go, poll, view: m => view(m), refresh: () => view() };
 })();

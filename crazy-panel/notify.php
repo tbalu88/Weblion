@@ -84,10 +84,15 @@ function cp_nt_ajax_list() {
 	if ($me <= 0 || !cp_nt_db_ok()) { wp_send_json_success(array('rows' => array(), 'unread' => 0, 'off' => 1)); }
 	$unread = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_nt_t() . ' WHERE uid = %d AND read_at IS NULL', $me));
 	if (!empty($_POST['count'])) { wp_send_json_success(array('unread' => $unread)); }
-	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT id, kind, text, link, by_name, created_at, read_at FROM ' . cp_nt_t() . ' WHERE uid = %d ORDER BY id DESC LIMIT 40', $me), ARRAY_A);
+	/* v2.7.6: az Értesítések oldal lapoz (lim) és szűr (un: csak olvasatlan) */
+	$lim = max(40, min(1000, (int) ($_POST['lim'] ?? 40)));
+	$wu = !empty($_POST['un']) ? ' AND read_at IS NULL' : '';
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT id, kind, text, link, by_name, created_at, read_at FROM ' . cp_nt_t() . ' WHERE uid = %d' . $wu . ' ORDER BY id DESC LIMIT %d', $me, $lim + 1), ARRAY_A);
+	$more = count($rows) > $lim;
+	if ($more) { array_pop($rows); }
 	foreach ($rows as &$r) { $r['id'] = (int) $r['id']; $r['created_at'] = function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at']; $r['read'] = $r['read_at'] ? 1 : 0; unset($r['read_at']); }
 	unset($r);
-	wp_send_json_success(array('rows' => $rows, 'unread' => $unread));
+	wp_send_json_success(array('rows' => $rows, 'unread' => $unread, 'more' => $more ? 1 : 0));
 }
 
 add_action('wp_ajax_nopriv_cp_nt_read', 'cp_nt_ajax_read');

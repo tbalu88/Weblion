@@ -1,0 +1,40 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js.bak275	2026-11-05 21:54:12.954514549 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-05 21:54:12.972341952 +0000
+@@ -44,10 +44,10 @@
+   };
+   /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
+   /* v1.37: felhasználónként beállítható, mely fülek és eszközök látszanak (C.tabs: az engedélyezettek) */
+-  const CAN = id => !Array.isArray(C.tabs) || C.tabs.includes(id) || (id === 'naplo' && !!(C.au && C.au.on)) || (id === 'beallitasok' && !!(C.set && C.set.on));
++  const CAN = id => !Array.isArray(C.tabs) || C.tabs.includes(id) || (id === 'naplo' && !!(C.au && C.au.on)) || (id === 'beallitasok' && !!(C.set && C.set.on)) || id === 'ertesitesek';
+   const HOME = C.dash && C.dash.on && CAN('kezdolap') ? 'kezdolap' : C.st && C.st.on ? 'stat' : (CAN('naptar') ? 'naptar' : ((C.tabs || [])[0] || 'naptar'));
+   /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
+-  if (!['naptar', 'kovetes', 'hatterek', 'hatterkat', 'beallitasok', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals', 'kapcsolatok'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : [], C.fl && C.fl.on ? ['flows'] : [], C.au && C.au.on ? ['naplo'] : [], C.dash && C.dash.on ? ['kezdolap'] : [], C.gcal && C.gcal.on ? ['gnaptar'] : [], C.wl && C.wl.on ? ['munkanaplo'] : [], C.kz && C.kz.on ? ['kezelok'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
++  if (!['naptar', 'kovetes', 'hatterek', 'hatterkat', 'beallitasok', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals', 'kapcsolatok'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : [], C.fl && C.fl.on ? ['flows'] : [], C.au && C.au.on ? ['naplo'] : [], C.dash && C.dash.on ? ['kezdolap'] : [], C.gcal && C.gcal.on ? ['gnaptar'] : [], C.wl && C.wl.on ? ['munkanaplo'] : [], C.kz && C.kz.on ? ['kezelok'] : [], C.nt && C.nt.on ? ['ertesitesek'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
+   const d0 = new Date();
+   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+ 
+@@ -180,7 +180,7 @@
+   function curLabel() {
+     const c = document.getElementById('cpx-cur');
+     const b = document.querySelector('.cpx-tabs [data-tab="' + S.tab + '"]');
+-    if (c) c.textContent = b ? b.textContent : '';
++    if (c) c.textContent = b ? b.textContent : (S.tab === 'ertesitesek' ? 'Értesítések' : '');
+   }
+   const tabBtn = (id, label) => !CAN(id) ? '' : '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '" title="' + label + '">' + ico(id) + '<span>' + label + '</span></button>';
+   const ICO = {
+@@ -266,6 +266,7 @@
+ 	if (S.tab === 'kapcsolatok') { if (window.CPContacts) await window.CPContacts.refresh(); return; }
+ 	if (S.tab === 'mail') { if (window.CPMail) await window.CPMail.refresh(); return; }
+ 	if (S.tab === 'feladatok') { if (window.CPKanban) await window.CPKanban.refresh(); return; }
++	if (S.tab === 'ertesitesek') { if (window.CPNotify && window.CPNotify.refresh) await window.CPNotify.refresh(); return; }
+ 	if (S.tab === 'flows') { if (window.CPFlows) await window.CPFlows.refresh(); return; }
+ 	if (S.tab === 'hatterkat') { if (window.CPBgCat) await window.CPBgCat.refresh(); return; }
+ 	if (S.tab === 'beallitasok') { if (window.CPSettings) await window.CPSettings.refresh(); return; }
+@@ -297,6 +298,7 @@
+ 	if (S.tab === 'beallitasok') { pollTrack(false); elPoll(false); if (window.CPSettings) window.CPSettings.view(main); else main.innerHTML = '<div class="cpx-empty err">A Beállítások nem töltődtek be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'hatterkat') { pollTrack(false); elPoll(false); if (window.CPBgCat) window.CPBgCat.view(main); else main.innerHTML = '<div class="cpx-empty err">A Háttérkatalógus nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'flows') { pollTrack(false); elPoll(false); if (window.CPFlows) window.CPFlows.view(main); else main.innerHTML = '<div class="cpx-empty err">Az Automatizmusok nem töltődtek be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
++	if (S.tab === 'ertesitesek') { pollTrack(false); elPoll(false); if (window.CPNotify && window.CPNotify.view) window.CPNotify.view(main); else main.innerHTML = '<div class="cpx-empty err">Az Értesítések nem töltődtek be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'feladatok') { pollTrack(false); elPoll(false); if (window.CPKanban) window.CPKanban.view(main); else main.innerHTML = '<div class="cpx-empty err">A Feladatok fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'mail') { pollTrack(false); elPoll(false); if (window.CPMail) window.CPMail.view(main); else main.innerHTML = '<div class="cpx-empty err">A Levelezés nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+ 	if (S.tab === 'kezelok') { pollTrack(false); elPoll(false); if (window.CPKezelok) window.CPKezelok.view(main); else main.innerHTML = '<div class="cpx-empty err">A Kezelők fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
