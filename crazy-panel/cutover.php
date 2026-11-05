@@ -73,6 +73,14 @@ function cp_cut_rr_owner($feat) {
 	return $users[$i % count($users)];
 }
 
+/* v2.6.10: az űrlapok dátuma többféle alakban jön („27 Nov, 2026”, „12/07/2026”, „2026. 11. 27.”) – a Salesmate mindet ÉÉÉÉ-HH-NN-re alakítja, a panel is */
+function cp_cut_date($v) {
+	$v = trim((string) $v);
+	if (preg_match('/(\d{4})[.\-\/ ]+(\d{1,2})[.\-\/ ]+(\d{1,2})/', $v, $m)) { return sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]); }
+	if (preg_match('#^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$#', $v, $m)) { return (int) $m[1] > 12 ? sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]) : sprintf('%04d-%02d-%02d', $m[3], $m[1], $m[2]); } /* hónap/nap/év, ahogy a Salesmate is érti; ha az első szám 12 fölött van, nap/hónap/év */
+	$t = strtotime(str_replace(',', '', $v) . ' 12:00:00');
+	return $t ? gmdate('Y-m-d', $t) : $v;
+}
 function cp_cut_plan_lead($pairs, $page, $feat) {
 	$src = $feat === 'forms_cp' ? 'Crazyphoto.hu' : 'Eventcrazy.hu';
 	$cols = function_exists('cp_lead_cols') ? cp_lead_cols() : array();
@@ -81,7 +89,7 @@ function cp_cut_plan_lead($pairs, $page, $feat) {
 		if ($v === '' || !isset($cols[$k])) { continue; }
 		$f[$cols[$k]] = $v;
 	}
-	if (!empty($f['event_d']) && preg_match('/(\d{4})[.\-\/ ]+(\d{1,2})[.\-\/ ]+(\d{1,2})/', (string) $f['event_d'], $m)) { $f['event_d'] = sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]); }
+	if (!empty($f['event_d'])) { $f['event_d'] = cp_cut_date((string) $f['event_d']); }
 	$email = sanitize_email(cp_lead_pick($pairs, '/e-?mail/i'));
 	$first = cp_lead_pick($pairs, '/first.?name|keresztn/i'); $last = cp_lead_pick($pairs, '/last.?name|vezet[eé]kn/i');
 	$name = trim(cp_lead_pick($pairs, '/(^|\.)(name|n[eé]v|full.?name)$/i') ?: trim($last . ' ' . $first));
@@ -109,7 +117,8 @@ function cp_cut_norm($k, $v) {
 	$v = trim(preg_replace('/\s+/u', ' ', (string) $v));
 	if ($k === 'c_email') { return mb_strtolower($v); }
 	if ($k === 'guests' || $k === 'hours') { return (string) (int) $v; }
-	if ($k === 'event_d') { return substr($v, 0, 10); }
+	if ($k === 'event_d') { return substr(cp_cut_date($v), 0, 10); }
+	if ($k === 'title' && preg_match('/^(.*\|\s*)(.+)$/u', $v, $m)) { return $m[1] . cp_cut_date($m[2]); }
 	return $v;
 }
 
