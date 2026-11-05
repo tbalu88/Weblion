@@ -562,3 +562,7 @@
 .ml-hf{width:1px;min-width:100%;max-width:100%}
 .ml-msg,.ml-mb{min-width:0;max-width:100%}
 .ml-read,.ml-msg{overflow-x:clip}
+/* v2.7.7: a tárgysor (cím + „Legújabb felül” + „Deal csatolása”) tördelhető – mobilon a linkek a cím alatt, az oldal nem lóg ki */
+.ml-subjh{flex-wrap:wrap;min-width:0;max-width:100%}
+.ml-subjh h3{min-width:0;overflow-wrap:anywhere}
+@media (max-width:760px){.ml-subjh{row-gap:2px}.ml-subjh h3{flex:1 1 100%}.ml-subjh .ml-link{padding:4px 0}.ml-subjh .ml-link+.ml-link{margin-left:auto}}
