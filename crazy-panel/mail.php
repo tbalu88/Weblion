@@ -378,13 +378,17 @@ function cp_mail_ajax_threads() {
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));
 	if ($q !== '') { $like = '%' . $wpdb->esc_like($q) . '%'; $w[] = $wpdb->prepare('(subject LIKE %s OR contact_name LIKE %s OR contact_email LIKE %s OR snippet LIKE %s)', $like, $like, $like, $like); }
 	$ord = sanitize_key(wp_unslash($_POST['so'] ?? '')) === 'old' ? 'ASC' : 'DESC';
-	$rows = $wpdb->get_results('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE ' . implode(' AND ', $w) . ' ORDER BY last_at ' . $ord . ' LIMIT 100', ARRAY_A);
+	/* v2.7.2: lapozás – a lista alján „Régebbi levelek betöltése” (200-asával, legfeljebb 5000) */
+	$lim = max(100, min(5000, (int) ($_POST['lim'] ?? 100)));
+	$rows = (array) $wpdb->get_results('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE ' . implode(' AND ', $w) . ' ORDER BY last_at ' . $ord . ', id ' . $ord . ' LIMIT ' . ($lim + 1), ARRAY_A);
+	$more = count($rows) > $lim;
+	if ($more) { array_pop($rows); }
 	$counts = array();
 	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' GROUP BY folder", ARRAY_A) as $c) { $counts[$c['folder']] = (int) $c['n']; }
 	$un = array();
 	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND (seen_at IS NULL OR seen_at < last_at) GROUP BY folder", ARRAY_A) as $c) { $un[$c['folder']] = (int) $c['n']; }
 	$counts['follow'] = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND FIND_IN_SET(%d, followers)", $me));
-	wp_send_json_success(array('rows' => array_map('cp_mail_thread_row', (array) $rows), 'counts' => $counts, 'un' => $un));
+	wp_send_json_success(array('rows' => array_map('cp_mail_thread_row', (array) $rows), 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0));
 }
 
 function cp_mail_thread_full($id) {

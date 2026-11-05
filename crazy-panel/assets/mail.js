@@ -146,9 +146,9 @@
 		if (document.hidden || S.demo || S.view !== 'inbox' || !S.main || !S.main.isConnected) return;
 		const box = S.main.querySelector('.ml-body');
 		if (!box || !box.querySelector('.ml-items')) return;
-		const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' }, key = JSON.stringify(P);
+		const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '', lim: S.lim || 100 }, key = JSON.stringify(P);
 		post('cp_mail_threads', P).then(n => {
-			if (JSON.stringify(P) !== JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' })) return;
+			if (JSON.stringify(P) !== JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '', lim: S.lim || 100 })) return;
 			const old = S.lc[key];
 			if (old && sig(old) === sig(n)) return;
 			S.lc[key] = n; S.lcAt[key] = Date.now();
@@ -339,7 +339,7 @@
 		let rows = [], counts = {}, un = {};
 		if (S.demo) { rows = (S.demoRows = S.demoRows || demoData()).filter(t => (S.folder === 'follow' ? t.fol.length : (t.folder || 'inbox') === S.folder) && (S.tab !== 'open' || t.st === 'open') && (S.tab !== 'unassigned' || !t.as) && (!S.unf || t.un)); un = { inbox: S.demoRows.filter(t => t.un && t.st === 'open' && (t.folder || 'inbox') === 'inbox').length }; counts = { inbox: S.demoRows.filter(t => t.st === 'open').length, follow: S.demoRows.filter(t => t.fol.length).length }; }
 		else {
-			const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' }, key = JSON.stringify(P), c = S.lc[key];
+			const P = { folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '', lim: S.lim || 100 }, key = JSON.stringify(P), c = S.lc[key];
 			let r = c;
 			if (!c) { box.querySelectorAll('.ml-items, .ml-list').forEach(x => x.classList.add('ml-busy')); try { r = await post('cp_mail_threads', P); S.lc[key] = r; S.lcAt[key] = Date.now(); } catch (e) { r = null; S.err = e.message; } }
 			/* a szomszédos fülek (Nyitott / Kiosztatlan / Mind) előre betöltve, hogy a váltás azonnali legyen */
@@ -347,10 +347,11 @@
 			else if (Date.now() - (S.lcAt[key] || 0) > 4000) {
 				/* háttérfrissítés: ha változott és még ugyanezt nézed (nyitott levél nélkül), újrarajzol */
 				S.lcAt[key] = Date.now();
-				post('cp_mail_threads', P).then(n => { const same = JSON.stringify(n) === JSON.stringify(S.lc[key]); S.lc[key] = n; if (!same && box.isConnected && !S.th && JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '' }) === key) drawInbox(box); }).catch(() => {});
+				post('cp_mail_threads', P).then(n => { const same = JSON.stringify(n) === JSON.stringify(S.lc[key]); S.lc[key] = n; if (!same && box.isConnected && !S.th && JSON.stringify({ folder: S.folder, tab: S.tab, box: S.box, q: S.mq || '', so: S.so, un: S.unf ? '1' : '', lim: S.lim || 100 }) === key) drawInbox(box); }).catch(() => {});
 			}
 			if (!box.isConnected) return;
 			if (r) { rows = r.rows; counts = r.counts || {}; un = r.un || {}; }
+			S.more = !!(r && r.more);
 		}
 		if (S.demo && S.so === 'old') rows = rows.slice().reverse();
 		S.rows = rows;
@@ -375,11 +376,13 @@
 				'<span class="ml-i1"><b>' + esc(t.cn || t.ce) + '</b>' + (t.as ? '<span class="ml-as">› ' + esc(pname(t.as) || 'kolléga') + '</span>' : '') + '<small>' + esc(ago(t.at)) + '</small></span>' +
 				'<span class="ml-i2">' + (t.att ? CLIP_I : '') + (t.st === 'closed' ? '✓ ' : '') + esc(t.subj) + '</span>' +
 				'<span class="ml-i3">' + (t.note ? '<span class="ml-inote">' + NOTE_I + esc(t.note.b.replace(/\s+/g, ' ')) + '</span>' : '<span>' + esc(t.snip) + '</span>') + (t.cnt ? '<i>' + t.cnt + '</i>' : '') + '</span></span>' + (t.id > 0 ? '<span class="ml-cl" data-cl role="button" tabindex="-1" title="Link másolása" aria-label="Link másolása">' + LINK_I + '</span>' : '') + '</div>').join('') :
-				'<div class="ml-empty"><b>' + (S.unf ? 'Nincs olvasatlan levél' : M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (M.connected || S.unf ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + '</div></section><div class="ml-split" data-split="c2" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
+				'<div class="ml-empty"><b>' + (S.unf ? 'Nincs olvasatlan levél' : M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (M.connected || S.unf ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + (S.more && !S.demo ? '<button type="button" class="ml-more" data-more>Régebbi levelek betöltése</button>' : '') + '</div></section><div class="ml-split" data-split="c2" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
 			'<section class="ml-read" data-read></section><button type="button" class="ml-fab" data-fab aria-label="Új levél" title="Új levél"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button></div>';
 		layout(box);
 		const pick = (sel, b) => { box.querySelectorAll(sel).forEach(x => x.classList.toggle('on', x === b)); };
-		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { pick('[data-f]', b); S.folder = b.dataset.f; S.th = null; drawInbox(box); }));
+		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { pick('[data-f]', b); S.folder = b.dataset.f; S.th = null; S.lim = 100; drawInbox(box); }));
+		const mb = box.querySelector('[data-more]');
+		if (mb) mb.addEventListener('click', () => { const it = box.querySelector('.ml-items'), y = it ? it.scrollTop : 0; mb.disabled = true; mb.textContent = 'Betöltés…'; S.lim = (S.lim || 100) + 200; drawInbox(box).then(() => { const n = box.querySelector('.ml-items'); if (n) n.scrollTop = y; }); });
 		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { pick('[data-tab]', b); S.tab = b.dataset.tab; drawInbox(box); }));
 		box.querySelector('.ml-box').addEventListener('change', e => { S.box = e.target.value; drawInbox(box); });
 		box.querySelector('[data-unf]').addEventListener('click', () => { S.unf = !S.unf; S.th = null; drawInbox(box); });
@@ -398,7 +401,7 @@
 		box.querySelector('.ml-q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { S.mq = e.target.value; drawInbox(box).then(() => { const i = box.querySelector('.ml-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 350); });
 		box.querySelector('[data-compose]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
 		box.querySelector('[data-fab]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
-		box.querySelector('[data-fsel]').addEventListener('change', e => { const v = e.target.value; if (v === '__demo') { S.demo = !S.demo; } else { S.folder = v; } S.th = null; S.reading = false; drawInbox(box); });
+		box.querySelector('[data-fsel]').addEventListener('change', e => { const v = e.target.value; if (v === '__demo') { S.demo = !S.demo; } else { S.folder = v; } S.th = null; S.reading = false; S.lim = 100; drawInbox(box); });
 		box.querySelector('[data-sort]').addEventListener('change', e => { S.so = e.target.value; try { localStorage.setItem('cpmail_so', S.so); } catch (x) { /* privát mód */ } drawInbox(box); });
 		box.querySelectorAll('[data-th]').forEach(b => {
 			const go = () => { S.th = Number(b.dataset.th); box.querySelectorAll('.ml-item').forEach(x => x.classList.toggle('on', x === b)); b.classList.remove('un'); const r = S.rows.find(x => x.id === S.th); if (r) r.un = 0; if (S.sel.size) { S.sel.clear(); selUI(box); } openThread(box, S.th); };
