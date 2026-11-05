@@ -42,7 +42,8 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 	$in = implode(',', $ids);
 	$msgs = (array) $wpdb->get_results('SELECT id, thread_id, dir, from_name, from_email, subject, body, attachments, status, sent_at FROM ' . cp_mail_t('messages') . " WHERE thread_id IN ($in) ORDER BY sent_at DESC, id DESC LIMIT " . (int) $msg_limit, ARRAY_A);
 	foreach ($msgs as $m) {
-		$txt = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags(str_replace(array('<br>', '</p>'), array("\n", "\n"), (string) $m['body']))));
+		/* v2.6.9: a bekezdések / sorok határán szóköz (különben „Anita!A rendezvény”), a kódolt betűk visszaalakítva */
+		$txt = trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6]|/td|/blockquote)\b[^>]*>#i', "\n", (string) $m['body'])), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
 		$att = json_decode((string) $m['attachments'], true) ?: array();
 		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'subj' => $m['subject'], 'snip' => mb_substr($txt, 0, 260), 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
 		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']); } }

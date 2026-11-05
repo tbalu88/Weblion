@@ -67,7 +67,7 @@ function cp_smh_import($raw) {
 			$dupe = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M m JOIN $T t ON t.id = m.thread_id WHERE t.contact_email = %s AND m.dir = %s AND m.sent_at BETWEEN %s AND %s", $other['e'], $out ? 'out' : 'in', gmdate('Y-m-d H:i:s', $ts - 600), gmdate('Y-m-d H:i:s', $ts + 600)));
 			if ($dupe) { $st['dup']++; continue; }
 			if (!preg_match('/<[a-z][^>]*>/i', $body)) { $body = '<p>' . str_replace("\n", '<br>', esc_html(str_replace("\r", '', $body))) . '</p>'; }
-			$body = function_exists('cp_mail_clean') ? cp_mail_clean($body) : wp_kses_post($body);
+			$body = cp_smh_strip_css(function_exists('cp_mail_clean') ? cp_mail_clean(cp_smh_strip_css($body)) : wp_kses_post(cp_smh_strip_css($body)));
 			$text = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($body)));
 			$tkey = md5($other['e'] . '|' . $nsubj);
 			$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count FROM $T WHERE tkey = %s AND (deal_id = %d OR deal_id IS NULL) ORDER BY id DESC LIMIT 1", $tkey, $did), ARRAY_A);
@@ -275,4 +275,22 @@ stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + part + ' fáj
 })();
 JS;
 	return str_replace(array('__IDS__', '__DEST__'), array(wp_json_encode($ids), wp_json_encode($url)), $js);
+}
+
+/* v2.6.9: a levél HTML-jének stílusa (style / head / megjegyzés) ne kerüljön szövegként a levélbe; a már szöveggé vált CSS-szabályok törlése */
+function cp_smh_strip_css($h) {
+	$h = (string) $h;
+	$h = preg_replace('#<!--.*?-->#s', '', $h);
+	$h = preg_replace('#<(style|script|head|title|xml)\b[^>]*>.*?</\1\s*>#si', '', $h);
+	/* már szöveggé vált szabályok: @media / @font-face / @page blokkok és „szelektor { tulajdonság: érték; }” */
+	for ($i = 0; $i < 6; $i++) {
+		$n = preg_replace(array('/@(?:media|supports)[^{}<]{0,200}\{(?:[^{}<]*\{[^{}<]*\})*[^{}<]*\}/u', '/@(?:font-face|page|import|charset)[^{}<;]{0,200}(?:\{[^{}<]*\}|;)/u', '/(?<![\p{L}\p{N}<\/])[a-zA-Z0-9_.#*:\s,\-\[\]="\'()]{1,200}\{\s*(?:[a-zA-Z\-]+\s*:[^{}<]*;?\s*)+\}/u'), '', $h);
+		if ($n === null || $n === $h) { break; }
+		$h = $n;
+	}
+	$h = preg_replace('#<p>\s*(?:<br\s*/?>\s*)*</p>#i', '', $h);
+	/* ékezetes betűk számkóddal (&#xE1; = á, &aacute;) → rendes betűk; a HTML-jelek (< > & ") kódolva maradnak */
+	$h = preg_replace_callback('/&#(x[0-9a-fA-F]{1,6}|[0-9]{1,7});/', function ($m) { $c = $m[1][0] === 'x' || $m[1][0] === 'X' ? hexdec(substr($m[1], 1)) : (int) $m[1]; return ($c >= 160 && $c <= 0x10FFFF) ? mb_chr($c, 'UTF-8') : ($c === 32 ? ' ' : $m[0]); }, $h);
+	$h = preg_replace_callback('/&([a-zA-Z]{2,8});/', function ($m) { if (in_array(strtolower($m[1]), array('lt', 'gt', 'amp', 'quot', 'apos'), true)) { return $m[0]; } $d = html_entity_decode($m[0], ENT_QUOTES | ENT_HTML5, 'UTF-8'); return $d === $m[0] ? $m[0] : $d; }, $h);
+	return trim($h);
 }
