@@ -348,7 +348,7 @@ function cp_mail_thread_row($t) {
 	$n = $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $t['id']), ARRAY_A);
 	return array(
 		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
-		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'st' => $t['status'], 'folder' => $t['folder'],
+		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
 		'un' => empty($t['seen_at']) || (!empty($t['last_at']) && $t['seen_at'] < $t['last_at']) ? 1 : 0,
 		'snip' => html_entity_decode((string) $t['snippet'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), 'cnt' => (int) $t['msg_count'], 'att' => (int) $t['has_attach'], 'at' => cp_mail_local($t['last_at']),
 		'fol' => array_values(array_filter(array_map('intval', explode(',', (string) $t['followers'])))), 'tags' => (string) $t['tags'],
@@ -367,6 +367,10 @@ function cp_mail_ajax_threads() {
 	$folder = sanitize_key(wp_unslash($_POST['folder'] ?? 'inbox'));
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($folder === 'follow') { $w[] = $wpdb->prepare('FIND_IN_SET(%d, followers)', $me); }
+	/* v2.7.3: a beolvasáskor (postafiók, Salesmate) lezártként archivált régi levelezés a Beérkezettben látszik („Mind” fül);
+	   az Archív csak a kézzel archivált szálakat mutatja (azoknál a korábbi mappa ki van töltve) */
+	elseif ($folder === 'inbox') { $w[] = "(folder = 'inbox' OR (folder = 'archive' AND prev_folder = '' AND SUBSTRING_INDEX(tags, ',', 1) IN ('import','salesmate')))"; }
+	elseif ($folder === 'archive') { $w[] = "(folder = 'archive' AND NOT (prev_folder = '' AND SUBSTRING_INDEX(tags, ',', 1) IN ('import','salesmate')))"; }
 	elseif ($folder !== '') { $w[] = $wpdb->prepare('folder = %s', $folder); }
 	$tab = sanitize_key(wp_unslash($_POST['tab'] ?? 'open'));
 	if ($tab === 'open') { $w[] = "status = 'open'"; }
@@ -567,7 +571,9 @@ function cp_mail_ajax_bulk() {
 				if (!in_array($tagv, $l, true)) { $l[] = $tagv; $set['tags'] = mb_substr(implode(', ', $l), 0, 255); $ev = mb_substr('Címkék: ' . $set['tags'], 0, 255); }
 				break;
 			case 'archive': case 'trash': case 'spam':
-				if ($t['folder'] !== $op) { $set['folder'] = $op; $set['prev_folder'] = $t['folder']; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
+				$legacy = $t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true); /* v2.7.3: a Beérkezettben látszó régi szál */
+				if ($legacy && $op === 'archive') { $set['prev_folder'] = 'inbox'; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
+				elseif ($t['folder'] !== $op) { $set['folder'] = $op; $set['prev_folder'] = $legacy ? 'inbox' : $t['folder']; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
 				break;
 			case 'restore':
 				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive'), true) && !in_array($t['folder'], array('promo'), true) ? $t['prev_folder'] : 'inbox';
