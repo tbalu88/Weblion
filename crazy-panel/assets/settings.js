@@ -290,7 +290,7 @@
 			box.querySelector('[data-snipcopy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.querySelector('[data-snip]').value); toast('A kód a vágólapon.'); } catch (e) { box.querySelector('[data-snip]').select(); } });
 			box.querySelectorAll('[data-cut]').forEach(sel => sel.addEventListener('change', async () => {
 				const f = x.feats.find(y => y.k === sel.dataset.cut);
-				if ((sel.value === 'live' || sel.value === 'only') && !window.confirm('Átkapcsolod: ' + f.n + ' → ' + sel.options[sel.selectedIndex].text + '?\n\nEzután a panel csinálja; a Salesmate megfelelő automatizmusát kapcsold ki, különben duplán történik meg.')) { sel.value = f.mode; return; }
+				if ((sel.value === 'live' || sel.value === 'only') && !window.confirm('Átkapcsolod: ' + f.n + ' → ' + sel.options[sel.selectedIndex].text + '?\n\n' + (/^forms_/.test(f.k) ? 'A weboldalon azonnal a panel saját űrlapja jelenik meg (a gyorsítótár ürül), a deal a panelből jön létre. A Salesmate-ben semmit nem kell kikapcsolni; visszakapcsoláskor újra a Salesmate-űrlap látszik.' : 'Ezután a panel csinálja; a Salesmate megfelelő automatizmusát kapcsold ki, különben duplán történik meg.'))) { sel.value = f.mode; return; }
 				try { x = await post('cp_cut_set', { feat: sel.dataset.cut, mode: sel.value }); toast('Mentve.'); draw(); } catch (e) { toast(e.message, true); sel.value = f.mode; }
 			}));
 			box.querySelector('[data-rrsave]').addEventListener('click', async () => { const ids = Array.from(box.querySelectorAll('[data-rr]:checked')).map(c => c.dataset.rr).join(','); try { x = await post('cp_cut_set', { rr: ids }); toast('Mentve.'); draw(); } catch (e) { toast(e.message, true); } });

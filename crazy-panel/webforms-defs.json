@@ -1,0 +1,776 @@
+{
+ "249aeb1c-71c0-4c4c-9f6a-6eeffd1d24e5": {
+  "name": "EC - Global",
+  "btn": "Elküld",
+  "redirect": "https://eventcrazy.hu/megrendeles-rogzitve/",
+  "notify": [
+   "info@eventcrazy.hu"
+  ],
+  "privacy": "<div>Az űrlap elküldésével elfogadom az <a href=\"https://eventcrazy.hu/adatkezelesi-tajekoztato/\" target=\"_blank\" rel=\"noopener noreferrer\">adatvédelmi és adatkezelésre vonatkozó nyilatkozatot.</a></div>",
+  "lang": "hu",
+  "tags": [
+   "Web-form"
+  ],
+  "fields": [
+   {
+    "n": "Contact.name",
+    "t": "text",
+    "l": "Név",
+    "ph": "Teljes név",
+    "req": 1
+   },
+   {
+    "n": "Contact.email",
+    "t": "email",
+    "l": "Email",
+    "ph": "Email cím",
+    "req": 1
+   },
+   {
+    "n": "Contact.mobile",
+    "t": "tel",
+    "l": "Telefonszám",
+    "ph": "Telefonszám"
+   },
+   {
+    "n": "Deal.multiSelectCustomField3",
+    "t": "multi",
+    "l": "Szolgáltatások",
+    "ph": "Válassz szolgáltatásokat",
+    "req": 1,
+    "o": [
+     "AI fotózás",
+     "AI Karikatúra",
+     "Digitális Karikatúra",
+     "Drón",
+     "Élőzene",
+     "Greenbox",
+     "Hashtag Printing",
+     "Karaoke",
+     "LED Tánctér",
+     "Mindflex",
+     "OverheadSpinner",
+     "Rendezvény videó",
+     "Rendezvényfotó",
+     "SelfieLight",
+     "SpinnerClassic",
+     "Selfie Tükör",
+     "Szelfigép",
+     "SzelfiRobot",
+     "TattooPrinting",
+     "VIP Spinner",
+     "VR Élmény",
+     "DJ",
+     "CrazyLight",
+     "Ülőfoci / Seated Football",
+     "Csocsó / Foosball",
+     "XXL csocsó / XXL Foosball",
+     "Crazy Beauty",
+     "CrazyCatch",
+     "Visszahívást kérek",
+     "Egyéb"
+    ]
+   },
+   {
+    "n": "Deal.dateCustomField1",
+    "t": "date",
+    "l": "Rendezvény dátuma",
+    "ph": "Rendezvény dátuma",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField1",
+    "t": "text",
+    "l": "Rendezvény helyszíne",
+    "ph": "Rendezvény helyszíne",
+    "req": 1
+   },
+   {
+    "n": "Deal.intCustomField3",
+    "t": "int",
+    "l": "Rendelkezésreállás hossza (óra)",
+    "ph": "Ennyi ideig szeretném az aktivitást",
+    "req": 1
+   },
+   {
+    "n": "Deal.intCustomField1",
+    "t": "int",
+    "l": "Tervezett létszám",
+    "ph": "Hány fő várható a rendezvényen?"
+   },
+   {
+    "n": "Deal.textCustomField3",
+    "t": "text",
+    "l": "Megjegyzés",
+    "ph": "Egyedi kívánság, kérés"
+   },
+   {
+    "n": "Deal.title",
+    "t": "text",
+    "l": "Megrendelés",
+    "ph": "Title",
+    "req": 1,
+    "hid": 1,
+    "def": "[EventCrazy] {{Contact.name}}"
+   },
+   {
+    "n": "Deal.source",
+    "t": "select",
+    "l": "Source",
+    "ph": "Source",
+    "hid": 1,
+    "def": "Eventcrazy.hu",
+    "o": [
+     "Ads",
+     "Referrals",
+     "Crazyphoto.hu",
+     "Crazyphoto",
+     "Spinner",
+     "Eventcrazy.hu",
+     "Halloween Ads Google",
+     "cf-fb-wed-ad",
+     "Facebook Lead Ads",
+     "LinkedIn Lead Ads"
+    ]
+   },
+   {
+    "n": "Deal.textAreaCustomField1",
+    "t": "textarea",
+    "l": "Kuponkód",
+    "ph": "Kuponkód"
+   },
+   {
+    "n": "Contact.utmCampaign",
+    "t": "text",
+    "l": "UTM Campaign",
+    "ph": "UTM Campaign",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmSource",
+    "t": "text",
+    "l": "UTM Source",
+    "ph": "UTM Source",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmMedium",
+    "t": "text",
+    "l": "UTM Medium",
+    "ph": "UTM Medium",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmContent",
+    "t": "text",
+    "l": "UTM Content",
+    "ph": "UTM Content",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmTerm",
+    "t": "text",
+    "l": "UTM Term",
+    "ph": "UTM Term",
+    "hid": 1
+   }
+  ],
+  "theme": "ec",
+  "feat": "forms_ec"
+ },
+ "6fe1df29-8099-4ca3-b715-2fa372698e78": {
+  "name": "CP - Fotóautomata",
+  "btn": "Elküld",
+  "redirect": "https://crazyphoto.hu/koszonjuk/",
+  "notify": [
+   "info@crazyphoto.hu"
+  ],
+  "privacy": "",
+  "lang": "hu",
+  "tags": [
+   "Web-form"
+  ],
+  "fields": [
+   {
+    "n": "Contact.name",
+    "t": "text",
+    "l": "Név",
+    "ph": "Teljes név",
+    "req": 1
+   },
+   {
+    "n": "Contact.email",
+    "t": "email",
+    "l": "Email",
+    "ph": "Email cím",
+    "req": 1
+   },
+   {
+    "n": "Contact.mobile",
+    "t": "tel",
+    "l": "Telefonszám",
+    "ph": "Telefonszám"
+   },
+   {
+    "n": "Deal.dateCustomField1",
+    "t": "date",
+    "l": "Rendezvény dátuma",
+    "ph": "Rendezvény dátuma",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField1",
+    "t": "text",
+    "l": "Rendezvény helyszíne",
+    "ph": "Rendezvény helyszíne",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField5",
+    "t": "select",
+    "l": "Választott fotófal",
+    "ph": "Választott háttér",
+    "req": 1,
+    "o": [
+     "Absztrakt",
+     "Arany",
+     "Egyedit gyártatnék",
+     "Art Deco",
+     "Bokeh",
+     "Bokeh 2",
+     "Bokeh 3",
+     "Bokeh 4",
+     "Bőr",
+     "Candy",
+     "Deszka",
+     "Deszka 2",
+     "Esküvő",
+     "Fehér",
+     "Gatsby",
+     "Graffiti",
+     "Hollywood",
+     "Karácsony",
+     "Karácsony 2",
+     "Karácsony 3",
+     "Levelek",
+     "Levelek 2",
+     "Márvány",
+     "Pezsgő",
+     "Pink",
+     "Polygon",
+     "Polygon 2",
+     "Rosé",
+     "Selyem",
+     "Shimmer",
+     "Tégla",
+     "Városi",
+     "Zebra",
+     "Zöld",
+     "Még nem tudom",
+     "Arany 2",
+     "Saját hátterem van",
+     "Fények",
+     "Bokeh 5",
+     "Karácsony 4"
+    ]
+   },
+   {
+    "n": "Deal.intCustomField1",
+    "t": "int",
+    "l": "Tervezett létszám",
+    "ph": "Hány fő várható a rendezvényen?"
+   },
+   {
+    "n": "Deal.textCustomField3",
+    "t": "text",
+    "l": "Megjegyzés",
+    "ph": "Egyedi kívánság, kérés"
+   },
+   {
+    "n": "Deal.title",
+    "t": "text",
+    "l": "Megrendelés",
+    "ph": "Title",
+    "req": 1,
+    "hid": 1,
+    "def": "[CF] {{Contact.name}}"
+   },
+   {
+    "n": "Deal.textCustomField18",
+    "t": "select",
+    "l": "Választott Csomag",
+    "ph": "Választott Csomag",
+    "req": 1,
+    "o": [
+     "Mini - 3 óra - 70 db nyomtatás",
+     "Mini - 3 óra - Korlátlan",
+     "Medium - 4 óra - 125 db nyomtatás",
+     "Medium - 4 óra - Korlátlan",
+     "Mega - 5 óra - 175 db nyomtatás",
+     "Mega - 5 óra - Korlátlan",
+     "Carneval - 6 óra - 225 db nyomtatás",
+     "Carneval - 6 óra - Korlátlan",
+     "Egyedi csomagot szeretnék",
+     "Green Shot",
+     "Visszahívást kérek / További kérdés"
+    ]
+   },
+   {
+    "n": "Deal.source",
+    "t": "select",
+    "l": "Source",
+    "ph": "Source",
+    "hid": 1,
+    "def": "Crazyphoto.hu",
+    "o": [
+     "Ads",
+     "Referrals",
+     "Crazyphoto.hu",
+     "Crazyphoto",
+     "Spinner",
+     "Eventcrazy.hu",
+     "Halloween Ads Google",
+     "cf-fb-wed-ad",
+     "Facebook Lead Ads",
+     "LinkedIn Lead Ads"
+    ]
+   },
+   {
+    "n": "Deal.textAreaCustomField1",
+    "t": "textarea",
+    "l": "Kuponkód",
+    "ph": "Kuponkód"
+   },
+   {
+    "n": "Deal.textCustomField13",
+    "t": "select",
+    "l": "Szolgáltatás",
+    "ph": "Szolgáltatás",
+    "hid": 1,
+    "def": "Fotóautomata",
+    "o": [
+     "Fotóautomata",
+     "Spinner",
+     "Fotóautomata & Spinner",
+     "Selfie Light",
+     "CrazyMelange",
+     "Oveerhead Spinner",
+     "VIP Spinner",
+     "DanceFloor",
+     "VR",
+     "Lenticular",
+     "Fotó",
+     "Videó",
+     "Fotó & Videó",
+     "Karikatúra",
+     "Crazy Cathc",
+     "Mindflex"
+    ]
+   },
+   {
+    "n": "Contact.utmCampaign",
+    "t": "text",
+    "l": "UTM Campaign",
+    "ph": "UTM Campaign",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmSource",
+    "t": "text",
+    "l": "UTM Source",
+    "ph": "UTM Source",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmContent",
+    "t": "text",
+    "l": "UTM Content",
+    "ph": "UTM Content",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmMedium",
+    "t": "text",
+    "l": "UTM Medium",
+    "ph": "UTM Medium",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmTerm",
+    "t": "text",
+    "l": "UTM Term",
+    "ph": "UTM Term",
+    "hid": 1
+   },
+   {
+    "n": "Deal.textCustomField19",
+    "t": "url",
+    "l": "Sablon kép (link)",
+    "ph": "Deal Sablon kép (link)",
+    "hid": 1,
+    "def": "https://crazyphoto.hu/#nincs-sablon-kep"
+   }
+  ],
+  "theme": "cp",
+  "feat": "forms_cp"
+ },
+ "76712892-d762-4f1e-8200-a0afd764f71a": {
+  "name": "CP - Spinner Form",
+  "btn": "Elküld",
+  "redirect": "https://crazyphoto.hu/koszonjuk/",
+  "notify": [
+   "info@crazyphoto.hu"
+  ],
+  "privacy": "",
+  "lang": "hu",
+  "tags": [
+   "Web-form"
+  ],
+  "fields": [
+   {
+    "n": "Contact.name",
+    "t": "text",
+    "l": "Név",
+    "ph": "Teljes név",
+    "req": 1
+   },
+   {
+    "n": "Contact.email",
+    "t": "email",
+    "l": "Email",
+    "ph": "Email cím",
+    "req": 1
+   },
+   {
+    "n": "Contact.mobile",
+    "t": "tel",
+    "l": "Telefonszám",
+    "ph": "Telefonszám"
+   },
+   {
+    "n": "Deal.dateCustomField1",
+    "t": "date",
+    "l": "Rendezvény dátuma",
+    "ph": "Rendezvény dátuma",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField1",
+    "t": "text",
+    "l": "Rendezvény helyszíne",
+    "ph": "Rendezvény helyszíne",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField3",
+    "t": "text",
+    "l": "Megyjegyzés",
+    "ph": "Egyedi kívánság, kérés"
+   },
+   {
+    "n": "Deal.textCustomField14",
+    "t": "select",
+    "l": "Választott csomag",
+    "ph": "Választott csomag",
+    "req": 1,
+    "o": [
+     "Mini Party - 3 óra",
+     "Medium Party - 4 óra",
+     "Mega Party - 5 óra",
+     "Carneval - 6 óra",
+     "Egyéni",
+     "Visszahívást kérek"
+    ]
+   },
+   {
+    "n": "Deal.multiSelectCustomField2",
+    "t": "multi",
+    "l": "Spinner Extra",
+    "ph": "Extra szolgáltatás",
+    "o": [
+     "Színpad branding",
+     "Advanced kellékszett",
+     "Professional kellékszett",
+     "TV-s megjelenítés"
+    ]
+   },
+   {
+    "n": "Deal.title",
+    "t": "text",
+    "l": "Megrendelés",
+    "ph": "Title",
+    "req": 1,
+    "hid": 1,
+    "def": "[CF] {{Contact.name}}"
+   },
+   {
+    "n": "Deal.source",
+    "t": "select",
+    "l": "Source",
+    "ph": "Source",
+    "hid": 1,
+    "def": "Crazyphoto.hu",
+    "o": [
+     "Ads",
+     "Referrals",
+     "Crazyphoto.hu",
+     "Crazyphoto",
+     "Spinner",
+     "Eventcrazy.hu",
+     "Halloween Ads Google",
+     "cf-fb-wed-ad",
+     "Facebook Lead Ads",
+     "LinkedIn Lead Ads"
+    ]
+   },
+   {
+    "n": "Deal.textAreaCustomField1",
+    "t": "textarea",
+    "l": "Kuponkód",
+    "ph": "Kuponkód"
+   },
+   {
+    "n": "Deal.textCustomField13",
+    "t": "select",
+    "l": "Szolgáltatás",
+    "ph": "Szolgáltatás",
+    "hid": 1,
+    "def": "Spinner",
+    "o": [
+     "Fotóautomata",
+     "Spinner",
+     "Fotóautomata & Spinner",
+     "Selfie Light",
+     "CrazyMelange",
+     "Oveerhead Spinner",
+     "VIP Spinner",
+     "DanceFloor",
+     "VR",
+     "Lenticular",
+     "Fotó",
+     "Videó",
+     "Fotó & Videó",
+     "Karikatúra",
+     "Crazy Cathc",
+     "Mindflex"
+    ]
+   },
+   {
+    "n": "Contact.utmSource",
+    "t": "text",
+    "l": "UTM Source",
+    "ph": "UTM Source",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmMedium",
+    "t": "text",
+    "l": "UTM Medium",
+    "ph": "UTM Medium",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmCampaign",
+    "t": "text",
+    "l": "UTM Campaign",
+    "ph": "UTM Campaign",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmContent",
+    "t": "text",
+    "l": "UTM Content",
+    "ph": "UTM Content",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmTerm",
+    "t": "text",
+    "l": "UTM Term",
+    "ph": "UTM Term",
+    "hid": 1
+   }
+  ],
+  "theme": "spin",
+  "feat": "forms_cp"
+ },
+ "49eeaced-0140-47a0-bce6-5cbf0de18b93": {
+  "name": "EC - Global EN",
+  "btn": "Submit",
+  "redirect": "https://eventcrazy.hu/megrendeles-rogzitve/",
+  "notify": [
+   "info@eventcrazy.hu"
+  ],
+  "privacy": "<div>By submitting this form, I accept the&nbsp;<a href=\"https://eventcrazy.hu/adatkezelesi-tajekoztato/\" target=\"_blank\" rel=\"noopener noreferrer\">privacy policy and data processing statement.</a></div>",
+  "lang": "en",
+  "tags": [
+   "Web-form"
+  ],
+  "fields": [
+   {
+    "n": "Contact.name",
+    "t": "text",
+    "l": "Name",
+    "ph": "Full name",
+    "req": 1
+   },
+   {
+    "n": "Contact.email",
+    "t": "email",
+    "l": "Email",
+    "ph": "Email address",
+    "req": 1
+   },
+   {
+    "n": "Contact.mobile",
+    "t": "tel",
+    "l": "Phone number",
+    "ph": "Phone number"
+   },
+   {
+    "n": "Deal.multiSelectCustomField3",
+    "t": "multi",
+    "l": "Services",
+    "ph": "Select services",
+    "req": 1,
+    "o": [
+     "AI fotózás",
+     "AI Karikatúra",
+     "Digitális Karikatúra",
+     "Drón",
+     "Élőzene",
+     "Greenbox",
+     "Hashtag Printing",
+     "Karaoke",
+     "LED Tánctér",
+     "Mindflex",
+     "OverheadSpinner",
+     "Rendezvény videó",
+     "Rendezvényfotó",
+     "SelfieLight",
+     "SpinnerClassic",
+     "Selfie Tükör",
+     "Szelfigép",
+     "SzelfiRobot",
+     "TattooPrinting",
+     "VIP Spinner",
+     "VR Élmény",
+     "DJ",
+     "CrazyLight",
+     "Ülőfoci / Seated Football",
+     "Csocsó / Foosball",
+     "XXL csocsó / XXL Foosball",
+     "Crazy Beauty",
+     "CrazyCatch",
+     "Visszahívást kérek",
+     "Egyéb"
+    ]
+   },
+   {
+    "n": "Deal.dateCustomField1",
+    "t": "date",
+    "l": "Event date",
+    "ph": "Event date",
+    "req": 1
+   },
+   {
+    "n": "Deal.textCustomField1",
+    "t": "text",
+    "l": "Event location",
+    "ph": "Event location",
+    "req": 1
+   },
+   {
+    "n": "Deal.intCustomField3",
+    "t": "int",
+    "l": "Duration (hours)",
+    "ph": "How long would you like the activity to run?",
+    "req": 1
+   },
+   {
+    "n": "Deal.intCustomField1",
+    "t": "int",
+    "l": "Expected number of guests",
+    "ph": "How many guests are expected at the event?"
+   },
+   {
+    "n": "Deal.textCustomField3",
+    "t": "text",
+    "l": "Notes",
+    "ph": "Any special wishes or requests"
+   },
+   {
+    "n": "Deal.title",
+    "t": "text",
+    "l": "Order",
+    "ph": "Title",
+    "req": 1,
+    "hid": 1,
+    "def": "[EventCrazy EN] {{Contact.name}}"
+   },
+   {
+    "n": "Deal.source",
+    "t": "select",
+    "l": "Source",
+    "ph": "Source",
+    "hid": 1,
+    "def": "Eventcrazy.hu",
+    "o": [
+     "Ads",
+     "Referrals",
+     "Crazyphoto.hu",
+     "Crazyphoto",
+     "Spinner",
+     "Eventcrazy.hu",
+     "Halloween Ads Google",
+     "cf-fb-wed-ad",
+     "Facebook Lead Ads",
+     "LinkedIn Lead Ads"
+    ]
+   },
+   {
+    "n": "Deal.textAreaCustomField1",
+    "t": "textarea",
+    "l": "Coupon code",
+    "ph": "Coupon code"
+   },
+   {
+    "n": "Contact.utmSource",
+    "t": "text",
+    "l": "UTM Source",
+    "ph": "UTM Source",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmMedium",
+    "t": "text",
+    "l": "UTM Medium",
+    "ph": "UTM Medium",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmCampaign",
+    "t": "text",
+    "l": "UTM Campaign",
+    "ph": "UTM Campaign",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmContent",
+    "t": "text",
+    "l": "UTM Content",
+    "ph": "UTM Content",
+    "hid": 1
+   },
+   {
+    "n": "Contact.utmTerm",
+    "t": "text",
+    "l": "UTM Term",
+    "ph": "UTM Term",
+    "hid": 1
+   }
+  ],
+  "theme": "ec",
+  "feat": "forms_ec"
+ }
+}

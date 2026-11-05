@@ -38,8 +38,8 @@ function cp_cut_db_ok() { return get_option('cp_cut_db_ver') === CP_CUT_DB_VER; 
 /* a kapcsolható funkciók: kulcs => array(név, leírás, a panel már képes-e élesben csinálni) */
 function cp_cut_feats() {
 	return array(
-		'forms_ec'    => array('EventCrazy űrlap → deal', 'Az eventcrazy.hu ajánlatkérő űrlapjából deal (név, felelős, mezők).', false),
-		'forms_cp'    => array('Crazyphoto űrlap → deal', 'A crazyphoto.hu főoldali űrlapjából deal.', false),
+		'forms_ec'    => array('EventCrazy űrlap → deal', 'Az eventcrazy.hu ajánlatkérő űrlapjai (magyar, angol). „Panel + tükör”: a panel saját űrlapja jelenik meg ugyanazokkal a mezőkkel, a deal a panelből jön létre (a Salesmate-be is); „Salesmate” / „Árnyék”: az eredeti Salesmate-űrlap.', true),
+		'forms_cp'    => array('Crazyphoto űrlap → deal', 'A crazyphoto.hu űrlapjai (fotóautomata, spinner, árkalkulátor). Mint fent.', true),
 		'fb'          => array('Facebook Lead Ads → deal', 'A Facebook-hirdetések űrlapjaiból deal (Make-forgatókönyvvel).', false),
 		'flow_rename' => array('Átnevezés', '„[Forrás] Név | dátum” deal-név új dealnél.', false),
 		'flow_pumble' => array('Új deal → Pumble', 'Értesítés a csatornába új dealnél.', false),
@@ -218,6 +218,12 @@ function cp_cut_ajax_set() {
 	$m = sanitize_key(wp_unslash($_POST['mode'] ?? ''));
 	if (!isset($F[$k]) || !in_array($m, array('sm', 'shadow', 'live', 'only'), true)) { cp_el_err('Hibás kérés.'); }
 	if (in_array($m, array('live', 'only'), true) && !$F[$k][2]) { cp_el_err('Ezt a funkciót a panel még nem tudja élesben – előbb árnyék-üzemben kell hibátlanul futnia.'); }
+	$was = cp_cut_mode($k);
 	$all = cp_cut_modes(); $all[$k] = $m; update_option('cp_cut_modes', $all, false);
+	/* v2.7: az űrlapok átkapcsolása a weboldalakon azonnal látsszon */
+	if (in_array($k, array('forms_ec', 'forms_cp'), true) && $was !== $m && function_exists('cp_wf_switched')) { cp_wf_switched(); }
 	wp_send_json_success(cp_cut_data());
 }
+
+/* v2.7: saját ajánlatkérő űrlapok (a Salesmate-űrlapok helyett) */
+require_once __DIR__ . '/webforms.php';
