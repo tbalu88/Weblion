@@ -1,0 +1,26 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-05 12:41:34.400068959 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v98/panel.js	2026-11-05 13:53:10.963149192 +0000
+@@ -2629,3 +2629,23 @@
+     setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); else if (S.tab === 'deals' && window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(DEEP); }, 300);
+   }
+ })();
++
++/* v2.6.8: Elszámolás / Tárca összegmezői léptethetők: görgetés vagy ↑/↓ = ±100 Ft, Shift-tel ±1000 Ft (1000 Ft alatti értéknél ±1 / ±10; óraszámnál ±0,5) */
++(function () {
++	const ok = el => el && el.tagName === 'INPUT' && !el.readOnly && !el.disabled && (el.closest('.el-dlg') || el.classList.contains('el-in') || el.id === 'tw-a' || el.id === 'ta-a') && /^(numeric|decimal|text)$/.test(el.getAttribute('inputmode') || 'text') && /^[\s+−-]*[\d\s.,]*$/.test(el.value);
++	const num = v => { const t = String(v || '').replace(/\s/g, '').replace('−', '-').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? null : n; };
++	function step(el, dir, big) {
++		const dec = el.getAttribute('inputmode') === 'decimal';
++		let v = num(el.value); if (v === null) v = num(el.placeholder); if (v === null) v = 0;
++		const lab = (el.closest('label') || {}).textContent || '';
++		const money = /Ft/.test(lab) || ['tw-a', 'ta-a'].includes(el.id) || Math.abs(v) >= 1000 || Math.abs(num(el.placeholder) || 0) >= 1000;
++		const d = dec ? 0.5 : money ? (big ? 1000 : 100) : (big ? 10 : 1);
++		let n = Math.round((v + dir * d) * 100) / 100; if (!dec && el.id !== 'ed-c' && n < 0) n = 0;
++		el.value = dec ? String(n).replace('.', ',') : String(Math.round(n));
++		el.dispatchEvent(new Event('input', { bubbles: true }));
++		clearTimeout(el._stT); el._stT = setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 600);
++	}
++	document.addEventListener('wheel', e => { const el = e.target; if (!ok(el) || document.activeElement !== el) return; e.preventDefault(); step(el, e.deltaY < 0 ? 1 : -1, e.shiftKey); }, { passive: false });
++	document.addEventListener('keydown', e => { const el = e.target; if (!ok(el) || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return; e.preventDefault(); step(el, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey); });
++	document.addEventListener('focusin', e => { const el = e.target; if (ok(el) && !el.title) el.title = 'Görgetés vagy ↑/↓: ±100 Ft · Shift-tel: ±1000 Ft'; });
++})();
