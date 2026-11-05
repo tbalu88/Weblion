@@ -170,21 +170,48 @@ function cp_wf_after($lid) {
 	}
 }
 
-/* értesítő levél az űrlap címzettjeinek (ahogy eddig a Salesmate küldte) */
+/* értesítő levél az űrlap címzettjeinek – a Salesmate „New Submission” levelének mintájára (v2.7.4), kiegészítve:
+ * tárgy: „<űrlap> - New Submission [sorszám]”, törzs: minden mező „Címke: érték” (üres: „-”), felül a panel-link és
+ * a visszatérő ügyfél jelzése. Feladó: a weboldal (nem az info@), válaszcím: az ügyfél – így a panel Levelezése a
+ * postafiókból az ügyféllel közös szálként, a deal-hez kötve veszi fel, és a „Válasz” az ügyfélnek megy. */
+function cp_wf_seq($fid) {
+	$s = get_option('cp_wf_seq', array()); if (!is_array($s)) { $s = array(); }
+	if (!isset($s[$fid])) {
+		$seed = array('249aeb1c-71c0-4c4c-9f6a-6eeffd1d24e5' => 746); /* a Salesmate utolsó sorszáma (2026-11-05) */
+		global $wpdb;
+		$s[$fid] = $seed[$fid] ?? (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_lead_t() . ' WHERE form_id = %s', $fid));
+	}
+	$s[$fid] = (int) $s[$fid] + 1;
+	update_option('cp_wf_seq', $s, false);
+	return $s[$fid];
+}
 function cp_wf_mail($def, $pairs, $deal, $page) {
-	$lab = array();
-	foreach ($def['fields'] as $f) { if (empty($f['hid']) || $f['n'] === 'Deal.source') { $lab[$f['n']] = $f['l']; } }
+	$fid = '';
+	foreach (cp_wf_defs() as $k => $d) { if ($d['name'] === $def['name']) { $fid = $k; } }
+	$n = cp_wf_seq($fid);
+	$e = function ($v) { return esc_html((string) $v); };
 	$rows = '';
-	foreach ($lab as $n => $l) { if (isset($pairs[$n]) && $pairs[$n] !== '') { $rows .= '<tr><td style="padding:6px 12px 6px 0;color:#666;vertical-align:top">' . esc_html($l) . '</td><td style="padding:6px 0"><b>' . nl2br(esc_html($pairs[$n])) . '</b></td></tr>'; } }
+	foreach ($def['fields'] as $f) {
+		$v = isset($pairs[$f['n']]) && $pairs[$f['n']] !== '' ? (string) $pairs[$f['n']] : '-';
+		$rows .= '<p style="margin:0 0 12px"><b>' . $e($f['l']) . ':</b><br>' . nl2br($e($v)) . '</p>';
+	}
 	$base = function_exists('cp_pu_panel_url') ? cp_pu_panel_url() : home_url('/');
 	$link = $base . '#' . ($deal ? 'deals:' . $deal : 'deals:leads');
-	$html = '<div style="font:14px/1.5 Arial,sans-serif;color:#222"><p>Új beküldés: <b>' . esc_html($def['name']) . '</b></p><table style="border-collapse:collapse">' . $rows . '</table>'
-		. '<p style="margin-top:16px"><a href="' . esc_url($link) . '">' . ($deal ? 'Megnyitás a Crazy panelben' : 'Megkeresések a Crazy panelben (a deal még készül)') . '</a></p>'
-		. ($page !== '' ? '<p style="color:#888;font-size:12px">Oldal: ' . esc_html($page) . '</p>' : '') . '</div>';
-	$h = array('Content-Type: text/html; charset=UTF-8', 'From: Crazy panel <info@eventcrazy.hu>');
 	$em = sanitize_email((string) ($pairs['Contact.email'] ?? ''));
-	if ($em !== '') { $h[] = 'Reply-To: ' . str_replace(array("\r", "\n", '<', '>'), '', (string) ($pairs['Contact.name'] ?? '')) . ' <' . $em . '>'; }
-	foreach ((array) $def['notify'] as $to) { $to = sanitize_email($to); if ($to !== '') { @wp_mail($to, 'Új ajánlatkérés: ' . ($pairs['Contact.name'] ?? '') . ' (' . $def['name'] . ')', $html, $h); } }
+	$ret = function_exists('cp_ret_by_email') ? cp_ret_by_email($em, (int) $deal) : null;
+	$top = '<p style="margin:0 0 6px"><a href="' . esc_url($link) . '" style="display:inline-block;background:#E8894A;color:#1A1F2B;padding:8px 16px;border-radius:999px;text-decoration:none;font-weight:700">' . ($deal ? 'Deal megnyitása a Crazy panelben' : 'Megkeresések a Crazy panelben') . '</a></p>'
+		. ($deal ? '' : '<p style="margin:0 0 6px;color:#B4432F">A deal még készül (a panel újrapróbálja).</p>')
+		. ($ret ? '<p style="margin:0 0 6px">🔁 <b>Visszatérő ügyfél:</b> ' . (int) $ret['n'] . ' korábbi deal' . ($ret['won'] ? ', ebből ' . (int) $ret['won'] . ' megnyert' . ($ret['last_ev'] ? ' (utoljára ' . $e(substr($ret['last_ev'], 0, 10)) . ')' : '') : '') . '</p>' : '')
+		. '<p style="margin:0 0 6px;color:#5B6275">Válaszolj erre a levélre: a válasz az ügyfélnek megy.</p>';
+	$html = '<div style="font:14px/1.5 Arial,sans-serif;color:#222;max-width:640px">' . $top . '<hr style="border:0;border-top:1px solid #e5e5e5;margin:14px 0">' . $rows
+		. ($page !== '' ? '<p style="color:#888;font-size:12px;margin-top:16px">Beküldve innen: ' . $e($page) . '</p>' : '') . '</div>';
+	$name = str_replace(array("\r", "\n", '<', '>', '"'), '', (string) ($pairs['Contact.name'] ?? ''));
+	$h = array('Content-Type: text/html; charset=UTF-8', 'From: Weboldal-űrlap <wordpress@eventcrazy.hu>', 'X-Crazy-Panel: webform');
+	if ($em !== '') { $h[] = 'Reply-To: "' . $name . '" <' . $em . '>'; }
+	$to = array_map('sanitize_email', (array) $def['notify']);
+	/* a crazyphoto.hu űrlapjai a panel postafiókjába (info@eventcrazy.hu) is, hogy a Levelezésben is megjelenjenek */
+	if (!in_array('info@eventcrazy.hu', $to, true)) { $to[] = 'info@eventcrazy.hu'; }
+	foreach (array_unique(array_filter($to)) as $t) { @wp_mail($t, $def['name'] . ' - New Submission [' . $n . ']', $html, $h); }
 }
 
 /* ------------------------------------------------------------ kontakt + deal (a panel „Új deal” lépései szerint) */
