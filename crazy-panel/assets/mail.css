@@ -558,3 +558,7 @@
 .ml-ret.lo{background:#F3F4F6;border-color:#E2E4E8;color:#4A4F5A}
 .ml-ret:hover{filter:brightness(.98)}
 .ml-more{display:block;width:calc(100% - 24px);margin:10px 12px 18px;padding:10px;border:1px dashed var(--li,#E2DDD5);border-radius:10px;background:transparent;color:var(--mu,#5B6275);font:600 13px Inter,sans-serif;cursor:pointer}.ml-more:hover{background:rgba(0,0,0,.03)}.ml-more[disabled]{opacity:.6;cursor:wait}
+/* v2.7.5: iOS-en a beágyazott levél (iframe) a tartalma szélességére nyúlt, és az egész oldalt oldalra lehetett húzni – a keret a kártya szélességén marad, a széles tartalom a kereten belül görgethető */
+.ml-hf{width:1px;min-width:100%;max-width:100%}
+.ml-msg,.ml-mb{min-width:0;max-width:100%}
+.ml-read,.ml-msg{overflow-x:clip}
