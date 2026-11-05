@@ -12,7 +12,10 @@ if (!defined('ABSPATH')) { exit; }
 define('CP_GDB_SCOPE', 'https://www.googleapis.com/auth/drive');
 function cp_gdb_opts() {
 	$o = get_option('cp_gdb', array()); if (!is_array($o)) { $o = array(); }
-	return array_merge(array('on' => '0', 'folder' => '1wN0hY77ih9rOV9Y8rnQaX0J7vxQ1Cs8S'), $o);
+	/* v2.6.10: a Beállítások kapcsolója számként (1/0) ment – egységesen szöveg */
+	$r = array_merge(array('on' => '0', 'folder' => '1wN0hY77ih9rOV9Y8rnQaX0J7vxQ1Cs8S'), $o);
+	$r['on'] = empty($r['on']) ? '0' : '1';
+	return $r;
 }
 function cp_gdb_state() { $s = get_option('cp_gdb_state', array()); return is_array($s) ? $s : array(); }
 function cp_gdb_pass() { return function_exists('cp_st_secret') ? (string) cp_st_secret('gdb_pass') : ''; }
