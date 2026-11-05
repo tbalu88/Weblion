@@ -1,0 +1,24 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-05 12:18:21.705162964 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v95/crazy-panel.php	2026-11-05 12:37:32.981805454 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.6.5');
++define('CP_PANEL_VER', '2.6.6');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3897,6 +3897,12 @@
+ 	$kz = $kid !== '' ? cp_el_kez_find($kid) : null;
+ 	if ($kz) { return (string) $kz['name']; }
+ 	if (!empty($row['ksm']) && is_scalar($row['ksm'])) { return (string) $row['ksm']; }
++	/* v2.6.6: ha a kezelőt senki nem választotta ki, és a naptárban sincs: a deal „Gépkezelő” mezője (ahogy az Elszámolás képernyő is mutatja) */
++	if ($kid === '' && isset($row['i']) && $row['i'] === 'r0' && function_exists('cp_crm_t')) {
++		global $wpdb;
++		$op = trim((string) $wpdb->get_var($wpdb->prepare('SELECT operator FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $id)));
++		if ($op !== '') { $m = cp_el_kez_by_label($op); return $m ? (string) $m['name'] : $op; }
++	}
+ 	return $kid;
+ }
+ 
