@@ -22,10 +22,14 @@ a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen 
 
 | # | Javaslat | Becslés |
 |---|---|---|
-| F1 | Foglalási link („Lefoglalom”) az ajánlatlevélben – az adatlap kitöltése = elfogadás | ~1 nap |
 | F2 | Szerződés elfogadása kattintással az adatlapon (PDF + időbélyeg), díjbekérő egy kattintással | ~1,5 nap |
 | F3 | Dátum szerinti automatikus szakaszváltás (Felkészül, Lement, Pénzre várunk, Megnyert) – átállás után | ~0,5 nap |
 | F4 | Elakadt ajánlat: 5 nap után teendő, 14 nap után Elvesztett-javaslat | ~0,5 nap |
 | N3 | Megválaszolatlan levél figyelő: 24 munkaórája válasz nélküli megkeresés → jelzés a felelősnek | ~0,5 nap |
 | N5 | Értékeléskérő levél a galériával (Google-értékelés link), jóváhagyással | ~0,5 nap |
 | N6 | Fizetési emlékeztető levél lejárt számlánál, egy kattintással | ~0,5 nap |
+
+## Félretéve (2026-11-05): foglalási link az ajánlatlevélben – az adminisztrációval egyeztetni kell
+- Kész, de nem élesített kód: kapacitás-ellenőrzés kattintáskor (az „Adatlap kiküldve” dealeket is levonja), napi zár,
+  a levélszkennerek ellen csak gombnyomásra foglal, telt háznál „keressenek meg” gomb + értesítés. A kód a munkamenet
+  jegyzetei között van (booking.php); újraélesítéshez a panelhez kell kötni és az ajánlatlevélbe tenni.

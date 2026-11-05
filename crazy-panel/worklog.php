@@ -233,6 +233,9 @@ function cp_wl_ajax_status() {
 		if ($e['status'] === 'approved') { cp_el_err('Már jóvá van hagyva.'); }
 		$wpdb->update(cp_wl_t('entries'), array('status' => 'submitted', 'updated_at' => gmdate('Y-m-d H:i:s')), array('id' => (int) $e['id']));
 		cp_wl_notify_admins('lezárta a munkanaplóját (' . $day . ', ' . cp_wl_hours($e) . ' óra) – jóváhagyásra vár.', $day);
+		/* v2.6: összefoglaló a Pumble riport-csatornájába */
+		$pr = cp_wl_pumble_report($uid, $day);
+		if (is_wp_error($pr) && $pr->get_error_code() !== 'nohook') { error_log('Crazy panel munkanapló Pumble: ' . $pr->get_error_message()); }
 	} elseif ($to === 'approved' || $to === 'draft') {
 		if (!cp_wl_is_approver()) { cp_el_err('Jóváhagyni / visszanyitni csak admin tud.'); }
 		if ($to === 'approved' && $uid === $me) { cp_el_err('A saját napodat nem hagyhatod jóvá.'); }
@@ -376,3 +379,58 @@ add_action('cp_wl_remind', function () {
 		if (function_exists('cp_notify')) { cp_notify($w, 'worklog', 'emlékeztető: a mai munkanapló még üres – írd meg a nap végén.', 'munkanaplo:' . $day, 'Crazy panel'); }
 	}
 });
+
+/* ------------------------------------------------------------ v2.6: lezárt munkanap → Pumble riport-csatorna
+ * Webhook: Beállítások → Munkanapló („Pumble webhook a munkanapló-riporthoz”); ha nincs megadva, az Összesítők (riport)
+ * csatornájába megy. Képet nem küld (azok a panelben maradnak), csak a szöveges összefoglalót és a linket. */
+function cp_wl_hook() {
+	$h = function_exists('cp_st_secret') ? (string) cp_st_secret('wl_webhook') : '';
+	if ($h === '' && function_exists('cp_st_dg_hook')) { $h = (string) cp_st_dg_hook(); }
+	return $h;
+}
+function cp_wl_report_text($uid, $day) {
+	$e = cp_wl_out(cp_wl_get_row($uid, $day));
+	if (!$e) { return ''; }
+	$u = function_exists('cp_pu_get') ? cp_pu_get($uid) : null;
+	$hm = array('január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december');
+	$dn = array('', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat', 'vasárnap');
+	$p = array_map('intval', explode('-', $day)); $ts = strtotime($day . ' 12:00:00');
+	$dl = $p[0] . '. ' . $hm[$p[1] - 1] . ' ' . $p[2] . '. (' . $dn[(int) gmdate('N', $ts)] . ')';
+	$num = function ($n) { return str_replace('.', ',', (string) $n); };
+	$ft = function ($n) { return number_format((float) $n, 0, ',', ' ') . ' Ft'; };
+	$L = array('📋 **Munkanapló – ' . ($u ? $u['n'] : '#' . $uid) . ', ' . $dl . '**');
+	if ($e['t_start'] !== '') { $L[] = '🕘 Munkaidő: ' . $e['t_start'] . '–' . ($e['t_end'] ?: '?') . ($e['break_min'] ? ' (szünet ' . $e['break_min'] . ' perc)' : '') . ' · **' . $num($e['hours']) . ' óra**'; }
+	if ($e['kinds'] || trim((string) $e['place']) !== '') { $L[] = '🏷 ' . trim(implode(', ', $e['kinds']) . ($e['place'] ? ' · ' . $e['place'] : ''), ' ·'); }
+	if ($e['deal_list']) { $L[] = '🎉 Rendezvények: ' . implode('; ', array_map(function ($d) { return $d['title']; }, $e['deal_list'])); }
+	if ($e['tasks']) {
+		$done = count(array_filter($e['tasks'], function ($t) { return !empty($t['done']); }));
+		$L[] = '✅ Feladatok: ' . $done . '/' . count($e['tasks']) . ' kész';
+		foreach (array_slice($e['tasks'], 0, 12) as $t) { $L[] = '   ' . (!empty($t['done']) ? '☑' : '☐') . ' ' . mb_substr((string) $t['t'], 0, 120); }
+	}
+	if (trim((string) $e['notes']) !== '') { $L[] = '📝 ' . mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $e['notes'])), 0, 400); }
+	if ($e['km'] !== null || $e['vehicle'] !== '') { $L[] = '🚐 ' . trim(($e['vehicle'] ? $e['vehicle'] . ' · ' : '') . ($e['km'] !== null ? $e['km'] . ' km' : ''), ' ·'); }
+	if ($e['costs']) {
+		$sum = array_sum(array_map(function ($c) { return (float) ($c['amount'] ?? 0); }, $e['costs']));
+		$L[] = '🧾 Költségek: **' . $ft($sum) . '** (' . implode('; ', array_map(function ($c) use ($ft) { return trim(($c['what'] ?? '') . ' ' . $ft($c['amount'] ?? 0)); }, array_slice($e['costs'], 0, 6))) . ')';
+	}
+	$ph = count(array_filter($e['files'], function ($f) { return $f['kind'] === 'photo'; }));
+	if ($ph) { $L[] = '📷 ' . $ph . ' fotó (a panelben)'; }
+	if (!empty($e['issue_flag']) || trim((string) $e['issue']) !== '') { $L[] = '⚠ **Probléma:** ' . mb_substr(trim((string) $e['issue']), 0, 400); }
+	if (trim((string) $e['tomorrow']) !== '') { $L[] = '➡ Holnap: ' . mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $e['tomorrow'])), 0, 300); }
+	if (function_exists('cp_pu_panel_url')) { $L[] = '[Megnyitás a Crazy panelben](' . cp_pu_panel_url() . '#munkanaplo:' . $day . ')'; }
+	return implode("\n", $L);
+}
+function cp_wl_pumble_report($uid, $day) {
+	if (!get_option('cp_wl_pb', 1)) { return new WP_Error('nohook', 'ki'); }
+	$hook = cp_wl_hook();
+	if ($hook === '' || !preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', $hook)) { return new WP_Error('nohook', 'Nincs Pumble webhook.'); }
+	/* ugyanarról a napról újra lezárásnál (visszanyitás után) „javítva” jelöléssel */
+	$k = 'cp_wl_pb_' . (int) $uid . '_' . $day;
+	$again = (bool) get_option($k);
+	$txt = cp_wl_report_text($uid, $day);
+	if ($txt === '') { return new WP_Error('empty', 'Nincs bejegyzés.'); }
+	if ($again) { $txt = preg_replace('/^📋 \*\*/u', '📋 **(javítva) ', $txt, 1); }
+	$r = function_exists('cp_el_pumble') ? cp_el_pumble($txt, $hook) : wp_remote_post($hook, array('timeout' => 10, 'headers' => array('Content-Type' => 'application/json'), 'body' => wp_json_encode(array('text' => $txt))));
+	if (!is_wp_error($r)) { update_option($k, time(), false); }
+	return $r;
+}

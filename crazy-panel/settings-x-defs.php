@@ -373,6 +373,25 @@ add_filter('cp_sx_sections', function ($S) {
 		);
 	}
 
+	/* ---------------- v2.6: Munkanapló – Pumble-riport a lezárt napokról */
+	if (function_exists('cp_wl_hook')) {
+		$S['wl'] = array('n' => 'Munkanapló',
+			'd' => 'Amikor valaki lezárja a napi munkanaplóját, a panel összefoglalót küld a Pumble riport-csatornájába (munkaidő, feladatok, rendezvények, km, költségek, probléma, holnapi teendő, link). A fotók a panelben maradnak.',
+			'info' => function () {
+				$own = function_exists('cp_st_secret') && (string) cp_st_secret('wl_webhook') !== '';
+				$dg = function_exists('cp_st_dg_hook') && cp_st_dg_hook() !== '';
+				return array(array('Hová megy', $own ? 'a munkanapló saját webhookjára' : ($dg ? 'az Összesítők (riport) csatornájába – saját webhook nincs megadva' : 'sehová: nincs webhook megadva'), ($own || $dg) ? 'ok' : 'bad'));
+			},
+			'fields' => array(
+				array('k' => 'pb', 't' => 'sw', 'l' => 'Pumble-üzenet a munkanapló lezárásakor', 'opt' => 'cp_wl_pb', 'def' => 1),
+				array('k' => 'hook', 't' => 'secret', 'l' => 'Pumble webhook a munkanapló-riporthoz (ha üres: az Összesítők csatornája)', 'ph' => 'https://api.pumble.com/…', 'chk' => 'cp_sx_pumble', 'has' => function () { return function_exists('cp_st_secret') && (string) cp_st_secret('wl_webhook') !== ''; }, 'set' => function ($v) { cp_st_secret_set('wl_webhook', $v); }),
+			),
+			'acts' => array(
+				array('k' => 'test', 'l' => 'Próbaüzenet a Pumble-be', 'fn' => function () { $h = cp_wl_hook(); if ($h === '') { return new WP_Error('cp_sx', 'Nincs webhook megadva.'); } $r = cp_el_pumble('✅ Crazy panel – teszt: ide érkeznek a lezárt munkanaplók összefoglalói.', $h); return is_wp_error($r) ? $r : 'Próbaüzenet elküldve.'; }),
+			),
+		);
+	}
+
 	/* ---------------- Összesítők (heti/havi Pumble-összesítő, mérföldkövek) */
 	if (function_exists('cp_st_dg_opts')) {
 		$f = array(
