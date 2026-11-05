@@ -1,0 +1,35 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-05 07:27:16.987593950 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v87/crazy-panel.php	2026-11-05 11:20:24.433424209 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.5.3');
++define('CP_PANEL_VER', '2.6');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -772,6 +772,7 @@
+ 		'ct'         => array('on' => function_exists('cp_ct_ajax_get') && cp_panel_can_x('deals')),
+ 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+ 		'wl'         => function_exists('cp_wl_cfg') ? cp_wl_cfg() : array('on' => false),
++		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
+ 	);
+@@ -795,6 +796,7 @@
+ 	if (!empty($cfg['ct']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contract.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['bil']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/bill.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['wl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/worklog.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (!empty($cfg['kz']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/kezelok.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['gcal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/gcal.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '<script src="' . esc_url(plugins_url('assets/mnav.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+@@ -3731,6 +3733,7 @@
+ require_once __DIR__ . '/merge.php';
+ require_once __DIR__ . '/loyal.php';
+ require_once __DIR__ . '/sm-hist.php';
++require_once __DIR__ . '/kezelok.php';
+ require_once __DIR__ . '/dealact.php';
+ require_once __DIR__ . '/mail-send.php';
+ require_once __DIR__ . '/mail-att.php';

@@ -33,3 +33,13 @@ a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen 
 - Kész, de nem élesített kód: kapacitás-ellenőrzés kattintáskor (az „Adatlap kiküldve” dealeket is levonja), napi zár,
   a levélszkennerek ellen csak gombnyomásra foglal, telt háznál „keressenek meg” gomb + értesítés. A kód a munkamenet
   jegyzetei között van (booking.php); újraélesítéshez a panelhez kell kötni és az ajánlatlevélbe tenni.
+
+## Kezelők fül – továbbfejlesztési javaslatok (2026-11-05)
+| # | Javaslat | Becslés |
+|---|---|---|
+| K1 | Adatbekérő link: a kezelő saját maga tölti ki / javítja a hiányzó adatait (egyszer használatos link, mint az ügyfélportál) | ~1 nap |
+| K2 | Beosztás: a dealen a „Gépkezelő” mező a Kezelők listájából választható, ütközésjelzéssel (egy napon két helyre ne) | ~1 nap |
+| K3 | Kezelői értesítő: a rendezvény előtt e-mail / Pumble a kezelőnek (cím, időpont, kapcsolattartó, gép, háttér) | ~0,5 nap |
+| K4 | Megbízási szerződés / teljesítésigazolás generálása a kezelő adataiból (a szerződésmodulból) | ~1 nap |
+| K5 | Havi kezelői összesítő a Kezelői elszámolásból kezelőnként (alkalmak, órák, km, kifizetendő), CSV a könyvelőnek | ~0,5 nap |
+| K6 | Okmányok és lejáratok (jogosítvány, egészségügyi kiskönyv), figyelmeztetés lejárat előtt | ~0,5 nap |
