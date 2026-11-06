@@ -654,3 +654,6 @@
   .ml-psend{margin:6px 0 0;display:inline-block}
 }
 .ml-dcard .ml-pchip{align-self:flex-start}
+/* v2.9.15: sablonszerkesztő – a változók címkeként, magyar néven */
+.cp-var{display:inline-block;background:#E8F0FE;color:#1D4ED8;border-radius:6px;padding:0 6px;margin:0 1px;font-size:0;line-height:1.5;vertical-align:baseline;user-select:all;cursor:default}
+.cp-var::before{content:attr(data-l);font:600 12.5px Inter,sans-serif}

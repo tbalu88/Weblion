@@ -741,7 +741,7 @@
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
 			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3><button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div><div class="ml-pres" data-pres hidden></div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
-			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + (C.portal && C.portal.on && M.send && M.send.on && d.id ? '<button type="button" class="ml-psend" data-psend title="Választ nyit erre a szálra, benne a deal személyes portál-linkjével">📝 Portál-link küldése</button>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
+			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
 				/* v1.98: lezárt / elvesztett / törölt deal figyelmeztetés, ajánlott nyitott deal */
 				(d.warn ? '<div class="ml-dwarn">⚠ ' + esc(d.warn) + (d.alt ? '<button type="button" class="cpx-btn sm" data-dalt="' + Number(d.alt.id) + '">Áthelyezés ide: ' + esc(d.alt.title) + '</button>' : '') + '</div>' : '') : '') +
 			/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
@@ -824,9 +824,6 @@
 		qa.querySelector('[data-qf]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) forward(m); });
 		qa.querySelector('[data-qn]').addEventListener('click', () => { qaShow(false); const n = rd.querySelector('[data-note]'); const nc = rd.querySelector('.ml-ncomp'); if (nc) nc.classList.add('open'); if (n) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); n.focus(); } });
 		qa.querySelector('[data-qr]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, false); });
-		/* v2.9.7: a szál deal-kártyájáról: válasz a portál-linkkel beszúrva */
-		const psb = rd.querySelector('[data-psend]');
-		if (psb) psb.addEventListener('click', () => { const m = lastM(); S.autoPortal = 1; if (m) reply(m, false); else compose({ to: t.ce ? [t.ce] : [], subject: t.subj || '', deal: d.id, dealTitle: d.title }); });
 		qa.querySelector('[data-qra]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, true); });
 		const bk = rd.querySelector('[data-back]');
 		/* v1.86.1: a „Vissza” gomb és a böngésző visszalépése (mobilon visszalegyintés) ugyanazt csinálja: vissza a levéllistára */
@@ -1070,15 +1067,17 @@
 			'<p><a href="' + esc(u) + '" target="_blank" style="display:inline-block;background:#F2A33A;color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif">Rendezvény-adatlap kitöltése</a></p><p style="font-size:12px;color:#666666">Ha a gomb nem működik, ezt a linket másold a böngészőbe: ' + esc(u) + '</p>';
 		const pstText = sm => !sm || sm.none ? 'még nincs portál' : (sm.st === 'kesz' ? 'kitöltve ✓' : sm.done + '/' + sm.total + ' kitöltve') + (sm.deadline && sm.st !== 'kesz' ? ' · határidő: ' + sm.deadline : '');
 		const pstDraw = sm => { const el = q('[data-pst]'); if (el) { el.textContent = pstText(sm); el.parentNode.title = 'A deal személyes ügyfélportál-linkjének beszúrása · Portál: ' + pstText(sm); } };
-		let pstFor = 0;
+		let pstFor = 0, pHide = false;
 		/* a látható gomb csak akkor, ha a levél dealhez kötött (válasznál a szál dealje) */
 		const pbSync = async () => {
 			const w = q('[data-pbw]'); if (!w) return;
 			const did = deal && deal.id ? Number(deal.id) : 0;
-			w.hidden = !did;
+			if (pstFor !== did) pHide = false;
+			w.hidden = !did || pHide;
 			if (!did || pstFor === did) return;
 			pstFor = did; pstDraw(null); const el = q('[data-pst]'); if (el) el.textContent = '…';
-			try { const r = await post('cp_portal_mail_link', { deal: did, peek: 1 }); if (pstFor === did) pstDraw(r.none ? null : r.summary); } catch (e) { if (el) el.textContent = ''; }
+			/* v2.9.15: aláírt szerződésnél és ha a portál már ki lett küldve, a gomb nem kell (a szerkesztő-eszköztár ikonja megmarad) */
+			try { const r = await post('cp_portal_mail_link', { deal: did, peek: 1 }); if (pstFor === did) { pstDraw(r.none ? null : r.summary); if (r.hide) { pHide = true; w.hidden = true; } } } catch (e) { if (el) el.textContent = ''; }
 		};
 		const insertPortal = async (m) => {
 			const did = deal && deal.id ? deal.id : 0;
@@ -1278,12 +1277,18 @@
 			te.innerHTML = '<div class="crm-eg"><label class="crm-ef"><span>Sablon neve *</span><input type="text" data-n value="' + esc(t.name) + '"></label>' +
 				'<label class="crm-ef"><span>Kategória</span><input type="text" data-c list="ml-cats" value="' + esc(t.category) + '" placeholder="pl. Ajánlat, Emlékeztető"><datalist id="ml-cats">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></label></div>' +
 				'<label class="crm-ef ml-subj"><span>Tárgy</span><input type="text" data-s value="' + esc(t.subject) + '"></label><div data-ed></div>' +
-				'<div class="ml-vars"><span>Változók (kattints a beszúráshoz):</span>' + Object.keys(VARS).map(k => '<button type="button" data-vchip="' + esc(k) + '" title="' + esc(VARS[k][0] + ' – pl. ' + VARS[k][1]) + '">{{' + esc(k) + '}}</button>').join('') + '</div>' +
+				'<div class="ml-vars"><span>Változók (kattints a beszúráshoz):</span>' + Object.keys(VARS).map(k => '<button type="button" data-vchip="' + esc(k) + '" title="' + esc('{{' + k + '}} – pl. ' + VARS[k][1]) + '">' + esc(VARS[k][0]) + '</button>').join('') + '</div>' +
 				'<div class="ml-row ml-prow"><label>Előnézet</label><div data-dp class="ml-grow"></div><button type="button" class="cpx-btn ghost" data-prev>Előnézet</button></div><div class="ml-prev" hidden></div>' +
 				'<div class="crm-ebar"><button type="button" class="cpx-btn" data-save>Mentés</button>' + (t.id ? '<button type="button" class="cpx-btn ghost" data-dup>Másolat</button><button type="button" class="cpx-btn ghost bad" data-del>Törlés</button>' : '') +
 				'<span class="crm-emsg">' + (t.updated_at ? 'Utoljára módosította: ' + esc(t.updated_by || '–') + ', ' + esc(t.updated_at) : '') + '</span></div>';
-			const ed = editor(te.querySelector('[data-ed]'), t.body);
-			te.querySelectorAll('[data-vchip]').forEach(b => { b.addEventListener('mousedown', e => e.preventDefault()); b.addEventListener('click', () => ed.insert('{{' + b.dataset.vchip + '}}')); });
+			/* v2.9.15: a változók a szerkesztőben címkeként, magyar néven (mentéskor visszaalakul {{…}}-ra) */
+			const vlab = k => (VARS[k] ? VARS[k][0].replace(/\s*\(.*\)$/, '') : k);
+			const vchip = (k, raw) => '<span class="cp-var" contenteditable="false" data-l="' + esc(vlab(k)) + '" title="' + esc(raw) + '">' + esc(raw) + '</span>';
+			const wrapV = h => { const t0 = document.createElement('div'); t0.innerHTML = h || ''; const w = document.createTreeWalker(t0, NodeFilter.SHOW_TEXT); const ns = []; while (w.nextNode()) { if (/\{\{[^}]*\}\}/.test(w.currentNode.nodeValue) && !(w.currentNode.parentNode && w.currentNode.parentNode.closest && w.currentNode.parentNode.closest('.cp-var'))) ns.push(w.currentNode); } ns.forEach(n => { const f = document.createElement('span'); f.innerHTML = esc(n.nodeValue).replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)[^}]*\}\}/g, (m0, k) => vchip(k, m0.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'"))); n.replaceWith(...f.childNodes); }); return t0.innerHTML; };
+			const unwrapV = h => { const t0 = document.createElement('div'); t0.innerHTML = h || ''; t0.querySelectorAll('span.cp-var').forEach(x => x.replaceWith(document.createTextNode(x.getAttribute('title') || x.textContent))); return t0.innerHTML; };
+			const ed0 = editor(te.querySelector('[data-ed]'), wrapV(t.body));
+			const ed = Object.assign({}, ed0, { get: () => unwrapV(ed0.get()) });
+			te.querySelectorAll('[data-vchip]').forEach(b => { b.addEventListener('mousedown', e => e.preventDefault()); b.addEventListener('click', () => ed0.html(vchip(b.dataset.vchip, '{{' + b.dataset.vchip + '}}') + '&nbsp;')); });
 			let deal = null;
 			dealPicker(te.querySelector('[data-dp]'), x => { deal = x; });
 			te.querySelector('[data-prev]').addEventListener('click', async () => {

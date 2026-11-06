@@ -108,7 +108,17 @@ function cp_plk_ajax_link() {
 	if ($deal === '') { cp_el_err('Előbb válassz deal-t a levélhez.'); }
 	$p = cp_portal_get_by_deal($deal);
 	/* v2.9.7: csak az állapot a levélíró gombjára (link kiadása nélkül) */
-	if (!empty($_POST['peek'])) { wp_send_json_success($p ? array('none' => 0, 'summary' => cp_plk_summary($deal)) : array('none' => 1)); }
+	if (!empty($_POST['peek'])) {
+		/* v2.9.15: a levélíró gombja nem kell, ha a portál már létrejött (a link kiment), vagy a szerződés már alá van írva */
+		$hide = (bool) $p;
+		if (!$hide && function_exists('cp_crm_t')) {
+			global $wpdb;
+			$dr = $wpdb->get_row($wpdb->prepare('SELECT stage, status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $deal), ARRAY_A);
+			$late = array('szerződés aláírva', 'rendezvény felkészül', 'rendezvény lement (g&r)', 'pénzre várunk');
+			if ($dr && (strtolower((string) $dr['status']) === 'won' || in_array(mb_strtolower(trim((string) $dr['stage'])), $late, true))) { $hide = true; }
+		}
+		wp_send_json_success(($p ? array('none' => 0, 'summary' => cp_plk_summary($deal)) : array('none' => 1)) + array('hide' => $hide));
+	}
 	if (!$p) {
 		if (empty($_POST['create'])) { wp_send_json_success(array('none' => 1)); }
 		$p = cp_portal_create($deal, null, 'panel', 'v2', false);
