@@ -261,7 +261,8 @@
 		el.querySelectorAll('[data-hv]').forEach(b => b.addEventListener('click', () => { HV = b.dataset.hv; try { localStorage.setItem('cpmail_hv', HV); } catch (e) { /* privát mód */ } document.querySelectorAll('.ml-mb[data-hm]').forEach(m2 => { if (HC[m2.dataset.hm] && HC[m2.dataset.hm].html) mountHtml(m2, m2.dataset.hm, false); }); }));
 	}
 	function loadHtml(rd) {
-		rd.querySelectorAll('.ml-mb[data-hm]').forEach(el => {
+		rd.querySelectorAll('.ml-msg:not(.cl) .ml-mb[data-hm]:not([data-hl])').forEach(el => {
+			el.dataset.hl = '1'; /* v2.7.8: csak a kinyitott levelek eredeti nézete töltődik be (egyszer) */
 			const mid = el.dataset.hm;
 			if (HC[mid]) { if (HC[mid].html) mountHtml(el, mid, false); return; }
 			post('cp_mail_html', { id: mid }).then(x => { HC[mid] = x; if (x.html && el.isConnected) mountHtml(el, mid, false); }).catch(() => { /* marad a szöveges nézet */ });
@@ -563,6 +564,13 @@
 
 	function drawThread(box, rd, x) {
 		const t = x.t, d = x.deal;
+		/* v2.7.8: összecsukható levelek – alapból csak a legutóbbi nyitott; kattintásra nyílik / csukódik, „Összes kinyitása” gomb */
+		const MX = (S.mx = S.mx || {}), mk = m => String(m.id || m.sent_at || ''), msgs0 = (x.msgs || []).slice();
+		const newest = msgs0.reduce((a, b) => (!a || String(b.sent_at || '') >= String(a.sent_at || '') ? b : a), null);
+		const XS = MX[t.id] || (MX[t.id] = { def: null, o: {} });
+		const isOpen = m => msgs0.length <= 1 ? true : (Object.prototype.hasOwnProperty.call(XS.o, mk(m)) ? XS.o[mk(m)] : (XS.def !== null ? XS.def : m === newest));
+		const snip = h => { try { return (new DOMParser().parseFromString(String(h || '').replace(/<(style|script)[\s\S]*?<\/\1>/gi, ''), 'text/html').body.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 180); } catch (e) { return ''; } };
+		const allOpen = () => msgs0.every(isOpen);
 		const me = M.me || (PEOPLE[0] || {}).id || 0;
 		const following = (t.fol || []).includes(me);
 		const money = v => (v == null ? '–' : Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Ft');
@@ -578,7 +586,7 @@
 			'<select data-as aria-label="Felelős"><option value="">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (t.as === p.id ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' +
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
-			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3><button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
+			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3><button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
 				/* v1.98: lezárt / elvesztett / törölt deal figyelmeztetés, ajánlott nyitott deal */
@@ -586,8 +594,8 @@
 			/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
 			(x.ret ? '<button type="button" class="ml-ret' + (x.ret.won ? '' : ' lo') + '" data-ret="' + Number(x.ret.ct || 0) + '" title="A feladó kontaktjának megnyitása – minden korábbi deal-je">' + (x.ret.won ? '🔁 <b>Visszatérő ügyfél</b> · ' + x.ret.won + ' megnyert rendezvény' + (x.ret.won_v ? ' (' + esc(money(x.ret.won_v)) + ')' : '') + (x.ret.last_ev ? ' · utoljára ' + esc(x.ret.last_ev.replace(/-/g, '.') + '.') : '') : '↺ Korábban már érdeklődött (' + x.ret.n + ' deal)') + '</button>' : '') +
 			(x.notes || []).map(n => '<div class="ml-ncard"><div class="ml-nh"><span class="ml-av" style="background:' + avc(n.author) + '">' + esc(ini(n.author)) + '</span><b>Jegyzet</b> – ' + esc(n.author) + '<small>' + esc(ago(n.created_at)) + '</small>' + (n.author_uid === me || M.admin ? '<button type="button" class="ml-ndel" data-ndel="' + n.id + '" title="Jegyzet törlése">×</button>' : '') + '</div><div class="ml-nb">' + nl2br(n.body) + '</div></div>').join('') +
-			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
-				(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' +
+			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg' + (isOpen(m) ? '' : ' cl') + '" data-mk="' + esc(mk(m)) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
+				(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(snip(m.body)) + '</div>' +
 				(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button"' + (t.id > 0 ? ' data-mdel' : ' disabled') + ' title="Törlés (a levélszál a Kukába kerül)">' + DEL_I + '</button><button type="button"' + (t.id > 0 ? ' data-mmore="' + ix + '"' : ' disabled') + ' title="Továbbiak">' + MORE_I + '</button></span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
 				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : tidyBody(m.body)) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
@@ -612,6 +620,21 @@
 			S.reply = { to: toL, cc: ccL, subject: subj, body: quote, quote: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
 			S.view = 'compose'; view(S.main);
 		};
+		const xb = rd.querySelector('[data-xall]');
+		const xlab = () => { if (xb) xb.textContent = allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása'; };
+		rd.querySelectorAll('.ml-msg[data-mk]').forEach(a => a.addEventListener('click', e => {
+			if (e.target.closest('button, a, select, input, textarea, .ml-mb, .ml-atts')) return;
+			const cl = a.classList.contains('cl');
+			if (!cl && !e.target.closest('.ml-mh')) return;
+			if (!cl && window.getSelection && String(window.getSelection())) return;
+			XS.o[a.dataset.mk] = cl; a.classList.toggle('cl', !cl); xlab();
+			if (cl) loadHtml(rd);
+		}));
+		if (xb) xb.addEventListener('click', () => {
+			const open = !allOpen(); XS.def = open; XS.o = {};
+			rd.querySelectorAll('.ml-msg[data-mk]').forEach(a => a.classList.toggle('cl', !open));
+			xlab(); if (open) loadHtml(rd);
+		});
 		loadHtml(rd);
 		const tl = timeline(x);
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
