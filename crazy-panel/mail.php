@@ -348,7 +348,7 @@ function cp_mail_thread_row($t) {
 	$n = $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $t['id']), ARRAY_A);
 	return array(
 		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
-		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
+		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'sz' => $t['folder'] === 'snooze' ? (int) ((get_option('cp_mail_snooze', array())[(int) $t['id']]['ts'] ?? 0)) : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
 		'un' => empty($t['seen_at']) || (!empty($t['last_at']) && $t['seen_at'] < $t['last_at']) ? 1 : 0,
 		'snip' => html_entity_decode((string) $t['snippet'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), 'cnt' => (int) $t['msg_count'], 'att' => (int) $t['has_attach'], 'at' => cp_mail_local($t['last_at']),
 		'fol' => array_values(array_filter(array_map('intval', explode(',', (string) $t['followers'])))), 'tags' => (string) $t['tags'],
@@ -364,6 +364,7 @@ function cp_mail_ajax_threads() {
 	if (!cp_mail_db_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 	global $wpdb;
 	$w = array('1=1');
+	cp_mail_snooze_due();
 	$folder = sanitize_key(wp_unslash($_POST['folder'] ?? 'inbox'));
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($folder === 'follow') { $w[] = $wpdb->prepare('FIND_IN_SET(%d, followers)', $me); }
@@ -529,7 +530,7 @@ function cp_mail_event_text($f, $set, $t) {
 /* ------------------------------------------------------------ v1.47: tömeges műveletek a kijelölt levélszálakon
  * Csak a panelben hat (olvasott, címke, felelős, lezárás, mappa) – a postafiókban és a Salesmate-ben semmi nem változik. */
 function cp_mail_folder_name($f) {
-	return array('inbox' => 'Beérkezett', 'archive' => 'Archív', 'trash' => 'Kuka', 'spam' => 'Spam', 'promo' => 'Promóciók', 'sent' => 'Elküldött', 'outbox' => 'Kimenő', 'draft' => 'Piszkozatok')[$f] ?? $f;
+	return array('inbox' => 'Beérkezett', 'snooze' => 'Szundi', 'archive' => 'Archív', 'trash' => 'Kuka', 'spam' => 'Spam', 'promo' => 'Promóciók', 'sent' => 'Elküldött', 'outbox' => 'Kimenő', 'draft' => 'Piszkozatok')[$f] ?? $f;
 }
 add_action('wp_ajax_nopriv_cp_mail_bulk', 'cp_mail_ajax_bulk');
 add_action('wp_ajax_cp_mail_bulk', 'cp_mail_ajax_bulk');
@@ -542,7 +543,11 @@ function cp_mail_ajax_bulk() {
 	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) wp_unslash($_POST['ids'] ?? '')))))), 0, 500);
 	$op = sanitize_key(wp_unslash($_POST['op'] ?? ''));
 	$v = (string) wp_unslash($_POST['v'] ?? '');
-	if (!$ids || !in_array($op, array('read', 'unread', 'close', 'open', 'assign', 'tag', 'archive', 'trash', 'spam', 'restore'), true)) { cp_el_err('Hibás kérés.'); }
+	if (!$ids || !in_array($op, array('read', 'unread', 'close', 'open', 'assign', 'tag', 'archive', 'trash', 'spam', 'restore', 'snooze'), true)) { cp_el_err('Hibás kérés.'); }
+	/* v2.8.2: szundi – a megadott időpontig a Szundi mappában, utána vissza a Beérkezettbe olvasatlanként */
+	$sz = $op === 'snooze' ? (int) $v : 0;
+	if ($op === 'snooze' && ($sz < time() + 60 || $sz > time() + 366 * DAY_IN_SECONDS)) { cp_el_err('Válassz egy jövőbeli időpontot (legfeljebb egy évre előre).'); }
+	$szm = get_option('cp_mail_snooze', array()); if (!is_array($szm)) { $szm = array(); }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	$who = function_exists('cp_panel_who') ? cp_panel_who() : '';
 	$now = gmdate('Y-m-d H:i:s');
@@ -575,8 +580,16 @@ function cp_mail_ajax_bulk() {
 				if ($legacy && $op === 'archive') { $set['prev_folder'] = 'inbox'; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
 				elseif ($t['folder'] !== $op) { $set['folder'] = $op; $set['prev_folder'] = $legacy ? 'inbox' : $t['folder']; $ev = 'Áthelyezve: ' . cp_mail_folder_name($op); }
 				break;
+			case 'snooze':
+				$legacy = $t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true);
+				$set['folder'] = 'snooze';
+				if ($t['folder'] !== 'snooze') { $set['prev_folder'] = $legacy || in_array($t['folder'], array('trash', 'spam'), true) ? 'inbox' : $t['folder']; }
+				$szm[(int) $t['id']] = array('ts' => $sz, 'uid' => $me);
+				$ev = 'Szundi eddig: ' . wp_date('Y.m.d. H:i', $sz);
+				break;
 			case 'restore':
-				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive'), true) && !in_array($t['folder'], array('promo'), true) ? $t['prev_folder'] : 'inbox';
+				unset($szm[(int) $t['id']]);
+				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive', 'snooze'), true) && !in_array($t['folder'], array('promo'), true) ? $t['prev_folder'] : 'inbox';
 				if ($t['folder'] !== $to) { $set['folder'] = $to; $set['prev_folder'] = ''; $set['status'] = 'open'; $ev = 'Visszaállítva: ' . cp_mail_folder_name($to); }
 				break;
 		}
@@ -585,6 +598,7 @@ function cp_mail_ajax_bulk() {
 		$n++;
 		if ($ev !== '') { $wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => $op, 'text' => $ev, 'author_uid' => $me, 'author' => $who, 'created_at' => $now)); }
 	}
+	if (in_array($op, array('snooze', 'restore'), true)) { update_option('cp_mail_snooze', $szm, false); }
 	if ($op === 'assign' && $uid && $n && $uid !== $me && function_exists('cp_notify')) {
 		cp_notify($uid, 'mail_assign', $n === 1 ? 'rád osztott egy levélszálat' : 'rád osztott ' . $n . ' levélszálat', 'mail:' . (int) $rows[0]['id']);
 	}
@@ -655,3 +669,24 @@ function cp_mail_ajax_presence() {
 	$last = (int) $wpdb->get_var($wpdb->prepare('SELECT MAX(id) FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d', $tid));
 	wp_send_json_success(array('who' => $who, 'last' => $last));
 }
+
+/* v2.8.2: lejárt szundik – vissza az eredeti mappába (Beérkezett), nyitottként és olvasatlanként, a szundizónak értesítés.
+ * Ha közben új levél jött (a beolvasás a szálat már visszatette a Beérkezettbe), csak a jegyzéket takarítja. */
+function cp_mail_snooze_due() {
+	$m = get_option('cp_mail_snooze', array());
+	if (!is_array($m) || !$m || !function_exists('cp_mail_db_ok') || !cp_mail_db_ok()) { return; }
+	global $wpdb; $T = cp_mail_t('threads'); $now = time(); $ch = false;
+	foreach ($m as $id => $x) {
+		$t = $wpdb->get_row($wpdb->prepare("SELECT id, folder, prev_folder, subject FROM $T WHERE id = %d", (int) $id), ARRAY_A);
+		if (!$t || $t['folder'] !== 'snooze') { unset($m[$id]); $ch = true; continue; }
+		if ((int) ($x['ts'] ?? 0) > $now) { continue; }
+		$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive', 'snooze'), true) ? $t['prev_folder'] : 'inbox';
+		$wpdb->update($T, array('folder' => $to, 'prev_folder' => '', 'status' => 'open', 'seen_at' => null), array('id' => (int) $id));
+		$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $id, 'kind' => 'snooze', 'text' => 'Szundi lejárt – vissza a ' . cp_mail_folder_name($to) . ' mappába', 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+		if (!empty($x['uid']) && function_exists('cp_notify')) { cp_notify((int) $x['uid'], 'mail_follow', 'visszatért a szundizott levélszál: „' . mb_substr((string) $t['subject'], 0, 100) . '”', 'mail:' . (int) $id, 'Crazy panel'); }
+		unset($m[$id]); $ch = true;
+	}
+	if ($ch) { update_option('cp_mail_snooze', $m, false); }
+}
+add_action('cp_crm_tick', 'cp_mail_snooze_due', 40);
+
