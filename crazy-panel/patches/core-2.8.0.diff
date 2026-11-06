@@ -1,0 +1,43 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php.bak283	2026-11-06 06:22:02.990407225 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-06 06:22:03.006448801 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.7.13');
++define('CP_PANEL_VER', '2.8.0');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -713,6 +713,7 @@
+ 	echo '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
+ 	echo '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">';
+ 	echo '<link rel="stylesheet" href="' . esc_url(plugins_url('assets/panel.css', __FILE__)) . '?v=' . CP_PANEL_VER . '">';
++	if (function_exists('cp_pwa_head')) { cp_pwa_head(); } /* v2.8: telepíthető app */
+ 	echo '</head>';
+ }
+ 
+@@ -775,6 +776,7 @@
+ 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
+ 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+ 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
++		'pwa'        => function_exists('cp_pwa_cfg') ? cp_pwa_cfg() : array('on' => false),
+ 	);
+ 	cp_panel_head('Crazy panel');
+ 	echo '<body><div id="cpx-app"></div>';
+@@ -798,6 +800,7 @@
+ 	if (!empty($cfg['wl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/worklog.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['kz']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/kezelok.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	if (!empty($cfg['gcal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/gcal.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
++	if (function_exists('cp_pwa_cfg')) { echo '<script src="' . esc_url(plugins_url('assets/pwa.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+ 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '<script src="' . esc_url(plugins_url('assets/mnav.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
+ 	echo '</body></html>';
+@@ -3760,6 +3763,7 @@
+ require_once __DIR__ . '/contract.php';
+ require_once __DIR__ . '/mail-html.php';
+ require_once __DIR__ . '/cutover.php';
++require_once __DIR__ . '/pwa.php';
+ 
+ /* =====================================================================
+  * ÁKOS TÁRCA (v1.9) – Tárca fül + egyenleg az Elszámolás fülön

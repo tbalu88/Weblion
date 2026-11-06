@@ -133,10 +133,10 @@ function cp_wf_ajax_send() {
 	/* a látogató azonnal továbbmegy; a deal a válasz után készül (a lassú Salesmate ne tartsa fel) */
 	ignore_user_abort(true);
 	$out = wp_json_encode(array('ok' => 1, 'redirect' => $redirect));
-	if (function_exists('fastcgi_finish_request')) {
+	if (function_exists('fastcgi_finish_request') || function_exists('litespeed_finish_request')) {
 		header('Content-Type: application/json; charset=UTF-8');
 		echo $out;
-		fastcgi_finish_request();
+		if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); } else { litespeed_finish_request(); }
 		cp_wf_after($lid);
 		exit;
 	}

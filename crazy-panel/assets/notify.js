@@ -106,7 +106,7 @@
 		V.main = main || V.main;
 		const m = V.main;
 		if (!m) return;
-		if (!m.querySelector('.ntp')) m.innerHTML = '<div class="ntp"><div class="ntp-h"><h2>Értesítések</h2><div class="ntp-tools"></div></div><div class="ntp-l"><div class="cpx-ntn">Betöltés…</div></div></div>';
+		if (!m.querySelector('.ntp')) { m.innerHTML = '<div class="ntp"><div class="ntp-h"><h2>Értesítések</h2><div class="ntp-tools"></div></div><div class="ntp-dev" data-dev hidden></div><div class="ntp-l"><div class="cpx-ntn">Betöltés…</div></div></div>'; drawDev(m); }
 		let x;
 		try { x = await post('cp_nt_list', { lim: V.lim, un: V.un ? 1 : '' }); } catch (e) { m.querySelector('.ntp-l').innerHTML = '<div class="cpx-ntn">' + esc(e.message) + '</div>'; return; }
 		if (!m.isConnected || !m.querySelector('.ntp')) return;
@@ -132,6 +132,41 @@
 			go(b.dataset.link);
 		}));
 	}
+	/* v2.8: telepíthető app + push-értesítés erre az eszközre */
+	async function drawDev(m) {
+		const el = m.querySelector('[data-dev]');
+		if (!el || !window.CPPwa) return;
+		let st; try { st = await window.CPPwa.state(); } catch (e) { return; }
+		if (!st.sw) return;
+		const B = (k, t, cls) => '<button type="button" class="cpx-btn ' + (cls || 'ghost') + ' sm" data-dv="' + k + '">' + t + '</button>';
+		let h = '';
+		if (st.ios && !st.standalone) {
+			h = '<div><b>📲 Crazy panel app a telefonon</b><small>iPhone-on: Safariban a <b>Megosztás</b> gomb → <b>Főképernyőhöz adás</b>. Utána a kezdőképernyőn lévő ikonról nyisd meg, és itt bekapcsolhatod az értesítéseket.</small></div>';
+		} else {
+			const parts = [];
+			if (st.install) parts.push(B('install', '📲 Telepítés', ''));
+			if (st.canPush) {
+				if (st.on) { parts.push(B('test', 'Próbaértesítés')); parts.push(B('off', 'Kikapcsolás')); }
+				else if (st.perm === 'denied') { /* a gomb nem segít: magyarázat */ }
+				else parts.push(B('on', '🔔 Bekapcsolás', ''));
+			}
+			const txt = !st.canPush ? 'Ez a böngésző nem tud push-értesítést fogadni.' : st.on ? 'Ezen az eszközön <b>bekapcsolva</b>: az értesítések akkor is megjönnek, ha a panel nincs nyitva.' : st.perm === 'denied' ? 'Az értesítések ezen az eszközön le vannak tiltva – a böngésző / telefon beállításaiban engedélyezheted a panelnek.' : 'Kapj értesítést erre az eszközre is (új ajánlatkérés, megemlítés, kiosztás), akkor is, ha a panel nincs nyitva.';
+			h = '<div><b>🔔 Értesítések ezen az eszközön</b><small>' + txt + (st.install ? ' A panel telepíthető is: saját ikon, külön ablak.' : '') + '</small></div><span class="ntp-dvb">' + parts.join('') + '</span>';
+		}
+		el.innerHTML = h; el.hidden = false;
+		el.querySelectorAll('[data-dv]').forEach(b => b.addEventListener('click', async () => {
+			const k = b.dataset.dv; b.disabled = true;
+			try {
+				if (k === 'on') { await window.CPPwa.enable(); flash('Értesítések bekapcsolva ezen az eszközön.'); }
+				if (k === 'off') { await window.CPPwa.disable(); flash('Értesítések kikapcsolva ezen az eszközön.'); }
+				if (k === 'test') { const r = await window.CPPwa.test(); flash(r.ok ? 'Próbaértesítés elküldve (' + r.ok + ' eszközre).' : 'Nem sikerült elküldeni' + (r.err ? ': ' + r.err : '.')); }
+				if (k === 'install') { await window.CPPwa.install(); }
+			} catch (e) { flash(e.message); }
+			drawDev(m);
+		}));
+	}
+	function flash(t) { let d = document.getElementById('cpx-toast'); if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; document.body.appendChild(d); } d.textContent = t; d.classList.add('on'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), 4000); }
+	document.addEventListener('cp-pwa', () => { if (V.main && V.main.isConnected) drawDev(V.main); });
 	function openPage() { if (window.CPXGo) { V.lim = 60; window.CPXGo('ertesitesek'); } else { open(); } }
 
 	function mount() {
@@ -163,6 +198,7 @@
 		'.ntp-i.new{background:#EEF3FD}.ntp-i.new:hover{background:#E4ECFC}.ntp-i.new .ntp-t:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#2F5BD8;margin-right:7px;vertical-align:2px}' +
 		'.ntp-k{flex:none;width:22px;text-align:center;color:#6B6F78;font-size:15px}.ntp-t{flex:1;min-width:0;overflow-wrap:anywhere}.ntp-a{flex:none;color:#8A8E96;font-size:12px;padding-top:2px}' +
 		'.ntp-more{display:block;width:100%;margin:14px 0 0;padding:11px;border:1px dashed #E2DDD5;border-radius:12px;background:transparent;color:#5B6275;font:600 13px Inter,sans-serif;cursor:pointer}.ntp-more[disabled]{opacity:.6}' +
+		'.ntp-dev{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #E6E3DE;border-radius:14px;padding:12px 16px;margin:0 0 6px}.ntp-dev[hidden]{display:none}.ntp-dev b{font:700 14px Inter,sans-serif;color:#141C33}.ntp-dev small{display:block;color:#5B6275;font:13px/1.45 Inter,sans-serif;margin-top:3px;max-width:560px}.ntp-dvb{display:flex;gap:6px;flex-wrap:wrap}.ntp-dvb .sm{height:32px;padding:0 14px;font-size:13px}' +
 		'@media (max-width:600px){.ntp-h h2{font-size:19px}.ntp-i{padding:12px}}';
 	document.head.appendChild(css);
 	let tries = 0;
