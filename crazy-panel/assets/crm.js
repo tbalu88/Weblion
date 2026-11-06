@@ -682,8 +682,10 @@
 		if (/^(services_|extras|tags)/.test(k)) return String(v).split(' | ').map(x => '<span class="crm-tag">' + esc(x) + '</span>').join(' ');
 		return esc(v).replace(/\n/g, '<br>');
 	}
+	const ALWAYS_K = ['km_fee'];
 	function dl(d, keys, inl) {
-		const rows = keys.map(k => { const v = fmtVal(k, d[k], d); return v ? '<dt>' + esc(LBL[k] || k) + '</dt><dd' + (inl ? ikA(k) : '') + '>' + v + '</dd>' : ''; }).join('');
+		/* v2.9.13: a kiszállási díj üresen is látszik, hogy rögtön kézzel beírható legyen */
+		const rows = keys.map(k => { let v = fmtVal(k, d[k], d); if (!v && inl && ALWAYS_K.includes(k) && ikA(k)) v = '<span class="cpx-muted">– kattints a megadáshoz</span>'; return v ? '<dt>' + esc(LBL[k] || k) + '</dt><dd' + (inl ? ikA(k) : '') + '>' + v + '</dd>' : ''; }).join('');
 		return rows ? '<dl class="crm-dl">' + rows + '</dl>' : '';
 	}
 	function sheet(html) {
