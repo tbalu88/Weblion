@@ -401,7 +401,7 @@ function cp_mail_thread_full($id) {
 	$t = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $id), ARRAY_A);
 	if (!$t) { return null; }
 	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, ' . ((int) get_option('cp_mail_db_ver') >= 9 ? 'reply_to' : "'' reply_to") . ', CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
-	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); }
+	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
 	unset($m);
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);
 	foreach ($notes as &$n) { $n['id'] = (int) $n['id']; $n['author_uid'] = (int) $n['author_uid']; $n['created_at'] = cp_mail_local($n['created_at']); }

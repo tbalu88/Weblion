@@ -97,8 +97,36 @@ function cp_imp_decode($data, $enc, $charset) {
 	return $data;
 }
 function cp_imp_param($part, $name) {
-	foreach (array('parameters', 'dparameters') as $k) { if (!empty($part->$k)) { foreach ($part->$k as $p) { if (strtolower($p->attribute) === $name || strtolower($p->attribute) === $name . '*') { return cp_imp_hdr($p->value); } } } }
+	/* v2.8.6: RFC 2231 is – filename*=utf-8''AI%20Karikat%C3%BAra.jpg, és a darabolt filename*0*, filename*1* … */
+	foreach (array('dparameters', 'parameters') as $k) {
+		if (empty($part->$k)) { continue; }
+		$plain = ''; $pieces = array();
+		foreach ($part->$k as $p) {
+			$a = strtolower((string) $p->attribute);
+			if ($a === $name) { $plain = (string) $p->value; }
+			elseif ($a === $name . '*') { $pieces[0] = array(true, (string) $p->value); }
+			elseif (preg_match('/^' . preg_quote($name, '/') . '\*(\d+)(\*?)$/', $a, $m)) { $pieces[(int) $m[1]] = array($m[2] === '*', (string) $p->value); }
+		}
+		if ($pieces) {
+			ksort($pieces); $raw = '';
+			foreach ($pieces as $x) { $raw .= $x[1]; }
+			return cp_mail_fname($pieces[array_key_first($pieces)][0] ? $raw : $raw);
+		}
+		if ($plain !== '') { return cp_mail_fname(cp_imp_hdr($plain)); }
+	}
 	return '';
+}
+/* fájlnév kiolvasása: RFC 2231 (charset'nyelv'%XX), MIME-fejléc (=?utf-8?…?=), és a Mac-es szétbontott ékezetek összevonása (u + ́ → ú) */
+function cp_mail_fname($s) {
+	$s = trim((string) $s, " \t\"'");
+	if (preg_match("/^([A-Za-z0-9_-]+)'[A-Za-z-]*'(.*)$/s", $s, $m)) {
+		$v = rawurldecode($m[2]);
+		$cs = strtoupper($m[1]);
+		if ($cs !== 'UTF-8' && $cs !== 'US-ASCII' && function_exists('mb_convert_encoding')) { $c = @mb_convert_encoding($v, 'UTF-8', $cs); if ($c !== false) { $v = $c; } }
+		$s = $v;
+	} elseif (strpos($s, '=?') !== false && function_exists('cp_imp_hdr')) { $s = cp_imp_hdr($s); }
+	if (class_exists('Normalizer') && mb_check_encoding($s, 'UTF-8')) { $n = Normalizer::normalize($s, Normalizer::FORM_C); if ($n !== false) { $s = $n; } }
+	return $s;
 }
 /* a részek bejárása: első text/plain és text/html, mellékletnevek */
 function cp_imp_walk($mb, $uid, $part, $num, &$acc) {

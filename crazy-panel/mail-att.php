@@ -133,8 +133,10 @@ function cp_att_ajax_get() {
 	}
 	$parts = cp_att_parts($mb, $loc[1]);
 	/* elsősorban a sorszám, ha a név is egyezik; különben név szerint */
-	$p = isset($parts[$i]) && $parts[$i]['n'] === $a['n'] ? $parts[$i] : null;
-	if (!$p) { foreach ($parts as $x) { if ($x['n'] === $a['n']) { $p = $x; break; } } }
+	/* v2.8.6: a régi (kódolt nevű) bejegyzés is párosodjon a postafiók most már kiolvasott nevével */
+	$nn = function ($v) { return function_exists('cp_mail_fname') ? cp_mail_fname((string) $v) : (string) $v; };
+	$p = isset($parts[$i]) && $nn($parts[$i]['n']) === $nn($a['n']) ? $parts[$i] : null;
+	if (!$p) { foreach ($parts as $x) { if ($nn($x['n']) === $nn($a['n'])) { $p = $x; break; } } }
 	if (!$p) { imap_close($mb); cp_att_fail('A melléklet nincs meg a levélben.'); }
 	if ($p['size'] > 40 * 1024 * 1024) { imap_close($mb); cp_att_fail('A melléklet túl nagy a panelhez (40 MB felett) – nyisd meg levelezőprogramból.'); }
 	$raw = (string) imap_fetchbody($mb, $loc[1], $p['num'], FT_UID | FT_PEEK);
