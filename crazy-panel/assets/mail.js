@@ -987,8 +987,8 @@
 		const SIG = M.sig ? '<div class="cp-sign">' + M.sig + '</div>' : '';
 		const withSig = b => { b = b || ''; if (!SIG || /cp-sign/.test(b)) return b; if (ctx.quote && b.indexOf(ctx.quote) >= 0) return b.replace(ctx.quote, SIG + ctx.quote); return b + SIG; };
 		const ed = editor(q('[data-ed]'), withSig(draft ? (draft.quote && draft.body === draft.quote ? '<p><br></p>' + draft.body : draft.body) : '<p><br></p>'));
-		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), []);
-		if (draft && draft.cc && draft.cc.length) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
+		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), draft && draft.bcc ? draft.bcc : []);
+		if (draft && ((draft.cc && draft.cc.length) || (draft.bcc && draft.bcc.length))) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
 		if (draft && draft.deal) deal = { id: Number(draft.deal), title: draft.dealTitle || ('Deal #' + draft.deal) };
 		/* v1.54: AI-válasz a válaszíróban is – a piszkozat az idézett levél fölé kerül */
 		const cai = q('[data-cai]');
@@ -1023,9 +1023,12 @@
 		const sendBtn = q('[data-send]'), testBtn = q('[data-test]');
 		/* v1.54: mellékletek csatolása (feltöltés a szerverre, küldéskor a levélhez) */
 		const atts = [];
+		/* v2.8.7: visszavont küldésből visszatérve a már feltöltött mellékletek is megmaradnak */
+		if (draft && Array.isArray(draft.atts)) draft.atts.filter(a => a && a.tok).forEach(a => atts.push({ n: a.n, size: a.size || 0, tok: a.tok, err: '' }));
 		const attBox = document.createElement('div'); attBox.className = 'ml-attl'; q('[data-ed]').after(attBox);
 		const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
 		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : 'feltöltés…') + '</small><button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); };
+		if (atts.length) setTimeout(drawAtt, 0); /* v2.8.7: visszavont küldésből megmaradt mellékletek */
 		const upload = async file => {
 			const a = { n: file.name, size: file.size, tok: '', err: '' }; atts.push(a); drawAtt();
 			if (file.size > 15 * 1048576) { a.err = 'túl nagy (max. 15 MB)'; drawAtt(); return; }
@@ -1073,7 +1076,19 @@
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
-			if (!test && !force) { const ok = await undoWait(20); if (!ok) { b.disabled = false; b.textContent = old; toast('Küldés visszavonva – a levél itt maradt, szerkesztheted.'); return; } }
+			if (!test && !force) {
+				/* v2.8.7: a levél tartalma a visszaszámlálás előtt félretéve – ha közben máshová lépsz a panelben, a visszavonás piszkozatként visszahozza a levélírót */
+				const snap = { to: tl, cc: cc.get(), bcc: bcc.get(), subject: sj, body: body, thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) };
+				const ok = await undoWait(20);
+				if (!ok) {
+					try { localStorage.setItem('cpmail_draft', JSON.stringify(snap)); } catch (e) { /* privát mód */ }
+					if (box.isConnected && S.view === 'compose') { b.disabled = false; b.textContent = old; toast('Küldés visszavonva – a levél itt maradt, szerkesztheted.'); return; }
+					S.reply = snap; S.view = 'compose';
+					if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main);
+					setTimeout(() => toast('Küldés visszavonva – a levél piszkozatként itt van, szerkesztheted.'), 300);
+					return;
+				}
+			}
 			try {
 				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '' });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
@@ -1081,7 +1096,8 @@
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
 				/* v1.84: a hívó (pl. „Ajánlat küldése” a dealen) értesítése a sikeres küldésről */
 				if (S.onSent) { const f = S.onSent; S.onSent = null; try { f(r); } catch (x) { /* a levél elment */ } }
-				open(r.thread);
+				/* v2.8.7: ha közben máshová léptél a panelben, nem ránt vissza a Levelezésbe */
+				if (box.isConnected) open(r.thread);
 			} catch (e) {
 				b.disabled = false; b.textContent = old;
 				/* v2.7.13: közben válasz / új levél jött a szálba – rákérdez, és csak megerősítés után küld */
