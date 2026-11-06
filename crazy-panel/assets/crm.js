@@ -1046,7 +1046,9 @@
 			(R.edit && !d.deleted_at ? ab('pri', 'data-edit', AI.edit, 'Szerkesztés') : '') +
 			(window.CPMail && window.CPMail.canSend && window.CPMail.canSend() ? ab('', 'data-d3mail title="Új levél a deal kontaktjának (a levél a dealhez kötve)"', AI.mail, 'E-mail') : '') +
 			(window.CPKanban ? ab('', 'data-todo title="Teendő felvétele a Feladatokba"', AI.todo, 'Teendő') : '') +
-			(smUrl ? '<a class="d3-ab" href="' + esc(smUrl) + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + AI.ext + '<span>Salesmate</span></a>' : '') + '</div></div>' +
+			(smUrl ? '<a class="d3-ab" href="' + esc(smUrl) + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + AI.ext + '<span>Salesmate</span></a>' : '') +
+			/* v2.9.18: deal törlése az adatlapról (csak admin) */
+			(W && C.role === 'admin' && !d.deleted_at ? ab('bad', 'data-d3del title="Végleges törlés (a Salesmate-ből is) – csak admin"', AI.no, 'Törlés') : '') + '</div></div>' +
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
@@ -1119,6 +1121,15 @@
 		/* v2.9.1: e-mail küldése a dealből – a levélíró a kontakt címével, a dealhez kötve */
 		const d3m = sh.querySelector('[data-d3mail]');
 		if (d3m) d3m.addEventListener('click', () => { const to = c && c.email ? [c.email] : []; window.CPMail.compose({ to: to, subject: '', body: '', deal: d.id, dealTitle: d.title }); });
+		const d3d = sh.querySelector('[data-d3del]');
+		if (d3d) d3d.addEventListener('click', async () => {
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: „' + (d.title || '#' + d.id) + '”.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			if (w === null) return;
+			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
+			d3d.disabled = true;
+			try { await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id)); closePage(); hideModal(); load(); }
+			catch (e) { d3d.disabled = false; toast(e.message, true); }
+		});
 		const todo = sh.querySelector('[data-todo]');
 		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(sh.querySelector('[data-kbq]'), { title: d.title || 'Deal #' + d.id, deal: d.id, onDone: () => window.CPKanban.linked(kbl, { deal: d.id }) }));
 		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id, back); };
