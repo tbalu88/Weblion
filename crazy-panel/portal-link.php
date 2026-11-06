@@ -73,7 +73,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$ev = array();
 	$p = cp_portal_get_by_deal($id);
 	if ($p) {
-		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve');
+		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve', 'mail' => 'Portál-link levélben elküldve (panel)');
 		foreach ((array) cp_portal_notifications($p->id) as $n) {
 			$t = explode(':', (string) $n->type)[0];
 			$ev[] = array('at' => wp_date('Y-m-d H:i', cp_portal_db_ts($n->sent_at)), 'text' => $N[$t] ?? ('Portál: ' . $t), 'ch' => (string) $n->channel, 'ok' => strpos((string) $n->result, 'ok') === 0 || $n->result === '' ? 1 : 0);
@@ -107,6 +107,8 @@ function cp_plk_ajax_link() {
 	$deal = preg_replace('/[^0-9]/', '', (string) wp_unslash($_POST['deal'] ?? ''));
 	if ($deal === '') { cp_el_err('Előbb válassz deal-t a levélhez.'); }
 	$p = cp_portal_get_by_deal($deal);
+	/* v2.9.7: csak az állapot a levélíró gombjára (link kiadása nélkül) */
+	if (!empty($_POST['peek'])) { wp_send_json_success($p ? array('none' => 0, 'summary' => cp_plk_summary($deal)) : array('none' => 1)); }
 	if (!$p) {
 		if (empty($_POST['create'])) { wp_send_json_success(array('none' => 1)); }
 		$p = cp_portal_create($deal, null, 'panel', 'v2', false);
@@ -120,3 +122,31 @@ function cp_plk_ajax_link() {
 
 /* a levélszál deal-kártyájára is: portál-állapot */
 function cp_plk_chip($deal_id) { $s = cp_plk_summary($deal_id); return $s && empty($s['none']) ? array('st' => $s['st'], 'done' => $s['done'], 'total' => $s['total'], 'deadline' => $s['deadline']) : null; }
+
+/* v2.9.7: a levélíróból küldött levélben benne volt a deal portál-linkje → napló + a deal az „Adatlap kiküldve” szakaszba
+ * (ugyanaz a szabály, mint a „Ügyfélportál kiküldése” gombnál: csak ajánlati szakaszból előre, megnyert dealnél nem). Visszatér: üzenet a küldőnek, vagy ''. */
+function cp_plk_after_send($deal_id, $html) {
+	$deal_id = (string) (int) $deal_id;
+	if ($deal_id === '0' || !cp_plk_ready() || cp_portal_mode() !== 'on' || !function_exists('cp_portal_url')) { return ''; }
+	if (strpos((string) $html, cp_portal_url('/r/')) === false) { return ''; }
+	$p = cp_portal_get_by_deal($deal_id);
+	if (!$p) { return ''; }
+	cp_portal_notify_log($p, 'mail', 'email', 'ok: levélíró (panel)');
+	$o = cp_portal_opts(); $po = cp_panel_opts(); $target = cp_portal_sent_stage();
+	if (empty($o['sent_stage_write']) || $target === '' || !function_exists('cp_portal_sm_snapshot')) { return ''; }
+	$snap = cp_portal_sm_snapshot($deal_id);
+	if (is_wp_error($snap)) { return 'A szakaszt nem tudtam ellenőrizni (' . $snap->get_error_message() . ').'; }
+	$cur = (string) $snap['stage'];
+	if (cp_panel_lc($cur) === cp_panel_lc($target)) { return ''; }
+	$pending = array_map('cp_panel_lc', cp_panel_lines($po['pending_stages']));
+	if ($snap['status'] === 'won' || !in_array(cp_panel_lc($cur), $pending, true)) { return ''; }
+	$body = array('stage' => $target);
+	if ($snap['pipeline'] !== '') { $body['pipeline'] = $snap['pipeline']; }
+	$put = cp_sm_put_deal($deal_id, $body);
+	if (is_wp_error($put)) {
+		if (function_exists('cp_portal_error_add')) { cp_portal_error_add($deal_id, 'szakaszváltás', $put->get_error_message()); }
+		return 'A deal szakaszát nem sikerült átállítani („' . $target . '”): ' . $put->get_error_message();
+	}
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	return 'A deal az „' . $target . '” szakaszba került.';
+}

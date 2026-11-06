@@ -229,7 +229,9 @@ function cp_send_ajax() {
 	/* v2.9: az elküldött levél piszkozata törlődik */
 	$did = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['draft'] ?? '')));
 	if ($did !== '' && function_exists('cp_mail_drafts_get')) { $all = cp_mail_drafts_get($me); if (isset($all[$did])) { unset($all[$did]); cp_mail_drafts_put($me, $all); } }
-	wp_send_json_success(array('thread' => (int) $t['id'], 'warn' => $warn));
+	/* v2.9.7: portál-linkes levél → „Adatlap kiküldve” szakasz */
+	$pst = function_exists('cp_plk_after_send') ? cp_plk_after_send((int) ($deal ?: $t['deal_id']), $html) : '';
+	wp_send_json_success(array('thread' => (int) $t['id'], 'warn' => $warn, 'pst' => $pst));
 }
 
 /* ------------------------------------------------------------ beállítások: Beállítások → Crazy levelezés (a lap alján) */

@@ -741,7 +741,7 @@
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
 			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3><button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div><div class="ml-pres" data-pres hidden></div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
-			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
+			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + (C.portal && C.portal.on && M.send && M.send.on && d.id ? '<button type="button" class="ml-psend" data-psend title="Választ nyit erre a szálra, benne a deal személyes portál-linkjével">📝 Portál-link küldése</button>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
 				/* v1.98: lezárt / elvesztett / törölt deal figyelmeztetés, ajánlott nyitott deal */
 				(d.warn ? '<div class="ml-dwarn">⚠ ' + esc(d.warn) + (d.alt ? '<button type="button" class="cpx-btn sm" data-dalt="' + Number(d.alt.id) + '">Áthelyezés ide: ' + esc(d.alt.title) + '</button>' : '') + '</div>' : '') : '') +
 			/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
@@ -824,6 +824,9 @@
 		qa.querySelector('[data-qf]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) forward(m); });
 		qa.querySelector('[data-qn]').addEventListener('click', () => { qaShow(false); const n = rd.querySelector('[data-note]'); const nc = rd.querySelector('.ml-ncomp'); if (nc) nc.classList.add('open'); if (n) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); n.focus(); } });
 		qa.querySelector('[data-qr]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, false); });
+		/* v2.9.7: a szál deal-kártyájáról: válasz a portál-linkkel beszúrva */
+		const psb = rd.querySelector('[data-psend]');
+		if (psb) psb.addEventListener('click', () => { const m = lastM(); S.autoPortal = 1; if (m) reply(m, false); else compose({ to: t.ce ? [t.ce] : [], subject: t.subj || '', deal: d.id, dealTitle: d.title }); });
 		qa.querySelector('[data-qra]').addEventListener('click', () => { const m = lastM(); qaShow(false); if (m) reply(m, true); });
 		const bk = rd.querySelector('[data-back]');
 		/* v1.86.1: a „Vissza” gomb és a böngésző visszalépése (mobilon visszalegyintés) ugyanazt csinálja: vissza a levéllistára */
@@ -993,7 +996,7 @@
 			(SON ? '<button type="button" data-mq="test">🧪 Próbalevél magamnak</button>' : '') + '<button type="button" data-mq="prev">👁 Előnézet</button><button type="button" data-mq="save">💾 Piszkozat mentése</button>' +
 			(ctx.thread ? '<button type="button" data-mq="unthread">✉ Új levélként küldöm</button>' : '') + '<button type="button" data-mq="clear">🗑 Új, üres levél</button>' + (SON ? '' : '<small>A panelből küldés neked még nincs bekapcsolva.</small>') + '</div></div>' +
 			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>' + (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
-			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span><div data-dp class="ml-grow"></div></div>' +
+			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Ügyfélportál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-tpop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Másolat</label><div class="ml-chips" data-ccv></div></div>' +
@@ -1060,24 +1063,52 @@
 			catch (e) { a.err = e.message || 'hiba'; }
 			drawAtt();
 		};
-		/* v1.59: friss, személyes ügyfélportál-link a dealhez – gombként a levélbe */
+		/* v1.59 / v2.9.7: friss, személyes ügyfélportál-link a dealhez – gombként, mondatban vagy puszta linkként; a levélíró tetején látható gomb a portál állapotával */
+		const PM = [['btn', 'Gombként', 'narancs gomb, alatta a sima link'], ['txt', 'Szövegként', '„Az adatlapot itt töltheted ki: …”'], ['url', 'Csak a link', 'a puszta cím a kurzor helyére']];
+		let pmode = 'btn'; try { pmode = localStorage.getItem('cpmail_pmode') || 'btn'; } catch (e) { /* nincs tár */ }
+		const portalHtml = (u, m) => m === 'url' ? '<a href="' + esc(u) + '" target="_blank">' + esc(u) + '</a>&nbsp;' : m === 'txt' ? '<p>A rendezvény adatlapját itt töltheted ki: <a href="' + esc(u) + '" target="_blank">' + esc(u) + '</a></p>' :
+			'<p><a href="' + esc(u) + '" target="_blank" style="display:inline-block;background:#F2A33A;color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif">Rendezvény-adatlap kitöltése</a></p><p style="font-size:12px;color:#666666">Ha a gomb nem működik, ezt a linket másold a böngészőbe: ' + esc(u) + '</p>';
+		const pstText = sm => !sm || sm.none ? 'még nincs portál' : (sm.st === 'kesz' ? 'kitöltve ✓' : sm.done + '/' + sm.total + ' kitöltve') + (sm.deadline && sm.st !== 'kesz' ? ' · határidő: ' + sm.deadline : '');
+		const pstDraw = sm => { const el = q('[data-pst]'); if (el) { el.textContent = pstText(sm); el.parentNode.title = 'A deal személyes ügyfélportál-linkjének beszúrása · Portál: ' + pstText(sm); } };
+		let pstFor = 0;
+		/* a látható gomb csak akkor, ha a levél dealhez kötött (válasznál a szál dealje) */
+		const pbSync = async () => {
+			const w = q('[data-pbw]'); if (!w) return;
+			const did = deal && deal.id ? Number(deal.id) : 0;
+			w.hidden = !did;
+			if (!did || pstFor === did) return;
+			pstFor = did; pstDraw(null); const el = q('[data-pst]'); if (el) el.textContent = '…';
+			try { const r = await post('cp_portal_mail_link', { deal: did, peek: 1 }); if (pstFor === did) pstDraw(r.none ? null : r.summary); } catch (e) { if (el) el.textContent = ''; }
+		};
+		const insertPortal = async (m) => {
+			const did = deal && deal.id ? deal.id : 0;
+			if (!did) { toast('Előbb válassz deal-t a levélhez (fent a deal-keresőben).', true); return; }
+			try {
+				let r = await post('cp_portal_mail_link', { deal: did });
+				if (r.none) {
+					if (!window.confirm('Ehhez a dealhez még nincs ügyfélportál. Létrehozzam most (külön meghívó levél nélkül), és a linkjét ebbe a levélbe teszem?')) return;
+					r = await post('cp_portal_mail_link', { deal: did, create: 1 });
+				}
+				ed.html(portalHtml(r.url, m || pmode));
+				if (r.summary) { pstFor = Number(did); pstDraw(r.summary); }
+				toast('A személyes portál-link a levélben (csak ennek az ügyfélnek szól). Küldés után a deal – ha még ajánlati szakaszban van – magától az „Adatlap kiküldve” szakaszba lép.');
+			} catch (e) { toast(e.message, true); }
+		};
 		const pb = box.querySelector('[data-cmd="portal"]');
 		if (pb) {
 			if (!(C.portal && C.portal.on)) pb.hidden = true;
-			pb.addEventListener('click', async () => {
-				const did = deal && deal.id ? deal.id : 0;
-				if (!did) { toast('Előbb válassz deal-t a levélhez (fent a deal-keresőben).', true); return; }
-				try {
-					let r = await post('cp_portal_mail_link', { deal: did });
-					if (r.none) {
-						if (!window.confirm('Ehhez a dealhez még nincs ügyfélportál. Létrehozzam most (külön meghívó levél nélkül), és a linkjét ebbe a levélbe teszem?')) return;
-						r = await post('cp_portal_mail_link', { deal: did, create: 1 });
-					}
-					ed.html('<p><a href="' + esc(r.url) + '" target="_blank" style="display:inline-block;background:#F2A33A;color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif">Rendezvény-adatlap kitöltése</a></p><p style="font-size:12px;color:#666666">Ha a gomb nem működik, ezt a linket másold a böngészőbe: ' + esc(r.url) + '</p>');
-					toast('A személyes portál-link a levélben (csak ennek az ügyfélnek szól).');
-				} catch (e) { toast(e.message, true); }
-			});
+			pb.addEventListener('click', () => insertPortal());
 		}
+		const pins = q('[data-pins]'), pdd = q('[data-pmode]'), ppop = q('[data-ppop]');
+		if (pins) {
+			pins.addEventListener('click', () => insertPortal());
+			const pdraw = () => { ppop.innerHTML = '<div class="ml-tpop-l">' + PM.map(x => '<button type="button" data-pm="' + x[0] + '"' + (x[0] === pmode ? ' class="on"' : '') + '><b>' + (x[0] === pmode ? '✓ ' : '') + esc(x[1]) + '</b><small>' + esc(x[2]) + '</small></button>').join('') + '</div>'; };
+			pdd.addEventListener('click', e => { e.stopPropagation(); pdraw(); ppop.hidden = !ppop.hidden; });
+			ppop.addEventListener('click', e => { const b = e.target.closest('[data-pm]'); if (!b) return; e.stopPropagation(); pmode = b.dataset.pm; try { localStorage.setItem('cpmail_pmode', pmode); } catch (x) { /* nincs tár */ } ppop.hidden = true; insertPortal(pmode); });
+			document.addEventListener('click', e => { if (!ppop.hidden && !e.target.closest('[data-pbw]')) ppop.hidden = true; });
+		}
+		pbSync();
+		if (S.autoPortal) { S.autoPortal = 0; if (deal && deal.id) setTimeout(() => insertPortal(), 50); }
 		const ab = box.querySelector('[data-cmd="attach"]');
 		if (ab) {
 			if ((M.send && M.send.on)) {
@@ -1117,7 +1148,7 @@
 				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '', draft: test ? '' : draftId });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				if (!r.test) { dsent = true; clearInterval(dtimer); }
-				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : ''), !!r.warn);
+				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : '') + (r.pst ? ' ' + r.pst : ''), !!r.warn);
 				/* v1.84: a hívó (pl. „Ajánlat küldése” a dealen) értesítése a sikeres küldésről */
 				if (S.onSent) { const f = S.onSent; S.onSent = null; try { f(r); } catch (x) { /* a levél elment */ } }
 				/* v2.8.7: ha közben máshová léptél a panelben, nem ránt vissza a Levelezésbe */
@@ -1131,7 +1162,7 @@
 		};
 		if (sendBtn) sendBtn.addEventListener('click', () => doSend(false));
 		if (testBtn) testBtn.addEventListener('click', () => doSend(true));
-		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); });
+		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); pbSync(); });
 		q('[data-cc]').addEventListener('click', () => box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = !r.hidden; }));
 		q('[data-tplbtn]').addEventListener('click', e => {
 			e.stopPropagation();
