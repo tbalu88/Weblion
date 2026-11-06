@@ -317,6 +317,8 @@
 
   // Pumble-linkből érkezve (?portal=ID) rögtön megnyitjuk a részletezőt
   if (P.open) {
+    /* v2.9.23: a ?portal=ID a megnyitás után kikerül a címből, különben minden frissítés újra megnyitná az ablakot */
+    try { const u = new URL(location.href); u.searchParams.delete('portal'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) { /* régi böngésző */ }
     const go = () => { if (document.getElementById('cpx-modal')) open(P.open, 'Deal #' + P.open); else setTimeout(go, 300); };
     setTimeout(go, 600);
   }
