@@ -1,0 +1,11 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php.bak280	2026-11-06 05:47:09.276999889 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-06 05:47:09.278952770 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.7.10');
++define('CP_PANEL_VER', '2.7.11');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');

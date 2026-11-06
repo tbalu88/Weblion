@@ -11,6 +11,9 @@
 	const SVG = p => '<svg class="cpx-ico" viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
 	const I_MENU = SVG('<path d="M4 7h16M4 12h16M4 17h16"/>');
 	const I_BELL = SVG('<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>');
+	const I_MOON = SVG('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>');
+	const I_SUN = SVG('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>');
+	const dark = () => document.documentElement.getAttribute('data-theme') === 'dark';
 	const MAIN = ['deals', 'mail', 'kapcsolatok'];
 	const S = { bar: null, sheet: null };
 	const tabs = () => Array.from(document.querySelectorAll('.cpx-tabs [data-tab]')).map(b => ({ id: b.dataset.tab, label: (b.querySelector('span') || b).textContent.trim() }));
@@ -39,6 +42,8 @@
 			'<div class="mn-acts">' + (has('beallitasok') ? '<button type="button" data-a="set" title="Beállítások">' + ico('beallitasok') + '</button>' : '') +
 			(bell ? '<button type="button" data-a="bell" title="Értesítések">' + I_BELL + (bn && !bn.hidden ? '<i></i>' : '') + '</button>' : '') +
 			'<button type="button" data-a="ref" title="Frissítés a Salesmate-ből">' + ico('refresh') + '</button>' +
+			/* v2.7.11: éjszakai mód kapcsoló (nap / hold) */
+			(document.getElementById('cpx-theme') ? '<button type="button" data-a="theme" class="mn-theme" title="' + (dark() ? 'Világos mód' : 'Éjszakai mód') + '">' + (dark() ? I_SUN : I_MOON) + '</button>' : '') +
 			(C.logout ? '<a href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '</a>' : '') + '</div>' +
 			'<div class="mn-list">' + all.map(t => '<button type="button" data-go="' + esc(t.id) + '" class="' + (cur() === t.id ? 'on' : '') + '">' + ico(t.id) + '<span>' + esc(t.label) + '</span></button>').join('') + '</div></div>';
 		document.body.appendChild(sh);
@@ -49,6 +54,7 @@
 		if (a('set')) a('set').addEventListener('click', () => go('beallitasok'));
 		if (a('bell')) a('bell').addEventListener('click', e => { e.stopPropagation(); closeSheet(); const b = document.querySelector('.cpx-bell'); if (b) b.click(); });
 		a('ref').addEventListener('click', () => { closeSheet(); const r = document.getElementById('cpx-refresh'); if (r) r.click(); });
+		if (a('theme')) a('theme').addEventListener('click', () => { const t = document.getElementById('cpx-theme'); if (t) t.click(); const x = a('theme'); x.innerHTML = dark() ? I_SUN : I_MOON; x.title = dark() ? 'Világos mód' : 'Éjszakai mód'; });
 		mark();
 	}
 
