@@ -83,7 +83,14 @@ function cp_nt_ajax_list() {
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($me <= 0 || !cp_nt_db_ok()) { wp_send_json_success(array('rows' => array(), 'unread' => 0, 'off' => 1)); }
 	$unread = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_nt_t() . ' WHERE uid = %d AND read_at IS NULL', $me));
-	if (!empty($_POST['count'])) { wp_send_json_success(array('unread' => $unread)); }
+	if (!empty($_POST['count'])) {
+		/* v2.7.9: a Levelezés menüpont számlálója – a Beérkezett olvasatlan nyitott szálai */
+		$mu = null;
+		if (function_exists('cp_mail_t') && function_exists('cp_mail_db_ok') && cp_mail_db_ok() && (!function_exists('cp_pu_can') || cp_pu_can('mail'))) {
+			$mu = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE folder = 'inbox' AND status = 'open' AND (seen_at IS NULL OR seen_at < last_at)");
+		}
+		wp_send_json_success(array('unread' => $unread, 'mail' => $mu));
+	}
 	/* v2.7.6: az Értesítések oldal lapoz (lim) és szűr (un: csak olvasatlan) */
 	$lim = max(40, min(1000, (int) ($_POST['lim'] ?? 40)));
 	$wu = !empty($_POST['un']) ? ' AND read_at IS NULL' : '';

@@ -34,8 +34,19 @@
 		b.hidden = !S.n;
 		S.btn.title = S.n ? S.n + ' olvasatlan értesítés' : 'Értesítések';
 	}
+	/* v2.7.9: olvasatlan levelek száma a Levelezés menüpont mellett (a menü újrarajzolása után is visszakerül) */
+	function mailBadge() {
+		document.querySelectorAll('.cpx-tabs [data-tab="mail"]').forEach(btn => {
+			let n = btn.querySelector('.cpx-tab-n');
+			if (!S.mail) { if (n) n.remove(); return; }
+			if (!n) { n = document.createElement('b'); n.className = 'cpx-tab-n'; btn.appendChild(n); }
+			n.textContent = S.mail > 99 ? '99+' : String(S.mail);
+			btn.title = 'Levelezés – ' + S.mail + ' olvasatlan levél a Beérkezettben';
+		});
+	}
+	new MutationObserver(() => { if (S.mail && !document.querySelector('.cpx-tabs [data-tab="mail"] .cpx-tab-n')) mailBadge(); }).observe(document.documentElement, { childList: true, subtree: true });
 	async function poll() {
-		try { const r = await post('cp_nt_list', { count: 1 }); S.n = r.unread || 0; badge(); } catch (e) { /* csendben újra */ }
+		try { const r = await post('cp_nt_list', { count: 1 }); S.n = r.unread || 0; badge(); if (r.mail != null) { S.mail = r.mail; mailBadge(); } } catch (e) { /* csendben újra */ }
 	}
 
 	/* a cél megnyitása: „feladatok:12”, „feladatok:mine”, „mail:3” */
@@ -157,4 +168,6 @@
 	let tries = 0;
 	const t = setInterval(() => { if (mount() || ++tries > 50) { clearInterval(t); poll(); setInterval(() => { if (!document.hidden) poll(); }, 60000); } }, 200);
 	window.CPNotify = { go, poll, view: m => view(m), refresh: () => view() };
+	/* a levél megnyitása / olvasottnak jelölése után hamarabb frissüljön a szám */
+	document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.ml-item, [data-one="read"], [data-bulk], [data-tab="mail"]')) { clearTimeout(S.mt); S.mt = setTimeout(poll, 2500); } }, true);
 })();
