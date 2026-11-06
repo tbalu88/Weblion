@@ -1001,7 +1001,7 @@
 			try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ km_fee: String(v) }), c: '{}' }); toast('A kiszállási díj (' + (v ? money(v) : '0 Ft') + ') beírva a dealbe – a Salesmate-ben is.'); reload(); }
 			catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Újra'; } toast(e.message, true); }
 		};
-		const man = () => W ? '<form class="d3-trvm" data-trvm><label>Kézi összeg<input type="number" min="0" step="500" inputmode="numeric" value="' + (cur ? cur : '') + '" placeholder="pl. 15000"> Ft</label><button type="submit" class="cpx-btn sm ghost">Mentés</button></form>' : '';
+		const man = () => W ? '<form class="d3-trvm" data-trvm novalidate><label>Kézi összeg<input type="number" min="0" step="1" inputmode="numeric" value="' + (cur ? cur : '') + '" placeholder="pl. 15000"> Ft</label><button type="submit" class="cpx-btn sm ghost">Mentés</button></form>' : '';
 		const wire = () => {
 			const f = box.querySelector('[data-trvm]');
 			if (f) f.addEventListener('submit', e => { e.preventDefault(); const i = f.querySelector('input'), v = Math.round(Number(i.value)); if (i.value === '' || !(v >= 0)) { toast('Adj meg egy összeget (Ft).', true); i.focus(); return; } if (v === cur) { toast('A dealen is ennyi szerepel.'); return; } save(v, f.querySelector('button')); });

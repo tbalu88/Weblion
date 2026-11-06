@@ -73,7 +73,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$ev = array();
 	$p = cp_portal_get_by_deal($id);
 	if ($p) {
-		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve', 'mail' => 'Portál-link levélben elküldve (panel)');
+		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve', 'mail' => 'Portál-link levélben elküldve (panel)', 'contract_ready' => 'Az ügyfél beküldte a szerződéshez szükséges adatokat', 'contract_update' => 'Az ügyfél módosította a szerződés adatait');
 		foreach ((array) cp_portal_notifications($p->id) as $n) {
 			$t = explode(':', (string) $n->type)[0];
 			$ev[] = array('at' => wp_date('Y-m-d H:i', cp_portal_db_ts($n->sent_at)), 'text' => $N[$t] ?? ('Portál: ' . $t), 'ch' => (string) $n->channel, 'ok' => strpos((string) $n->result, 'ok') === 0 || $n->result === '' ? 1 : 0);
