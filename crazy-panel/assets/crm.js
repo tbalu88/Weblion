@@ -360,7 +360,7 @@
 			});
 		}
 		if (act === 'del') {
-			const w = window.prompt('Végleges törlés a Salesmate-ből is: ' + rows.length + ' deal.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: ' + rows.length + ' deal.\nVelük együtt törlődik az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük, a levélszálaik a Kukába kerülnek.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
 			if (w === null) return;
 			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
 			return runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' }));
@@ -1123,11 +1123,16 @@
 		if (d3m) d3m.addEventListener('click', () => { const to = c && c.email ? [c.email] : []; window.CPMail.compose({ to: to, subject: '', body: '', deal: d.id, dealTitle: d.title }); });
 		const d3d = sh.querySelector('[data-d3del]');
 		if (d3d) d3d.addEventListener('click', async () => {
-			const w = window.prompt('Végleges törlés a Salesmate-ből is: „' + (d.title || '#' + d.id) + '”.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			/* v2.9.19: előbb megmutatja, mi törlődik még a deallel együtt */
+			let inf = null; d3d.disabled = true;
+			try { inf = await post('cp_crm_del_info', { id: d.id }); } catch (e) { inf = null; }
+			d3d.disabled = false;
+			const also = inf ? [inf.portal ? '• az ügyfélportál' + (inf.files ? ' és ' + inf.files + ' fájlja (sablon, logó)' : '') + ', a link sem működik tovább' : '', inf.cal ? '• ' + inf.cal + ' naptárbejegyzés a Google Naptárból' : (inf.cal_err ? '• (a naptárat most nem érem el – onnan kézzel töröld)' : ''), inf.threads ? '• ' + inf.threads + ' levélszál a Kukába kerül' : ''].filter(Boolean) : [];
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: „' + (d.title || '#' + d.id) + '”.' + (also.length ? '\nVele együtt törlődik:\n' + also.join('\n') : '') + '\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
 			if (w === null) return;
 			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
 			d3d.disabled = true;
-			try { await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id)); closePage(); hideModal(); load(); }
+			try { const r = await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id) + (r && r.clean && r.clean.length ? ' · vele együtt: ' + r.clean.join(', ') : '')); closePage(); hideModal(); load(); }
 			catch (e) { d3d.disabled = false; toast(e.message, true); }
 		});
 		const todo = sh.querySelector('[data-todo]');

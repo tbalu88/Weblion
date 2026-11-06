@@ -385,6 +385,7 @@ function cp_crm_ajax_delete() {
 	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
 	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 	if ($id <= 0 || (isset($_POST['ok']) ? (string) wp_unslash($_POST['ok']) : '') !== 'TÖRLÉS') { cp_el_err('Hibás kérés.'); }
+	$plan = cp_crm_del_plan($id); /* v2.9.19: a deallel együtt törlendők (a Salesmate-törlés előtt, amíg az adatok megvannak) */
 	$res = cp_sm_request('DELETE', '/apis/deal/v4/' . $id);
 	if (is_wp_error($res)) { cp_el_err($res->get_error_message(), 502); }
 	$chk = cp_sm_get_deal($id);
@@ -395,7 +396,68 @@ function cp_crm_ajax_delete() {
 	$wpdb->update(cp_crm_t('deals'), array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'deleted', 'old_val' => '', 'new_val' => 'törölve', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
-	wp_send_json_success(array('id' => $id));
+	wp_send_json_success(array('id' => $id, 'clean' => cp_crm_del_clean($id, $plan)));
+}
+
+/* v2.9.19: deal törlésekor minden hozzá tartozó adat megszűnik: ügyfélportál (fájlok, adatlap, linkek, napló),
+ * Google Naptár-bejegyzés(ek), a deal levélszálai a Kukába. A számlák maradnak (jogszabály). */
+function cp_crm_del_plan($id) {
+	global $wpdb;
+	$d = $wpdb->get_row($wpdb->prepare('SELECT d.id, d.title, d.event_d, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id = %d', $id), ARRAY_A);
+	$out = array('portal' => 0, 'files' => 0, 'cal' => array(), 'cal_err' => '', 'threads' => array());
+	if (function_exists('cp_portal_get_by_deal') && function_exists('cp_portal_db_ready') && cp_portal_db_ready() && ($p = cp_portal_get_by_deal((string) $id))) {
+		$out['portal'] = (int) $p->id;
+		$a = cp_portal_answers($p->id);
+		$vals = array_merge(array($a['photo_template'] ?? null, $a['template_logo'] ?? null), (array) ($a['photo_template_hist'] ?? array()));
+		foreach ($vals as $v) { foreach (array('logo', 'preview', 'file', 'png') as $k) { if (is_array($v) && !empty($v[$k])) { $out['files']++; } } }
+	}
+	if ($d && !empty($d['event_d']) && function_exists('cp_gcal_ok') && cp_gcal_ok()) {
+		$made = get_option('cp_gcal_made', array());
+		$ev = cp_gcal_events($d['event_d'], $d['event_d'], true);
+		if (is_wp_error($ev)) { $out['cal_err'] = $ev->get_error_message(); }
+		else {
+			list($byDate, $byId) = cp_gcal_index(array($d));
+			foreach ($ev as $e) { if ((is_array($made) && ($made[$id] ?? '') === $e['id']) || cp_gcal_match($e, $byDate, $byId) === (int) $id) { $out['cal'][$e['id']] = $e['t']; } }
+		}
+	}
+	if (function_exists('cp_mail_t')) { $out['threads'] = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_mail_t('threads') . " WHERE deal_id = %d AND folder <> 'trash'", $id))); }
+	return $out;
+}
+function cp_crm_del_clean($id, $plan) {
+	global $wpdb;
+	$r = array();
+	if ($plan['portal']) {
+		$pid = (int) $plan['portal'];
+		$a = cp_portal_answers($pid);
+		if (function_exists('cp_portal_sb_files_delete')) { foreach (array_merge(array($a['photo_template'] ?? null, $a['template_logo'] ?? null), (array) ($a['photo_template_hist'] ?? array())) as $v) { cp_portal_sb_files_delete($v); } }
+		foreach (array('form_answers', 'form_state', 'notifications', 'log', 'access_tokens', 'access_log') as $t) { $wpdb->delete(cp_portal_t($t), array('portal_id' => $pid)); }
+		$wpdb->delete(cp_portal_t('portals'), array('id' => $pid));
+		if (function_exists('cp_portal_retention_log')) { cp_portal_retention_log('portál törölve (deal törlése)', $pid, 1); }
+		$r[] = 'ügyfélportál' . ($plan['files'] ? ' és ' . $plan['files'] . ' fájlja' : '');
+	}
+	if ($plan['cal']) {
+		$ok = 0; $made = get_option('cp_gcal_made', array());
+		foreach ($plan['cal'] as $eid => $t) { $x = cp_gcal_req('DELETE', '/events/' . rawurlencode($eid)); if (!is_wp_error($x)) { $ok++; } }
+		if (is_array($made) && isset($made[$id])) { unset($made[$id]); update_option('cp_gcal_made', $made, false); }
+		update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false);
+		$r[] = $ok . ' naptárbejegyzés' . ($ok < count($plan['cal']) ? ' (' . (count($plan['cal']) - $ok) . ' nem sikerült)' : '');
+	} elseif ($plan['cal_err'] !== '') { $r[] = 'a naptárat nem értem el: ' . $plan['cal_err']; }
+	if ($plan['threads']) {
+		$T = cp_mail_t('threads');
+		foreach ($plan['threads'] as $tid) { $wpdb->query($wpdb->prepare("UPDATE $T SET prev_folder = IF(folder IN ('trash','spam'), 'inbox', folder), folder = 'trash' WHERE id = %d", $tid)); }
+		$r[] = count($plan['threads']) . ' levélszál a Kukába';
+	}
+	return $r;
+}
+
+/* a törlés megerősítése előtt: mi törlődik a deallel együtt */
+add_action('wp_ajax_nopriv_cp_crm_del_info', 'cp_crm_ajax_del_info');
+add_action('wp_ajax_cp_crm_del_info', 'cp_crm_ajax_del_info');
+function cp_crm_ajax_del_info() {
+	cp_crm_ajax_guard(array('deals'));
+	cp_admin_need();
+	$p = cp_crm_del_plan((int) ($_POST['id'] ?? 0));
+	wp_send_json_success(array('portal' => $p['portal'] ? 1 : 0, 'files' => $p['files'], 'cal' => count($p['cal']), 'cal_err' => $p['cal_err'], 'threads' => count($p['threads'])));
 }
 
 
