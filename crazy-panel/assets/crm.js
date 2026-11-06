@@ -993,16 +993,24 @@
 		try { r = await post('cp_crm_trv', { id: d.id }); } catch (e) { box.innerHTML = '<small class="cpx-muted">A kiszállási díjat most nem tudom kiszámolni.</small>'; return; }
 		if (!box.isConnected) return;
 		const cur = Number(r.cur || 0);
-		if (!r.ok) { box.innerHTML = '<div class="d3-trvh">🚐 Kiszállás</div><small class="cpx-muted">' + esc(r.msg || '') + '</small>'; return; }
+		/* v2.9.11: kézi összeg is megadható (pl. egyedi megállapodás, vidéki helyszín, ahol a számítás nem pontos) */
+		const save = async (v, btn) => {
+			if (btn) { btn.disabled = true; btn.textContent = 'Mentés…'; }
+			try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ km_fee: String(v) }), c: '{}' }); toast('A kiszállási díj (' + (v ? money(v) : '0 Ft') + ') beírva a dealbe – a Salesmate-ben is.'); reload(); }
+			catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Újra'; } toast(e.message, true); }
+		};
+		const man = () => W ? '<form class="d3-trvm" data-trvm><label>Kézi összeg<input type="number" min="0" step="500" inputmode="numeric" value="' + (cur ? cur : '') + '" placeholder="pl. 15000"> Ft</label><button type="submit" class="cpx-btn sm ghost">Mentés</button></form>' : '';
+		const wire = () => {
+			const f = box.querySelector('[data-trvm]');
+			if (f) f.addEventListener('submit', e => { e.preventDefault(); const i = f.querySelector('input'), v = Math.round(Number(i.value)); if (i.value === '' || !(v >= 0)) { toast('Adj meg egy összeget (Ft).', true); i.focus(); return; } if (v === cur) { toast('A dealen is ennyi szerepel.'); return; } save(v, f.querySelector('button')); });
+		};
+		if (!r.ok) { box.innerHTML = '<div class="d3-trvh">🚐 Kiszállás' + (cur ? ': <b>' + esc(money(cur)) + '</b> <small>(a dealen)</small>' : '') + '</div><small class="cpx-muted">' + esc(r.msg || '') + '</small>' + man(); wire(); return; }
 		const fee = r.fee == null ? null : Number(r.fee), same = fee != null && fee === cur;
 		box.innerHTML = '<div class="d3-trvh">🚐 Kiszállási díj' + (fee != null ? ': <b>' + (fee ? esc(money(fee)) : 'ingyenes') + '</b>' + (r.vat ? ' <small>(' + esc(r.vat) + ')</small>' : '') : '') + '</div><small class="cpx-muted">' + esc(r.how) + '</small>' +
-			(fee != null && W && !same ? '<div class="d3-trvb">' + (cur ? '<small>A dealen most: ' + esc(money(cur)) + '</small>' : '') + '<button type="button" class="cpx-btn sm" data-trvs>' + (cur ? 'Átírom erre' : 'Beírom a dealbe') + '</button></div>' : same && cur ? '<small class="d3-trvok">✓ A dealen is ennyi szerepel.</small>' : '');
+			(fee != null && W && !same ? '<div class="d3-trvb">' + (cur ? '<small>A dealen most: ' + esc(money(cur)) + '</small>' : '') + '<button type="button" class="cpx-btn sm" data-trvs>' + (cur ? 'Átírom erre' : 'Beírom a dealbe') + '</button></div>' : same && cur ? '<small class="d3-trvok">✓ A dealen is ennyi szerepel.</small>' : (fee == null && cur ? '<small>A dealen most: ' + esc(money(cur)) + '</small>' : '')) + man();
 		const b = box.querySelector('[data-trvs]');
-		if (b) b.addEventListener('click', async () => {
-			b.disabled = true; b.textContent = 'Mentés…';
-			try { await post('cp_crm_save', { id: d.id, f: JSON.stringify({ km_fee: String(fee) }), c: '{}' }); toast('A kiszállási díj (' + (fee ? money(fee) : '0 Ft') + ') beírva a dealbe – a Salesmate-ben is.'); reload(); }
-			catch (e) { b.disabled = false; b.textContent = 'Újra'; toast(e.message, true); }
-		});
+		if (b) b.addEventListener('click', () => save(fee, b));
+		wire();
 	}
 	async function openDeal(id, back, fromHist) {
 		if (!fromHist) pushDeal(id);

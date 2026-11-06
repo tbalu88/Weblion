@@ -547,3 +547,8 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-sbf{margin:6px 0 12px;padding-bottom:12px;border-bottom:1px solid #F2EFEA}.d3-sbh{display:block;font:700 12px Inter,sans-serif;color:#5B6275;text-transform:uppercase;letter-spacing:.04em;margin:2px 0 2px}
 .d3-sbf .d3-tb img{object-fit:contain;background:#fff}
 
+/* v2.9.11: kiszállási díj kézi megadása */
+.d3-trvm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;padding-top:7px;border-top:1px dashed #E6E3DE}
+.d3-trvm label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu)}
+.d3-trvm input{width:110px;height:28px;border:1px solid #DDD8D0;border-radius:8px;padding:0 8px;font:500 13px Inter,sans-serif;background:#fff;color:var(--ink)}
+.d3-trvm .cpx-btn{height:28px;font-size:12px;padding:0 10px}

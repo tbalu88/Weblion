@@ -186,6 +186,8 @@ function cp_wf_seq($fid) {
 	return $s[$fid];
 }
 function cp_wf_mail($def, $pairs, $deal, $page, $shadow = false) {
+	/* nyers beküldési lista ([{name, value}]) esetén név => érték alakra */
+	if (isset($pairs[0]) && is_array($pairs[0]) && function_exists('cp_lead_pairs')) { $pairs = cp_lead_pairs($pairs); }
 	$fid = '';
 	foreach (cp_wf_defs() as $k => $d) { if ($d['name'] === $def['name']) { $fid = $k; } }
 	$n = cp_wf_seq($fid);
