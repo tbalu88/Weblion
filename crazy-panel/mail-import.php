@@ -371,9 +371,19 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	/* v1.98: a legutóbbi ilyen szál – ha 60 napnál régebben volt benne levél, új megkeresésnek számít (új szál, friss deal) */
 	$t = $wpdb->get_row($wpdb->prepare("SELECT id, last_at, msg_count, folder, followers, deal_id, src FROM $T WHERE tkey = %s ORDER BY id DESC LIMIT 1", $tkey), ARRAY_A);
 	if ($t && $t['last_at'] && strtotime($t['last_at'] . ' UTC') < strtotime($at . ' UTC') - CP_IMP_GAP_DAYS * DAY_IN_SECONDS) { $t = null; }
+	/* v2.9.23: a feladó új a szálban (pl. a titkárság válaszol, az ügyfél másolatban) – ha a többi résztvevő (címzett, másolat)
+	   valamelyikével már van ilyen tárgyú szál, a levél abba kerül, nem nyit újat; a dealt is a résztvevőkön keresztül keressük */
+	$parts = array();
+	if (!$out) { foreach (array_merge($to, $cc) as $a) { if ($a['e'] !== '' && $a['e'] !== $other['e'] && !cp_imp_ours($a['e']) && !in_array($a['e'], $parts, true)) { $parts[] = $a['e']; } } }
+	if (!$t && $parts) {
+		$keys = array_map(function ($e) use ($subj) { return md5($e . '|' . cp_imp_norm_subj($subj)); }, array_slice($parts, 0, 10));
+		$t2 = $wpdb->get_row("SELECT id, last_at, msg_count, folder, followers, deal_id, src FROM $T WHERE tkey IN ('" . implode("','", array_map('esc_sql', $keys)) . "') ORDER BY last_at DESC LIMIT 1", ARRAY_A);
+		if ($t2 && !($t2['last_at'] && strtotime($t2['last_at'] . ' UTC') < strtotime($at . ' UTC') - CP_IMP_GAP_DAYS * DAY_IN_SECONDS)) { $t = $t2; }
+	}
 	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at); }
 	if (!$t) {
 		$deal = cp_imp_pick_deal($other['e'], $at);
+		if (!$deal) { foreach ($parts as $pe) { $deal = cp_imp_pick_deal($pe, $at); if ($deal) { break; } } }
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
