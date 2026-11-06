@@ -501,7 +501,7 @@
     dlg.querySelector('#cpx-goSheet').onclick = () => { S.day = date; closeModal(); go('munkalap'); };
     dlg.querySelector('#cpx-goCheck').onclick = () => { S.day = date; closeModal(); go('ellenorzes'); };
   }
-  function closeModal() { const d = document.getElementById('cpx-modal'); if (d) { d.hidden = true; d.innerHTML = ''; } }
+  function closeModal() { const d = document.getElementById('cpx-modal'); if (d) { if (window.cpxSheetMo) window.cpxSheetMo.close(d); else { d.hidden = true; d.innerHTML = ''; } } }
   function capBox(label, used, cap, pend) {
     const free = cap - used;
     return '<div class="capbox ' + (free <= 0 ? 'full' : free <= 2 ? 'mid' : 'ok') + '"><span>' + label + '</span><b>' + Math.max(0, free) + ' szabad</b><small>' + used + ' foglalt / ' + cap + ' kapacitás' + (pend ? ' · ' + pend + ' függő' : '') + '</small></div>';

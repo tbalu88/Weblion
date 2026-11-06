@@ -162,3 +162,5 @@ body:has(.st-dragging),body:has(.st-resizing){user-select:none}
 @media (max-width:700px){.st-jump{margin:6px -12px 0;padding:2px 12px 4px}.st-jump button{font-size:12px;padding:5px 10px;max-width:170px}.st-totop{right:12px;bottom:max(14px,env(safe-area-inset-bottom))}}
 @media print{.st-jump,.st-totop{display:none!important}}
 @media (max-width:760px){body.mn-on:not(.mn-hide) .st-toast{bottom:calc(76px + env(safe-area-inset-bottom))}}
+/* v2.9.23: a felszámoló számok ne ugráljanak szélességben */
+.st-kpi b,.st-al-big{font-variant-numeric:tabular-nums}

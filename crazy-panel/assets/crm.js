@@ -694,6 +694,7 @@
 	function sheet(html) {
 		const m = document.getElementById('cpx-modal');
 		if (!m) return null;
+		if (window.cpxSheetMo) window.cpxSheetMo.watch();
 		m.innerHTML = '<div class="cpx-sheet wide crm-sheet" role="dialog" aria-modal="true">' + html + '</div>';
 		m.hidden = false;
 		return m.querySelector('.crm-sheet');
@@ -717,7 +718,7 @@
 	};
 	/* v1.75: a deal-, kontakt- és cégnézet önálló oldal a fő tartalomban (nem felugró ablak): saját címe van (#deals:<sorszám>),
 	   az Esc nem zárja be, a böngésző Vissza gombja és a ← / × gomb igen; a lista alatta megmarad */
-	function hideModal() { const m = document.getElementById('cpx-modal'); if (m && !m.hidden) { m.hidden = true; m.innerHTML = ''; } }
+	function hideModal() { const m = document.getElementById('cpx-modal'); if (m && !m.hidden) { if (window.cpxSheetMo) window.cpxSheetMo.close(m); else { m.hidden = true; m.innerHTML = ''; } } }
 	function closePage(nav) {
 		const main = document.getElementById('cpx-main');
 		if (main) { main.classList.remove('crm-pg-on'); const p = main.querySelector(':scope > .crm-page'); if (p) p.remove(); }

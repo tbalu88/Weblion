@@ -146,7 +146,7 @@
 		});
 		if (window.CPXStatus) window.CPXStatus();
 	}
-	function closeDlg() { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } }
+	function closeDlg() { const m = document.getElementById('cpx-modal'); if (m) { if (window.cpxSheetMo) window.cpxSheetMo.close(m); else { m.hidden = true; m.innerHTML = ''; } } }
 	async function mergeDlg(kind, ids) {
 		const ct = kind === 'ct', m = document.getElementById('cpx-modal');
 		if (!m) return;

@@ -164,6 +164,58 @@
 			'<span>tavaly: ' + (yoy == null ? '–' : delta(cur, yoy, money, inv, fmt)) + '</span></div></div>';
 	}
 
+	/* ------------------------------------------------------------ mozgás: számok felszámolása, sávok kinövése */
+	const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+	const calm = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+	/* a kiírt szám (pl. „1 234 567 Ft”, „12,5%”) szétbontása: előtag, érték, tizedesek, ezres elválasztó, utótag */
+	function numParts(t) {
+		const m = /^([^\d-]*)(-?\d{1,3}(?:([\s  .])\d{3})*|-?\d+)(?:,(\d+))?(.*)$/.exec(t);
+		if (!m) return null;
+		const sep = m[3] || '', dec = m[4] ? m[4].length : 0;
+		const v = parseFloat(m[2].split(sep || '#').join('') + (dec ? '.' + m[4] : ''));
+		return isFinite(v) ? { pre: m[1], v: v, dec: dec, sep: sep, post: m[5] } : null;
+	}
+	function numFmt(p, v) {
+		const neg = v < 0, s = Math.abs(v).toFixed(p.dec).split('.');
+		const int = p.sep ? s[0].replace(/\B(?=(\d{3})+(?!\d))/g, p.sep) : s[0];
+		return p.pre + (neg ? '-' : '') + int + (p.dec ? ',' + s[1] : '') + p.post;
+	}
+	function countUp(el, from, ms) {
+		const fin = el.textContent, p = numParts(fin);
+		if (!p || p.v === from) return;
+		const t0 = performance.now();
+		el._cnt = t0;
+		const step = now => {
+			if (el._cnt !== t0) return; /* újabb indítás felülírta */
+			const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+			el.textContent = k < 1 ? numFmt(p, from + (p.v - from) * e) : fin;
+			if (k < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	}
+	function animIn(main) {
+		if (!main.animate) return;
+		if (calm()) { main.querySelectorAll('.st-kpis, .st-grid').forEach(x => x.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 200, easing: 'ease' })); return; }
+		main.querySelectorAll('.st-kpi b').forEach(b => countUp(b, 0, 600));
+		const grow = (els, origin, axis, step, max) => els.forEach((el, i) => {
+			el.style.transformOrigin = origin;
+			if (el instanceof SVGElement) el.style.transformBox = 'fill-box';
+			el.animate([{ transform: axis + '(0)' }, { transform: axis + '(1)' }], { duration: 500, delay: Math.min(i * step, max), easing: EASE, fill: 'backwards' });
+		});
+		main.querySelectorAll('.st-bars, .st-fun').forEach(g => grow([...g.querySelectorAll('.st-bar .b > span, .st-fun .b')], '0 50%', 'scaleX', 40, 240));
+		grow([...main.querySelectorAll('.st-split')], '0 50%', 'scaleX', 0, 0);
+		animTrend();
+	}
+	function animTrend() {
+		const svg = document.querySelector('#st-trend .st-chart');
+		if (!svg || !svg.animate || calm()) return;
+		const bars = [...svg.querySelectorAll('rect[pointer-events="none"]')];
+		bars.forEach((r, i) => {
+			r.style.transformBox = 'fill-box'; r.style.transformOrigin = '50% 100%';
+			r.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 500, delay: Math.min(Math.floor(i / 2) * 25, 300), easing: EASE, fill: 'backwards' });
+		});
+	}
+
 	function draw() {
 		const main = S.main;
 		if (!main) return;
@@ -256,6 +308,9 @@
 		drawTrend();
 		drawGa();
 		drawAlerts();
+		/* csak új időszaknál (vagy első betöltéskor) mozog; átrendezés, szerkesztés nem játssza újra */
+		const ak = [d.gran, d.from, d.to].join('|');
+		if (!S.edit && S.animKey !== ak) { S.animKey = ak; animIn(main); }
 	}
 
 	/* ------------------------------------------------------------ élő figyelmeztetések */
@@ -293,12 +348,16 @@
 		if (S.alErr && !a) { box.innerHTML = h + '<div class="st-warn err">' + esc(S.alErr) + '</div>'; return; }
 		if (!a) { box.innerHTML = h + '<div class="st-sub">Betöltés…</div>'; return; }
 		const act = a.alerts.filter(x => x.sev !== 'ok'), ok = a.alerts.filter(x => x.sev === 'ok');
-		h += '<div class="st-als">' + act.map(x => '<div class="st-al st-al-' + x.sev + '"><div class="st-al-h"><span class="st-al-big">' + esc(String(x.big)) + '</span><div><b>' + esc(x.title) + '</b>' + (x.n != null ? ' <span class="st-sub">(' + x.n + ' deal)</span>' : '') + '<div class="st-sub">' + esc(x.text) + '</div>' + (x.sub ? '<div class="st-sub st-al-sub">' + esc(x.sub) + '</div>' : '') + '</div></div>' +
+		h += '<div class="st-als">' + act.map(x => '<div class="st-al st-al-' + x.sev + '"><div class="st-al-h"><span class="st-al-big" data-k="' + esc(String(x.id || x.title)) + '">' + esc(String(x.big)) + '</span><div><b>' + esc(x.title) + '</b>' + (x.n != null ? ' <span class="st-sub">(' + x.n + ' deal)</span>' : '') + '<div class="st-sub">' + esc(x.text) + '</div>' + (x.sub ? '<div class="st-sub st-al-sub">' + esc(x.sub) + '</div>' : '') + '</div></div>' +
 			(x.items && x.items.length ? '<details' + (x.sev === 'red' ? ' open' : '') + '><summary>' + (x.items.length + (x.more || 0)) + ' tétel' + (x.more ? ' (az első ' + x.items.length + ' látszik)' : '') + '</summary><ul>' + x.items.map((it, i) => (x.id === 'mail' && it.sev === 'info' && (i === 0 || x.items[i - 1].sev !== 'info') ? '<li class="st-al-sep">Lezajlott rendezvény utáni levelek – nem számítanak bele (jellemzően köszönő):</li>' : '') + alItem(it)).join('') + (x.more ? '<li class="st-sub">… és még ' + x.more + '</li>' : '') + '</ul>' + (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '') + '</details>' : (x.note ? '<div class="st-sub st-al-note">' + esc(x.note) + '</div>' : '')) + '</div>').join('') + '</div>';
 		if (ok.length) h += '<div class="st-al-okline">✓ Rendben: ' + ok.map(x => esc(x.title)).join(' · ') + '</div>';
 		if (a.quickErr) h += '<div class="st-warn err" style="margin-top:8px">Gyors szinkron hiba: ' + esc(a.quickErr) + '</div>';
 		const open = [...box.querySelectorAll('details')].map(d => d.open);
+		/* élő frissítés: a megváltozott számok az előző értékről számolnak át */
+		const prev = {};
+		box.querySelectorAll('.st-al-big[data-k]').forEach(b => { const p = numParts(b.textContent); if (p) prev[b.dataset.k] = p.v; });
 		box.innerHTML = h;
+		if (!calm()) box.querySelectorAll('.st-al-big[data-k]').forEach(b => { if (prev[b.dataset.k] != null) countUp(b, prev[b.dataset.k], 400); });
 		box.querySelectorAll('details').forEach((d, i) => { if (open[i] != null) d.open = open[i]; });
 		box.querySelectorAll('.st-mok').forEach(b => b.onclick = async () => {
 			b.disabled = true;

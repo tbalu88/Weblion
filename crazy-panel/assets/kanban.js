@@ -456,7 +456,7 @@
 	}
 	/* hozzászólások és változások időrendben, a legfrissebb felül */
 	const feed = x => (x.comments || []).map(m => ({ at: m.created_at, id: m.id, m: m })).concat((x.acts || []).map(a => ({ at: a.created_at, id: a.id, a: a }))).sort((p, q) => (p.at < q.at ? 1 : p.at > q.at ? -1 : 0));
-	function closeSheet() { const m = document.getElementById('cpx-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } }
+	function closeSheet() { const m = document.getElementById('cpx-modal'); if (m) { if (window.cpxSheetMo) window.cpxSheetMo.close(m); else { m.hidden = true; m.innerHTML = ''; } } }
 
 	/* @ megemlítés a hozzászólásban */
 	function mention(ta, pop) {

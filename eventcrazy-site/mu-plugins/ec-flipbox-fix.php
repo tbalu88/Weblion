@@ -7,6 +7,7 @@
  * 4) Csempe-címek: nem törnek szóközepen – a betűméret addig csökken, amíg a leghosszabb szó és a teljes tartalom elfér;
  *    asztali nézetben (200%-os nagyításon is) a hátoldal leírása kisebb lesz, hogy a gomb ne vágódjon le.
  * 5) Vélemények: a hosszú link a kártyán belül törik, nem lóg ki.
+ * 6) Mozgás: szűrés után a csempék egymás után úsznak be, az „+ Ajánlathoz” gomb benyomódik; csökkentett mozgásnál csak elhalványulás.
  * Kikapcsolás: a fájl törlése (vagy átnevezése).
  */
 if (!defined('ABSPATH')) { exit; }
@@ -22,6 +23,17 @@ add_action('wp_head', function () {
 [data-id="3e25d98"] [data-id="076669a"]{display:none!important}
 /* vélemények: a hosszú link (URL) a kártyán belül törik */
 .elementor-image-box-description{overflow-wrap:anywhere}
+/* „+ Ajánlathoz”: benyomódás kattintáskor; a régi „transition:all” helyett csak a szükséges tulajdonságok */
+body .ec-add{transition:background-color .2s ease,border-color .2s ease,color .2s ease,box-shadow .2s ease,transform 120ms cubic-bezier(0.23,1,0.32,1)}
+body .ec-add:active{transform:scale(.95)}
+/* csökkentett mozgás: a csempe hátoldala és az ajánlatsáv csak elhalványul, nem csúszik */
+@media (prefers-reduced-motion:reduce){
+	body .ec-add:active{transform:none}
+	.elementor-flip-box .elementor-flip-box__back{transform:none!important;opacity:0;transition:opacity .2s ease!important}
+	.elementor-flip-box:hover .elementor-flip-box__back,.elementor-flip-box:focus-within .elementor-flip-box__back{opacity:1}
+	.elementor-flip-box .elementor-flip-box__front{transform:none!important;transition:none!important}
+	body .ec-bar{transition:opacity .25s ease,visibility .25s ease!important}
+}
 @media (max-width:767px){
 	/* mobil: kisebb betűköz a folyószövegben */
 	.elementor-widget-text-editor p,.elementor-widget-text-editor li,.elementor-icon-box-description{letter-spacing:.2px!important;word-spacing:normal!important;-webkit-hyphens:auto;hyphens:auto}
@@ -118,7 +130,18 @@ add_action('wp_footer', function () {
 	window.addEventListener('load', fitAll);
 	window.addEventListener('resize', later);
 	/* szűrőgombok (Összes, Fotóautomaták…): az újonnan megjelenő csempék igazítása */
-	document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.ec-chip')) { later(); } });
+	document.addEventListener('click', function (e) {
+		if (!(e.target.closest && e.target.closest('.ec-chip'))) { return; }
+		later();
+		/* szűrés után a megjelenő csempék egymás után úsznak be (max. 8 késleltetve, kattintani végig lehet) */
+		if (!document.body.animate) { return; }
+		var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+		var cols = [].slice.call(document.querySelectorAll('[data-ec-cat]')).filter(function (c) { return c.offsetParent !== null; });
+		cols.forEach(function (c, i) {
+			c.animate(calm ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'scale(.97)' }, { opacity: 1, transform: 'none' }],
+				{ duration: 200, delay: calm ? 0 : Math.min(i, 7) * 30, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' });
+		});
+	});
 	if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fitAll); }
 })();
 
@@ -140,7 +163,7 @@ ECJS
 
 /* egyszeri gyorsítótár-ürítés (WP Rocket) minden új változat után */
 add_action('wp_loaded', function () {
-	$v = '3';
+	$v = '4';
 	if (get_option('ec_flipfix_purged') === $v) { return; }
 	update_option('ec_flipfix_purged', $v, false);
 	if (function_exists('rocket_clean_domain')) { rocket_clean_domain(); }

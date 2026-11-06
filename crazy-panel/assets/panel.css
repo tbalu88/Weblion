@@ -757,3 +757,24 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 /* v2.9.22: a sötét oldalsávban (és a mobil menüben) a másodlagos gomb átlátszó marad */
 .cpx-top .cpx-btn.ghost,.cpx-shell .cpx-top-r .cpx-btn.ghost,.cpx-menu .cpx-btn.ghost{background:transparent;border-color:rgba(255,255,255,.22);color:#fff}
 .cpx-top .cpx-btn.ghost:hover,.cpx-shell .cpx-top-r .cpx-btn.ghost:hover,.cpx-menu .cpx-btn.ghost:hover{background:rgba(255,255,255,.08)}
+
+/* v2.9.23: mozgás – közös görbék; csak transform és opacity mozog */
+:root{--ease-out:cubic-bezier(0.23,1,0.32,1);--ease-in-out:cubic-bezier(0.77,0,0.175,1);--ease-drawer:cubic-bezier(0.32,0.72,0,1)}
+/* felugró menük: a gomb felőli sarokból nőnek ki (lefelé nyílók: bal felső, felfelé nyílók: bal alsó) */
+.ml-pop,.kb-pop,.d3-wpop{transform-origin:top left;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
+.ml-vpop,.ml-mpop,.kb-mpop{transform-origin:bottom left;transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out)}
+@starting-style{.ml-pop,.kb-pop,.d3-wpop,.ml-mpop,.kb-mpop{opacity:0;transform:scale(.97)}}
+/* gombok: alig érezhető benyomódás */
+.cpx-btn,.ml-rtool button,.cpx-x{transition:background .12s,border-color .12s,transform 160ms var(--ease-out)}
+.cpx-btn:not([disabled]):active,.ml-rtool button:not([disabled]):active,.cpx-x:active{transform:scale(.97)}
+/* értesítő buborék: csak átlátszóság és elmozdulás, ugyanarra távozik, amerről jön */
+.cpx-toast{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+/* csökkentett mozgás: helyzetváltozás helyett csak elhalványulás, végtelen mozgás lassítva vagy ki */
+@media (prefers-reduced-motion:reduce){
+	.ml-pop,.kb-pop,.d3-wpop,.ml-vpop,.ml-mpop,.kb-mpop{transition:opacity 150ms ease}
+	@starting-style{.ml-pop,.kb-pop,.d3-wpop,.ml-mpop,.kb-mpop{transform:none}}
+	.cpx-btn:active,.ml-rtool button:active,.cpx-x:active{transform:none}
+	.cpx-toast,.cpx-toast.on{transition:opacity 200ms ease;transform:none}
+	.ml-spin,.ml-rf.spin svg{animation-duration:2.4s}
+	.st-live .pulse{animation:none}
+}
