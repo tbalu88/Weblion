@@ -26,8 +26,8 @@ function cp_portal_sb_file_url($f) {
 
 function cp_portal_sb_files_delete($val) {
 	if (!is_array($val)) { return; }
-	foreach (array('logo', 'preview', 'file') as $k) {
-		if (!empty($val[$k]) && preg_match('/^p\d+-[a-z0-9]{12}-(logo|prev|clogo)\.(png|jpg)$/', $val[$k])) { @unlink(cp_portal_sb_dir() . '/' . $val[$k]); }
+	foreach (array('logo', 'preview', 'file', 'png') as $k) {
+		if (!empty($val[$k]) && preg_match('/^p\d+-[a-z0-9]{12}-(logo|prev|clogo|print)\.(png|jpg)$/', $val[$k])) { @unlink(cp_portal_sb_dir() . '/' . $val[$k]); }
 	}
 }
 
@@ -95,8 +95,13 @@ function cp_portal_render_sablon_page($portal, $tok) {
 /* ------------------------------------------------------------ mentés (REST) */
 
 function cp_portal_sb_dataurl($s, $types, $max) {
-	if (!is_string($s) || !preg_match('#^data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)$#', $s, $m) || !in_array($m[1], $types, true)) { return null; }
-	$b = base64_decode($m[2], true);
+	/* v2.9.5: regex nélkül (a több MB-os PNG-nél a reguláris kifejezés elakadhat) */
+	if (!is_string($s) || strncmp($s, 'data:image/', 11) !== 0) { return null; }
+	$c = strpos($s, ';base64,');
+	if ($c === false || $c > 30) { return null; }
+	$m = array(1 => substr($s, 11, $c - 11));
+	if (!in_array($m[1], array('png', 'jpeg'), true) || !in_array($m[1], $types, true)) { return null; }
+	$b = base64_decode(substr($s, $c + 8), true);
 	if ($b === false || strlen($b) > $max || !cp_sb_is_img($b)) { return null; }
 	return array($m[1] === 'png' ? 'png' : 'jpg', $b);
 }
@@ -129,10 +134,17 @@ function cp_portal_rest_sablon_save(WP_REST_Request $req) {
 		if (@file_put_contents($dir . '/' . $val['logo'], $lg[1]) === false) { return new WP_REST_Response(array('ok' => false, 'message' => 'A logót nem sikerült elmenteni.'), 500); }
 	}
 	if (@file_put_contents($dir . '/' . $val['preview'], $prev[1]) === false) { return new WP_REST_Response(array('ok' => false, 'message' => 'Az előnézetet nem sikerült elmenteni.'), 500); }
+	/* v2.9.5: a nyomtatható, lyukasztott PNG (4×6", átlátszó fotóablakok) – a böngésző készíti, ugyanúgy, mint a panel Sablonkészítője */
+	$png = cp_portal_sb_dataurl(isset($b['png']) ? $b['png'] : '', array('png'), 15 * MB_IN_BYTES);
+	if ($png) { $val['png'] = $base . '-print.png'; if (@file_put_contents($dir . '/' . $val['png'], $png[1]) === false) { unset($val['png']); } }
+	/* v2.9.5: az előző változatok megmaradnak (az utolsó 5) – a dealen letölthetők; a régebbiek fájljai törlődnek */
 	if ($old) {
-		$del = $old;
-		if ($val['logo'] === (isset($old['logo']) ? $old['logo'] : '')) { $del['logo'] = ''; }
-		cp_portal_sb_files_delete($del);
+		$hist = isset($answers['photo_template_hist']) && is_array($answers['photo_template_hist']) ? $answers['photo_template_hist'] : array();
+		$o2 = $old; unset($o2['snap']);
+		if ($val['logo'] !== '' && $val['logo'] === ($o2['logo'] ?? '')) { $o2['logo'] = ''; } /* a közös logó az aktuálisé */
+		array_unshift($hist, $o2);
+		foreach (array_slice($hist, 5) as $gone) { cp_portal_sb_files_delete($gone); }
+		cp_portal_answer_put($portal->id, 'photo_template_hist', array_slice($hist, 0, 5), 'ugyfel');
 	}
 	cp_portal_answer_put($portal->id, 'photo_template', $val, 'ugyfel');
 	if (!isset($answers['template_mode'])) { cp_portal_answer_put($portal->id, 'template_mode', 'own', 'ugyfel'); }
@@ -204,7 +216,7 @@ add_action('wp_ajax_nopriv_cp_portal_sb_file', 'cp_portal_ajax_sb_file');
 add_action('wp_ajax_cp_portal_sb_file', 'cp_portal_ajax_sb_file');
 function cp_portal_ajax_sb_file() {
 	$f = isset($_GET['f']) ? (string) wp_unslash($_GET['f']) : '';
-	if (!preg_match('/^p(\d+)-[a-z0-9]{12}-(logo|prev|clogo)\.(png|jpg)$/', $f, $m)) { status_header(400); exit; }
+	if (!preg_match('/^p(\d+)-[a-z0-9]{12}-(logo|prev|clogo|print)\.(png|jpg)$/', $f, $m)) { status_header(400); exit; }
 	$ok = cp_panel_authed();
 	if (!$ok) {
 		$s = cp_portal_session();
@@ -213,5 +225,7 @@ function cp_portal_ajax_sb_file() {
 	if (!$ok) { status_header(403); exit; }
 	$path = cp_portal_sb_dir() . '/' . $f;
 	if (!is_file($path)) { status_header(404); exit; }
+	/* v2.9.5: letöltés beszédes fájlnévvel (?dl=Név) */
+	if (!empty($_GET['dl'])) { $n = sanitize_file_name(remove_accents((string) wp_unslash($_GET['dl']))); if ($n !== '') { header('Content-Disposition: attachment; filename="' . $n . '"'); } }
 	cp_sb_send($f, $path);
 }

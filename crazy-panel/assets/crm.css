@@ -543,3 +543,7 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-lbn{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;font-size:28px;line-height:1;cursor:pointer}
 @media (max-width:600px){.d3-lbi img{max-width:100%}.d3-lbn{position:absolute;bottom:22px}.d3-lbn.p{left:22px}.d3-lbn.n{right:22px}}
 .d3-fg{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+/* v2.9.5: online fotósablon a Fájlok kártyán */
+.d3-sbf{margin:6px 0 12px;padding-bottom:12px;border-bottom:1px solid #F2EFEA}.d3-sbh{display:block;font:700 12px Inter,sans-serif;color:#5B6275;text-transform:uppercase;letter-spacing:.04em;margin:2px 0 2px}
+.d3-sbf .d3-tb img{object-fit:contain;background:#fff}
+

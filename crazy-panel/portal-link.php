@@ -61,6 +61,15 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$x['portal'] = cp_plk_summary($id);
 	/* v1.92: amit az ügyfél a portálon másképp adott meg, mint ami a dealen van – a deal-adatlapon „Átveszem” gombbal beírható */
 	if (is_array($x['portal']) && empty($x['portal']['none'])) { $x['portal']['diff'] = cp_plk_diff($id, (array) $x['deal']); }
+	/* v2.9.5: az ügyfél online fotósablonjai (aktuális + az előző 5) a deal Fájlok kártyájára: előnézet, lyukasztott PNG */
+	$pp = cp_portal_get_by_deal($id);
+	if ($pp && function_exists('cp_portal_answers') && function_exists('cp_portal_sb_file_url')) {
+		$aa = cp_portal_answers($pp->id); $sbf = array();
+		$one = function ($v, $cur) { if (!is_array($v) || empty($v['preview'])) { return null; } return array('name' => (string) ($v['name'] ?? ''), 'at' => !empty($v['at']) ? wp_date('Y-m-d H:i', (int) $v['at']) : '', 'cur' => $cur ? 1 : 0, 'prev' => cp_portal_sb_file_url($v['preview']), 'png' => !empty($v['png']) ? cp_portal_sb_file_url($v['png']) : '', 'logo' => !empty($v['logo']) ? cp_portal_sb_file_url($v['logo']) : ''); };
+		if ($o = $one($aa['photo_template'] ?? null, true)) { $sbf[] = $o; }
+		foreach ((array) ($aa['photo_template_hist'] ?? array()) as $hv) { if ($o = $one($hv, false)) { $sbf[] = $o; } }
+		if ($sbf) { $x['sbf'] = $sbf; }
+	}
 	$ev = array();
 	$p = cp_portal_get_by_deal($id);
 	if ($p) {
