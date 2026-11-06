@@ -4,6 +4,9 @@
  * 1) Flip Box csempék: az egész csempe kattintható (mobilon a hátoldali gomb nem érhető el), link nélküli csempéhez tartalék cél.
  * 2) Mobilon a sorkizárt bekezdések balra zárva, kisebb betűköz; a képernyő széléig érő szövegblokkok oldalmargót kapnak.
  * 3) Greenbox oldal: a véletlenül bemásolt második fejléc-kártya (értékelés-jelvény, telefon, kép) rejtve.
+ * 4) Csempe-címek: nem törnek szóközepen – a betűméret addig csökken, amíg a leghosszabb szó és a teljes tartalom elfér;
+ *    asztali nézetben (200%-os nagyításon is) a hátoldal leírása kisebb lesz, hogy a gomb ne vágódjon le.
+ * 5) Vélemények: a hosszú link a kártyán belül törik, nem lóg ki.
  * Kikapcsolás: a fájl törlése (vagy átnevezése).
  */
 if (!defined('ABSPATH')) { exit; }
@@ -17,6 +20,8 @@ add_action('wp_head', function () {
 	echo "<style id=\"ec-mobile-fix\">\n" . <<<'ECCSS'
 /* Greenbox: a második (bemásolt) fejléc-kártya – értékelés-jelvény, telefon, kép – minden nézetben rejtve */
 [data-id="3e25d98"] [data-id="076669a"]{display:none!important}
+/* vélemények: a hosszú link (URL) a kártyán belül törik */
+.elementor-image-box-description{overflow-wrap:anywhere}
 @media (max-width:767px){
 	/* mobil: kisebb betűköz a folyószövegben */
 	.elementor-widget-text-editor p,.elementor-widget-text-editor li,.elementor-icon-box-description{letter-spacing:.2px!important;word-spacing:normal!important;-webkit-hyphens:auto;hyphens:auto}
@@ -58,6 +63,66 @@ add_action('wp_footer', function () {
 })();
 
 (function () {
+	/* csempék: a cím ne törjön szóközepen, a tartalom ne vágódjon le – a betűméret a csempéhez igazodik */
+	function shrink(el, min, over) {
+		var fs = parseFloat(getComputedStyle(el).fontSize);
+		while (over() && fs > min) { fs -= 1; el.style.setProperty('font-size', fs + 'px', 'important'); }
+	}
+	/* a leghosszabb szó szélessége (px) és a rendelkezésre álló hely */
+	function widest(el) {
+		var max = 0, w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, r = document.createRange();
+		while ((n = w.nextNode())) {
+			var re = /\S+/g, m;
+			while ((m = re.exec(n.textContent))) { r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length); max = Math.max(max, r.getBoundingClientRect().width); }
+		}
+		return max;
+	}
+	function room(el) {
+		var cs = getComputedStyle(el);
+		return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+	}
+	function fitLayer(l) {
+		var inner = l.querySelector('.elementor-flip-box__layer__inner');
+		var t = l.querySelector('.elementor-flip-box__layer__title');
+		var d = l.querySelector('.elementor-flip-box__layer__description');
+		var back = l.classList.contains('elementor-flip-box__back');
+		[t, d].forEach(function (e) { if (e) { ['font-size', 'display', '-webkit-box-orient', 'overflow', '-webkit-line-clamp'].forEach(function (p) { e.style.removeProperty(p); }); } });
+		if (!inner) { return; }
+		if (!l.clientWidth) { return; } /* rejtett (szűrt) csempe: megjelenéskor igazítjuk */
+		var tall = function () { return inner.getBoundingClientRect().height > l.clientHeight + 1; };
+		if (t) {
+			t.style.setProperty('overflow-wrap', 'normal', 'important');
+			t.style.setProperty('word-break', 'normal', 'important');
+			shrink(t, 12, function () { return widest(t) > room(t) || (!back && tall()); });
+			t.style.setProperty('overflow-wrap', 'break-word', 'important');
+		}
+		/* a hátoldal csak egérrel (rámutatásra) látszik; érintőképernyőn az egész csempe link, ott nem igazítunk */
+		if (back && window.matchMedia && matchMedia('(hover:hover)').matches) {
+			if (d) { shrink(d, 11, tall); }
+			if (t) { shrink(t, 14, tall); }
+			/* végső tartalék: a leírás sorai vágódnak (…), a gomb mindig látszik */
+			if (d && tall()) {
+				d.style.display = '-webkit-box'; d.style.webkitBoxOrient = 'vertical'; d.style.overflow = 'hidden';
+				for (var k = 6; k >= 1 && tall(); k--) { d.style.webkitLineClamp = k; }
+			}
+		}
+	}
+	function fitAll() {
+		var ls = document.querySelectorAll('.elementor-flip-box__layer');
+		for (var i = 0; i < ls.length; i++) { fitLayer(ls[i]); }
+	}
+	window.ecFlipFit = fitAll;
+	var tm;
+	function later() { clearTimeout(tm); tm = setTimeout(fitAll, 150); }
+	if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', fitAll); } else { fitAll(); }
+	window.addEventListener('load', fitAll);
+	window.addEventListener('resize', later);
+	/* szűrőgombok (Összes, Fotóautomaták…): az újonnan megjelenő csempék igazítása */
+	document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.ec-chip')) { later(); } });
+	if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fitAll); }
+})();
+
+(function () {
 	/* mobil: a sorkizárt bekezdések balra zárva (keskeny képernyőn a sorkizárás nagy lyukakat hagy a szavak között) */
 	function unjustify() {
 		if (window.innerWidth > 767) return;
@@ -75,7 +140,7 @@ ECJS
 
 /* egyszeri gyorsítótár-ürítés (WP Rocket) minden új változat után */
 add_action('wp_loaded', function () {
-	$v = '2';
+	$v = '3';
 	if (get_option('ec_flipfix_purged') === $v) { return; }
 	update_option('ec_flipfix_purged', $v, false);
 	if (function_exists('rocket_clean_domain')) { rocket_clean_domain(); }
