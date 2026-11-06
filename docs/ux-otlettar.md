@@ -1,7 +1,7 @@
 # Crazy panel – UX-ötlettár (félretett javaslatok)
 
 Ha a felhasználó új fejlesztési/UX-javaslatokat kér, ezeket is fel kell ajánlani (a 2026-10-31-i listából
-a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.7.12; az 5. (PWA + push), U1, U2 2026-11-06-án (v2.7.13, v2.8.0; a szakaszváltás visszavonása még nincs kész); a többi ide került). Elkészülés után innen törölni.
+a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.7.12; az 5. (PWA + push), U1, U2 2026-11-06-án (v2.7.13, v2.8.0; a szakaszváltás visszavonása még nincs kész); U3 szundi és U5 billentyűparancsok (v2.8.2; a „rendezvény előtt 3 nappal” szundi-lehetőség még nincs); a többi ide került). Elkészülés után innen törölni.
 
 | # | Javaslat | Becslés |
 |---|---|---|
@@ -45,9 +45,7 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 ## UI/UX-javaslatok (2026-11-06, felajánlva, még nem kért) – a Superhuman, Front, Linear, HubSpot, Pipedrive mintájára
 | # | Javaslat | Minta | Becslés |
 |---|---|---|---|
-| U3 | Szundi a levélszálakra: „Holnap 9-kor / jövő hétfőn / a rendezvény előtt 3 nappal” újra a Beérkezettbe | Superhuman, Front | ~0,5 nap |
 | U4 | Mentett nézetek a Deal-eken és a Levelezésben (pl. „Saját nyitott”, „E heti rendezvények”, „Válaszra vár”), a menüből egy kattintással | Linear, HubSpot | ~0,5 nap |
-| U5 | Billentyűparancsok: j/k lépkedés, r válasz, e archív, # kuka, s szundi, ? súgó | Superhuman, Gmail | ~0,5 nap |
 | U6 | Előnézet rámutatásra: ügyfél / deal neve fölött kis kártya (telefon, nyitott deal, utolsó levél, visszatérő-e) | Linear, Front | ~0,5 nap |
 | U7 | Inline szerkesztés a deal-listában: dátum, helyszín, felelős, érték kattintásra, az adatlap megnyitása nélkül | Pipedrive, Airtable | ~1 nap |
 | U8 | „Mai fókusz” a Kezdőlapon: egy listában a mai teendők, válaszra váró levelek, lejárt határidők, kipipálhatóan | Linear „My issues”, HubSpot Tasks | ~0,5 nap |
