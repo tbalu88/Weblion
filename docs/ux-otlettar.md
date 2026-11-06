@@ -1,13 +1,12 @@
 # Crazy panel – UX-ötlettár (félretett javaslatok)
 
 Ha a felhasználó új fejlesztési/UX-javaslatokat kér, ezeket is fel kell ajánlani (a 2026-10-31-i listából
-a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.7.12; a többi ide került). Elkészülés után innen törölni.
+a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.7.12; az 5. (PWA + push), U1, U2 2026-11-06-án (v2.7.13, v2.8.0; a szakaszváltás visszavonása még nincs kész); a többi ide került). Elkészülés után innen törölni.
 
 | # | Javaslat | Becslés |
 |---|---|---|
 | 1 | Szakaszváltás mobilon húzás nélkül: hosszan nyomva a csempén menü (Áthelyezés → szakaszlista, Megnyert, Elvesztett, Jegyzet) | ~0,5 nap |
 | 4 | Gyorsgombok a csempén a jegyzet mellé: hívás (tel:), e-mail (új levél a kontaktnak), teendő – mint a Salesmate-ben | ~0,5 nap |
-| 5 | Telepíthető app (PWA): kezdőképernyő-ikon, teljes képernyő, gyorsabb indulás; push-értesítés új ajánlatkérésnél és megemlítésnél | ~1 nap |
 | 6 | Deal-adatlap mobilon fülekre bontva (Áttekintés · Idővonal · Ügyfél · Pénzügy), rögzített gombsor | ~1 nap |
 | 8 | „Következő lépés” sáv szakaszonként (pl. Szerződés kiküldve után 3 nappal: rákérdezni az aláírásra), egy kattintással teendő | ~0,5 nap |
 | 10 | Sablonok „/” jellel a válaszmezőben, a deal adataival kitöltve (név, dátum, becsült ár) | ~0,5 nap |
@@ -46,8 +45,6 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 ## UI/UX-javaslatok (2026-11-06, felajánlva, még nem kért) – a Superhuman, Front, Linear, HubSpot, Pipedrive mintájára
 | # | Javaslat | Minta | Becslés |
 |---|---|---|---|
-| U1 | Ütközésjelzés a levélszálban: „Andi épp ezt nézi / válaszol” – két kolléga ne válaszoljon ugyanarra | Front | ~1 nap |
-| U2 | Visszavonható küldés (10 mp) és „Visszavonás” minden archiválás / kukába tétel / szakaszváltás után | Gmail, Linear | ~0,5 nap |
 | U3 | Szundi a levélszálakra: „Holnap 9-kor / jövő hétfőn / a rendezvény előtt 3 nappal” újra a Beérkezettbe | Superhuman, Front | ~0,5 nap |
 | U4 | Mentett nézetek a Deal-eken és a Levelezésben (pl. „Saját nyitott”, „E heti rendezvények”, „Válaszra vár”), a menüből egy kattintással | Linear, HubSpot | ~0,5 nap |
 | U5 | Billentyűparancsok: j/k lépkedés, r válasz, e archív, # kuka, s szundi, ? súgó | Superhuman, Gmail | ~0,5 nap |
