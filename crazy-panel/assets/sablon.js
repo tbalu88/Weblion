@@ -795,6 +795,27 @@ async function applyDeal(fresh) {
 	const di = D[st.di];
 	if (!inCat(di)) st.cat = 'all';
 	drawAllUi(); fillDeals(); schedule();   /* mentés csak tényleges módosításkor (changed → saveSoon) */
+	autoPng(d.id);
+}
+/* v2.9.9: a deal Fájlok kártyájáról nyitva (régi, PNG nélkül mentett ügyfélsablon): a lyukasztott PNG elkészül az ügyfél beállításaiból, és a dealhez kerül */
+function autoPng(id) {
+	let ts = '';
+	try { ts = localStorage.getItem('cpsb_png_' + id) || ''; if (ts) localStorage.removeItem('cpsb_png_' + id); } catch (e) { ts = ''; }
+	if (!ts || CLIENT) return;
+	msg('Lyukasztott PNG készítése a dealhez…', '');
+	setTimeout(async () => {
+		try {
+			await fontsReady();
+			const B = await build();
+			const c = document.createElement('canvas'); c.width = B.L.OW; c.height = B.L.OH;
+			compose(c.getContext('2d'), B, 'punch');
+			const blob = await new Promise((res, rej) => c.toBlob(x => (x ? res(x) : rej(new Error('A PNG nem készült el.'))), 'image/png'));
+			const pd = await withDpi(blob, DPI);
+			const u = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => rej(new Error('A PNG nem olvasható.')); fr.readAsDataURL(pd); });
+			const r = await post('cp_portal_sb_png', { deal: id, at: ts, png: u });
+			msg(r.had ? '✓ Ehhez a sablonhoz már van PNG a deal Fájlok kártyáján.' : '✓ Kész: a lyukasztott PNG a deal Fájlok kártyájára került (Online fotósablon). Innen is letöltheted.', 'ok');
+		} catch (e) { msg('A PNG-t nem sikerült a dealhez tenni: ' + e.message + ' – a „PNG letöltése” gombbal letöltheted.', 'err'); }
+	}, 600);
 }
 
 /* ------------------------------------------------------------ események */

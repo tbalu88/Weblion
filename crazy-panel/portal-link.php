@@ -65,7 +65,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$pp = cp_portal_get_by_deal($id);
 	if ($pp && function_exists('cp_portal_answers') && function_exists('cp_portal_sb_file_url')) {
 		$aa = cp_portal_answers($pp->id); $sbf = array();
-		$one = function ($v, $cur) { if (!is_array($v) || empty($v['preview'])) { return null; } return array('name' => (string) ($v['name'] ?? ''), 'at' => !empty($v['at']) ? wp_date('Y-m-d H:i', (int) $v['at']) : '', 'cur' => $cur ? 1 : 0, 'prev' => cp_portal_sb_file_url($v['preview']), 'png' => !empty($v['png']) ? cp_portal_sb_file_url($v['png']) : '', 'logo' => !empty($v['logo']) ? cp_portal_sb_file_url($v['logo']) : ''); };
+		$one = function ($v, $cur) { if (!is_array($v) || empty($v['preview'])) { return null; } return array('name' => (string) ($v['name'] ?? ''), 'at' => !empty($v['at']) ? wp_date('Y-m-d H:i', (int) $v['at']) : '', 'ts' => (int) ($v['at'] ?? 0), 'cur' => $cur ? 1 : 0, 'prev' => cp_portal_sb_file_url($v['preview']), 'png' => !empty($v['png']) ? cp_portal_sb_file_url($v['png']) : '', 'logo' => !empty($v['logo']) ? cp_portal_sb_file_url($v['logo']) : ''); };
 		if ($o = $one($aa['photo_template'] ?? null, true)) { $sbf[] = $o; }
 		foreach ((array) ($aa['photo_template_hist'] ?? array()) as $hv) { if ($o = $one($hv, false)) { $sbf[] = $o; } }
 		if ($sbf) { $x['sbf'] = $sbf; }
@@ -149,4 +149,29 @@ function cp_plk_after_send($deal_id, $html) {
 	}
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	return 'A deal az „' . $target . '” szakaszba került.';
+}
+
+/* v2.9.9: a régebben (PNG nélkül) mentett ügyfélsablonhoz a panel Sablonkészítője elkészíti a lyukasztott PNG-t az ügyfél beállításaiból,
+ * és ide tölti fel – utána a deal Fájlok kártyáján letölthető. Csak az aktuális sablonhoz, és csak ha még nincs PNG-je. */
+add_action('wp_ajax_nopriv_cp_portal_sb_png', 'cp_plk_ajax_sb_png');
+add_action('wp_ajax_cp_portal_sb_png', 'cp_plk_ajax_sb_png');
+function cp_plk_ajax_sb_png() {
+	cp_el_auth();
+	cp_tab_need(array('deals', 'sablon'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_plk_ready() || !function_exists('cp_portal_sb_dataurl')) { cp_el_err('Hibás kérés.'); }
+	$deal = preg_replace('/[^0-9]/', '', (string) wp_unslash($_POST['deal'] ?? ''));
+	$p = $deal !== '' ? cp_portal_get_by_deal($deal) : null;
+	if (!$p) { cp_el_err('Ehhez a dealhez nincs ügyfélportál.'); }
+	$a = cp_portal_answers($p->id);
+	$v = isset($a['photo_template']) && is_array($a['photo_template']) ? $a['photo_template'] : null;
+	if (!$v || empty($v['preview']) || !preg_match('/^(p\d+-[a-z0-9]{12})-prev\.jpg$/', (string) $v['preview'], $m)) { cp_el_err('Nincs mentett ügyfélsablon.'); }
+	if ((int) ($_POST['at'] ?? 0) !== (int) ($v['at'] ?? 0)) { cp_el_err('Közben új sablon került mentésre – frissítsd az oldalt.'); }
+	if (!empty($v['png'])) { wp_send_json_success(array('had' => 1)); }
+	$png = cp_portal_sb_dataurl((string) wp_unslash($_POST['png'] ?? ''), array('png'), 15 * MB_IN_BYTES);
+	if (!$png) { cp_el_err('A PNG nem készült el.'); }
+	$name = $m[1] . '-print.png';
+	if (@file_put_contents(cp_portal_sb_dir() . '/' . $name, $png[1]) === false) { cp_el_err('A PNG-t nem sikerült elmenteni.', 500); }
+	$v['png'] = $name;
+	cp_portal_answer_put($p->id, 'photo_template', $v, 'ugyfel');
+	wp_send_json_success(array('png' => cp_portal_sb_file_url($name)));
 }
