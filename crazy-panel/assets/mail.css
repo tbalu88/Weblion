@@ -597,3 +597,7 @@
   .ml-ev{font-size:12.5px}
   .ml-snip{font-size:12px}
 }
+/* v2.7.13: ütközésjelzés */
+.ml-pres{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:4px 12px 8px;padding:8px 12px;border-radius:10px;background:#FFF6E5;border:1px solid #F4D9A6;color:#7A4B00;font-size:13px;line-height:1.35}.ml-pres[hidden]{display:none}
+.ml-pres .r{color:#B4432F}.ml-pres .n{color:#1F4FB8}.ml-pres button{border:0;background:#1F4FB8;color:#fff;border-radius:999px;padding:3px 10px;font:600 12px Inter,sans-serif;cursor:pointer;margin-left:4px}
+.ml-compose>.ml-pres{margin:0 0 10px}

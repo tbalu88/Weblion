@@ -622,3 +622,36 @@ function cp_sig_norm_links($html) {
 	return $out;
 }
 
+
+/* ------------------------------------------------------------ v2.7.13: ütközésjelzés – ki nézi / ki válaszol épp a szálban
+ * A levélszálat megnyitó kolléga böngészője 15 mp-enként jelez (nézi / válaszol); a válasz a többiek friss jelzéseit adja,
+ * és a szál legutóbbi levelének azonosítóját (így látszik, ha közben új levél jött). Rövid életű adat, csak gyorsítótárban. */
+add_action('wp_ajax_nopriv_cp_mail_presence', 'cp_mail_ajax_presence');
+add_action('wp_ajax_cp_mail_presence', 'cp_mail_ajax_presence');
+function cp_mail_ajax_presence() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	$tid = (int) ($_POST['th'] ?? 0);
+	if ($tid <= 0) { wp_send_json_success(array('who' => array(), 'last' => 0)); }
+	$st = sanitize_key(wp_unslash($_POST['st'] ?? 'view')) === 'reply' ? 'reply' : 'view';
+	$k = 'cp_mpres_' . $tid;
+	$p = get_transient($k);
+	if (!is_array($p)) { $p = array(); }
+	$now = time();
+	foreach ($p as $uid => $x) { if ($now - (int) ($x['t'] ?? 0) > 40) { unset($p[$uid]); } }
+	if ($me > 0) {
+		if (!empty($_POST['leave'])) { unset($p[$me]); } else { $p[$me] = array('s' => $st, 't' => $now); }
+	}
+	set_transient($k, $p, 120);
+	$who = array();
+	foreach ($p as $uid => $x) {
+		if ((int) $uid === $me) { continue; }
+		$u = function_exists('cp_pu_get') ? cp_pu_get((int) $uid) : null;
+		$who[] = array('n' => $u ? (string) $u['n'] : 'Egy kolléga', 's' => (string) $x['s']);
+	}
+	global $wpdb;
+	$last = (int) $wpdb->get_var($wpdb->prepare('SELECT MAX(id) FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d', $tid));
+	wp_send_json_success(array('who' => $who, 'last' => $last));
+}

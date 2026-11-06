@@ -142,6 +142,14 @@ function cp_send_ajax() {
 	$thread = (int) ($_POST['thread'] ?? 0);
 	$t = $thread ? $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $thread), ARRAY_A) : null;
 	if ($thread && !$t) { cp_el_err('Nincs ilyen levélszál.', 404); }
+	/* v2.7.13 (ütközésjelzés): ha a válaszíró megnyitása óta új levél jött a szálba (kolléga válaszolt / az ügyfél írt), előbb rákérdez */
+	$known = (int) ($_POST['known'] ?? 0);
+	if ($t && $known > 0 && empty($_POST['force']) && !$test) {
+		$nw = $wpdb->get_row($wpdb->prepare('SELECT dir, from_name, sent_at FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d AND id > %d ORDER BY id DESC LIMIT 1', $thread, $known), ARRAY_A);
+		if ($nw) {
+			wp_send_json_error(array('code' => 'newer', 'dir' => $nw['dir'], 'msg' => $nw['dir'] === 'out' ? 'Amióta megnyitottad, már ment válasz ebbe a levélszálba (' . (function_exists('cp_mail_local') ? cp_mail_local($nw['sent_at']) : $nw['sent_at']) . ').' : 'Amióta megnyitottad, új levél jött az ügyféltől ebbe a szálba (' . esc_html((string) $nw['from_name']) . ').'), 409);
+		}
+	}
 	$deal = (int) ($_POST['deal'] ?? 0) ?: ($t ? (int) $t['deal_id'] : 0);
 	$vals = cp_mail_values($deal);
 	/* v1.59: a {{Deal.ugyfelportal_link}} mindig friss, működő portál-link (a régi linkek nem kérhetők vissza) */

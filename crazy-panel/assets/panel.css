@@ -745,3 +745,6 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 .cpx-menu .cpx-top-r .cpx-theme{flex:1;justify-content:center}
 @media (min-width:1025px){.cpx-shell .cpx-top-r .cpx-theme{justify-content:flex-start;padding:0 14px 0 9px}.cpx-mini .cpx-top-r .cpx-theme{justify-content:center;padding:0}}
 /* v2.7.12: a levelek eredeti nézete is sötét (a benne lévő képek eredeti színűek) */
+/* v2.7.13: értesítő sáv művelettel (Visszavonás) */
+.cpx-toast.on{pointer-events:auto}
+.cpx-tact{border:0;background:#F2B35B;color:#1A1F2B;border-radius:999px;padding:4px 12px;margin-left:8px;font:700 13px Inter,sans-serif;cursor:pointer}.cpx-tact.ghost{background:rgba(255,255,255,.16);color:#fff;margin-left:4px}
