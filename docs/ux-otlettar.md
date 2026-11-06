@@ -1,7 +1,7 @@
 # Crazy panel – UX-ötlettár (félretett javaslatok)
 
 Ha a felhasználó új fejlesztési/UX-javaslatokat kér, ezeket is fel kell ajánlani (a 2026-10-31-i listából
-a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen törölni.
+a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.7.12; a többi ide került). Elkészülés után innen törölni.
 
 | # | Javaslat | Becslés |
 |---|---|---|
@@ -12,7 +12,6 @@ a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen 
 | 8 | „Következő lépés” sáv szakaszonként (pl. Szerződés kiküldve után 3 nappal: rákérdezni az aláírásra), egy kattintással teendő | ~0,5 nap |
 | 10 | Sablonok „/” jellel a válaszmezőben, a deal adataival kitöltve (név, dátum, becsült ár) | ~0,5 nap |
 | 11 | Egységes gombstílus minden fülön (a deal-adatlap sötétkék gombjai a Kezdőlapon, Kapacitáson, Levelezésben is) | ~0,5 nap |
-| 12 | Sötét mód (a telefon beállítása szerint) | ~1 nap |
 | 13 | Bővített Ctrl+K kereső parancsokkal („új deal”, „ugrás 12.18-ra a Kapacitásban”, „Levelezés: kiosztatlan”) | ~0,5 nap |
 | 14 | Betöltési váz (skeleton) a „Betöltés…” szöveg helyett | ~0,5 nap |
 | – | Kapacitás: év/hónap nézetben a szabad gépekre szűrt gyors ajánlatadás; Mindkettő kalkulátor a panelben (telefonos ajánlatadáshoz) | ~1 nap |
@@ -43,3 +42,18 @@ a 2., 3., 7. pont elkészült; a többi ide került). Elkészülés után innen 
 | K4 | Megbízási szerződés / teljesítésigazolás generálása a kezelő adataiból (a szerződésmodulból) | ~1 nap |
 | K5 | Havi kezelői összesítő a Kezelői elszámolásból kezelőnként (alkalmak, órák, km, kifizetendő), CSV a könyvelőnek | ~0,5 nap |
 | K6 | Okmányok és lejáratok (jogosítvány, egészségügyi kiskönyv), figyelmeztetés lejárat előtt | ~0,5 nap |
+
+## UI/UX-javaslatok (2026-11-06, felajánlva, még nem kért) – a Superhuman, Front, Linear, HubSpot, Pipedrive mintájára
+| # | Javaslat | Minta | Becslés |
+|---|---|---|---|
+| U1 | Ütközésjelzés a levélszálban: „Andi épp ezt nézi / válaszol” – két kolléga ne válaszoljon ugyanarra | Front | ~1 nap |
+| U2 | Visszavonható küldés (10 mp) és „Visszavonás” minden archiválás / kukába tétel / szakaszváltás után | Gmail, Linear | ~0,5 nap |
+| U3 | Szundi a levélszálakra: „Holnap 9-kor / jövő hétfőn / a rendezvény előtt 3 nappal” újra a Beérkezettbe | Superhuman, Front | ~0,5 nap |
+| U4 | Mentett nézetek a Deal-eken és a Levelezésben (pl. „Saját nyitott”, „E heti rendezvények”, „Válaszra vár”), a menüből egy kattintással | Linear, HubSpot | ~0,5 nap |
+| U5 | Billentyűparancsok: j/k lépkedés, r válasz, e archív, # kuka, s szundi, ? súgó | Superhuman, Gmail | ~0,5 nap |
+| U6 | Előnézet rámutatásra: ügyfél / deal neve fölött kis kártya (telefon, nyitott deal, utolsó levél, visszatérő-e) | Linear, Front | ~0,5 nap |
+| U7 | Inline szerkesztés a deal-listában: dátum, helyszín, felelős, érték kattintásra, az adatlap megnyitása nélkül | Pipedrive, Airtable | ~1 nap |
+| U8 | „Mai fókusz” a Kezdőlapon: egy listában a mai teendők, válaszra váró levelek, lejárt határidők, kipipálhatóan | Linear „My issues”, HubSpot Tasks | ~0,5 nap |
+| U9 | Mikro-visszajelzések: sima átmenetek fülváltáskor, mentéskor kis pipa, egységes értesítő buborék egy helyen | Linear, Stripe | ~0,5 nap |
+| U10 | Akadálymentesség és érintés: látható fókuszkeret billentyűzetnél, legalább 44 px-es érintési felületek mobilon, kontraszt-ellenőrzés | Apple HIG | ~0,5 nap |
+
