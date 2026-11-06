@@ -1,0 +1,19 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php.bak299	2026-11-06 11:50:55.403254040 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v19/crazy-panel.php	2026-11-06 11:50:55.416930342 +0000
+@@ -10,7 +10,7 @@
+ 
+ if (!defined('ABSPATH')) { exit; }
+ 
+-define('CP_PANEL_VER', '2.9.7');
++define('CP_PANEL_VER', '2.9.8');
+ define('CP_PANEL_TRACK', 'cp_pt_');
+ define('CP_PANEL_OPT', 'cp_panel_settings');
+ define('CP_PANEL_SUBS', 'cp_panel_subs');
+@@ -3763,6 +3763,7 @@
+ require_once __DIR__ . '/contract.php';
+ require_once __DIR__ . '/mail-html.php';
+ require_once __DIR__ . '/cutover.php';
++require_once __DIR__ . '/claim.php'; /* v2.9.8: felelős = aki először foglalkozik vele */
+ require_once __DIR__ . '/pwa.php';
+ 
+ /* =====================================================================
