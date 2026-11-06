@@ -40,14 +40,14 @@
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), ms || 7000);
 	}
 	/* v2.7.13: visszavonható küldés – a levél 20 mp múlva megy ki, addig visszavonható */
-	function undoWait(sec) {
+	function undoWait(sec, who) {
 		return new Promise(res => {
 			let d = document.getElementById('cpx-toast');
 			if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; d.setAttribute('role', 'status'); document.body.appendChild(d); }
 			let n = sec, done = false;
 			const fin = ok => { if (done) return; done = true; clearInterval(iv); window.removeEventListener('beforeunload', bu); d.classList.remove('on'); res(ok); };
 			const bu = e => { e.preventDefault(); e.returnValue = ''; };
-			const draw = () => { d.innerHTML = '<span>Küldés ' + n + ' mp múlva…</span> <button type="button" class="cpx-tact">Visszavonás</button> <button type="button" class="cpx-tact ghost">Küldés most</button>'; const b = d.querySelectorAll('.cpx-tact'); b[0].onclick = () => fin(false); b[1].onclick = () => fin(true); };
+			const draw = () => { d.innerHTML = '<span>' + (who ? 'Küldés ide: <b>' + esc(who) + '</b> – ' + n + ' mp múlva…' : 'Küldés ' + n + ' mp múlva…') + '</span> <button type="button" class="cpx-tact">Visszavonás</button> <button type="button" class="cpx-tact ghost">Küldés most</button>'; const b = d.querySelectorAll('.cpx-tact'); b[0].onclick = () => fin(false); b[1].onclick = () => fin(true); };
 			clearTimeout(d._t); d.classList.remove('bad'); d.classList.add('on'); draw();
 			window.addEventListener('beforeunload', bu);
 			const iv = setInterval(() => { n--; if (n <= 0) fin(true); else draw(); }, 1000);
@@ -1096,7 +1096,7 @@
 			if (!test && !tl.length) { toast('Adj meg címzettet.', true); return; }
 			if (!sj) { toast('Add meg a tárgyat.', true); q('[data-subj]').focus(); return; }
 			if (ed.isEmpty()) { toast('Üres a levél.', true); return; }
-			if (!test && !force && !window.confirm('Elküldöd a levelet?\n\nCímzett: ' + tl.join(', ') + (cc.get().length ? '\nMásolat: ' + cc.get().join(', ') : '') + (bcc.get().length ? '\nRejtett: ' + bcc.get().join(', ') : '') + '\nTárgy: ' + sj + (atts.length ? '\nMelléklet: ' + atts.map(a => a.n).join(', ') : '') + '\n\nA levél a postafiókból megy ki, és az Elküldött mappába is bekerül.')) return;
+			/* v2.9.2: nincs külön megerősítő ablak – a 20 mp-es visszavonás véd az elsietett küldés ellen */
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
@@ -1104,7 +1104,7 @@
 				/* v2.8.7: a levél tartalma a visszaszámlálás előtt félretéve – ha közben máshová lépsz a panelben, a visszavonás piszkozatként visszahozza a levélírót */
 				const snap = { to: tl, cc: cc.get(), bcc: bcc.get(), subject: sj, body: body, thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) };
 				await dsave(true);
-				const ok = await undoWait(20);
+				const ok = await undoWait(20, tl.length > 1 ? tl[0] + ' +' + (tl.length - 1) : tl[0]);
 				if (!ok) {
 					if (box.isConnected && S.view === 'compose') { b.disabled = false; b.textContent = old; toast('Küldés visszavonva – a levél itt maradt, szerkesztheted.'); return; }
 					S.reply = snap; S.draftId = draftId; S.view = 'compose';
