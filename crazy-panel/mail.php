@@ -136,6 +136,13 @@ function cp_mail_vars() {
 		'portal.link'         => array('Ügyfélportál linkje', 'https://eventcrazy.hu/portal/…'),
 		'felelos.nev'         => array('Felelős kolléga', 'Andrea'),
 		'sajat.nev'           => array('A te neved', 'Teszt Elek'),
+		/* v2.9.14: a Salesmate-sablonok helytartóinak magyar megfelelői (a régi {{Deal.…}} / {{Contact.…}} alakok is működnek) */
+		'rendezveny.nap'      => array('Rendezvény dátuma (2026.11.14)', '2026.11.14'),
+		'rendezveny.oraszam'  => array('Rendelkezésre állás (óra)', '4'),
+		'netto.ar'            => array('Nettó ár (Ft nélkül)', '190 000'),
+		'kiszallasi.dij'      => array('Kiszállási díj (Ft nélkül)', '10 000'),
+		'kontakt.azonosito'   => array('Kontakt azonosító', '12345'),
+		'deal.azonosito'      => array('Deal azonosító', '23456'),
 	);
 }
 
@@ -171,6 +178,12 @@ function cp_mail_values($deal_id) {
 		'ertek'               => $d['value'] !== null ? number_format((float) $d['value'], 0, ',', ' ') . ' Ft' : '',
 		'portal.link'         => (string) $d['portal_link'],
 		'felelos.nev'         => function_exists('cp_crm_user_name') ? cp_crm_user_name($d['owner_id']) : '',
+		'rendezveny.nap'      => $d['event_d'] ? str_replace('-', '.', substr((string) $d['event_d'], 0, 10)) : '',
+		'rendezveny.oraszam'  => $d['hours'] !== null && $d['hours'] !== '' ? (string) (0 + $d['hours']) : '',
+		'netto.ar'            => $d['value'] !== null && $d['value'] !== '' ? number_format((float) $d['value'], 0, ',', ' ') : '',
+		'kiszallasi.dij'      => $d['km_fee'] !== null && $d['km_fee'] !== '' ? number_format((float) $d['km_fee'], 0, ',', ' ') : '',
+		'kontakt.azonosito'   => $d['contact_id'] ? (string) $d['contact_id'] : '',
+		'deal.azonosito'      => (string) $d['id'],
 	));
 	/* v1.43: a Salesmate-ből átvett sablonok változói ({{Deal.…}}, {{Contact.…}}) – a nyers értékek, a szűrőket a renderelés alkalmazza */
 	if (function_exists('cp_crm_spec')) {
@@ -181,6 +194,37 @@ function cp_mail_values($deal_id) {
 	$v['Contact.id'] = (string) $d['contact_id']; $v['Contact.name'] = $c ? (string) $c['name'] : ''; $v['Contact.email'] = $c ? (string) $c['email'] : '';
 	$v['Contact.mobile'] = $c ? (string) $c['mobile'] : ''; $v['Contact.phone'] = $c ? (string) $c['phone'] : ''; $v['Company.name'] = (string) $co;
 	return $v;
+}
+
+/* v2.9.14: helytartó olvasható neve (a levélíró sárga jelöléséhez és a hiánylistához) */
+function cp_mail_ph_label($k) {
+	$V = cp_mail_vars();
+	if (isset($V[$k])) { return preg_replace('/\s*\(.*\)$/u', '', $V[$k][0]); }
+	$sm = array('Contact.name' => 'Kontakt neve', 'Contact.email' => 'Kontakt e-mail-címe', 'Contact.mobile' => 'Kontakt mobilszáma', 'Contact.phone' => 'Kontakt telefonszáma', 'Contact.id' => 'Kontakt azonosító',
+		'Company.name' => 'Cég neve', 'Deal.id' => 'Deal azonosító', 'Deal.title' => 'Deal neve', 'Deal.dealValue' => 'Nettó ár', 'Deal.ugyfelportal_link' => 'Ügyfélportál linkje',
+		'Deal.dateCustomField1' => 'Rendezvény dátuma', 'Deal.dateTimeCustomField1' => 'Kezdés', 'Deal.textCustomField1' => 'Helyszín', 'Deal.intCustomField1' => 'Tervezett létszám',
+		'Deal.intCustomField2' => 'Kiszállási díj', 'Deal.intCustomField3' => 'Rendelkezésre állás (óra)', 'Deal.textCustomField5' => 'Fotófal / háttér', 'Deal.textCustomField13' => 'Szolgáltatás');
+	return $sm[$k] ?? $k;
+}
+/* kitöltés a levélíróban: az ismert és kitöltött helytartók értékre cserélődnek; ami hiányzik, sárga jelölés lesz (HTML-ben),
+ * amely a title-ben megőrzi az eredeti helytartót – így később (pl. deal csatolásakor) újra kitölthető, és küldés előtt felismerhető */
+function cp_mail_fill($text, $vals, $html, &$miss) {
+	return preg_replace_callback('/\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*((?:\|[^}]*)?)\}\}/u', function ($m) use ($vals, $html, &$miss) {
+		$x = array_key_exists($m[1], $vals) ? (string) $vals[$m[1]] : '';
+		if ($x !== '' && $m[2] !== '') { $x = cp_mail_filter($x, $m[2]); }
+		if ($x !== '') { return $html ? esc_html($x) : $x; }
+		$l = cp_mail_ph_label($m[1]); $miss[$l] = 1;
+		return $html ? '<span class="cp-ph" title="' . esc_attr(html_entity_decode($m[0], ENT_QUOTES, 'UTF-8')) . '" style="background:#FFF3CD;color:#7A5B00;border-radius:4px;padding:0 3px">⚠ ' . esc_html($l) . '</span>' : $m[0];
+	}, $text);
+}
+/* küldés előtti ellenőrzés: maradt-e kitöltetlen helytartó (az idézett korábbi levélben nem keresünk) – visszatér: hiányzó nevek */
+function cp_mail_unfilled($subj, $html) {
+	$h = preg_replace('#<blockquote\b.*</blockquote>#isu', '', (string) $html);
+	$out = array();
+	if (preg_match_all('/\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)[^}]*\}\}/u', $subj . ' ' . html_entity_decode($h, ENT_QUOTES, 'UTF-8'), $m)) { foreach ($m[1] as $k) { $out[cp_mail_ph_label($k)] = 1; } }
+	if (preg_match_all('#class="cp-ph"[^>]*>⚠\s*([^<]+)<#u', $h, $m)) { foreach ($m[1] as $k) { $out[trim(html_entity_decode($k, ENT_QUOTES, 'UTF-8'))] = 1; } }
+	if (preg_match_all('#background:\#FFF3CD">\[([^\]<]+)\]#u', $h, $m)) { foreach ($m[1] as $k) { $out[cp_mail_ph_label($k)] = 1; } }
+	return array_keys($out);
 }
 
 /* Salesmate-szűrők: date : "%Y.%m.%d.", money / money_without_currency, remove: 'x', default: 'x' */
@@ -304,6 +348,19 @@ function cp_mail_ajax_tpl_del() {
 /* előnézet: a változók kitöltése egy deal adataival */
 add_action('wp_ajax_nopriv_cp_mail_preview', 'cp_mail_ajax_preview');
 add_action('wp_ajax_cp_mail_preview', 'cp_mail_ajax_preview');
+add_action('wp_ajax_nopriv_cp_mail_fill', 'cp_mail_ajax_fill');
+add_action('wp_ajax_cp_mail_fill', 'cp_mail_ajax_fill');
+function cp_mail_ajax_fill() {
+	cp_el_auth();
+	cp_tab_need(array('mail', 'deals'));
+	$deal = (int) ($_POST['deal'] ?? 0);
+	if (!$deal) { cp_el_err('Válassz deal-t a levélhez.'); }
+	$vals = cp_mail_values($deal);
+	$miss = array();
+	$subj = cp_mail_fill(sanitize_text_field(wp_unslash($_POST['subject'] ?? '')), $vals, false, $miss);
+	$body = cp_mail_fill(cp_mail_clean(wp_unslash($_POST['body'] ?? '')), $vals, true, $miss);
+	wp_send_json_success(array('subject' => $subj, 'body' => $body, 'miss' => array_keys($miss)));
+}
 function cp_mail_ajax_preview() {
 	cp_el_auth();
 	cp_tab_need(array('mail'));

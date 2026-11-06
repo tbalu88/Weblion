@@ -996,7 +996,7 @@
 			(SON ? '<button type="button" data-mq="test">🧪 Próbalevél magamnak</button>' : '') + '<button type="button" data-mq="prev">👁 Előnézet</button><button type="button" data-mq="save">💾 Piszkozat mentése</button>' +
 			(ctx.thread ? '<button type="button" data-mq="unthread">✉ Új levélként küldöm</button>' : '') + '<button type="button" data-mq="clear">🗑 Új, üres levél</button>' + (SON ? '' : '<small>A panelből küldés neked még nincs bekapcsolva.</small>') + '</div></div>' +
 			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>' + (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
-			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Ügyfélportál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-tpop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
+			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Ügyfélportál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Másolat</label><div class="ml-chips" data-ccv></div></div>' +
@@ -1122,11 +1122,40 @@
 				cmp.addEventListener('drop', e => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); cmp.classList.remove('drop'); Array.from(e.dataTransfer.files).forEach(upload); });
 			} else ab.title = 'Melléklet – a panelből küldés bekapcsolása után';
 		}
+		/* v2.9.14: sablon-helytartók kitöltése a deal adataival már a levélíróban; a hiányzók sárgán jelölve (title: az eredeti helytartó) */
+		const unph = h => { const t = document.createElement('div'); t.innerHTML = h; t.querySelectorAll('span.cp-ph[title]').forEach(x => x.replaceWith(document.createTextNode(x.getAttribute('title')))); return t.innerHTML; };
+		const unfilled = (sj, h) => {
+			const t = document.createElement('div'); t.innerHTML = h; t.querySelectorAll('blockquote').forEach(x => x.remove());
+			const out = new Set();
+			t.querySelectorAll('span.cp-ph').forEach(x => out.add(x.textContent.replace(/^⚠\s*/, '').trim()));
+			((sj + ' ' + t.textContent).match(/\{\{[^}]*\}\}/g) || []).forEach(x => out.add(x.replace(/^\{\{\s*|\s*(\|[^}]*)?\}\}$/g, '')));
+			return Array.from(out);
+		};
+		let filling = null;
+		const fillNow = async (why) => {
+			if (!deal || !deal.id) return;
+			const sj0 = q('[data-subj]').value, b0 = ed.get();
+			if (!/\{\{/.test(sj0) && !/\{\{|class="cp-ph"/.test(b0)) return;
+			if (filling) return filling;
+			filling = (async () => {
+				try {
+					const r = await post('cp_mail_fill', { deal: deal.id, subject: sj0, body: unph(b0) });
+					if (ed.get() !== b0 || q('[data-subj]').value !== sj0) return; /* közben írtál – nem írom felül */
+					q('[data-subj]').value = r.subject; ed.set(r.body);
+					if (r.miss && r.miss.length) toast('Kitöltve a deal adataival. Hiányzik a dealből: ' + r.miss.join(', ') + ' – sárgával jelölve, írd be kézzel, vagy töltsd ki a dealen.', true);
+					else if (why) toast('Kitöltve a deal adataival.');
+				} catch (e) { toast(e.message, true); }
+				finally { filling = null; }
+			})();
+			return filling;
+		};
 		const doSend = async (test, force) => {
 			const tl = to.get(), sj = q('[data-subj]').value.trim(), body = ed.get();
 			if (!test && !tl.length) { toast('Adj meg címzettet.', true); return; }
 			if (!sj) { toast('Add meg a tárgyat.', true); q('[data-subj]').focus(); return; }
 			if (ed.isEmpty()) { toast('Üres a levél.', true); return; }
+			/* v2.9.14: kitöltetlen sablon-helytartó nem mehet ki (próbalevélnél mehet, hogy lásd) */
+			if (!test) { const um = unfilled(sj, body); if (um.length) { toast('Kitöltetlen adat maradt a levélben: ' + um.join(', ') + '. ' + (deal ? 'Írd be a sárga helyekre, vagy töltsd ki a dealen.' : 'Válaszd ki a dealt fent, és kitöltöm.'), true); const f = q('.ml-compose .cp-ph'); if (f) f.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; } }
 			/* v2.9.2: nincs külön megerősítő ablak – a 20 mp-es visszavonás véd az elsietett küldés ellen */
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
@@ -1162,7 +1191,8 @@
 		};
 		if (sendBtn) sendBtn.addEventListener('click', () => doSend(false));
 		if (testBtn) testBtn.addEventListener('click', () => doSend(true));
-		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); pbSync(); });
+		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); pbSync(); fillNow(true); });
+		if (deal && deal.id) fillNow(false);
 		q('[data-cc]').addEventListener('click', () => box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = !r.hidden; }));
 		q('[data-tplbtn]').addEventListener('click', e => {
 			e.stopPropagation();
@@ -1171,6 +1201,9 @@
 				if (!ed.isEmpty() && !window.confirm('A sablon felülírja a levél jelenlegi szövegét. Mehet?')) return;
 				if (t.subject) q('[data-subj]').value = t.subject;
 				ed.set(withSig(t.body || ''));
+				/* v2.9.14: azonnali kitöltés; deal nélkül rákérdez */
+				if (deal && deal.id) fillNow(true);
+				else if (/\{\{/.test((t.subject || '') + (t.body || ''))) { toast('Melyik dealhez írod? Válaszd ki fent a deal-keresőben, és a sablon adatait rögtön kitöltöm.'); const c = q('.ml-compose'); c.classList.add('dp-on'); const i = q('[data-dp] input'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
 			});
 		});
 		/* v2.9: automatikus mentés a szerverre (4 mp-enként, ha változott; a levélíró elhagyásakor is) */

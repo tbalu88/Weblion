@@ -164,6 +164,9 @@ function cp_send_ajax() {
 	$html = cp_mail_render(cp_mail_clean(wp_unslash($_POST['body'] ?? '')), $vals, true);
 	if (trim(wp_strip_all_tags($html)) === '') { cp_el_err('Üres a levél.'); }
 	if (preg_match('/\[KITÖLTENDŐ/u', $html . $subj)) { cp_el_err('A levélben még van kitöltendő rész ([KITÖLTENDŐ: …]).'); }
+	/* v2.9.14: kitöltetlen sablon-helytartó nem mehet ki az ügyfélnek (próbalevélnél csak figyelmeztet) */
+	$unf = function_exists('cp_mail_unfilled') ? cp_mail_unfilled($subj, $html) : array();
+	if ($unf && !$test) { wp_send_json_error(array('code' => 'unfilled', 'miss' => $unf, 'msg' => 'A levélben kitöltetlen adat maradt: ' . implode(', ', $unf) . '. Töltsd ki a dealen (vagy írd be kézzel a sárga helyekre), és küldd újra.')); }
 	$atts = function_exists('cp_att_take') ? cp_att_take(wp_unslash($_POST['att'] ?? ''), $me) : array();
 	if (is_wp_error($atts)) { cp_el_err($atts->get_error_message()); }
 	$o = cp_send_opts();
