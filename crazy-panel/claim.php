@@ -2,8 +2,8 @@
 /* =====================================================================
  * Felelős = aki először foglalkozik vele (v2.9.8)
  * – új deal (a bekapcsolás után létrejött): az lesz a felelős, aki a kiválasztott kollégák közül (Beállítások → Átállás →
- *   „Felelős-kiosztás”, alapból Andi és Dorka) elsőként érdemben foglalkozik vele: mező szerkesztése, szakaszváltás,
- *   jegyzet, teendő, levél a dealhez, portál kiküldése, számla. A puszta megnyitás nem számít.
+ *   „Felelős-kiosztás”, alapból Andi és Dorka) elsőként levelet / választ küld a panelből az ügyfélnek a dealhez (v2.9.12-től
+ *   csak ez számít; megnyitás, szerkesztés, jegyzet, szakaszváltás nem).
  * – akinek a nevére kézzel állították a dealt (új deal felvételekor vagy a Felelős mezőben), azt nem írja felül.
  * – levélszál: ha még nincs kiosztva, az kapja, aki a kiválasztott kollégák közül elsőként válaszol rá a panelből.
  * Egy deal / szál csak egyszer kerül így kiosztásra; régi dealekhez nem nyúl.
@@ -73,8 +73,9 @@ function cp_claim_thread($thread_id) {
 
 /* a figyelt műveletek: ajax-művelet => a deal azonosítójának POST-mezője */
 function cp_claim_actions() {
-	return array('cp_crm_set' => 'id', 'cp_crm_save' => 'id', 'cp_crm_move' => 'id', 'cp_crm_note_add' => 'deal', 'cp_crm_act_save' => 'deal',
-		'cp_portal_p_send' => 'id', 'cp_bil_issue' => 'id', 'cp_mail_send' => 'deal', 'cp_crm_create' => '');
+	/* v2.9.12: a deal is csak a levélválasszal kerül valakihez (a szerkesztés / jegyzet / szakaszváltás nem számít);
+	 * a cp_crm_set / cp_crm_save csak a kézi felelős-beállítás felismeréséhez kell */
+	return array('cp_crm_set' => 'id', 'cp_crm_save' => 'id', 'cp_mail_send' => 'deal', 'cp_crm_create' => '');
 }
 
 /* a művelet lefutása után (csak sikeres válasznál) – a válasz a kimeneti pufferből olvasható */
@@ -101,6 +102,7 @@ add_action('admin_init', function () {
 		try {
 			if ($a === 'cp_crm_create') { $id = (int) ($j['data']['id'] ?? 0); if ($id) { cp_claim_mark($id, 0, 'manual'); } return; }
 			if ($owner_set !== '') { cp_claim_mark($deal, (int) $owner_set, 'manual'); return; }
+			if ($a !== 'cp_mail_send') { return; }
 			if ($a === 'cp_mail_send') {
 				$th = (int) ($j['data']['thread'] ?? 0);
 				cp_claim_thread($th);
