@@ -229,7 +229,11 @@ function cp_crm_deal_data($id) {
 	foreach ($acts as &$a) { $a['due_at'] = cp_crm_local($a['due_at']); $a['completed_at'] = cp_crm_local($a['completed_at']); $a['owner'] = cp_crm_user_name($a['owner_id']); }
 	unset($a);
 	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
-	foreach ($hist as &$h) { $h['at'] = cp_crm_local($h['at']); }
+	foreach ($hist as &$h) {
+		$h['at'] = cp_crm_local($h['at']);
+		/* v2.9.4: a kezdés időpontja a táblában világidőben (UTC) van – a változásnaplóban helyi időben, másodperc nélkül */
+		if ($h['field'] === 'start_at') { foreach (array('old_val', 'new_val') as $k) { if (preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/', (string) $h[$k])) { $h[$k] = substr((string) cp_crm_local(str_replace('T', ' ', substr((string) $h[$k], 0, 19))), 0, 16); } } }
+	}
 	unset($h);
 	return apply_filters('cp_crm_deal_data', array('deal' => $deal, 'contact' => $contact, 'company' => $company, 'others' => $others, 'acts' => $acts, 'hist' => $hist, 'sync' => cp_crm_sync_at()));
 }
