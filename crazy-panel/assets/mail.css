@@ -574,3 +574,26 @@
 .ml-msg:not(.cl) .ml-mh{cursor:pointer}
 .ml-mh>div{min-width:0}
 .ml-msg.cl .ml-mh{border-bottom:0;padding-bottom:0}
+/* v2.7.12: mobilon tömörebb betűméretek (a Salesmate alkalmazáshoz hasonlóan) */
+@media (max-width:760px){
+  .ml-i1{font-size:14px;line-height:1.3}
+  .ml-i1 small{font-size:11.5px}
+  .ml-i2{font-size:13.5px;line-height:1.3}
+  .ml-i3,.ml-i3>span{font-size:12.5px;line-height:1.3}
+  .ml-i3 i{font-size:11.5px;line-height:16px;padding:0 6px}
+  .ml-item{padding:8px 10px}
+  .ml-link{font-size:13px}
+  .ml-subjh h3{font-size:14px}
+  .ml-backbar button{padding:5px 12px;font-size:13px}
+  .ml-backbar span{font-size:13px}
+  .ml-from>span:first-child{font-size:14px}
+  .ml-from .ml-fe,.ml-fe{font-size:11.5px}
+  .ml-to,.ml-md,.ml-mt{font-size:11.5px}
+  .ml-mb{font-size:13px}
+  .ml-mh .ml-av.lg,.ml-av.lg{width:28px;height:28px;font-size:12px}
+  .ml-msg{padding:10px 8px}
+  .ml-hv button{font-size:11.5px;padding:2px 9px}
+  .ml-atts{font-size:12px}
+  .ml-ev{font-size:12.5px}
+  .ml-snip{font-size:12px}
+}

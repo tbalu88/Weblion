@@ -728,7 +728,7 @@ a{color:var(--o)}
 /* v2.7.10: éjszakai mód – a munkaterület színei megfordítva (a színárnyalatok megmaradnak); a képek, videók, a levelek
    eredeti nézete és az eleve sötét menüsáv visszafordítva, így azok változatlanok */
 html[data-theme="dark"]{filter:invert(1) hue-rotate(180deg) contrast(.92) brightness(1.04);background:#fff}
-html[data-theme="dark"] img,html[data-theme="dark"] video,html[data-theme="dark"] picture,html[data-theme="dark"] iframe,html[data-theme="dark"] .cpx-top,html[data-theme="dark"] [style*="background-image"]{filter:invert(1) hue-rotate(180deg)}
+html[data-theme="dark"] img,html[data-theme="dark"] video,html[data-theme="dark"] picture,html[data-theme="dark"] iframe:not(.ml-hf),html[data-theme="dark"] .cpx-top,html[data-theme="dark"] [style*="background-image"]{filter:invert(1) hue-rotate(180deg)}
 html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="background-image"]{filter:none}
 .cpx-theme{display:flex;align-items:center;gap:10px;height:32px;padding:0 12px 0 8px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:transparent;color:rgba(255,255,255,.85);font:600 13px "Plus Jakarta Sans",sans-serif;cursor:pointer;white-space:nowrap}
 .cpx-theme:hover{background:rgba(255,255,255,.07);color:#fff}
@@ -744,3 +744,4 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 @media (min-width:1025px){.cpx-mini .cpx-theme{justify-content:center;padding:0;border:0}.cpx-mini .cpx-theme>span:last-child{display:none}}
 .cpx-menu .cpx-top-r .cpx-theme{flex:1;justify-content:center}
 @media (min-width:1025px){.cpx-shell .cpx-top-r .cpx-theme{justify-content:flex-start;padding:0 14px 0 9px}.cpx-mini .cpx-top-r .cpx-theme{justify-content:center;padding:0}}
+/* v2.7.12: a levelek eredeti nézete is sötét (a benne lévő képek eredeti színűek) */
