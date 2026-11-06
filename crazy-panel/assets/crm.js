@@ -16,6 +16,48 @@
 	const money = (v, cur) => v == null ? '–' : num(v) + (cur && cur !== 'HUF' ? ' ' + cur : ' Ft');
 	const huD = s => { if (!s) return ''; const p = s.slice(0, 10).split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2]); return p[0] + '. ' + HU_MS[p[1] - 1] + ' ' + p[2] + '. (' + DOW[d.getDay()] + ')'; };
 	const huDT = s => s ? s.slice(0, 4) + '.' + s.slice(5, 7) + '.' + s.slice(8, 10) + '. ' + s.slice(11, 16) : '';
+	/* v2.8.8: deal Fájlok kártya – bélyegképek */
+	const D3IMG = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
+	const d3Ext = n => (((/\.([a-z0-9]{1,5})$/i.exec(n || '') || [])[1]) || '').toUpperCase();
+	const d3Generic = n => /^(image|img|photo|foto|unnamed|attachment|kep|scan|document)[\d _()-]*\.\w+$/i.test(n || '');
+	function d3Files(list) {
+		const seen = {}, out = [];
+		(list || []).forEach(f => { const k = f.m && d3Generic(f.n) ? f.m + '|' + f.i : String(f.n || '').toLowerCase(); if (seen[k]) { seen[k].x++; return; } const g = Object.assign({}, f, { x: 1 }); seen[k] = g; out.push(g); });
+		return out;
+	}
+	const D3T = { on: true };
+	function d3Thumb(f) {
+		const e = d3Ext(f.n), cls = /^(PDF)$/.test(e) ? 'pdf' : /^(DOCX?|ODT|RTF|PAGES)$/.test(e) ? 'doc' : /^(XLSX?|CSV|ODS|NUMBERS)$/.test(e) ? 'xls' : /^(PPTX?|KEY|ODP)$/.test(e) ? 'ppt' : /^(ZIP|RAR|7Z|GZ)$/.test(e) ? 'zip' : D3IMG.test(f.n) ? 'img' : 'oth';
+		const C0 = window.CPX || {};
+		const img = D3T.on && D3IMG.test(f.n) && f.m && C0.ajax ? '<img loading="lazy" alt="" src="' + esc(C0.ajax + '?action=cp_mail_thumb&m=' + f.m + '&i=' + f.i + '&t=' + encodeURIComponent(C0.t || '')) + '">' : '';
+		return '<span class="d3-tb t-' + cls + (img ? ' has' : '') + '">' + img + '<i>' + esc(e || 'FÁJL') + '</i></span>';
+	}
+	function d3FilesBind(sh, fl) {
+		sh.querySelectorAll('.d3-tb img').forEach(im => { const bad = () => { const p = im.parentNode; if (p) p.classList.remove('has'); im.remove(); }; im.addEventListener('error', bad); if (im.complete && !im.naturalWidth) bad(); });
+		const imgs = fl.map((f, ix) => ({ f, ix })).filter(x => D3IMG.test(x.f.n) && x.f.m && window.CPMailAtt);
+		sh.querySelectorAll('a[data-fx]').forEach(a => a.addEventListener('click', e => {
+			const ix = Number(a.dataset.fx), pos = imgs.findIndex(x => x.ix === ix);
+			if (pos < 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+			e.preventDefault(); d3Lightbox(imgs.map(x => x.f), pos);
+		}));
+	}
+	function d3Lightbox(list, pos) {
+		const d = document.createElement('div'); d.className = 'd3-lb';
+		const draw = () => {
+			const f = list[pos], u = window.CPMailAtt(f.m, f.i, f.n), dl = u.replace('&view=1', '');
+			d.innerHTML = '<div class="d3-lbt"><b>' + esc(f.n) + '</b><span>' + (list.length > 1 ? (pos + 1) + ' / ' + list.length : '') + '</span><a href="' + esc(dl) + '" class="d3-lbb">⬇ Letöltés</a><button type="button" class="d3-lbb" data-x>✕</button></div>' +
+				'<div class="d3-lbi">' + (list.length > 1 ? '<button type="button" class="d3-lbn p" data-p aria-label="Előző">‹</button>' : '') + '<img src="' + esc(u) + '" alt="">' + (list.length > 1 ? '<button type="button" class="d3-lbn n" data-n aria-label="Következő">›</button>' : '') + '</div>';
+			d.querySelector('[data-x]').onclick = close;
+			const p = d.querySelector('[data-p]'), n = d.querySelector('[data-n]');
+			if (p) p.onclick = () => { pos = (pos - 1 + list.length) % list.length; draw(); };
+			if (n) n.onclick = () => { pos = (pos + 1) % list.length; draw(); };
+		};
+		const key = e => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft' && list.length > 1) { pos = (pos - 1 + list.length) % list.length; draw(); } else if (e.key === 'ArrowRight' && list.length > 1) { pos = (pos + 1) % list.length; draw(); } };
+		function close() { d.remove(); document.removeEventListener('keydown', key, true); }
+		d.addEventListener('click', e => { if (e.target === d || e.target.classList.contains('d3-lbi')) close(); });
+		document.addEventListener('keydown', key, true);
+		draw(); document.body.appendChild(d);
+	}
 	const uname = id => (USERS[String(id)] || {}).n || (id ? '#' + id : '');
 	const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
 	/* v1.84: kapacitás a rendezvény napján – „1 szabad · 9 ajánlat”; a csempén csak szűkös vagy kockázatos napnál */
@@ -971,6 +1013,8 @@
 		catch (e) { if (sh.isConnected) { sh.innerHTML = head360('Deal #' + id, back, id) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); } return; }
 		if (!sh.isConnected) return;
 		const d = x.deal, c = x.contact, co = x.company, m = x.mail || { threads: [], msgs: [], notes: [], files: [] };
+		/* v2.8.8: bélyegkép csak a nyitott, illetve a jövőbeli rendezvényű dealeknél (visszamenőleg nem készül) */
+		D3T.on = !d.deleted_at && (d.status === 'Open' || (d.event_d && d.event_d >= today()));
 		const smUrl = C.sm ? C.sm + d.id : '';
 		const self = { label: shortTitle({ id: d.id, title: d.title, ev: d.event_d }).slice(0, 40), fn: () => openDeal(id, back) };
 		/* összkép */
@@ -1014,9 +1058,11 @@
 			(co ? '<section class="d3-c"><h4>Korábbi munkák – ' + esc(co.name) + '</h4>' + statLine(x.co_stats) + (otherCo.length ? dealRows(otherCo, d.id) : '<p class="cpx-muted">A cégnek nincs más (más kontakthoz tartozó) deal-je.</p>') + '</section>' : '') +
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Levélszálak <small>' + (m.threads || []).length + '</small></h4>' + threadList(m) + '</section>' +
-			'<section class="d3-c"><h4>Fájlok <small>' + (m.files || []).length + '</small></h4>' + ((m.files || []).length ? '<ul class="d3-files">' + m.files.map(f => '<li>' + (f.m && window.CPMailAtt ? '<a class="d3-fl" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' : '<button type="button" data-th="' + f.th + '">') + I.file + '<span><b>' + esc(f.n) + '</b><small>' + esc([f.from, huDT(f.at)].filter(Boolean).join(' · ')) + '</small></span>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul><p class="d3-sub">Kattintásra megnyílik vagy letöltődik (a postafiókból).</p>' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>') + '</section>' +
+			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
+			(() => { const fl = d3Files(m.files || []); return '<section class="d3-c"><h4>Fájlok <small>' + fl.length + '</small></h4>' + (fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '" title="' + esc(f.n) + '">' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + esc(f.n) + '</b><small>' + esc([f.from, huDT(f.at)].filter(Boolean).join(' · ')) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul><p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>') + '</section>'; })() +
 			'</aside></div>';
 		sh.innerHTML = h;
+		d3FilesBind(sh, d3Files(m.files || []));
 		D3.ctx = { id: id, back: back };
 		const cmp = sh.querySelector('[data-comp]');
 		if (cmp) compose(cmp, x, 'note');

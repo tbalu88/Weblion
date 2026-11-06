@@ -71,6 +71,7 @@ function cp_att_locate($m) {
 }
 
 function cp_att_send_file($name, $mime, $data, $inline) {
+	if (!empty($GLOBALS['cp_att_capture'])) { call_user_func($GLOBALS['cp_att_capture'], $name, $mime, $data); exit; } /* v2.8.8: bélyegkép készítése */
 	nocache_headers();
 	header('X-Content-Type-Options: nosniff');
 	header('Content-Security-Policy: sandbox');
@@ -83,6 +84,7 @@ function cp_att_send_file($name, $mime, $data, $inline) {
 	exit;
 }
 function cp_att_fail($msg, $code = 404) {
+	if (!empty($GLOBALS['cp_att_capture'])) { status_header(404); header('Cache-Control: no-store'); exit; } /* átmeneti hiba (pl. postafiók): nem jegyzi meg */
 	status_header($code);
 	nocache_headers();
 	header('Content-Type: text/html; charset=utf-8');
@@ -190,3 +192,69 @@ add_action('init', function () {
 		if (filemtime($sub) < time() - 2 * DAY_IN_SECONDS) { foreach ((array) glob($sub . '/*') as $x) { @unlink($x); } @rmdir($sub); }
 	}
 });
+
+/* ------------------------------------------------------------ v2.8.8: bélyegképek a mellékletekhez
+ * Csak képekből (JPG, PNG, GIF, WebP, HEIC – a fájl tartalma alapján ellenőrizve, nem a neve alapján), első megnézéskor
+ * egyszer készül (240 px, WebP, ~10 KB), a védett crazy-mail/thumbs mappában tárolva; 90 napig nem nézett bélyeg törlődik.
+ * PDF-ből és más fájlból nem készül (a PDF-feldolgozás – Ghostscript – idegen feladók fájljain biztonsági kockázat). */
+function cp_thumb_dir() { $d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { wp_mkdir_p($d); @file_put_contents($d . '/index.php', '<?php // csend'); } return $d; }
+function cp_thumb_key() { return md5((int) ($_REQUEST['m'] ?? 0) . '|' . (int) ($_REQUEST['i'] ?? 0) . '|v1'); }
+function cp_thumb_none() {
+	@file_put_contents(cp_thumb_dir() . '/' . cp_thumb_key() . '.none', '1');
+	status_header(404); header('Cache-Control: private, max-age=86400'); exit;
+}
+function cp_thumb_fmt($data) {
+	$h = substr((string) $data, 0, 16);
+	if (strncmp($h, "\xFF\xD8\xFF", 3) === 0) { return 'jpeg'; }
+	if (strncmp($h, "\x89PNG", 4) === 0) { return 'png'; }
+	if (strncmp($h, 'GIF8', 4) === 0) { return 'gif'; }
+	if (strncmp($h, 'RIFF', 4) === 0 && substr($h, 8, 4) === 'WEBP') { return 'webp'; }
+	if (substr($h, 4, 4) === 'ftyp' && preg_match('/^(heic|heix|mif1|msf1|hevc)$/', substr($h, 8, 4))) { return 'heic'; }
+	return '';
+}
+function cp_thumb_make($data) {
+	$fmt = cp_thumb_fmt($data);
+	if ($fmt === '' || strlen($data) > 25 * 1024 * 1024 || !class_exists('Imagick')) { return null; }
+	try {
+		if ($fmt === 'heic' && !Imagick::queryFormats('HEIC')) { return null; }
+		Imagick::setResourceLimit(Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024);
+		Imagick::setResourceLimit(Imagick::RESOURCETYPE_AREA, 80000000);
+		$im = new Imagick();
+		$im->setFormat($fmt);
+		$im->readImageBlob($data);
+		if ($im->getNumberImages() > 1) { $im->setIteratorIndex(0); $im = $im->getImage(); }
+		if (method_exists($im, 'autoOrient')) { $im->autoOrient(); }
+		$im->thumbnailImage(240, 240, true);
+		$im->setImageBackgroundColor('white');
+		if ($im->getImageAlphaChannel()) { $im = $im->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN); }
+		$wf = Imagick::queryFormats('WEBP') ? 'webp' : 'jpeg'; /* ha a szerveren nincs WebP-író: JPEG */
+		$im->setImageFormat($wf); $im->setImageCompressionQuality($wf === 'webp' ? 72 : 78); $im->stripImage();
+		$b = $im->getImageBlob(); $im->clear();
+		return $b !== '' ? $b : null;
+	} catch (\Throwable $e) { return null; }
+}
+add_action('wp_ajax_nopriv_cp_mail_thumb', 'cp_thumb_ajax');
+add_action('wp_ajax_cp_mail_thumb', 'cp_thumb_ajax');
+function cp_thumb_ajax() {
+	if (!function_exists('cp_panel_authed') || !cp_panel_authed() || !hash_equals(cp_panel_csrf(), (string) wp_unslash($_REQUEST['t'] ?? ''))) { status_header(403); exit; }
+	$f = cp_thumb_dir() . '/' . cp_thumb_key();
+	if (is_file($f . '.none')) { status_header(404); header('Cache-Control: private, max-age=86400'); exit; }
+	$out = function ($b) { header('Content-Type: ' . (strncmp($b, 'RIFF', 4) === 0 ? 'image/webp' : (strncmp($b, "\x89PNG", 4) === 0 ? 'image/png' : 'image/jpeg'))); header('Cache-Control: private, max-age=2592000'); header('X-Content-Type-Options: nosniff'); header('Content-Length: ' . strlen($b)); echo $b; exit; };
+	if (is_file($f . '.webp')) { @touch($f . '.webp'); $out((string) file_get_contents($f . '.webp')); }
+	@set_time_limit(40);
+	$GLOBALS['cp_att_capture'] = function ($name, $mime, $data) use ($f, $out) {
+		$b = cp_thumb_make((string) $data);
+		if ($b === null) { cp_thumb_none(); }
+		@file_put_contents($f . '.webp', $b);
+		$out($b);
+	};
+	cp_att_ajax_get();
+}
+/* naponta: a 90 napja nem nézett bélyegek törlése */
+add_action('cp_crm_tick', function () {
+	if (get_transient('cp_thumb_gc')) { return; }
+	set_transient('cp_thumb_gc', 1, DAY_IN_SECONDS);
+	$d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { return; }
+	foreach ((array) glob($d . '/*.{webp,none}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
+}, 60);
+
