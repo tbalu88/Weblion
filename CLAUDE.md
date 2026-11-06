@@ -11,3 +11,6 @@
 ## Félretett ötletek
 - A félretett UX-/fejlesztési javaslatok a `docs/ux-otlettar.md` fájlban vannak. Ha a felhasználó új javaslatokat kér,
   ezeket is ajánld fel (az újak mellett); ami elkészült, azt töröld onnan.
+
+## Tervezés skillekkel (kötelező)
+- Felület tervezése vagy átdolgozása előtt az `impeccable` skill (részletekhez `emil-design-eng`), élesítés előtt `break-ui` a legrosszabb adatokkal; animációhoz `animate`; fejlesztés tervezéséhez, feladatbontáshoz `planning-and-task-breakdown`.
