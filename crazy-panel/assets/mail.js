@@ -37,7 +37,7 @@
 		d.querySelector('.cpx-tact').addEventListener('click', () => { d.classList.remove('on'); clearTimeout(d._t); fn(); });
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), ms || 7000);
 	}
-	/* v2.7.13: visszavonható küldés – a levél 10 mp múlva megy ki, addig visszavonható */
+	/* v2.7.13: visszavonható küldés – a levél 20 mp múlva megy ki, addig visszavonható */
 	function undoWait(sec) {
 		return new Promise(res => {
 			let d = document.getElementById('cpx-toast');
@@ -996,7 +996,7 @@
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
-			if (!test && !force) { const ok = await undoWait(10); if (!ok) { b.disabled = false; b.textContent = old; toast('Küldés visszavonva – a levél itt maradt, szerkesztheted.'); return; } }
+			if (!test && !force) { const ok = await undoWait(20); if (!ok) { b.disabled = false; b.textContent = old; toast('Küldés visszavonva – a levél itt maradt, szerkesztheted.'); return; } }
 			try {
 				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '' });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
