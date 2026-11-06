@@ -86,6 +86,8 @@ function cp_imp_hdr($s) {
 	$out = '';
 	foreach ((array) imap_mime_header_decode((string) $s) as $p) {
 		$cs = strtoupper((string) $p->charset);
+		/* v2.9.20: kódolatlan 8 bites rész (pl. nyers Latin-2 „ő”) – különben az adatbázis elutasítja a sort, és a levél elveszik */
+		if (($cs === 'DEFAULT' || $cs === '') && !mb_check_encoding($p->text, 'UTF-8')) { $cs = 'ISO-8859-2'; }
 		$out .= cp_imp_conv($p->text, $cs);
 	}
 	return trim($out);
@@ -375,6 +377,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
+		if (!$wpdb->insert_id) { throw new \Exception('A levélszál mentése nem sikerült: ' . $wpdb->last_error); }
 		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'));
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
@@ -382,6 +385,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		'status' => (!$sent && $out) ? (cp_imp_sm_copy($hraw, $me) ? 'Salesmate-ből küldve' : 'ellenőrizetlen') : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 9 && $rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
 		/* v1.67: az eredeti HTML szűrve (a beágyazott képek a mellékletek sorszámára hivatkozva) */
 		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
+	if (!$wpdb->insert_id) { throw new \Exception('A levél mentése nem sikerült: ' . $wpdb->last_error); }
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
 	if (!$out && !(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE thread_id = %d AND dir = 'out' AND status <> 'idézetből' AND sent_at <= %s", (int) $t['id'], $at))) {
@@ -610,7 +614,8 @@ function cp_imp_sync_run() {
 		if (is_wp_error($mb)) { throw new \Exception($mb->get_error_message()); }
 		$info = imap_status($mb, cp_imp_ref() . 'INBOX', SA_UIDVALIDITY | SA_UIDNEXT);
 		$uv = $info ? (int) $info->uidvalidity : 0;
-		if (empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) {
+		$first = empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv;
+		if ($first) {
 			/* első futás (vagy a szerver újraszámozta a leveleket): az utolsó 3 nap, a már meglévőket kihagyja */
 			$uids = array_map('intval', (array) imap_search($mb, 'SINCE "' . gmdate('d-M-Y', time() - 3 * DAY_IN_SECONDS) . '"', SE_UID));
 		} else {
@@ -618,10 +623,19 @@ function cp_imp_sync_run() {
 			foreach ((array) imap_fetch_overview($mb, ((int) $sy['uid'] + 1) . ':*', FT_UID) as $ov) { if ((int) $ov->uid > (int) $sy['uid']) { $uids[] = (int) $ov->uid; } }
 		}
 		sort($uids);
+		/* v2.9.20: ha az előző futás egy levélen halt el (memória, időkorlát), az hibának számít; 3 elakadás után kihagyjuk */
+		$skipped_now = 0;
+		if (!empty($sy['cur'])) {
+			$c = (int) $sy['cur']; unset($sy['cur']);
+			$ec = (int) ($sy['errs'][$c] ?? 0) + 1;
+			if ($ec >= 3) { $sy['skipped'][] = $c; $sy['skipped'] = array_slice($sy['skipped'], -50); unset($sy['errs'][$c]); $sy['uid'] = max((int) ($sy['uid'] ?? 0), $c); $uids = array_values(array_filter($uids, function ($u) use ($c) { return $u > $c; })); $sy['err'] = 'Egy levél (UID ' . $c . ') feldolgozása háromszor elakadt, kihagytam.'; $skipped_now = 1; }
+			else { $sy['errs'][$c] = $ec; }
+		}
 		$max = (int) ($sy['uid'] ?? 0);
 		$done = 0; $todo = array_slice($uids, 0, 300);
 		foreach ($todo as $uid) {
 			if (time() - $t0 > 100) { break; }
+			$sy['cur'] = $uid; $sy['uid'] = $max; $sy['uv'] = (int) $uv; update_option('cp_imp_sync', $sy, false); /* levelenként mentett állás */
 			try { $r = cp_imp_one($mb, $uid, false, true, 'INBOX'); } catch (\Throwable $e) { $r = 'err'; }
 			if ($r === 'ok') { $sy['n'] = (int) ($sy['n'] ?? 0) + 1; }
 			/* v2.0.1: hibás levél: újrapróbálás a következő körökben (legfeljebb 3×), utána kihagyva és megjegyezve */
@@ -634,11 +648,13 @@ function cp_imp_sync_run() {
 			/* 25 levelenként az állás mentése (ha a futás félbeszakad, ne kezdje elölről) */
 			if ($done % 25 === 0) { $sy['uid'] = $max; $sy['uv'] = (int) $uv; update_option('cp_imp_sync', $sy, false); }
 		}
+		unset($sy['cur']);
 		imap_errors(); imap_alerts();
 		imap_close($mb);
-		if ((empty($sy['uid']) || (int) ($sy['uv'] ?? 0) !== $uv) && count($uids) <= 300 && $done === count($todo) && $info) { $max = max($max, (int) $info->uidnext - 1); }
-		$sy['uid'] = $max; $sy['uv'] = $uv; $sy['err'] = '';
+		if ($first && count($uids) <= 300 && $done === count($todo) && $info) { $max = max($max, (int) $info->uidnext - 1); }
+		$sy['uid'] = $max; $sy['uv'] = $uv; if (empty($skipped_now)) { $sy['err'] = ''; }
 	} catch (\Throwable $e) {
+		unset($sy['cur']); /* kapcsolati hiba – nem a levél hibája */
 		$sy['err'] = mb_substr($e->getMessage(), 0, 200);
 	}
 	$sy['last'] = time();

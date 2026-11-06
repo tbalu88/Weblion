@@ -416,7 +416,10 @@ function cp_crm_del_plan($id) {
 		$ev = cp_gcal_events($d['event_d'], $d['event_d'], true);
 		if (is_wp_error($ev)) { $out['cal_err'] = $ev->get_error_message(); }
 		else {
-			list($byDate, $byId) = cp_gcal_index(array($d));
+			/* az adott nap összes dealje kell a párosításhoz, különben egy hasonló nevű másik ügyfél bejegyzése is ide sorolódna */
+			$all = cp_gcal_deals($d['event_d'], $d['event_d']);
+			if (!in_array((int) $id, array_map('intval', array_column($all, 'id')), true)) { $all[] = $d; }
+			list($byDate, $byId) = cp_gcal_index($all);
 			foreach ($ev as $e) { if ((is_array($made) && ($made[$id] ?? '') === $e['id']) || cp_gcal_match($e, $byDate, $byId) === (int) $id) { $out['cal'][$e['id']] = $e['t']; } }
 		}
 	}

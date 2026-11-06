@@ -376,7 +376,10 @@ function cp_bil_mark_paid($deal_id) {
 	global $wpdb;
 	/* v1.98: „fizetve” csak ha a kifizetett összeg fedezi a deal értékét (egy előleg vagy részlet még nem teljes fizetés);
 	 * a díjbekérő-pipa (dj) ettől függetlenül „ok”, mert a díjbekérőt kifizették */
-	$val = function_exists('cp_crm_t') ? (float) $wpdb->get_var($wpdb->prepare('SELECT value FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal_id)) : 0;
+	$dv = function_exists('cp_crm_t') ? $wpdb->get_row($wpdb->prepare('SELECT value, ctype FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal_id), ARRAY_A) : null;
+	$val = $dv ? (float) $dv['value'] : 0;
+	/* v2.9.20: a bizonylatok bruttóak, a deal értéke nettó – a profil ÁFA-kulcsával bruttósítva hasonlítunk (AAM: nincs ÁFA) */
+	if ($val > 0 && preg_match('/(\d+)\s*%/', (string) cp_bil_opts(strtoupper((string) $dv['ctype']) === 'EV' ? 'EV' : 'KFT')['vat'], $vm)) { $val *= 1 + (int) $vm[1] / 100; }
 	if ($val > 0) {
 		$T = cp_bil_t();
 		$maxp = (float) $wpdb->get_var($wpdb->prepare("SELECT MAX(gross) FROM $T WHERE deal_id = %d AND pay = 'paid'", $deal_id));

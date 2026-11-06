@@ -567,7 +567,8 @@ function cb_r_log(WP_REST_Request $req) {
 
 /* titkosnak tűnő kulcsnév (a teljes opció nevét is ide adjuk, ha az opció egyetlen szöveg) */
 function cb_mask_key($k) {
-	return $k !== '' && (bool) preg_match('/secret|token|pass|hash|webhook|_url$|^url$|key|kulcs|private|credential|signature|^sig$|salt|cookie|session|bearer|auth/i', $k);
+	/* ^h$ / ^tok: a panel-felhasználók jelszó-lenyomata és belépési tokenje (cp_panel_users) */
+	return $k !== '' && (bool) preg_match('/secret|token|pass|hash|webhook|_url$|^url$|key|kulcs|private|credential|signature|^sig$|salt|cookie|session|bearer|auth|^h$|^tok(_|$)/i', $k);
 }
 
 /* a kulcsnévtől függetlenül titoknak tűnő érték (API-kulcs, token, privát kulcs, webhook) */

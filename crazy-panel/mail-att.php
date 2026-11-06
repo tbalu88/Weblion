@@ -188,7 +188,7 @@ add_action('init', function () {
 	set_transient('cp_att_gc', 1, DAY_IN_SECONDS);
 	$d = cp_att_dir();
 	foreach ((array) glob($d . '/*', GLOB_ONLYDIR) as $sub) {
-		if (is_file($sub . '/.sent')) { continue; }
+		if (is_file($sub . '/.sent') || basename($sub) === 'thumbs') { continue; } /* a bélyegképeknek saját, 90 napos takarítása van */
 		if (filemtime($sub) < time() - 2 * DAY_IN_SECONDS) { foreach ((array) glob($sub . '/*') as $x) { @unlink($x); } @rmdir($sub); }
 	}
 });
@@ -255,6 +255,6 @@ add_action('cp_crm_tick', function () {
 	if (get_transient('cp_thumb_gc')) { return; }
 	set_transient('cp_thumb_gc', 1, DAY_IN_SECONDS);
 	$d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { return; }
-	foreach ((array) glob($d . '/*.{webp,none}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
+	foreach ((array) glob($d . '/*.{webp,jpg,none}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
 }, 60);
 
