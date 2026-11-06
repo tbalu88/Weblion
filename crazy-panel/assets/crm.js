@@ -752,7 +752,7 @@
 		else closePage(false);
 	});
 	const AIs = p => '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
-	const AI = { ok: AIs('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), no: AIs('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'), undo: AIs('<path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 12"/>'), edit: AIs('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), todo: AIs('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>'), ext: AIs('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>') };
+	const AI = { mail: AIs('<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>'), ok: AIs('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), no: AIs('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'), undo: AIs('<path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 12"/>'), edit: AIs('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), todo: AIs('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>'), ext: AIs('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>') };
 	const ab = (cls, attr, ico, txt) => '<button type="button" class="d3-ab' + (cls ? ' ' + cls : '') + '" ' + attr + '>' + ico + '<span>' + txt + '</span></button>';
 	const head360 = (t, back, did) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '<button type="button" class="d3-back" data-close>← Vissza</button>') + '<h3>' + t + '</h3>' +
 		(did ? '<span class="d3-no" title="A deal egyedi sorszáma (a Salesmate-ben is ez)">#' + Number(did) + '</span><button type="button" class="cpx-btn ghost d3-link" data-dlink="' + Number(did) + '" title="A deal saját linkje – elküldhető, könyvjelzőzhető">🔗 <span>Link</span></button>' : '') +
@@ -1032,6 +1032,7 @@
 			/* v1.78.8: egységes gombsor – azonos méret és stílus, vonalas ikonok */
 			(W && !d.deleted_at ? (d.status === 'Open' ? ab('d3-won', 'data-mvst="Won"', AI.ok, 'Megnyert') + ab('bad', 'data-mvst="Lost"', AI.no, 'Elvesztett') : ab('', 'data-mvst="Open"', AI.undo, 'Újranyitás')) : '') +
 			(R.edit && !d.deleted_at ? ab('pri', 'data-edit', AI.edit, 'Szerkesztés') : '') +
+			(window.CPMail && window.CPMail.canSend && window.CPMail.canSend() ? ab('', 'data-d3mail title="Új levél a deal kontaktjának (a levél a dealhez kötve)"', AI.mail, 'E-mail') : '') +
 			(window.CPKanban ? ab('', 'data-todo title="Teendő felvétele a Feladatokba"', AI.todo, 'Teendő') : '') +
 			(smUrl ? '<a class="d3-ab" href="' + esc(smUrl) + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + AI.ext + '<span>Salesmate</span></a>' : '') + '</div></div>' +
 			(d.deleted_at ? '<p class="crm-warn">Ez a deal a Salesmate-ben már nem található (törölték).</p>' : '') +
@@ -1100,6 +1101,9 @@
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
 		const kbl = sh.querySelector('[data-kbl]');
 		if (window.CPKanban) window.CPKanban.linked(kbl, { deal: d.id });
+		/* v2.9.1: e-mail küldése a dealből – a levélíró a kontakt címével, a dealhez kötve */
+		const d3m = sh.querySelector('[data-d3mail]');
+		if (d3m) d3m.addEventListener('click', () => { const to = c && c.email ? [c.email] : []; window.CPMail.compose({ to: to, subject: '', body: '', deal: d.id, dealTitle: d.title }); });
 		const todo = sh.querySelector('[data-todo]');
 		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(sh.querySelector('[data-kbq]'), { title: d.title || 'Deal #' + d.id, deal: d.id, onDone: () => window.CPKanban.linked(kbl, { deal: d.id }) }));
 		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id, back); };
