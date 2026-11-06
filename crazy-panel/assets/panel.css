@@ -724,3 +724,23 @@ a{color:var(--o)}
   .cpx-shell .cpx-top-r .cpx-btn{height:32px;font-size:13px}
   .cpx-mini .cpx-tab-n{position:absolute;top:1px;right:6px;margin:0;min-width:16px;height:16px;font-size:10px;line-height:16px;padding:0 4px}
 }
+
+/* v2.7.10: éjszakai mód – a munkaterület színei megfordítva (a színárnyalatok megmaradnak); a képek, videók, a levelek
+   eredeti nézete és az eleve sötét menüsáv visszafordítva, így azok változatlanok */
+html[data-theme="dark"]{filter:invert(1) hue-rotate(180deg) contrast(.92) brightness(1.04);background:#fff}
+html[data-theme="dark"] img,html[data-theme="dark"] video,html[data-theme="dark"] picture,html[data-theme="dark"] iframe,html[data-theme="dark"] .cpx-top,html[data-theme="dark"] [style*="background-image"]{filter:invert(1) hue-rotate(180deg)}
+html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="background-image"]{filter:none}
+.cpx-theme{display:flex;align-items:center;gap:10px;height:32px;padding:0 12px 0 8px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:transparent;color:rgba(255,255,255,.85);font:600 13px "Plus Jakarta Sans",sans-serif;cursor:pointer;white-space:nowrap}
+.cpx-theme:hover{background:rgba(255,255,255,.07);color:#fff}
+.cpx-tg{position:relative;flex:none;width:44px;height:22px;border-radius:999px;background:rgba(255,255,255,.14);transition:background .2s}
+.cpx-tg svg{position:absolute;top:4px;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.55;z-index:1;transition:color .2s,opacity .2s}
+.cpx-tg .tg-s{left:4px}.cpx-tg .tg-m{right:4px}
+.cpx-tg i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#F2B35B;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .22s cubic-bezier(.2,.8,.2,1),background .2s}
+.cpx-theme .tg-s{color:#1A1F2B;opacity:1}
+.cpx-theme[aria-checked="true"] .cpx-tg{background:rgba(120,140,255,.35)}
+.cpx-theme[aria-checked="true"] .cpx-tg i{transform:translateX(22px);background:#E9EDFF}
+.cpx-theme[aria-checked="true"] .tg-s{color:currentColor;opacity:.55}
+.cpx-theme[aria-checked="true"] .tg-m{color:#1D2747;opacity:1}
+@media (min-width:1025px){.cpx-mini .cpx-theme{justify-content:center;padding:0;border:0}.cpx-mini .cpx-theme>span:last-child{display:none}}
+.cpx-menu .cpx-top-r .cpx-theme{flex:1;justify-content:center}
+@media (min-width:1025px){.cpx-shell .cpx-top-r .cpx-theme{justify-content:flex-start;padding:0 14px 0 9px}.cpx-mini .cpx-top-r .cpx-theme{justify-content:center;padding:0}}

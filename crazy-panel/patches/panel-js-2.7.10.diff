@@ -1,0 +1,32 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js.bak279	2026-11-06 05:41:35.509721423 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-06 05:41:35.529094326 +0000
+@@ -29,6 +29,8 @@
+   /* ------------------------------------------------------------ state */
+   /* v1.36: mélylink (#feladatok:12, #mail:3) – a belépés előtt megnyitott link a belépés után is érvényes */
+   try { const h = sessionStorage.getItem('cp_after'); sessionStorage.removeItem('cp_after'); if (h && !location.hash) history.replaceState(null, '', h); } catch (e) { /* privát mód */ }
++  /* v2.7.10: éjszakai mód (a böngésző megjegyzi) */
++  try { if (localStorage.getItem('cpx_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) { /* privát mód */ }
+   const DEEP = location.hash.indexOf(':') > 0 ? location.hash.slice(location.hash.indexOf(':') + 1) : '';
+   const S = {
+     /* v1.67: ha a telefon a háttérben bezárta a panelt, újranyitáskor az utolsó fülre tér vissza (12 órán belül) */
+@@ -137,6 +139,7 @@
+       (!TOOLS.length ? '' : '<div class="cpx-grp' + (toolsOpen ? ' open' : '') + '" id="cpx-tools"><button type="button" class="cpx-grp-h" aria-expanded="' + (toolsOpen ? 'true' : 'false') + '" title="Eszközök">' + ico('tools') + '<span>Eszközök</span><svg class="cpx-ico cpx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><div class="cpx-grp-b">' + TOOLS.map(t => tabBtn(t[0], t[1])).join('') + '</div></div>') +
+       (C.set && C.set.on ? tabBtn('beallitasok', 'Beállítások') : '') +
+       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
++      '<button type="button" class="cpx-theme" id="cpx-theme" role="switch" aria-checked="' + (document.documentElement.getAttribute('data-theme') === 'dark') + '" title="Éjszakai mód be / ki"><span class="cpx-tg"><svg class="tg-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><svg class="tg-m" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><i></i></span><span>Éjszakai mód</span></button>' +
+       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">' + ico('refresh') + '<span>Frissítés</span></button>' +
+       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '<span>Kilépés' + (C.user ? ' <small>(' + esc(C.user) + ')</small>' : (C.role ? ' <small>(' + (C.role === 'iroda' ? 'iroda' : 'admin') + ')</small>' : '')) + '</span></a></div></div>';
+     app.appendChild(top);
+@@ -150,6 +153,12 @@
+       try { localStorage.setItem('cpx_tools', on ? '1' : '0'); } catch (e) { /* privát mód */ }
+     });
+     top.querySelector('#cpx-refresh').addEventListener('click', () => { menu(false); refresh(); });
++    top.querySelector('#cpx-theme').addEventListener('click', e => {
++      const dark = document.documentElement.getAttribute('data-theme') !== 'dark';
++      if (dark) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme');
++      e.currentTarget.setAttribute('aria-checked', String(dark));
++      try { localStorage.setItem('cpx_theme', dark ? 'dark' : 'light'); } catch (x) { /* privát mód */ }
++    });
+     /* v1.65: a logóra kattintva a Kezdőlap (ha nincs, a nyitóoldal) */
+     const logo = top.querySelector('.cpx-logo');
+     logo.style.cursor = 'pointer'; logo.setAttribute('role', 'link'); logo.title = 'Kezdőlap';
