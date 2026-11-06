@@ -17,7 +17,11 @@ self.addEventListener('push', e => {
 });
 self.addEventListener('notificationclick', e => {
 	e.notification.close();
-	const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
+	/* v2.8.3: mindig a panel saját címén belül (a hash a cél: #deals:12, #mail:3 …), így nem nyílik külső böngészőablak */
+	const raw = (e.notification.data && e.notification.data.url) || '', scope = self.registration.scope;
+	const hash = raw.indexOf('#') >= 0 ? raw.slice(raw.indexOf('#')) : '';
+	const url = scope + hash;
+	try { fetch(scope + '?cp_pwa=click&u=' + encodeURIComponent(raw) + '&o=' + encodeURIComponent(url), { credentials: 'omit', keepalive: true }).catch(() => {}); } catch (x) { /* napló */ }
 	e.waitUntil((async () => {
 		const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 		for (const c of all) {

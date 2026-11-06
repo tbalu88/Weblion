@@ -55,6 +55,7 @@
 		if (tab === 'mail' && window.CPMail && window.CPMail.open) { window.CPMail.open(Number(arg)); return; }
 		if (tab === 'munkanaplo' && window.CPWorklog) { window.CPWorklog.open(arg); return; }
 		if (tab === 'deals' && window.CPCrm) { if (window.CPXGo) window.CPXGo('deals'); setTimeout(() => window.CPCrm.deep && window.CPCrm.deep(arg), 60); return; }
+		if (tab === 'ertesitesek' || (tab && !arg && window.CPXGo && !['mail', 'deals', 'feladatok', 'munkanaplo'].includes(tab))) { if (window.CPXGo) window.CPXGo(tab); return; }
 		if (tab === 'feladatok' && window.CPKanban) {
 			if (window.CPXGo) window.CPXGo('feladatok');
 			setTimeout(() => window.CPKanban.deep(arg), 60);

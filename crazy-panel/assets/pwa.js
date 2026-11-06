@@ -9,7 +9,7 @@
 	navigator.serviceWorker.addEventListener('message', e => {
 		const u = e.data && e.data.cpNav; if (!u) return;
 		const h = String(u).split('#')[1] || '';
-		if (h && window.CPNotify && window.CPNotify.go) window.CPNotify.go(h); else if (u) location.href = u;
+		if (h && window.CPNotify && window.CPNotify.go) window.CPNotify.go(h); else if (h) { location.hash = h; }
 	});
 	window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.bip = e; document.dispatchEvent(new Event('cp-pwa')); });
 	const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;

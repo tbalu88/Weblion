@@ -34,6 +34,13 @@ add_action('init', function () {
 		), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 		exit;
 	}
+	/* v2.8.3: értesítésre kattintás naplója (a hibakereséshez: milyen címet kapott / nyitott meg a telefon), az utolsó 20 */
+	if ($what === 'click') {
+		$l = get_option('cp_pwa_clicks', array()); if (!is_array($l)) { $l = array(); }
+		array_unshift($l, array('t' => time(), 'u' => mb_substr(esc_url_raw((string) wp_unslash($_GET['u'] ?? '')), 0, 200), 'o' => mb_substr(esc_url_raw((string) wp_unslash($_GET['o'] ?? '')), 0, 200), 'ua' => mb_substr(sanitize_text_field((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 120)));
+		update_option('cp_pwa_clicks', array_slice($l, 0, 20), false);
+		header('Content-Type: text/plain'); echo 'ok'; exit;
+	}
 	if ($what === 'sw') {
 		header('Content-Type: application/javascript; charset=utf-8');
 		header('Service-Worker-Allowed: ' . cp_pwa_base());
