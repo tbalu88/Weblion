@@ -1,0 +1,11 @@
+--- /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js.bak287	2026-11-06 09:09:18.951236303 +0000
++++ /tmp/claude-0/-home-user-Weblion/9a4f063b-55f1-506e-86a5-149a915d4ed9/scratchpad/v80/panel.js	2026-11-06 09:09:18.965083066 +0000
+@@ -189,7 +189,7 @@
+   function curLabel() {
+     const c = document.getElementById('cpx-cur');
+     const b = document.querySelector('.cpx-tabs [data-tab="' + S.tab + '"]');
+-    if (c) c.textContent = b ? b.textContent : (S.tab === 'ertesitesek' ? 'Értesítések' : '');
++    if (c) c.textContent = b ? ((b.querySelector('span') || b).textContent) : (S.tab === 'ertesitesek' ? 'Értesítések' : ''); /* v2.8.4: a számláló ne kerüljön a címbe */
+   }
+   const tabBtn = (id, label) => !CAN(id) ? '' : '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '" title="' + label + '">' + ico(id) + '<span>' + label + '</span></button>';
+   const ICO = {
