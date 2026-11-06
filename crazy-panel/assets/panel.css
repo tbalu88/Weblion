@@ -1,8 +1,8 @@
-:root{--n:#141C33;--n2:#1D2747;--o:#E8894A;--g:linear-gradient(120deg,#E8894A 0%,#F2B35B 100%);--ink:#1A1F2B;--mu:#5B6275;--li:#E7E2DA;--bg:#F6F3EE;--ok:#2E9E6A;--okb:#E3F4EB;--mid:#D9902A;--midb:#FCF0DC;--full:#D2463C;--fullb:#FBE3E1;--pend:#E2B93B;--pendb:#FFF6D6}
+:root{--n:#141C33;--n2:#1D2747;--o:#E8894A;--g:linear-gradient(120deg,#E8894A 0%,#F2B35B 100%);--ink:#1A1F2B;--mu:#5B6275;--li:#E7E2DA;--bg:#F6F3EE;--ok:#2E9E6A;--okt:#1F7A50;--ot:#A85617;--okb:#E3F4EB;--mid:#D9902A;--midb:#FCF0DC;--full:#D2463C;--fullb:#FBE3E1;--pend:#E2B93B;--pendb:#FFF6D6}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
-a{color:var(--o)}
+a{color:var(--ot)}
 [hidden]{display:none!important}
 .cpx-logo{font:800 20px "Plus Jakarta Sans",sans-serif;color:#fff;letter-spacing:-.02em}
 .cpx-logo span{background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent;margin-left:4px}
@@ -27,8 +27,14 @@ a{color:var(--o)}
 .cpx-cur,.cpx-burger{display:none}
 .cpx-status{color:rgba(255,255,255,.65);font-size:13px}
 .cpx-status.err{color:#FFB4AC}
-.cpx-btn{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 16px;border-radius:999px;border:0;background:var(--g);color:var(--ink);font:700 14px "Plus Jakarta Sans",sans-serif;cursor:pointer;text-decoration:none}
-.cpx-btn.ghost{background:transparent;border:1.5px solid var(--li);color:var(--ink)}
+/* v2.9.22: egy fő gombstílus (sötétkék) és egy másodlagos (fehér, keretes) az egész panelen; a narancs a márka- és állapotjelzésé */
+.cpx-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 16px;border-radius:999px;border:1px solid var(--n);background:var(--n);color:#fff;font:600 14px Inter,sans-serif;cursor:pointer;text-decoration:none;transition:background .12s,border-color .12s}
+.cpx-btn:hover{background:#26304D;border-color:#26304D}
+.cpx-btn:focus-visible{outline:2px solid var(--o);outline-offset:2px}
+.cpx-btn[disabled]{background:#9AA0AE;border-color:#9AA0AE;cursor:default}
+.cpx-btn.ghost{background:#fff;border:1px solid #DCD6CC;color:var(--ink)}
+.cpx-btn.ghost:hover{background:#F6F4F0}
+.cpx-btn.ghost[disabled]{color:#9AA0AE;background:#fff}
 .cpx-top .cpx-btn.ghost{border-color:rgba(255,255,255,.25);color:#fff}
 .cpx-main{max-width:1280px;margin:0 auto;padding:20px}
 .cpx-empty{padding:60px 20px;text-align:center;color:var(--mu)}
@@ -200,7 +206,7 @@ a{color:var(--o)}
 .td-n{min-width:190px}
 .td-n .nm{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .td-n a{color:var(--ink);font-weight:600;text-decoration:none}
-.td-n a:hover{text-decoration:underline;color:var(--o)}
+.td-n a:hover{text-decoration:underline;color:var(--ot)}
 .td-n .mut{color:#8A5A10}
 .td-n .ntx{display:inline-block;color:#6E5300;background:var(--pendb);border-radius:6px;padding:2px 7px;margin-top:4px;max-width:300px;white-space:pre-line}
 .nt{border:0;background:transparent;color:#9AA0AE;font-size:12px;cursor:pointer;padding:2px 5px;border-radius:6px}
@@ -222,12 +228,12 @@ a{color:var(--o)}
 .bgst.on{border-color:#9ED6BA;color:#1E6B47;background:var(--okb)}
 .tsel{height:32px;border:1.5px solid #F1C7C2;border-radius:8px;background:#fff;padding:0 6px;font-weight:700;font-size:13px;color:var(--full);cursor:pointer}
 .tsel.ok{color:var(--ink);border-color:var(--li)}
-.okt{display:block;color:var(--ok);font-size:11px}
+.okt{display:block;color:var(--okt);font-size:11px}
 .stc{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--midb);color:#8A5A10;line-height:1.35}
 .stc.done{background:var(--okb);color:#1E6B47}
 .stc.urgent{background:var(--fullb);color:var(--full)}
 .prep{font-size:12px;font-weight:600;margin-top:4px;color:#8A5A10}
-.prep.done{color:var(--ok)}
+.prep.done{color:var(--okt)}
 .prep.urgent{color:var(--full)}
 .wcard .prep{margin:0 0 8px}
 .cpx-sheet.narrow{max-width:520px}
@@ -290,7 +296,7 @@ a{color:var(--o)}
 @media (max-width:760px){.pgrid{grid-template-columns:repeat(3,1fr);gap:8px}.pcard b{font-size:12px}}
 .bgname{border:0;background:transparent;padding:2px 0;cursor:pointer;text-align:left;color:var(--ink);font:inherit;font-weight:600}
 .bgname i{font-style:normal;color:#C2BAAE;font-size:12px;margin-left:2px}
-.bgname:hover{color:#9A4E12}.bgname:hover i{color:var(--o)}
+.bgname:hover{color:#9A4E12}.bgname:hover i{color:var(--ot)}
 .bgname:focus-visible{outline:3px solid var(--o);outline-offset:2px;border-radius:6px}
 
 /* kezelői elszámolás (v1.4) */
@@ -313,7 +319,7 @@ a{color:var(--o)}
 .el-t .td-n{min-width:200px}
 .el-t .td-n .nm{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .el-t .td-n a{color:var(--ink);font-weight:600;text-decoration:none}
-.el-t .td-n a:hover{text-decoration:underline;color:var(--o)}
+.el-t .td-n a:hover{text-decoration:underline;color:var(--ot)}
 .el-t .td-n small{color:var(--mu)}
 .el-t .el-sub{color:var(--mu);font-size:13px}
 .el-t .el-loc{max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -419,7 +425,7 @@ a{color:var(--o)}
 .cpk-save{height:54px;border:0;border-radius:999px;background:var(--g);font:800 17px "Plus Jakarta Sans",sans-serif;color:var(--ink);cursor:pointer}
 .cpk-save:disabled{opacity:.6;cursor:default}
 .cpk-msg{margin:0;font-size:14px;color:var(--mu);text-align:center;min-height:20px}
-.cpk-msg.ok,.cpk-hint.ok{color:var(--ok);font-weight:600}
+.cpk-msg.ok,.cpk-hint.ok{color:var(--okt);font-weight:600}
 .cpk-msg.bad,.cpk-hint.bad{color:var(--full);font-weight:600}
 .cpk-lock{margin:0;background:var(--pendb);color:#6E5300;border-radius:12px;padding:10px 12px;font-size:14px}
 .cpk-foot{color:var(--mu);font-size:12.5px;text-align:center;margin:14px 0 30px}
@@ -566,7 +572,7 @@ a{color:var(--o)}
 .tw-badge .tw-b-d{flex-basis:100%;font-size:13px;color:var(--ink);opacity:.85;margin-top:2px}
 .tw-h{font:800 22px "Plus Jakarta Sans",sans-serif;margin:0}
 .tw-h small{font-size:13px;font-weight:600;color:var(--mu);margin-left:6px}
-.kpi.tw-pos b{color:var(--ok)}
+.kpi.tw-pos b{color:var(--okt)}
 .kpi.tw-neg b{color:var(--full)}
 .tw-aam h3 small{font-size:12.5px;font-weight:500}
 .tw-aamwrap{overflow:auto;border:1px solid var(--li);border-radius:14px}
@@ -574,7 +580,7 @@ a{color:var(--o)}
 .tw-at small{display:block}
 .tw-acts{white-space:nowrap;text-align:right}
 .tw-wrap{max-height:calc(100vh - 120px)}
-.tw-t td.tw-a.pos{color:var(--ok);font-weight:700}
+.tw-t td.tw-a.pos{color:var(--okt);font-weight:700}
 .tw-t td.tw-a.neg{color:var(--full);font-weight:700}
 .tw-t td.tw-run{color:var(--mu)}
 .tw-t td.tw-run.neg{color:var(--full);font-weight:700}
@@ -586,7 +592,7 @@ a{color:var(--o)}
 .tw-src{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;background:#EEF0F5;color:#2B3242}
 .tw-src.el{background:#E8EEFB;color:#2F5E9E}
 .tw-src.aam{background:var(--okb);color:#1E6B47}
-.tw-sz{display:inline-block;font-size:11px;font-weight:700;color:var(--ok);white-space:nowrap}
+.tw-sz{display:inline-block;font-size:11px;font-weight:700;color:var(--okt);white-space:nowrap}
 .tw-grid{margin-top:12px}
 .cpx-btn.tw-del{margin-left:auto;color:var(--full);border-color:#F1C7C2}
 .tw-payh{margin:12px 0 0;font-size:13px}
@@ -713,7 +719,7 @@ a{color:var(--o)}
 
 /* v2.7.9: kompaktabb oldalmenü (asztali nézet) + olvasatlan levelek száma a Levelezés mellett */
 .cpx-tabs button{position:relative}
-.cpx-tab-n{margin-left:auto;background:#E8553E;color:#fff;border-radius:999px;font:700 11px/18px Inter,sans-serif;min-width:18px;height:18px;padding:0 6px;text-align:center;flex:none}
+.cpx-tab-n{margin-left:auto;background:#C53A24;color:#fff;border-radius:999px;font:700 11px/18px Inter,sans-serif;min-width:18px;height:18px;padding:0 6px;text-align:center;flex:none}
 @media (min-width:1025px){
   .cpx-shell>.cpx-top{padding:14px 10px 12px}
   .cpx-shell .cpx-logo{padding:0 10px 12px}
@@ -748,3 +754,6 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 /* v2.7.13: értesítő sáv művelettel (Visszavonás) */
 .cpx-toast.on{pointer-events:auto}
 .cpx-tact{border:0;background:#F2B35B;color:#1A1F2B;border-radius:999px;padding:4px 12px;margin-left:8px;font:700 13px Inter,sans-serif;cursor:pointer}.cpx-tact.ghost{background:rgba(255,255,255,.16);color:#fff;margin-left:4px}
+/* v2.9.22: a sötét oldalsávban (és a mobil menüben) a másodlagos gomb átlátszó marad */
+.cpx-top .cpx-btn.ghost,.cpx-shell .cpx-top-r .cpx-btn.ghost,.cpx-menu .cpx-btn.ghost{background:transparent;border-color:rgba(255,255,255,.22);color:#fff}
+.cpx-top .cpx-btn.ghost:hover,.cpx-shell .cpx-top-r .cpx-btn.ghost:hover,.cpx-menu .cpx-btn.ghost:hover{background:rgba(255,255,255,.08)}

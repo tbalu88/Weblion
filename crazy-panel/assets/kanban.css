@@ -8,7 +8,7 @@
 .kb-tabs button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--li);background:#fff;border-radius:999px;padding:5px 12px;font:600 13px Inter,sans-serif;color:var(--ink);cursor:pointer}
 .kb-tabs button:hover{background:#F6F3EE}
 .kb-tabs button.on{background:var(--n,#141C33);border-color:var(--n,#141C33);color:#fff}
-.kb-tabs button b{background:#E8553E;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:17px}
+.kb-tabs button b{background:#C53A24;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:17px}
 .kb-tabs .kb-addb{border-style:dashed;color:var(--mu);font-weight:500}
 .kb-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .kb-q{height:32px;border:1.5px solid var(--li);border-radius:999px;padding:0 12px;background:#fff;font-size:13px;width:220px}
