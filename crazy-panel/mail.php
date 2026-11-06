@@ -187,7 +187,7 @@ function cp_mail_values($deal_id) {
 	));
 	/* v1.43: a Salesmate-ből átvett sablonok változói ({{Deal.…}}, {{Contact.…}}) – a nyers értékek, a szűrőket a renderelés alkalmazza */
 	if (function_exists('cp_crm_spec')) {
-		foreach ((array) cp_crm_spec('deal') as $col => $x) { if (is_array($x) && !empty($x[0]) && array_key_exists($col, $d)) { $v['Deal.' . $x[0]] = str_replace(' | ', ', ', (string) $d[$col]); } }
+		foreach ((array) cp_crm_spec('deal') as $col => $x) { if (is_array($x) && !empty($x[0]) && array_key_exists($col, $d)) { $v['Deal.' . $x[0]] = ($x[1] ?? '') === 'dt' && $d[$col] && function_exists('cp_crm_local') ? cp_crm_local($d[$col]) : str_replace(' | ', ', ', (string) $d[$col]); } } /* v2.9.21: időpont helyi időben */
 	}
 	$v['Deal.id'] = (string) $d['id']; $v['Deal.title'] = (string) $d['title']; $v['Deal.dealValue'] = $d['value'] !== null ? (string) $d['value'] : '';
 	$v['Deal.ugyfelportal_link'] = (string) $d['portal_link'];
@@ -400,9 +400,10 @@ function cp_mail_local($dt) {
 	return function_exists('cp_crm_local') ? cp_crm_local($dt) : (string) $dt;
 }
 
-function cp_mail_thread_row($t) {
+function cp_mail_thread_row($t, $notes = null) {
 	global $wpdb;
-	$n = $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $t['id']), ARRAY_A);
+	/* v2.9.21: a listánál a legutóbbi jegyzeteket egyetlen lekérdezés hozza ($notes), egyedi szálnál külön */
+	$n = is_array($notes) ? ($notes[(int) $t['id']] ?? null) : $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $t['id']), ARRAY_A);
 	return array(
 		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
 		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'sz' => $t['folder'] === 'snooze' ? (int) ((get_option('cp_mail_snooze', array())[(int) $t['id']]['ts'] ?? 0)) : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
@@ -454,7 +455,9 @@ function cp_mail_ajax_threads() {
 	$myd = function_exists('cp_mail_drafts_get') && $me > 0 ? cp_mail_drafts_get($me) : array();
 	$counts['draft'] = count($myd);
 	$dth = function_exists('cp_mail_draft_threads') ? cp_mail_draft_threads() : array();
-	$rowsOut = array_map(function ($t) use ($dth) { $r = cp_mail_thread_row($t); if (isset($dth[(int) $t['id']])) { $r['dr'] = 1; } return $r; }, (array) $rows);
+	$ids = array_map(function ($t) { return (int) $t['id']; }, (array) $rows); $notes = array();
+	if ($ids) { $N = cp_mail_t('notes'); $in = implode(',', $ids); foreach ((array) $wpdb->get_results("SELECT n.thread_id, n.body, n.author, n.created_at FROM $N n JOIN (SELECT MAX(id) id FROM $N WHERE deleted_at IS NULL AND thread_id IN ($in) GROUP BY thread_id) x ON x.id = n.id", ARRAY_A) as $r) { $notes[(int) $r['thread_id']] = $r; } }
+	$rowsOut = array_map(function ($t) use ($dth, $notes) { $r = cp_mail_thread_row($t, $notes); if (isset($dth[(int) $t['id']])) { $r['dr'] = 1; } return $r; }, (array) $rows);
 	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0));
 }
 
@@ -609,7 +612,7 @@ function cp_mail_ajax_bulk() {
 	/* v2.8.2: szundi – a megadott időpontig a Szundi mappában, utána vissza a Beérkezettbe olvasatlanként */
 	$sz = $op === 'snooze' ? (int) $v : 0;
 	if ($op === 'snooze' && ($sz < time() + 60 || $sz > time() + 366 * DAY_IN_SECONDS)) { cp_el_err('Válassz egy jövőbeli időpontot (legfeljebb egy évre előre).'); }
-	$szm = get_option('cp_mail_snooze', array()); if (!is_array($szm)) { $szm = array(); }
+	$szm = cp_opt_fresh('cp_mail_snooze'); if (!is_array($szm)) { $szm = array(); }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	$who = function_exists('cp_panel_who') ? cp_panel_who() : '';
 	$now = gmdate('Y-m-d H:i:s');
@@ -735,7 +738,7 @@ function cp_mail_ajax_presence() {
 /* v2.8.2: lejárt szundik – vissza az eredeti mappába (Beérkezett), nyitottként és olvasatlanként, a szundizónak értesítés.
  * Ha közben új levél jött (a beolvasás a szálat már visszatette a Beérkezettbe), csak a jegyzéket takarítja. */
 function cp_mail_snooze_due() {
-	$m = get_option('cp_mail_snooze', array());
+	$m = cp_opt_fresh('cp_mail_snooze');
 	if (!is_array($m) || !$m || !function_exists('cp_mail_db_ok') || !cp_mail_db_ok()) { return; }
 	global $wpdb; $T = cp_mail_t('threads'); $now = time(); $ch = false;
 	foreach ($m as $id => $x) {

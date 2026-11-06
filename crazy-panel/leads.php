@@ -60,6 +60,13 @@ function cp_lead_pairs($fd) {
 	foreach (array_slice($out, 0, 80, true) as $k => $v) { $clean[mb_substr(sanitize_text_field($k), 0, 80)] = mb_substr(sanitize_textarea_field($v), 0, 2000); }
 	return $clean;
 }
+/* v2.9.21: beállítás friss olvasása az adatbázisból (gyorsítótár nélkül) – a „beolvas, módosít, visszaír” mentéseknél így egy
+ * közben futó másik kérés változása nem vész el (a hosszú, Salesmate-re váró futások régi másolata nem írja felül) */
+function cp_opt_fresh($name, $default = array()) {
+	wp_cache_delete($name, 'options'); wp_cache_delete('notoptions', 'options'); /* nem automatikusan betöltött beállításokhoz */
+	$v = get_option($name, $default);
+	return is_array($default) && !is_array($v) ? $default : $v;
+}
 function cp_lead_pick($pairs, $re) { foreach ($pairs as $k => $v) { if ($v !== '' && preg_match($re, $k)) { return $v; } } return ''; }
 
 add_action('wp_ajax_nopriv_cp_lead_in', 'cp_lead_ajax_in');
@@ -88,6 +95,9 @@ function cp_lead_ajax_in() {
 		'data' => $raw, 'name' => mb_substr($name, 0, 190), 'email' => mb_substr($email, 0, 190), 'phone' => mb_substr($phone, 0, 60), 'page' => mb_substr(esc_url_raw((string) wp_unslash($_POST['page'] ?? '')), 0, 255),
 		'ip_hash' => $ip, 'status' => 'new', 'created_at' => gmdate('Y-m-d H:i:s')));
 	$id = (int) $wpdb->insert_id;
+	/* v2.9.21: összesített óránkénti korlát (IP-váltogatós elárasztás ellen): 60 fölött a lead megmarad, de értesítés és levél nem megy */
+	$hk = 'cp_lead_in_h_' . gmdate('YmdH'); $hn = (int) get_transient($hk) + 1; set_transient($hk, $hn, 2 * HOUR_IN_SECONDS);
+	if ($hn > 60) { if ($hn === 61 && function_exists('cp_audit_add')) { cp_audit_add('leads', 'flood', 'Szokatlanul sok webes beküldés egy órán belül – az értesítések szünetelnek', 'leads', (string) $hn); } wp_send_json_success(array('id' => $id)); }
 	/* v1.70: az átállás árnyék-üzeme (cutover.php) ebből számolja a panel deal-tervét */
 	do_action('cp_lead_received', $id, $pairs, (string) wp_unslash($_POST['page'] ?? ''));
 	/* a Salesmate deal minél előbb jöjjön át: soron kívüli szinkron 1,5 perc múlva */

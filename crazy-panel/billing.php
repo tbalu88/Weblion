@@ -155,6 +155,11 @@ function cp_bil_doubt_guard($deal, $type) {
 	if (!empty($_POST['doubt_ok'])) { return; }
 	$n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_bil_t() . " WHERE deal_id = %d AND type = %s AND number = '' AND err LIKE %s", $deal, $type, $wpdb->esc_like(CP_BIL_DOUBT) . '%'));
 	if ($n) { cp_el_err('DOUBT|Ennél a dealnél egy korábbi ilyen bizonylat kiállítása bizonytalanul végződött – lehet, hogy már létezik. Előbb nézd meg a számlázóban, és jelöld a bizonylatsoron (létrejött / nem jött létre).'); }
+	/* v2.9.21: ugyanannak a dealnek már van (vagy sorban áll) végszámlája – csak megerősítéssel készülhet még egy */
+	if ($type === 'invoice') {
+		$m = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_bil_t() . " WHERE deal_id = %d AND type = 'invoice' AND pay NOT IN ('cancelled', 'storno') AND (number <> '' OR req IS NOT NULL)", $deal));
+		if ($m) { cp_el_err('DOUBT|Ennél a dealnél már van végszámla (vagy galériával együtt kiküldésre vár). Ha csak módosítani kell, előbb sztornózd a régit a számlázóban. Biztosan kiállítasz még egy végszámlát?'); }
+	}
 }
 
 /* ------------------------------------------------------------ végpontok (deal adatlap) */
@@ -249,6 +254,8 @@ function cp_bil_ajax_issue() {
 	if (cp_bil_prov($p) === 'szamlazz') {
 		$advNo = '';
 		if ($type === 'invoice' && !empty($_POST['advance'])) {
+			/* v2.9.21: a Számla Agent egy végszámlán csak egy előleget tud levonni – többnél a második kimaradna */
+			if (count(array_filter(array_map('intval', (array) json_decode(wp_unslash((string) $_POST['advance']), true)))) > 1) { cp_el_err('A Számlázz.hu egy végszámlán csak egy előlegszámlát tud levonni. Több előlegnél a végszámlát a Számlázz.hu felületén állítsd ki.'); }
 			foreach (array_map('intval', (array) json_decode(wp_unslash((string) $_POST['advance']), true)) as $aid) {
 				$advNo = (string) $wpdb->get_var($wpdb->prepare('SELECT number FROM ' . cp_bil_t() . " WHERE id = %d AND deal_id = %d AND type = 'advance' AND profile = %s AND number <> ''", $aid, (int) $d['id'], $p));
 				if ($advNo !== '') { break; }
@@ -448,6 +455,8 @@ function cp_szl_issue_row($row, $send) {
 	if (strpos((string) $r['err'], CP_BIL_DOUBT) === 0) { return new WP_Error('cp_bil', 'Ennél a számlánál nem biztos, hogy az előző kiállítás nem sikerült – előbb nézd meg a Számlázz.hu-ban, és jelöld: létrejött / nem jött létre.'); }
 	$lk = 'szl_row_' . (int) $row; if (!cp_bil_lock($lk, 180)) { return new WP_Error('cp_bil', 'A kiállítás folyamatban.'); }
 	$q = json_decode((string) $r['req'], true);
+	/* v2.9.21: a később (pl. a galériával) kiállított számla határideje ne legyen már lejárt – a mai naptól a profil szerinti napokkal */
+	if (is_array($q) && !empty($q['due']) && $q['due'] < wp_date('Y-m-d')) { $q['due'] = wp_date('Y-m-d', time() + max(1, (int) cp_bil_opts($r['profile'])['due']) * DAY_IN_SECONDS); }
 	$x = cp_szl_issue($r['profile'], $q, $send ? 'send' : 'quiet');
 	if (is_wp_error($x)) { $wpdb->update(cp_bil_t(), array('err' => cp_bil_is_unclear($x) ? cp_bil_doubt_msg($x) : $x->get_error_message()), array('id' => (int) $row)); cp_bil_unlock($lk); return $x; }
 	$wpdb->update(cp_bil_t(), array('number' => $x['number'] !== '' ? $x['number'] : '(kiállítva)', 'gross' => $x['gross'], 'url' => $x['url'], 'sent_at' => $send ? gmdate('Y-m-d H:i:s') : null, 'err' => null), array('id' => (int) $row));

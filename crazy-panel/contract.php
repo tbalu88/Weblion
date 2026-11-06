@@ -110,7 +110,7 @@ function cp_ct_prefill($id) {
 	$keys = cp_ct_guess($d);
 	$svc = array();
 	/* v1.92: a háttérnél a dealen (a kollégák által) rögzített nyer; ha nincs, az ügyfél portálon kért választása */
-	foreach ($keys as $i => $k) { if (!isset($L['services'][$k])) { continue; } $S = $L['services'][$k]; $svc[] = array('k' => $k, 'hours' => $hours > 0 && $hours <= 16 ? $hours : (int) $S['hours'], 'price' => $i === 0 && (float) $d['value'] > 0 ? (float) $d['value'] - (float) $d['km_fee'] : 0, 'bg' => $S['hatter'] ? (string) ((function_exists('cp_portal_bg_real') ? cp_portal_bg_real((string) $d['background']) : trim((string) $d['background'])) ?: ($g('background') ?: $d['background'])) : ''); }
+	foreach ($keys as $i => $k) { if (!isset($L['services'][$k])) { continue; } $S = $L['services'][$k]; $svc[] = array('k' => $k, 'hours' => $hours > 0 && $hours <= 16 ? $hours : (int) $S['hours'], 'price' => $i === 0 && (float) $d['value'] > 0 ? (float) $d['value'] : 0, 'bg' => $S['hatter'] ? (string) ((function_exists('cp_portal_bg_real') ? cp_portal_bg_real((string) $d['background']) : trim((string) $d['background'])) ?: ($g('background') ?: $d['background'])) : ''); }
 	$pm = mb_strtolower((string) $d['pay_method']);
 	$pay = strpos($pm, 'kész') !== false ? 'cash' : (strpos($pm, 'előre') !== false || strpos($pm, 'elore') !== false ? 'pre' : 'post');
 	$city = ''; if (preg_match('/\b\d{4}\s+([^\s,]+)/u', $venue ?: (string) $d['venue'], $m)) { $city = $m[1]; }

@@ -63,12 +63,14 @@ function cp_est_deal($d) {
 	$g = (int) ($d['guests'] ?? 0);
 	if ($g > 1000) { $lines[] = '1000 fő felett egyedi ajánlat'; $approx = true; }
 	elseif ($g > 150) { foreach ($P['guests'] as $b) { if ($g <= $b[0]) { $lines[] = 'Létszám-felár (' . $g . ' fő): ' . cp_est_ft($b[1]); $tot += $b[1]; break; } } }
+	$tot0 = $tot; /* v2.9.21: a kiszállás nem része a deal értékének (külön tétel) – csak tájékoztatásul szerepel */
 	$km = (int) ($d['km_fee'] ?? 0); $venue = (string) ($d['venue'] ?? ''); $geo = null;
 	if ($km > 0) { $lines[] = 'Kiszállás (a dealben megadva): ' . cp_est_ft($km); $tot += $km; }
 	elseif (cp_est_is_bp($venue)) { $lines[] = 'Kiszállás Budapesten: ' . ($bud ? cp_est_ft($bud) : 'ingyenes'); $tot += $bud; }
 	elseif ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['bp'])) { $lines[] = 'Kiszállás Budapesten' . (!empty($geo['n']) ? ' (felismerve: ' . $geo['n'] . ')' : '') . ': ' . ($bud ? cp_est_ft($bud) : 'ingyenes'); $tot += $bud; }
 	elseif ($venue !== '' && is_array($geo) && !empty($geo['km'])) { $kmv = (int) $geo['km'] * $P['trip']; $fee = $kmv * $P['km']; $lines[] = 'Kiszállás (' . (!empty($geo['n']) ? $geo['n'] . ', ' : '') . '~' . $kmv . ' km oda-vissza): ' . cp_est_ft($fee); $tot += $fee; }
 	else { $lines[] = $venue === '' ? 'Kiszállás nélkül (nincs helyszín)' : (is_array($geo ?? null) ? 'Kiszállás nélkül (a helyszínt nem találtam a térképen – írd be a települést vagy irányítószámot)' : 'Kiszállás nélkül (a távolság számolása folyamatban, 10 percen belül frissül)'); $approx = true; }
+	if ($tot !== $tot0) { $lines[] = 'A kiszállási díj nincs benne a becsült értékben (külön számlázzuk): ' . cp_est_ft($tot - $tot0); $tot = $tot0; }
 	return array('p' => (int) $tot, 'a' => $approx ? 1 : 0, 'l' => $lines);
 }
 /* v1.91.1: ingyenes levelezőről (Gmail, Freemail, Citromail…) érkező ajánlatkérés = magánszemély → Crazyphoto-árak */

@@ -179,12 +179,17 @@ function cp_flow_tick() {
 	/* első futás: innentől figyel, a múltat nem dolgozza fel */
 	if (empty($st['since'])) { $st = array('since' => $now, 'hist' => (int) $wpdb->get_var("SELECT MAX(id) FROM $H"), 'days' => array()); update_option('cp_flow_state', $st, false); delete_transient('cp_flow_lock'); return; }
 	$flows = array_filter(cp_flows(), function ($f) { return $f['mode'] !== 'off'; });
+	/* v2.9.21: a feldolgozás azonosító szerint halad (nem idő szerint) – a szinkron később behozott dealjei és naplósorai sem maradnak ki */
+	if (empty($st['did'])) { $st['did'] = (int) $wpdb->get_var("SELECT MAX(id) FROM $D WHERE created_at <= " . $wpdb->prepare('%s', $st['since'])); }
+	$hmax = (int) $st['hist'];
 	if ($flows) {
 		/* új deal-ek a legutóbbi futás óta (a szinkron hozza be őket) */
-		$new = (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE created_at > %s AND created_at <= %s ORDER BY created_at LIMIT 200", $st['since'], $now));
+		$new = array_map('intval', (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE id > %d AND created_at > %s ORDER BY id LIMIT 200", (int) $st['did'], gmdate('Y-m-d H:i:s', strtotime($st['since'] . ' UTC') - 3 * DAY_IN_SECONDS))));
+		if ($new) { $st['did'] = max($new); }
 		foreach ($flows as $f) { if (($f['def']['trigger']['type'] ?? '') === 'deal_created') { foreach ($new as $id) { cp_flow_run($f, (int) $id); } } }
 		/* szakaszba lépés (a változásnaplóból) */
 		$hs = (array) $wpdb->get_results($wpdb->prepare("SELECT id, deal_id, new_val FROM $H WHERE id > %d AND field = 'stage' ORDER BY id LIMIT 500", (int) $st['hist']), ARRAY_A);
+		foreach ($hs as $h) { $hmax = max($hmax, (int) $h['id']); }
 		foreach ($flows as $f) { if (($f['def']['trigger']['type'] ?? '') === 'stage_enter') { foreach ($hs as $h) { if ((string) $h['new_val'] === (string) $f['def']['trigger']['stage']) { cp_flow_run($f, (int) $h['deal_id']); } } } }
 		/* rendezvénydátumhoz kötött időpont: naponta egyszer, a megadott óra után (budapesti idő) */
 		$today = wp_date('Y-m-d'); $hour = (int) wp_date('G');
@@ -197,7 +202,7 @@ function cp_flow_tick() {
 		}
 	}
 	$st['since'] = $now;
-	$st['hist'] = (int) ($wpdb->get_var("SELECT MAX(id) FROM $H") ?: $st['hist']);
+	$st['hist'] = $flows ? $hmax : (int) ($wpdb->get_var("SELECT MAX(id) FROM $H") ?: $st['hist']);
 	$st['last'] = time();
 	update_option('cp_flow_state', $st, false);
 	delete_transient('cp_flow_lock');

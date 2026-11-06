@@ -237,7 +237,7 @@ function cp_wf_create($lid) {
 	$fail = function ($msg) use ($lk) { delete_transient($lk); return new WP_Error('cp_wf', $msg); };
 
 	/* kontakt: azonos e-mail-cím és név (vagy névtelen régi kontakt) → a meglévő; különben új */
-	$q0 = get_option('cp_wf_q', array());
+	$q0 = cp_opt_fresh('cp_wf_q');
 	$cid = is_array($q0) && !empty($q0[$lid]['c']) ? (int) $q0[$lid]['c'] : 0;
 	if ($cid && !$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('contacts') . ' WHERE id = %d AND deleted_at IS NULL', $cid))) { $cid = 0; }
 	if (!$cid && $email !== '') {
@@ -271,9 +271,13 @@ function cp_wf_create($lid) {
 		elseif ($t === 'multi') { $v = implode(',', array_map('trim', explode(', ', $v))); }
 		$body[$k] = $v;
 	}
-	$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
-	if (is_wp_error($dr)) { return $fail('A deal-t nem sikerült létrehozni: ' . $dr->get_error_message()); }
-	$id = cp_crm_new_id($dr);
+	/* v2.9.21: ha egy korábbi próbálkozásnál a Salesmate létrehozta a dealt, de a válasz nem jött meg (időtúllépés), a szinkron már behozta – azt használjuk, nem hozunk létre másodikat */
+	$id = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . ' WHERE contact_id = %d AND deleted_at IS NULL AND created_at >= %s ORDER BY id LIMIT 1', $cid, gmdate('Y-m-d H:i:s', strtotime($r['created_at'] . ' UTC') - 120)));
+	if (!$id) {
+		$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
+		if (is_wp_error($dr)) { return $fail('A deal-t nem sikerült létrehozni: ' . $dr->get_error_message()); }
+		$id = cp_crm_new_id($dr);
+	}
 	if (!$id) { return $fail('A deal létrejött, de a Salesmate nem adta vissza az azonosítóját.'); }
 	$wpdb->update(cp_lead_t(), array('deal_id' => $id), array('id' => $lid));
 	cp_wf_queue_del($lid);
@@ -290,24 +294,24 @@ function cp_wf_create($lid) {
 function cp_wf_plan($lid, $pairs, $page, $feat) {
 	static $mem = array();
 	if (isset($mem[$lid])) { return $mem[$lid]; }
-	$q = get_option('cp_wf_q', array()); if (!is_array($q)) { $q = array(); }
+	$q = cp_opt_fresh('cp_wf_q'); if (!is_array($q)) { $q = array(); }
 	if (!empty($q[$lid]['p']) && is_array($q[$lid]['p'])) { return $mem[$lid] = $q[$lid]['p']; }
 	$p = cp_cut_plan_lead($pairs, $page, $feat);
-	if (isset($q[$lid])) { $q = get_option('cp_wf_q', array()); $q[$lid]['p'] = $p; update_option('cp_wf_q', $q, false); }
+	if (isset($q[$lid])) { $q = cp_opt_fresh('cp_wf_q'); $q[$lid]['p'] = $p; update_option('cp_wf_q', $q, false); }
 	return $mem[$lid] = $p;
 }
 
 /* a megkeresés kontaktja (újrapróbáláshoz) – a sorban tartva */
 function cp_wf_lead_cid($lid, $cid) {
-	$q = get_option('cp_wf_q', array()); if (!is_array($q)) { $q = array(); }
+	$q = cp_opt_fresh('cp_wf_q'); if (!is_array($q)) { $q = array(); }
 	if (isset($q[$lid])) { $q[$lid]['c'] = (int) $cid; update_option('cp_wf_q', $q, false); }
 }
 
 /* ------------------------------------------------------------ újrapróbálás (10 percenként, a CRM-ütemmel) */
-function cp_wf_queue_add($lid) { $q = get_option('cp_wf_q', array()); if (!is_array($q)) { $q = array(); } $q[$lid] = array('n' => 0, 'c' => 0, 't' => time()); update_option('cp_wf_q', $q, false); }
-function cp_wf_queue_del($lid) { $q = get_option('cp_wf_q', array()); if (is_array($q) && isset($q[$lid])) { unset($q[$lid]); update_option('cp_wf_q', $q, false); } }
+function cp_wf_queue_add($lid) { $q = cp_opt_fresh('cp_wf_q'); if (!is_array($q)) { $q = array(); } $q[$lid] = array('n' => 0, 'c' => 0, 't' => time()); update_option('cp_wf_q', $q, false); }
+function cp_wf_queue_del($lid) { $q = cp_opt_fresh('cp_wf_q'); if (is_array($q) && isset($q[$lid])) { unset($q[$lid]); update_option('cp_wf_q', $q, false); } }
 add_action('cp_crm_tick', function () {
-	$q = get_option('cp_wf_q', array());
+	$q = cp_opt_fresh('cp_wf_q');
 	if (!is_array($q) || !$q) { return; }
 	global $wpdb;
 	foreach (array_slice($q, 0, 5, true) as $lid => $x) {
@@ -317,7 +321,7 @@ add_action('cp_crm_tick', function () {
 			$wpdb->update(cp_cut_t(), array('status' => 'live', 'deal_id' => (int) $res, 'checked_at' => gmdate('Y-m-d H:i:s')), array('ref' => 'form:' . (int) $lid));
 			continue;
 		}
-		$q2 = get_option('cp_wf_q', array());
+		$q2 = cp_opt_fresh('cp_wf_q');
 		if (!isset($q2[$lid])) { continue; }
 		$q2[$lid]['n'] = (int) $q2[$lid]['n'] + 1; $q2[$lid]['e'] = mb_substr($res->get_error_message(), 0, 200);
 		if ($q2[$lid]['n'] === 3 && function_exists('cp_notify') && function_exists('cp_pu_data')) {

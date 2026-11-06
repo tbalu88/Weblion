@@ -420,8 +420,14 @@ function cp_crm_sync($manual = false) {
 					/* a teljes olvasásban nem látott rekordok: a Salesmate-ben törölve (csak jelöljük, nem töröljük) */
 					if (!empty($st[$m . '_redo'])) {
 						$cut = gmdate('Y-m-d H:i:s', strtotime($st[$m . '_run'] . ' UTC') - 3600);
-						$n = $wpdb->query($wpdb->prepare("UPDATE $tab SET deleted_at = %s WHERE deleted_at IS NULL AND via = 'search' AND (synced_at IS NULL OR synced_at < %s)", gmdate('Y-m-d H:i:s'), $cut));
-						if ($n) { $log[] = $m . ': ' . (int) $n . ' törölt jelölve'; }
+						/* v2.9.21: a Salesmate keresője néha kihagy rekordot – csak az számít töröltnek, ami két egymást követő teljes olvasásból is hiányzik */
+						$miss = array_map('intval', (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE deleted_at IS NULL AND via = 'search' AND (synced_at IS NULL OR synced_at < %s)", $cut)));
+						$prev = array_map('intval', (array) get_option('cp_crm_miss_' . $m, array()));
+						$del = array_values(array_intersect($miss, $prev));
+						update_option('cp_crm_miss_' . $m, array_values(array_diff($miss, $del)), false);
+						$n = 0;
+						foreach (array_chunk($del, 500) as $ch) { $n += (int) $wpdb->query($wpdb->prepare("UPDATE $tab SET deleted_at = %s WHERE deleted_at IS NULL AND id IN (" . implode(',', $ch) . ')', gmdate('Y-m-d H:i:s'))); }
+						if ($n || $miss) { $log[] = $m . ': ' . (int) $n . ' törölt jelölve' . (count($miss) > $n ? ', ' . (count($miss) - $n) . ' kimaradt (a következő teljes olvasás dönt)' : ''); }
 					}
 					$st[$m . '_full_at'] = time();
 					$st[$m . '_n'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM $tab WHERE deleted_at IS NULL");
@@ -455,7 +461,7 @@ function cp_crm_sync($manual = false) {
 		if (!empty($st['deal_full_at']) && (empty($st['gap_at']) || time() - (int) $st['gap_at'] > 20 * HOUR_IN_SECONDS) && $calls < $budget) {
 			$tab = cp_crm_t('deals');
 			$max = (int) $wpdb->get_var("SELECT MAX(id) FROM $tab");
-			$have = array_flip(array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE id >= %d", $max - 300))));
+			$have = array_flip(array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE id >= %d AND deleted_at IS NULL", $max - 300)))); /* v2.9.21: a töröltnek jelöltet is újra megnézi */
 			$found = 0; $tried = 0;
 			for ($id = $max + 40; $id >= $max - 300 && $tried < 80; $id--) {
 				if (isset($have[$id])) { continue; }

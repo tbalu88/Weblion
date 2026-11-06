@@ -171,6 +171,6 @@ function cp_portal_ajax_p_errors() {
 	cp_el_auth();
 	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
 	if (!empty($_POST['clear'])) { update_option('cp_portal_errors', array(), false); }
-	$q = get_option('cp_portal_smq', array());
+	$q = cp_opt_fresh('cp_portal_smq');
 	wp_send_json_success(array('errors' => cp_portal_errors(), 'queue' => is_array($q) ? array_values($q) : array()));
 }

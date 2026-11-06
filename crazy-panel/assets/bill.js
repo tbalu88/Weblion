@@ -164,7 +164,7 @@
 				try { r = await post('cp_bil_issue', P); }
 				catch (e) {
 					if (!/^DOUBT\|/.test(e.message)) throw e;
-					if (!window.confirm(e.message.slice(6) + '\n\nBiztosan NEM jött létre, és most kiállítod?')) { btn.disabled = false; provUi(); return; }
+					if (!window.confirm(e.message.slice(6) + (/\?$/.test(e.message) ? '' : '\n\nBiztosan NEM jött létre, és most kiállítod?'))) { btn.disabled = false; provUi(); return; }
 					r = await post('cp_bil_issue', Object.assign({}, P, { doubt_ok: 1 }));
 				}
 				toast(r.msg, !!r.bad); close(); B.docs = r.docs.map(fix); draw(box, id, B);

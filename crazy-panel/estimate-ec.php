@@ -98,11 +98,13 @@ function cp_est_ec_deal($d, $private = false) {
 	list($tot, $lines) = cp_est_ec_items($keys, $d, 1, $approx, $bud);
 	if (count($keys) + count($custom) >= 3) { $bud = 15000; }
 	foreach ($custom as $c) { $lines[] = $c . ': egyedi ár (nincs az árlistában)'; $approx = true; }
+	$tot0 = $tot; /* v2.9.21: a kiszállás nem része a deal értékének (külön tétel) – csak tájékoztatásul szerepel */
 	$km = (int) ($d['km_fee'] ?? 0); $venue = (string) ($d['venue'] ?? ''); $geo = null;
 	if ($km > 0) { $lines[] = 'Kiszállás (a dealben megadva): ' . cp_est_ft($km); $tot += $km; }
 	elseif (cp_est_is_bp($venue) || ($venue !== '' && is_array($geo = cp_est_geo_get($venue)) && !empty($geo['bp']))) { $lines[] = 'Kiszállás Budapesten: ' . cp_est_ft($bud); $tot += $bud; }
 	elseif ($venue !== '' && is_array($geo) && !empty($geo['km'])) { $kmv = (int) $geo['km'] * $T['trip']; $fee = $kmv * $T['km']; $lines[] = 'Kiszállás (' . (!empty($geo['n']) ? $geo['n'] . ', ' : '') . '~' . $kmv . ' km oda-vissza × 130 Ft): ' . cp_est_ft($fee); $tot += $fee; }
 	else { $lines[] = $venue === '' ? 'Kiszállás nélkül (nincs helyszín)' : (is_array($geo) ? 'Kiszállás nélkül (a helyszínt nem találtam a térképen)' : 'Kiszállás nélkül (a távolság számolása folyamatban, 10 percen belül frissül)'); $approx = true; }
+	if ($tot !== $tot0) { $lines[] = 'A kiszállási díj nincs benne a becsült értékben (külön számlázzuk): ' . cp_est_ft($tot - $tot0); $tot = $tot0; }
 	$lines[] = 'Az árak nettó árak, az ÁFA-t nem tartalmazzák.';
 	return array('p' => (int) $tot, 'a' => $approx ? 1 : 0, 'l' => $lines, 'v' => 'ec');
 }

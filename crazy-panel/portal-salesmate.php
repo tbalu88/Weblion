@@ -214,7 +214,7 @@ function cp_portal_sm_queue($deal_id, $kind, $payload) {
 	if ($kind === 'note' && empty($o['sm_notes'])) { return; }
 	if ($kind === 'venue' && cp_portal_sm_venue_field() === '') { return; }
 	if ($kind === 'bg') { $p = cp_panel_opts(); if (empty($p['bg_write']) || $p['f_bg'] === '') { return; } }
-	$q = get_option('cp_portal_smq', array());
+	$q = cp_opt_fresh('cp_portal_smq');
 	if (!is_array($q)) { $q = array(); }
 	$k = $deal_id . '|' . $kind . ($kind === 'note' ? '|' . md5((string) $payload) : '');
 	$q[$k] = array('deal' => (string) $deal_id, 'kind' => $kind, 'payload' => $payload, 'tries' => 0, 'next' => time(), 'err' => '');
@@ -265,7 +265,7 @@ add_action('cp_portal_smq_run', 'cp_portal_smq_run');
 function cp_portal_smq_run() {
 	if (get_transient('cp_portal_smq_lock')) { return; }
 	set_transient('cp_portal_smq_lock', 1, 120);
-	$q = get_option('cp_portal_smq', array());
+	$q = cp_opt_fresh('cp_portal_smq');
 	if (!is_array($q)) { $q = array(); }
 	$delays = array(60, 300, 900);
 	$next_due = 0;
@@ -278,7 +278,7 @@ function cp_portal_smq_run() {
 		$done++;
 		$r = cp_portal_sm_do($job);
 		// közben érkezhetett újabb érték ugyanarra a kulcsra: a friss sort olvassuk újra
-		$q2 = get_option('cp_portal_smq', array());
+		$q2 = cp_opt_fresh('cp_portal_smq');
 		if (!is_array($q2)) { $q2 = array(); }
 		$changed = isset($q2[$k]) && wp_json_encode($q2[$k]['payload']) !== wp_json_encode($job['payload']);
 		if (!is_wp_error($r)) {

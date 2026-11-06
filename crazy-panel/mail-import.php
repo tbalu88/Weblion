@@ -352,7 +352,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($other['e'] === '' || $other['e'] === $me) { return 'skip'; }
 	$subj = cp_imp_hdr($h->subject ?? '');
 	$ts = isset($h->date) ? (int) strtotime($h->date) : 0;
-	if (!$ts) { $ts = time(); }
+	if (!$ts || $ts > time() + 600) { $ts = time(); } /* v2.9.21: jövőbe datált levél (rossz órájú feladó, spam) ne ragadjon a lista tetejére */
 	$at = gmdate('Y-m-d H:i:s', $ts);
 	$st = imap_fetchstructure($mb, $uid, FT_UID);
 	$acc = array('att' => array());
