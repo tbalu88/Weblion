@@ -185,7 +185,7 @@ function cp_wf_seq($fid) {
 	update_option('cp_wf_seq', $s, false);
 	return $s[$fid];
 }
-function cp_wf_mail($def, $pairs, $deal, $page) {
+function cp_wf_mail($def, $pairs, $deal, $page, $shadow = false) {
 	$fid = '';
 	foreach (cp_wf_defs() as $k => $d) { if ($d['name'] === $def['name']) { $fid = $k; } }
 	$n = cp_wf_seq($fid);
@@ -200,7 +200,7 @@ function cp_wf_mail($def, $pairs, $deal, $page) {
 	$em = sanitize_email((string) ($pairs['Contact.email'] ?? ''));
 	$ret = function_exists('cp_ret_by_email') ? cp_ret_by_email($em, (int) $deal) : null;
 	$top = '<p style="margin:0 0 6px"><a href="' . esc_url($link) . '" style="display:inline-block;background:#E8894A;color:#1A1F2B;padding:8px 16px;border-radius:999px;text-decoration:none;font-weight:700">' . ($deal ? 'Deal megnyitása a Crazy panelben' : 'Megkeresések a Crazy panelben') . '</a></p>'
-		. ($deal ? '' : '<p style="margin:0 0 6px;color:#B4432F">A deal még készül (a panel újrapróbálja).</p>')
+		. ($deal ? '' : ($shadow ? '<p style="margin:0 0 6px;color:#5B6275">A deal a Salesmate-ből érkezik a panelbe pár percen belül.</p>' : '<p style="margin:0 0 6px;color:#B4432F">A deal még készül (a panel újrapróbálja).</p>'))
 		. ($ret ? '<p style="margin:0 0 6px">🔁 <b>Visszatérő ügyfél:</b> ' . (int) $ret['n'] . ' korábbi deal' . ($ret['won'] ? ', ebből ' . (int) $ret['won'] . ' megnyert' . ($ret['last_ev'] ? ' (utoljára ' . $e(substr($ret['last_ev'], 0, 10)) . ')' : '') : '') . '</p>' : '')
 		. '<p style="margin:0 0 6px;color:#5B6275">Válaszolj erre a levélre: a válasz az ügyfélnek megy.</p>';
 	$html = '<div style="font:14px/1.5 Arial,sans-serif;color:#222;max-width:640px">' . $top . '<hr style="border:0;border-top:1px solid #e5e5e5;margin:14px 0">' . $rows
@@ -208,7 +208,8 @@ function cp_wf_mail($def, $pairs, $deal, $page) {
 	$name = str_replace(array("\r", "\n", '<', '>', '"'), '', (string) ($pairs['Contact.name'] ?? ''));
 	$h = array('Content-Type: text/html; charset=UTF-8', 'From: Weboldal-űrlap <wordpress@eventcrazy.hu>', 'X-Crazy-Panel: webform');
 	if ($em !== '') { $h[] = 'Reply-To: "' . $name . '" <' . $em . '>'; }
-	$to = array_map('sanitize_email', (array) $def['notify']);
+	/* v2.9.10: árnyék módban a Salesmate küldi a saját értesítőjét a címzetteknek – a panel csak a saját postafiókjába (Levelezés) */
+	$to = $shadow ? array() : array_map('sanitize_email', (array) $def['notify']);
 	/* a crazyphoto.hu űrlapjai a panel postafiókjába (info@eventcrazy.hu) is, hogy a Levelezésben is megjelenjenek */
 	if (!in_array('info@eventcrazy.hu', $to, true)) { $to[] = 'info@eventcrazy.hu'; }
 	foreach (array_unique(array_filter($to)) as $t) { @wp_mail($t, $def['name'] . ' - New Submission [' . $n . ']', $html, $h); }
@@ -352,3 +353,13 @@ function cp_wf_switched() {
 	if (function_exists('rocket_clean_domain')) { rocket_clean_domain(); }
 	wp_remote_get('https://crazyphoto.hu/?cp_wf_ping=' . time(), array('timeout' => 8, 'blocking' => true));
 }
+
+/* v2.9.10: amíg az űrlap a Salesmate-é (árnyék / Salesmate mód), a figyelő által elkapott beküldésről is megy értesítő a panel postafiókjába,
+ * hogy a Levelezésben is ott legyen (élő módban a cp_wf_after küldi). */
+add_action('cp_lead_received', function ($id, $pairs, $page) {
+	global $wpdb;
+	$fid = (string) $wpdb->get_var($wpdb->prepare('SELECT form_id FROM ' . cp_lead_t() . ' WHERE id = %d', (int) $id));
+	$def = cp_wf_def($fid);
+	if (!$def || empty($def['notify']) || cp_wf_live($def)) { return; }
+	try { cp_wf_mail($def, (array) $pairs, 0, (string) $page, true); } catch (\Throwable $e) { /* az értesítő hibája ne akassza meg a beküldést */ }
+}, 20, 3);
