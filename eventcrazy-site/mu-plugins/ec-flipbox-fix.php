@@ -62,6 +62,8 @@ add_action('wp_footer', function () {
 	document.addEventListener('click', function (e) {
 		var w = e.target.closest && e.target.closest('.elementor-widget-flip-box');
 		if (!w) return;
+		/* a csempén lévő saját gomb (pl. „+ Ajánlathoz”) ne nyissa meg az aloldalt */
+		if (e.target.closest('button, input, select, textarea, label, .ec-add')) return;
 		var own = e.target.closest('a[href]');
 		if (own && (own.getAttribute('href') || '').trim() && own.getAttribute('href') !== '#') return; /* saját működő link: hagyjuk */
 		var l = linkOf(w);

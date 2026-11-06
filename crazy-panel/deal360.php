@@ -46,7 +46,7 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		$txt = trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6]|/td|/blockquote)\b[^>]*>#i', "\n", (string) $m['body'])), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
 		$att = json_decode((string) $m['attachments'], true) ?: array();
 		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'subj' => $m['subject'], 'snip' => mb_substr($txt, 0, 260), 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
-		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + (!empty($a['cid']) ? array('emb' => 1) : array()); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.) */
+		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + (!empty($a['cid']) && cp_d360_is_emb((string) $a['n']) ? array('emb' => 1) : array()); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
 	}
 	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);
 	foreach ($notes as $n) { $out['notes'][] = array('id' => (int) $n['id'], 'th' => (int) $n['thread_id'], 'b' => mb_substr((string) $n['body'], 0, 1200), 'by' => $n['author'], 'at' => cp_crm_local($n['created_at'])); }
@@ -198,4 +198,11 @@ function cp_d360_ajax_who() {
 	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT co.id, co.name, COUNT(DISTINCT d.id) n FROM ' . cp_crm_t('companies') . ' co LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.company_id = co.id LEFT JOIN ' . cp_crm_t('deals') . ' d ON (d.company_id = co.id OR d.contact_id = c.id) AND d.deleted_at IS NULL WHERE co.name LIKE %s GROUP BY co.id ORDER BY n DESC LIMIT 8', $l), ARRAY_A) as $r) { $out[] = array('k' => 'co', 'id' => (int) $r['id'], 'n' => $r['name'], 'c' => (int) $r['n']); }
 	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT c.id, c.name, c.email, COUNT(d.id) n FROM ' . cp_crm_t('contacts') . ' c LEFT JOIN ' . cp_crm_t('deals') . ' d ON d.contact_id = c.id AND d.deleted_at IS NULL WHERE (c.name LIKE %s OR c.email LIKE %s) AND c.deleted_at IS NULL GROUP BY c.id ORDER BY n DESC LIMIT 8', $l, $l), ARRAY_A) as $r) { $out[] = array('k' => 'ct', 'id' => (int) $r['id'], 'n' => $r['name'] !== '' ? $r['name'] : $r['email'], 'e' => $r['email'], 'c' => (int) $r['n']); }
 	wp_send_json_success(array('rows' => $out));
+}
+
+/* v2.9.23: aláírás- / beágyazott kép-e – csak kép, és csak tipikus név (image001.png, ~WRD0000.jpg, Outlook-…, logo…, ikonok).
+   Egyes levelezők (pl. Apple Mail) a valódi mellékletnek (PDF, sablon-PNG) is adnak Content-ID-t, azokat nem rejtjük. */
+function cp_d360_is_emb($n) {
+	if (!preg_match('/\.(jpe?g|png|gif|webp|bmp|svg)$/i', $n)) { return false; }
+	return (bool) preg_match('/^(image\d*|img\d*|~wrd\d*|outlook-[\w-]*|unnamed[\w-]*|signature[\w-]*|alairas[\w-]*|icon[\w-]*|banner[\w-]*|facebook[\w-]*|instagram[\w-]*|linkedin[\w-]*|youtube[\w-]*|tiktok[\w-]*|twitter[\w-]*|x-logo[\w-]*|spacer|pixel|blank)(\(\d+\))?\.\w+$/i', $n);
 }
