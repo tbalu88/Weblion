@@ -393,7 +393,12 @@ function cp_mail_ajax_threads() {
 	$un = array();
 	foreach ((array) $wpdb->get_results('SELECT folder, COUNT(*) n FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND (seen_at IS NULL OR seen_at < last_at) GROUP BY folder", ARRAY_A) as $c) { $un[$c['folder']] = (int) $c['n']; }
 	$counts['follow'] = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE status = 'open' AND FIND_IN_SET(%d, followers)", $me));
-	wp_send_json_success(array('rows' => array_map('cp_mail_thread_row', (array) $rows), 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0));
+	/* v2.9: saját piszkozatok – a Piszkozatok mappa száma és a szálak „✎ Piszkozat” jelzése */
+	$myd = function_exists('cp_mail_drafts_get') && $me > 0 ? cp_mail_drafts_get($me) : array();
+	$counts['draft'] = count($myd);
+	$dth = function_exists('cp_mail_draft_threads') ? cp_mail_draft_threads() : array();
+	$rowsOut = array_map(function ($t) use ($dth) { $r = cp_mail_thread_row($t); if (isset($dth[(int) $t['id']])) { $r['dr'] = 1; } return $r; }, (array) $rows);
+	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0));
 }
 
 function cp_mail_thread_full($id) {
@@ -690,3 +695,74 @@ function cp_mail_snooze_due() {
 }
 add_action('cp_crm_tick', 'cp_mail_snooze_due', 40);
 
+
+/* ------------------------------------------------------------ v2.9: saját piszkozatok a szerveren (kollégánként)
+ * Mint a Gmail / Outlook: a levélíró gépelés közben és elhagyáskor menti, a Piszkozatok mappában a saját piszkozatok,
+ * egy levélszálhoz tartozó félbehagyott válasz a szálon is látszik. Küldéskor / elvetéskor törlődik. Legfeljebb 60 db. */
+function cp_mail_drafts_get($uid) { $d = get_option('cp_mail_drafts_u' . (int) $uid, array()); return is_array($d) ? $d : array(); }
+function cp_mail_drafts_put($uid, $d) { update_option('cp_mail_drafts_u' . (int) $uid, $d, false); }
+function cp_mail_draft_me() { cp_el_auth(); cp_tab_need(array('mail')); $me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; if ($me <= 0) { cp_el_err('A piszkozatokhoz személyes fiókkal kell belépni.'); } return $me; }
+function cp_mail_draft_row($id, $x) {
+	$txt = trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<blockquote.*$#is', '', (string) ($x['body'] ?? ''))), ENT_QUOTES, 'UTF-8')));
+	return array('id' => (string) $id, 'to' => array_values((array) ($x['to'] ?? array())), 'subject' => (string) ($x['subject'] ?? ''), 'snip' => mb_substr($txt, 0, 160), 'thread' => (int) ($x['thread'] ?? 0), 'at' => wp_date('Y-m-d H:i', (int) ($x['t'] ?? time())), 'ts' => (int) ($x['t'] ?? 0));
+}
+add_action('wp_ajax_nopriv_cp_mail_draft_save', 'cp_mail_ajax_draft_save');
+add_action('wp_ajax_cp_mail_draft_save', 'cp_mail_ajax_draft_save');
+function cp_mail_ajax_draft_save() {
+	$me = cp_mail_draft_me();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$in = json_decode((string) wp_unslash($_POST['d'] ?? ''), true);
+	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
+	$addr = function ($l) { return array_slice(array_values(array_filter(array_map(function ($e) { return sanitize_email((string) $e); }, (array) $l))), 0, 20); };
+	$x = array('to' => $addr($in['to'] ?? array()), 'cc' => $addr($in['cc'] ?? array()), 'bcc' => $addr($in['bcc'] ?? array()),
+		'subject' => mb_substr(sanitize_text_field((string) ($in['subject'] ?? '')), 0, 255), 'body' => mb_substr(cp_mail_clean((string) ($in['body'] ?? '')), 0, 400000),
+		'thread' => (int) ($in['thread'] ?? 0), 'tsubj' => mb_substr(sanitize_text_field((string) ($in['tsubj'] ?? '')), 0, 255), 'quote' => mb_substr(cp_mail_clean((string) ($in['quote'] ?? '')), 0, 300000),
+		'deal' => (int) ($in['deal'] ?? 0), 'dealTitle' => mb_substr(sanitize_text_field((string) ($in['dealTitle'] ?? '')), 0, 255), 'known' => (int) ($in['known'] ?? 0),
+		'atts' => array_slice(array_values(array_filter(array_map(function ($a) { return is_array($a) && !empty($a['tok']) ? array('n' => mb_substr(sanitize_text_field((string) ($a['n'] ?? '')), 0, 190), 'size' => (int) ($a['size'] ?? 0), 'tok' => preg_replace('/[^A-Za-z0-9._-]/', '', (string) $a['tok'])) : null; }, (array) ($in['atts'] ?? array())))), 0, 20), 't' => time());
+	$all = cp_mail_drafts_get($me);
+	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
+	if ($id === '' || !isset($all[$id])) { $id = 'd' . base_convert((string) time(), 10, 36) . wp_generate_password(5, false, false); $id = strtolower(preg_replace('/[^a-z0-9]/i', '', $id)); }
+	/* üres piszkozatot nem tárol (és a meglévőt törli) */
+	$empty = !$x['to'] && !$x['cc'] && $x['subject'] === '' && trim(wp_strip_all_tags(str_replace((string) $x['quote'], '', (string) $x['body']))) === '' && !$x['atts'];
+	if ($empty) { unset($all[$id]); cp_mail_drafts_put($me, $all); wp_send_json_success(array('id' => '', 'empty' => 1)); }
+	$all[$id] = $x;
+	if (count($all) > 60) { uasort($all, function ($a, $b) { return (int) $b['t'] - (int) $a['t']; }); $all = array_slice($all, 0, 60, true); }
+	cp_mail_drafts_put($me, $all);
+	wp_send_json_success(array('id' => $id, 'at' => wp_date('H:i')));
+}
+add_action('wp_ajax_nopriv_cp_mail_draft_list', 'cp_mail_ajax_draft_list');
+add_action('wp_ajax_cp_mail_draft_list', 'cp_mail_ajax_draft_list');
+function cp_mail_ajax_draft_list() {
+	$me = cp_mail_draft_me();
+	$all = cp_mail_drafts_get($me);
+	uasort($all, function ($a, $b) { return (int) $b['t'] - (int) $a['t']; });
+	$rows = array(); foreach ($all as $id => $x) { $rows[] = cp_mail_draft_row($id, $x); }
+	wp_send_json_success(array('rows' => $rows));
+}
+add_action('wp_ajax_nopriv_cp_mail_draft_get', 'cp_mail_ajax_draft_get');
+add_action('wp_ajax_cp_mail_draft_get', 'cp_mail_ajax_draft_get');
+function cp_mail_ajax_draft_get() {
+	$me = cp_mail_draft_me();
+	$all = cp_mail_drafts_get($me);
+	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
+	if ($id === '' && !empty($_POST['thread'])) { foreach ($all as $k => $x) { if ((int) ($x['thread'] ?? 0) === (int) $_POST['thread']) { $id = (string) $k; } } }
+	if ($id === '' || !isset($all[$id])) { cp_el_err('Ez a piszkozat már nincs meg (elküldték vagy elvetették).', 404); }
+	wp_send_json_success(array('id' => $id, 'd' => $all[$id]));
+}
+add_action('wp_ajax_nopriv_cp_mail_draft_del', 'cp_mail_ajax_draft_del');
+add_action('wp_ajax_cp_mail_draft_del', 'cp_mail_ajax_draft_del');
+function cp_mail_ajax_draft_del() {
+	$me = cp_mail_draft_me();
+	$all = cp_mail_drafts_get($me);
+	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
+	unset($all[$id]);
+	cp_mail_drafts_put($me, $all);
+	wp_send_json_success(array('n' => count($all)));
+}
+/* a szál-listához: mely szálakhoz van saját félbehagyott válasz */
+function cp_mail_draft_threads() {
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	if ($me <= 0) { return array(); }
+	$o = array(); foreach (cp_mail_drafts_get($me) as $x) { if (!empty($x['thread'])) { $o[(int) $x['thread']] = 1; } }
+	return $o;
+}

@@ -226,6 +226,9 @@ function cp_send_ajax() {
 	$wpdb->update($T, array('msg_count' => (int) $t['msg_count'] + 1, 'last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => 'send', 'text' => 'Levél elküldve a panelből: ' . mb_substr(implode(', ', $to), 0, 200), 'author_uid' => $me, 'author' => $who, 'created_at' => $now));
 	if ($sidk !== '') { set_transient($sidk, array('thread' => (int) $t['id'], 'warn' => $warn), 30 * MINUTE_IN_SECONDS); }
+	/* v2.9: az elküldött levél piszkozata törlődik */
+	$did = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['draft'] ?? '')));
+	if ($did !== '' && function_exists('cp_mail_drafts_get')) { $all = cp_mail_drafts_get($me); if (isset($all[$did])) { unset($all[$did]); cp_mail_drafts_put($me, $all); } }
 	wp_send_json_success(array('thread' => (int) $t['id'], 'warn' => $warn));
 }
 
