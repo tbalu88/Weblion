@@ -107,7 +107,7 @@ add_action('admin_init', function () {
 	check_admin_referer('cp_smh_list');
 	$o = cp_panel_opts(); $base = 'https://' . $o['linkname'] . '/#/app/deals/';
 	$done = array(); global $wpdb;
-	foreach ((array) $wpdb->get_col('SELECT DISTINCT t.deal_id FROM ' . cp_mail_t('threads') . " t WHERE t.tags = 'salesmate' AND t.deal_id IS NOT NULL") as $x) { $done[(int) $x] = 1; }
+	foreach ((array) $wpdb->get_col('SELECT DISTINCT t.deal_id FROM ' . cp_mail_t('threads') . " t WHERE SUBSTRING_INDEX(t.tags, ',', 1) = 'salesmate' AND t.deal_id IS NOT NULL") as $x) { $done[(int) $x] = 1; }
 	header('Content-Type: text/csv; charset=utf-8');
 	header('Content-Disposition: attachment; filename="salesmate-dealek-levelekhez.csv"');
 	$fh = fopen('php://output', 'w');

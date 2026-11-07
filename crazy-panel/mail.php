@@ -409,7 +409,7 @@ function cp_mail_thread_row($t, $notes = null) {
 		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'sz' => $t['folder'] === 'snooze' ? (int) ((get_option('cp_mail_snooze', array())[(int) $t['id']]['ts'] ?? 0)) : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
 		'un' => empty($t['seen_at']) || (!empty($t['last_at']) && $t['seen_at'] < $t['last_at']) ? 1 : 0,
 		'snip' => html_entity_decode((string) $t['snippet'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), 'cnt' => (int) $t['msg_count'], 'att' => (int) $t['has_attach'], 'at' => cp_mail_local($t['last_at']),
-		'fol' => array_values(array_filter(array_map('intval', explode(',', (string) $t['followers'])))), 'tags' => (string) $t['tags'],
+		'fol' => array_values(array_filter(array_map('intval', explode(',', (string) $t['followers'])))), 'tags' => implode(', ', cp_mail_tags_parts($t['tags'])[1]),
 		'note' => $n ? array('b' => mb_substr((string) $n['body'], 0, 160), 'by' => $n['author'], 'at' => cp_mail_local($n['created_at'])) : null,
 	);
 }
@@ -440,6 +440,9 @@ function cp_mail_ajax_threads() {
 	if ($box !== '') { $w[] = $wpdb->prepare('mailbox = %s', $box); }
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));
 	if ($q !== '') { $like = '%' . $wpdb->esc_like($q) . '%'; $w[] = $wpdb->prepare('(subject LIKE %s OR contact_name LIKE %s OR contact_email LIKE %s OR snippet LIKE %s)', $like, $like, $like, $like); }
+	/* v2.9.25: címke-szűrő – a megadott címkék bármelyike (JSON-tömb) */
+	$tg = json_decode((string) wp_unslash($_POST['tg'] ?? ''), true);
+	if (is_array($tg)) { $or = array(); foreach (array_slice($tg, 0, 20) as $x) { $x = cp_mail_tag_norm($x); if ($x !== '' && !cp_mail_tag_is_sys($x)) { $or[] = cp_mail_tag_where($x); } } if ($or) { $w[] = '(' . implode(' OR ', $or) . ')'; } }
 	$ord = sanitize_key(wp_unslash($_POST['so'] ?? '')) === 'old' ? 'ASC' : 'DESC';
 	/* v2.7.2: lapozás – a lista alján „Régebbi levelek betöltése” (200-asával, legfeljebb 5000) */
 	$lim = max(100, min(5000, (int) ($_POST['lim'] ?? 100)));
@@ -458,7 +461,7 @@ function cp_mail_ajax_threads() {
 	$ids = array_map(function ($t) { return (int) $t['id']; }, (array) $rows); $notes = array();
 	if ($ids) { $N = cp_mail_t('notes'); $in = implode(',', $ids); foreach ((array) $wpdb->get_results("SELECT n.thread_id, n.body, n.author, n.created_at FROM $N n JOIN (SELECT MAX(id) id FROM $N WHERE deleted_at IS NULL AND thread_id IN ($in) GROUP BY thread_id) x ON x.id = n.id", ARRAY_A) as $r) { $notes[(int) $r['thread_id']] = $r; } }
 	$rowsOut = array_map(function ($t) use ($dth, $notes) { $r = cp_mail_thread_row($t, $notes); if (isset($dth[(int) $t['id']])) { $r['dr'] = 1; } return $r; }, (array) $rows);
-	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0));
+	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0, 'tags' => cp_mail_tags_all()));
 }
 
 function cp_mail_thread_full($id) {
@@ -564,7 +567,8 @@ function cp_mail_ajax_thread_set() {
 	elseif ($f === 'assignee') { $set['assignee_uid'] = ctype_digit($v) && (int) $v > 0 ? (int) $v : null; }
 	elseif ($f === 'status') { $set['status'] = $v === 'closed' ? 'closed' : 'open'; }
 	elseif ($f === 'follow') { $l = array_filter(array_map('intval', explode(',', (string) $t['followers']))); $l = $v === '1' ? array_unique(array_merge($l, array($me))) : array_diff($l, array($me)); $set['followers'] = implode(',', $l); }
-	elseif ($f === 'tags') { $set['tags'] = mb_substr(sanitize_text_field($v), 0, 255); }
+	/* v2.9.25: a felület csak a saját címkéket küldi; a belső jelölők (import, salesmate) megmaradnak */
+	elseif ($f === 'tags') { $nu = array_values(array_filter(array_map('cp_mail_tag_norm', explode(',', $v)), function ($x) { return $x !== '' && !cp_mail_tag_is_sys($x); })); $set['tags'] = cp_mail_tags_join(cp_mail_tags_parts($t['tags'])[0], $nu); cp_mail_tag_register($nu); }
 	else { cp_el_err('Hibás kérés.'); }
 	$wpdb->update(cp_mail_t('threads'), $set, array('id' => $id));
 	$ev = cp_mail_event_text($f, $set, $t);
@@ -588,7 +592,7 @@ function cp_mail_event_text($f, $set, $t) {
 		$d = function_exists('cp_crm_row_out') ? cp_crm_row_out((int) $set['deal_id']) : null;
 		return mb_substr('Deal csatolva: ' . ($d ? $d['title'] : '#' . $set['deal_id']), 0, 255);
 	}
-	if ($f === 'tags') { return $set['tags'] === $t['tags'] ? '' : ($set['tags'] === '' ? 'Címkék törölve' : mb_substr('Címkék: ' . $set['tags'], 0, 255)); }
+	if ($f === 'tags') { $u = implode(', ', cp_mail_tags_parts($set['tags'])[1]); return $set['tags'] === $t['tags'] ? '' : ($u === '' ? 'Címkék törölve' : mb_substr('Címkék: ' . $u, 0, 255)); }
 	return '';
 }
 
@@ -608,7 +612,7 @@ function cp_mail_ajax_bulk() {
 	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) wp_unslash($_POST['ids'] ?? '')))))), 0, 500);
 	$op = sanitize_key(wp_unslash($_POST['op'] ?? ''));
 	$v = (string) wp_unslash($_POST['v'] ?? '');
-	if (!$ids || !in_array($op, array('read', 'unread', 'close', 'open', 'assign', 'tag', 'archive', 'trash', 'spam', 'restore', 'snooze'), true)) { cp_el_err('Hibás kérés.'); }
+	if (!$ids || !in_array($op, array('read', 'unread', 'close', 'open', 'assign', 'tag', 'untag', 'archive', 'trash', 'spam', 'restore', 'snooze'), true)) { cp_el_err('Hibás kérés.'); }
 	/* v2.8.2: szundi – a megadott időpontig a Szundi mappában, utána vissza a Beérkezettbe olvasatlanként */
 	$sz = $op === 'snooze' ? (int) $v : 0;
 	if ($op === 'snooze' && ($sz < time() + 60 || $sz > time() + 366 * DAY_IN_SECONDS)) { cp_el_err('Válassz egy jövőbeli időpontot (legfeljebb egy évre előre).'); }
@@ -624,8 +628,10 @@ function cp_mail_ajax_bulk() {
 		foreach (cp_mail_people() as $p) { if ($p['id'] === $uid) { $aname = $p['n']; } }
 		if ($uid && $aname === '') { cp_el_err('Nincs ilyen kolléga.'); }
 	}
-	$tagv = $op === 'tag' ? trim(mb_substr(sanitize_text_field($v), 0, 60), " ,") : '';
-	if ($op === 'tag' && $tagv === '') { cp_el_err('Adj meg egy címkét.'); }
+	$tagv = in_array($op, array('tag', 'untag'), true) ? cp_mail_tag_norm($v) : '';
+	if ($tagv !== '' && cp_mail_tag_is_sys($tagv)) { $tagv = ''; }
+	if ($op === 'tag' && $tagv !== '') { cp_mail_tag_register(array($tagv)); }
+	if (in_array($op, array('tag', 'untag'), true) && $tagv === '') { cp_el_err('Adj meg egy címkét.'); }
 	foreach ($rows as $t) {
 		$set = array(); $ev = '';
 		switch ($op) {
@@ -636,9 +642,13 @@ function cp_mail_ajax_bulk() {
 			case 'assign':
 				if ((int) $t['assignee_uid'] !== $uid) { $set['assignee_uid'] = $uid ?: null; $ev = $uid ? 'Kiosztva: ' . $aname : 'Felelős eltávolítva'; }
 				break;
-			case 'tag':
-				$l = array_filter(array_map('trim', explode(',', (string) $t['tags'])));
-				if (!in_array($tagv, $l, true)) { $l[] = $tagv; $set['tags'] = mb_substr(implode(', ', $l), 0, 255); $ev = mb_substr('Címkék: ' . $set['tags'], 0, 255); }
+			case 'tag': case 'untag':
+				list($tsys, $tusr) = cp_mail_tags_parts($t['tags']);
+				$has = in_array(mb_strtolower($tagv), array_map('mb_strtolower', $tusr), true);
+				if ($op === 'tag' && !$has) { $tusr[] = $tagv; }
+				if ($op === 'untag' && $has) { $tusr = array_values(array_filter($tusr, function ($x) use ($tagv) { return mb_strtolower($x) !== mb_strtolower($tagv); })); }
+				$ns = cp_mail_tags_join($tsys, $tusr);
+				if ($ns !== $t['tags']) { $set['tags'] = $ns; $ev = mb_substr(($op === 'tag' ? 'Címke hozzáadva: ' : 'Címke levéve: ') . $tagv, 0, 255); }
 				break;
 			case 'archive': case 'trash': case 'spam':
 				$legacy = $t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true); /* v2.7.3: a Beérkezettben látszó régi szál */
@@ -826,3 +836,5 @@ function cp_mail_draft_threads() {
 	$o = array(); foreach (cp_mail_drafts_get($me) as $x) { if (!empty($x['thread'])) { $o[(int) $x['thread']] = 1; } }
 	return $o;
 }
+
+require_once __DIR__ . '/mail-tags.php';
