@@ -211,7 +211,7 @@
 .ml-kbl:empty{display:none}.ml-kbl{padding:0 12px 6px}
 /* v1.38: AI válaszvarázsló */
 .ml-rtool .ml-aibtn{background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83}
-.ml-aip{padding:0 12px 8px}
+.ml-aip{padding:0 12px 8px;flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;max-height:65%}
 .ml-ai{background:#fff;border:1.5px solid #B9A7EE;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 24px -16px rgba(75,46,131,.5)}
 .ml-aih{display:flex;align-items:center;justify-content:space-between;font-size:13.5px}
 .ml-aiw{display:flex;gap:8px}
