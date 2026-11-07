@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash tools/cp-deploy.sh:*)",
+      "Bash(bash /home/user/Weblion/tools/cp-deploy.sh:*)"
+    ]
+  }
+}

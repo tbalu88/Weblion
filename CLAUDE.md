@@ -14,3 +14,8 @@
 
 ## Tervezés skillekkel (kötelező)
 - Felület tervezése vagy átdolgozása előtt az `impeccable` skill (részletekhez `emil-design-eng`), élesítés előtt `break-ui` a legrosszabb adatokkal; animációhoz `animate`; fejlesztés tervezéséhez, feladatbontáshoz `planning-and-task-breakdown`.
+
+## Élesítés – mikor kell visszakérdezni (a felhasználó döntése, 2026-11-07)
+- Tesztelt hibajavítás és már jóváhagyott funkció élesítése KÉRDEZÉS NÉLKÜL mehet (a `tools/cp-deploy.sh` szkripttel), utána rövid jelentés.
+- Csak ezekben kérdezz előtte: adatvesztés vagy törlés; ügyfélnek kimenő levél; pénz (számla); Salesmate-adat módosítása; új funkció tervének jóváhagyása.
+- Élesítés előtt mindig: élő sha = utolsó ismert verzió, helyi teszt; utána 200-as válasz és útmutató-frissítés.
