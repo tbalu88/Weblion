@@ -362,6 +362,29 @@
 			post('cp_mail_html', { id: mid }).then(x => { HC[mid] = x; if (x.html && el.isConnected) mountHtml(el, mid, false); }).catch(() => { /* marad a szöveges nézet */ });
 		});
 	}
+	/* v2.9.27: kockázatos csatolmány jelzése – a panel nem víruskereső, de a veszélyes típusokra figyelmeztet, és letöltés előtt rákérdez */
+	const ATT_HIGH = /\.(exe|scr|bat|cmd|com|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|iso|img|vhdx?|reg|cpl|dll|html?|svg|xhtml|mht|url|appx|msix)$/i;
+	const ATT_WARN = /\.(docm|dotm|xlsm|xltm|xlam|pptm|potm|ppsm|zip|rar|7z|gz|tgz|tar|cab|ace|arj|bz2|xz|rtf|one)$/i;
+	const attRisk = n => {
+		n = String(n || '');
+		if (/[‪-‮⁦-⁩]/.test(n) || /\.(pdf|docx?|xlsx?|jpe?g|png)\s{2,}/i.test(n) || /\.(pdf|docx?|xlsx?|jpe?g|png)\.(exe|scr|js|vbs|bat|cmd|com|hta|lnk)$/i.test(n)) return { lvl: 'high', why: 'a fájlnév álcázott (más típusnak mutatja magát, mint ami valójában)' };
+		if (ATT_HIGH.test(n)) return { lvl: 'high', why: /\.(html?|svg|xhtml|mht|url)$/i.test(n) ? 'weboldal- vagy hivatkozásfájl – gyakori adathalász-trükk' : 'futtatható / programfájl – megnyitva kárt okozhat' };
+		if (ATT_WARN.test(n)) return { lvl: 'warn', why: /\.(zip|rar|7z|gz|tgz|tar|cab|ace|arj|bz2|xz)$/i.test(n) ? 'tömörített fájl – a belsejét nem látjuk, ismeretlen feladótól gyanús' : 'makrót vagy beágyazott tartalmat hordozhat – makrót ne engedélyezz' };
+		return null;
+	};
+	window.CPAttRisk = attRisk;
+	if (!window.__cpAttGuard) {
+		window.__cpAttGuard = true;
+		document.addEventListener('click', e => {
+			const a = e.target.closest && e.target.closest('a[data-risk]');
+			if (!a) return;
+			const r = attRisk(a.dataset.rn || a.textContent);
+			if (!r) return;
+			const msg = (r.lvl === 'high' ? '⚠ Veszélyes csatolmány!\n\n' : 'Figyelem – kockázatos csatolmány.\n\n') + '„' + (a.dataset.rn || a.textContent.trim()) + '”\nOk: ' + r.why + '.\n\n' + (r.lvl === 'high' ? 'Csak akkor töltsd le, ha biztosan tudod, mi ez és ki küldte. Ismeretlen feladótól (pl. álláspályázat) ne nyisd meg.' : 'Ismeretlen feladótól óvatosan: tömörített fájlt ne bonts ki, Office-fájlban ne engedélyezz makrót / szerkesztést.') + '\n\nLetöltöd mégis?';
+			if (!window.confirm(msg)) { e.preventDefault(); e.stopPropagation(); }
+		}, true);
+	}
+	const attRiskAttr = n => { const r = attRisk(n); return r ? ' data-risk="' + r.lvl + '" data-rn="' + esc(n) + '" class="ml-arisk ' + r.lvl + '" title="' + esc((r.lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + r.why) + '"' : ''; };
 	const attUrl = (mid, i, n) => C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&t=' + encodeURIComponent(C.t) + (/\.(png|jpe?g|gif|webp|pdf)$/i.test(n || '') ? '&view=1' : '');
 	window.CPMailAtt = attUrl;
 	const CLIP_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>';
@@ -771,7 +794,7 @@
 			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg' + (isOpen(m) ? '' : ' cl') + '" data-mk="' + esc(mk(m)) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 				(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(snip(m.body)) + '</div>' +
 				(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button"' + (t.id > 0 ? ' data-mdel' : ' disabled') + ' title="Törlés (a levélszál a Kukába kerül)">' + DEL_I + '</button><button type="button"' + (t.id > 0 ? ' data-mmore="' + ix + '"' : ' disabled') + ' title="Továbbiak">' + MORE_I + '</button></span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
-				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : tidyBody(m.body)) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener" title="Megnyitás / letöltés">' + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
+				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : tidyBody(m.body)) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener"' + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' : '<span>' + esc(a.n) + '</span>').join(', ') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			/* v1.85: mobilon a szál alján válasz-gombok (a lebegő „+” helyett) */
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
