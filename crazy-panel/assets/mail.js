@@ -302,7 +302,8 @@
 		h = h.replace(/(<br>\s*){3,}/g, '<br><br>');
 		const lines = h.split(/<br\s*\/?>/i);
 		const qi = lines.findIndex((l, i) => i > 0 && /^\s*(?:<\/?p>)?\s*(On .{6,120} wrote:|.{6,160} (?:ezt )?írta:|-{2,}\s*(?:Original Message|Eredeti üzenet)|From:\s|Feladó:\s)/i.test(l.replace(/<[^>]+>/g, '')));
-		if (qi > 0) {
+		/* v2.9.36: ha az idézet előtt nincs szöveg (pl. továbbított levél), nem csukjuk össze – különben üresnek látszana a levél */
+		if (qi > 0 && lines.slice(0, qi).join(' ').replace(/<[^>]+>|&nbsp;/g, '').trim() !== '') {
 			const rest = lines.slice(qi).join('<br>');
 			h = lines.slice(0, qi).join('<br>').replace(/(<br>\s*)+$/, '') + '<details class="ml-qd"><summary>… korábbi levelek</summary><div>' + rest + '</div></details>';
 		}
@@ -341,7 +342,9 @@
 					};
 					/* v1.69.2: a korábbi levelek idézete (egymásba ágyazott blockquote / Gmail / Outlook előzmény) összecsukva */
 					const quotes = Array.from(d.querySelectorAll('blockquote, .gmail_quote, #divRplyFwdMsg, #appendonsend')).filter(q => !q.parentElement.closest('blockquote, .gmail_quote, details.cpq'));
-					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
+					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40 || /-{3,}\s*(Forwarded message|Továbbított üzenet|Továbbított levél)|^\s*Begin forwarded message/i.test((q.textContent || '').slice(0, 400))) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
+					/* v2.9.36: ha az összecsukás után semmi sem látszana (a levél egésze idézet), kinyitva mutatjuk */
+					{ const cl = d.body.cloneNode(true); cl.querySelectorAll('details.cpq, style, script').forEach(x => x.remove()); if ((cl.textContent || '').replace(/\s+/g, '') === '' && !cl.querySelector('img')) d.querySelectorAll('details.cpq').forEach(x => { x.open = true; }); }
 					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
 					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
 				} catch (e) { f.style.height = '480px'; }
