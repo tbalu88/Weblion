@@ -81,6 +81,13 @@ function cp_cut_date($v) {
 	$t = strtotime(str_replace(',', '', $v) . ' 12:00:00');
 	return $t ? gmdate('Y-m-d', $t) : $v;
 }
+/* a legutóbbi élő kontakt az e-mail-címmel (a Salesmate is ezt használja újra) */
+function cp_cut_known_contact($email) {
+	global $wpdb;
+	if ($email === '' || !function_exists('cp_crm_t')) { return null; }
+	$c = $wpdb->get_row($wpdb->prepare('SELECT id, name FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', strtolower($email)), ARRAY_A);
+	return $c ? array('id' => (int) $c['id'], 'name' => trim((string) $c['name'])) : null;
+}
 function cp_cut_plan_lead($pairs, $page, $feat) {
 	$src = $feat === 'forms_cp' ? 'Crazyphoto.hu' : 'Eventcrazy.hu';
 	$cols = function_exists('cp_lead_cols') ? cp_lead_cols() : array();
@@ -93,6 +100,9 @@ function cp_cut_plan_lead($pairs, $page, $feat) {
 	$email = sanitize_email(cp_lead_pick($pairs, '/e-?mail/i'));
 	$first = cp_lead_pick($pairs, '/first.?name|keresztn/i'); $last = cp_lead_pick($pairs, '/last.?name|vezet[eé]kn/i');
 	$name = trim(cp_lead_pick($pairs, '/(^|\.)(name|n[eé]v|full.?name)$/i') ?: trim($last . ' ' . $first));
+	/* v2.9.46: mint a Salesmate – ha az e-mail-címmel már van kontakt, a deal neve a meglévő kontakt neve (nem a most beírt név) */
+	$known = cp_cut_known_contact($email);
+	if ($known && $known['name'] !== '') { $name = $known['name']; }
 	$o = function_exists('cp_panel_opts') ? cp_panel_opts() : array();
 	$plan = array(
 		'title' => '[' . $src . '] ' . $name . (!empty($f['event_d']) ? ' | ' . $f['event_d'] : ''),

@@ -236,14 +236,13 @@ function cp_wf_create($lid) {
 	$name = (string) ($pairs['Contact.name'] ?? ''); $email = sanitize_email((string) ($pairs['Contact.email'] ?? '')); $phone = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) ($pairs['Contact.mobile'] ?? '')), 0, 40);
 	$fail = function ($msg) use ($lk) { delete_transient($lk); return new WP_Error('cp_wf', $msg); };
 
-	/* kontakt: azonos e-mail-cím és név (vagy névtelen régi kontakt) → a meglévő; különben új */
+	/* kontakt: v2.9.46 – mint a Salesmate: azonos e-mail-cím → a legutóbbi meglévő kontakt (a név eltérhet); különben új */
 	$q0 = cp_opt_fresh('cp_wf_q');
 	$cid = is_array($q0) && !empty($q0[$lid]['c']) ? (int) $q0[$lid]['c'] : 0;
 	if ($cid && !$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('contacts') . ' WHERE id = %d AND deleted_at IS NULL', $cid))) { $cid = 0; }
 	if (!$cid && $email !== '') {
-		$nn = function ($x) { return trim(preg_replace('/\s+/u', ' ', mb_strtolower((string) $x))); };
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT id, name FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 10', $email), ARRAY_A) as $c) {
-			if ($nn($c['name']) === $nn($name) || $nn($c['name']) === '') { $cid = (int) $c['id']; break; }
+			$cid = (int) $c['id']; break;
 		}
 	}
 	if (!$cid) {
