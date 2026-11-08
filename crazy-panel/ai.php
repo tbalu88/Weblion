@@ -22,13 +22,52 @@ function cp_ai_ready() { $o = cp_ai_opts(); return !empty($o['on']) && cp_ai_key
 function cp_ai_models() { return array('claude-opus-5-5' => 'Claude Opus 5.5 (legjobb minőség – ajánlott)', 'claude-sonnet-5-5' => 'Claude Sonnet 5.5 (gyorsabb, olcsóbb)'); }
 
 /* ------------------------------------------------------------ Claude Messages API (nyers HTTP: a tárhelyen nincs Composer / SDK) */
-function cp_ai_call($system, $messages, $schema = null, $max_tokens = 8000) {
+/* v2.9.44: pontos tokennapló – minden hívás egy sor (funkció, modell, bemenő / kimenő / gyorsítótár-tokenek), a Claude válaszának „usage” mezőjéből */
+function cp_ai_log_t() { global $wpdb; return $wpdb->prefix . 'crazy_ai_log'; }
+add_action('init', function () {
+	if (get_option('cp_ai_log_ver') === '1') { return; }
+	global $wpdb;
+	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+	dbDelta('CREATE TABLE ' . cp_ai_log_t() . " (
+		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+		at datetime NOT NULL,
+		feat varchar(20) NOT NULL DEFAULT '',
+		model varchar(60) NOT NULL DEFAULT '',
+		tin int(10) unsigned NOT NULL DEFAULT 0,
+		tout int(10) unsigned NOT NULL DEFAULT 0,
+		tcw int(10) unsigned NOT NULL DEFAULT 0,
+		tcr int(10) unsigned NOT NULL DEFAULT 0,
+		ok tinyint(1) NOT NULL DEFAULT 1,
+		ref varchar(40) NOT NULL DEFAULT '',
+		PRIMARY KEY  (id),
+		KEY at (at)
+	) " . $wpdb->get_charset_collate() . ';');
+	update_option('cp_ai_log_ver', '1', false);
+});
+function cp_ai_feats() { return array('valasz' => 'AI válasz (levél)', 'deal' => 'Deal-adatok kiolvasása', 'szamla' => 'Számla-kiolvasás', 'teszt' => 'Kapcsolatpróba'); }
+function cp_ai_log_add($feat, $model, $j, $ok, $ref = '') {
+	global $wpdb;
+	$u = is_array($j) ? (array) ($j['usage'] ?? array()) : array();
+	$row = array('at' => gmdate('Y-m-d H:i:s'), 'feat' => mb_substr((string) $feat, 0, 20), 'model' => mb_substr((string) ($j['model'] ?? $model), 0, 60), 'tin' => (int) ($u['input_tokens'] ?? 0), 'tout' => (int) ($u['output_tokens'] ?? 0), 'tcw' => (int) ($u['cache_creation_input_tokens'] ?? 0), 'tcr' => (int) ($u['cache_read_input_tokens'] ?? 0), 'ok' => $ok ? 1 : 0, 'ref' => mb_substr((string) $ref, 0, 40));
+	$GLOBALS['cp_ai_last'] = $row;
+	if (get_option('cp_ai_log_ver') === '1') { $wpdb->insert(cp_ai_log_t(), $row); }
+}
+/* havi bontás funkciónként (a Beállítások „AI-használat” részéhez) */
+function cp_ai_usage_months($n = 3) {
+	global $wpdb;
+	if (get_option('cp_ai_log_ver') !== '1') { return array(); }
+	$from = gmdate('Y-m-01 00:00:00', strtotime(gmdate('Y-m-01') . ' -' . max(0, $n - 1) . ' months'));
+	return (array) $wpdb->get_results($wpdb->prepare('SELECT DATE_FORMAT(at, %s) ym, feat, COUNT(*) n, SUM(tin) tin, SUM(tout) tout, SUM(tcw) tcw, SUM(tcr) tcr FROM ' . cp_ai_log_t() . ' WHERE at >= %s GROUP BY ym, feat ORDER BY ym DESC, feat', '%Y-%m', $from), ARRAY_A);
+}
+function cp_ai_call($system, $messages, $schema = null, $max_tokens = 8000, $x = array()) {
 	$key = cp_ai_key();
 	if ($key === '') { return new WP_Error('nokey', 'Nincs megadva az AI API-kulcs (Beállítások → Crazy AI).'); }
 	$o = cp_ai_opts();
-	$model = isset(cp_ai_models()[$o['model']]) ? $o['model'] : CP_AI_MODEL;
+	$model = !empty($x['model']) && isset(cp_ai_models()[$x['model']]) ? $x['model'] : (isset(cp_ai_models()[$o['model']]) ? $o['model'] : CP_AI_MODEL);
+	$eff = $x['effort'] ?? $o['effort'];
+	$feat = (string) ($x['feat'] ?? '');
 	$body = array('model' => $model, 'max_tokens' => $max_tokens, 'system' => $system, 'messages' => $messages,
-		'output_config' => array('effort' => in_array($o['effort'], array('low', 'medium', 'high'), true) ? $o['effort'] : 'medium'));
+		'output_config' => array('effort' => in_array($eff, array('low', 'medium', 'high'), true) ? $eff : 'medium'));
 	if ($schema) { $body['output_config']['format'] = array('type' => 'json_schema', 'schema' => $schema); }
 	$headers = array('Content-Type' => 'application/json', 'x-api-key' => $key, 'anthropic-version' => '2026-10-21');
 	/* ha a biztonsági szűrő elutasítaná, a szerver az ajánlott tartalék modellel próbálja újra */
@@ -39,6 +78,7 @@ function cp_ai_call($system, $messages, $schema = null, $max_tokens = 8000) {
 	if (is_wp_error($res)) { return new WP_Error('net', 'Az AI-szolgáltatás nem érhető el: ' . $res->get_error_message()); }
 	$code = (int) wp_remote_retrieve_response_code($res);
 	$j = json_decode((string) wp_remote_retrieve_body($res), true);
+	cp_ai_log_add($feat, $model, $j, $code >= 200 && $code < 300 && is_array($j), (string) ($x['ref'] ?? ''));
 	if ($code < 200 || $code >= 300) {
 		$m = is_array($j) && isset($j['error']['message']) ? $j['error']['message'] : 'HTTP ' . $code;
 		$hu = array(401 => 'Érvénytelen API-kulcs.', 403 => 'Az API-kulcsnak nincs jogosultsága.', 429 => 'Túl sok kérés vagy elfogyott a keret – próbáld újra pár perc múlva, vagy nézd meg az egyenleget a console.anthropic.com-on.', 529 => 'Az AI-szolgáltatás most túlterhelt – próbáld újra.');
@@ -206,7 +246,7 @@ function cp_ai_draft($tid, $wish = '') {
 		'notes' => array('type' => 'array', 'items' => array('type' => 'string'), 'description' => 'Rövid megjegyzések a kollégának (mire figyeljen, mit érdemes ellenőrizni)'),
 		'missing' => array('type' => 'array', 'items' => array('type' => 'string'), 'description' => 'A [KITÖLTENDŐ] helyek listája: mi hiányzik'),
 	));
-	$r = cp_ai_call($system, array(array('role' => 'user', 'content' => $user)), $schema);
+	$r = cp_ai_call($system, array(array('role' => 'user', 'content' => $user)), $schema, 8000, array('feat' => 'valasz', 'ref' => 'szál ' . (int) $tid));
 	if (is_wp_error($r)) { return $r; }
 	$j = json_decode($r, true);
 	if (!is_array($j) || !isset($j['reply_html'])) { return new WP_Error('parse', 'Az AI válasza nem volt értelmezhető – próbáld újra.'); }
@@ -294,7 +334,7 @@ function cp_ai_deal_extract($m, $t, $services) {
 		'event_type' => array('type' => 'string', 'description' => 'A rendezvény típusa röviden (pl. konferencia esti gála, esküvő, céges buli)'),
 		'summary' => array('type' => 'string', 'description' => '1–3 mondatos magyar összefoglaló a kérésről a deal megjegyzésébe (nevek nélkül)'),
 	));
-	$r = cp_ai_call(array(array('type' => 'text', 'text' => $sys)), array(array('role' => 'user', 'content' => $user)), $schema, 1500);
+	$r = cp_ai_call(array(array('type' => 'text', 'text' => $sys)), array(array('role' => 'user', 'content' => $user)), $schema, 1500, array('feat' => 'deal'));
 	if (is_wp_error($r)) { return $r; }
 	$j = json_decode($r, true);
 	if (!is_array($j)) { return new WP_Error('parse', 'Az AI válasza nem volt értelmezhető.'); }
@@ -363,7 +403,7 @@ function cp_ai_admin_page() {
 		}
 		$msg .= 'Beállítások mentve.';
 		if (!empty($_POST['test'])) {
-			$r = cp_ai_call(array(array('type' => 'text', 'text' => 'Röviden, magyarul válaszolj.')), array(array('role' => 'user', 'content' => 'Írd le egy mondatban, hogy működik a kapcsolat.')), null, 400);
+			$r = cp_ai_call(array(array('type' => 'text', 'text' => 'Röviden, magyarul válaszolj.')), array(array('role' => 'user', 'content' => 'Írd le egy mondatban, hogy működik a kapcsolat.')), null, 400, array('feat' => 'teszt'));
 			$msg .= is_wp_error($r) ? ' Teszt: ' . $r->get_error_message() : ' Teszt sikeres – az AI válasza: „' . mb_substr(trim($r), 0, 200) . '”';
 		}
 	}

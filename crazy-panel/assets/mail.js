@@ -812,7 +812,19 @@
 		const IC = p => '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
 		/* v2.9.38: számla a Drive-on – jelvény a melléklet mellett (kattintva megnyitja), vagy kézi mentés gomb a „Számla” címkés szálban */
 		const isInv = tgList(t.tags).some(z => z.toLowerCase() === 'számla');
-		const dvHtml = (m, a, ai) => a.dv ? ' <a class="ml-dv' + (a.dv.s === 'mail' ? ' warn' : '') + '" href="https://drive.google.com/file/d/' + encodeURIComponent(a.dv.id) + '/view" target="_blank" rel="noopener" title="' + esc('A Drive-on: EC - Számlák ' + a.dv.y + ' / ' + a.dv.f + (a.dv.s === 'mail' ? ' – a számla keltét nem sikerült kiolvasni, a levél dátuma szerinti hónapba került' : ' – a számla kelte: ' + a.dv.d) + (a.dv.s === 'van' ? ' (már fent volt)' : '')) + '">✓ Drive · ' + esc(a.dv.f) + (a.dv.s === 'mail' ? ' ?' : '') + '</a>'
+		const nf = v => String(Math.round(Number(v) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+		const dvTitle = dv => {
+			const x = dv.ai || {}, l = ['A Drive-on: EC - Számlák ' + dv.y + ' / ' + dv.f];
+			l.push(dv.s === 'mail' ? 'A számla keltét nem sikerült kiolvasni – a levél dátuma szerinti hónapba került. A ✎ gombbal áthelyezheted.' : dv.s === 'kezi' ? 'A hónapot kézzel állították be.' : 'A számla kelte: ' + dv.d + (dv.s === 'ai' ? ' (AI olvasta ki)' : ' (szövegfelismerés)'));
+			if (x.sup) l.push('Kiállító: ' + x.sup);
+			if (x.no) l.push('Számlaszám: ' + x.no);
+			if (x.amt) l.push('Bruttó: ' + x.amt + (x.cur ? ' ' + x.cur : ''));
+			if (x.due) l.push('Fizetési határidő: ' + x.due);
+			if (dv.tk) l.push('AI-kiolvasás: ' + nf(dv.tk.in) + ' bemenő + ' + nf(dv.tk.out) + ' kimenő token');
+			if (dv.k) l.push('(Ez a fájl már fent volt a mappában, nem töltöttük fel újra.)');
+			return l.join('\n');
+		};
+		const dvHtml = (m, a, ai) => a.dv ? ' <a class="ml-dv' + (a.dv.s === 'mail' ? ' warn' : '') + '" href="https://drive.google.com/file/d/' + encodeURIComponent(a.dv.id) + '/view" target="_blank" rel="noopener" title="' + esc(dvTitle(a.dv)) + '">✓ Drive · ' + esc(a.dv.f) + (a.dv.s === 'mail' ? ' ?' : '') + '</a><button type="button" class="ml-dvx" data-dvx="' + Number(m.id) + '" data-dvi="' + ai + '" title="Másik hónapba (a fájl a Drive-on is átkerül)" aria-label="Hónap módosítása">✎</button>'
 			: (isInv && m.dir === 'in' && /\.pdf$/i.test(a.n || '') ? ' <button type="button" class="ml-dvb" data-dvm="' + Number(m.id) + '" data-dvi="' + ai + '" title="A számla mentése a Drive számlamappájába, a kelte szerinti hónapba">Mentés a Drive-ra</button>' : '');
 		const dvAny = msgs0.some(m => (m.attachments || []).some(a => a.dv));
 		rd.innerHTML = '<div class="ml-backbar"><button type="button" data-back aria-label="Vissza">‹ Vissza</button><span>' + esc(t.subj) + '</span>' +
@@ -851,9 +863,25 @@
 				const r = await post('cp_mail_drive_save', { m: b.dataset.dvm, i: b.dataset.dvi });
 				const mm = (x.msgs || []).find(z => String(z.id) === b.dataset.dvm);
 				if (mm && mm.attachments && mm.attachments[Number(b.dataset.dvi)]) mm.attachments[Number(b.dataset.dvi)].dv = r.dv;
-				toast(r.dv.s === 'van' ? 'Ez a számla már fent volt a Drive-on: ' + r.dv.f : 'Mentve a Drive-ra: ' + r.dv.f + (r.dv.s === 'mail' ? ' (a kelte nem volt kiolvasható – a levél dátuma szerint)' : ''));
+				toast(r.dv.k ? 'Ez a számla már fent volt a Drive-on: ' + r.dv.f : 'Mentve a Drive-ra: ' + r.dv.f + (r.dv.s === 'mail' ? ' (a kelte nem volt kiolvasható – a levél dátuma szerint)' : ''));
 				drawThread(box, rd, x);
 			} catch (er) { b.disabled = false; b.textContent = 'Mentés a Drive-ra'; toast(er.message, true); }
+		}));
+		rd.querySelectorAll('[data-dvx]').forEach(b => b.addEventListener('click', e => {
+			e.preventDefault(); e.stopPropagation();
+			const mm = (x.msgs || []).find(z => String(z.id) === b.dataset.dvx), ix = Number(b.dataset.dvi), dv = mm && mm.attachments[ix] && mm.attachments[ix].dv;
+			if (!dv) return;
+			const HN = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
+			const base = new Date(Number(dv.y), Math.max(0, Number(String(dv.f).slice(0, 2)) - 1), 15), opts = [];
+			for (let k = 2; k >= -12; k--) { const d = new Date(base.getFullYear(), base.getMonth() + k, 15), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); opts.push('<option value="' + ym + '"' + (k === 0 ? ' selected' : '') + '>' + d.getFullYear() + ' · ' + String(d.getMonth() + 1).padStart(2, '0') + ' - ' + HN[d.getMonth()] + '</option>'); }
+			const sel = document.createElement('select'); sel.className = 'ml-dvs'; sel.setAttribute('aria-label', 'Melyik hónap mappájába kerüljön'); sel.innerHTML = opts.join('');
+			b.replaceWith(sel); sel.focus();
+			sel.addEventListener('change', async () => {
+				sel.disabled = true;
+				try { const r = await post('cp_mail_drive_move', { m: mm.id, i: ix, ym: sel.value }); mm.attachments[ix].dv = r.dv; toast('Áthelyezve a Drive-on: ' + r.dv.f); drawThread(box, rd, x); }
+				catch (er) { sel.disabled = false; toast(er.message, true); }
+			});
+			sel.addEventListener('blur', () => { if (!sel.disabled) setTimeout(() => { if (sel.isConnected && !sel.disabled) drawThread(box, rd, x); }, 150); });
 		}));
 		let tcur = tgList(t.tags);
 		const tgSet = () => act('cp_mail_thread_set', { f: 'tags', v: tcur.join(', ') });

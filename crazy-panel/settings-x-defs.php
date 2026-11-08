@@ -413,5 +413,28 @@ add_filter('cp_sx_sections', function ($S) {
 			),
 		);
 	}
+	/* ---------------- v2.9.44: AI-használat – pontos tokenszámok a Claude válaszaiból, havonta és funkciónként */
+	if (function_exists('cp_ai_usage_months')) {
+		$S['aiuse'] = array('n' => 'AI-használat (tokenek)',
+			'd' => 'Minden AI-hívás tokenszáma, ahogy a Claude visszaadja: bemenő (amit a panel elküld – levél, PDF, utasítás) és kimenő (amit az AI ír). A „gyorsítótár” sor a bemenő tokenek közül az olcsóbban számlázott, újrahasznált részt mutatja. A pontos költséget a console.anthropic.com → Usage oldalon látod.',
+			'info' => function () {
+				$o = array(); $hm = array('01' => 'január', '02' => 'február', '03' => 'március', '04' => 'április', '05' => 'május', '06' => 'június', '07' => 'július', '08' => 'augusztus', '09' => 'szeptember', '10' => 'október', '11' => 'november', '12' => 'december');
+				$fe = cp_ai_feats(); $nf = function ($v) { return number_format((int) $v, 0, ',', ' '); };
+				$rows = cp_ai_usage_months(3);
+				if (!$rows) { return array(array('Napló', 'még nincs AI-hívás a napló indulása óta', '')); }
+				$tot = array();
+				foreach ($rows as $r) {
+					$lab = substr($r['ym'], 0, 4) . '. ' . ($hm[substr($r['ym'], 5, 2)] ?? '') . ' – ' . ($fe[$r['feat']] ?? ($r['feat'] !== '' ? $r['feat'] : 'egyéb'));
+					$o[] = array($lab, $nf($r['n']) . ' hívás · ' . $nf($r['tin'] + $r['tcw'] + $r['tcr']) . ' bemenő + ' . $nf($r['tout']) . ' kimenő token' . ((int) $r['tcr'] ? ' (gyorsítótárból: ' . $nf($r['tcr']) . ')' : ''), '');
+					$t = &$tot[$r['ym']]; $t = ($t ?? 0) + $r['tin'] + $r['tcw'] + $r['tcr'] + $r['tout']; unset($t);
+				}
+				foreach ($tot as $ym => $v) { $o[] = array(substr($ym, 0, 4) . '. ' . ($hm[substr($ym, 5, 2)] ?? '') . ' – összesen', $nf($v) . ' token', 'ok'); }
+				return $o;
+			},
+			'fields' => array(
+				array('k' => 'mdr_ai', 't' => 'sw', 'l' => 'Számlák kiolvasása AI-jal (a kelte, a szállító, a számlaszám és az összeg); kikapcsolva csak a Google szövegfelismerése', 'opt' => 'cp_mdr_ai', 'def' => 1),
+			),
+		);
+	}
 	return $S;
 });
