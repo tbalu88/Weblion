@@ -214,7 +214,9 @@ function cp_wf_mail($def, $pairs, $deal, $page, $shadow = false) {
 	$to = $shadow ? array() : array_map('sanitize_email', (array) $def['notify']);
 	/* a crazyphoto.hu űrlapjai a panel postafiókjába (info@eventcrazy.hu) is, hogy a Levelezésben is megjelenjenek */
 	if (!in_array('info@eventcrazy.hu', $to, true)) { $to[] = 'info@eventcrazy.hu'; }
-	foreach (array_unique(array_filter($to)) as $t) { @wp_mail($t, $def['name'] . ' - New Submission [' . $n . ']', $html, $h); }
+	/* v2.9.51: egyetlen levél minden címzettnek (egy Message-ID) – különben a továbbított példány miatt kétszer jelent meg a Levelezésben */
+	$to = array_values(array_unique(array_filter($to)));
+	if ($to) { @wp_mail($to, $def['name'] . ' - New Submission [' . $n . ']', $html, $h); }
 }
 
 /* ------------------------------------------------------------ kontakt + deal (a panel „Új deal” lépései szerint) */
