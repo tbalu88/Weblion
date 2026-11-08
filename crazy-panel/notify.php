@@ -58,6 +58,8 @@ function cp_notify($uid, $kind, $text, $hash, $by_name = null) {
 	$wpdb->insert(cp_nt_t(), array('uid' => $uid, 'kind' => $kind, 'text' => $text, 'link' => mb_substr($hash, 0, 60), 'by_uid' => $me ?: null, 'by_name' => $by, 'created_at' => gmdate('Y-m-d H:i:s')));
 	/* v2.8: push-értesítés a kolléga feliratkozott eszközeire (a válasz elküldése után) */
 	if (function_exists('cp_push_queue')) { cp_push_queue($uid, $by !== '' ? $by : 'Crazy panel', $text, $hash); }
+	/* v2.9.32: az új ajánlatkérésről mindenki kap csengőt, de Pumble-üzenetet nem (a felhasználó döntése, 2026-11-08) */
+	if ($kind === 'lead') { return; }
 	$hook = cp_nt_hook_get('notif_hook_u' . $uid);
 	if ($hook === '') { $hook = cp_nt_hook_get('notif_hook'); }
 	if ($hook === '' || !cp_nt_hook_ok($hook) || !function_exists('cp_pu_panel_url')) { return; }
