@@ -754,3 +754,4 @@
 .ml-atts .ml-atti > a:first-child{overflow-wrap:anywhere}
 .ml-atts .ml-atti:not(:last-child)::after{content:',';color:#8A8780;margin-left:-3px}
 
+.ml-tabs button:disabled{opacity:.45;cursor:default}

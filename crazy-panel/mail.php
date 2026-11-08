@@ -426,6 +426,9 @@ function cp_mail_ajax_threads() {
 	$folder = sanitize_key(wp_unslash($_POST['folder'] ?? 'inbox'));
 	/* v2.9.40: keresésnél minden levél között (minden mappa és a lezártak is) – csak a Kuka és a Spam marad ki */
 	$qs = trim((string) wp_unslash($_POST['q'] ?? '')) !== '';
+	/* v2.9.42: címkére szűrve is minden levél között (a „Mind” fül szerint, minden mappából) */
+	$tg0 = json_decode((string) wp_unslash($_POST['tg'] ?? ''), true);
+	if (is_array($tg0) && array_filter(array_map('strval', $tg0), 'strlen')) { $qs = true; }
 	if ($qs && in_array($folder, array('inbox', 'archive', 'promo', 'sent', 'outbox', 'snooze'), true)) { $folder = 'all'; }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($folder === 'follow') { $w[] = $wpdb->prepare('FIND_IN_SET(%d, followers)', $me); }
