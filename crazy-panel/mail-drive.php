@@ -27,7 +27,11 @@ function cp_mdr_q($s) { return "'" . str_replace(array('\\', "'"), array('\\\\',
 function cp_mdr_folder($parent, $name) {
 	$key = $parent . '|' . $name;
 	$c = cp_mdr_cache();
-	if (!empty($c[$key])) { return $c[$key]; }
+	/* a megjegyzett mappa még ott van-e (nincs kukában, nem került máshová, nem nevezték át) – különben újrakeresés / létrehozás */
+	if (!empty($c[$key])) {
+		$j = cp_mdr_json(cp_gdb_api('GET', CP_MDR_API . '/' . rawurlencode($c[$key]) . '?supportsAllDrives=true&fields=id,name,trashed,parents'));
+		if (!is_wp_error($j) && empty($j['trashed']) && ($j['name'] ?? '') === $name && in_array($parent, (array) ($j['parents'] ?? array()), true)) { return $c[$key]; }
+	}
 	$q = cp_mdr_q($parent) . " in parents and name = " . cp_mdr_q($name) . " and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 	$j = cp_mdr_json(cp_gdb_api('GET', CP_MDR_API . '?' . http_build_query(array('q' => $q, 'fields' => 'files(id)', 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'corpora' => 'allDrives'))));
 	if (is_wp_error($j)) { return $j; }
