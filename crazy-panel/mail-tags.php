@@ -138,7 +138,8 @@ function cp_mail_inv_private($e) { return (bool) preg_match('/@(gmail\.com|googl
 function cp_mail_inv_sender($e) { return (bool) preg_match('/@([\w.-]+\.)?(szamlazz\.hu|billingo\.(hu|io)|szamlazo\.hu|kulcs-soft\.hu|nav\.gov\.hu)$/i', (string) $e); }
 function cp_mail_inv_match($subj, $from, $atts) {
 	$names = array_map(function ($a) { return (string) (is_array($a) ? ($a['n'] ?? '') : $a); }, (array) $atts);
-	foreach ($names as $n) { if (preg_match('/\.(pdf|xml)$/i', $n) && cp_mail_inv_subj(str_replace(array('_', '-', '.'), ' ', $n))) { return true; } }
+	/* a melléklet neve: „számla…”, „szamlakep”, „SZLA_…” (Számlázz.hu, könyvelők), „invoice”, „díjbekérő” stb. */
+	foreach ($names as $n) { $nn = str_replace(array('_', '-', '.'), ' ', $n); if (preg_match('/\.(pdf|xml)$/i', $n) && (cp_mail_inv_subj($nn) || preg_match('/(^|[^a-z])(szla|e ?szla|eszamla)([^a-z]|$)/i', $nn))) { return true; } }
 	/* a tárgy alapján csak új levél (nem válasz/továbbítás), és cégtől PDF/XML-lel vagy számlázótól – a magánszemély „számla” tárgyú levele többnyire az ügyfél kérdése */
 	if (!cp_mail_inv_subj($subj) || preg_match('/^\s*(re|v[aá]|v[aá]lasz|aw|sv|fw|fwd|tov)\s*:/iu', (string) $subj)) { return false; }
 	if (cp_mail_inv_sender($from)) { return true; }
@@ -159,8 +160,9 @@ function cp_mail_tag_add($tid, $tag) {
 }
 /* egyszeri visszamenőleges címkézés (az elmúlt 12 hónap bejövő levelei), a levélszinkron első futásakor */
 function cp_mail_inv_backfill() {
-	if (get_option('cp_mail_inv_back') === '1') { return; }
-	update_option('cp_mail_inv_back', '1', false);
+	/* v2.9.39: „2” – újrafuttatás a bővített szabállyal (SZLA_… mellékletnév); csak címkét tesz rá, kétszer nem */
+	if (get_option('cp_mail_inv_back') === '2') { return; }
+	update_option('cp_mail_inv_back', '2', false);
 	global $wpdb;
 	$n = 0;
 	foreach ((array) $wpdb->get_results('SELECT thread_id, subject, from_email, attachments FROM ' . cp_mail_t('messages') . " WHERE dir = 'in' AND sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 365 DAY) ORDER BY id DESC LIMIT 20000", ARRAY_A) as $r) {
