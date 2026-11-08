@@ -125,6 +125,8 @@ function cp_gdb_prune() {
 		$firstMon = !isset($seenMon[$mk]); $seenMon[$mk] = 1;
 		if ($age <= 7 || ($firstDay && $age <= 60) || ($firstMon && $age <= 365)) { continue; }
 		$x = cp_gdb_api('DELETE', 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($f['id']) . '?supportsAllDrives=true');
+		/* v2.9.38: a közös meghajtón a szolgáltatásfiók csak kukába tehet (végleges törlés: 404) – a kuka 30 nap után magától ürül */
+		if (is_wp_error($x)) { $x = cp_gdb_api('PATCH', 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($f['id']) . '?supportsAllDrives=true&fields=id', wp_json_encode(array('trashed' => true)), array('Content-Type' => 'application/json')); }
 		if (!is_wp_error($x)) { $del++; }
 	}
 	return $del;
