@@ -342,6 +342,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$f = $from[0] ?? array('e' => '', 'n' => '');
 	$out = $sent || $f['e'] === $me; /* v1.63: a saját címünkről a Beérkezettbe jött levél feladója hamisítható → „ellenőrizetlen” jelölés */
 	$kind = $out ? '' : cp_imp_kind($hraw, $f['e']);
+	/* v2.9.37: a „noreply” számlázóktól jövő számla nem rendszerüzenet – átvesszük */
+	if ($kind === 'skip' && function_exists('cp_mail_inv_subj') && cp_mail_inv_subj(cp_imp_hdr($h->subject ?? '')) && !preg_match('/mailer-daemon|postmaster/i', $f['e'])) { $kind = ''; }
 	if ($kind === 'skip') { return 'skip'; }
 	$promo = $kind === 'promo';
 	$other = $out ? ($to[0] ?? array('e' => '', 'n' => '')) : $f;
@@ -421,6 +423,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($live && !$out && !$promo) { $upd['seen_at'] = null; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
+	/* v2.9.37: bejövő számla → „Számla” címke */
+	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) { cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG); }
 	/* v1.86: a szál követői értesítést kapnak az ügyfél új leveléről (csengő; ha be van állítva, Pumble is) – csak friss, élő beérkezésnél */
 	/* v1.99.2: a követők mellett a szál felelőse is értesítést kap; a régiség a beérkezés idejéhez mérve (késve kézbesített levélnél is szól) */
 	$as = (int) $wpdb->get_var($wpdb->prepare("SELECT assignee_uid FROM $T WHERE id = %d", (int) $t['id']));
@@ -673,6 +677,7 @@ function cp_imp_sync_run() {
 	update_option('cp_imp_sync', $sy, false);
 	delete_transient('cp_imp_sync_lock');
 	try { cp_imp_relink_recent(); } catch (\Throwable $e) { /* a következő körben újra */ }
+	if (function_exists('cp_mail_inv_backfill')) { try { cp_mail_inv_backfill(); } catch (\Throwable $e) { /* nem kritikus */ } }
 }
 
 /* v1.97: „Letöltés most” – a Levelezés ↻ gombja azonnal lekéri az új leveleket (nem várja meg az 5 perces ütemet).

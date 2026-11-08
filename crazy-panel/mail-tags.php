@@ -125,3 +125,47 @@ function cp_mail_ajax_tag_op() {
 	if (function_exists('cp_audit_add')) { cp_audit_add('levelezes', 'tag_' . $op, 'Címke', $n, $txt . ' (' . $done . ' szál)'); }
 	wp_send_json_success(array('tags' => cp_mail_tags_all(), 'n' => $done));
 }
+
+/* ------------------------------------------------------------ v2.9.37: bejövő számlák automatikus „Számla” címkéje
+ * Számla: a PDF/XML melléklet neve számlára utal, VAGY a tárgy számlára utal (nem válasz), és számlázótól jön, vagy cégtől PDF/XML-lel.
+ * A magánszemély „számla” tárgyú levele melléklet-név nélkül, a számláló és a számlázási adatok nem kapnak címkét. Csak bejövő levélre. */
+const CP_MAIL_INV_TAG = 'Számla';
+function cp_mail_inv_subj($s) {
+	$s = preg_replace('/sz[aá]ml[aá]l[oó]|sz[aá]ml[aá]z[aá]s\w*/iu', '', (string) $s); /* számláló, számlázási adatok: nem számla */
+	return (bool) preg_match('/(sz[aá]ml[aá]|d[ií]jbek[eé]r|proforma|invoice|rechnung|factur|fizet[eé]si [eé]rtes[ií]t)/iu', $s);
+}
+function cp_mail_inv_private($e) { return (bool) preg_match('/@(gmail\.com|googlemail\.com|freemail\.hu|citromail\.hu|yahoo\.[a-z.]+|hotmail\.[a-z.]+|outlook\.[a-z.]+|live\.[a-z.]+|icloud\.com|me\.com|t-online\.hu|vipmail\.hu|indamail\.hu)$/i', (string) $e); }
+function cp_mail_inv_sender($e) { return (bool) preg_match('/@([\w.-]+\.)?(szamlazz\.hu|billingo\.(hu|io)|szamlazo\.hu|kulcs-soft\.hu|nav\.gov\.hu)$/i', (string) $e); }
+function cp_mail_inv_match($subj, $from, $atts) {
+	$names = array_map(function ($a) { return (string) (is_array($a) ? ($a['n'] ?? '') : $a); }, (array) $atts);
+	foreach ($names as $n) { if (preg_match('/\.(pdf|xml)$/i', $n) && cp_mail_inv_subj(str_replace(array('_', '-', '.'), ' ', $n))) { return true; } }
+	/* a tárgy alapján csak új levél (nem válasz/továbbítás), és cégtől PDF/XML-lel vagy számlázótól – a magánszemély „számla” tárgyú levele többnyire az ügyfél kérdése */
+	if (!cp_mail_inv_subj($subj) || preg_match('/^\s*(re|v[aá]|v[aá]lasz|aw|sv|fw|fwd|tov)\s*:/iu', (string) $subj)) { return false; }
+	if (cp_mail_inv_sender($from)) { return true; }
+	if (cp_mail_inv_private($from)) { return false; }
+	foreach ($names as $n) { if (preg_match('/\.(pdf|xml)$/i', $n)) { return true; } }
+	return false;
+}
+function cp_mail_tag_add($tid, $tag) {
+	global $wpdb;
+	$T = cp_mail_t('threads');
+	$cur = (string) $wpdb->get_var($wpdb->prepare("SELECT tags FROM $T WHERE id = %d", $tid));
+	list($sys, $user) = cp_mail_tags_parts($cur);
+	foreach ($user as $n) { if (mb_strtolower($n) === mb_strtolower($tag)) { return false; } }
+	$user[] = $tag;
+	$wpdb->update($T, array('tags' => cp_mail_tags_join($sys, $user)), array('id' => (int) $tid));
+	cp_mail_tag_register(array($tag));
+	return true;
+}
+/* egyszeri visszamenőleges címkézés (az elmúlt 12 hónap bejövő levelei), a levélszinkron első futásakor */
+function cp_mail_inv_backfill() {
+	if (get_option('cp_mail_inv_back') === '1') { return; }
+	update_option('cp_mail_inv_back', '1', false);
+	global $wpdb;
+	$n = 0;
+	foreach ((array) $wpdb->get_results('SELECT thread_id, subject, from_email, attachments FROM ' . cp_mail_t('messages') . " WHERE dir = 'in' AND sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 365 DAY) ORDER BY id DESC LIMIT 20000", ARRAY_A) as $r) {
+		if (cp_mail_inv_match($r['subject'], $r['from_email'], json_decode((string) $r['attachments'], true) ?: array()) && cp_mail_tag_add((int) $r['thread_id'], CP_MAIL_INV_TAG)) { $n++; }
+	}
+	update_option('cp_mail_inv_back_n', $n, false);
+}
+
