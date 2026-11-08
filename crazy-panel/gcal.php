@@ -131,7 +131,7 @@ function cp_gcal_plan($id) {
 	global $wpdb;
 	$d = $wpdb->get_row($wpdb->prepare('SELECT d.*, c.name cn, c.phone cp, c.mobile cm FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id = %d', $id), ARRAY_A);
 	if (!$d) { return null; }
-	$pen = $d['stage'] === cp_gcal_stages()[0];
+	$pen = cp_gcal_mark_on() && $d['stage'] === cp_gcal_stages()[0];
 	$date = (string) $d['event_d'];
 	$s = ''; $e = '';
 	if (!empty($d['start_at'])) {
@@ -242,6 +242,8 @@ function cp_gcal_shadow() {
  * „Szerződés kiküldve” → „[Ceruzás] ” a cím elé; továbblépéskor le; ha 3 óra után sincs bejegyzés, a panel létrehozza.
  * Elvesztett deal bejegyzéséhez nem nyúl. Minden írás naplózva (WordPress → Beállítások → Crazy Google Naptár). */
 function cp_gcal_pen_on() { return !empty(cp_gcal_opts()['pen']); }
+/* v2.9.47: a „[Ceruzás]” jelölés külön kapcsoló (alapból ki – a kollégák nem használják); a bejegyzések létrehozása / frissítése ettől független */
+function cp_gcal_mark_on() { return !empty(cp_gcal_opts()['mark']); }
 function cp_gcal_wlog($a, $deal, $t) {
 	$l = get_option('cp_gcal_wlog', array()); if (!is_array($l)) { $l = array(); }
 	array_unshift($l, array('at' => time(), 'a' => $a, 'deal' => (int) $deal, 't' => mb_substr((string) $t, 0, 160)));
@@ -276,7 +278,7 @@ function cp_gcal_pen_sync($dry = false) {
 	foreach ($ev as $e) {
 		$id = cp_gcal_match($e, $bd, $bi); if (!$id) { continue; }
 		$d = $bi[$id]; $has[$id] = 1;
-		if ($d['status'] !== 'Open') { continue; }
+		if ($d['status'] !== 'Open' || !cp_gcal_mark_on()) { continue; }
 		$pen = cp_gcal_pen($e['t']); $new = null; $k = '';
 		if ($d['stage'] === $PEN && !$pen) { $new = CP_GCAL_PEN . $e['t']; $k = 'add'; }
 		elseif ($pen && in_array($d['stage'], $later, true)) { $new = cp_gcal_unpen($e['t']); $k = 'remove'; }

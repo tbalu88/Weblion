@@ -40,10 +40,10 @@ function cp_claim_deal_row($deal_id) {
 }
 
 /* a deal az aktuális kollégáé lesz, ha új, még nem foglalta le senki, és ő a kiválasztottak között van */
-function cp_claim_deal($deal_id) {
+function cp_claim_deal($deal_id, $sm_as = 0, $by = '') {
 	$deal_id = (int) $deal_id;
 	if ($deal_id <= 0) { return; }
-	$sm = cp_claim_me_sm();
+	$sm = $sm_as ? (int) $sm_as : cp_claim_me_sm();
 	if (!$sm || !in_array($sm, cp_claim_pool(), true)) { return; }
 	$s = cp_claim_state();
 	if (isset($s['done'][(string) $deal_id])) { return; }
@@ -56,19 +56,20 @@ function cp_claim_deal($deal_id) {
 	if (is_wp_error($put)) { cp_claim_unmark($deal_id); return; }
 	global $wpdb;
 	$wpdb->update(cp_crm_t('deals'), array('owner_id' => $sm), array('id' => $deal_id));
-	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $deal_id, 'field' => 'owner_id', 'old_val' => (string) (int) $d['owner_id'], 'new_val' => (string) $sm, 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $deal_id, 'field' => 'owner_id', 'old_val' => (string) (int) $d['owner_id'], 'new_val' => (string) $sm, 'by_user' => $by !== '' ? $by : (function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel'), 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 }
 
 /* levélszál: az első válaszoló kapja, ha még nincs kiosztva */
-function cp_claim_thread($thread_id) {
+function cp_claim_thread($thread_id, $sm_as = 0) {
 	global $wpdb;
 	if (!function_exists('cp_mail_t') || $thread_id <= 0) { return; }
-	$sm = cp_claim_me_sm(); $uid = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	if ($sm_as) { $sm = (int) $sm_as; $uid = cp_claim_uid_of($sm); $who = cp_claim_name_of($sm); }
+	else { $sm = cp_claim_me_sm(); $uid = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; $who = function_exists('cp_panel_who') ? cp_panel_who() : ''; }
 	if (!$sm || !$uid || !in_array($sm, cp_claim_pool(), true)) { return; }
 	$T = cp_mail_t('threads');
 	$n = $wpdb->query($wpdb->prepare("UPDATE $T SET assignee_uid = %d WHERE id = %d AND assignee_uid IS NULL", $uid, (int) $thread_id));
-	if ($n) { $wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $thread_id, 'kind' => 'assign', 'text' => 'Kiosztva: ' . (function_exists('cp_panel_who') ? cp_panel_who() : '') . ' (első válasz)', 'author_uid' => $uid, 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'created_at' => gmdate('Y-m-d H:i:s'))); }
+	if ($n) { $wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $thread_id, 'kind' => 'assign', 'text' => 'Kiosztva: ' . $who . ' (első válasz' . ($sm_as ? ', a Salesmate-ből küldött levél aláírása alapján' : '') . ')', 'author_uid' => $uid, 'author' => $who, 'created_at' => gmdate('Y-m-d H:i:s'))); }
 }
 
 /* a figyelt műveletek: ajax-művelet => a deal azonosítójának POST-mezője */
@@ -112,3 +113,36 @@ add_action('admin_init', function () {
 		} catch (\Throwable $e) { /* a kiosztás hibája ne rontsa el a választ */ }
 	}, 0);
 }, 1);
+
+/* ------------------------------------------------------------ v2.9.47: a Salesmate-ből küldött levél (team inbox BCC-másolata) is számít
+ * A küldő kolléga a levél saját részének (az idézet előtti) aláírásából: a kiosztható kollégák (pool) teljes neve.
+ * Csak akkor dönt, ha pontosan egy kolléga neve szerepel. */
+function cp_claim_name_of($sm) { $u = function_exists('cp_crm_users') ? cp_crm_users() : array(); return (string) ($u[(int) $sm]['n'] ?? ''); }
+function cp_claim_uid_of($sm) {
+	if (!function_exists('cp_pu_data')) { return 0; }
+	foreach ((array) cp_pu_data()['list'] as $id => $u) { if ((int) ($u['sm'] ?? 0) === (int) $sm && !empty($u['a'])) { return (int) $id; } }
+	return 0;
+}
+function cp_claim_sm_sender($text) {
+	$norm = function ($s) { return trim(preg_replace('/\s+/u', ' ', mb_strtolower(remove_accents((string) $s)))); };
+	$t = $norm($text);
+	$own = preg_split('/\n\s*(on .{6,120} wrote:|.{6,160} irta:|-{2,}\s*(original message|eredeti uzenet)|from:\s|felado:\s|>)/u', $t, 2)[0];
+	$own = preg_split('/(on .{6,120} wrote:|.{6,160} irta:|-{2,}\s*(original message|eredeti uzenet))/u', $own, 2)[0];
+	$hit = array();
+	foreach (cp_claim_pool() as $sm) {
+		$n = $norm(cp_claim_name_of($sm)); if ($n === '' || mb_strpos($n, ' ') === false) { continue; }
+		$rev = implode(' ', array_reverse(explode(' ', $n)));
+		if (mb_strpos($own, $n) !== false || mb_strpos($own, $rev) !== false) { $hit[] = (int) $sm; }
+	}
+	return count($hit) === 1 ? $hit[0] : 0;
+}
+function cp_claim_from_sm_mail($thread_id, $text) {
+	if (!function_exists('cp_mail_t') || $thread_id <= 0) { return; }
+	$sm = cp_claim_sm_sender($text);
+	if (!$sm) { return; }
+	cp_claim_state();
+	global $wpdb;
+	$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', (int) $thread_id));
+	try { cp_claim_thread((int) $thread_id, $sm); if ($deal) { cp_claim_deal($deal, $sm, cp_claim_name_of($sm) . ' (Salesmate-levél)'); } } catch (\Throwable $e) { /* nem kritikus */ }
+}
+

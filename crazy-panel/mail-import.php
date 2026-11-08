@@ -424,6 +424,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($live && !$out && !$promo) { $upd['seen_at'] = null; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
+	/* v2.9.47: a Salesmate-ből küldött levél másolata (élő beérkezés) – a felelős az aláírás szerinti kolléga, ha még nincs lefoglalva */
+	if ($live && $out && !$sent && function_exists('cp_claim_from_sm_mail')) { cp_claim_from_sm_mail((int) $t['id'], (string) ($acc['plain'] ?? '') !== '' ? (string) $acc['plain'] : $text); }
 	/* v2.9.37: bejövő számla → „Számla” címke */
 	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) {
 		cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG);
