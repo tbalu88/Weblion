@@ -564,7 +564,8 @@
 .ml-read,.ml-msg{overflow-x:clip}
 /* v2.7.7: a tárgysor (cím + „Legújabb felül” + „Deal csatolása”) tördelhető – mobilon a linkek a cím alatt, az oldal nem lóg ki */
 .ml-subjh{flex-wrap:wrap;min-width:0;max-width:100%}
-.ml-subjh h3{min-width:0;overflow-wrap:anywhere}
+.ml-subjh h3{min-width:0;overflow-wrap:anywhere;flex:1 1 260px}
+.ml-subjh > :not(h3){flex:none}
 @media (max-width:760px){.ml-subjh{row-gap:2px}.ml-subjh h3{flex:1 1 100%}.ml-subjh .ml-link{padding:4px 0}.ml-subjh .ml-link+.ml-link{margin-left:auto}}
 /* v2.7.8: összecsukható levelek a szálban */
 .ml-snip{display:none;color:#656973;font-size:13px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;max-width:100%}
