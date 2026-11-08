@@ -130,7 +130,7 @@ add_action('cp_imp_admin_after', function () {
 		$msg = implode(' ', $parts);
 	}
 	$prog = '';
-	if (isset($_POST['cp_smh_prog']) && current_user_can('manage_options') && check_admin_referer('cp_smh_do')) { $prog = cp_smh_script(!empty($_POST['cp_smh_all'])); }
+	if (isset($_POST['cp_smh_prog']) && current_user_can('manage_options') && check_admin_referer('cp_smh_do')) { $prog = cp_smh_script(!empty($_POST['cp_smh_all']), $_POST['cp_smh_prog'] === 'upd'); }
 	$n = count(cp_smh_deals());
 	echo '<h2>Salesmate-levelek átvétele (régi levelezés)</h2>';
 	if ($msg !== '') { echo '<div class="notice notice-info"><p>' . esc_html($msg) . '</p></div>'; }
@@ -140,7 +140,7 @@ add_action('cp_imp_admin_after', function () {
 	echo '<p><b>A program által letöltött fájlok</b> (salesmate-levelek-01.json, -02.json …): <input type="file" id="cp-smh-files" accept=".json,application/json" multiple> <button type="button" class="button button-primary" id="cp-smh-go">Fájlok betöltése</button></p><pre id="cp-smh-out" style="background:#f6f7f7;padding:8px;max-height:260px;overflow:auto;display:none"></pre>';
 	echo '<script>(function(){var u=' . wp_json_encode(rest_url('crazy-panel/v1/smh')) . ',n=' . wp_json_encode(wp_create_nonce('wp_rest')) . ',o=document.getElementById("cp-smh-out");document.getElementById("cp-smh-go").addEventListener("click",async function(){var fs=document.getElementById("cp-smh-files").files;if(!fs.length){alert("Válaszd ki a fájlokat.");return;}this.disabled=true;o.style.display="block";var tot=0,bad=0;for(var f of fs){var j;try{j=JSON.parse(await f.text());}catch(e){o.textContent+=f.name+": nem érvényes JSON\n";continue;}if(!Array.isArray(j)){j=j.deals||[];}for(var i=0;i<j.length;i+=10){var part=j.slice(i,i+10),ok=false,last="";for(var t=0;t<3&&!ok;t++){try{var r=await fetch(u,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"text/plain;charset=UTF-8","X-WP-Nonce":n},body:JSON.stringify(part)});var x=await r.json().catch(function(){return {};});if(r.ok&&x.ok){ok=true;o.textContent+=f.name+" ["+(i+1)+"–"+(i+part.length)+"]: "+x.msg+"\n";}else{last=x.msg||("HTTP "+r.status);}}catch(e){last=e.message;}if(!ok)await new Promise(function(z){setTimeout(z,3000);});}if(!ok){bad++;o.textContent+="⚠ "+f.name+" ["+(i+1)+"–"+(i+part.length)+"]: nem sikerült ("+last+") – töltsd be újra ezt a fájlt később (ami már bent van, nem duplázódik)\n";}o.scrollTop=o.scrollHeight;}tot++;}o.textContent+="Kész: "+tot+" fájl"+(bad?", "+bad+" adag hibás – azokat a fájlokat töltsd be újra":"")+".\n";this.disabled=false;});})();</script>';
 	echo '<h3>Automatikus átvétel (ajánlott)</h3><p>A program a Salesmate-oldalon, a te belépéseddel fut: dealenként lekéri a leveleket, és 100 dealenként egy fájlt ment a Letöltések mappába; a fájlokat fent, a „Fájlok betöltése” gombbal töltsd be (egyszerre többet is kijelölhetsz). A Salesmate-ben semmit nem módosít; a még olvasatlan, friss beszélgetéseket kihagyja, hogy ott ne legyenek olvasottnak jelölve. A kulcsa 48 óráig érvényes.</p>';
-	echo '<form method="post">' . wp_nonce_field('cp_smh_do', '_wpnonce', true, false) . '<label><input type="checkbox" name="cp_smh_all" value="1"> az összes deal (nem csak azok, ahol a panelből hiányzik a kimenő levél)</label><p><button class="button button-primary" name="cp_smh_prog" value="1">Program létrehozása</button></p></form>';
+	echo '<form method="post">' . wp_nonce_field('cp_smh_do', '_wpnonce', true, false) . '<label><input type="checkbox" name="cp_smh_all" value="1"> az összes deal (nem csak azok, ahol a panelből hiányzik a kimenő levél)</label><p><button class="button button-primary" name="cp_smh_prog" value="upd">Program – friss levelek (naponta)</button> <button class="button" name="cp_smh_prog" value="1">Program – régi levelezés</button></p><p class="description">A „friss levelek” program azokat a dealeket nézi át újra, ahol a Salesmate szerint frissebb az e-mailes kommunikáció (utolsó 30 nap), mint a panelben lévő legutolsó levél – akkor is, ha a deal már korábban fel volt dolgozva. A pipa csak a „régi levelezés” programra vonatkozik.</p></form>';
 	if ($prog !== '') { echo '<p><b>Másold ki az egészet</b> (kattints bele, Ctrl+A, Ctrl+C), és futtasd a Salesmate-oldalon – lépések a panel útmutatójában.</p><textarea rows="12" class="large-text code" readonly onclick="this.select()">' . esc_textarea($prog) . '</textarea>'; }
 	$log = (array) get_option('cp_smh_log', array());
 	if ($log) { $s = array_sum(array_column($log, 'new')); echo '<p>Eddig átvéve: <b>' . (int) $s . '</b> levél, ' . count($log) . ' beillesztésből.</p>'; }
@@ -159,14 +159,21 @@ add_action('rest_api_init', function () {
 		return new WP_REST_Response(array('ok' => 1, 'msg' => $msg), 200);
 	}));
 });
-function cp_smh_script($all) {
+function cp_smh_script($all, $upd = false) {
 	global $wpdb;
 	$k = bin2hex(random_bytes(20));
 	update_option('cp_smh_tok', array('h' => hash('sha256', $k), 'exp' => time() + 2 * DAY_IN_SECONDS), false);
 	$ids = array();
 	$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
 	$doneIds = get_option('cp_smh_done', array()); if (!is_array($doneIds)) { $doneIds = array(); }
-	foreach (cp_smh_deals() as $d) {
+	/* v2.9.31: frissítő mód – a Salesmate utolsó e-mailes kommunikációja újabb, mint a panel legutolsó levele a dealnél */
+	if ($upd) {
+		$D = cp_crm_t('deals');
+		$ids = array_map('intval', (array) $wpdb->get_col("SELECT d.id FROM $D d WHERE d.deleted_at IS NULL AND d.last_comm_mode = 'Email' AND d.last_comm_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)
+			AND d.last_comm_at > DATE_ADD(COALESCE((SELECT MAX(m.sent_at) FROM $T t JOIN $M m ON m.thread_id = t.id WHERE t.deal_id = d.id AND m.status <> 'idézetből'), '2000-01-01'), INTERVAL 5 MINUTE)
+			ORDER BY d.last_comm_at DESC LIMIT 1500"));
+	}
+	foreach ($upd ? array() : cp_smh_deals() as $d) {
 		if (isset($doneIds[(int) $d['id']])) { continue; }
 		if (!$all && $d['lcm'] !== 'Email') { continue; }
 		if (!$all && (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T t JOIN $M m ON m.thread_id = t.id WHERE t.deal_id = %d AND m.dir = 'out' AND m.status <> 'idézetből'", $d['id']))) { continue; }
