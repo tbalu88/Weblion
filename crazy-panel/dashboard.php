@@ -30,7 +30,8 @@ function cp_dash_ajax_data() {
 	 * v1.68: a Kezdőlapról elrejtettek kimaradnak; a régi lejártak is jönnek (a felület külön csoportba teszi) */
 	$todo = array();
 	$hid = array_flip(cp_dash_hidden($uid));
-	if ($crm && $sm) {
+	/* v2.9.48: felhasználónként kikapcsolható (pl. a fióktulajdonos nevén lévő régi Salesmate-tevékenységek) – a Salesmate-et nem érinti */
+	if ($crm && $sm && !get_option('cp_dash_noact_' . (int) $uid)) {
 		$A = cp_crm_t('activities');
 		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT a.id, a.title, a.type, a.due_at, a.related_id, d.title dt FROM $A a LEFT JOIN $D d ON d.id = a.related_id AND d.deleted_at IS NULL
 			WHERE a.deleted_at IS NULL AND (a.completed IS NULL OR a.completed = 0) AND a.owner_id = %d AND a.due_at IS NOT NULL AND a.due_at <= %s ORDER BY a.due_at DESC LIMIT 600", $sm, cp_dash_utc($eod)), ARRAY_A) as $r) {
