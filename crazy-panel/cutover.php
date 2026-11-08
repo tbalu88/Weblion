@@ -127,6 +127,8 @@ function cp_cut_reconcile() {
 	global $wpdb;
 	if (function_exists('cp_lead_match')) { cp_lead_match(); }
 	$L = cp_cut_t();
+	/* v2.9.30: egyszeri újraellenőrzés az új összevetési szabállyal */
+	if (get_option('cp_cut_rq') !== '2930') { $wpdb->query("UPDATE $L SET status = 'pending' WHERE status = 'diff' AND ref LIKE 'lead:%'"); update_option('cp_cut_rq', '2930', false); }
 	foreach ((array) $wpdb->get_results("SELECT * FROM $L WHERE status = 'pending' AND ref LIKE 'lead:%' ORDER BY id LIMIT 100", ARRAY_A) as $r) {
 		$lid = (int) substr($r['ref'], 5);
 		$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_lead_t() . ' WHERE id = %d', $lid));
@@ -137,8 +139,9 @@ function cp_cut_reconcile() {
 		$d = $wpdb->get_row($wpdb->prepare('SELECT d.title, d.pipeline, d.stage, d.owner_id, d.source, d.event_d, d.venue, d.guests, d.hours, d.service, d.created_at, c.email c_email, c.name c_name FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id = %d', $deal), ARRAY_A);
 		if (!$d) { continue; }
 		/* a létrehozás óta kézzel módosított mezőknél a kezdeti érték számít (a változásnaplóból) */
-		/* (a létrehozás utáni 15 percben az automatizmusok – pl. az Átnevezés – dolgoznak, azok a Salesmate lépései) */
-		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT field, old_val FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d AND at > DATE_ADD(%s, INTERVAL 15 MINUTE) ORDER BY id DESC', $deal, $d['created_at']), ARRAY_A) as $h) { if (array_key_exists($h['field'], $d)) { $d[$h['field']] = (string) $h['old_val']; } }
+		/* v2.9.30: minden későbbi változás visszaszámolva – a kollégák gyakran már 2–12 percen belül ajánlatot küldenek
+		   (szakasz, név, helyszín), a 15 perces ablak ezt tévesen eltérésnek vette; az összevetés a létrehozáskori állapotot nézi */
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT field, old_val FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d AND at > %s ORDER BY id DESC', $deal, $d['created_at']), ARRAY_A) as $h) { if (array_key_exists($h['field'], $d)) { $d[$h['field']] = (string) $h['old_val']; } }
 		$plan = json_decode((string) $r['plan'], true) ?: array();
 		$hard = array(); $soft = array();
 		$L2 = array('title' => 'Deal neve', 'pipeline' => 'Pipeline', 'stage' => 'Szakasz', 'source' => 'Forrás', 'event_d' => 'Rendezvény dátuma', 'venue' => 'Helyszín', 'guests' => 'Létszám', 'hours' => 'Időtartam', 'service' => 'Szolgáltatás', 'c_email' => 'Kontakt e-mail', 'owner_id' => 'Felelős');
