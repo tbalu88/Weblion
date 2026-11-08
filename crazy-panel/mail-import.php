@@ -303,14 +303,16 @@ function cp_imp_relink($tid, $email, $at) {
 	global $wpdb;
 	$cur = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid));
 	if ($cur) {
+		/* v2.9.34: mint a Salesmate-ben – a dealen lévő szál a dealen marad (lezárt dealről sem visszük át másikra);
+		   csak a törölt dealen ülő vagy deal nélküli szálhoz keresünk dealt */
 		$d = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $cur), ARRAY_A);
-		if ($d && $d['status'] === 'Open' && empty($d['deleted_at'])) { return; }
+		if ($d && empty($d['deleted_at'])) { return; }
 	}
 	if (cp_imp_deal_manual($tid)) { return; }
 	$best = cp_imp_pick_deal($email, $at);
 	if (!$best || $best === $cur) { return; }
 	$st = (string) $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
-	if ($cur && $st !== 'Open') { return; } /* lezártról csak nyitottra visz át */
+
 	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $best), array('id' => $tid));
 	$title = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => $tid, 'kind' => 'autodeal', 'text' => mb_substr(($cur ? 'Deal automatikusan áthelyezve (az ügyfél nyitott dealje): ' : 'Deal automatikusan csatolva: ') . ($title !== '' ? $title : '#' . $best), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
@@ -321,7 +323,7 @@ function cp_imp_relink_recent() {
 	set_transient('cp_imp_relink_at', 1, 15 * MINUTE_IN_SECONDS);
 	global $wpdb;
 	$T = cp_mail_t('threads'); $E = cp_mail_t('events'); $D = cp_crm_t('deals');
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.status <> 'Open' OR d.deleted_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 200", gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS)), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.deleted_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 200", gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS)), ARRAY_A);
 	foreach ($rows as $r) { cp_imp_relink((int) $r['id'], $r['contact_email'], $r['last_at']); }
 }
 
