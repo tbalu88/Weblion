@@ -102,7 +102,8 @@
     "n": "Deal.textCustomField3",
     "t": "text",
     "l": "Megjegyzés",
-    "ph": "Egyedi kívánság, kérés"
+    "ph": "Egyedi kívánság, kérés",
+    "ui": "area"
    },
    {
     "n": "Deal.title",
@@ -137,7 +138,8 @@
     "n": "Deal.textAreaCustomField1",
     "t": "textarea",
     "l": "Kuponkód",
-    "ph": "Kuponkód"
+    "ph": "Kuponkód",
+    "ui": "line"
    },
    {
     "n": "Contact.utmCampaign",
@@ -284,7 +286,8 @@
     "n": "Deal.textCustomField3",
     "t": "text",
     "l": "Megjegyzés",
-    "ph": "Egyedi kívánság, kérés"
+    "ph": "Egyedi kívánság, kérés",
+    "ui": "area"
    },
    {
     "n": "Deal.title",
@@ -339,7 +342,8 @@
     "n": "Deal.textAreaCustomField1",
     "t": "textarea",
     "l": "Kuponkód",
-    "ph": "Kuponkód"
+    "ph": "Kuponkód",
+    "ui": "line"
    },
    {
     "n": "Deal.textCustomField13",
@@ -465,7 +469,8 @@
     "n": "Deal.textCustomField3",
     "t": "text",
     "l": "Megyjegyzés",
-    "ph": "Egyedi kívánság, kérés"
+    "ph": "Egyedi kívánság, kérés",
+    "ui": "area"
    },
    {
     "n": "Deal.textCustomField14",
@@ -527,7 +532,8 @@
     "n": "Deal.textAreaCustomField1",
     "t": "textarea",
     "l": "Kuponkód",
-    "ph": "Kuponkód"
+    "ph": "Kuponkód",
+    "ui": "line"
    },
    {
     "n": "Deal.textCustomField13",
@@ -697,7 +703,8 @@
     "n": "Deal.textCustomField3",
     "t": "text",
     "l": "Notes",
-    "ph": "Any special wishes or requests"
+    "ph": "Any special wishes or requests",
+    "ui": "area"
    },
    {
     "n": "Deal.title",
@@ -732,7 +739,8 @@
     "n": "Deal.textAreaCustomField1",
     "t": "textarea",
     "l": "Coupon code",
-    "ph": "Coupon code"
+    "ph": "Coupon code",
+    "ui": "line"
    },
    {
     "n": "Contact.utmSource",

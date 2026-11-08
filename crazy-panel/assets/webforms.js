@@ -44,7 +44,7 @@
 			'.cpwf *{box-sizing:border-box}.cpwf-f{margin:0 0 16px}.cpwf-l{display:block;font-weight:500;font-size:14px;color:var(--lb);margin:0 0 6px}.cpwf-l i{font-style:normal;color:var(--rq);margin-right:3px}' +
 			'.cpwf input[type=text],.cpwf input[type=email],.cpwf input[type=tel],.cpwf input[type=number],.cpwf input[type=date],.cpwf select,.cpwf textarea{display:block;width:100%;min-height:44px;margin:0;padding:10px 14px;font:16px/1.3 inherit;color:var(--tx);background:var(--in);border:1px solid var(--bd);border-radius:10px;box-shadow:none;outline:none;-webkit-appearance:none;appearance:none}' +
 			'.cpwf select{background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 15px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:36px}' +
-			'.cpwf textarea{min-height:70px;resize:vertical}.cpwf ::placeholder{color:var(--ph);opacity:1}' +
+			'.cpwf textarea{min-height:70px;resize:vertical}.cpwf textarea.cpwf-big{min-height:130px}.cpwf ::placeholder{color:var(--ph);opacity:1}' +
 			'.cpwf input:focus,.cpwf select:focus,.cpwf textarea:focus{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 25%,transparent)}' +
 			'.cpwf-ch{display:flex;flex-wrap:wrap;gap:6px}.cpwf-ch label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:7px 12px;border:1px solid var(--bd);border-radius:999px;font-size:14px;line-height:1.2;background:var(--in);color:var(--tx);user-select:none}' +
 			'.cpwf-ch input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}.cpwf-ch label:has(input:checked){background:var(--ac);border-color:var(--ac);color:var(--bt)}.cpwf-ch label:has(input:focus-visible){box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 35%,transparent)}' +
@@ -71,8 +71,9 @@
 				h += '<div class="cpwf-ch" role="group" aria-label="' + esc(x.l) + '">' + (x.o || []).map(function (o, j) { return '<label><input type="checkbox" name="' + esc(x.n) + '" value="' + esc(o) + '"' + (j === 0 ? ' id="' + fid + '"' : '') + '>' + esc(o) + '</label>'; }).join('') + '</div>';
 			} else if (x.t === 'select') {
 				h += '<select id="' + fid + '" name="' + esc(x.n) + '"' + (x.req ? ' required' : '') + '><option value="">' + esc(x.ph || T(en, ['Válassz…', 'Choose…'])) + '</option>' + (x.o || []).map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select>';
-			} else if (x.t === 'textarea') {
-				h += '<textarea id="' + fid + '" name="' + esc(x.n) + '" rows="2" placeholder="' + esc(x.ph) + '"' + (x.req ? ' required' : '') + '></textarea>';
+			} else if ((x.t === 'textarea' && x.ui !== 'line') || x.ui === 'area') {
+				/* v2.9.49: a megjelenés („ui”) független a mező típusától – a Megjegyzés nagy szövegdoboz, a Kuponkód egysoros */
+				h += '<textarea id="' + fid + '" name="' + esc(x.n) + '" rows="' + (x.ui === 'area' ? 5 : 2) + '"' + (x.ui === 'area' ? ' class="cpwf-big"' : '') + (x.t !== 'textarea' ? ' maxlength="500"' : '') + ' placeholder="' + esc(x.ph) + '"' + (x.req ? ' required' : '') + '></textarea>';
 			} else {
 				var ty = x.t === 'int' ? 'number' : (x.t === 'email' ? 'email' : (x.t === 'tel' ? 'tel' : (x.t === 'date' ? 'date' : 'text')));
 				var ac = x.n === 'Contact.name' ? ' autocomplete="name"' : (x.n === 'Contact.email' ? ' autocomplete="email"' : (x.n === 'Contact.mobile' ? ' autocomplete="tel"' : ''));
@@ -203,4 +204,31 @@
 		}
 	};
 	window.SmFormSettings = API;
+})();
+
+/* v2.9.49: az eventcrazy.hu „Ajánlatlista” sávjának „Ajánlatot kérek →” gombja eddig a Salesmate-űrlap ablakának adta át a kiválasztott
+ * szolgáltatásokat (iframe-cím paraméterrel). A panel űrlapjánál nincs ilyen ablak: itt a panel űrlapjában pipáljuk be őket, és odagörgetünk.
+ * A csempe-nevek → űrlap-értékek megfeleltetése ugyanaz, mint az oldal saját szkriptjében. */
+(function () {
+	var MAP = {"Csocsó":"Csocsó / Foosball","XXL csocsó":"XXL csocsó / XXL Foosball","Foosball":"Csocsó / Foosball","XXL Foosball":"XXL csocsó / XXL Foosball","Rendezvényfotó":"Rendezvényfotó","Rendezvényvideó":"Rendezvény videó","Ülőfoci":"Ülőfoci / Seated Football","Szelfigép":"Szelfigép","Selfie Stand":"SelfieLight","AI Karikatúra":"AI Karikatúra","Greenbox fotózás":"Greenbox","Overhead Spinner":"OverheadSpinner","CrazySpinner":"SpinnerClassic","AI Fotózás":"AI fotózás","Karaoke":"Karaoke","Élő zenekar":"Élőzene","Digitális Karikatúra":"Digitális Karikatúra","VR élmény":"VR Élmény","VIP Spinner":"VIP Spinner","Selfie tükör":"Selfie Tükör","Selfiebot":"SzelfiRobot","LED Tánctér":"LED Tánctér","Brain War":"Mindflex","CrazyCatch":"CrazyCatch","Crazy DJ":"DJ","CrazyLight":"CrazyLight","Crazy Beauty":"Crazy Beauty","Rendezvény fotó és videó":"Rendezvényfotó,Rendezvény videó"};
+	function fill(vals) {
+		var box = document.querySelector('.cpwf');
+		if (!box) { return false; }
+		var cbs = box.querySelectorAll('input[type=checkbox][name="Deal.multiSelectCustomField3"]');
+		for (var i = 0; i < cbs.length; i++) { if (vals.indexOf(cbs[i].value) > -1 && !cbs[i].checked) { cbs[i].checked = true; cbs[i].dispatchEvent(new Event('change', { bubbles: true })); } }
+		window.scrollTo({ top: box.getBoundingClientRect().top + window.scrollY - 90, behavior: 'instant' });
+		return true;
+	}
+	document.addEventListener('click', function (e) {
+		var b = e.target && e.target.closest ? e.target.closest('.ec-go') : null;
+		if (!b || document.querySelector('iframe[src*="salesmate.io/webforms"]')) { return; }
+		var sel = []; try { sel = JSON.parse(localStorage.getItem('ecAjanlatlista') || '[]'); } catch (x) {}
+		var vals = [];
+		sel.forEach(function (n) { String(MAP[n] || n).split(',').forEach(function (v) { if (vals.indexOf(v) < 0) { vals.push(v); } }); });
+		var bar = document.querySelector('.ec-bar'); if (bar) { bar.classList.remove('show'); }
+		if (fill(vals)) { return; }
+		/* az űrlap még nincs kirajzolva (lusta betöltés): betöltjük, és megvárjuk */
+		if (window.cpLoadForm) { try { window.cpLoadForm(); } catch (x) {} }
+		var n = 0, t = setInterval(function () { if (fill(vals) || ++n > 40) { clearInterval(t); } }, 150);
+	}, true);
 })();

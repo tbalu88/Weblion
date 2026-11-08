@@ -413,6 +413,24 @@ add_filter('cp_sx_sections', function ($S) {
 			),
 		);
 	}
+	/* ---------------- v2.9.49: új deal → Pumble (a Salesmate „Új deal → Pumble értesítés” workflow utódja) */
+	if (function_exists('cp_nt_hook_get')) {
+		$S['leadhook'] = array('n' => 'Új deal értesítés (Pumble)',
+			'd' => 'Minden új dealről (weboldal, Facebook, kézi felvétel) Pumble-üzenet megy ebbe a csatornába – ahová eddig a Salesmate küldte (pl. #new-leads). Pumble: a csatorna → Integrations / Incoming Webhooks → új webhook, a címét ide másold. Ha üres, az Értesítések közös csatornájába megy.',
+			'info' => function () {
+				$own = cp_nt_hook_get('lead_hook') !== ''; $common = cp_nt_hook_get('notif_hook') !== '';
+				$f = function_exists('cp_flows') ? (cp_flows()['pumble']['mode'] ?? '') : '';
+				return array(array('Hová megy', $own ? 'a saját „Új deal” csatornába' : ($common ? 'a közös értesítési csatornába (saját nincs megadva)' : 'sehová: nincs webhook'), $own ? 'ok' : 'bad'), array('Automatizmus', $f === 'live' ? 'élő' : ($f === 'shadow' ? 'árnyék (nem küld)' : 'ki'), $f === 'live' ? 'ok' : ''));
+			},
+			'fields' => array(
+				array('k' => 'hook', 't' => 'secret', 'l' => 'Pumble webhook az új dealekhez', 'ph' => 'https://api.pumble.com/…', 'chk' => 'cp_sx_pumble', 'has' => function () { return cp_nt_hook_get('lead_hook') !== ''; }, 'set' => function ($v) { cp_nt_hook_set('lead_hook', $v); }),
+			),
+			'acts' => array(
+				array('k' => 'test', 'l' => 'Próbaüzenet ebbe a csatornába', 'fn' => function () { $h = cp_nt_hook_get('lead_hook'); if ($h === '') { return new WP_Error('cp_sx', 'Nincs webhook megadva.'); } $r = cp_el_pumble('✅ Crazy panel – teszt: ide érkeznek az új dealek értesítései.', $h); return is_wp_error($r) ? $r : 'Próbaüzenet elküldve.'; }),
+			),
+		);
+	}
+
 	/* ---------------- v2.9.44: AI-használat – pontos tokenszámok a Claude válaszaiból, havonta és funkciónként */
 	if (function_exists('cp_ai_usage_months')) {
 		$S['aiuse'] = array('n' => 'AI-használat (tokenek)',

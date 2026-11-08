@@ -25,7 +25,7 @@
 	}
 	/* v1.79: csoportosítva; az „x:” kezdetűek a WordPress-adminból áthozott oldalak (közös mezőleírásból, settings-x.php) */
 	const SECS = [['me', 'Saját beállításaim', 0], ['-', 'Csapat', 1], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1],
-		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiók', 1], ['x:gcal', 'Google Naptár', 1], ['x:gdrive', 'Google Drive mentés', 1], ['ai', 'AI', 1], ['x:aiuse', 'AI-használat (tokenek)', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
+		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiók', 1], ['x:gcal', 'Google Naptár', 1], ['x:gdrive', 'Google Drive mentés', 1], ['ai', 'AI', 1], ['x:leadhook', 'Új deal értesítés (Pumble)', 1], ['x:aiuse', 'AI-használat (tokenek)', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
 		['-', 'Működés', 1], ['x:core', 'Kapacitás, szakaszok', 1], ['x:el', 'Kezelői elszámolás', 1], ['x:wl', 'Munkanapló', 1], ['x:portal', 'Ügyfélportál', 1], ['ct', 'Szerződésmodulok', 1], ['cut', 'Átállás', 1],
 		['-', 'Statisztika', 1], ['x:stat', 'Statisztikák', 1], ['x:digest', 'Összesítők', 1], ['wp', 'Tartalék: WordPress', 1]];
 	const secret = (name, has, ph) => '<input type="password" data-k="' + name + '" autocomplete="new-password" placeholder="' + esc(has ? 'beállítva – csak cseréhez írd be az újat' : ph) + '">' + (has ? '<label class="cs-chk"><input type="checkbox" data-k="' + name + '_clear"> törlés</label>' : '');

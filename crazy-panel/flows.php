@@ -137,7 +137,8 @@ function cp_flow_step($f, $s, $d, $mode) {
 		case 'pumble':
 			$txt = cp_flow_fill($s['v'], $d);
 			if ($mode === 'live') {
-				$hook = function_exists('cp_nt_hook_get') ? cp_nt_hook_get('notif_hook') : '';
+				/* v2.9.49: külön „Új deal” csatorna (pl. #new-leads), ha meg van adva; különben a közös értesítési csatorna */
+				$hook = function_exists('cp_nt_hook_get') ? (cp_nt_hook_get('lead_hook') !== '' ? cp_nt_hook_get('lead_hook') : cp_nt_hook_get('notif_hook')) : '';
 				$r = $hook !== '' && function_exists('cp_el_pumble') ? cp_el_pumble($txt, $hook) : new WP_Error('x', 'Nincs beállítva Pumble webhook');
 				cp_flow_log($f['id'], $id, $mode, 'pumble', $txt, '', '', is_wp_error($r) ? 'error' : 'done'); return;
 			}
