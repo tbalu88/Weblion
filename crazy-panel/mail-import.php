@@ -697,5 +697,9 @@ function cp_imp_ajax_fetch_now() {
 function cp_imp_sm_copy($hraw, $me) {
 	$q = preg_quote($me, '/');
 	$auth = preg_match('/^X-(Authenticated-Sender|Get-Message-Sender-Via):[^\n]*' . $q . '/mi', $hraw) || preg_match('/authenticated_id:\s*' . $q . '/i', $hraw);
-	return $auth && (bool) preg_match('/salesmate/i', $hraw);
+	if ($auth && preg_match('/salesmate/i', $hraw)) { return true; }
+	/* v2.9.33: a team inbox Auto BCC-je a Salesmate saját levelezőszerveréről jön (nem a mi szerverünkön át) –
+	   a mi szerverünk által rögzített Received sor a Salesmate gépét nevezi meg, és a levél Salesmate-es azonosítójú */
+	$h1 = preg_replace('/\r?\n[ \t]+/', ' ', $hraw);
+	return (bool) preg_match('/^X-Mailer:\s*Salesmate\.io\b/mi', $h1) && (bool) preg_match('/^Received:\s*from\s[^\n]*helo=[\w.-]*\.salesmate\.io\b/mi', $h1) && (bool) preg_match('/^Message-Id:\s*<[^>]*@salesmate\.io>/mi', $h1);
 }
