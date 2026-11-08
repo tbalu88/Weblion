@@ -8,6 +8,8 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/crm-filter.php';
+
 /* a fő pipeline szakaszai sorrendben (a Salesmate beállításai szerint, 2026. okt.) */
 function cp_crm_stages() {
 	return array('Érdeklődő / Megrendelő', 'Ajánlat kiküldve', 'Adatlap kiküldve', 'Szerződés kiküldve', 'Szerződés aláírva', 'Rendezvény felkészül', 'Rendezvény lement (G&R)', 'Pénzre várunk');
@@ -73,7 +75,13 @@ function cp_crm_list_data($a) {
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
 	$rq = function ($k) use ($a) { return isset($a[$k]) && is_scalar($a[$k]) ? trim((string) $a[$k]) : ''; };
 	$w = array('d.deleted_at IS NULL');
+	/* v2.9.53: összetett szűrő (crm-filter.php); állapot-feltétel nélkül a nyitottak */
+	$cfp = function_exists('cp_cf_parse') ? cp_cf_parse($a['cf'] ?? '') : null;
+	$cfw = $cfp ? cp_cf_where($cfp) : '';
+	if ($cfw !== '') { $w[] = $cfw; }
 	$st = $rq('st');
+	/* cégre/kontaktra szűrve (Deal 360°) minden állapot látszik, mint eddig */
+	if (isset($a['cf']) && !cp_cf_has_status($cfp) && $rq('co') === '' && $rq('ct') === '') { $st = 'Open'; }
 	if (in_array($st, array('Open', 'Won', 'Lost'), true)) { $w[] = $wpdb->prepare('d.status = %s', $st); }
 	$stage = $rq('stage');
 	if ($stage !== '') { $w[] = $wpdb->prepare('d.stage = %s', mb_substr($stage, 0, 80)); }
@@ -167,10 +175,17 @@ function cp_crm_board_data($a) {
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
 	/* nyitott deal-ek; „won” = a megnyertek is, amelyek rendezvénye még előttünk van (vagy 30 napon belül volt) */
 	$w = "d.status = 'Open'";
-	if (!empty($a['won'])) { $w = $wpdb->prepare("(d.status = 'Open' OR (d.status = 'Won' AND d.event_d >= %s))", wp_date('Y-m-d', time() - 30 * DAY_IN_SECONDS)); }
+	/* v2.9.53: összetett szűrő; ha van benne állapot-feltétel, az dönt (nem csak a nyitottak) */
+	$cfp = function_exists('cp_cf_parse') ? cp_cf_parse($a['cf'] ?? '') : null;
+	if ($cfp && cp_cf_has_status($cfp)) { $w = '1=1'; }
+	$cfw = $cfp ? cp_cf_where($cfp) : '';
+	if ($cfw !== '') { $w .= ' AND ' . $cfw; }
+	if (!empty($a['won']) && !$cfp) { $w = $wpdb->prepare("(d.status = 'Open' OR (d.status = 'Won' AND d.event_d >= %s))", wp_date('Y-m-d', time() - 30 * DAY_IN_SECONDS)); }
 	$own = isset($a['own']) && is_scalar($a['own']) ? (string) $a['own'] : '';
 	if ($own !== '' && ctype_digit($own)) { $w .= $wpdb->prepare(' AND d.owner_id = %d', (int) $own); }
-	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND $w ORDER BY d.event_d IS NULL, d.event_d ASC, d.id DESC LIMIT 2000", ARRAY_A);
+	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND $w ORDER BY d.event_d IS NULL, d.event_d ASC, d.id DESC LIMIT 2001", ARRAY_A);
+	$more = count((array) $rows) > 2000;
+	if ($more) { $rows = array_slice($rows, 0, 2000); }
 	$out = array();
 	foreach ((array) $rows as $r) { $out[] = cp_crm_list_row($r); }
 	/* a következő nyitott tevékenység deal-enként (a deal-hez vagy a kontaktjához kötve) – a kártya teendő-jelzéséhez */
@@ -187,7 +202,7 @@ function cp_crm_board_data($a) {
 	if ($out && function_exists('cp_ret_for_rows')) { $RT = cp_ret_for_rows($out); foreach ($out as &$x) { if (isset($RT[$x['id']])) { $x['ret'] = $RT[$x['id']]; } } unset($x); }
 	/* v1.84: kapacitás a rendezvény napján (capacity.php) – az első két szakasz jövőbeli dealjeinél */
 	if ($out && function_exists('cp_cap_for_rows')) { $K = cp_cap_for_rows($out); foreach ($out as &$x) { if (isset($K[$x['id']])) { $x['cap'] = $K[$x['id']]; } } unset($x); }
-	return array('rows' => $out, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
+	return array('rows' => $out, 'more' => $more, 'sync' => cp_crm_sync_at(), 'now' => wp_date('Y-m-d H:i'));
 }
 
 /* ------------------------------------------------------------ AJAX: deal-adatlap */
