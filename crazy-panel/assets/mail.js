@@ -363,12 +363,12 @@
 		});
 	}
 	/* v2.9.27: kockázatos csatolmány jelzése – a panel nem víruskereső, de a veszélyes típusokra figyelmeztet, és letöltés előtt rákérdez */
-	const ATT_HIGH = /\.(exe|scr|bat|cmd|com|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|iso|img|vhdx?|reg|cpl|dll|html?|svg|xhtml|mht|url|appx|msix)$/i;
+	const ATT_HIGH = /\.(exe|scr|bat|cmd|com|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|iso|img|vhdx?|reg|cpl|dll|html?|xhtml|mht|url|appx|msix)$/i;
 	const ATT_WARN = /\.(docm|dotm|xlsm|xltm|xlam|pptm|potm|ppsm|zip|rar|7z|gz|tgz|tar|cab|ace|arj|bz2|xz|rtf|one)$/i;
 	const attRisk = n => {
 		n = String(n || '');
 		if (/[‪-‮⁦-⁩]/.test(n) || /\.(pdf|docx?|xlsx?|jpe?g|png)\s{2,}/i.test(n) || /\.(pdf|docx?|xlsx?|jpe?g|png)\.(exe|scr|js|vbs|bat|cmd|com|hta|lnk)$/i.test(n)) return { lvl: 'high', why: 'a fájlnév álcázott (más típusnak mutatja magát, mint ami valójában)' };
-		if (ATT_HIGH.test(n)) return { lvl: 'high', why: /\.(html?|svg|xhtml|mht|url)$/i.test(n) ? 'weboldal- vagy hivatkozásfájl – gyakori adathalász-trükk' : 'futtatható / programfájl – megnyitva kárt okozhat' };
+		if (ATT_HIGH.test(n)) return { lvl: 'high', why: /\.(html?|xhtml|mht|url)$/i.test(n) ? 'weboldal- vagy hivatkozásfájl – gyakori adathalász-trükk' : 'futtatható / programfájl – megnyitva kárt okozhat' };
 		if (ATT_WARN.test(n)) return { lvl: 'warn', why: /\.(zip|rar|7z|gz|tgz|tar|cab|ace|arj|bz2|xz)$/i.test(n) ? 'tömörített fájl – a belsejét nem látjuk, ismeretlen feladótól gyanús' : 'makrót vagy beágyazott tartalmat hordozhat – makrót ne engedélyezz' };
 		return null;
 	};
@@ -381,7 +381,8 @@
 			const zr = a.dataset.zip ? (() => { try { return JSON.parse(a.dataset.zip); } catch (x) { return null; } })() : null;
 			if (zr && zr.lvl === 'ok') return;
 			if (zr && zr.lvl) {
-				const why = [zr.err, zr.enc ? 'jelszóval védett – a belsejét nem lehet ellenőrizni (kártevők gyakori trükkje)' : '', zr.risky && zr.risky.length ? 'veszélyes fájl van benne: ' + zr.risky.join(', ') : '', zr.nested && zr.nested.length ? 'újabb tömörített fájl van benne: ' + zr.nested.join(', ') : '', zr.macro && zr.macro.length ? 'makrós Office-fájl van benne: ' + zr.macro.join(', ') : '', zr.bomb ? 'kicsomagolva gyanúsan nagy („zip-bomba” lehet)' : ''].filter(Boolean);
+				const sh3 = l => l.slice(0, 3).join(', ') + (l.length > 3 ? ' … és még ' + (l.length - 3) : '');
+				const why = [zr.err, zr.enc ? 'jelszóval védett – a belsejét nem lehet ellenőrizni (kártevők gyakori trükkje)' : '', zr.risky && zr.risky.length ? 'veszélyes fájl van benne: ' + sh3(zr.risky) : '', zr.nested && zr.nested.length ? 'újabb tömörített fájl van benne: ' + sh3(zr.nested) : '', zr.macro && zr.macro.length ? 'makrós Office-fájl van benne: ' + sh3(zr.macro) : '', zr.bomb ? 'kicsomagolva gyanúsan nagy („zip-bomba” lehet)' : ''].filter(Boolean);
 				const m2 = (zr.lvl === 'high' ? '⚠ Veszélyes zip!\n\n' : 'Figyelem – ellenőrizd ezt a zipet.\n\n') + '„' + (a.dataset.rn || '') + '”\n' + (why.length ? why.map(x => '• ' + x).join('\n') : '• ismeretlen típusú fájlok vannak benne') + '\n\n' + (zr.lvl === 'high' ? 'Ismeretlen feladótól ne nyisd meg. ' : '') + 'Letöltöd mégis?';
 				if (!window.confirm(m2)) { e.preventDefault(); e.stopPropagation(); }
 				return;

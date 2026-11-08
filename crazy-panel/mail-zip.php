@@ -10,10 +10,10 @@ if (!defined('ABSPATH')) { exit; }
 function cp_zip_kind($n) {
 	$n = (string) $n;
 	if (preg_match('/[\x{202a}-\x{202e}\x{2066}-\x{2069}]/u', $n) || preg_match('/\.(pdf|docx?|xlsx?|jpe?g|png)\s{2,}/i', $n) || preg_match('/\.(pdf|docx?|xlsx?|jpe?g|png)\.(exe|scr|js|vbs|bat|cmd|com|hta|lnk)$/i', $n)) { return 'high'; }
-	if (preg_match('/\.(exe|scr|bat|cmd|com|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|iso|img|vhdx?|reg|cpl|dll|html?|svg|xhtml|mht|url|appx|msix|sh|app|dmg|pkg)$/i', $n)) { return 'high'; }
+	if (preg_match('/\.(exe|scr|bat|cmd|com|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|iso|img|vhdx?|reg|cpl|dll|html?|xhtml|mht|url|appx|msix|sh|app|dmg|pkg)$/i', $n)) { return 'high'; }
 	if (preg_match('/\.(zip|rar|7z|gz|tgz|tar|cab|ace|arj|bz2|xz)$/i', $n)) { return 'nest'; }
 	if (preg_match('/\.(docm|dotm|xlsm|xltm|xlam|pptm|potm|ppsm|rtf|one)$/i', $n)) { return 'warn'; }
-	if (preg_match('/\.(pdf|docx?|odt|xlsx?|ods|pptx?|odp|txt|csv|jpe?g|png|gif|webp|heic|heif|tiff?|bmp|mp4|mov|m4v|avi|mp3|wav|m4a)$/i', $n)) { return 'ok'; }
+	if (preg_match('/\.(pdf|docx?|odt|xlsx?|ods|pptx?|odp|txt|csv|jpe?g|png|gif|webp|heic|heif|tiff?|bmp|mp4|mov|m4v|avi|mp3|wav|m4a|svg|eps|ai|psd|indd|cdr|ttf|otf)$/i', $n)) { return 'ok'; }
 	return 'other';
 }
 function cp_zip_label($n) {
@@ -21,6 +21,8 @@ function cp_zip_label($n) {
 	if (preg_match('/\.(docx?|odt|rtf|txt)$/i', $n)) { return 'szöveg'; }
 	if (preg_match('/\.(xlsx?|ods|csv|pptx?|odp)$/i', $n)) { return 'táblázat/bemutató'; }
 	if (preg_match('/\.(jpe?g|png|gif|webp|heic|heif|tiff?|bmp)$/i', $n)) { return 'kép'; }
+	if (preg_match('/\.(svg|eps|ai|psd|indd|cdr)$/i', $n)) { return 'grafika/logó'; }
+	if (preg_match('/\.(ttf|otf)$/i', $n)) { return 'betűtípus'; }
 	if (preg_match('/\.(mp4|mov|m4v|avi)$/i', $n)) { return 'videó'; }
 	if (preg_match('/\.(mp3|wav|m4a)$/i', $n)) { return 'hang'; }
 	return 'egyéb';
@@ -46,9 +48,9 @@ function cp_zip_inspect($data) {
 		$total += (int) $st['size']; $comp += (int) $st['comp_size'];
 		if (!empty($st['encryption_method'])) { $out['enc'] = true; }
 		$k = cp_zip_kind($base);
-		if ($k === 'high' && count($out['risky']) < 10) { $out['risky'][] = $name; }
-		elseif ($k === 'nest' && count($out['nested']) < 10) { $out['nested'][] = $name; }
-		elseif ($k === 'warn' && count($out['macro']) < 10) { $out['macro'][] = $name; }
+		if ($k === 'high' && count($out['risky']) < 10) { $out['risky'][] = $base; }
+		elseif ($k === 'nest' && count($out['nested']) < 10) { $out['nested'][] = $base; }
+		elseif ($k === 'warn' && count($out['macro']) < 10) { $out['macro'][] = $base; }
 		elseif ($k === 'other') { $other++; }
 		if ($k === 'ok' || $k === 'other') { $lb = cp_zip_label($base); $out['kinds'][$lb] = ($out['kinds'][$lb] ?? 0) + 1; }
 	}
@@ -67,7 +69,7 @@ add_action('wp_ajax_cp_mail_att_zip', 'cp_zip_ajax');
 function cp_zip_ajax() {
 	if (!function_exists('cp_panel_authed') || !cp_panel_authed() || !hash_equals(cp_panel_csrf(), (string) wp_unslash($_REQUEST['t'] ?? ''))) { wp_send_json_error(array('msg' => 'auth'), 403); }
 	if (function_exists('cp_panel_can') && !cp_panel_can('mail') && !cp_panel_can('deals')) { wp_send_json_error(array('msg' => 'Nincs jogosultság.'), 403); }
-	$key = 'cp_zip_' . md5((int) ($_REQUEST['m'] ?? 0) . '|' . (int) ($_REQUEST['i'] ?? 0) . '|v1');
+	$key = 'cp_zip_' . md5((int) ($_REQUEST['m'] ?? 0) . '|' . (int) ($_REQUEST['i'] ?? 0) . '|v2');
 	$c = get_transient($key);
 	if (is_array($c)) { wp_send_json_success($c); }
 	@set_time_limit(40);
