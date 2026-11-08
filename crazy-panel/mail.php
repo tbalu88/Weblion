@@ -424,14 +424,18 @@ function cp_mail_ajax_threads() {
 	$w = array('1=1');
 	cp_mail_snooze_due();
 	$folder = sanitize_key(wp_unslash($_POST['folder'] ?? 'inbox'));
+	/* v2.9.40: keresésnél minden levél között (minden mappa és a lezártak is) – csak a Kuka és a Spam marad ki */
+	$qs = trim((string) wp_unslash($_POST['q'] ?? '')) !== '';
+	if ($qs && in_array($folder, array('inbox', 'archive', 'promo', 'sent', 'outbox', 'snooze'), true)) { $folder = 'all'; }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($folder === 'follow') { $w[] = $wpdb->prepare('FIND_IN_SET(%d, followers)', $me); }
 	/* v2.7.3: a beolvasáskor (postafiók, Salesmate) lezártként archivált régi levelezés a Beérkezettben látszik („Mind” fül);
 	   az Archív csak a kézzel archivált szálakat mutatja (azoknál a korábbi mappa ki van töltve) */
 	elseif ($folder === 'inbox') { $w[] = "(folder = 'inbox' OR (folder = 'archive' AND prev_folder = '' AND SUBSTRING_INDEX(tags, ',', 1) IN ('import','salesmate')))"; }
 	elseif ($folder === 'archive') { $w[] = "(folder = 'archive' AND NOT (prev_folder = '' AND SUBSTRING_INDEX(tags, ',', 1) IN ('import','salesmate')))"; }
+	elseif ($folder === 'all') { $w[] = "folder NOT IN ('trash','spam')"; }
 	elseif ($folder !== '') { $w[] = $wpdb->prepare('folder = %s', $folder); }
-	$tab = sanitize_key(wp_unslash($_POST['tab'] ?? 'open'));
+	$tab = $qs ? 'all' : sanitize_key(wp_unslash($_POST['tab'] ?? 'open'));
 	if ($tab === 'open') { $w[] = "status = 'open'"; }
 	if ($tab === 'unassigned') { $w[] = 'assignee_uid IS NULL'; }
 	/* v1.88: „Csak olvasatlan” gyorsszűrő */
