@@ -684,7 +684,8 @@
 .ml-tgbar .ml-tg,.ml-ttags .ml-tg{height:24px;line-height:24px;font-size:12.5px;max-width:200px}
 .ml-tgbar small{font-size:12px}
 .ml-tgbar .ml-link{font-size:12.5px;margin-left:auto}
-.ml-ttags{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 12px}
+.ml-ttags{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 12px;padding:0 12px}
+@media (max-width:760px){.ml-read .ml-ttags{padding:0 6px}}
 .ml-tadd{border:1px dashed #C9C2B8;background:transparent;border-radius:999px;height:24px;padding:0 10px;font:500 12.5px Inter,sans-serif;color:#656973;cursor:pointer}
 .ml-tadd:hover{border-color:#8E877D;color:var(--ink)}
 .ml-tgpop{position:fixed;z-index:60;display:flex;flex-direction:column;max-height:340px;padding:6px;overflow:hidden}
