@@ -225,6 +225,9 @@ if (!Object.keys(H).some(k => k.toLowerCase() === 'accesstoken')) { stat('Nem ka
 stat('Belépés rendben (' + Object.keys(H).join(', ') + '). Indul…');
 let errs = 0;
 let tokAt = H.accessToken || H.accesstoken || '', wait403 = null, bad403 = 0, stop = false;
+/* v2.9.35: a 403 nem mindig lejárt kulcs – egy beszélgetéshez (pl. másik team inbox) nincs jogosultság. Ilyenkor egy biztosan
+   működő kérés újrapróbálásával döntünk: ha az megy, a tiltott elemet kihagyjuk és megyünk tovább. */
+let lastOk = '', noAcc = 0;
 const curTok = () => H.accessToken || H.accesstoken || '';
 /* 403: a kulcs lejárt → megvárjuk, amíg a Salesmate újat használ (egy kattintás a felületen), utána folytatjuk */
 const refresh = async () => {
@@ -240,7 +243,7 @@ const refresh = async () => {
 };
 /* ha kiesik az internet: várunk, amíg visszajön, és onnan folytatjuk */
 const online = async () => { if (navigator.onLine) return; stat('Megszakadt az internetkapcsolat – várok, és magától folytatom, amint visszajön…'); while (!navigator.onLine) await new Promise(r => setTimeout(r, 2000)); await new Promise(r => setTimeout(r, 3000)); };
-const get = async (p, cx) => { if (stop) return null; for (let t = 0; t < 3; t++) { await online(); if (wait403) await wait403; if (stop) return null; const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000); try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include', signal: ac.signal }); clearTimeout(to); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (r.status === 401 || r.status === 403) { bad403++; if (bad403 > 40) { stop = true; stat('A Salesmate folyamatosan elutasítja a kéréseket (403) – a program megállt. Küldj képet erről a dobozról.'); return null; } await refresh(); continue; } bad403 = 0; if (!r.ok) { errs++; if (cx) cx.bad = 1; if (errs <= 8) log('HTTP ' + r.status + ': ' + p.slice(0, 90)); return null; } const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { clearTimeout(to); if (!navigator.onLine) { t--; continue; } errs++; if (cx) cx.bad = 1; if (errs <= 8) log('hiba (' + (e.name || e.message) + '): ' + p.slice(0, 80)); await new Promise(z => setTimeout(z, 1500)); } } return null; };
+const get = async (p, cx) => { if (stop) return null; for (let t = 0; t < 3; t++) { await online(); if (wait403) await wait403; if (stop) return null; const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000); try { const r = await oFetch(location.origin + p, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include', signal: ac.signal }); clearTimeout(to); if (r.status === 429) { await new Promise(z => setTimeout(z, 3000 * (t + 1))); continue; } if (r.status === 401 || r.status === 403) { if (lastOk && lastOk !== p) { const c = await oFetch(location.origin + lastOk, { headers: Object.assign({ Accept: 'application/json' }, H), credentials: 'include' }).catch(() => null); if (c && c.ok) { noAcc++; if (noAcc <= 8) log('Nincs hozzáférésed, kihagyva: ' + p.slice(0, 70)); return null; } } bad403++; if (bad403 > 40) { stop = true; stat('A Salesmate folyamatosan elutasítja a kéréseket (403) – a program megállt. Küldj képet erről a dobozról.'); return null; } await refresh(); continue; } bad403 = 0; if (r.ok) lastOk = p; if (!r.ok) { errs++; if (cx) cx.bad = 1; if (errs <= 8) log('HTTP ' + r.status + ': ' + p.slice(0, 90)); return null; } const j = await r.json(); return j && j.Data !== undefined ? j.Data : j; } catch (e) { clearTimeout(to); if (!navigator.onLine) { t--; continue; } errs++; if (cx) cx.bad = 1; if (errs <= 8) log('hiba (' + (e.name || e.message) + '): ' + p.slice(0, 80)); await new Promise(z => setTimeout(z, 1500)); } } return null; };
 const gap = () => new Promise(r => setTimeout(r, 250));
 const TYPES = 'EmailReceived,EmailSent,ScheduledEmail,TeamInboxConversationEmailSent,TeamInboxConversationEmailReceived,SequenceEmailSent,SequenceEmailReceived,SequenceTeamInboxEmailSent,SequenceTeamInboxEmailReceived,MarketingAutomationEmailSent';
 const pad = n => String(n).padStart(2, '0');
@@ -296,7 +299,7 @@ async function worker1() { if (!IDS.length) return; const id = IDS[next++]; awai
 if (!stop) await Promise.all([worker(), worker()]);
 XMLHttpRequest.prototype.setRequestHeader = oSet; window.fetch = oFetch;
 save();
-stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + part + ' fájl a Letöltések mappában (salesmate-levelek-01.json …). ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (failedN ? failedN + ' deal hibára futott – ezeket a következő program újra megpróbálja. ' : '') + '\nMost töltsd be a fájlokat a panel admin oldalán („Fájlok betöltése”).');
+stat('KÉSZ ✓ ' + IDS.length + ' deal, ' + mails + ' levél, ' + part + ' fájl a Letöltések mappában (salesmate-levelek-01.json …). ' + (skipped ? skipped + ' friss, olvasatlan beszélgetést kihagytam. ' : '') + (failedN ? failedN + ' deal hibára futott – ezeket a következő program újra megpróbálja. ' : '') + (noAcc ? noAcc + ' beszélgetéshez nincs hozzáférésed (kihagyva). ' : '') + '\nMost töltsd be a fájlokat a panel admin oldalán („Fájlok betöltése”).');
 })();
 JS;
 	return str_replace(array('__IDS__', '__DEST__'), array(wp_json_encode($ids), wp_json_encode($url)), $js);
