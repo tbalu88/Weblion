@@ -17,11 +17,12 @@ function cp_crm_source_on() {
 	if ($on !== null) { return $on; }
 	$on = false;
 	if (get_option('cp_crm_source', '1') !== '1' || !function_exists('cp_crm_db_ok') || !cp_crm_db_ok()) { return $on; }
-	if (function_exists('cp_crm_importing') && cp_crm_importing()) { return $on; }
 	$st = cp_crm_state();
 	$p = cp_panel_opts();
-	/* v1.99.1: ha a panel a fő rendszer, a frissességet nem nézzük (nincs mihez képest) – soha nem esik vissza a Salesmate-re */
-	if (!(function_exists('cp_crm_primary') && cp_crm_primary()) && (empty($st['last_ok']) || time() - (int) $st['last_ok'] > 30 * MINUTE_IN_SECONDS)) { return $on; }
+	/* v2.9.52: a saját táblákból olvasunk, amint az első teljes áthozatal megvolt – a napi újraolvasás (_redo) vagy egy
+	   Salesmate-kiesés alatt sem esünk vissza a (lassú / elérhetetlen) Salesmate-olvasásra; a frissesség a szinkron
+	   állapotában és a felügyeleti riasztásban látszik */
+	foreach (cp_crm_mods() as $m => $x) { if (empty($st[$m . '_full_at'])) { return $on; } }
 	/* a rendezvény dátuma a saját táblában az event_d oszlop (dateCustomField1) */
 	if ($p['f_date'] !== cp_crm_spec('deal')['event_d'][0]) { return $on; }
 	$on = true;

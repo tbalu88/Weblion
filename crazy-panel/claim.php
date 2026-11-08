@@ -124,10 +124,15 @@ function cp_claim_uid_of($sm) {
 	return 0;
 }
 function cp_claim_sm_sender($text) {
-	$norm = function ($s) { return trim(preg_replace('/\s+/u', ' ', mb_strtolower(remove_accents((string) $s)))); };
-	$t = $norm($text);
-	$own = preg_split('/\n\s*(on .{6,120} wrote:|.{6,160} irta:|-{2,}\s*(original message|eredeti uzenet)|from:\s|felado:\s|>)/u', $t, 2)[0];
-	$own = preg_split('/(on .{6,120} wrote:|.{6,160} irta:|-{2,}\s*(original message|eredeti uzenet))/u', $own, 2)[0];
+	/* v2.9.52: soronként normalizálva (a sortörések megmaradnak), és a levél saját része az első, sor elején álló idézet-fejléc előttig */
+	$norm = function ($s) { return trim(preg_replace('/[ \t]+/u', ' ', mb_strtolower(remove_accents((string) $s)))); };
+	$own = array();
+	foreach (preg_split('/\r?\n/u', (string) $text) as $line) {
+		$l = $norm($line);
+		if (preg_match('/^(>|-{2,}\s*(original message|eredeti uzenet|forwarded message|tovabbitott uzenet)|(from|felado|kuldo)\s*:|on .{3,160} wrote:$|.{3,160} irta:$|\d{4}\. .{3,80} irta:)/u', $l)) { break; }
+		$own[] = $l;
+	}
+	$own = implode("\n", $own);
 	$hit = array();
 	foreach (cp_claim_pool() as $sm) {
 		$n = $norm(cp_claim_name_of($sm)); if ($n === '' || mb_strpos($n, ' ') === false) { continue; }

@@ -34,8 +34,10 @@ function cp_smh_follow($tid, $did) {
 	$cur = (int) $wpdb->get_var($wpdb->prepare("SELECT deal_id FROM $T WHERE id = %d", $tid));
 	if (!$tid || !$did || $cur === (int) $did) { return 0; }
 	if (function_exists('cp_imp_deal_manual') && cp_imp_deal_manual($tid)) { return 0; }
-	/* ha a Salesmate ugyanazt a szálat egy napon belül már egy másik dealhez rendelte (pl. az ügyfél több dealjén is látszik), az első marad */
-	if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'autodeal' AND text LIKE %s AND created_at >= %s", $tid, 'Deal a Salesmate szerint:%', gmdate('Y-m-d H:i:s', time() - DAY_IN_SECONDS)))) { return 0; }
+	/* v2.9.52: ha a Salesmate szerinti áthelyezés egyszer már megtörtént, az marad (különben két deal között ide-oda vándorolt a szál) */
+	if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'autodeal' AND text LIKE %s", $tid, 'Deal a Salesmate szerint:%'))) { return 0; }
+	/* törölt dealhez nem visszük */
+	if (!(int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_crm_t('deals') . ' WHERE id = %d AND deleted_at IS NULL', $did))) { return 0; }
 	$wpdb->update($T, array('deal_id' => (int) $did), array('id' => (int) $tid));
 	$title = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $did));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $tid, 'kind' => 'autodeal', 'text' => mb_substr('Deal a Salesmate szerint: ' . ($title !== '' ? $title : '#' . $did), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
@@ -81,8 +83,9 @@ function cp_smh_import($raw) {
 			if ($ex) { $st['moved'] += cp_smh_follow($ex, $did); $st['dup']++; continue; }
 			/* már megvan a postafiókból vagy idézetből (azonos irány, ugyanannál az ügyfélnél, ±10 percen belül)? */
 			/* v2.9.34: már megvan a postafiókból vagy idézetből (azonos irány, ±10 perc, az ügyfél a szál ügyfele, címzettje vagy feladója) → a szál oda kerül, ahol a Salesmate-ben van */
-			$lk = '%' . $wpdb->esc_like($other['e']) . '%';
-			$dupe = (int) $wpdb->get_var($wpdb->prepare("SELECT m.thread_id FROM $M m JOIN $T t ON t.id = m.thread_id WHERE m.dir = %s AND m.sent_at BETWEEN %s AND %s AND (t.contact_email = %s OR m.to_list LIKE %s OR m.cc_list LIKE %s OR LOWER(m.from_email) = %s) ORDER BY m.id DESC LIMIT 1", $out ? 'out' : 'in', gmdate('Y-m-d H:i:s', $ts - 600), gmdate('Y-m-d H:i:s', $ts + 600), $other['e'], $lk, $lk, $other['e']));
+			/* v2.9.52: pontos címegyezés („Név <cím>” vagy önálló cím a listában) – a részszöveg (anna@… ↔ xanna@…) téves szálat talált */
+			$ea = '%<' . $wpdb->esc_like($other['e']) . '>%'; $eb = '%, ' . $wpdb->esc_like($other['e']) . ',%';
+			$dupe = (int) $wpdb->get_var($wpdb->prepare("SELECT m.thread_id FROM $M m JOIN $T t ON t.id = m.thread_id WHERE m.dir = %s AND m.sent_at BETWEEN %s AND %s AND (LOWER(t.contact_email) = %s OR LOWER(m.to_list) LIKE %s OR CONCAT(', ', LOWER(m.to_list), ',') LIKE %s OR LOWER(m.cc_list) LIKE %s OR CONCAT(', ', LOWER(m.cc_list), ',') LIKE %s OR LOWER(m.from_email) = %s) ORDER BY m.id DESC LIMIT 1", $out ? 'out' : 'in', gmdate('Y-m-d H:i:s', $ts - 600), gmdate('Y-m-d H:i:s', $ts + 600), $other['e'], $ea, $eb, $ea, $eb, $other['e']));
 			if ($dupe) { $st['moved'] += cp_smh_follow($dupe, $did); $st['dup']++; continue; }
 			if (!preg_match('/<[a-z][^>]*>/i', $body)) { $body = '<p>' . str_replace("\n", '<br>', esc_html(str_replace("\r", '', $body))) . '</p>'; }
 			$body = cp_smh_strip_css(function_exists('cp_mail_clean') ? cp_mail_clean(cp_smh_strip_css($body)) : wp_kses_post(cp_smh_strip_css($body)));

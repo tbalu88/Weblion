@@ -136,6 +136,8 @@ function cp_flow_step($f, $s, $d, $mode) {
 			cp_flow_log($f['id'], $id, $mode, 'set_stage', 'Szakaszt váltana: ' . $d['stage'] . ' → ' . $s['v'], 'stage', $s['v']); return;
 		case 'pumble':
 			$txt = cp_flow_fill($s['v'], $d);
+			/* v2.9.52: egy dealről csak egyszer (ha egy futás félbeszakadt és újraindul, nem megy ki újra) */
+			if ($mode === 'live' && (int) $GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare('SELECT COUNT(*) FROM ' . cp_flow_t() . " WHERE flow = %s AND deal_id = %d AND action = 'pumble' AND mode = 'live' AND result = 'done'", $f['id'], $id))) { return; }
 			if ($mode === 'live' && function_exists('cp_ch_on') && !cp_ch_on('newdeal')) { cp_flow_log($f['id'], $id, $mode, 'pumble', 'Kikapcsolva (Beállítások → Értesítések): ' . $txt, '', '', 'skipped'); return; }
 			if ($mode === 'live') {
 				/* v2.9.49: külön „Új deal” csatorna (pl. #new-leads), ha meg van adva; különben a közös értesítési csatorna */
@@ -187,6 +189,8 @@ function cp_flow_tick() {
 	/* v2.9.30: új deal = az utolsó 2 napban létrejött, még nem látott deal. A Salesmate keresője néha kihagy dealt, a szinkron
 	   később (kisebb azonosítóval) pótolja – az azonosító-vízjel ezeket átugrotta. A látott azonosítók listája a 2 napos ablakon belül marad. */
 	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT id FROM $D WHERE created_at > %s ORDER BY id LIMIT 500", gmdate('Y-m-d H:i:s', time() - 2 * DAY_IN_SECONDS)), ARRAY_A);
+	/* v2.9.52: adatbázis-hiba esetén nem írjuk felül a „látott” listát (különben az utolsó 2 nap minden dealje újra lefutna) */
+	if ($wpdb->last_error !== '') { delete_transient('cp_flow_lock'); return; }
 	$ids = array_map(function ($r) { return (int) $r['id']; }, $rows);
 	if (!isset($st['seen']) || !is_array($st['seen'])) { $st['seen'] = array_fill_keys(array_filter($ids, function ($i) use ($st) { return $i <= (int) $st['did']; }), 1); }
 	$new = array_values(array_filter($ids, function ($i) use ($st) { return !isset($st['seen'][$i]); }));

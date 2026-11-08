@@ -224,19 +224,19 @@ function cp_wf_create($lid) {
 	global $wpdb;
 	if (!function_exists('cp_crm_t') || !function_exists('cp_sm_request')) { return new WP_Error('cp_wf', 'A CRM nem elérhető.'); }
 	/* egyszerre csak egy folyamat dolgozzon ugyanazon a megkeresésen */
-	$lk = 'cp_wf_lk_' . $lid;
-	if (get_transient($lk)) { return new WP_Error('cp_wf', 'Folyamatban.'); }
-	set_transient($lk, 1, 120);
+	/* v2.9.52: atomi zár (add_option csak egyszer sikerülhet), 10 perces lejárattal – a tranziens két párhuzamos kérésnél mindkettőt átengedhette */
+	$lk = 'cp_wf_lk_' . (int) $lid;
+	if (!cp_wf_lock($lk)) { return new WP_Error('cp_wf', 'Folyamatban.'); }
 	$r = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_lead_t() . ' WHERE id = %d', $lid), ARRAY_A);
-	if (!$r) { delete_transient($lk); return new WP_Error('cp_wf', 'Nincs ilyen megkeresés.'); }
-	if (!empty($r['deal_id'])) { cp_wf_queue_del($lid); delete_transient($lk); return (int) $r['deal_id']; }
+	if (!$r) { delete_option($lk); return new WP_Error('cp_wf', 'Nincs ilyen megkeresés.'); }
+	if (!empty($r['deal_id'])) { cp_wf_queue_del($lid); delete_option($lk); return (int) $r['deal_id']; }
 	$def = cp_wf_def((string) $r['form_id']);
 	$pairs = json_decode((string) $r['data'], true) ?: array();
-	if (!$def) { cp_wf_queue_del($lid); delete_transient($lk); return new WP_Error('cp_wf', 'Ismeretlen űrlap.'); }
+	if (!$def) { cp_wf_queue_del($lid); delete_option($lk); return new WP_Error('cp_wf', 'Ismeretlen űrlap.'); }
 	$plan = cp_wf_plan($lid, $pairs, (string) $r['page'], $def['feat']);
 	$tags = implode(',', (array) ($def['tags'] ?? array()));
 	$name = (string) ($pairs['Contact.name'] ?? ''); $email = sanitize_email((string) ($pairs['Contact.email'] ?? '')); $phone = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) ($pairs['Contact.mobile'] ?? '')), 0, 40);
-	$fail = function ($msg) use ($lk) { delete_transient($lk); return new WP_Error('cp_wf', $msg); };
+	$fail = function ($msg) use ($lk) { delete_option($lk); return new WP_Error('cp_wf', $msg); };
 
 	/* kontakt: v2.9.46 – mint a Salesmate: azonos e-mail-cím → a legutóbbi meglévő kontakt (a név eltérhet); különben új */
 	$q0 = cp_opt_fresh('cp_wf_q');
@@ -273,8 +273,14 @@ function cp_wf_create($lid) {
 		$body[$k] = $v;
 	}
 	/* v2.9.21: ha egy korábbi próbálkozásnál a Salesmate létrehozta a dealt, de a válasz nem jött meg (időtúllépés), a szinkron már behozta – azt használjuk, nem hozunk létre másodikat */
-	$id = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . ' WHERE contact_id = %d AND deleted_at IS NULL AND created_at >= %s ORDER BY id LIMIT 1', $cid, gmdate('Y-m-d H:i:s', strtotime($r['created_at'] . ' UTC') - 120)));
+	/* v2.9.52: csak akkor, ha ennél a megkeresésnél már volt deal-létrehozási kísérlet, és a deal nem tartozik másik megkereséshez
+	   (különben az ügyfél ugyanakkor beküldött második űrlapja az elsőhöz olvadt volna) */
+	$id = 0;
+	if (is_array($q0) && !empty($q0[$lid]['att'])) {
+		$id = (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d WHERE d.contact_id = %d AND d.deleted_at IS NULL AND d.created_at >= %s AND NOT EXISTS (SELECT 1 FROM ' . cp_lead_t() . ' l WHERE l.deal_id = d.id AND l.id <> %d) ORDER BY d.id LIMIT 1', $cid, gmdate('Y-m-d H:i:s', strtotime($r['created_at'] . ' UTC') - 120), $lid));
+	}
 	if (!$id) {
+		cp_wf_lead_mark($lid, 'att', 1);
 		$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
 		if (is_wp_error($dr)) { return $fail('A deal-t nem sikerült létrehozni: ' . $dr->get_error_message()); }
 		$id = cp_crm_new_id($dr);
@@ -287,7 +293,7 @@ function cp_wf_create($lid) {
 	if (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'created', 'old_val' => '', 'new_val' => 'létrehozva a weboldal űrlapjából (' . $def['name'] . ')', 'by_user' => 'Weboldal-űrlap', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
-	delete_transient($lk);
+	delete_option($lk);
 	return $id;
 }
 
@@ -303,9 +309,19 @@ function cp_wf_plan($lid, $pairs, $page, $feat) {
 }
 
 /* a megkeresés kontaktja (újrapróbáláshoz) – a sorban tartva */
-function cp_wf_lead_cid($lid, $cid) {
+function cp_wf_lead_cid($lid, $cid) { cp_wf_lead_mark($lid, 'c', (int) $cid); }
+function cp_wf_lead_mark($lid, $k, $v) {
 	$q = cp_opt_fresh('cp_wf_q'); if (!is_array($q)) { $q = array(); }
-	if (isset($q[$lid])) { $q[$lid]['c'] = (int) $cid; update_option('cp_wf_q', $q, false); }
+	if (isset($q[$lid])) { $q[$lid][$k] = $v; update_option('cp_wf_q', $q, false); }
+}
+/* atomi zár: az add_option INSERT-je csak egy kérésnek sikerül; a lejárt zárat (összeomlott kérés) átvesszük */
+function cp_wf_lock($lk, $ttl = 600) {
+	if (add_option($lk, time() + $ttl, '', false)) { return true; }
+	global $wpdb;
+	$exp = (int) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $lk));
+	if ($exp > time()) { return false; }
+	/* lejárt: csak az veheti át, akinek a feltételes UPDATE sikerül */
+	return (bool) $wpdb->query($wpdb->prepare("UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s", (string) (time() + $ttl), $lk, (string) $exp));
 }
 
 /* ------------------------------------------------------------ újrapróbálás (10 percenként, a CRM-ütemmel) */
@@ -315,8 +331,9 @@ add_action('cp_crm_tick', function () {
 	$q = cp_opt_fresh('cp_wf_q');
 	if (!is_array($q) || !$q) { return; }
 	global $wpdb;
-	foreach (array_slice($q, 0, 5, true) as $lid => $x) {
-		if (time() - (int) ($x['t'] ?? 0) < 120) { continue; } /* a beküldés még dolgozik rajta */
+	/* csak az esedékesek (a beküldés már nem dolgozik rajta, a visszavárás letelt) – a várakozók ne foglalják az 5 helyet */
+	$due = array_filter($q, function ($x) { return time() - (int) ($x['t'] ?? 0) >= 120; });
+	foreach (array_slice($due, 0, 5, true) as $lid => $x) {
 		$res = cp_wf_create((int) $lid);
 		if (!is_wp_error($res)) {
 			$wpdb->update(cp_cut_t(), array('status' => 'live', 'deal_id' => (int) $res, 'checked_at' => gmdate('Y-m-d H:i:s')), array('ref' => 'form:' . (int) $lid));
@@ -328,7 +345,11 @@ add_action('cp_crm_tick', function () {
 		if ($q2[$lid]['n'] === 3 && function_exists('cp_notify') && function_exists('cp_pu_data')) {
 			foreach (cp_pu_data()['list'] as $uid => $u) { if (!empty($u['a']) && ($u['r'] ?? '') === 'admin') { cp_notify((int) $uid, 'lead_fail', 'Egy weboldalas ajánlatkérésből nem sikerült deal-t létrehozni (' . $q2[$lid]['e'] . ') – a Megkeresések között megvan, a panel tovább próbálja.', 'deals:leads', 'Crazy panel'); } }
 		}
-		if ($q2[$lid]['n'] >= 30) { unset($q2[$lid]); } /* kb. 5 óra után feladja – a megkeresés a listában marad */
+		/* v2.9.52: nem dobjuk el – 30 próba (kb. 5 óra) után óránként próbál tovább, és egyszer újra szól */
+		if ($q2[$lid]['n'] >= 30) { $q2[$lid]['t'] = time() + 3600 - 120; }
+		if ($q2[$lid]['n'] === 30 && function_exists('cp_notify') && function_exists('cp_pu_data')) {
+			foreach (cp_pu_data()['list'] as $uid => $u) { if (!empty($u['a']) && ($u['r'] ?? '') === 'admin') { cp_notify((int) $uid, 'lead_fail', 'Egy weboldalas ajánlatkérésből 5 óra után sem sikerült deal-t létrehozni (' . $q2[$lid]['e'] . ') – a panel ezután óránként próbálja; a Megkeresések között kézzel is létrehozható.', 'deals:leads', 'Crazy panel'); } }
+		}
 		update_option('cp_wf_q', $q2, false);
 	}
 }, 25);

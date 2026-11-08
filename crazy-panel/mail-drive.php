@@ -53,10 +53,16 @@ function cp_mdr_month_folder($ymd) {
 	$mf = cp_mdr_folder($yf, $name);
 	return is_wp_error($mf) ? $mf : array('id' => $mf, 'name' => $name, 'year' => $y, 'yf' => $yf);
 }
-function cp_mdr_find_file($folder, $name) {
+/* v2.9.52: azonos név mellett a tartalmat is összevetjük (md5) – ha más, az nem „már fent van” */
+function cp_mdr_find_file($folder, $name, $md5 = '') {
 	$q = cp_mdr_q($folder) . ' in parents and name = ' . cp_mdr_q($name) . ' and trashed = false';
-	$j = cp_mdr_json(cp_gdb_api('GET', CP_MDR_API . '?' . http_build_query(array('q' => $q, 'fields' => 'files(id)', 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'corpora' => 'allDrives'))));
-	return is_wp_error($j) ? $j : (string) ($j['files'][0]['id'] ?? '');
+	$j = cp_mdr_json(cp_gdb_api('GET', CP_MDR_API . '?' . http_build_query(array('q' => $q, 'fields' => 'files(id,md5Checksum)', 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'corpora' => 'allDrives'))));
+	if (is_wp_error($j)) { return $j; }
+	$files = (array) ($j['files'] ?? array());
+	if (!$files) { return ''; }
+	if ($md5 === '') { return (string) $files[0]['id']; }
+	foreach ($files as $f) { if (($f['md5Checksum'] ?? '') === $md5) { return (string) $f['id']; } }
+	return '-'; /* van ilyen nevű, de más tartalmú */
 }
 /* feltöltés (multipart); $as_doc: Google-dokumentummá alakítva (szövegfelismerés) */
 function cp_mdr_upload($parent, $name, $data, $mime, $as_doc = false) {
@@ -206,8 +212,15 @@ function cp_mdr_save($mid, $i, $by = '') {
 	$dsrc = $src;
 	$f = cp_mdr_month_folder($d);
 	if (is_wp_error($f)) { return $f; }
-	$ex = cp_mdr_find_file($f['id'], $name);
+	$ex = cp_mdr_find_file($f['id'], $name, md5($data));
 	if (is_wp_error($ex)) { return $ex; }
+	if ($ex === '-') {
+		/* más számla ugyanezzel a fájlnévvel: egyedi névvel töltjük fel (a levél azonosítójával) */
+		$name = preg_replace('/(\.pdf)$/i', '', $name) . ' (' . (int) $mid . ').pdf';
+		$ex = cp_mdr_find_file($f['id'], $name, md5($data));
+		if (is_wp_error($ex)) { return $ex; }
+		if ($ex === '-') { $ex = ''; }
+	}
 	if ($ex !== '') { $id = $ex; $src = 'van'; }
 	else { $id = cp_mdr_upload($f['id'], $name, $data, 'application/pdf'); if (is_wp_error($id)) { return $id; } }
 	$dv = array('id' => $id, 'f' => $f['name'], 'y' => $f['year'], 'd' => $d, 's' => $dsrc, 'k' => $ex !== '' ? 1 : 0);

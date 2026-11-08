@@ -305,17 +305,27 @@ function cp_imp_relink($tid, $email, $at) {
 	if ($cur) {
 		/* v2.9.34: mint a Salesmate-ben – a dealen lévő szál a dealen marad (lezárt dealről sem visszük át másikra);
 		   csak a törölt dealen ülő vagy deal nélküli szálhoz keresünk dealt */
-		$d = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $cur), ARRAY_A);
-		if ($d && empty($d['deleted_at'])) { return; }
+		$d = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at, closed_at, event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $cur), ARRAY_A);
+		/* v2.9.52 kivétel: visszatérő ügyfél új megkeresése – a szál a régi, lezárt dealhez került, mert az új deal még nem
+		   létezett; ha a szál a régi deal lezárása (rendezvénye) UTÁN indult, és azóta jött egy nyitott deal, oda kerül */
+		$late = false;
+		if ($d && empty($d['deleted_at']) && $d['status'] !== 'Open') {
+			$tc = (string) $wpdb->get_var($wpdb->prepare('SELECT created_at FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid));
+			$end = !empty($d['closed_at']) ? (string) $d['closed_at'] : (!empty($d['event_d']) ? $d['event_d'] . ' 23:59:59' : '');
+			$sm = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'autodeal' AND text LIKE %s", $tid, 'Deal a Salesmate szerint:%'));
+			$late = $tc !== '' && $end !== '' && $tc > $end && !$sm;
+		}
+		if ($d && empty($d['deleted_at']) && !$late) { return; }
 	}
 	if (cp_imp_deal_manual($tid)) { return; }
 	$best = cp_imp_pick_deal($email, $at);
 	if (!$best || $best === $cur) { return; }
 	$st = (string) $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
+	if (!empty($late) && $st !== 'Open') { return; } /* lezártról csak nyitottra */
 
 	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $best), array('id' => $tid));
 	$title = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
-	$wpdb->insert(cp_mail_t('events'), array('thread_id' => $tid, 'kind' => 'autodeal', 'text' => mb_substr(($cur ? 'Deal automatikusan áthelyezve (az ügyfél nyitott dealje): ' : 'Deal automatikusan csatolva: ') . ($title !== '' ? $title : '#' . $best), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+	$wpdb->insert(cp_mail_t('events'), array('thread_id' => $tid, 'kind' => 'autodeal', 'text' => mb_substr(($cur ? 'Deal automatikusan áthelyezve' . ($st === 'Open' ? ' (az ügyfél nyitott dealje)' : '') . ': ' : 'Deal automatikusan csatolva: ') . ($title !== '' ? $title : '#' . $best), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
 }
 /* az utolsó 30 nap automatikusan kötött szálai: deal nélküli vagy lezárt/törölt dealen ülő → újrakötés (15 percenként) */
 function cp_imp_relink_recent() {
@@ -323,7 +333,7 @@ function cp_imp_relink_recent() {
 	set_transient('cp_imp_relink_at', 1, 15 * MINUTE_IN_SECONDS);
 	global $wpdb;
 	$T = cp_mail_t('threads'); $E = cp_mail_t('events'); $D = cp_crm_t('deals');
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.deleted_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 200", gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS)), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.deleted_at IS NOT NULL OR (d.status <> 'Open' AND t.created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 DAY))) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 200", gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS)), ARRAY_A);
 	foreach ($rows as $r) { cp_imp_relink((int) $r['id'], $r['contact_email'], $r['last_at']); }
 }
 
@@ -425,7 +435,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	/* v2.9.47: a Salesmate-ből küldött levél másolata (élő beérkezés) – a felelős az aláírás szerinti kolléga, ha még nincs lefoglalva */
-	if ($live && $out && !$sent && function_exists('cp_claim_from_sm_mail')) { cp_claim_from_sm_mail((int) $t['id'], (string) ($acc['plain'] ?? '') !== '' ? (string) $acc['plain'] : $text); }
+	/* v2.9.52: csak a valódi Salesmate-másolatnál (a saját címről érkező, de nem a Salesmate-ből jött levél feladója hamisítható) */
+	if ($live && $out && !$sent && function_exists('cp_claim_from_sm_mail') && cp_imp_sm_copy($hraw, $me)) { cp_claim_from_sm_mail((int) $t['id'], (string) ($acc['plain'] ?? '') !== '' ? (string) $acc['plain'] : $text); }
 	/* v2.9.37: bejövő számla → „Számla” címke */
 	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) {
 		cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG);
