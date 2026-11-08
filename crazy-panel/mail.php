@@ -839,3 +839,4 @@ function cp_mail_draft_threads() {
 
 require_once __DIR__ . '/mail-tags.php';
 require_once __DIR__ . '/mail-zip.php';
+require_once __DIR__ . '/mail-drive.php';

@@ -740,3 +740,15 @@
 .ml-zipv{font-weight:500;opacity:.9}
 .d3-ft .ml-zipv{display:block}
 .d3-ft .ml-ariskb.ok{color:#1F7A50}
+/* v2.9.38: számla a Drive-on */
+.ml-atts a.ml-dv{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:999px;background:#E3F4EB;color:#1F7A50;font-weight:600;font-size:11.5px;white-space:nowrap;text-decoration:none}
+.ml-atts a.ml-dv:hover{text-decoration:underline}
+.ml-atts a.ml-dv.warn{background:#FCEBDD;color:#8A4512}
+.ml-dvb{appearance:none;border:1px solid var(--li,#E2E0DA);background:#fff;color:#2F6FDB;font:600 11.5px/1.2 inherit;padding:2px 8px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.ml-dvb:hover{border-color:#2F6FDB}
+.ml-dvb:disabled{opacity:.6;cursor:progress}
+.ml-dvh{display:inline-flex;align-items:center;flex-shrink:0;padding:2px 9px;border-radius:999px;background:#E3F4EB;color:#1F7A50;font-size:12px;font-weight:600;white-space:nowrap}
+.ml-atts .ml-atti{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;max-width:100%}
+.ml-atts .ml-atti > a:first-child{overflow-wrap:anywhere}
+.ml-atts .ml-atti:not(:last-child)::after{content:',';color:#8A8780;margin-left:-3px}
+

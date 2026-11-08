@@ -400,6 +400,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		/* v1.67: az eredeti HTML szűrve (a beágyazott képek a mellékletek sorszámára hivatkozva) */
 		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	if (!$wpdb->insert_id) { throw new \Exception('A levél mentése nem sikerült: ' . $wpdb->last_error); }
+	$msg_id = (int) $wpdb->insert_id;
 	$add = 1;
 	/* v1.41: az ügyfél levelében idézett saját válaszunk külön kimenő levélként (ugyanaz a válasz csak egyszer) */
 	if (!$out && !(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE thread_id = %d AND dir = 'out' AND status <> 'idézetből' AND sent_at <= %s", (int) $t['id'], $at))) {
@@ -424,7 +425,11 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if ($acc['att']) { $upd['has_attach'] = 1; }
 	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
 	/* v2.9.37: bejövő számla → „Számla” címke */
-	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) { cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG); }
+	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) {
+		cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG);
+		/* v2.9.38: az új számla PDF-je a Drive számlamappájába (a levélszinkron végén, háttérben) */
+		if ($live && function_exists('cp_mdr_enqueue')) { foreach ($acc['att'] as $a) { if (preg_match('/\.pdf$/i', (string) ($a['n'] ?? ''))) { cp_mdr_enqueue($msg_id); break; } } }
+	}
 	/* v1.86: a szál követői értesítést kapnak az ügyfél új leveléről (csengő; ha be van állítva, Pumble is) – csak friss, élő beérkezésnél */
 	/* v1.99.2: a követők mellett a szál felelőse is értesítést kap; a régiség a beérkezés idejéhez mérve (késve kézbesített levélnél is szól) */
 	$as = (int) $wpdb->get_var($wpdb->prepare("SELECT assignee_uid FROM $T WHERE id = %d", (int) $t['id']));
@@ -678,6 +683,7 @@ function cp_imp_sync_run() {
 	delete_transient('cp_imp_sync_lock');
 	try { cp_imp_relink_recent(); } catch (\Throwable $e) { /* a következő körben újra */ }
 	if (function_exists('cp_mail_inv_backfill')) { try { cp_mail_inv_backfill(); } catch (\Throwable $e) { /* nem kritikus */ } }
+	if (function_exists('cp_mdr_run')) { try { cp_mdr_run(); } catch (\Throwable $e) { delete_transient('cp_mdr_lock'); } }
 }
 
 /* v1.97: „Letöltés most” – a Levelezés ↻ gombja azonnal lekéri az új leveleket (nem várja meg az 5 perces ütemet).
