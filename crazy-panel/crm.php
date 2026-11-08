@@ -474,6 +474,23 @@ function cp_crm_sync($manual = false) {
 			$st['gap_found'] = $found;
 			if ($found) { $log[] = 'keresőből kimaradt deal: ' . $found; }
 		}
+		/* v2.9.30: minden körben – a legutóbbi deal-azonosítók közti, még meg nem nézett hézagok (legfeljebb 6 lekérés),
+		   hogy a keresőből kimaradt friss deal ne csak a napi pótláskor, hanem 10 percen belül megjelenjen */
+		if (!empty($st['deal_full_at']) && $calls < $budget + 6) {
+			$tab = cp_crm_t('deals');
+			$max = (int) $wpdb->get_var("SELECT MAX(id) FROM $tab");
+			$have = array_flip(array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE id >= %d", $max - 45))));
+			$chk = array_flip(array_map('intval', (array) ($st['gap_chk'] ?? array())));
+			$found = 0; $tried = 0;
+			for ($id = $max - 1; $id >= $max - 45 && $tried < 6; $id--) {
+				if (isset($have[$id]) || isset($chk[$id])) { continue; }
+				$tried++; $calls++;
+				$g = cp_sm_get_deal((string) $id);
+				if (!is_wp_error($g) && !empty($g['id'])) { $found += cp_crm_store('deal', array($g), 'get'); } else { $chk[$id] = 1; }
+			}
+			$st['gap_chk'] = array_values(array_filter(array_keys($chk), function ($i) use ($max) { return $i >= $max - 45; }));
+			if ($found) { $log[] = 'keresőből kimaradt friss deal: ' . $found; }
+		}
 		/* Salesmate-oldali darabszámok az összevetéshez (naponta) */
 		if (empty($st['tot_at']) || time() - (int) $st['tot_at'] > 20 * HOUR_IN_SECONDS) {
 			foreach (cp_crm_mods() as $m => $x) {

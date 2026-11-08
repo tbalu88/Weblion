@@ -182,10 +182,15 @@ function cp_flow_tick() {
 	/* v2.9.21: a feldolgozás azonosító szerint halad (nem idő szerint) – a szinkron később behozott dealjei és naplósorai sem maradnak ki */
 	if (empty($st['did'])) { $st['did'] = (int) $wpdb->get_var("SELECT MAX(id) FROM $D WHERE created_at <= " . $wpdb->prepare('%s', $st['since'])); }
 	$hmax = (int) $st['hist'];
+	/* v2.9.30: új deal = az utolsó 2 napban létrejött, még nem látott deal. A Salesmate keresője néha kihagy dealt, a szinkron
+	   később (kisebb azonosítóval) pótolja – az azonosító-vízjel ezeket átugrotta. A látott azonosítók listája a 2 napos ablakon belül marad. */
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT id FROM $D WHERE created_at > %s ORDER BY id LIMIT 500", gmdate('Y-m-d H:i:s', time() - 2 * DAY_IN_SECONDS)), ARRAY_A);
+	$ids = array_map(function ($r) { return (int) $r['id']; }, $rows);
+	if (!isset($st['seen']) || !is_array($st['seen'])) { $st['seen'] = array_fill_keys(array_filter($ids, function ($i) use ($st) { return $i <= (int) $st['did']; }), 1); }
+	$new = array_values(array_filter($ids, function ($i) use ($st) { return !isset($st['seen'][$i]); }));
+	$st['seen'] = array_fill_keys($ids, 1);
+	if ($new) { $st['did'] = max((int) $st['did'], max($new)); }
 	if ($flows) {
-		/* új deal-ek a legutóbbi futás óta (a szinkron hozza be őket) */
-		$new = array_map('intval', (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE id > %d AND created_at > %s ORDER BY id LIMIT 200", (int) $st['did'], gmdate('Y-m-d H:i:s', strtotime($st['since'] . ' UTC') - 3 * DAY_IN_SECONDS))));
-		if ($new) { $st['did'] = max($new); }
 		foreach ($flows as $f) { if (($f['def']['trigger']['type'] ?? '') === 'deal_created') { foreach ($new as $id) { cp_flow_run($f, (int) $id); } } }
 		/* szakaszba lépés (a változásnaplóból) */
 		$hs = (array) $wpdb->get_results($wpdb->prepare("SELECT id, deal_id, new_val FROM $H WHERE id > %d AND field = 'stage' ORDER BY id LIMIT 500", (int) $st['hist']), ARRAY_A);
