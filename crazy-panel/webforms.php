@@ -324,7 +324,7 @@ add_action('cp_crm_tick', function () {
 		if (!isset($q2[$lid])) { continue; }
 		$q2[$lid]['n'] = (int) $q2[$lid]['n'] + 1; $q2[$lid]['e'] = mb_substr($res->get_error_message(), 0, 200);
 		if ($q2[$lid]['n'] === 3 && function_exists('cp_notify') && function_exists('cp_pu_data')) {
-			foreach (cp_pu_data()['list'] as $uid => $u) { if (!empty($u['a']) && ($u['r'] ?? '') === 'admin') { cp_notify((int) $uid, 'lead', 'Egy weboldalas ajánlatkérésből nem sikerült deal-t létrehozni (' . $q2[$lid]['e'] . ') – a Megkeresések között megvan, a panel tovább próbálja.', 'deals:leads', 'Crazy panel'); } }
+			foreach (cp_pu_data()['list'] as $uid => $u) { if (!empty($u['a']) && ($u['r'] ?? '') === 'admin') { cp_notify((int) $uid, 'lead_fail', 'Egy weboldalas ajánlatkérésből nem sikerült deal-t létrehozni (' . $q2[$lid]['e'] . ') – a Megkeresések között megvan, a panel tovább próbálja.', 'deals:leads', 'Crazy panel'); } }
 		}
 		if ($q2[$lid]['n'] >= 30) { unset($q2[$lid]); } /* kb. 5 óra után feladja – a megkeresés a listában marad */
 		update_option('cp_wf_q', $q2, false);

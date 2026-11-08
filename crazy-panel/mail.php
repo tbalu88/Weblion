@@ -765,7 +765,7 @@ function cp_mail_snooze_due() {
 		$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive', 'snooze'), true) ? $t['prev_folder'] : 'inbox';
 		$wpdb->update($T, array('folder' => $to, 'prev_folder' => '', 'status' => 'open', 'seen_at' => null), array('id' => (int) $id));
 		$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $id, 'kind' => 'snooze', 'text' => 'Szundi lejárt – vissza a ' . cp_mail_folder_name($to) . ' mappába', 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
-		if (!empty($x['uid']) && function_exists('cp_notify')) { cp_notify((int) $x['uid'], 'mail_follow', 'visszatért a szundizott levélszál: „' . mb_substr((string) $t['subject'], 0, 100) . '”', 'mail:' . (int) $id, 'Crazy panel'); }
+		if (!empty($x['uid']) && function_exists('cp_notify')) { cp_notify((int) $x['uid'], 'mail_snooze', 'visszatért a szundizott levélszál: „' . mb_substr((string) $t['subject'], 0, 100) . '”', 'mail:' . (int) $id, 'Crazy panel'); }
 		unset($m[$id]); $ch = true;
 	}
 	if ($ch) { update_option('cp_mail_snooze', $m, false); }

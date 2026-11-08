@@ -50,16 +50,19 @@ function cp_notify($uid, $kind, $text, $hash, $by_name = null) {
 	if ($uid <= 0 || $uid === $me || !cp_nt_db_ok() || !function_exists('cp_pu_get')) { return; }
 	$u = cp_pu_get($uid);
 	if (!$u || empty($u['a'])) { return; }
+	/* v2.9.50: Beállítások → Értesítések – csatornánként (csengő / telefon / Pumble) kapcsolható */
+	$on_b = !function_exists('cp_nt_on') || cp_nt_on($uid, $kind, 'b'); $on_p = !function_exists('cp_nt_on') || cp_nt_on($uid, $kind, 'p'); $on_u = !function_exists('cp_nt_on') || cp_nt_on($uid, $kind, 'u');
+	if (!$on_b && !$on_p && !$on_u) { return; }
 	/* v1.86: háttérfolyamatból (pl. beérkező levél) a feladó neve adható meg; különben a bejelentkezett kolléga */
 	$by = $by_name !== null ? (string) $by_name : (function_exists('cp_panel_who') ? cp_panel_who() : '');
 	$text = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $text)), 0, 400);
 	/* ugyanarról ugyanannak 2 percen belül csak egyszer (pl. több mentés egymás után) */
 	if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_nt_t() . ' WHERE uid = %d AND kind = %s AND link = %s AND text = %s AND created_at >= %s', $uid, $kind, $hash, $text, gmdate('Y-m-d H:i:s', time() - 120)))) { return; }
-	$wpdb->insert(cp_nt_t(), array('uid' => $uid, 'kind' => $kind, 'text' => $text, 'link' => mb_substr($hash, 0, 60), 'by_uid' => $me ?: null, 'by_name' => $by, 'created_at' => gmdate('Y-m-d H:i:s')));
+	if ($on_b) { $wpdb->insert(cp_nt_t(), array('uid' => $uid, 'kind' => $kind, 'text' => $text, 'link' => mb_substr($hash, 0, 60), 'by_uid' => $me ?: null, 'by_name' => $by, 'created_at' => gmdate('Y-m-d H:i:s'))); }
 	/* v2.8: push-értesítés a kolléga feliratkozott eszközeire (a válasz elküldése után) */
-	if (function_exists('cp_push_queue')) { cp_push_queue($uid, $by !== '' ? $by : 'Crazy panel', $text, $hash); }
-	/* v2.9.32: az új ajánlatkérésről mindenki kap csengőt, de Pumble-üzenetet nem (a felhasználó döntése, 2026-11-08) */
-	if ($kind === 'lead') { return; }
+	if ($on_p && function_exists('cp_push_queue')) { cp_push_queue($uid, $by !== '' ? $by : 'Crazy panel', $text, $hash); }
+	/* v2.9.32 → v2.9.50: a Pumble is a beállítás szerint (az új ajánlatkérésnél alapból ki) */
+	if (!$on_u || (!function_exists('cp_nt_on') && $kind === 'lead')) { return; }
 	$hook = cp_nt_hook_get('notif_hook_u' . $uid);
 	if ($hook === '') { $hook = cp_nt_hook_get('notif_hook'); }
 	if ($hook === '' || !cp_nt_hook_ok($hook) || !function_exists('cp_pu_panel_url')) { return; }
@@ -156,3 +159,5 @@ function cp_nt_admin_section() {
 	}
 	echo '</table><p><button class="button button-primary">Mentés</button> <label style="margin-left:12px"><input type="checkbox" name="nt_test" value="1"> teszt üzenet a közös csatornára</label></p></form>';
 }
+
+require_once __DIR__ . '/notify-prefs.php';

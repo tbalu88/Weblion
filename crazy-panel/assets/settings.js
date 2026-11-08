@@ -189,10 +189,59 @@
 	}
 	/* ------------------------------------------------------------ értesítések */
 	function secNotif(box, d) {
-		box.innerHTML = '<h2>Értesítések (Pumble)</h2><p class="cs-note">Megemlítéskor (@Név) és kiosztáskor a csengőn túl Pumble-üzenet is megy, a linkkel, ami egyenesen oda visz. Pumble: Workspace settings → Incoming Webhooks. A címeket a panel titkosítva tárolja, és nem mutatja vissza.</p>' +
-			'<div class="cs-card"><label class="cs-lbl">Közös értesítési csatorna</label>' + secret('common', d.notif.common, 'https://api.pumble.com/workspaces/…/incomingWebhooks/postMessage/…') + '<label class="cs-chk"><input type="checkbox" data-k="test"> teszt üzenet a közös csatornára</label></div>' +
-			'<div class="cs-card"><h3>Kollégánként (nem kötelező)</h3>' + d.users.filter(u => u.a).map(u => '<div class="cs-row"><span>' + esc(u.n) + '</span>' + secret('u' + u.id, d.notif.users[u.id], 'saját csatorna webhookja') + '</div>').join('') + '</div><div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button></div>';
-		box.querySelector('[data-save]').addEventListener('click', e => { const us = {}; d.users.forEach(u => { const v = val(box, 'u' + u.id), c = val(box, 'u' + u.id + '_clear'); if (v || c) us[u.id] = { v: v, clear: c ? 1 : 0 }; }); save(e.currentTarget, 'cp_set_admin', { sec: 'notif', common: val(box, 'common'), common_clear: val(box, 'common_clear'), users: JSON.stringify(us), test: val(box, 'test') }); });
+		const N = d.nt2;
+		if (!N) { box.innerHTML = '<h2>Értesítések</h2><div class="cpx-empty">Nem érhető el.</div>'; return; }
+		/* helyi másolat a táblázatról: mentésig itt változik */
+		if (!S.ntp || S.ntpSrc !== N) { S.ntp = JSON.parse(JSON.stringify(N.pref)); S.ntc = {}; N.ch.forEach(c => { S.ntc[c.k] = c.on; }); S.ntpSrc = N; }
+		if (S.ntu === undefined) S.ntu = 'all';
+		const CH = [['b', 'Csengő', 'a panel csengője'], ['p', 'Telefon', 'értesítés a telefonra (ha a kolléga bekapcsolta)'], ['u', 'Pumble', 'üzenet a kolléga Pumble-csatornájába']];
+		const elig = k => N.users.filter(u => !k.admin_only || u.admin);
+		const who = S.ntu === 'all' ? null : N.users.find(u => String(u.id) === String(S.ntu));
+		const state = (k, c) => { const us = who ? [who] : elig(k); const on = us.filter(u => S.ntp[u.id] && S.ntp[u.id][k.k] && S.ntp[u.id][k.k][c]).length; return { on, n: us.length }; };
+		const nobody = k => !elig(k).some(u => CH.some(c => S.ntp[u.id] && S.ntp[u.id][k.k] && S.ntp[u.id][k.k][c[0]]));
+		const groups = []; N.kinds.forEach(k => { let g = groups.find(x => x.g === k.g); if (!g) { g = { g: k.g, ks: [] }; groups.push(g); } g.ks.push(k); });
+		const tgt = { own: ['ok', 'saját csatorna beállítva'], fallback: ['', 'a tartalék csatornába megy'], none: ['bad', 'nincs webhook – nem megy sehová'] };
+		const row = k => {
+			const off = who && k.admin_only && !who.admin;
+			return '<tr data-row="' + k.k + '"' + (off ? ' class="na"' : '') + '><td><b>' + esc(k.l) + '</b><small>' + esc(k.d) + '</small><small class="cs-ntw">Kapja: ' + esc(k.who) + (off ? ' – ' + esc(who.n) + ' nem admin, nem kapja' : '') + '</small>' + (k.crit ? '<em class="cs-ntx" data-warn="' + k.k + '"' + (nobody(k) ? '' : ' hidden') + '>Senki nem kapja meg</em>' : '') + '</td>' +
+				CH.map(c => '<td data-l="' + c[1] + '"><input type="checkbox" data-nk="' + k.k + '" data-nc="' + c[0] + '"' + (off ? ' disabled' : '') + ' aria-label="' + esc(k.l + ' – ' + c[1] + (who ? ' – ' + who.n : ' – mindenki')) + '"></td>').join('') + '</tr>';
+		};
+		box.innerHTML = '<h2>Értesítések</h2><p class="cs-note">Itt állítod be, ki milyen jelzést kap, és melyik közös Pumble-csatornába mi menjen. A változás a Mentés után azonnal él.</p>' +
+			'<div class="cs-card"><div class="cs-nth"><h3>Ki mit kap</h3><label class="cs-ntu">Kolléga <select data-ntu><option value="all">Mindenki</option>' + N.users.map(u => '<option value="' + u.id + '"' + (String(S.ntu) === String(u.id) ? ' selected' : '') + '>' + esc(u.n) + (u.admin ? ' (admin)' : '') + '</option>').join('') + '</select></label></div>' +
+			'<p class="cs-muted">' + (who ? esc(who.n) + ' értesítései.' : 'Mindenki egyszerre: a pipa mindenkinél be- vagy kikapcsol; a félig jelölt négyzet azt jelenti, hogy van, akinél be van kapcsolva, és van, akinél nincs.') + ' Csengő: ' + CH[0][2] + ' · Telefon: ' + CH[1][2] + ' · Pumble: ' + CH[2][2] + '.</p>' +
+			'<div class="cs-tw"><table class="cs-t cs-nt"><thead><tr><th>Esemény</th>' + CH.map(c => '<th>' + c[1] + '</th>').join('') + '</tr></thead>' +
+			groups.map(g => '<tbody><tr class="cs-ntg"><th colspan="4">' + esc(g.g) + '</th></tr>' + g.ks.map(row).join('') + '</tbody>').join('') + '</table></div></div>' +
+			'<div class="cs-card"><h3>Közös csatornák (Pumble)</h3><ul class="cs-chl">' + N.ch.map(c => '<li><div class="cs-chh">' + sw('ch_' + c.k, S.ntc[c.k], esc(c.l)) + '<span class="cs-st ' + tgt[c.target][0] + '">' + tgt[c.target][1] + '</span><button type="button" class="cpx-btn ghost" data-cht="' + c.k + '">Próbaüzenet</button></div><small>' + esc(c.d) + (c.fb ? ' ' + esc(c.fb) : '') + '</small>' +
+				'<details><summary>Webhook megadása vagy cseréje</summary>' + secret('h_' + c.k, c.target === 'own', 'https://api.pumble.com/workspaces/…/incomingWebhooks/postMessage/…') + '</details></li>').join('') + '</ul></div>' +
+			'<div class="cs-card"><h3>Személyes Pumble-címek</h3><p class="cs-muted">Ide mennek a fenti táblázat Pumble-oszlopának üzenetei: ha a kollégának van saját címe, oda, különben a közös értesítési csatornába.</p><label class="cs-lbl">Közös értesítési csatorna</label>' + secret('common', d.notif.common, 'https://api.pumble.com/workspaces/…/incomingWebhooks/postMessage/…') + '<label class="cs-chk"><input type="checkbox" data-k="test"> próbaüzenet a közös csatornára</label>' +
+			N.users.map(u => '<div class="cs-row"><span>' + esc(u.n) + '</span>' + secret('u' + u.id, d.notif.users[u.id], 'saját csatorna webhookja (nem kötelező)') + '</div>').join('') + '</div>' +
+			'<div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button></div>';
+		const paint = () => {
+			box.querySelectorAll('[data-nk]').forEach(cb => { const k = N.kinds.find(x => x.k === cb.dataset.nk), st = state(k, cb.dataset.nc); cb.checked = st.n > 0 && st.on === st.n; cb.indeterminate = st.on > 0 && st.on < st.n; });
+			N.kinds.forEach(k => { const w = box.querySelector('[data-warn="' + k.k + '"]'); if (w) w.hidden = !nobody(k); });
+		};
+		paint();
+		box.querySelector('[data-ntu]').addEventListener('change', e => { S.ntu = e.target.value; secNotif(box, d); });
+		box.querySelectorAll('[data-nk]').forEach(cb => cb.addEventListener('change', () => {
+			const k = N.kinds.find(x => x.k === cb.dataset.nk);
+			(who ? [who] : elig(k)).forEach(u => { S.ntp[u.id] = S.ntp[u.id] || {}; S.ntp[u.id][k.k] = S.ntp[u.id][k.k] || {}; S.ntp[u.id][k.k][cb.dataset.nc] = cb.checked ? 1 : 0; });
+			paint();
+		}));
+		N.ch.forEach(c => { const el = box.querySelector('[data-k="ch_' + c.k + '"]'); if (el) el.addEventListener('change', () => { S.ntc[c.k] = el.checked ? 1 : 0; }); });
+		box.querySelectorAll('[data-cht]').forEach(b => b.addEventListener('click', async () => {
+			b.disabled = true; const t = b.textContent; b.textContent = 'Küldés…';
+			try { const r = await post('cp_set_admin', { sec: 'chtest', ch: b.dataset.cht }); toast(r.msg); } catch (e) { toast(e.message, true); }
+			b.disabled = false; b.textContent = t;
+		}));
+		box.querySelector('[data-save]').addEventListener('click', async e => {
+			const btn = e.currentTarget, hooks = {};
+			N.ch.forEach(c => { const v = val(box, 'h_' + c.k), cl = val(box, 'h_' + c.k + '_clear'); if (v || cl) hooks[c.k] = { v: v, clear: cl ? 1 : 0 }; });
+			const us = {}; N.users.forEach(u => { const v = val(box, 'u' + u.id), c = val(box, 'u' + u.id + '_clear'); if (v || c) us[u.id] = { v: v, clear: c ? 1 : 0 }; });
+			const personal = Object.keys(us).length || val(box, 'common') || val(box, 'common_clear') || val(box, 'test');
+			if (personal) { try { const r = await post('cp_set_admin', { sec: 'notif', common: val(box, 'common'), common_clear: val(box, 'common_clear'), users: JSON.stringify(us), test: val(box, 'test') }); if (r.msg) toast(r.msg); } catch (er) { toast(er.message, true); return; } }
+			S.ntpSrc = null;
+			save(btn, 'cp_set_admin', { sec: 'ntprefs', prefs: JSON.stringify(S.ntp), ch: JSON.stringify(S.ntc), hooks: JSON.stringify(hooks) });
+		});
 	}
 	/* ------------------------------------------------------------ levelezés */
 	function secMail(box, d) {
@@ -356,6 +405,13 @@
 		'.cs-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:6px 12px 0 0}.cs-sw{display:flex;align-items:center;gap:10px;font:600 13.5px Inter,sans-serif;margin:6px 0;cursor:pointer}.cs-sw input{display:none}.cs-sw span{width:36px;height:20px;border-radius:999px;background:#D7D3CC;position:relative;transition:.15s;flex:none}.cs-sw span::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}.cs-sw input:checked+span{background:#2E9E62}.cs-sw input:checked+span::after{left:18px}' +
 		'.cs-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.cs-tw{overflow:auto;background:#fff;border:1px solid #E6E3DE;border-radius:12px}.cs-t{width:100%;border-collapse:collapse;font-size:13px}.cs-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#656973;padding:8px 10px;background:#FAF8F5;border-bottom:1px solid #E6E3DE;white-space:nowrap}.cs-t td{padding:6px 10px;border-bottom:1px solid #F0ECE6;vertical-align:middle}' +
 		'.cs-t td input[type=text]{width:125px}.cs-t td select{max-width:125px}.cs-act{white-space:normal}.cs-act .cpx-btn{padding:4px 9px;font-size:12px;margin:2px 4px 2px 0}.cs-ut td small{display:block;color:#656973;font-size:11.5px;margin-top:3px}.cs-ut td:last-child{min-width:170px}.cs-ut td,.cs-ut th{padding:6px 8px}.cs-st{display:inline-block;border-radius:999px;padding:1px 8px;font:600 11.5px Inter,sans-serif;background:#EEF0F4}.cs-st.ok{background:#DFF3E8;color:#216E4E}.cs-st.bad{background:#FDECEA;color:#AE2E24}' +
+		'.cs-nth{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.cs-nth h3{margin:0}.cs-ntu{display:inline-flex;align-items:center;gap:8px;font:600 13px Inter,sans-serif;color:#4A4F5A}.cs-ntu select{min-width:190px}' +
+		'.cs-nt td:not(:first-child),.cs-nt th:not(:first-child){text-align:center;width:84px}.cs-nt td:first-child{padding-top:9px;padding-bottom:9px}.cs-nt td b{font-size:13.5px}.cs-nt td small{display:block;color:#4A4F5A;font-size:12px;margin-top:2px;max-width:62ch}.cs-nt small.cs-ntw{color:#656973;font-size:11.5px}' +
+		'.cs-nt input[type=checkbox]{width:18px;height:18px;accent-color:#2E9E62;cursor:pointer}.cs-nt input:disabled{cursor:not-allowed}.cs-nt tr.na td{opacity:.55}.cs-ntg th{background:#FAF8F5;color:#141C33;font:700 12px Inter,sans-serif;text-transform:none;letter-spacing:0;padding:10px 10px 6px}' +
+		'.cs-ntx{display:inline-block;margin-top:4px;font:700 11.5px Inter,sans-serif;font-style:normal;color:#AE2E24;background:#FDECEA;border-radius:999px;padding:1px 8px}' +
+		'.cs-chl{list-style:none;margin:0;padding:0}.cs-chl li{padding:10px 0;border-bottom:1px solid #F0ECE6}.cs-chl li:last-child{border-bottom:0}.cs-chh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.cs-chh .cs-sw{margin:0;flex:1 1 220px}.cs-chh .cpx-btn{padding:4px 10px;font-size:12px}.cs-chl small{display:block;color:#4A4F5A;font-size:12px;margin:4px 0 0 46px;max-width:70ch}' +
+		'.cs-chl details{margin:6px 0 0 46px}.cs-chl summary{cursor:pointer;font:600 12px Inter,sans-serif;color:#2F6FDB}.cs-chl details input{margin-top:6px}' +
+		'@media (max-width:600px){.cs-nt thead{display:none}.cs-nt,.cs-nt tbody,.cs-nt tr{display:block;width:100%}.cs-nt tr[data-row]{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #F0ECE6;padding:8px 10px}.cs-nt tr[data-row] td{border:0;padding:0}.cs-nt tr[data-row] td:first-child{grid-column:1/-1;padding-bottom:6px}.cs-nt td:not(:first-child){width:auto;display:flex;align-items:center;justify-content:center;gap:6px;font:600 12px Inter,sans-serif;color:#4A4F5A}.cs-nt td[data-l]::before{content:attr(data-l)}.cs-ntg th{display:block}.cs-chl small,.cs-chl details{margin-left:0}}' +
 		'.cs-vis td:not(:first-child),.cs-vis th:not(:first-child){text-align:center}.cs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}.cs-row>span{min-width:160px;font-weight:600;font-size:13px}.cs-users{display:flex;flex-wrap:wrap;margin-bottom:6px}' +
 		'.cs-ed{border:1px solid #E6E3DE;border-radius:10px;overflow:hidden;background:#fff}.cs-tb{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px;background:#FAF8F5;border-bottom:1px solid #E6E3DE}.cs-tb span{flex:1}.cs-tb i{width:1px;height:20px;background:#E1DDD6;margin:0 4px}.cs-tb button svg{display:block}.cs-up{font:600 12px Inter,sans-serif}.cs-tb button{border:0;background:none;border-radius:6px;padding:4px 8px;cursor:pointer;font:13px Inter,sans-serif;min-width:28px;color:#141C33}.cs-tb button:hover,.cs-tb button.on{background:#EFECE7}' +
 		'.cs .cs-tb select{padding:3px 6px;font-size:12.5px;max-width:140px}.cs-col{position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:6px;cursor:pointer}.cs-col:hover{background:#EFECE7}.cs-col span{font:700 14px Inter,sans-serif;text-decoration:underline;text-decoration-thickness:3px}.cs-col input{position:absolute;inset:0;opacity:0;cursor:pointer}' +

@@ -100,6 +100,7 @@ function cp_st_dg_maybe_send() {
 }
 
 function cp_st_dg_send($kind, $from, $to, $test) {
+	if (!$test) { if (function_exists('cp_ch_on') && !cp_ch_on('digest')) { return new WP_Error('chan_off', 'Ez a csatorna-üzenet ki van kapcsolva (Beállítások → Értesítések).'); } }
 	$hook = cp_st_dg_hook();
 	if ($hook === '') { return new WP_Error('nohook', 'Nincs megadva az összesítő Pumble-webhookja.'); }
 	$txt = cp_st_dg_text($kind, $from, $to, !$test);
@@ -545,6 +546,7 @@ function cp_st_ms_check() {
 }
 
 function cp_st_dg_post($txt) {
+	if (function_exists('cp_ch_on') && !cp_ch_on('digest')) { return new WP_Error('chan_off', 'Ez a csatorna-üzenet ki van kapcsolva (Beállítások → Értesítések).'); }
 	$hook = cp_st_dg_hook();
 	if ($hook === '') { return new WP_Error('nohook', 'Nincs webhook.'); }
 	if (function_exists('cp_el_pumble')) { return cp_el_pumble($txt, $hook); }

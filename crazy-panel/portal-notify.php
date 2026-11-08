@@ -103,6 +103,7 @@ function cp_portal_send_link_mail($portal, $type = 'newlink', $force = false) {
 /* ------------------------------------------------------------ Pumble */
 
 function cp_portal_pumble($text) {
+	if (function_exists('cp_ch_on') && !cp_ch_on('portal')) { return new WP_Error('chan_off', 'Ez a csatorna-üzenet ki van kapcsolva (Beállítások → Értesítések).'); }
 	$o = cp_portal_opts();
 	$url = trim((string) $o['pumble_url']);
 	if ($url === '') { return new WP_Error('nopumble', 'Az ügyfélportál Pumble-webhookja nincs beállítva (WP admin → Beállítások → Ügyfélportál).'); }

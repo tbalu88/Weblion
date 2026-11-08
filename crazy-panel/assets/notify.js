@@ -93,7 +93,7 @@
 
 	/* v2.7.6: külön oldal (#ertesitesek) a felugró ablak helyett */
 	const V = { lim: 60, un: false, main: null };
-	const kindIco = k => (String(k).indexOf('mail') === 0 ? '✉' : k === 'lead' ? '★' : k === 'deal_note' ? '💬' : '☑');
+	const kindIco = k => (String(k).indexOf('mail') === 0 ? '✉' : (k === 'lead' || k === 'lead_fail') ? '★' : k === 'deal_note' ? '💬' : String(k).indexOf('wl_') === 0 ? '📝' : k === 'system' ? '⚠' : '☑');
 	function dayKey(s) {
 		const d = new Date(String(s).replace(' ', 'T')), t = new Date(); t.setHours(0, 0, 0, 0);
 		const x = new Date(d); x.setHours(0, 0, 0, 0);

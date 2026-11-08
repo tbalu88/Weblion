@@ -43,7 +43,7 @@ function cp_set_data() {
 	$po = cp_panel_opts();
 	$x += array(
 		'sx' => function_exists('cp_sx_sections') ? array_keys(cp_sx_sections()) : array(),
-		'users' => cp_set_users_out(), 'roles' => cp_pu_roles(), 'sm_users' => $sm, 'tabs' => $tabs, 'vis' => $vis, 'shared_on' => cp_pu_shared_on(), 'notif' => $nt,
+		'users' => cp_set_users_out(), 'roles' => cp_pu_roles(), 'sm_users' => $sm, 'tabs' => $tabs, 'vis' => $vis, 'shared_on' => cp_pu_shared_on(), 'notif' => $nt, 'nt2' => function_exists('cp_nt_settings_out') ? cp_nt_settings_out() : null,
 		'mail' => array('sync_on' => get_option('cp_imp_sync_on') === '1', 'sync_last' => !empty($sy['last']) ? wp_date('Y.m.d. H:i', (int) $sy['last']) : '', 'sync_n' => (int) ($sy['n'] ?? 0), 'sync_err' => (string) ($sy['err'] ?? ''),
 			'imap' => array('host' => $io['host'] ?? '', 'user' => $io['user'] ?? '', 'pw' => function_exists('cp_imp_pw') && cp_imp_pw() !== ''),
 			'send' => $so ? array('on' => (int) $so['on'], 'users' => array_map('intval', (array) $so['users']), 'from_name' => $so['from_name'], 'sign' => $so['sign'], 'host' => $so['host'], 'port' => (int) $so['port'], 'secure' => $so['secure'], 'append' => (int) $so['append'], 'sent_folder' => $so['sent_folder'] !== '' && function_exists('cp_imp_utf8') ? cp_imp_utf8($so['sent_folder']) : '') : null),
@@ -164,6 +164,19 @@ function cp_set_ajax_admin() {
 			if ($off && !cp_set_me()) { cp_el_err('Előbb lépj be a saját fiókoddal – most közös jelszóval vagy bent.'); }
 			update_option('cp_panel_shared_off', $off ? '1' : '0', false);
 			$msg = $off ? 'A közös jelszavak kikapcsolva – mostantól csak személyes fiókkal lehet belépni.' : 'A közös jelszavak újra működnek.';
+			break;
+		/* v2.9.50: Értesítések – ki mit kap (csengő / telefon / Pumble), csatorna-üzenetek, webhookok */
+		case 'ntprefs':
+			if (!function_exists('cp_nt_settings_save')) { cp_el_err('Nem érhető el.'); }
+			$r = cp_nt_settings_save(json_decode((string) $p('prefs', '{}'), true), json_decode((string) $p('ch', '{}'), true), json_decode((string) $p('hooks', '{}'), true));
+			if (is_wp_error($r)) { cp_el_err($r->get_error_message()); }
+			$msg = $r;
+			break;
+		case 'chtest':
+			if (!function_exists('cp_ch_test')) { cp_el_err('Nem érhető el.'); }
+			$r = cp_ch_test(sanitize_key($p('ch')));
+			if (is_wp_error($r)) { cp_el_err($r->get_error_message()); }
+			$msg = $r;
 			break;
 		case 'notif':
 			$set = function ($k, $v, $clear, $label) use (&$msg) {

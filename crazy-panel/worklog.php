@@ -217,7 +217,7 @@ function cp_wl_ajax_save() {
 
 function cp_wl_notify_admins($text, $day) {
 	if (!function_exists('cp_notify')) { return; }
-	foreach (cp_wl_users() as $u) { if ($u['admin'] && $u['id'] !== cp_wl_me()) { cp_notify($u['id'], 'worklog', $text, 'munkanaplo:' . $day); } }
+	foreach (cp_wl_users() as $u) { if ($u['admin'] && $u['id'] !== cp_wl_me()) { cp_notify($u['id'], 'wl_closed', $text, 'munkanaplo:' . $day); } }
 }
 
 /* állapot: beküldés (saját), jóváhagyás / visszanyitás (admin, nem a sajátját) */
@@ -240,7 +240,7 @@ function cp_wl_ajax_status() {
 		if (!cp_wl_is_approver()) { cp_el_err('Jóváhagyni / visszanyitni csak admin tud.'); }
 		if ($to === 'approved' && $uid === $me) { cp_el_err('A saját napodat nem hagyhatod jóvá.'); }
 		$wpdb->update(cp_wl_t('entries'), array('status' => $to, 'approved_by' => $to === 'approved' ? $who : '', 'approved_at' => $to === 'approved' ? gmdate('Y-m-d H:i:s') : null), array('id' => (int) $e['id']));
-		if (function_exists('cp_notify') && $uid !== $me) { cp_notify($uid, 'worklog', ($to === 'approved' ? 'jóváhagyta' : 'visszanyitotta (javítsd, és zárd le újra)') . ' a munkanaplódat: ' . $day, 'munkanaplo:' . $day); }
+		if (function_exists('cp_notify') && $uid !== $me) { cp_notify($uid, 'wl_review', ($to === 'approved' ? 'jóváhagyta' : 'visszanyitotta (javítsd, és zárd le újra)') . ' a munkanaplódat: ' . $day, 'munkanaplo:' . $day); }
 	} else { cp_el_err('Hibás kérés.'); }
 	wp_send_json_success(array('e' => cp_wl_out(cp_wl_get_row($uid, $day))));
 }
@@ -256,7 +256,7 @@ function cp_wl_ajax_comment() {
 	$wpdb->insert(cp_wl_t('comments'), array('entry_id' => (int) $e['id'], 'uid' => cp_wl_me(), 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'body' => $body, 'created_at' => gmdate('Y-m-d H:i:s')));
 	if (function_exists('cp_notify')) {
 		$to = array($uid); foreach (cp_wl_users() as $u) { if ($u['admin']) { $to[] = $u['id']; } }
-		foreach (array_unique($to) as $t) { if ($t !== cp_wl_me()) { cp_notify($t, 'worklog', 'hozzászólt a munkanaplóhoz (' . $day . '): „' . mb_substr($body, 0, 100) . '”', 'munkanaplo:' . $day); } }
+		foreach (array_unique($to) as $t) { if ($t !== cp_wl_me()) { cp_notify($t, 'wl_comment', 'hozzászólt a munkanaplóhoz (' . $day . '): „' . mb_substr($body, 0, 100) . '”', 'munkanaplo:' . $day); } }
 	}
 	wp_send_json_success(array('e' => cp_wl_out(cp_wl_get_row($uid, $day))));
 }
@@ -376,7 +376,7 @@ add_action('cp_wl_remind', function () {
 	foreach ($writers as $w) {
 		$e = cp_wl_get_row($w, $day);
 		if ($e && ($e['t_start'] !== '' || trim((string) $e['notes']) !== '')) { continue; }
-		if (function_exists('cp_notify')) { cp_notify($w, 'worklog', 'emlékeztető: a mai munkanapló még üres – írd meg a nap végén.', 'munkanaplo:' . $day, 'Crazy panel'); }
+		if (function_exists('cp_notify')) { cp_notify($w, 'wl_remind', 'emlékeztető: a mai munkanapló még üres – írd meg a nap végén.', 'munkanaplo:' . $day, 'Crazy panel'); }
 	}
 });
 
@@ -422,6 +422,7 @@ function cp_wl_report_text($uid, $day) {
 }
 function cp_wl_pumble_report($uid, $day) {
 	if (!get_option('cp_wl_pb', 1)) { return new WP_Error('nohook', 'ki'); }
+	if (function_exists('cp_ch_on') && !cp_ch_on('wl')) { return new WP_Error('chan_off', 'Ez a csatorna-üzenet ki van kapcsolva (Beállítások → Értesítések).'); }
 	$hook = cp_wl_hook();
 	if ($hook === '' || !preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', $hook)) { return new WP_Error('nohook', 'Nincs Pumble webhook.'); }
 	/* ugyanarról a napról újra lezárásnál (visszanyitás után) „javítva” jelöléssel */

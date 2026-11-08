@@ -136,6 +136,7 @@ function cp_flow_step($f, $s, $d, $mode) {
 			cp_flow_log($f['id'], $id, $mode, 'set_stage', 'Szakaszt váltana: ' . $d['stage'] . ' → ' . $s['v'], 'stage', $s['v']); return;
 		case 'pumble':
 			$txt = cp_flow_fill($s['v'], $d);
+			if ($mode === 'live' && function_exists('cp_ch_on') && !cp_ch_on('newdeal')) { cp_flow_log($f['id'], $id, $mode, 'pumble', 'Kikapcsolva (Beállítások → Értesítések): ' . $txt, '', '', 'skipped'); return; }
 			if ($mode === 'live') {
 				/* v2.9.49: külön „Új deal” csatorna (pl. #new-leads), ha meg van adva; különben a közös értesítési csatorna */
 				$hook = function_exists('cp_nt_hook_get') ? (cp_nt_hook_get('lead_hook') !== '' ? cp_nt_hook_get('lead_hook') : cp_nt_hook_get('notif_hook')) : '';

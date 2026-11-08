@@ -166,7 +166,7 @@ function cp_rcl_tick($force = false) {
 			'checklist' => wp_json_encode(array(array('t' => 'Felhívni / e-mailt írni', 'd' => 0), array('t' => 'Ha kér: új deal a panelben', 'd' => 0))), 'deal_id' => $id, 'created_uid' => null, 'created_by' => 'Crazy panel', 'created_at' => $now, 'updated_at' => $now));
 		$cid = (int) $wpdb->insert_id;
 		if ($cid && function_exists('cp_kb_log')) { cp_kb_log($cid, 'Létrehozta az éves visszahívó (tavalyi rendezvény: ' . $r['event_d'] . ')'); }
-		if ($cid && $as !== '' && function_exists('cp_notify')) { cp_notify((int) $as, 'kb_assign', 'visszahívandó ügyfél: ' . $who . ' (tavaly ' . $ev . ')', 'feladatok:' . $cid, 'Crazy panel'); }
+		if ($cid && $as !== '' && function_exists('cp_notify')) { cp_notify((int) $as, 'kb_recall', 'visszahívandó ügyfél: ' . $who . ' (tavaly ' . $ev . ')', 'feladatok:' . $cid, 'Crazy panel'); }
 		$done[$id] = time(); $made++;
 	}
 	/* 2 évnél régebbi jelölések törlése */
