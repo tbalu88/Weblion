@@ -78,14 +78,17 @@
 	const shortTitle = r => { const t = r.title || 'Deal #' + r.id; if (!r.ev) return t; const m = t.match(/\s*\|\s*(\d{4}-\d{2}-\d{2})\.?$/); return m && m[1] === r.ev && m.index > 0 ? t.slice(0, m.index) : t; };
 	const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
+	const COL_DEF_INIT = () => [{ k: '_contact' }, { k: '_event' }, { k: '_pkg' }, { k: '_stage' }, { k: 'deal.value' }, { k: 'deal.owner_id' }, { k: 'deal.modified_at' }];
 	const SEL = new Map(); /* kijelölt deal-ek a listában: id → sor (lapozáskor megmarad, szűréskor törlődik) */
-	const S = { bso: 'ev', qf: [], dense: false, fold: [], cf: { m: 'all', g: [] }, view: '', vdirty: false, meta: null, mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
+	const S = { bso: 'ev', qf: [], dense: false, fold: [], cf: { m: 'all', g: [] }, cols: COL_DEF_INIT(), tw: 0, view: '', vdirty: false, meta: null, mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
 	try {
 		const k = JSON.parse(localStorage.getItem('cpcrm') || '{}');
 		['mode', 'st', 'stage', 'own', 'ev', 'so', 'dir', 'bso'].forEach(x => { if (typeof k[x] === 'string') S[x] = k[x]; });
 		S.dense = !!k.dense;
 		/* v2.9.53: a gyorsszűrő-gombok megszűntek (a szűrőben megvannak) – a régi állapot ne szűkítsen láthatatlanul */
 		S.qf = [];
+		if (Array.isArray(k.cols)) { const c = k.cols.filter(x => x && typeof x.k === 'string' && /^(_[a-z]+|(deal|contact|company)\.[a-z0-9_]+)$/.test(x.k)).slice(0, 30).map(x => ({ k: x.k, w: Math.max(0, Math.min(800, Number(x.w) || 0)) })); if (c.length) S.cols = c; }
+		S.tw = Math.max(0, Math.min(800, Number(k.tw) || 0));
 		if (Array.isArray(k.fold)) S.fold = k.fold.filter(x => typeof x === 'string');
 		if (k.cf && Array.isArray(k.cf.g)) { S.cf = { m: k.cf.m === 'any' ? 'any' : 'all', g: k.cf.g.filter(g => g && typeof g.t === 'string' && Array.isArray(g.c)) }; S.view = typeof k.view === 'string' ? k.view : ''; S.vdirty = !!k.vdirty; }
 		else {
@@ -99,7 +102,7 @@
 		}
 		if (S.mode === 'leads') S.mode = 'board';
 	} catch (e) { /* privát mód */ }
-	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, dense: S.dense, qf: S.qf, fold: S.fold, cf: S.cf, view: S.view, vdirty: S.vdirty })); } catch (e) { /* privát mód */ } }
+	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, dense: S.dense, qf: S.qf, fold: S.fold, cf: S.cf, cols: S.cols, tw: S.tw, view: S.view, vdirty: S.vdirty })); } catch (e) { /* privát mód */ } }
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -138,6 +141,11 @@
 		dense: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14M3 8.2h14M3 11.9h14M3 15.6h14"/></svg>',
 		info: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9v4.6M10 6.4v.1"/></svg>',
 		x: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"/></svg>',
+		pen: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z"/></svg>',
+		cols: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8 4v12M12 4v12"/></svg>',
+		grip: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01"/></svg>',
+		up: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 12 5-5 5 5"/></svg>',
+		down: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg>',
 		trash: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4.5h4V6M6 6l.8 10h6.4L14 6"/></svg>'
 	};
 	function head() {
@@ -157,6 +165,7 @@
 				? '<select data-f="sort" aria-label="Rendezés">' + opts([['mod:desc', 'Legutóbb módosított'], ['cr:desc', 'Legújabb'], ['ev:asc', 'Rendezvény ▲'], ['ev:desc', 'Rendezvény ▼'], ['val:desc', 'Legnagyobb érték'], ['title:asc', 'Név (A–Z)']], S.so + ':' + S.dir) + '</select>'
 				: '<select data-f="bso" aria-label="Rendezés">' + opts([['ev', 'Rendezvény dátuma'], ['val', 'Érték'], ['title', 'Név (A–Z)'], ['mod', 'Legutóbb módosított'], ['rot', 'Legrégebben rohadó']], S.bso) + '</select>';
 			f += '<label class="crm-sortc" title="Rendezés">' + IC.sort + so + '</label>';
+			if (S.mode === 'list') f += '<button type="button" class="crm-cbtn" data-cols aria-haspopup="dialog" aria-expanded="false" title="Oszlopok kiválasztása és sorrendje">' + IC.cols + '<span>Oszlopok</span></button>';
 			if (S.mode === 'board') f += '<span class="crm-seg crm-dens" role="group" aria-label="Kártyák"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '" aria-pressed="' + !S.dense + '" title="Részletes kártyák" aria-label="Részletes kártyák">' + IC.cards + '</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '" aria-pressed="' + S.dense + '" title="Kompakt kártyák" aria-label="Kompakt kártyák">' + IC.dense + '</button></span>';
 		}
 		const inf = '<span class="crm-info" tabindex="0" role="note" aria-label="' + esc(info) + '" data-tip="' + esc(info) + '">' + IC.info + '</span>';
@@ -295,7 +304,7 @@
 		q('[data-vdel]', el => { const c = C0(el); c.v.splice(+el.dataset.vdel, 1); cfTouch(); cfChanged(true); });
 		q('[data-vtxt]', (el, e) => { if (e.key !== 'Enter' || !el.value.trim()) return; e.preventDefault(); const c = C0(el); c.v = (Array.isArray(c.v) ? c.v : []).concat([el.value.trim()]); cfTouch(); cfChanged(true); }, 'keydown');
 		q('[data-v]', el => { const c = C0(el); c[el.dataset.v] = el.value.trim(); cfTouch(); el.closest('.crm-fc').classList.toggle('todo', !cfDone(c)); cfChanged(false, true); }, 'input');
-		q('[data-fview]', el => { const v = (S.meta.views || []).find(x => x.id === el.value); S.view = v ? v.id : ''; S.vdirty = false; if (v) S.cf = JSON.parse(JSON.stringify(v.f)); cfChanged(true); }, 'change');
+		q('[data-fview]', el => { const v = (S.meta.views || []).find(x => x.id === el.value); S.view = v ? v.id : ''; S.vdirty = false; if (v) { S.cf = JSON.parse(JSON.stringify(v.f)); if (Array.isArray(v.cols) && v.cols.length) S.cols = v.cols.map(c => ({ k: c.k, w: Number(c.w) || 0 })); if (v.so && v.so.indexOf(':') > 0 && S.mode === 'list') { const x = v.so.split(':'); S.so = x[0]; S.dir = x[1] === 'asc' ? 'asc' : 'desc'; } } cfChanged(true); }, 'change');
 		const form = p.querySelector('.crm-fvform');
 		let mode = 'new';
 		q('[data-vsave]', el => { mode = el.dataset.vsave; const v = cfView(); form.hidden = false; const n = form.querySelector('[data-vname]'); n.value = mode === 'upd' && v ? v.n : ''; form.querySelector('[data-vsh]').checked = mode === 'upd' && v ? v.sh : false; n.focus(); });
@@ -306,7 +315,7 @@
 			if (!n) { form.querySelector('[data-vname]').focus(); return; }
 			el.disabled = true;
 			try {
-				const d = await post('cp_cf_view_save', { id: mode === 'upd' ? S.view : '', n, sh: form.querySelector('[data-vsh]').checked ? 1 : '', f: cfOut() });
+				const d = await post('cp_cf_view_save', { id: mode === 'upd' ? S.view : '', n, sh: form.querySelector('[data-vsh]').checked ? 1 : '', f: cfOut(), cols: JSON.stringify(S.cols), so: S.mode === 'list' ? S.so + ':' + S.dir : '' });
 				S.meta.views = d.views; S.view = d.id; S.vdirty = false; save(); cfRefreshBtn(); cfDraw();
 			} catch (e) { el.disabled = false; alert(e.message); }
 		});
@@ -332,6 +341,8 @@
 		main.querySelectorAll('[data-dense]').forEach(b => b.addEventListener('click', () => { S.dense = b.dataset.dense === '1'; main.querySelectorAll('[data-dense]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); save(); redrawBoard(); }));
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', newDeal);
+		const cb = main.querySelector('[data-cols]');
+		if (cb) cb.addEventListener('click', e => { e.stopPropagation(); colPick(cb); });
 		const wb = main.querySelector('[data-who]');
 		if (wb) wb.addEventListener('click', e => { e.stopPropagation(); if (!wb.nextElementSibling || !wb.nextElementSibling.classList.contains('d3-wpop')) whoPicker(wb); });
 		const wx = main.querySelector('[data-whox]');
@@ -357,7 +368,7 @@
 				S.leads = d; S.loading = false;
 				if (body()) drawLeads(body());
 			} else if (S.mode === 'list') {
-				const d = await post('cp_crm_list', Object.assign({ q: S.q, cf: cfOut(), so: S.so, dir: S.dir, p: S.p }, S.who ? { [S.who.k]: S.who.id } : {}));
+				const [d] = await Promise.all([post('cp_crm_list', Object.assign({ q: S.q, cf: cfOut(), so: S.so, dir: S.dir, p: S.p, cols: JSON.stringify(colKeys()) }, S.who ? { [S.who.k]: S.who.id } : {})), cfMeta().catch(() => null)]);
 				if (my !== S.seq) return;
 				S.list = d;
 				S.loading = false;
@@ -431,6 +442,51 @@
 		const on = S.so === key;
 		return '<th><button type="button" class="crm-sort' + (on ? ' on' : '') + '" data-so="' + key + '">' + label + (on ? (S.dir === 'asc' ? ' ▲' : ' ▼') : '') + '</button></th>';
 	}
+	/* ------------------------------------------------------------ v2.9.54: lista – választható oszlopok, szélesség, rendezés, gyors szerkesztés */
+	const COL_DEF = [{ k: '_contact' }, { k: '_event' }, { k: '_pkg' }, { k: '_stage' }, { k: 'deal.value' }, { k: 'deal.owner_id' }, { k: 'deal.modified_at' }];
+	const COL_SPEC = {
+		_contact: { n: 'Kapcsolat', so: 'contact.name', w: 230, cell: r => contactCell(r) },
+		_event: { n: 'Rendezvény', so: 'ev', w: 180, cell: r => evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') },
+		_pkg: { n: 'Csomag', so: 'deal.package', w: 170, cell: r => (r.pkg ? esc(r.pkg) : '<span class="cpx-muted">–</span>') + (r.svc ? '<small>' + esc(r.svc) + '</small>' : '') },
+		_stage: { n: 'Szakasz', so: 'deal.stage', w: 180, cell: r => esc(r.stage) + '<br>' + stBadge(r) }
+	};
+	const COL_W = { text: 200, num: 120, date: 150, dt: 150, enum: 170, user: 150, multi: 230, bool: 110 };
+	const colFd = k => { if (COL_SPEC[k]) return null; const [g, f] = k.split('.'); return cfField(g, f); };
+	const colName = k => { if (COL_SPEC[k]) return COL_SPEC[k].n; const fd = colFd(k); if (!fd) return k; const g = k.split('.')[0]; return (g === 'deal' ? '' : (g === 'contact' ? 'Kontakt: ' : 'Cég: ')) + fd.n; };
+	const colW = c => c.w || (COL_SPEC[c.k] ? COL_SPEC[c.k].w : COL_W[(colFd(c.k) || {}).t] || 170);
+	const colKeys = () => S.cols.filter(c => !COL_SPEC[c.k]).map(c => c.k);
+	function colVal(k, r) {
+		const fd = colFd(k), v = r.x ? r.x[k] : undefined;
+		const none = '<span class="cpx-muted">–</span>';
+		if (!fd) return none;
+		if (v == null || v === '') return fd.t === 'bool' ? none : none;
+		switch (fd.t) {
+			case 'num': return k === 'deal.value' ? esc(money(Number(v), r.cur)) : esc(Number(v) % 1 ? String(Number(v)).replace('.', ',') : num(Number(v)));
+			case 'date': return esc(huD(v));
+			case 'dt': return esc(huDT(v));
+			case 'user': return esc(uname(v));
+			case 'bool': return Number(v) ? 'Igen' : none;
+			case 'multi': return '<span class="crm-mchips">' + String(v).split(' | ').filter(Boolean).map(x => '<i>' + esc(x) + '</i>').join('') + '</span>';
+			default: return '<span class="crm-clamp" title="' + esc(v) + '">' + esc(v) + '</span>';
+		}
+	}
+	function rowHtml(r, i) {
+		const tds = S.cols.map(c => {
+			const fd = colFd(c.k), ed = W && fd && fd.e && !(c.k.startsWith('contact.') && !r.cn && !r.ce);
+			const val = COL_SPEC[c.k] ? COL_SPEC[c.k].cell(r) : colVal(c.k, r);
+			const num_ = fd && fd.t === 'num' ? ' crm-num' : '';
+			return '<td data-l="' + esc(colName(c.k)) + '" class="crm-xc' + num_ + (ed ? ' crm-ed' : '') + '" data-k="' + esc(c.k) + '">' + val + (ed ? '<button type="button" class="crm-ied" data-ied="' + esc(c.k) + '" aria-label="' + esc(colName(c.k)) + ' szerkesztése" title="Szerkesztés">' + IC.pen + '</button>' : '') + '</td>';
+		}).join('');
+		return '<tr class="crm-row' + (i % 2 ? ' g1' : '') + (SEL.has(r.id) ? ' sel' : '') + '" data-id="' + r.id + '" tabindex="0">' +
+			'<td class="crm-cbc crm-stk0"><input type="checkbox" class="crm-cb" data-cb="' + r.id + '"' + (SEL.has(r.id) ? ' checked' : '') + ' aria-label="Kijelölés"></td>' +
+			'<td data-l="Deal" class="crm-stk1"><b>' + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' + tds + '</tr>';
+	}
+	function thHtml(key, label, so, i) {
+		const on = so && S.so === so;
+		const sortable = !!so;
+		return '<th' + (i != null ? ' data-ci="' + i + '"' : '') + (on ? ' aria-sort="' + (S.dir === 'asc' ? 'ascending' : 'descending') + '"' : '') + '>' + (sortable ? '<button type="button" class="crm-sort' + (on ? ' on' : '') + '" data-so="' + esc(so) + '" title="Rendezés: ' + esc(label) + '">' + esc(label) + (on ? (S.dir === 'asc' ? ' ▲' : ' ▼') : '') + '</button>' : esc(label)) +
+			(i != null ? '<span class="crm-rsz" data-rsz="' + i + '" aria-hidden="true"></span>' : '') + '</th>';
+	}
 	function drawList(box) {
 		const d = S.list;
 		const by = d.by || {};
@@ -438,19 +494,10 @@
 		let h = '<div class="crm-sum"><b>' + num(d.total) + ' deal</b>' + (sum ? '<span class="cpx-muted"> – ' + esc(sum) + '</span>' : '') + '</div>';
 		if (!d.rows.length) { box.innerHTML = h + '<div class="cpx-empty">Nincs a szűrésnek megfelelő deal.</div>'; return; }
 		h += '<div class="crm-bulk" id="crm-bulk" hidden></div>';
-		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl"><thead><tr><th class="crm-cbh"><input type="checkbox" class="crm-cb" data-all aria-label="Az oldal összes deal-jének kijelölése"></th>' + sortTh('title', 'Deal') + '<th>Kapcsolat</th>' + sortTh('ev', 'Rendezvény') + '<th>Csomag</th><th>Szakasz</th>' + sortTh('val', 'Érték') + '<th>Felelős</th>' + sortTh('mod', 'Módosítva') + '</tr></thead><tbody>';
-		d.rows.forEach((r, i) => {
-			h += '<tr class="crm-row' + (i % 2 ? ' g1' : '') + (SEL.has(r.id) ? ' sel' : '') + '" data-id="' + r.id + '" tabindex="0">' +
-				'<td class="crm-cbc"><input type="checkbox" class="crm-cb" data-cb="' + r.id + '"' + (SEL.has(r.id) ? ' checked' : '') + ' aria-label="Kijelölés"></td>' +
-				'<td data-l="Deal"><b>' + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</b><small class="cpx-muted">#' + r.id + '</small></td>' +
-				'<td data-l="Kapcsolat">' + contactCell(r) + '</td>' +
-				'<td data-l="Rendezvény">' + evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') + '</td>' +
-				'<td data-l="Csomag">' + (r.pkg ? esc(r.pkg) : '<span class="cpx-muted">–</span>') + (r.svc ? '<small>' + esc(r.svc) + '</small>' : '') + '</td>' +
-				'<td data-l="Szakasz">' + esc(r.stage) + '<br>' + stBadge(r) + '</td>' +
-				'<td data-l="Érték" class="crm-num">' + esc(money(r.value, r.cur)) + '</td>' +
-				'<td data-l="Felelős">' + esc(uname(r.own)) + '</td>' +
-				'<td data-l="Módosítva"><small>' + esc(huDT(r.mod)) + '</small></td></tr>';
-		});
+		const ws = [44, S.tw || 300].concat(S.cols.map(colW));
+		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl crm-xt" style="width:' + ws.reduce((a, b) => a + b, 0) + 'px"><colgroup>' + ws.map(w => '<col style="width:' + w + 'px">').join('') + '</colgroup><thead><tr><th class="crm-cbh crm-stk0"><input type="checkbox" class="crm-cb" data-all aria-label="Az oldal összes deal-jének kijelölése"></th>' +
+			thHtml('title', 'Deal', 'title', -1).replace('<th', '<th class="crm-stk1"') + S.cols.map((c, i) => thHtml(c.k, colName(c.k), COL_SPEC[c.k] ? COL_SPEC[c.k].so : c.k, i)).join('') + '</tr></thead><tbody>';
+		d.rows.forEach((r, i) => { h += rowHtml(r, i); });
 		h += '</tbody></table></div>';
 		const pages = Math.ceil(d.total / d.n);
 		if (pages > 1) {
@@ -459,19 +506,158 @@
 		box.innerHTML = h;
 		box.querySelectorAll('[data-so]').forEach(b => b.addEventListener('click', () => {
 			const k = b.dataset.so;
-			if (S.so === k) S.dir = S.dir === 'asc' ? 'desc' : 'asc'; else { S.so = k; S.dir = k === 'title' || k === 'ev' ? 'asc' : 'desc'; }
-			S.p = 0; save(); const ss = S.main.querySelector('.crm-sortsel'); if (ss) ss.value = S.so + ':' + S.dir; load();
+			if (S.so === k) S.dir = S.dir === 'asc' ? 'desc' : 'asc';
+			else { S.so = k; const fd = colFd(k); S.dir = k === 'title' || k === 'ev' || (fd && (fd.t === 'text' || fd.t === 'enum' || fd.t === 'date')) || k === 'contact.name' || k === 'deal.stage' || k === 'deal.package' ? 'asc' : 'desc'; }
+			S.p = 0; save(); syncSortSel(); load();
 		}));
 		box.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); box.scrollIntoView({ block: 'start' }); }));
+		bindResize(box);
+		bindEdit(box);
 		bindOpen(box);
 		bindSel(box);
 	}
-	function bindOpen(box) {
-		box.querySelectorAll('[data-id]').forEach(r => {
-			r.addEventListener('click', e => { if (e.target.closest('a, .crm-cbc, .crm-cb, .crm-qnb, .crm-qn')) return; openDeal(Number(r.dataset.id)); });
-			r.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.crm-qn')) openDeal(Number(r.dataset.id)); });
+	/* a sáv rendező legördülője: ha a fejlécből egy mezőre rendeztél, az is ott látszik */
+	function syncSortSel() {
+		const s = S.main && S.main.querySelector('select[data-f="sort"]');
+		if (!s) return;
+		const v = S.so + ':' + S.dir;
+		if (![...s.options].some(o => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = (S.so === 'title' ? 'Deal' : S.so === 'ev' ? 'Rendezvény' : colName(S.so)) + (S.dir === 'asc' ? ' ▲' : ' ▼'); s.appendChild(o); }
+		s.value = v;
+	}
+	/* oszlopszélesség: a fejléc jobb szélét húzva (a Deal-oszlopé is) */
+	function bindResize(box) {
+		box.querySelectorAll('[data-rsz]').forEach(hd => hd.addEventListener('pointerdown', e => {
+			e.preventDefault(); e.stopPropagation();
+			const i = Number(hd.dataset.rsz), th = hd.closest('th'), tbl = th.closest('table');
+			const cols = tbl.querySelectorAll('col'), col = cols[i + 2];
+			const x0 = e.clientX, w0 = th.getBoundingClientRect().width, t0 = tbl.getBoundingClientRect().width;
+			hd.setPointerCapture(e.pointerId); th.classList.add('rsz');
+			const mv = ev => { const w = Math.max(80, Math.min(800, Math.round(w0 + ev.clientX - x0))); col.style.width = w + 'px'; tbl.style.width = (t0 + w - w0) + 'px'; };
+			const up = ev => {
+				hd.removeEventListener('pointermove', mv); hd.removeEventListener('pointerup', up); th.classList.remove('rsz');
+				const w = Math.max(80, Math.min(800, Math.round(w0 + ev.clientX - x0)));
+				if (i < 0) S.tw = w; else S.cols[i].w = w;
+				cfTouch(); save();
+			};
+			hd.addEventListener('pointermove', mv); hd.addEventListener('pointerup', up);
+		}));
+		box.querySelectorAll('[data-rsz]').forEach(hd => hd.addEventListener('click', e => e.stopPropagation()));
+	}
+	/* gyors szerkesztés: ceruza → a mező típusához illő szerkesztő; Enter ment, Esc elvet */
+	function bindEdit(box) {
+		box.querySelectorAll('[data-ied]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); editCell(b.closest('td')); }));
+		box.querySelectorAll('td.crm-ed').forEach(td => td.addEventListener('dblclick', e => { e.stopPropagation(); editCell(td); }));
+	}
+	function editCell(td) {
+		if (!td || td.querySelector('.crm-ie')) return;
+		const tr = td.closest('tr'), id = Number(tr.dataset.id), k = td.dataset.k, fd = colFd(k);
+		const r = ((S.list && S.list.rows) || []).find(x => x.id === id);
+		if (!r || !fd || !fd.e) return;
+		const cur = r.x ? (r.x[k] == null ? '' : String(r.x[k])) : '';
+		const et = fd.e;
+		const opts = fd.o || [];
+		let inp = '';
+		if (et === 'user') inp = '<select data-iv>' + '<option value="">— nincs —</option>' + cfOpts(fd).map(o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+		else if (et === 'multi') { const sel = cur.split(' | ').filter(Boolean); const all = Array.from(new Set(opts.map(o => String(o[0])).concat(sel))); inp = '<div class="crm-iem" role="group" aria-label="' + esc(fd.n) + '">' + all.map(v => '<label><input type="checkbox" value="' + esc(v) + '"' + (sel.includes(v) ? ' checked' : '') + '> ' + esc(v) + '</label>').join('') + '</div>'; }
+		else if (et === 'date') inp = '<input type="date" data-iv value="' + esc(cur.slice(0, 10)) + '">';
+		else if (et === 'time') inp = '<input type="time" data-iv value="' + esc(cur.slice(11, 16)) + '">';
+		else if (et === 'int' || et === 'dec') inp = '<input type="number" step="' + (et === 'int' ? '1' : 'any') + '" data-iv value="' + esc(cur === '' ? '' : String(Number(cur))) + '">';
+		else if (fd.t === 'text' && (k === 'deal.note' || k === 'deal.description')) inp = '<textarea data-iv rows="4">' + esc(cur) + '</textarea>';
+		else { const dl = opts.length ? 'crm-dl-' + id + '-' + k.replace(/\W/g, '') : ''; inp = '<input type="' + (k === 'contact.email' ? 'email' : 'text') + '" data-iv value="' + esc(cur) + '"' + (dl ? ' list="' + dl + '"' : '') + '>' + (dl ? '<datalist id="' + dl + '">' + opts.slice(0, 80).map(o => '<option value="' + esc(o[0]) + '">').join('') + '</datalist>' : ''); }
+		const ed = document.createElement('div');
+		ed.className = 'crm-ie' + (et === 'multi' || fd.t === 'text' && k === 'deal.note' ? ' wide' : '');
+		ed.innerHTML = inp + '<div class="crm-iebar"><button type="button" class="cpx-btn" data-iok>Mentés</button><button type="button" class="crm-flink" data-ix>Mégse</button><small>' + (et === 'multi' ? '' : (fd.t === 'text' && k === 'deal.note' ? 'Ctrl+Enter: mentés · ' : 'Enter: mentés · ') + 'Esc: mégse') + '</small></div>';
+		td.appendChild(ed); td.classList.add('editing');
+		const f = ed.querySelector('[data-iv], input'); if (f) { f.focus(); if (f.select && f.type === 'text') f.select(); }
+		const val = () => et === 'multi' ? [...ed.querySelectorAll('input:checked')].map(x => x.value).join(',') : (ed.querySelector('[data-iv]').value || '').trim();
+		const close = () => { ed.remove(); td.classList.remove('editing'); document.removeEventListener('pointerdown', out, true); };
+		const out = e => { if (!ed.contains(e.target)) close(); };
+		setTimeout(() => document.addEventListener('pointerdown', out, true), 0);
+		ed.addEventListener('click', e => e.stopPropagation());
+		ed.addEventListener('keydown', e => {
+			e.stopPropagation();
+			if (e.key === 'Escape') { e.preventDefault(); close(); td.focus && tr.focus(); }
+			if (e.key === 'Enter' && (e.target.tagName !== 'TEXTAREA' || e.ctrlKey || e.metaKey) && e.target.type !== 'checkbox') { e.preventDefault(); ed.querySelector('[data-iok]').click(); }
+		});
+		ed.querySelector('[data-ix]').addEventListener('click', close);
+		ed.querySelector('[data-iok]').addEventListener('click', async ev => {
+			const v = val(), was = et === 'multi' ? cur.split(' | ').filter(Boolean).join(',') : (et === 'time' ? cur.slice(11, 16) : et === 'date' ? cur.slice(0, 10) : (et === 'int' || et === 'dec') && cur !== '' ? String(Number(cur)) : cur);
+			if (v === was) { close(); return; }
+			const [g, fk] = k.split('.');
+			if (fk === 'title' && !v) { toast('A deal neve nem lehet üres.', true); return; }
+			const b = ev.currentTarget; b.disabled = true; b.textContent = 'Mentés…';
+			try {
+				const res = await post('cp_crm_save', { id, f: JSON.stringify(g === 'deal' ? { [fk]: v } : {}), c: JSON.stringify(g === 'contact' ? { [fk]: v } : {}), cols: JSON.stringify(colKeys()) });
+				const i = S.list.rows.findIndex(x => x.id === id);
+				if (res.row && i >= 0) { S.list.rows[i] = Object.assign({}, S.list.rows[i], res.row); }
+				close();
+				const tmp = document.createElement('tbody'); tmp.innerHTML = rowHtml(S.list.rows[i], i);
+				const nr = tmp.firstElementChild; tr.replaceWith(nr);
+				bindEdit(nr); bindOpenRow(nr); bindSelRow(nr);
+				nr.querySelector('td[data-k="' + CSS.escape(k) + '"]').classList.add('crm-flash');
+				toast(res.warn ? 'Elmentve, de: ' + res.warn : 'Elmentve – a Salesmate-be is.', !!res.warn);
+			} catch (e) { b.disabled = false; b.textContent = 'Mentés'; toast(e.message, true); }
 		});
 	}
+	function bindOpenRow(r) {
+		r.addEventListener('click', e => { if (e.target.closest('a, .crm-cbc, .crm-cb, .crm-qnb, .crm-qn, .crm-ied, .crm-ie, .crm-rsz')) return; openDeal(Number(r.dataset.id)); });
+		r.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.crm-qn, .crm-ie')) openDeal(Number(r.dataset.id)); });
+	}
+	function bindSelRow(tr) {
+		const c = tr.querySelector('[data-cb]'); if (!c) return;
+		c.addEventListener('change', () => { const id = Number(c.dataset.cb); const r = S.list.rows.find(x => x.id === id); if (c.checked && r) SEL.set(id, r); else SEL.delete(id); tr.classList.toggle('sel', c.checked); const box = S.main.querySelector('#crm-body'); if (box) drawBulk(box); });
+	}
+
+	/* ------------------------------------------------------------ oszlopválasztó (a lista fejlécében) */
+	function colPick(btn) {
+		const old = document.querySelector('.crm-cpop'); if (old) { old.remove(); btn.setAttribute('aria-expanded', 'false'); return; }
+		const pop = document.createElement('div');
+		pop.className = 'crm-cpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Oszlopok');
+		btn.parentNode.appendChild(pop); btn.setAttribute('aria-expanded', 'true');
+		let q = '';
+		let tl = null;
+		const apply = (reload) => { save(); cfTouch(); cfRefreshBtn(); clearTimeout(tl); if (reload) tl = setTimeout(load, 350); else if (S.list) drawList(S.main.querySelector('#crm-body')); };
+		const draw = () => {
+			if (!S.meta) { pop.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; return; }
+			const on = new Set(S.cols.map(c => c.k));
+			const qq = q.toLowerCase();
+			const groups = S.meta.groups.filter(g => g.k !== 'activity');
+			let h = '<div class="crm-cp-h"><b>Oszlopok</b><button type="button" class="crm-flink" data-cdef>Alapértelmezés</button><button type="button" class="cpx-x" data-cclose aria-label="Bezárás">×</button></div>' +
+				'<p class="crm-cp-s">Látható (húzd a sorrendhez)</p><ol class="crm-cp-on">' + S.cols.map((c, i) => '<li draggable="true" data-ci="' + i + '"><span class="crm-cp-grip" aria-hidden="true">' + IC.grip + '</span><span class="crm-cp-n">' + esc(colName(c.k)) + '</span>' +
+					'<button type="button" class="crm-ficon" data-cup="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="' + esc(colName(c.k)) + ' feljebb">' + IC.up + '</button><button type="button" class="crm-ficon" data-cdn="' + i + '"' + (i < S.cols.length - 1 ? '' : ' disabled') + ' aria-label="' + esc(colName(c.k)) + ' lejjebb">' + IC.down + '</button><button type="button" class="crm-ficon" data-crm="' + i + '" aria-label="' + esc(colName(c.k)) + ' elrejtése">' + IC.x + '</button></li>').join('') + '</ol>' +
+				'<input type="search" class="crm-cp-q" data-cq placeholder="Mező keresése…" aria-label="Mező keresése" value="' + esc(q) + '"><div class="crm-cp-all">';
+			const specs = Object.keys(COL_SPEC).filter(k => !on.has(k) && (!qq || COL_SPEC[k].n.toLowerCase().includes(qq)));
+			if (specs.length) h += '<p class="crm-cp-s">Összevont</p>' + specs.map(k => '<button type="button" class="crm-cp-add" data-cadd="' + k + '">+ ' + esc(COL_SPEC[k].n) + '</button>').join('');
+			groups.forEach(g => {
+				const fs = g.f.filter(f => !on.has(g.k + '.' + f.k) && !(g.k === 'deal' && f.k === 'title') && (!qq || f.n.toLowerCase().includes(qq)));
+				if (fs.length) h += '<p class="crm-cp-s">' + esc(g.n) + '</p>' + fs.map(f => '<button type="button" class="crm-cp-add" data-cadd="' + g.k + '.' + f.k + '">+ ' + esc(f.n) + (f.e && W ? ' <i title="Szerkeszthető a listában">' + IC.pen + '</i>' : '') + '</button>').join('');
+			});
+			h += '</div>';
+			pop.innerHTML = h;
+			const qi = pop.querySelector('[data-cq]'); qi.addEventListener('input', () => { q = qi.value; const p = qi.selectionStart; draw(); const n = pop.querySelector('[data-cq]'); n.focus(); n.setSelectionRange(p, p); });
+			pop.querySelector('[data-cclose]').addEventListener('click', () => { pop.remove(); btn.setAttribute('aria-expanded', 'false'); btn.focus(); });
+			pop.querySelector('[data-cdef]').addEventListener('click', () => { S.cols = COL_DEF.map(c => ({ k: c.k })); S.tw = 0; draw(); apply(true); });
+			pop.querySelectorAll('[data-cadd]').forEach(b => b.addEventListener('click', () => { if (S.cols.length >= 30) { toast('Legfeljebb 30 oszlop lehet.', true); return; } S.cols.push({ k: b.dataset.cadd }); draw(); apply(!COL_SPEC[b.dataset.cadd]); }));
+			pop.querySelectorAll('[data-crm]').forEach(b => b.addEventListener('click', () => { S.cols.splice(Number(b.dataset.crm), 1); draw(); apply(false); }));
+			const mv = (i, j) => { if (j < 0 || j >= S.cols.length) return; const [x] = S.cols.splice(i, 1); S.cols.splice(j, 0, x); draw(); apply(false); const f = pop.querySelector('[data-ci="' + j + '"] [data-' + (j > i ? 'cdn' : 'cup') + ']'); if (f && !f.disabled) f.focus(); };
+			pop.querySelectorAll('[data-cup]').forEach(b => b.addEventListener('click', () => mv(Number(b.dataset.cup), Number(b.dataset.cup) - 1)));
+			pop.querySelectorAll('[data-cdn]').forEach(b => b.addEventListener('click', () => mv(Number(b.dataset.cdn), Number(b.dataset.cdn) + 1)));
+			let dragI = -1;
+			pop.querySelectorAll('.crm-cp-on li').forEach(li => {
+				li.addEventListener('dragstart', e => { dragI = Number(li.dataset.ci); li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragI)); } catch (x) { /* régi böngésző */ } });
+				li.addEventListener('dragend', () => li.classList.remove('drag'));
+				li.addEventListener('dragover', e => { e.preventDefault(); li.classList.add('over'); });
+				li.addEventListener('dragleave', () => li.classList.remove('over'));
+				li.addEventListener('drop', e => { e.preventDefault(); li.classList.remove('over'); const j = Number(li.dataset.ci); if (dragI >= 0 && dragI !== j) mv(dragI, j); });
+			});
+		};
+		draw();
+		if (!S.meta) cfMeta().then(draw).catch(e => { pop.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; });
+		const outside = e => { if (!pop.isConnected) { document.removeEventListener('pointerdown', outside, true); return; } if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { pop.remove(); btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('pointerdown', outside, true); } };
+		setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
+		pop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); pop.remove(); btn.setAttribute('aria-expanded', 'false'); btn.focus(); } });
+	}
+	function bindOpen(box) { box.querySelectorAll('[data-id]').forEach(bindOpenRow); }
 
 	/* ------------------------------------------------------------ kijelölés és tömeges műveletek (lista) */
 	function bindSel(box) {

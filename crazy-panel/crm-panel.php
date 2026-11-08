@@ -119,6 +119,8 @@ function cp_crm_list_data($a) {
 	}
 	$sorts = array('mod' => 'd.modified_at', 'cr' => 'd.created_at', 'ev' => 'd.event_d', 'val' => 'd.value', 'title' => 'd.title');
 	$so = $rq('so');
+	/* v2.9.54: rendezés bármelyik mezőre („csoport.mező”, a szűrő fehérlistája szerint) */
+	if (!isset($sorts[$so]) && function_exists('cp_cf_col') && ($sc = cp_cf_col($so))) { $sorts[$so] = $sc[0]; }
 	if (!isset($sorts[$so])) { $so = 'mod'; }
 	$dir = $rq('dir') === 'asc' ? 'ASC' : 'DESC';
 	$order = $sorts[$so] . ' IS NULL, ' . $sorts[$so] . ' ' . $dir . ', d.id DESC';
@@ -127,9 +129,17 @@ function cp_crm_list_data($a) {
 	$from = "FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE " . implode(' AND ', $w);
 	$total = (int) $wpdb->get_var("SELECT COUNT(*) $from");
 	$sum = $wpdb->get_results("SELECT d.status s, COUNT(*) n, SUM(d.value) v $from GROUP BY d.status", ARRAY_A);
-	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con $from ORDER BY $order LIMIT " . ($p * $n) . ", $n", ARRAY_A);
+	/* v2.9.54: a választott oszlopok értékei (x0, x1…) */
+	$cols = function_exists('cp_cf_cols_parse') ? cp_cf_cols_parse($a['cols'] ?? '') : array();
+	$xs = ''; $xk = array(); $i = 0;
+	foreach ($cols as $k => $c) { $xs .= ', ' . $c[0] . ' x' . $i; $xk['x' . $i] = array($k, $c[1]); $i++; }
+	$rows = $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con$xs $from ORDER BY $order LIMIT " . ($p * $n) . ", $n", ARRAY_A);
 	$out = array();
-	foreach ((array) $rows as $r) { $out[] = cp_crm_list_row($r); }
+	foreach ((array) $rows as $r) {
+		$o = cp_crm_list_row($r);
+		if ($xk) { $o['x'] = array(); foreach ($xk as $al => $kt) { $v = $r[$al]; if ($kt[1] === 'dt' && $v) { $v = cp_crm_local($v); } $o['x'][$kt[0]] = $v === null ? null : (string) $v; } }
+		$out[] = $o;
+	}
 	$by = array();
 	foreach ((array) $sum as $x) { $by[$x['s']] = array('n' => (int) $x['n'], 'v' => (float) $x['v']); }
 	return array('rows' => $out, 'total' => $total, 'p' => $p, 'n' => $n, 'by' => $by, 'sync' => cp_crm_sync_at());
@@ -324,11 +334,19 @@ function cp_crm_ajax_move() {
 	wp_send_json_success(array('row' => cp_crm_row_out($id), 'changed' => true, 'warn' => $warn));
 }
 
-function cp_crm_row_out($id) {
+function cp_crm_row_out($id, $cols_raw = null) {
 	global $wpdb;
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts'); $co = cp_crm_t('companies');
-	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
-	return $r ? cp_crm_list_row($r) : null;
+	/* v2.9.54: a lista választott oszlopai is (gyors szerkesztés után a sor frissítéséhez) */
+	if ($cols_raw === null && isset($_POST['cols'])) { $cols_raw = wp_unslash($_POST['cols']); }
+	$cols = $cols_raw !== null && function_exists('cp_cf_cols_parse') ? cp_cf_cols_parse($cols_raw) : array();
+	$xs = ''; $xk = array(); $i = 0;
+	foreach ($cols as $k => $cc) { $xs .= ', ' . $cc[0] . ' x' . $i; $xk['x' . $i] = array($k, $cc[1]); $i++; }
+	$r = $wpdb->get_row($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con$xs FROM $d d LEFT JOIN $c c ON c.id = d.contact_id LEFT JOIN $co co ON co.id = d.company_id WHERE d.id = %d", $id), ARRAY_A);
+	if (!$r) { return null; }
+	$o = cp_crm_list_row($r);
+	if ($xk) { $o['x'] = array(); foreach ($xk as $al => $kt) { $v = $r[$al]; if ($kt[1] === 'dt' && $v) { $v = cp_crm_local($v); } $o['x'][$kt[0]] = $v === null ? null : (string) $v; } }
+	return $o;
 }
 
 /* ------------------------------------------------------------ tömeges műveletek a listában (kijelölés): mezőírás, törlés

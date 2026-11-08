@@ -111,11 +111,13 @@ function cp_cf_opts() {
 /* a felületnek: mezők, műveletek, értékek, nézetek */
 function cp_cf_meta() {
 	$o = cp_cf_opts();
+	$ed = cp_cf_editable();
 	$g = array();
 	foreach (cp_cf_defs() as $gk => $G) {
 		$fs = array();
 		foreach ($G['f'] as $f => $x) {
 			$e = array('k' => $f, 'n' => $x[0], 't' => $x[1]);
+			if (isset($ed[$gk . '.' . $f])) { $e['e'] = $ed[$gk . '.' . $f]; }
 			if (!empty($x[2])) { $e['o'] = array_map(function ($v, $n) { return array($v, $n); }, array_keys($x[2]), array_values($x[2])); }
 			elseif (isset($o[$gk . '.' . $f])) { $e['o'] = array_map(function ($v) { return array($v, $v); }, $o[$gk . '.' . $f]); }
 			$fs[] = $e;
@@ -313,6 +315,34 @@ function cp_cf_where($p) {
 	return $gs ? '(' . implode($p['m'] === 'any' ? ' OR ' : ' AND ', $gs) . ')' : '';
 }
 
+/* ------------------------------------------------------------ v2.9.54: lista-oszlopok és rendezés bármelyik mezőre */
+/* „csoport.mező” → array(SQL-kifejezés, típus) vagy null (a Teendő-csoport nem lehet oszlop) */
+function cp_cf_col($key) {
+	if (!is_string($key) || !preg_match('/^(deal|contact|company)\.([a-z0-9_]+)$/', $key, $m)) { return null; }
+	$defs = cp_cf_defs();
+	if (!isset($defs[$m[1]]['f'][$m[2]])) { return null; }
+	$ty = $defs[$m[1]]['f'][$m[2]][1];
+	if ($m[1] === 'contact' && in_array($m[2], array('deals_open', 'deals_won'), true)) {
+		return array('(SELECT COUNT(*) FROM ' . cp_crm_t('deals') . " d2 WHERE d2.contact_id = d.contact_id AND d2.deleted_at IS NULL AND d2.status = '" . ($m[2] === 'deals_open' ? 'Open' : 'Won') . "')", $ty);
+	}
+	$al = array('deal' => 'd', 'contact' => 'c', 'company' => 'co');
+	return array($al[$m[1]] . '.`' . $m[2] . '`', $ty);
+}
+/* a kérés oszlopai (legfeljebb 30) → array(kulcs => array(kifejezés, típus)) */
+function cp_cf_cols_parse($raw) {
+	if (is_string($raw)) { $raw = json_decode($raw, true); }
+	$out = array();
+	foreach (array_slice(is_array($raw) ? $raw : array(), 0, 30) as $k) { $c = cp_cf_col(is_string($k) ? $k : ''); if ($c) { $out[$k] = $c; } }
+	return $out;
+}
+/* a gyors szerkesztésben írható mezők: deal (a deal-adatlap mentése szerint) és a kontakt alapadatai */
+function cp_cf_editable() {
+	$e = array();
+	if (function_exists('cp_crm_edit_fields')) { foreach (cp_crm_edit_fields() as $f => $t) { $e['deal.' . $f] = $t; } }
+	foreach (array('name' => 'str', 'email' => 'str', 'mobile' => 'str', 'phone' => 'str') as $f => $t) { $e['contact.' . $f] = $t; }
+	return $e;
+}
+
 /* ------------------------------------------------------------ mentett nézetek */
 function cp_cf_views_all() { $v = get_option('cp_cf_views', array()); return is_array($v) ? $v : array(); }
 function cp_cf_views_for_me() {
@@ -320,7 +350,7 @@ function cp_cf_views_for_me() {
 	$out = array();
 	foreach (cp_cf_views_all() as $id => $x) {
 		if (!empty($x['sh']) || (int) ($x['by'] ?? 0) === $me) {
-			$out[] = array('id' => (string) $id, 'n' => (string) $x['n'], 'sh' => !empty($x['sh']), 'mine' => (int) ($x['by'] ?? 0) === $me, 'f' => $x['f'], 'so' => (string) ($x['so'] ?? ''));
+			$out[] = array('id' => (string) $id, 'n' => (string) $x['n'], 'sh' => !empty($x['sh']), 'mine' => (int) ($x['by'] ?? 0) === $me, 'f' => $x['f'], 'so' => (string) ($x['so'] ?? ''), 'cols' => isset($x['cols']) && is_array($x['cols']) ? $x['cols'] : null);
 		}
 	}
 	usort($out, function ($a, $b) { return strcmp(mb_strtolower($a['n']), mb_strtolower($b['n'])); });
@@ -354,8 +384,19 @@ function cp_cf_ajax_view_save() {
 		$id = strtolower(wp_generate_password(8, false));
 		$all[$id] = array('by' => $me);
 	}
-	$so = preg_replace('/[^a-z:]/', '', (string) wp_unslash($_POST['so'] ?? ''));
-	$all[$id] = array_merge($all[$id], array('n' => $n, 'sh' => !empty($_POST['sh']) ? 1 : 0, 'f' => $p, 'so' => mb_substr($so, 0, 20), 'at' => time()));
+	$so = preg_replace('/[^a-z_.:]/', '', (string) wp_unslash($_POST['so'] ?? ''));
+	/* v2.9.54: a lista oszlopai (kulcs + szélesség) is a nézettel együtt */
+	$cols = null;
+	$cr = json_decode((string) wp_unslash($_POST['cols'] ?? ''), true);
+	if (is_array($cr)) {
+		$cols = array();
+		foreach (array_slice($cr, 0, 30) as $c) {
+			$k = is_array($c) ? (string) ($c['k'] ?? '') : '';
+			if ($k === '' || (!cp_cf_col($k) && !in_array($k, array('_contact', '_event', '_pkg', '_stage'), true))) { continue; }
+			$cols[] = array('k' => $k, 'w' => max(0, min(800, (int) ($c['w'] ?? 0))));
+		}
+	}
+	$all[$id] = array_merge($all[$id], array('n' => $n, 'sh' => !empty($_POST['sh']) ? 1 : 0, 'f' => $p, 'so' => mb_substr($so, 0, 40), 'cols' => $cols, 'at' => time()));
 	update_option('cp_cf_views', $all, false);
 	wp_send_json_success(array('id' => $id, 'views' => cp_cf_views_for_me()));
 }
