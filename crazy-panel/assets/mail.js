@@ -16,7 +16,7 @@
 	setTimeout(() => { try { const o = localStorage.getItem('cpmail_draft'); if (o) { post('cp_mail_draft_save', { d: o }).then(() => { localStorage.removeItem('cpmail_draft'); }).catch(() => {}); } } catch (e) { /* privát mód */ } }, 1500);
 
 	/* v1.67: a mappák / fülek listája gyorsítótárban – váltáskor azonnal megjelenik, a friss adat a háttérben jön */
-	const RO = ['cp_mail_threads', 'cp_mail_tags', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save'];
+	const RO = ['cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save'];
 	S.lc = {}; S.lcAt = {};
 	async function post(action, params) {
 		if (!RO.includes(action)) { S.lc = {}; S.lcAt = {}; } /* bármilyen módosítás után friss lista */
@@ -378,12 +378,46 @@
 		document.addEventListener('click', e => {
 			const a = e.target.closest && e.target.closest('a[data-risk]');
 			if (!a) return;
+			const zr = a.dataset.zip ? (() => { try { return JSON.parse(a.dataset.zip); } catch (x) { return null; } })() : null;
+			if (zr && zr.lvl === 'ok') return;
+			if (zr && zr.lvl) {
+				const why = [zr.err, zr.enc ? 'jelszóval védett – a belsejét nem lehet ellenőrizni (kártevők gyakori trükkje)' : '', zr.risky && zr.risky.length ? 'veszélyes fájl van benne: ' + zr.risky.join(', ') : '', zr.nested && zr.nested.length ? 'újabb tömörített fájl van benne: ' + zr.nested.join(', ') : '', zr.macro && zr.macro.length ? 'makrós Office-fájl van benne: ' + zr.macro.join(', ') : '', zr.bomb ? 'kicsomagolva gyanúsan nagy („zip-bomba” lehet)' : ''].filter(Boolean);
+				const m2 = (zr.lvl === 'high' ? '⚠ Veszélyes zip!\n\n' : 'Figyelem – ellenőrizd ezt a zipet.\n\n') + '„' + (a.dataset.rn || '') + '”\n' + (why.length ? why.map(x => '• ' + x).join('\n') : '• ismeretlen típusú fájlok vannak benne') + '\n\n' + (zr.lvl === 'high' ? 'Ismeretlen feladótól ne nyisd meg. ' : '') + 'Letöltöd mégis?';
+				if (!window.confirm(m2)) { e.preventDefault(); e.stopPropagation(); }
+				return;
+			}
 			const r = attRisk(a.dataset.rn || a.textContent);
 			if (!r) return;
 			const msg = (r.lvl === 'high' ? '⚠ Veszélyes csatolmány!\n\n' : 'Figyelem – kockázatos csatolmány.\n\n') + '„' + (a.dataset.rn || a.textContent.trim()) + '”\nOk: ' + r.why + '.\n\n' + (r.lvl === 'high' ? 'Csak akkor töltsd le, ha biztosan tudod, mi ez és ki küldte. Ismeretlen feladótól (pl. álláspályázat) ne nyisd meg.' : 'Ismeretlen feladótól óvatosan: tömörített fájlt ne bonts ki, Office-fájlban ne engedélyezz makrót / szerkesztést.') + '\n\nLetöltöd mégis?';
 			if (!window.confirm(msg)) { e.preventDefault(); e.stopPropagation(); }
 		}, true);
 	}
+	/* v2.9.28: zip tartalomellenőrzése a szerveren (kicsomagolás nélkül); a link jelzése az eredmény szerint változik */
+	const ZIPC = {};
+	window.CPZipScan = root => {
+		if (!root) return;
+		root.querySelectorAll('a[data-risk][data-rn]').forEach(a => {
+			if (a.dataset.zipq || !/\.zip$/i.test(a.dataset.rn)) return;
+			const mm = /[?&]m=(\d+)&i=(\d+)/.exec(a.getAttribute('href') || '');
+			if (!mm) return;
+			a.dataset.zipq = '1';
+			const k = mm[1] + '|' + mm[2];
+			const apply = r => {
+				if (!r || !r.lvl || !a.isConnected) return;
+				a.dataset.zip = JSON.stringify(r);
+				a.dataset.risk = r.lvl;
+				a.classList.remove('high', 'warn', 'ok'); a.classList.add(r.lvl);
+				const kinds = Object.keys(r.kinds || {}).map(x => r.kinds[x] + ' ' + x).join(', ');
+				const lbl = r.lvl === 'ok' ? (kinds || 'üres') : r.lvl === 'high' ? (r.enc ? 'jelszavas' : r.err ? 'nem olvasható' : 'veszélyes fájl van benne') : (r.nested && r.nested.length ? 'tömörített van benne' : r.macro && r.macro.length ? 'makrós fájl van benne' : r.bomb ? 'gyanúsan nagy' : 'ellenőrizd');
+				let s2 = a.querySelector('.ml-zipv'); if (!s2) { s2 = document.createElement('small'); s2.className = 'ml-zipv'; a.appendChild(s2); }
+				s2.textContent = ' · ' + lbl;
+				const b0 = a.querySelector('.ml-ariskb'); if (b0) { b0.textContent = r.lvl === 'ok' ? '✓' : '⚠'; b0.className = 'ml-ariskb ' + r.lvl; }
+				a.title = (r.lvl === 'ok' ? 'Ellenőrzött zip – tartalma: ' : 'Zip tartalma: ') + (r.list || []).join(', ') + (r.more ? ' … és még ' + r.more : '');
+			};
+			if (ZIPC[k]) { apply(ZIPC[k]); return; }
+			post('cp_mail_att_zip', { m: mm[1], i: mm[2] }).then(r => { ZIPC[k] = r; apply(r); }).catch(() => {});
+		});
+	};
 	const attRiskAttr = n => { const r = attRisk(n); return r ? ' data-risk="' + r.lvl + '" data-rn="' + esc(n) + '" class="ml-arisk ' + r.lvl + '" title="' + esc((r.lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + r.why) + '"' : ''; };
 	const attUrl = (mid, i, n) => C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&t=' + encodeURIComponent(C.t) + (/\.(png|jpe?g|gif|webp|pdf)$/i.test(n || '') ? '&view=1' : '');
 	window.CPMailAtt = attUrl;
@@ -800,6 +834,7 @@
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
 		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); } catch (e) { toast(e.message, true); } };
 		rd.querySelector('[data-st]').addEventListener('click', () => act('cp_mail_thread_set', { f: 'status', v: t.st === 'closed' ? 'open' : 'closed' }));
+		window.CPZipScan(rd);
 		let tcur = tgList(t.tags);
 		const tgSet = () => act('cp_mail_thread_set', { f: 'tags', v: tcur.join(', ') });
 		const tgOpen = btn => tagPicker(btn, tcur.join(', '), (n, on) => { tcur = on ? tcur.filter(x => x.toLowerCase() !== n.toLowerCase()).concat([n]) : tcur.filter(x => x.toLowerCase() !== n.toLowerCase()); tgSet(); });

@@ -34,6 +34,7 @@
 		return '<span class="d3-tb t-' + cls + (img ? ' has' : '') + '">' + img + '<i>' + esc(e || 'FÁJL') + '</i></span>';
 	}
 	function d3FilesBind(sh, fl) {
+		if (window.CPZipScan) window.CPZipScan(sh); /* v2.9.28: zip-ek tartalomellenőrzése */
 		const et = sh.querySelector('[data-embt]');
 		if (et) et.addEventListener('click', () => { const sec = et.closest('[data-fsec]'), on = sec.classList.toggle('emb-on'); et.textContent = et.textContent.replace(/ · (Mutasd|Elrejtés)$/, on ? ' · Elrejtés' : ' · Mutasd'); });
 		/* v2.9.6: a PNG nélküli (régebben mentett) aktuális sablon a Sablonkészítőben nyílik meg, az ügyfél beállításaival */

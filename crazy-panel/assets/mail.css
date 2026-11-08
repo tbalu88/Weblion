@@ -735,3 +735,8 @@
 .ml-ariskb{font-size:12px;line-height:1}
 .d3-ft .ml-ariskb.high{color:#C53A24}
 .d3-ft .ml-ariskb.warn{color:#A85617}
+/* v2.9.28: ellenőrzött zip */
+.ml-atts a.ml-arisk.ok{background:#E3F4EB;color:#1F7A50;font-weight:600}
+.ml-zipv{font-weight:500;opacity:.9}
+.d3-ft .ml-zipv{display:block}
+.d3-ft .ml-ariskb.ok{color:#1F7A50}
