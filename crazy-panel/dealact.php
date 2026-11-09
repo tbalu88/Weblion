@@ -13,7 +13,9 @@ define('CP_DACT_DB_VER', '1');
 function cp_dact_t() { global $wpdb; return $wpdb->prefix . 'crazy_crm_notes'; }
 
 add_action('init', function () {
-	if (get_option('cp_dact_db_ver') === CP_DACT_DB_VER || wp_doing_ajax()) { return; }
+	/* v2.9.58: előbb az AJAX-feltétel (ott nem kell a beállítást olvasni), és a már aktuális jelző automatikusan betöltve */
+	if (wp_doing_ajax()) { return; }
+	if (get_option('cp_dact_db_ver') === CP_DACT_DB_VER) { if (function_exists('cp_opt_autoload')) { cp_opt_autoload('cp_dact_db_ver'); } return; }
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	dbDelta('CREATE TABLE ' . cp_dact_t() . " (
@@ -30,7 +32,7 @@ add_action('init', function () {
   KEY deal_id (deal_id),
   KEY sm_id (sm_id)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_dact_db_ver', CP_DACT_DB_VER, false);
+	update_option('cp_dact_db_ver', CP_DACT_DB_VER, true);
 }, 7);
 function cp_dact_db_ok() { return get_option('cp_dact_db_ver') === CP_DACT_DB_VER; }
 
@@ -95,6 +97,9 @@ add_filter('cp_crm_deal_data', function ($x) {
 }, 20);
 function cp_dact_types() {
 	global $wpdb;
+	/* v2.9.58: a szűrő gyorsítótárazott értéklistájából (ugyanez a lekérdezés, 60-as korláttal) */
+	$co = function_exists('cp_cf_opts') ? cp_cf_opts() : array();
+	if (!empty($co['activity.type'])) { return array_slice($co['activity.type'], 0, 12); }
 	$t = (array) $wpdb->get_col('SELECT type FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND type <> '' GROUP BY type ORDER BY COUNT(*) DESC LIMIT 12");
 	return $t ?: array('Task', 'Call');
 }
@@ -203,9 +208,10 @@ function cp_dact_ajax_act_done() {
  * (hogy a kereső a még meg nem nyitott dealek jegyzeteiben is találjon). Csak azoknál a dealeknél kérdez, ahol a Salesmate
  * szerint van jegyzet; percenként legfeljebb 15 deal. Utána a deal megnyitásakor frissül, mint eddig. */
 add_action('init', function () {
-	if (!cp_dact_db_ok() || wp_doing_ajax()) { return; }
+	if (wp_doing_ajax() || !cp_dact_db_ok()) { return; }
 	$bf = get_option('cp_dact_bf', array());
-	if (!empty($bf['done'])) { return; }
+	/* v2.9.58: a kész jelző minden kérésnél olvasódik – automatikusan betöltve */
+	if (!empty($bf['done'])) { if (function_exists('cp_opt_autoload')) { cp_opt_autoload('cp_dact_bf'); } return; }
 	if (!wp_next_scheduled('cp_dact_bf')) { wp_schedule_event(time() + 60, 'cp_minute', 'cp_dact_bf'); }
 }, 30);
 add_action('cp_dact_bf', 'cp_dact_backfill');

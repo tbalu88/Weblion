@@ -60,7 +60,7 @@
 		const pages = Math.max(1, Math.ceil(r.total / r.n)), ct = r.kind === 'ct';
 		const allOn = r.rows.length && r.rows.every(x => S.sel.has(x.id));
 		body.innerHTML = '<div class="pp-n">' + r.total.toLocaleString('hu-HU') + (ct ? ' kontakt' : ' cég') + (pages > 1 ? ' · ' + (r.p + 1) + '. oldal / ' + pages : '') + (S.q && S.only ? ' · keresésnél a deal nélküliek is látszanak' : '') + '</div>' +
-			(DEL && S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button>' + (MRG ? '<button type="button" class="cpx-btn" data-mrg' + (S.sel.size < 2 || S.sel.size > 6 ? ' disabled title="2–6 rekordot jelölj ki"' : '') + '>⇄ Összevonás</button>' : '') + '<button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '') +
+			(DEL ? '<div data-bulk>' + bulkHtml() + '</div>' : '') +
 			(r.rows.length ? '<div class="pp-tw"><table class="pp-t"><thead><tr>' + (DEL ? '<th class="pp-ck"><input type="checkbox" data-all aria-label="Az oldal összes sorának kijelölése"' + (allOn ? ' checked' : '') + '></th>' : '') + '<th>' + (ct ? 'Kontakt' : 'Cég') + '</th><th class="pp-hm">' + (ct ? 'Cég' : 'Kontaktok') + '</th><th class="r">Deal</th><th class="r pp-hm">Megnyert</th><th class="r">Bevétel</th><th class="pp-hm">Legutóbbi rendezvény</th></tr></thead><tbody>' +
 				r.rows.map(x => '<tr tabindex="0" data-id="' + x.id + '"' + (S.sel.has(x.id) ? ' class="ck"' : '') + '>' + (DEL ? '<td class="pp-ck"><input type="checkbox" data-ck="' + x.id + '" aria-label="Kijelölés"' + (S.sel.has(x.id) ? ' checked' : '') + '></td>' : '') + '<td class="pp-nc"><span class="pp-av' + (ct ? '' : ' sq') + '" style="background:' + AVC[x.id % AVC.length] + '">' + esc(ini(x.name || x.email)) + '</span><span class="pp-nm"><b>' + esc(x.name || x.email || '#' + x.id) + '</b><small>' + esc(ct ? [x.name && x.email !== x.name ? x.email : '', x.mobile || x.phone, x.city].filter(Boolean).join(' · ') : (x.website || '')) + '</small></span></td>' +
 					'<td class="pp-hm">' + (ct ? (x.co ? '<a href="#" data-co="' + x.co_id + '">' + esc(x.co) + '</a>' : '<span class="cpx-muted">–</span>') : x.cts) + '</td><td class="r">' + x.n + (x.open ? ' <small class="pp-open">' + x.open + ' nyitott</small>' : '') + '</td><td class="r pp-hm">' + x.won + '</td><td class="r">' + esc(money(x.won_v)) + '</td><td class="pp-hm">' + esc(huD(x.last_ev)) + '</td></tr>').join('') + '</tbody></table></div>' +
@@ -74,15 +74,26 @@
 		body.querySelectorAll('[data-co]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); window.CPCrm.company(Number(a.dataset.co)); }));
 		body.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); window.scrollTo(0, 0); }));
 		if (DEL) {
-			const redraw = () => { const y = window.scrollY; load().then(() => window.scrollTo(0, y)); };
-			body.querySelectorAll('[data-ck]').forEach(c => c.addEventListener('change', () => { const x = r.rows.find(z => z.id === Number(c.dataset.ck)); if (c.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); redraw(); }));
+			/* v2.9.58: a pipálás helyben frissít (sorjelölés, „mind” pipa, műveletsáv) – nem tölti újra a listát */
+			const sync = () => {
+				body.querySelectorAll('tr[data-id]').forEach(tr => { const on = S.sel.has(Number(tr.dataset.id)); tr.classList.toggle('ck', on); const c = tr.querySelector('[data-ck]'); if (c) c.checked = on; });
+				const all = body.querySelector('[data-all]'); if (all) all.checked = !!(r.rows.length && r.rows.every(x => S.sel.has(x.id)));
+				const bk = body.querySelector('[data-bulk]'); if (!bk) return;
+				bk.innerHTML = bulkHtml();
+				const clr = bk.querySelector('[data-clr]'); if (clr) clr.addEventListener('click', () => { S.sel.clear(); sync(); });
+				const del = bk.querySelector('[data-del]'); if (del) del.addEventListener('click', () => delSel(ct));
+				const mb = bk.querySelector('[data-mrg]'); if (mb) mb.addEventListener('click', () => mergeDlg(ct ? 'ct' : 'co', Array.from(S.sel.keys())));
+			};
+			body.querySelectorAll('[data-ck]').forEach(c => c.addEventListener('change', () => { const x = r.rows.find(z => z.id === Number(c.dataset.ck)); if (c.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); sync(); }));
 			const all = body.querySelector('[data-all]');
-			if (all) all.addEventListener('change', () => { r.rows.forEach(x => { if (all.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); }); redraw(); });
-			const clr = body.querySelector('[data-clr]'); if (clr) clr.addEventListener('click', () => { S.sel.clear(); redraw(); });
-			const del = body.querySelector('[data-del]'); if (del) del.addEventListener('click', () => delSel(ct));
-			const mb = body.querySelector('[data-mrg]'); if (mb) mb.addEventListener('click', () => mergeDlg(ct ? 'ct' : 'co', Array.from(S.sel.keys())));
+			if (all) all.addEventListener('change', () => { r.rows.forEach(x => { if (all.checked) S.sel.set(x.id, x); else S.sel.delete(x.id); }); sync(); });
+			sync();
 		}
 		if (window.CPXStatus) window.CPXStatus();
+	}
+	/* a kijelölés műveletsávja (üres, ha nincs kijelölés) */
+	function bulkHtml() {
+		return S.sel.size ? '<div class="pp-bulk"><b>' + S.sel.size + ' kijelölve</b><button type="button" class="cpx-btn ghost" data-clr>Kijelölés törlése</button>' + (MRG ? '<button type="button" class="cpx-btn" data-mrg' + (S.sel.size < 2 || S.sel.size > 6 ? ' disabled title="2–6 rekordot jelölj ki"' : '') + '>⇄ Összevonás</button>' : '') + '<button type="button" class="cpx-btn danger" data-del>🗑 Kijelöltek törlése</button></div>' : '';
 	}
 	async function delSel(ct) {
 		const L = Array.from(S.sel.values()), n = L.length, what = ct ? 'kontakt' : 'cég';

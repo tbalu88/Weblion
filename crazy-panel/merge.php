@@ -288,8 +288,7 @@ function cp_mrg_contact($kid, $lid) {
 		$dc = (int) $wpdb->get_var($wpdb->prepare("SELECT company_id FROM $D WHERE id = %d", $did));
 		$kc = (int) $wpdb->get_var($wpdb->prepare("SELECT company_id FROM $C WHERE id = %d", $kid));
 		if (!$dc && $kc) { $body['primaryCompany'] = $kc; }
-		$r = cp_sm_put_deal($did, $body);
-		if (!is_wp_error($r)) { cp_crm_after_write($did); }
+		$r = cp_sm_put_deal($did, $body); /* v2.9.58: a saját táblát a cp_sm_request() írás utáni kampója frissíti (cp_crm_after_write) – külön lekérés nem kell */
 		$now = (int) $wpdb->get_var($wpdb->prepare("SELECT contact_id FROM $D WHERE id = %d", $did));
 		if (is_wp_error($r) || $now !== $kid) { $bad++; $res['warn'][] = 'deal #' . $did . ': nem sikerült áthelyezni' . (is_wp_error($r) ? ' (' . $r->get_error_message() . ')' : ''); continue; }
 		cp_mrg_hist($did, 'contact', $ln . ' (#' . $lid . ')', $kname . ' (#' . $kid . ') – kontaktok összevonása');
@@ -339,8 +338,7 @@ function cp_mrg_company($kid, $lid) {
 	}
 	/* deal-ek */
 	foreach (array_map('intval', (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE company_id = %d AND deleted_at IS NULL", $lid))) as $did) {
-		$r = cp_sm_put_deal($did, array('primaryCompany' => $kid));
-		if (!is_wp_error($r)) { cp_crm_after_write($did); }
+		$r = cp_sm_put_deal($did, array('primaryCompany' => $kid)); /* v2.9.58: a saját táblát a cp_sm_request() kampója frissíti */
 		if (is_wp_error($r) || (int) $wpdb->get_var($wpdb->prepare("SELECT company_id FROM $D WHERE id = %d", $did)) !== $kid) { $bad++; $res['warn'][] = 'deal #' . $did . ': nem sikerült áthelyezni' . (is_wp_error($r) ? ' (' . $r->get_error_message() . ')' : ''); continue; }
 		cp_mrg_hist($did, 'company', $ln, $K['name'] . ' – cégek összevonása');
 		$res['moved']++;
@@ -378,8 +376,11 @@ function cp_mrg_check($name, $email, $phone) {
 	$hit = array();
 	if ($e !== '') {
 		$dom = substr(strrchr($e, '@'), 1);
-		$like = $dom === 'gmail.com' ? array('%@gmail.com', '%@googlemail.com') : array('%@' . $dom);
-		foreach ($like as $lk) {
+		/* v2.9.58: nem Gmail-címnél pontos egyezés (az e-mail-indexszel; a rendezés kis-nagybetű-független) – a teljes domain átnézése csak a Gmailnél kell (pontok, +címke) */
+		if ($dom !== 'gmail.com') {
+			foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, email FROM $C WHERE deleted_at IS NULL AND email = %s LIMIT 50", $e), ARRAY_A) as $r) { if (cp_mrg_email($r['email']) === $e) { $hit[(int) $r['id']][] = 'azonos e-mail-cím'; } }
+		}
+		foreach ($dom === 'gmail.com' ? array('%@gmail.com', '%@googlemail.com') : array() as $lk) {
 			foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, email FROM $C WHERE deleted_at IS NULL AND email LIKE %s LIMIT 3000", $lk), ARRAY_A) as $r) { if (cp_mrg_email($r['email']) === $e) { $hit[(int) $r['id']][] = 'azonos e-mail-cím'; } }
 		}
 	}

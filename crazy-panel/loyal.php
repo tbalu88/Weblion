@@ -31,7 +31,7 @@ function cp_ret_by_email($email, $excl = 0) {
 	global $wpdb;
 	$email = strtolower(trim((string) $email));
 	if ($email === '' || strpos($email, '@') === false || (function_exists('cp_imp_ours') && cp_imp_ours($email))) { return null; }
-	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT id, company_id FROM ' . cp_crm_t('contacts') . ' WHERE deleted_at IS NULL AND LOWER(email) = %s LIMIT 20', $email), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT id, company_id FROM ' . cp_crm_t('contacts') . ' WHERE deleted_at IS NULL AND email = %s LIMIT 20', $email) /* v2.9.58: a rendezés kis-nagybetű-független – így az e-mail-index használható */, ARRAY_A);
 	if (!$rows) { return null; }
 	$r = cp_ret_sum(array_column($rows, 'id'), array_column($rows, 'company_id'), $excl);
 	if ($r) { $r['ct'] = (int) $rows[0]['id']; }
@@ -45,7 +45,13 @@ function cp_ret_for_rows($rows) {
 	if (!$ids) { return array(); }
 	$D = cp_crm_t('deals'); $in = implode(',', array_slice($ids, 0, 1500));
 	$out = array();
-	foreach ((array) $wpdb->get_results("SELECT d.id, COUNT(DISTINCT o.id) won, MAX(o.event_d) last_ev FROM $D d JOIN $D o ON o.id <> d.id AND o.deleted_at IS NULL AND o.status = 'Won' AND ((d.contact_id IS NOT NULL AND o.contact_id = d.contact_id) OR (d.company_id IS NOT NULL AND o.company_id = d.company_id)) WHERE d.id IN ($in) GROUP BY d.id", ARRAY_A) as $x) {
+	/* v2.9.58: a VAGY-os önösszekapcsolás helyett két indexes összekapcsolás (kontakt, cég) uniója; a DISTINCT miatt az eredmény ugyanaz */
+	$won = "o.id <> d.id AND o.deleted_at IS NULL AND o.status = 'Won'";
+	foreach ((array) $wpdb->get_results("SELECT x.id, COUNT(DISTINCT x.oid) won, MAX(x.ev) last_ev FROM (
+		SELECT d.id, o.id oid, o.event_d ev FROM $D d JOIN $D o ON o.contact_id = d.contact_id AND $won WHERE d.id IN ($in) AND d.contact_id IS NOT NULL
+		UNION ALL
+		SELECT d.id, o.id oid, o.event_d ev FROM $D d JOIN $D o ON o.company_id = d.company_id AND $won WHERE d.id IN ($in) AND d.company_id IS NOT NULL
+	) x GROUP BY x.id", ARRAY_A) as $x) {
 		$out[(int) $x['id']] = array('won' => (int) $x['won'], 'last_ev' => (string) $x['last_ev']);
 	}
 	return $out;

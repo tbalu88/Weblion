@@ -3,10 +3,6 @@
 .crm-seg{display:inline-flex;background:#fff;border:1.5px solid var(--li);border-radius:999px;padding:3px;gap:2px}
 .crm-seg button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;cursor:pointer;color:var(--mu)}
 .crm-seg button.on{background:var(--n);color:#fff}
-.crm-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.crm-filters input[type=search],.crm-filters select{height:38px;border:1.5px solid var(--li);border-radius:999px;padding:0 14px;background:#fff;max-width:100%}
-.crm-filters input[type=search]{min-width:300px}
-.crm-sortsel{display:none}
 .crm-chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--mu);cursor:pointer}
 .crm-ro{font-size:13px;color:var(--mu);margin:0 0 12px}
 .crm-warn{background:var(--fullb);color:var(--full);border-radius:12px;padding:9px 12px;font-size:13.5px;margin:10px 0 0}
@@ -56,7 +52,6 @@
 .crm-rot.hot{color:var(--full)}
 .crm-card.won{background:#FAFDFB}
 /* gyorsszűrők, sűrűség, összecsukott oszlop */
-.crm-qf{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;margin-top:2px}
 .crm-qfb{border:1.5px solid var(--li);background:#fff;border-radius:999px;padding:5px 12px;font:600 13px Inter,sans-serif;color:var(--mu);cursor:pointer}
 .crm-qfb:hover{border-color:#D9C5B3;color:var(--ink)}
 .crm-qfb.on{background:var(--n);border-color:var(--n);color:#fff}
@@ -132,29 +127,13 @@
 .crm-drop div[data-st=Lost].over{background:var(--fullb)}
 .cpx-toast.bad{background:var(--full)}
 /* adatlap */
-.crm-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 4px}
-.crm-act select{height:38px;border:1.5px solid var(--li);border-radius:999px;padding:0 14px;background:#fff;flex:1 1 220px;min-width:0}
-.crm-act .bad{color:var(--full);border-color:#F1C3BE}
-.crm-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 4px;font-size:14px}
-.crm-top .crm-st{margin-top:0}
-.crm-top b{font:800 16px "Plus Jakarta Sans",sans-serif;margin-left:auto}
-.crm-top .cpx-btn{height:32px;padding:0 12px;font-size:13px}
 .crm-dl{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:5px 14px;margin:0;font-size:14px}
 .crm-dl dt{color:var(--mu)}
 .crm-dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .crm-tag{display:inline-block;background:#F1EDE7;border-radius:999px;padding:1px 8px;margin:0 2px 3px 0;font-size:12.5px}
 .crm-desc{background:#FAF8F4;border-radius:10px;padding:8px 10px;margin-top:6px;font-size:13.5px;overflow-wrap:anywhere}
 .crm-meta{font-size:12.5px;color:var(--mu);margin:8px 0 0}
-.crm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
-.crm-list li{border-bottom:1px solid #F0ECE6;padding-bottom:6px}
-.crm-list li.done b{text-decoration:line-through;color:var(--mu)}
-.crm-hist s{color:var(--mu)}
-.crm-link{background:none;border:0;padding:0;color:var(--ot);font-weight:700;cursor:pointer;text-align:left}
 @media (max-width:700px){
-	.crm-filters{width:100%}
-	.crm-filters input[type=search]{min-width:0;width:100%}
-	.crm-filters select{flex:1 1 45%;min-width:0}
-	.crm-filters .crm-sortsel{display:block}
 	.crm-wrap{max-height:none;overflow:visible;background:transparent;border:0}
 	.crm-tbl thead{display:none}
 	.crm-tbl,.crm-tbl tbody,.crm-tbl tr,.crm-tbl td{display:block;width:100%}
@@ -236,19 +215,16 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-bad{color:#AE2E24}
 .d3-stat{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:#656973;margin-bottom:4px}
 .d3-stat b{color:#141C33}
-.d3-deals,.d3-ths,.d3-team,.d3-files{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
+.d3-deals,.d3-ths,.d3-team{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
 .d3-deals li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #F2EFEA;padding:5px 0}
 .d3-deals li.cur{opacity:.55}
-.d3-deals li>button,.d3-ths button,.d3-files button{border:0;background:none;text-align:left;cursor:pointer;padding:0;min-width:0;font:13px Inter,sans-serif;color:#141C33}
-.d3-deals b,.d3-ths b,.d3-files b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2F5BD8}
-.d3-deals small,.d3-ths small,.d3-files small{display:block;color:#656973;font-size:11.5px}
+.d3-deals li>button,.d3-ths button{border:0;background:none;text-align:left;cursor:pointer;padding:0;min-width:0;font:13px Inter,sans-serif;color:#141C33}
+.d3-deals b,.d3-ths b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2F5BD8}
+.d3-deals small,.d3-ths small{display:block;color:#656973;font-size:11.5px}
 .d3-deals li>span{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
 .d3-deals em{font-style:normal;font-size:12px;color:#656973;white-space:nowrap}
-.d3-ths li,.d3-files li{border-top:1px solid #F2EFEA;padding:5px 0}
-.d3-ths button,.d3-files button{width:100%}
-.d3-files button{display:flex;gap:8px;align-items:flex-start}
-.d3-files svg{flex:none;width:16px;height:16px;fill:none;stroke:#656973;stroke-width:1.8;margin-top:2px}
-.d3-files span{min-width:0}
+.d3-ths li{border-top:1px solid #F2EFEA;padding:5px 0}
+.d3-ths button{width:100%}
 .d3-team li{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
 .d3-team li a{display:flex;align-items:center;gap:8px;color:#2F5BD8;text-decoration:none;font-weight:600}
 .d3-team li small{margin-left:auto;color:#656973;font-size:11.5px}
@@ -299,7 +275,6 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-360 .crm-edit{max-width:980px;margin:0 auto;background:#fff;border-radius:12px;padding:12px 16px}
 @media (max-width:1280px){.d3{grid-template-columns:280px minmax(0,1fr)}.d3-r{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
 @media (max-width:820px){.d3,.d3.d3-2{grid-template-columns:minmax(0,1fr)}.d3-r{display:flex}.d3-m{order:-1}.d3.d3-2 .d3-m{order:0}.d3-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.cpx-sheet.crm-360{padding:10px 10px 20px}}
-.crm-filters{position:relative}
 /* v1.51: jegyzet és tevékenység a dealen */
 .d3-comp{border:1px solid #E6E3DE;border-radius:12px;padding:8px 10px 10px;margin-bottom:12px;background:#FCFBF9}
 .d3-ctabs{display:flex;gap:4px;margin-bottom:6px}
@@ -319,8 +294,6 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-x:hover{color:#AE2E24}
 .d3-ti.dnote{background:#FFF8E1}
 @media (max-width:820px){.d3-af{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.d3-files a.d3-fl{display:flex;gap:8px;align-items:flex-start;text-decoration:none;color:#141C33;width:100%}
-.d3-files a.d3-fl:hover b{text-decoration:underline}
 /* v1.59: ügyfélportál a deal-adatlapon */
 .d3-portal{border-color:#F3D9B8;background:#FFFCF7}
 .d3-pst{display:inline-block;margin-left:6px;border-radius:999px;padding:1px 8px;font:600 11px Inter,sans-serif;background:#FDECEA;color:#AE2E24;vertical-align:1px}
@@ -335,14 +308,6 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 	.crm-head .crm-hl{flex:none;margin:0}
 	.crm-head .crm-hl [data-new]{display:none}
-	.crm-head .crm-filters{display:contents}
-	.crm-filters input[type=search]{flex:1 1 150px;min-width:0;width:auto;height:40px;border-radius:999px;font-size:15px}
-	.crm-filters select{flex:1 1 40%;min-width:0;height:38px;border-radius:999px;font-size:14px}
-	.crm-filters .crm-chk{flex:1 1 100%;font-size:13px;order:3}
-	.crm-qf{flex:1 1 100%;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;scrollbar-width:none;margin:0;order:4;padding-bottom:2px}
-	.crm-qf::-webkit-scrollbar{display:none}
-	.crm-qf .crm-qfb{flex:none}
-	.crm-qf .crm-dens,.crm-qf .crm-bgap{display:none}
 	.crm>.crm-ro{display:none}
 	.crm-sumrow{margin:6px 2px 6px}
 	.crm-board{scroll-snap-type:x mandatory;gap:10px;padding:0 0 4px;margin:0 -12px;padding-left:14px;padding-right:14px;scroll-padding:0 14px;-webkit-overflow-scrolling:touch}
@@ -571,9 +536,6 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-fdirty{font-style:normal;color:var(--o);font-weight:800}
 .crm-fclr{width:28px;height:28px;border:0;background:transparent;border-radius:50%;color:var(--mu);cursor:pointer;display:inline-grid;place-items:center}
 .crm-fclr:hover{background:#F1EDE7;color:var(--ink)}
-.crm-qfs{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent);padding-right:14px}
-.crm-qfs::-webkit-scrollbar{display:none}
-.crm-qfs .crm-qfb{flex:none}
 .crm-bar .crm-qfb{height:30px;padding:0 11px;font-size:12.5px}
 .crm-sortc{flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;border:1.5px solid var(--li);border-radius:999px;padding:0 4px 0 11px;background:#fff;color:var(--mu);cursor:pointer}
 .crm-sortc select{border:0;background:transparent;height:32px;font:600 13px Inter,sans-serif;color:var(--ink);cursor:pointer;padding:0 6px 0 0;max-width:180px}
@@ -625,9 +587,6 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-bar{gap:6px;flex-wrap:wrap}
 	.crm-srch{flex:1 1 100%;min-width:0}
 	.crm-srch input{height:40px;font-size:15px}
-	.crm-qfs{flex:1 1 100%;order:5;padding-bottom:2px}
-	.crm-qfs::-webkit-scrollbar{display:none}
-	.crm-qfs .crm-qfb{flex:none}
 	.crm-bar .crm-bgap{display:none}
 	.crm-sortc select{max-width:96px;font-size:14px}
 	.crm-fclr{display:none}

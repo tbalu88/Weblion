@@ -13,7 +13,8 @@ define('CP_FLOW_DB_VER', '1');
 function cp_flow_t() { global $wpdb; return $wpdb->prefix . 'crazy_flow_log'; }
 
 add_action('init', function () {
-	if (get_option('cp_flow_db_ver') === CP_FLOW_DB_VER || wp_doing_ajax()) { return; }
+	if (wp_doing_ajax()) { return; }
+	if (get_option('cp_flow_db_ver') === CP_FLOW_DB_VER) { if (function_exists('cp_opt_autoload')) { cp_opt_autoload('cp_flow_db_ver'); } return; }
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	dbDelta('CREATE TABLE ' . cp_flow_t() . " (
@@ -31,7 +32,7 @@ add_action('init', function () {
   KEY flow (flow, created_at),
   KEY deal_id (deal_id)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_flow_db_ver', CP_FLOW_DB_VER, false);
+	update_option('cp_flow_db_ver', CP_FLOW_DB_VER, true);
 }, 7);
 function cp_flow_db_ok() { return get_option('cp_flow_db_ver') === CP_FLOW_DB_VER; }
 

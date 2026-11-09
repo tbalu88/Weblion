@@ -80,13 +80,11 @@
 
 	const COL_DEF_INIT = () => [{ k: '_contact' }, { k: '_event' }, { k: '_pkg' }, { k: '_stage' }, { k: 'deal.value' }, { k: 'deal.owner_id' }, { k: 'deal.modified_at' }];
 	const SEL = new Map(); /* kijelölt deal-ek a listában: id → sor (lapozáskor megmarad, szűréskor törlődik) */
-	const S = { bso: 'ev', qf: [], dense: false, fold: [], cf: { m: 'all', g: [] }, cols: COL_DEF_INIT(), tw: 0, view: '', vdirty: false, meta: null, mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
+	const S = { bso: 'ev', dense: false, fold: [], cf: { m: 'all', g: [] }, cols: COL_DEF_INIT(), tw: 0, view: '', vdirty: false, meta: null, mode: 'list', q: '', st: 'Open', stage: '', own: '', ev: '', so: 'mod', dir: 'desc', p: 0, won: false, list: null, board: null, err: '', loading: false, main: null, sync: R.sync || 0, seq: 0 };
 	try {
 		const k = JSON.parse(localStorage.getItem('cpcrm') || '{}');
 		['mode', 'st', 'stage', 'own', 'ev', 'so', 'dir', 'bso'].forEach(x => { if (typeof k[x] === 'string') S[x] = k[x]; });
 		S.dense = !!k.dense;
-		/* v2.9.53: a gyorsszűrő-gombok megszűntek (a szűrőben megvannak) – a régi állapot ne szűkítsen láthatatlanul */
-		S.qf = [];
 		if (Array.isArray(k.cols)) { const c = k.cols.filter(x => x && typeof x.k === 'string' && /^(_[a-z]+|(deal|contact|company)\.[a-z0-9_]+)$/.test(x.k)).slice(0, 30).map(x => ({ k: x.k, w: Math.max(0, Math.min(800, Number(x.w) || 0)) })); if (c.length) S.cols = c; }
 		S.tw = Math.max(0, Math.min(800, Number(k.tw) || 0));
 		if (Array.isArray(k.fold)) S.fold = k.fold.filter(x => typeof x === 'string');
@@ -102,7 +100,7 @@
 		}
 		if (S.mode === 'leads') S.mode = 'board';
 	} catch (e) { /* privát mód */ }
-	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, dense: S.dense, qf: S.qf, fold: S.fold, cf: S.cf, cols: S.cols, tw: S.tw, view: S.view, vdirty: S.vdirty })); } catch (e) { /* privát mód */ } }
+	function save() { try { localStorage.setItem('cpcrm', JSON.stringify({ mode: S.mode, st: S.st, stage: S.stage, own: S.own, ev: S.ev, so: S.so, dir: S.dir, bso: S.bso, dense: S.dense, fold: S.fold, cf: S.cf, cols: S.cols, tw: S.tw, view: S.view, vdirty: S.vdirty })); } catch (e) { /* privát mód */ } }
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -337,7 +335,6 @@
 	}
 	function bindHead(main) {
 		bindCfBtn(main);
-		main.querySelectorAll('[data-qf]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.qf; S.qf = S.qf.includes(k) ? S.qf.filter(x => x !== k) : S.qf.concat([k]); b.classList.toggle('on'); b.setAttribute('aria-pressed', S.qf.includes(k)); save(); redrawBoard(); }));
 		main.querySelectorAll('[data-dense]').forEach(b => b.addEventListener('click', () => { S.dense = b.dataset.dense === '1'; main.querySelectorAll('[data-dense]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); save(); redrawBoard(); }));
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', newDeal);
@@ -438,12 +435,7 @@
 		if (r.cp) a.push('<small>' + esc(r.cp) + '</small>');
 		return a.join('') || '<span class="cpx-muted">–</span>';
 	}
-	function sortTh(key, label) {
-		const on = S.so === key;
-		return '<th><button type="button" class="crm-sort' + (on ? ' on' : '') + '" data-so="' + key + '">' + label + (on ? (S.dir === 'asc' ? ' ▲' : ' ▼') : '') + '</button></th>';
-	}
 	/* ------------------------------------------------------------ v2.9.54: lista – választható oszlopok, szélesség, rendezés, gyors szerkesztés */
-	const COL_DEF = [{ k: '_contact' }, { k: '_event' }, { k: '_pkg' }, { k: '_stage' }, { k: 'deal.value' }, { k: 'deal.owner_id' }, { k: 'deal.modified_at' }];
 	const COL_SPEC = {
 		_contact: { n: 'Kapcsolat', so: 'contact.name', w: 230, cell: r => contactCell(r) },
 		_event: { n: 'Rendezvény', so: 'ev', w: 180, cell: r => evCell(r) + (r.venue ? '<small>' + esc(r.venue) + '</small>' : '') },
@@ -636,7 +628,7 @@
 			pop.innerHTML = h;
 			const qi = pop.querySelector('[data-cq]'); qi.addEventListener('input', () => { q = qi.value; const p = qi.selectionStart; draw(); const n = pop.querySelector('[data-cq]'); n.focus(); n.setSelectionRange(p, p); });
 			pop.querySelector('[data-cclose]').addEventListener('click', () => { pop.remove(); btn.setAttribute('aria-expanded', 'false'); btn.focus(); });
-			pop.querySelector('[data-cdef]').addEventListener('click', () => { S.cols = COL_DEF.map(c => ({ k: c.k })); S.tw = 0; draw(); apply(true); });
+			pop.querySelector('[data-cdef]').addEventListener('click', () => { S.cols = COL_DEF_INIT(); S.tw = 0; draw(); apply(true); });
 			pop.querySelectorAll('[data-cadd]').forEach(b => b.addEventListener('click', () => { if (S.cols.length >= 30) { toast('Legfeljebb 30 oszlop lehet.', true); return; } S.cols.push({ k: b.dataset.cadd }); draw(); apply(!COL_SPEC[b.dataset.cadd]); }));
 			pop.querySelectorAll('[data-crm]').forEach(b => b.addEventListener('click', () => { S.cols.splice(Number(b.dataset.crm), 1); draw(); apply(false); }));
 			const mv = (i, j) => { if (j < 0 || j >= S.cols.length) return; const [x] = S.cols.splice(i, 1); S.cols.splice(j, 0, x); draw(); apply(false); const f = pop.querySelector('[data-ci="' + j + '"] [data-' + (j > i ? 'cdn' : 'cup') + ']'); if (f && !f.disabled) f.focus(); };
@@ -779,16 +771,8 @@
 	/* ------------------------------------------------------------ pipeline-tábla */
 	function drawBoard(box) {
 		const all = S.board.rows || [];
-		const t0 = today(), now = (S.board && S.board.now) || '';
-		const QFN = {
-			mine: r => String(r.own) === String(R.me_sm),
-			late: r => r.na && r.na < now,
-			noact: r => !r.na,
-			rot: r => r.rot && r.rot <= t0,
-			d30: r => r.ev && r.ev >= t0 && r.ev <= addDays(t0, 30),
-			nodate: r => !r.ev
-		};
-		const rows = all.filter(r => (!S.q || hit(r, S.q)) && S.qf.every(k => !QFN[k] || QFN[k](r)));
+		const now = (S.board && S.board.now) || '';
+		const rows = all.filter(r => !S.q || hit(r, S.q));
 		const col = {};
 		STAGES.forEach(s => { col[s] = []; });
 		rows.forEach(r => { (col[r.stage] = col[r.stage] || []).push(r); });
@@ -805,7 +789,7 @@
 		/* v1.66: mobilon a Salesmate mintájára – oszloponként lapozható, nincs összecsukás, részletes kártya */
 		const MOB = window.matchMedia && window.matchMedia('(max-width:760px)').matches;
 		const prog = i => '<span class="crm-prog" aria-hidden="true">' + names.map((x, j) => '<i class="' + (j === i ? 'on' : '') + '"></i>').join('') + '</span>';
-		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q || S.qf.length ? '<span class="cpx-muted"> (szűrve, összesen ' + num(all.length) + ')</span>' : '') + (S.board.more ? '<span class="crm-more" title="A táblán legfeljebb 2000 deal fér el – szűkítsd a szűrőt (pl. rendezvény dátuma)">csak az első 2000</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
+		let h = '<div class="crm-sumrow"><div class="crm-sum"><b>' + num(rows.length) + ' deal</b>' + (S.q ? '<span class="cpx-muted"> (szűrve, összesen ' + num(all.length) + ')</span>' : '') + (S.board.more ? '<span class="crm-more" title="A táblán legfeljebb 2000 deal fér el – szűkítsd a szűrőt (pl. rendezvény dátuma)">csak az első 2000</span>' : '') + '<span class="cpx-muted"> – ' + esc(money(rows.reduce((a, r) => a + (r.value || 0), 0))) + '</span></div>' +
 			'<div class="crm-arr"><button type="button" data-arr="-1" aria-label="Balra">‹</button><button type="button" data-arr="1" aria-label="Jobbra">›</button></div></div><div class="crm-board' + (S.dense ? ' dense' : '') + '">';
 		names.forEach(s => {
 			const l = col[s] || [];
@@ -817,7 +801,7 @@
 				h += '<section class="crm-col folded" data-stage="' + esc(s) + '"><button type="button" class="crm-unfold" data-fold="' + esc(s) + '" title="Oszlop kinyitása"><span>' + esc(s) + '</span><b>' + l.length + '</b></button></section>';
 				return;
 			}
-			const pend = s === STAGES[0] && S.pend && !S.qf.length ? S.pend.rows.filter(x => !S.q || hit({ title: x.n, cn: x.n, ce: x.e, cp: x.p }, S.q)) : [];
+			const pend = s === STAGES[0] && S.pend ? S.pend.rows.filter(x => !S.q || hit({ title: x.n, cn: x.n, ce: x.e, cp: x.p }, S.q)) : [];
 			h += '<section class="crm-col" data-stage="' + esc(s) + '"><header><div class="crm-chh"><span class="crm-chip">' + esc(s) + '</span><span class="crm-chb">' + (R.edit ? '<button type="button" class="crm-add" data-add="' + esc(s) + '" title="Új deal ebbe a szakaszba" aria-label="Új deal: ' + esc(s) + '">+</button>' : '') + '<button type="button" class="crm-add crm-fold" data-fold="' + esc(s) + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(s) + '">‹</button></span></div>' +
 				'<small><span># ' + l.length + '</span>' + (v ? '<span>' + esc(money(v)) + '</span>' : '') + veH + '</small>' +
 				'<div class="crm-mh"><b>' + esc(s) + '</b><small>' + (v || !ve ? esc(money(v)) : '') + (ve ? (v ? ' + ' : '') + veH : '') + ' • ' + l.length + ' deal</small>' + prog(names.indexOf(s)) + '</div></header><div class="crm-cards">' +

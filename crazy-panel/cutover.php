@@ -12,7 +12,8 @@ define('CP_CUT_DB_VER', '1');
 function cp_cut_t() { global $wpdb; return $wpdb->prefix . 'crazy_cut_log'; }
 
 add_action('init', function () {
-	if (get_option('cp_cut_db_ver') === CP_CUT_DB_VER || wp_doing_ajax()) { return; }
+	if (wp_doing_ajax()) { return; }
+	if (get_option('cp_cut_db_ver') === CP_CUT_DB_VER) { if (function_exists('cp_opt_autoload')) { cp_opt_autoload('cp_cut_db_ver'); } return; }
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	dbDelta('CREATE TABLE ' . cp_cut_t() . " (
@@ -31,7 +32,7 @@ add_action('init', function () {
   KEY status (status),
   KEY created_at (created_at)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_cut_db_ver', CP_CUT_DB_VER, false);
+	update_option('cp_cut_db_ver', CP_CUT_DB_VER, true);
 }, 8);
 function cp_cut_db_ok() { return get_option('cp_cut_db_ver') === CP_CUT_DB_VER; }
 
@@ -64,7 +65,8 @@ function cp_cut_log($feat, $ref, $plan, $deal = 0) {
 
 /* a felelős körbeforgó kiosztással (a kollégák listája állítható; árnyékban külön mutatóval) */
 function cp_cut_rr_owner($feat) {
-	$rr = get_option('cp_cut_rr', array('users' => array(19, 25)));
+	/* v2.9.58: friss olvasás (gyorsítótár nélkül) – két egyidejű beküldés ne kapja ugyanazt a kollégát egy régi másolatból */
+	$rr = function_exists('cp_opt_fresh') ? cp_opt_fresh('cp_cut_rr', array('users' => array(19, 25))) : get_option('cp_cut_rr', array('users' => array(19, 25)));
 	$users = array_values(array_filter(array_map('intval', (array) ($rr['users'] ?? array()))));
 	if (!$users) { return 0; }
 	$k = 'p_' . $feat; $i = (int) ($rr[$k] ?? 0);
@@ -135,10 +137,10 @@ function cp_cut_norm($k, $v) {
 function cp_cut_reconcile() {
 	if (!cp_cut_db_ok() || !function_exists('cp_crm_t')) { return; }
 	global $wpdb;
-	if (function_exists('cp_lead_match')) { cp_lead_match(); }
+	/* v2.9.58: a 10 perces körben a párosítás már lefutott (leads.php, 20-as prioritás); itt csak a kézi „Ellenőrzés most” miatt */
+	if (!doing_action('cp_crm_tick') && function_exists('cp_lead_match')) { cp_lead_match(); }
 	$L = cp_cut_t();
-	/* v2.9.30: egyszeri újraellenőrzés az új összevetési szabállyal */
-	if (get_option('cp_cut_rq') !== '2930') { $wpdb->query("UPDATE $L SET status = 'pending' WHERE status = 'diff' AND ref LIKE 'lead:%'"); update_option('cp_cut_rq', '2930', false); }
+	/* v2.9.58: a v2.9.30-as egyszeri újraellenőrzés (cp_cut_rq = 2930) lefutott – kivezetve */
 	foreach ((array) $wpdb->get_results("SELECT * FROM $L WHERE status = 'pending' AND ref LIKE 'lead:%' ORDER BY id LIMIT 100", ARRAY_A) as $r) {
 		$lid = (int) substr($r['ref'], 5);
 		$deal = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_lead_t() . ' WHERE id = %d', $lid));

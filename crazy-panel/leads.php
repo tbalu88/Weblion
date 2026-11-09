@@ -9,12 +9,13 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_LEAD_DB_VER', '1');
+define('CP_LEAD_DB_VER', '2'); /* v2.9.58: 2 = index a deal_id oszlopon */
 
 function cp_lead_t() { global $wpdb; return $wpdb->prefix . 'crazy_leads'; }
 
 add_action('init', function () {
-	if (get_option('cp_lead_db_ver') === CP_LEAD_DB_VER || wp_doing_ajax()) { return; }
+	if (wp_doing_ajax()) { return; }
+	if (get_option('cp_lead_db_ver') === CP_LEAD_DB_VER) { if (function_exists('cp_opt_autoload')) { cp_opt_autoload('cp_lead_db_ver'); } return; }
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	dbDelta('CREATE TABLE ' . cp_lead_t() . " (
@@ -32,11 +33,13 @@ add_action('init', function () {
   created_at datetime NULL,
   PRIMARY KEY  (id),
   KEY email (email),
+  KEY deal_id (deal_id),
   KEY created_at (created_at)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_lead_db_ver', CP_LEAD_DB_VER, false);
+	update_option('cp_lead_db_ver', CP_LEAD_DB_VER, true);
 }, 7);
-function cp_lead_db_ok() { return get_option('cp_lead_db_ver') === CP_LEAD_DB_VER; }
+/* v2.9.58: az 1-es (index nélküli) változat is használható – a tábla megvan, az új indexet a következő nem-AJAX kérés teszi fel */
+function cp_lead_db_ok() { $v = get_option('cp_lead_db_ver'); return $v === CP_LEAD_DB_VER || $v === '1'; }
 
 /* ------------------------------------------------------------ a figyelő a weboldalon (minden oldal alján, apró) */
 add_action('wp_footer', function () {
@@ -95,6 +98,7 @@ function cp_lead_ajax_in() {
 		'data' => $raw, 'name' => mb_substr($name, 0, 190), 'email' => mb_substr($email, 0, 190), 'phone' => mb_substr($phone, 0, 60), 'page' => mb_substr(esc_url_raw((string) wp_unslash($_POST['page'] ?? '')), 0, 255),
 		'ip_hash' => $ip, 'status' => 'new', 'created_at' => gmdate('Y-m-d H:i:s')));
 	$id = (int) $wpdb->insert_id;
+	if (function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 	/* v2.9.21: összesített óránkénti korlát (IP-váltogatós elárasztás ellen): 60 fölött a lead megmarad, de értesítés és levél nem megy */
 	$hk = 'cp_lead_in_h_' . gmdate('YmdH'); $hn = (int) get_transient($hk) + 1; set_transient($hk, $hn, 2 * HOUR_IN_SECONDS);
 	if ($hn > 60) { if ($hn === 61 && function_exists('cp_audit_add')) { cp_audit_add('leads', 'flood', 'Szokatlanul sok webes beküldés egy órán belül – az értesítések szünetelnek', 'leads', (string) $hn); } wp_send_json_success(array('id' => $id)); }
@@ -112,16 +116,22 @@ function cp_lead_ajax_in() {
 	wp_send_json_success(array('id' => $id));
 }
 
-/* a megkeresés párosítása a szinkronnal átjött Salesmate deal-lel: azonos e-mail, a beküldés körül létrehozva */
+/* a megkeresés párosítása a szinkronnal átjött Salesmate deal-lel: azonos e-mail, a beküldés körül létrehozva
+ * v2.9.58: nem a lista minden betöltésekor, hanem a szinkron után (ugyanabban a körben: 10 percenként és a beküldés utáni
+ * soron kívüli körben) – a cp_crm_tick_run (10-es prioritás) után, az átállás egyeztetése (30) előtt */
+add_action('cp_crm_tick', 'cp_lead_match', 20);
+add_action('cp_crm_more', 'cp_lead_match', 20);
 function cp_lead_match() {
 	global $wpdb;
-	if (!function_exists('cp_crm_t')) { return; }
+	if (!function_exists('cp_crm_t') || !cp_lead_db_ok()) { return; }
+	$n = 0;
 	$rows = (array) $wpdb->get_results('SELECT id, email, created_at FROM ' . cp_lead_t() . " WHERE deal_id IS NULL AND email <> '' AND created_at >= '" . gmdate('Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS) . "' LIMIT 200", ARRAY_A);
 	foreach ($rows as $r) {
 		$d = (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE c.email = %s AND d.created_at BETWEEN %s AND %s ORDER BY ABS(TIMESTAMPDIFF(SECOND, d.created_at, %s)) LIMIT 1',
 			$r['email'], gmdate('Y-m-d H:i:s', strtotime($r['created_at']) - 1800), gmdate('Y-m-d H:i:s', strtotime($r['created_at']) + 6 * 3600), $r['created_at']));
-		if ($d) { $wpdb->update(cp_lead_t(), array('deal_id' => $d), array('id' => (int) $r['id'])); }
+		if ($d) { $n += (int) $wpdb->update(cp_lead_t(), array('deal_id' => $d), array('id' => (int) $r['id'])); }
 	}
+	if ($n && function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 }
 
 /* ------------------------------------------------------------ a panel: Deal-ek → Megkeresések */
@@ -132,7 +142,6 @@ function cp_lead_ajax_list() {
 	if (function_exists('cp_panel_can_x') && !cp_panel_can_x('deals')) { cp_el_err('Nincs jogosultságod.', 403); }
 	if (!cp_lead_db_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 	global $wpdb;
-	cp_lead_match();
 	$w = "status <> 'spam'";
 	if (($_POST['st'] ?? '') === 'spam') { $w = "status = 'spam'"; }
 	/* v1.43: a pipeline-hoz – csak a még párosítatlan (Salesmate-szinkronra váró) megkeresések, és a friss párosítások */
@@ -168,7 +177,7 @@ function cp_lead_ajax_set() {
 	global $wpdb;
 	$st = sanitize_key(wp_unslash($_POST['st'] ?? ''));
 	if (!in_array($st, array('new', 'seen', 'spam'), true)) { cp_el_err('Hibás kérés.'); }
-	$wpdb->update(cp_lead_t(), array('status' => $st), array('id' => (int) ($_POST['id'] ?? 0)));
+	if ($wpdb->update(cp_lead_t(), array('status' => $st), array('id' => (int) ($_POST['id'] ?? 0))) && function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 	wp_send_json_success(array('ok' => 1));
 }
 

@@ -184,7 +184,7 @@
 		draw();
 		load(false);
 		clearInterval(S.timer);
-		S.timer = setInterval(() => { if (!active()) { clearInterval(S.timer); return; } if (!document.hidden && !document.getElementById('gc-mod')) load(true); }, 180000);
+		S.timer = setInterval(() => { if (!active()) { clearInterval(S.timer); return; } if (!document.hidden && !document.getElementById('gc-mod')) load(false); }, 180000); /* v2.9.58: az automatikus frissítés a szerver gyorsítótárát használja – kényszerített Google-hívás csak a Frissítés gombra */
 	}
 	window.CPGcal = { view, refresh: () => load(true), status };
 

@@ -103,7 +103,7 @@ function cp_gcal_events($from, $to, $force = false) {
 function cp_gcal_norm($s) { return trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(remove_accents((string) $s)))); }
 function cp_gcal_deals($from, $to) {
 	global $wpdb;
-	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.event_d BETWEEN %s AND %s AND d.status <> 'Lost'", $from, $to), ARRAY_A);
+	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.event_d BETWEEN %s AND %s AND d.status <> 'Lost'", $from, $to), ARRAY_A); /* v2.9.58: a törölt deal nem számít */
 }
 /* az esemény dealje: 1) a leírásban lévő kezelői adatlap link (…?k=<deal>.<aláírás>), 2) a kontakt neve a címben, azonos napon */
 function cp_gcal_match($ev, $byDate, $byId) {
@@ -232,9 +232,8 @@ function cp_gcal_shadow() {
 		$ev = null;
 		foreach ($cache[$day] as $e) { if (cp_gcal_match($e, $byDate, $byId) === $deal) { $ev = $e; break; } }
 		if (!$ev) { if ($age > 6 * HOUR_IN_SECONDS) { $set('missing', 'Nincs bejegyzés a naptárban a rendezvény napján (' . $day . ').'); } continue; }
-		$note = '';
 		/* v1.71.1: a ceruzás jelölés módja egyeztetés alatt (a címekben nincs ✏️) – addig csak a bejegyzés meglétét nézi */
-		$set('match', $note);
+		$set('match', '');
 	}
 }
 

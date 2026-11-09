@@ -106,7 +106,12 @@ function cp_wf_ajax_send() {
 		$v = mb_substr($v, 0, $f['t'] === 'textarea' ? 2000 : 500);
 		if ($v !== '') {
 			if ($f['t'] === 'email' && !is_email($v)) { $errs[$n] = $en ? 'Invalid email address.' : 'Érvénytelen e-mail-cím.'; }
-			if ($f['t'] === 'int') { $v = preg_replace('/[^0-9]/', '', $v); }
+			if ($f['t'] === 'int') {
+				$neg = strpos($v, '-') === 0;
+				$v = preg_replace('/[^0-9]/', '', $v);
+				/* v2.9.58: létszám / óraszám: pozitív egész (0, negatív vagy irreális érték nem mehet be) */
+				if ($neg || $v === '' || (int) $v < 1 || (int) $v > 100000) { $errs[$n] = $en ? 'Please enter a whole number between 1 and 100 000.' : 'Adj meg egy 1 és 100 000 közötti egész számot.'; }
+			}
 			if ($f['t'] === 'date') { $v = function_exists('cp_cut_date') ? cp_cut_date($v) : $v; if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) { $errs[$n] = $en ? 'Invalid date.' : 'Érvénytelen dátum.'; } }
 			if ($f['t'] === 'select' && !empty($f['o']) && !in_array($v, $f['o'], true)) { $v = ''; }
 			if ($f['t'] === 'multi' && !empty($f['o'])) { $v = implode(', ', array_values(array_intersect($f['o'], array_map('trim', explode(', ', $v))))); }
@@ -128,6 +133,7 @@ function cp_wf_ajax_send() {
 	$wpdb->insert(cp_lead_t(), array('form_id' => $fid, 'form_name' => mb_substr((string) $def['name'], 0, 190), 'data' => $data, 'name' => mb_substr((string) ($pairs['Contact.name'] ?? ''), 0, 190),
 		'email' => mb_substr($email, 0, 190), 'phone' => mb_substr((string) ($pairs['Contact.mobile'] ?? ''), 0, 60), 'page' => $page, 'ip_hash' => $ip, 'status' => 'new', 'created_at' => gmdate('Y-m-d H:i:s')));
 	$lid = (int) $wpdb->insert_id;
+	if ($lid && function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 	if (!$lid) { wp_send_json(array('ok' => 0, 'err' => 'server', 'msg' => $en ? 'Something went wrong – please call us.' : 'Hiba történt – kérjük, hívj minket telefonon.'), 500); }
 	cp_wf_queue_add($lid);
 	/* a látogató azonnal továbbmegy; a deal a válasz után készül (a lassú Salesmate ne tartsa fel) */
@@ -175,7 +181,8 @@ function cp_wf_after($lid) {
  * a visszatérő ügyfél jelzése. Feladó: a weboldal (nem az info@), válaszcím: az ügyfél – így a panel Levelezése a
  * postafiókból az ügyféllel közös szálként, a deal-hez kötve veszi fel, és a „Válasz” az ügyfélnek megy. */
 function cp_wf_seq($fid) {
-	$s = get_option('cp_wf_seq', array()); if (!is_array($s)) { $s = array(); }
+	/* v2.9.58: friss olvasás (gyorsítótár nélkül) – két egyidejű beküldés ne kapja ugyanazt a sorszámot egy régi másolatból */
+	$s = function_exists('cp_opt_fresh') ? cp_opt_fresh('cp_wf_seq', array()) : get_option('cp_wf_seq', array()); if (!is_array($s)) { $s = array(); }
 	if (!isset($s[$fid])) {
 		$seed = array('249aeb1c-71c0-4c4c-9f6a-6eeffd1d24e5' => 746); /* a Salesmate utolsó sorszáma (2026-11-05) */
 		global $wpdb;
@@ -287,6 +294,7 @@ function cp_wf_create($lid) {
 	}
 	if (!$id) { return $fail('A deal létrejött, de a Salesmate nem adta vissza az azonosítóját.'); }
 	$wpdb->update(cp_lead_t(), array('deal_id' => $id), array('id' => $lid));
+	if (function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 	cp_wf_queue_del($lid);
 	$cg = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
 	if (!is_wp_error($cg)) { cp_crm_store('contact', array(isset($cg['Data']) ? $cg['Data'] : $cg), 'get'); }

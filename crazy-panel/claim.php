@@ -55,7 +55,7 @@ function cp_claim_deal($deal_id, $sm_as = 0, $by = '') {
 	$put = cp_sm_put_deal($deal_id, array('owner' => $sm));
 	if (is_wp_error($put)) { cp_claim_unmark($deal_id); return; }
 	global $wpdb;
-	$wpdb->update(cp_crm_t('deals'), array('owner_id' => $sm), array('id' => $deal_id));
+	if ($wpdb->update(cp_crm_t('deals'), array('owner_id' => $sm), array('id' => $deal_id)) && function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $deal_id, 'field' => 'owner_id', 'old_val' => (string) (int) $d['owner_id'], 'new_val' => (string) $sm, 'by_user' => $by !== '' ? $by : (function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel'), 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 }
@@ -104,11 +104,9 @@ add_action('admin_init', function () {
 			if ($a === 'cp_crm_create') { $id = (int) ($j['data']['id'] ?? 0); if ($id) { cp_claim_mark($id, 0, 'manual'); } return; }
 			if ($owner_set !== '') { cp_claim_mark($deal, (int) $owner_set, 'manual'); return; }
 			if ($a !== 'cp_mail_send') { return; }
-			if ($a === 'cp_mail_send') {
-				$th = (int) ($j['data']['thread'] ?? 0);
-				cp_claim_thread($th);
-				if (!$deal && $th) { global $wpdb; $deal = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $th)); }
-			}
+			$th = (int) ($j['data']['thread'] ?? 0);
+			cp_claim_thread($th);
+			if (!$deal && $th) { global $wpdb; $deal = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $th)); }
 			cp_claim_deal($deal);
 		} catch (\Throwable $e) { /* a kiosztás hibája ne rontsa el a választ */ }
 	}, 0);

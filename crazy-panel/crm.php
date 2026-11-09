@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_CRM_DB_VER', '1');
+define('CP_CRM_DB_VER', '2'); /* v2.9.58: 2 = index a deals.company_id oszlopon */
 
 function cp_crm_t($name) {
 	global $wpdb;
@@ -126,10 +126,13 @@ function cp_crm_sql_type($t) {
 
 function cp_crm_db_install() {
 	global $wpdb;
+	/* v2.9.58: két egyszerre érkező kérés ne futtassa párhuzamosan az ALTER-t */
+	if (get_transient('cp_crm_db_inst')) { return; }
+	set_transient('cp_crm_db_inst', 1, 5 * MINUTE_IN_SECONDS);
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	$c = $wpdb->get_charset_collate();
 	$keys = array(
-		'deal' => array('KEY event_d (event_d)', 'KEY stage (stage)', 'KEY contact_id (contact_id)', 'KEY modified_at (modified_at)', 'KEY created_at (created_at)'),
+		'deal' => array('KEY event_d (event_d)', 'KEY stage (stage)', 'KEY contact_id (contact_id)', 'KEY company_id (company_id)', 'KEY modified_at (modified_at)', 'KEY created_at (created_at)'),
 		'contact' => array('KEY email (email)', 'KEY company_id (company_id)', 'KEY modified_at (modified_at)'),
 		'company' => array('KEY name (name)'),
 		'activity' => array('KEY related_id (related_id)', 'KEY due_at (due_at)'),
@@ -162,16 +165,36 @@ function cp_crm_db_install() {
   KEY deal_id (deal_id),
   KEY at (at)
 ) $c;");
-	update_option('cp_crm_db_ver', CP_CRM_DB_VER, false);
+	update_option('cp_crm_db_ver', CP_CRM_DB_VER, true);
+	delete_transient('cp_crm_db_inst');
 }
 
+/* v2.9.58: az 1-es (index nélküli) változat is használható – a táblák megvannak, az új indexet a következő nem-AJAX kérés teszi fel */
 function cp_crm_db_ok() {
-	return get_option('cp_crm_db_ver') === CP_CRM_DB_VER;
+	$v = get_option('cp_crm_db_ver');
+	return $v === CP_CRM_DB_VER || $v === '1';
 }
 
 add_action('init', function () {
-	if (!cp_crm_db_ok() && !wp_doing_ajax()) { cp_crm_db_install(); }
+	if (wp_doing_ajax()) { return; }
+	if (get_option('cp_crm_db_ver') === CP_CRM_DB_VER) { cp_opt_autoload('cp_crm_db_ver'); return; }
+	cp_crm_db_install();
 }, 6);
+
+/* v2.9.58: a minden kérésnél olvasott (verzió-)jelzők automatikus betöltése – egyszeri átállítás, ha az érték már aktuális,
+   de a beállítás még nem töltődik be magától (a régi telepítések „autoload = nem” értékkel mentették) */
+function cp_opt_autoload($name) {
+	if (!function_exists('wp_set_option_autoload') || !function_exists('wp_load_alloptions')) { return; }
+	$all = wp_load_alloptions();
+	if (!isset($all[$name])) { wp_set_option_autoload($name, true); }
+}
+
+/* v2.9.58: változásszámláló a Deal-ek nézet „változott-e valami?” lekérdezéséhez (crm-panel.php cp_crm_ajax_stamp):
+   deal-sor tényleges változásakor (cp_crm_store), törléskor és a megkeresések változásakor (leads.php, webforms.php) nő */
+function cp_crm_rev() { return (string) get_option('cp_crm_rev', '0'); }
+function cp_crm_rev_bump() {
+	update_option('cp_crm_rev', (string) (int) round(microtime(true) * 1000), false);
+}
 
 /* ------------------------------------------------------------ értékek átalakítása */
 
@@ -222,7 +245,6 @@ function cp_crm_row($m, $r, $via) {
 		/* csak a fő pipeline (a „Todo” és az „Ügynökség megkeresések” nem kell) */
 		$main = cp_panel_lc(cp_panel_opts()['pipeline']);
 		if ($row['pipeline'] !== '' && $main !== '' && cp_panel_lc($row['pipeline']) !== $main) { return null; }
-		if ($row['company_id'] === null && is_string($get('primaryCompany'))) { $row['company_id'] = null; }
 		$pk = '';
 		foreach (array('pkg_fix', 'pkg_v2', 'pkg_old', 'spinner_pkg', 'melange_pkg') as $k) { if ($row[$k] !== '') { $pk = $row[$k]; break; } }
 		$row['package'] = mb_substr(trim(preg_replace('/\s*\|\s*[\d.\s]+Ft\s*$/u', '', $pk)), 0, 120);
@@ -269,39 +291,56 @@ function cp_crm_store($m, $raw, $via = 'search') {
 	foreach ($raw as $r) { if (is_array($r)) { $x = cp_crm_row($m, $r, $via); if ($x) { $rows[$x['id']] = $x; } } }
 	if (!$rows) { return 0; }
 	$ids = implode(',', array_map('intval', array_keys($rows)));
+	/* v2.9.58: a meglévő sorok minden modulnál – a változatlan sor nem íródik újra (csak a synced_at frissül, a törlésjelöléshez kell) */
+	$cols = array_keys(cp_crm_spec($m));
+	if ($m === 'deal') { $cols[] = 'package'; }
 	$old = array();
-	if ($m === 'deal') {
-		$cols = array_keys(cp_crm_spec('deal'));
-		$cols[] = 'package';
-		foreach ((array) $wpdb->get_results('SELECT id, ' . implode(', ', $cols) . " FROM $tab WHERE id IN ($ids)", ARRAY_A) as $o) { $old[(int) $o['id']] = $o; }
-	}
+	foreach ((array) $wpdb->get_results('SELECT id, via, deleted_at, ' . implode(', ', $cols) . " FROM $tab WHERE id IN ($ids)", ARRAY_A) as $o) { $old[(int) $o['id']] = $o; }
+	$same_val = function ($ov, $nv) {
+		$a = $ov === null ? '' : (string) $ov; $b = $nv === null ? '' : (string) $nv;
+		return $a === $b || (is_numeric($a) && is_numeric($b) && (float) $a == (float) $b);
+	};
 	$skip = array_flip(cp_crm_hist_skip());
-	$hist = array();
+	$hist = array(); $same = array(); $chg = 0;
 	foreach ($rows as $id => $row) {
+		if (isset($old[$id])) {
+			$o = $old[$id];
+			$eq = (string) $o['via'] === (string) $row['via'] && ($o['deleted_at'] === null) === ($row['deleted_at'] === null);
+			foreach ($cols as $col) { if (!$eq) { break; } $eq = $same_val($o[$col], $row[$col]); }
+			if ($eq) { $same[] = (int) $id; continue; }
+		}
 		/* változásnapló: csak a már meglévő deal-eknél, a ténylegesen megváltozott mezőkről */
 		if ($m === 'deal' && isset($old[$id])) {
 			$by = cp_crm_user_name($row['modified_by']);
 			$at = $row['modified_at'] ? $row['modified_at'] : gmdate('Y-m-d H:i:s');
 			foreach ($old[$id] as $col => $ov) {
-				if ($col === 'id' || isset($skip[$col]) || !array_key_exists($col, $row)) { continue; }
+				if ($col === 'id' || $col === 'via' || $col === 'deleted_at' || isset($skip[$col]) || !array_key_exists($col, $row)) { continue; }
 				$nv = $row[$col];
+				if ($same_val($ov, $nv)) { continue; }
 				$a = $ov === null ? '' : (string) $ov; $b = $nv === null ? '' : (string) $nv;
-				if (is_numeric($a) && is_numeric($b) && (float) $a == (float) $b) { continue; }
-				if ($a === $b) { continue; }
 				$hist[] = $wpdb->prepare('(%d, %s, %s, %s, %s, %s, %s)', $id, $col, mb_substr($a, 0, 2000), mb_substr($b, 0, 2000), mb_substr($by, 0, 100), $at, 'salesmate');
 			}
 		}
-		$cols = array_keys($row);
+		$chg++;
+		$cols_i = array_keys($row);
 		$vals = array();
 		foreach ($row as $v) { $vals[] = $v === null ? 'NULL' : $wpdb->prepare('%s', (string) $v); }
 		$upd = array();
-		foreach ($cols as $c) { if ($c !== 'id') { $upd[] = "$c = VALUES($c)"; } }
-		$wpdb->query("INSERT INTO $tab (" . implode(', ', $cols) . ') VALUES (' . implode(', ', $vals) . ') ON DUPLICATE KEY UPDATE ' . implode(', ', $upd));
+		foreach ($cols_i as $c) { if ($c !== 'id') { $upd[] = "$c = VALUES($c)"; } }
+		$wpdb->query("INSERT INTO $tab (" . implode(', ', $cols_i) . ') VALUES (' . implode(', ', $vals) . ') ON DUPLICATE KEY UPDATE ' . implode(', ', $upd));
+	}
+	if ($same) {
+		foreach (array_chunk($same, 500) as $ch) { $wpdb->query($wpdb->prepare("UPDATE $tab SET synced_at = %s WHERE id IN (" . implode(',', $ch) . ')', gmdate('Y-m-d H:i:s'))); }
 	}
 	if ($hist) {
 		foreach (array_chunk($hist, 200) as $ch) {
 			$wpdb->query('INSERT INTO ' . cp_crm_t('history') . ' (deal_id, field, old_val, new_val, by_user, at, src) VALUES ' . implode(', ', $ch));
 		}
+	}
+	/* v2.9.58: a ténylegesen megváltozott sorok száma (a szinkron csak ekkor üríti a panel gyorsítótárát) */
+	if ($chg) {
+		$GLOBALS['cp_crm_chg'] = (int) ($GLOBALS['cp_crm_chg'] ?? 0) + $chg;
+		if ($m === 'deal') { cp_crm_rev_bump(); }
 	}
 	return count($rows);
 }
@@ -379,6 +418,8 @@ function cp_crm_sync($manual = false) {
 	$budget = $manual ? 16 : 28;
 	$log = array();
 	$t0 = microtime(true);
+	$GLOBALS['cp_crm_chg'] = 0;
+	$cnt = false; /* v2.9.58: a darabszámok (COUNT) csak teljes olvasás végén vagy naponta egyszer */
 	try {
 		cp_crm_users();
 		foreach (cp_crm_mods() as $m => $x) {
@@ -427,10 +468,12 @@ function cp_crm_sync($manual = false) {
 						update_option('cp_crm_miss_' . $m, array_values(array_diff($miss, $del)), false);
 						$n = 0;
 						foreach (array_chunk($del, 500) as $ch) { $n += (int) $wpdb->query($wpdb->prepare("UPDATE $tab SET deleted_at = %s WHERE deleted_at IS NULL AND id IN (" . implode(',', $ch) . ')', gmdate('Y-m-d H:i:s'))); }
+						if ($n) { $GLOBALS['cp_crm_chg'] += $n; if ($m === 'deal') { cp_crm_rev_bump(); } }
 						if ($n || $miss) { $log[] = $m . ': ' . (int) $n . ' törölt jelölve' . (count($miss) > $n ? ', ' . (count($miss) - $n) . ' kimaradt (a következő teljes olvasás dönt)' : ''); }
 					}
 					$st[$m . '_full_at'] = time();
 					$st[$m . '_n'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM $tab WHERE deleted_at IS NULL");
+					$cnt = true;
 					$log[] = $m . ': teljes olvasás kész (' . $st[$m . '_n'] . ')';
 					unset($st[$m . '_redo'], $st[$m . '_run'], $st[$m . '_cur'], $st[$m . '_span']);
 					if (empty($st[$m . '_inc'])) { $st[$m . '_inc'] = time(); }
@@ -463,9 +506,10 @@ function cp_crm_sync($manual = false) {
 			$max = (int) $wpdb->get_var("SELECT MAX(id) FROM $tab");
 			$have = array_flip(array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE id >= %d AND deleted_at IS NULL", $max - 300)))); /* v2.9.21: a töröltnek jelöltet is újra megnézi */
 			$found = 0; $tried = 0;
-			for ($id = $max + 40; $id >= $max - 300 && $tried < 80; $id--) {
+			/* v2.9.58: a hívások beleszámítanak a körönkénti keretbe, és a ciklus időben is korlátos */
+			for ($id = $max + 40; $id >= $max - 300 && $tried < 80 && microtime(true) - $t0 < 170; $id--) {
 				if (isset($have[$id])) { continue; }
-				$tried++;
+				$tried++; $calls++;
 				$g = cp_sm_get_deal((string) $id);
 				if (is_wp_error($g) || empty($g['id'])) { continue; }
 				$found += cp_crm_store('deal', array($g), 'get');
@@ -482,17 +526,20 @@ function cp_crm_sync($manual = false) {
 			$have = array_flip(array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT id FROM $tab WHERE id >= %d", $max - 45))));
 			$chk = array_flip(array_map('intval', (array) ($st['gap_chk'] ?? array())));
 			$found = 0; $tried = 0;
-			for ($id = $max - 1; $id >= $max - 45 && $tried < 6; $id--) {
+			for ($id = $max - 1; $id >= $max - 45 && $tried < 6 && microtime(true) - $t0 < 170; $id--) {
 				if (isset($have[$id]) || isset($chk[$id])) { continue; }
 				$tried++; $calls++;
 				$g = cp_sm_get_deal((string) $id);
-				if (!is_wp_error($g) && !empty($g['id'])) { $found += cp_crm_store('deal', array($g), 'get'); } else { $chk[$id] = 1; }
+				/* v2.9.58: a nem a fő pipeline-ba tartozó deal (a tárolás 0-t ad) is megjegyezve – különben minden körben újra lekérné */
+				$got = (!is_wp_error($g) && !empty($g['id'])) ? cp_crm_store('deal', array($g), 'get') : 0;
+				if ($got) { $found += $got; } else { $chk[$id] = 1; }
 			}
 			$st['gap_chk'] = array_values(array_filter(array_keys($chk), function ($i) use ($max) { return $i >= $max - 45; }));
 			if ($found) { $log[] = 'keresőből kimaradt friss deal: ' . $found; }
 		}
 		/* Salesmate-oldali darabszámok az összevetéshez (naponta) */
 		if (empty($st['tot_at']) || time() - (int) $st['tot_at'] > 20 * HOUR_IN_SECONDS) {
+			$cnt = true;
 			foreach (cp_crm_mods() as $m => $x) {
 				$res = cp_crm_search($m, array(), 0, 1);
 				if (!is_wp_error($res) && $res['total'] !== null) { $st[$m . '_sm'] = $res['total']; }
@@ -501,18 +548,26 @@ function cp_crm_sync($manual = false) {
 		}
 		$st['last_ok'] = time();
 		$st['last_err'] = '';
-	} catch (Exception $e) {
+	} catch (\Throwable $e) {
+		/* v2.9.58: nem csak Exception – TypeError stb. esetén se maradjon bent a zár, és a kör eredménye se vesszen el */
 		$st['last_err'] = mb_substr($e->getMessage(), 0, 300);
 		$st['err_at'] = time();
+	} finally {
+		try {
+			/* v2.9.58: a teljes táblát számoló COUNT-ok csak teljes olvasás végén, naponta egyszer, vagy ha még nincs érték */
+			foreach (cp_crm_mods() as $m => $x) { if ($cnt || !isset($st[$m . '_n'])) { $st[$m . '_n'] = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_crm_t($x[0]) . ' WHERE deleted_at IS NULL'); } }
+			$st['last_run'] = time();
+			$st['last_calls'] = $calls;
+			$st['last_log'] = implode(' · ', $log);
+			cp_crm_state_set($st);
+		} finally {
+			cp_crm_unlock();
+		}
 	}
-	foreach (cp_crm_mods() as $m => $x) { $st[$m . '_n'] = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_crm_t($x[0]) . ' WHERE deleted_at IS NULL'); }
-	$st['last_run'] = time();
-	$st['last_calls'] = $calls;
-	$st['last_log'] = implode(' · ', $log);
-	cp_crm_state_set($st);
-	cp_crm_unlock();
-	/* a fülek a saját táblákból olvasnak: a gyorsítótárukat ürítjük, hogy a Salesmate-ből jött változás azonnal látsszon */
-	if (function_exists('cp_crm_source_on') && cp_crm_source_on() && function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	/* a fülek a saját táblákból olvasnak: a gyorsítótárukat ürítjük, hogy a Salesmate-ből jött változás azonnal látsszon
+	   v2.9.58: csak ha a kör ténylegesen változtatott sort */
+	if (!empty($GLOBALS['cp_crm_chg']) && function_exists('cp_crm_source_on') && cp_crm_source_on() && function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	if (!isset($st['last_err'])) { $st['last_err'] = ''; }
 	return $st['last_err'] !== '' ? 'Hiba: ' . $st['last_err'] : ($log ? implode(' · ', $log) : 'Nincs változás.');
 }
 

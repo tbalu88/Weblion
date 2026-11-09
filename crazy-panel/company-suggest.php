@@ -187,8 +187,8 @@ function cp_cos_ajax_apply() {
 	/* deal */
 	$p = cp_sm_request('PUT', '/apis/deal/v4/' . $id, array('primaryCompany' => $cid));
 	$dealok = !is_wp_error($p);
+	/* v2.9.58: a sikeres deal-írás után a saját táblát a cp_sm_request() kampója már frissítette (cp_crm_after_write) – külön lekérés nem kell */
 	if (!$dealok) { $warn[] = 'a deal-hez nem sikerült hozzárendelni (' . $p->get_error_message() . ')'; }
-	elseif (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	if ($dealok && !$wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'company_id' AND at >= %s", $id, gmdate('Y-m-d H:i:s', time() - 120)))) $wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'company', 'old_val' => '', 'new_val' => (string) $wpdb->get_var($wpdb->prepare("SELECT name FROM $CO WHERE id = %d", $cid)), 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	wp_send_json_success(array('co' => $cid, 'warn' => implode('; ', $warn)));

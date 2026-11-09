@@ -59,6 +59,8 @@
 		(document.head || document.documentElement).appendChild(st);
 	}
 	function T(en, hu) { return en ? hu[1] : hu[0]; }
+	/* v2.9.58: a mai nap helyi idő szerint (a toISOString UTC-t ad – éjfél és 1–2 óra között még a tegnapot) */
+	function today() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 
 	function render(W, el, d) {
 		var f = d.form, en = f.lang === 'en', id = 'cpwf' + (++seq), inst = 'cpwf-' + seq;
@@ -77,7 +79,8 @@
 			} else {
 				var ty = x.t === 'int' ? 'number' : (x.t === 'email' ? 'email' : (x.t === 'tel' ? 'tel' : (x.t === 'date' ? 'date' : 'text')));
 				var ac = x.n === 'Contact.name' ? ' autocomplete="name"' : (x.n === 'Contact.email' ? ' autocomplete="email"' : (x.n === 'Contact.mobile' ? ' autocomplete="tel"' : ''));
-				var ex = ty === 'number' ? ' min="0" step="1" inputmode="numeric"' : (ty === 'date' ? ' min="' + new Date().toISOString().slice(0, 10) + '"' : '');
+				/* v2.9.58: létszám / óraszám legalább 1; szövegmezők legfeljebb 255 karakter */
+				var ex = ty === 'number' ? ' min="1" max="100000" step="1" inputmode="numeric"' : (ty === 'date' ? ' min="' + today() + '"' : ' maxlength="255"');
 				h += '<input type="' + ty + '" id="' + fid + '" name="' + esc(x.n) + '" placeholder="' + esc(x.ph) + '"' + ac + ex + (x.req ? ' required' : '') + '>';
 			}
 			h += '<div class="cpwf-e"></div></div>';
@@ -133,7 +136,8 @@
 				var val = v[x.n], bad = '';
 				if (x.req && (Array.isArray(val) ? !val.length : val === '')) { bad = x.t === 'multi' ? T(en, ['Válassz legalább egyet.', 'Choose at least one.']) : T(en, ['Kötelező mező.', 'Required.']); }
 				else if (x.t === 'email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) { bad = T(en, ['Érvénytelen e-mail-cím.', 'Invalid email address.']); }
-				else if (x.t === 'date' && val && val < new Date().toISOString().slice(0, 10)) { bad = T(en, ['Jövőbeli dátumot adj meg.', 'Please choose a future date.']); }
+				else if (x.t === 'date' && val && val < today()) { bad = T(en, ['Jövőbeli dátumot adj meg.', 'Please choose a future date.']); }
+				else if (x.t === 'int' && val !== '' && !(/^\d+$/.test(val) && +val >= 1 && +val <= 100000)) { bad = T(en, ['Adj meg egy 1 és 100 000 közötti egész számot.', 'Please enter a whole number between 1 and 100 000.']); }
 				mark(x.n, bad);
 				if (bad) { ok = false; if (!first) { first = form.querySelector('.cpwf-f[data-n="' + x.n + '"]'); } }
 			});

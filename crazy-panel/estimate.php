@@ -79,7 +79,8 @@ function cp_est_private($d) {
 	if ($e === '' && !empty($d['contact_id']) && function_exists('cp_crm_t')) { global $wpdb; $e = strtolower(trim((string) $wpdb->get_var($wpdb->prepare('SELECT email FROM ' . cp_crm_t('contacts') . ' WHERE id = %d', (int) $d['contact_id'])))); }
 	$dom = substr(strrchr($e, '@') ?: '', 1);
 	if ($dom === '') { return false; }
-	return (bool) preg_match('/^(gmail\.com|googlemail\.com|freemail\.hu|citromail\.hu|indamail\.hu|vipmail\.hu|mailbox\.hu|t-online\.hu|upcmail\.hu|chello\.hu|invitel\.hu|digikabel\.hu|monornet\.hu|externet\.hu|(yahoo|ymail|hotmail|outlook|live|msn|gmx|aol|icloud|me|mac|proton|protonmail|tutanota|zoho|mail|yandex)\.[a-z.]+)$/', $dom);
+	/* v2.9.58: az ingyenes levelezők listája egy helyen: company-suggest.php cp_cos_free() (azonos minta volt itt is) */
+	return function_exists('cp_cos_free') && cp_cos_free($dom);
 }
 function cp_est_ft($n) { return ($n < 0 ? '−' : '') . number_format(abs((float) $n), 0, ',', ' ') . ' Ft'; }
 
@@ -99,8 +100,10 @@ function cp_est_for_rows($rows) {
 }
 
 /* egy helyszín feloldása: település (elütéstűrően) és útvonalhossz Budapest XI.-ből; a tick és a próba közös */
-function cp_est_geocode($v) {
+/* v2.9.58: $until (Unix-idő, 0 = nincs): eddig futhat összesen – a lekérések időkorlátja ehhez igazodik; ha lejár, null (nem jegyezzük meg, a következő kör újrapróbálja) */
+function cp_est_geocode($v, $until = 0) {
 	$P = cp_est_prices(); $ua = array('User-Agent' => 'CrazyPanel/1.0 (eventcrazy.hu; info@eventcrazy.hu)', 'Accept-Language' => 'hu');
+	$tmo = function () use ($until) { return $until ? min(12, $until - time()) : 12; };
 	/* irányítószám, ha van; különben a teljes szöveg, majd az első vesszőig tartó rész */
 	$qs = array();
 	if (preg_match('/(^|\D)([1-9]\d{3})(\D|$)/', $v, $m)) { $qs[] = array('postalcode' => $m[2], 'country' => 'hu'); }
@@ -108,13 +111,15 @@ function cp_est_geocode($v) {
 	$hit = null; $name = '';
 	/* 1) irányítószám (pontos) – 2) Photon: elütéstűrő kereső, településre és helyszínnévre is („Szegd”, „Hotel Ozon, Matrahaza”) – 3) Nominatim */
 	if (isset($qs[0]['postalcode'])) {
-	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $qs[0]), 'https://nominatim.openstreetmap.org/search'), array('timeout' => 12, 'headers' => $ua));
+	if ($until && $tmo() < 2) { return null; }
+	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $qs[0]), 'https://nominatim.openstreetmap.org/search'), array('timeout' => max(1, $tmo()), 'headers' => $ua));
 	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
 		if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; $a = (array) ($j[0]['address'] ?? array()); $name = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? ''); }
 		array_shift($qs);
 	}
 	if (!$hit) {
-	$r = wp_remote_get(add_query_arg(array('q' => $v, 'limit' => 1, 'lat' => 47.2, 'lon' => 19.4, 'bbox' => '16.1,45.7,22.9,48.6'), 'https://photon.komoot.io/api/'), array('timeout' => 12, 'headers' => $ua));
+	if ($until && $tmo() < 2) { return null; }
+	$r = wp_remote_get(add_query_arg(array('q' => $v, 'limit' => 1, 'lat' => 47.2, 'lon' => 19.4, 'bbox' => '16.1,45.7,22.9,48.6'), 'https://photon.komoot.io/api/'), array('timeout' => max(1, $tmo()), 'headers' => $ua));
 	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
 	$f = $j['features'][0] ?? null;
 		if ($f && strtoupper((string) ($f['properties']['countrycode'] ?? '')) === 'HU' && isset($f['geometry']['coordinates'][1])) {
@@ -123,8 +128,9 @@ function cp_est_geocode($v) {
 		}
 	}
 	foreach ($hit ? array() : $qs as $i => $q) {
+		if ($until && $tmo() < 4) { return null; }
 		sleep(2);
-	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $q), 'https://nominatim.openstreetmap.org/search'), array('timeout' => 12, 'headers' => $ua));
+	$r = wp_remote_get(add_query_arg(array_merge(array('format' => 'jsonv2', 'limit' => 1, 'addressdetails' => 1), $q), 'https://nominatim.openstreetmap.org/search'), array('timeout' => max(1, $tmo()), 'headers' => $ua));
 	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
 		if (is_array($j) && !empty($j[0]['lat'])) { $hit = $j[0]; $a = (array) ($j[0]['address'] ?? array()); $name = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? ''); break; }
 	}
@@ -133,13 +139,15 @@ function cp_est_geocode($v) {
 	/* Budapestre esik (pl. „budapets”-ből javítva): a budapesti kiszállási díj jár, nem km-alapú */
 	if (mb_strtolower($name) === 'budapest' || mb_strpos(mb_strtolower($name), 'budapest') === 0) { return array('km' => 0, 'bp' => 1, 'n' => 'Budapest', 't' => time()); }
 	$o = $P['origin'];
-	$r = wp_remote_get('https://router.project-osrm.org/route/v1/driving/' . $o[1] . ',' . $o[0] . ';' . (float) $hit['lon'] . ',' . (float) $hit['lat'] . '?overview=false', array('timeout' => 12, 'headers' => $ua));
+	if ($until && $tmo() < 2) { return null; }
+	$r = wp_remote_get('https://router.project-osrm.org/route/v1/driving/' . $o[1] . ',' . $o[0] . ';' . (float) $hit['lon'] . ',' . (float) $hit['lat'] . '?overview=false', array('timeout' => max(1, $tmo()), 'headers' => $ua));
 	$j = is_wp_error($r) ? null : json_decode(wp_remote_retrieve_body($r), true);
 	$m = isset($j['routes'][0]['distance']) ? (float) $j['routes'][0]['distance'] : 0;
 	return array('km' => $m > 0 ? (int) round($m / 1000) : 0, 'n' => $name, 't' => time());
 }
 
-/* távolság a háttérben: 10 percenként legfeljebb 2 új helyszín (a Nominatim szabálya: max. 1 kérés / mp, azonosító fejléccel) */
+/* távolság a háttérben: 10 percenként legfeljebb 2 új helyszín (a Nominatim szabálya: max. 1 kérés / mp, azonosító fejléccel)
+ * v2.9.58: a 10 perces körben összesen legfeljebb ~20 mp (a lassú térképszolgáltatás ne tartsa fel a szinkront) */
 add_action('cp_crm_tick', 'cp_est_geo_tick', 40);
 function cp_est_geo_tick() {
 	if (!function_exists('cp_crm_stages') || !function_exists('cp_crm_t')) { return; }
@@ -147,16 +155,19 @@ function cp_est_geo_tick() {
 	$st0 = cp_crm_stages()[0] ?? '';
 	$vs = $wpdb->get_col($wpdb->prepare('SELECT DISTINCT venue FROM ' . cp_crm_t('deals') . " WHERE status = 'Open' AND deleted_at IS NULL AND stage = %s AND venue <> '' AND (km_fee IS NULL OR km_fee = 0) LIMIT 60", $st0));
 	$G = get_option('cp_est_geo', array()); if (!is_array($G)) { $G = array(); }
-	$n = 0; $P = cp_est_prices(); $ua = array('User-Agent' => 'CrazyPanel/1.0 (eventcrazy.hu; info@eventcrazy.hu)', 'Accept-Language' => 'hu');
+	$n = 0; $until = time() + 20;
 	foreach ($vs as $v) {
-		if ($n >= 2) { break; }
+		if ($n >= 2 || time() > $until - 3) { break; }
 		if (cp_est_is_bp($v)) { continue; }
 		$k = md5(cp_est_norm_venue($v));
 		/* a v1.82.1 előtti (elütést nem tűrő) sikertelen keresést azonnal újrapróbálja; egyébként a sikertelent naponta egyszer */
 		if (isset($G[$k]) && (!empty($G[$k]['km']) || !empty($G[$k]['bp']) || (isset($G[$k]['n']) && (time() - (int) ($G[$k]['t'] ?? 0)) < DAY_IN_SECONDS))) { continue; }
+		if ($n > 0) { sleep(2); }
+		$g = cp_est_geocode($v, $until);
+		/* kifutott az időből: egy óra múlva újra (addig „nem találtam”), hogy egy lassú helyszín ne akassza meg a többit */
+		if (!is_array($g)) { $G[$k] = array('km' => 0, 'n' => '', 't' => time() - DAY_IN_SECONDS + HOUR_IN_SECONDS); $n++; break; }
 		$n++;
-		if ($n > 1) { sleep(2); }
-		$G[$k] = cp_est_geocode($v);
+		$G[$k] = $g;
 	}
 	if ($n) { if (count($G) > 400) { $G = array_slice($G, -300, null, true); } update_option('cp_est_geo', $G, false); }
 }
