@@ -89,14 +89,19 @@ function cp_wl_users() {
 	foreach (cp_pu_data()['list'] as $id => $u) { if (!empty($u['a']) && cp_pu_can_uid((int) $id, 'munkanaplo', (string) ($u['r'] ?? 'iroda'))) { $out[] = array('id' => (int) $id, 'n' => (string) $u['n'], 'admin' => ($u['r'] ?? '') === 'admin'); } }
 	return $out;
 }
+/* v2.9.61: a napló gazdája (aki írja, és akit emlékeztetni kell) csak Ákos – a többi jogosult (Tóth Balázs, Gacsal Zsolt) olvassa,
+ * jóváhagyja és hozzászól, de saját naplója nincs. A „Kinek a naplója” választó, a napló-lekérések és az esti emlékeztető ezt használja. */
+function cp_wl_owners() {
+	$out = array();
+	foreach (cp_wl_users() as $u) { if (preg_match('/ákos/iu', $u['n'])) { $out[] = $u; } }
+	return $out;
+}
 function cp_wl_is_approver() { return function_exists('cp_panel_is_admin') && cp_panel_is_admin(); }
 function cp_wl_cfg() {
 	if (!cp_wl_db_ok() || !cp_wl_can()) { return array('on' => false); }
-	$users = cp_wl_users();
-	/* kinek a naplóját mutassa alapból: aki a legtöbbet írja (Ákos), különben saját */
-	global $wpdb;
-	$main = (int) $wpdb->get_var('SELECT uid FROM ' . cp_wl_t('entries') . ' GROUP BY uid ORDER BY COUNT(*) DESC LIMIT 1');
-	if (!$main) { foreach ($users as $u) { if (preg_match('/ákos/iu', $u['n'])) { $main = $u['id']; } } }
+	/* v2.9.61: a választóban csak a napló gazdája (Ákos); alapból az ő naplója nyílik */
+	$users = cp_wl_owners();
+	$main = $users ? $users[0]['id'] : 0;
 	return array('on' => true, 'me' => cp_wl_me(), 'main' => $main ?: cp_wl_me(), 'users' => $users, 'approver' => cp_wl_is_approver(),
 		'kinds' => array('Rendezvény', 'Szállítás', 'Kiépítés / bontás', 'Műhely / javítás', 'Raktár', 'Beszerzés', 'Iroda', 'Egyéb'));
 }
@@ -148,8 +153,9 @@ function cp_wl_ensure($uid, $day) {
 }
 function cp_wl_uid_param() {
 	$uid = (int) ($_REQUEST['uid'] ?? 0);
-	if (!$uid) { $uid = cp_wl_me(); }
-	$ok = false; foreach (cp_wl_users() as $u) { if ($u['id'] === $uid) { $ok = true; } }
+	$own = cp_wl_owners();
+	if (!$uid) { $uid = $own ? $own[0]['id'] : cp_wl_me(); }
+	$ok = false; foreach ($own as $u) { if ($u['id'] === $uid) { $ok = true; } }
 	if (!$ok) { cp_el_err('Ennek a kollégának nincs munkanaplója.'); }
 	return $uid;
 }
@@ -378,9 +384,9 @@ add_action('cp_wl_remind', function () {
 	if (get_option('cp_wl_reminded') === $day) { return; }
 	update_option('cp_wl_reminded', $day, false);
 	global $wpdb;
-	/* írók: akik az elmúlt 30 napban írtak naplót (vagy Ákos) */
-	$writers = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT DISTINCT uid FROM ' . cp_wl_t('entries') . ' WHERE day >= %s', gmdate('Y-m-d', time() - 30 * DAY_IN_SECONDS))));
-	if (!$writers) { foreach (cp_wl_users() as $u) { if (preg_match('/ákos/iu', $u['n'])) { $writers[] = $u['id']; } } }
+	/* v2.9.61: csak a napló gazdája kap emlékeztetőt (Ákos) – korábban mindenki, akinek 30 napon belül volt bejegyzése
+	   (egy hozzászólás is létrehozhatott ilyet), így az olvasók (Tóth Balázs, Gacsal Zsolt) is kaptak */
+	$writers = array_map(function ($u) { return (int) $u['id']; }, cp_wl_owners());
 	foreach ($writers as $w) {
 		$e = cp_wl_get_row($w, $day);
 		if ($e && ($e['t_start'] !== '' || trim((string) $e['notes']) !== '')) { continue; }
