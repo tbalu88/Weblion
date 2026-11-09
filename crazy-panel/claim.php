@@ -142,6 +142,8 @@ function cp_claim_sm_sender($text) {
 	return count($hit) === 1 ? $hit[0] : 0;
 }
 function cp_claim_from_sm_mail($thread_id, $text) {
+	/* v2.9.55: visszaállás Salesmate-re (2026-11-09) – a Salesmate-levél alapján nem oszt ki; visszakapcsolás: update_option('cp_claim_sm_on', 1) */
+	if (!get_option('cp_claim_sm_on')) { return; }
 	if (!function_exists('cp_mail_t') || $thread_id <= 0) { return; }
 	$sm = cp_claim_sm_sender($text);
 	if (!$sm) { return; }
