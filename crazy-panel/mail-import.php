@@ -92,8 +92,13 @@ function cp_imp_hdr($s) {
 	}
 	return trim($out);
 }
-function cp_imp_decode($data, $enc, $charset) {
+function cp_imp_decode($data, $enc, $charset, $cut = false) {
 	if ($enc === 3) { $data = base64_decode($data); } elseif ($enc === 4) { $data = quoted_printable_decode($data); }
+	/* v2.9.58: levágott (600 KB-os) UTF-8 szövegnél a végén félbevágott karakter maradhat – azt (legfeljebb 3 bájt) eldobjuk,
+	   különben az egész szöveg „nem UTF-8” lenne, és Latin-2-ként átkódolva zagyvává válna */
+	if ($cut && !mb_check_encoding($data, 'UTF-8') && in_array(strtoupper(trim((string) $charset, " \t\"'")), array('', 'UTF-8', 'UTF8', 'US-ASCII', 'DEFAULT'), true)) {
+		for ($k = 1; $k <= 3; $k++) { $x = substr($data, 0, -$k); if (mb_check_encoding($x, 'UTF-8')) { $data = $x; break; } }
+	}
 	$data = cp_imp_conv($data, $charset);
 	if (!mb_check_encoding($data, 'UTF-8')) { $data = cp_imp_conv($data, 'ISO-8859-2'); }
 	return $data;
@@ -112,7 +117,7 @@ function cp_imp_param($part, $name) {
 		if ($pieces) {
 			ksort($pieces); $raw = '';
 			foreach ($pieces as $x) { $raw .= $x[1]; }
-			return cp_mail_fname($pieces[array_key_first($pieces)][0] ? $raw : $raw);
+			return cp_mail_fname($raw);
 		}
 		if ($plain !== '') { return cp_mail_fname(cp_imp_hdr($plain)); }
 	}
@@ -142,8 +147,9 @@ function cp_imp_walk($mb, $uid, $part, $num, &$acc) {
 	if ($fname !== '' && ($disp === 'attachment' || $type !== 0)) { $acc['att'][] = array('n' => mb_substr($fname, 0, 120)) + (!empty($part->ifid) ? array('cid' => trim((string) $part->id, '<> ')) : array()); return; }
 	if ($type === 0 && ($sub === 'plain' || $sub === 'html') && !isset($acc[$sub])) {
 		$raw = imap_fetchbody($mb, $uid, $num === '' ? '1' : $num, FT_UID | FT_PEEK);
-		if (mb_strlen((string) $raw) > 600000) { $raw = substr($raw, 0, 600000); }
-		$acc[$sub] = cp_imp_decode((string) $raw, (int) $part->encoding, cp_imp_param($part, 'charset'));
+		$cut = strlen((string) $raw) > 600000; /* v2.9.58: bájtméret (strlen), nem karakterszám */
+		if ($cut) { $raw = substr($raw, 0, 600000); }
+		$acc[$sub] = cp_imp_decode((string) $raw, (int) $part->encoding, cp_imp_param($part, 'charset'), $cut);
 	}
 }
 /* v1.41: az ügyfél levelében idézett KORÁBBI SAJÁT LEVELÜNK kinyerése – a Salesmate-ből küldött válaszaink
@@ -394,6 +400,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		$t2 = $wpdb->get_row("SELECT id, last_at, msg_count, folder, followers, deal_id, src FROM $T WHERE tkey IN ('" . implode("','", array_map('esc_sql', $keys)) . "') ORDER BY last_at DESC LIMIT 1", ARRAY_A);
 		if ($t2 && !($t2['last_at'] && strtotime($t2['last_at'] . ' UTC') < strtotime($at . ' UTC') - CP_IMP_GAP_DAYS * DAY_IN_SECONDS)) { $t = $t2; }
 	}
+	/* v2.9.58: a feldolgozás (IMAP-letöltés) közben nem került-e be mégis – még minden írás előtt (a zár mellett is ellenőrizve) */
+	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $mid))) { return 'dup'; }
 	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at); }
 	if (!$t) {
 		$deal = cp_imp_pick_deal($other['e'], $at);
@@ -406,9 +414,9 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
-		'status' => (!$sent && $out) ? (cp_imp_sm_copy($hraw, $me) ? 'Salesmate-ből küldve' : 'ellenőrizetlen') : '', 'sent_at' => $at, 'mid' => $mid) + ((int) get_option('cp_mail_db_ver') >= 9 && $rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
+		'status' => (!$sent && $out) ? (cp_imp_sm_copy($hraw, $me) ? 'Salesmate-ből küldve' : 'ellenőrizetlen') : '', 'sent_at' => $at, 'mid' => $mid) + ($rto !== '' ? array('reply_to' => mb_substr($rto, 0, 190)) : array())
 		/* v1.67: az eredeti HTML szűrve (a beágyazott képek a mellékletek sorszámára hivatkozva) */
-		+ ((int) get_option('cp_mail_db_ver') >= 8 && function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + ((int) get_option('cp_mail_db_ver') >= 6 && !empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ((int) get_option('cp_mail_db_ver') >= 7 && $folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
+		+ (function_exists('cp_mail_html_safe') ? array('html' => cp_mail_html_safe($acc['html'] ?? '', array_filter(array_flip(array_map(function ($a) { return (string) ($a['cid'] ?? ''); }, array_slice($acc['att'], 0, 20))), function ($v, $k) { return $k !== ''; }, ARRAY_FILTER_USE_BOTH))) : array()) + (!empty($h->message_id) ? array('msgid' => mb_substr(trim($h->message_id), 0, 255)) : array()) + ($folder !== '' ? array('imap_folder' => mb_substr($folder, 0, 120), 'imap_uid' => (int) $uid) : array()));
 	if (!$wpdb->insert_id) { throw new \Exception('A levél mentése nem sikerült: ' . $wpdb->last_error); }
 	$msg_id = (int) $wpdb->insert_id;
 	$add = 1;
@@ -426,14 +434,16 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 			}
 		}
 	}
-	$upd = array('msg_count' => (int) $t['msg_count'] + $add);
+	$upd = array();
 	if ($at >= $t['last_at']) { $upd['last_at'] = $at; $upd['snippet'] = mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200); }
 	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
 	if ($live && !$out && !$promo && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
 	/* v1.99.2: az ügyfél új levele mindig olvasatlanná teszi a szálat – akkor is, ha késve kézbesítették (régebbi dátummal) */
 	if ($live && !$out && !$promo) { $upd['seen_at'] = null; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }
-	$wpdb->update($T, $upd, array('id' => (int) $t['id']));
+	/* v2.9.58: a levélszámláló az adatbázisban nő (msg_count + N) – párhuzamos írásnál sem vész el */
+	$wpdb->query($wpdb->prepare("UPDATE $T SET msg_count = msg_count + %d WHERE id = %d", $add, (int) $t['id']));
+	if ($upd) { $wpdb->update($T, $upd, array('id' => (int) $t['id'])); }
 	/* v2.9.47: a Salesmate-ből küldött levél másolata (élő beérkezés) – a felelős az aláírás szerinti kolléga, ha még nincs lefoglalva */
 	/* v2.9.52: csak a valódi Salesmate-másolatnál (a saját címről érkező, de nem a Salesmate-ből jött levél feladója hamisítható) */
 	if ($live && $out && !$sent && function_exists('cp_claim_from_sm_mail') && cp_imp_sm_copy($hraw, $me)) { cp_claim_from_sm_mail((int) $t['id'], (string) ($acc['plain'] ?? '') !== '' ? (string) $acc['plain'] : $text); }
@@ -462,17 +472,9 @@ function cp_imp_tick() {
 	$s = cp_imp_state();
 	if (empty($s['running'])) { wp_clear_scheduled_hook('cp_imp_tick'); return; }
 	if (get_transient('cp_imp_lock')) { return; }
-	/* v1.41: a régi (idézetek nélküli) formátumban átvett leveleket töröljük a panelből, és elölről kezdjük – a postafiókot nem érinti */
-	if ((int) ($s['v'] ?? 1) < 2) {
-		global $wpdb;
-		$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
-		$wpdb->query("DELETE m FROM $M m JOIN $T t ON t.id = m.thread_id WHERE t.src = 'imap'");
-		$wpdb->query("DELETE FROM $T WHERE src = 'imap'");
-		foreach ($s['folders'] as &$f0) { unset($f0['uids'], $f0['pos'], $f0['total'], $f0['done']); }
-		unset($f0);
-		$s['cnt'] = array(); $s['v'] = 2; $s['restarted'] = time();
-		cp_imp_state_set($s);
-	}
+	/* v2.9.58: a v1.41-es „régi formátumú importált levelek törlése” átállás kivéve (rég lefutott, és minden imap-szálat törölt volna) */
+	/* v2.9.58: atomi zár – a folyamatos beérkezéssel (↻ gomb, 5 perces ütem) közös, így egyszerre csak egy behúzás fut */
+	if (!cp_mail_lock('imp')) { return; }
 	set_transient('cp_imp_lock', 1, 120);
 	if (function_exists('set_time_limit')) { @set_time_limit(110); }
 	/* ha a köteg váratlanul leállna (végzetes hiba), az ok bekerül az állapotba */
@@ -482,7 +484,7 @@ function cp_imp_tick() {
 	});
 	$t0 = time();
 	$mb = cp_imp_open();
-	if (is_wp_error($mb)) { $s['err'] = $mb->get_error_message(); $s['errn'] = (int) ($s['errn'] ?? 0) + 1; if ($s['errn'] >= 5) { $s['running'] = 0; } cp_imp_state_set($s); delete_transient('cp_imp_lock'); return; }
+	if (is_wp_error($mb)) { $s['err'] = $mb->get_error_message(); $s['errn'] = (int) ($s['errn'] ?? 0) + 1; if ($s['errn'] >= 5) { $s['running'] = 0; } cp_imp_state_set($s); delete_transient('cp_imp_lock'); cp_mail_unlock('imp'); return; }
 	$s['errn'] = 0; $s['err'] = '';
 	foreach ($s['folders'] as $i => &$f) {
 		if (!empty($f['done'])) { continue; }
@@ -507,6 +509,7 @@ function cp_imp_tick() {
 	$s['last'] = time();
 	cp_imp_state_set($s);
 	delete_transient('cp_imp_lock');
+	cp_mail_unlock('imp');
 }
 
 function cp_imp_start($folders) {
@@ -549,7 +552,7 @@ function cp_imp_admin_page() {
 		} elseif ($do === 'start') {
 			$msg = cp_imp_start(array_map('strval', (array) wp_unslash($_POST['folders'] ?? array())));
 		} elseif ($do === 'sync_on' || $do === 'sync_off') {
-			update_option('cp_imp_sync_on', $do === 'sync_on' ? '1' : '0', false);
+			update_option('cp_imp_sync_on', $do === 'sync_on' ? '1' : '0', true); /* v2.9.58: automatikusan betöltve */
 			if ($do === 'sync_on') { if (!wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 30, 'cp_5min', 'cp_imp_sync'); } $msg = 'A folyamatos beérkezés bekapcsolva – 5 percenként, csak olvasva.'; }
 			else { wp_clear_scheduled_hook('cp_imp_sync'); $msg = 'A folyamatos beérkezés kikapcsolva.'; }
 		} elseif ($do === 'tpl') {
@@ -634,10 +637,13 @@ add_action('init', function () {
 	if (get_option('cp_imp_sync_on') === '1' && !wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 60, 'cp_5min', 'cp_imp_sync'); }
 });
 add_action('cp_imp_sync', 'cp_imp_sync_run');
-function cp_imp_sync_run() {
+/* v2.9.58: $full = false (a ↻ gomb): csak a levelek behúzása; az újrakötés, a számlacímkék és a Drive-sor az 5 perces ütemé */
+function cp_imp_sync_run($full = true) {
 	if (get_option('cp_imp_sync_on') !== '1') { wp_clear_scheduled_hook('cp_imp_sync'); return; }
 	$st = cp_imp_state();
 	if (!empty($st['running']) || get_transient('cp_imp_lock') || get_transient('cp_imp_sync_lock')) { return; }
+	/* v2.9.58: atomi zár (a ↻ gomb és az 5 perces ütem egyszerre nem húzhatja be ugyanazt a levelet); a tranziens a kijelzéshez marad */
+	if (!cp_mail_lock('imp')) { return; }
 	set_transient('cp_imp_sync_lock', 1, 240);
 	if (function_exists('set_time_limit')) { @set_time_limit(150); }
 	$sy = get_option('cp_imp_sync', array());
@@ -694,8 +700,10 @@ function cp_imp_sync_run() {
 	$sy['last'] = time();
 	update_option('cp_imp_sync', $sy, false);
 	delete_transient('cp_imp_sync_lock');
+	cp_mail_unlock('imp');
+	if ($full === false) { return; } /* (a WP-horog üres szöveget is adhat – az teljes futás) */
 	try { cp_imp_relink_recent(); } catch (\Throwable $e) { /* a következő körben újra */ }
-	if (function_exists('cp_mail_inv_backfill')) { try { cp_mail_inv_backfill(); } catch (\Throwable $e) { /* nem kritikus */ } }
+	/* v2.9.58: az egyszeri visszamenőleges számlacímkézés (cp_mail_inv_backfill) rég lefutott – kivéve */
 	if (function_exists('cp_mdr_run')) { try { cp_mdr_run(); } catch (\Throwable $e) { delete_transient('cp_mdr_lock'); } }
 }
 
@@ -711,7 +719,7 @@ function cp_imp_ajax_fetch_now() {
 	$n0 = (int) ($sy0['n'] ?? 0);
 	if (!get_transient('cp_imp_fetch_rl') && !get_transient('cp_imp_sync_lock')) {
 		set_transient('cp_imp_fetch_rl', 1, 20);
-		cp_imp_sync_run();
+		cp_imp_sync_run(false); /* v2.9.58: a kattintásban csak a levelek behúzása (a háttérmunka az 5 perces ütemben) */
 	}
 	$sy = get_option('cp_imp_sync', array());
 	if (!empty($sy['err'])) { cp_el_err('A postafiók most nem érhető el: ' . $sy['err'], 502); }

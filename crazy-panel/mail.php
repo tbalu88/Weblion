@@ -111,12 +111,27 @@ add_action('init', function () {
 ) " . $wpdb->get_charset_collate() . ';');
 	/* v5: olvasott / olvasatlan – a meglévő szálak olvasottként indulnak */
 	if ((int) get_option('cp_mail_db_ver') < 5) { $wpdb->query('UPDATE ' . cp_mail_t('threads') . ' SET seen_at = COALESCE(last_at, UTC_TIMESTAMP()) WHERE seen_at IS NULL'); }
-	update_option('cp_mail_db_ver', CP_MAIL_DB_VER, false);
+	update_option('cp_mail_db_ver', CP_MAIL_DB_VER, true); /* v2.9.58: automatikusan betöltve (minden kérés olvassa) */
 }, 7);
 
 function cp_mail_db_ok() {
 	return get_option('cp_mail_db_ver') === CP_MAIL_DB_VER;
 }
+
+/* v2.9.58: a minden kérésnél olvasott apró jelzők (adatbázis-verzió, AI-napló, beérkezés be/ki) automatikusan betöltve –
+ * így nem kell rájuk külön lekérdezés. Egyszeri átállítás; a jelző (cp_mail_al) maga is automatikusan betöltött, tehát olcsó. */
+add_action('init', function () {
+	if (get_option('cp_mail_al') === '1' || !function_exists('wp_set_option_autoload')) { return; }
+	$all = wp_load_alloptions();
+	foreach (array('cp_mail_db_ver', 'cp_ai_log_ver', 'cp_imp_sync_on') as $k) { if (!array_key_exists($k, $all)) { wp_set_option_autoload($k, true); } }
+	update_option('cp_mail_al', '1', true);
+}, 6);
+
+/* v2.9.58: atomi zár a MySQL GET_LOCK-kal – egyszerre csak egy kérés kaphatja meg; ha a kérés összeomlik,
+ * az adatbázis-kapcsolat bontásakor magától felszabadul (nincs beragadt zár). A név adatbázisonként egyedi. */
+function cp_mail_lock_name($k) { global $wpdb; return 'cp_' . md5(DB_NAME . '|' . $wpdb->prefix . '|' . $k); }
+function cp_mail_lock($k) { global $wpdb; return (string) $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 0)', cp_mail_lock_name($k))) === '1'; }
+function cp_mail_unlock($k) { global $wpdb; $wpdb->query($wpdb->prepare('SELECT RELEASE_LOCK(%s)', cp_mail_lock_name($k))); }
 
 /* a sablonokban használható változók: kulcs => array(címke, minta) */
 function cp_mail_vars() {
@@ -475,7 +490,7 @@ function cp_mail_thread_full($id) {
 	global $wpdb;
 	$t = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $id), ARRAY_A);
 	if (!$t) { return null; }
-	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, ' . ((int) get_option('cp_mail_db_ver') >= 9 ? 'reply_to' : "'' reply_to") . ', CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
+	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, reply_to, CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
 	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
 	unset($m);
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);
@@ -720,7 +735,7 @@ function cp_sig_norm_links($html) {
 
 
 /* ------------------------------------------------------------ v2.7.13: ütközésjelzés – ki nézi / ki válaszol épp a szálban
- * A levélszálat megnyitó kolléga böngészője 15 mp-enként jelez (nézi / válaszol); a válasz a többiek friss jelzéseit adja,
+ * A levélszálat megnyitó kolléga böngészője 45 mp-enként jelez (v2.9.58; korábban 15) (nézi / válaszol); a válasz a többiek friss jelzéseit adja,
  * és a szál legutóbbi levelének azonosítóját (így látszik, ha közben új levél jött). Rövid életű adat, csak gyorsítótárban. */
 add_action('wp_ajax_nopriv_cp_mail_presence', 'cp_mail_ajax_presence');
 add_action('wp_ajax_cp_mail_presence', 'cp_mail_ajax_presence');
@@ -736,11 +751,15 @@ function cp_mail_ajax_presence() {
 	$p = get_transient($k);
 	if (!is_array($p)) { $p = array(); }
 	$now = time();
-	foreach ($p as $uid => $x) { if ($now - (int) ($x['t'] ?? 0) > 40) { unset($p[$uid]); } }
+	/* v2.9.58: a böngésző 45 mp-enként jelez; írás csak változáskor (új / távozó kolléga, más állapot), vagy ha a saját jelzés
+	   már 60 mp-nél régebbi – így a jelzések többsége nem ír az adatbázisba. A 150 mp-nél régebbi jelzés lejárt. */
+	$ch = false;
+	foreach ($p as $uid => $x) { if ($now - (int) ($x['t'] ?? 0) > 150) { unset($p[$uid]); $ch = true; } }
 	if ($me > 0) {
-		if (!empty($_POST['leave'])) { unset($p[$me]); } else { $p[$me] = array('s' => $st, 't' => $now); }
+		if (!empty($_POST['leave'])) { if (isset($p[$me])) { unset($p[$me]); $ch = true; } }
+		elseif (!isset($p[$me]) || ($p[$me]['s'] ?? '') !== $st || $now - (int) ($p[$me]['t'] ?? 0) >= 60) { $p[$me] = array('s' => $st, 't' => $now); $ch = true; }
 	}
-	set_transient($k, $p, 120);
+	if ($ch) { set_transient($k, $p, 300); }
 	$who = array();
 	foreach ($p as $uid => $x) {
 		if ((int) $uid === $me) { continue; }
@@ -790,14 +809,17 @@ function cp_mail_ajax_draft_save() {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	$in = json_decode((string) wp_unslash($_POST['d'] ?? ''), true);
 	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
+	$all = cp_mail_drafts_get($me);
+	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
+	/* v2.9.58: az idézett levél (akár több száz KB) változatlan → nem szűrjük újra (a tárolt, már szűrt változat marad; „qh” = a beküldött idézet lenyomata) */
+	$qraw = (string) ($in['quote'] ?? ''); $qh = md5($qraw);
+	$quote = $id !== '' && isset($all[$id]) && ($all[$id]['qh'] ?? '') === $qh ? (string) ($all[$id]['quote'] ?? '') : mb_substr(cp_mail_clean($qraw), 0, 300000);
 	$addr = function ($l) { return array_slice(array_values(array_filter(array_map(function ($e) { return sanitize_email((string) $e); }, (array) $l))), 0, 20); };
 	$x = array('to' => $addr($in['to'] ?? array()), 'cc' => $addr($in['cc'] ?? array()), 'bcc' => $addr($in['bcc'] ?? array()),
 		'subject' => mb_substr(sanitize_text_field((string) ($in['subject'] ?? '')), 0, 255), 'body' => mb_substr(cp_mail_clean((string) ($in['body'] ?? '')), 0, 400000),
-		'thread' => (int) ($in['thread'] ?? 0), 'tsubj' => mb_substr(sanitize_text_field((string) ($in['tsubj'] ?? '')), 0, 255), 'quote' => mb_substr(cp_mail_clean((string) ($in['quote'] ?? '')), 0, 300000),
+		'thread' => (int) ($in['thread'] ?? 0), 'tsubj' => mb_substr(sanitize_text_field((string) ($in['tsubj'] ?? '')), 0, 255), 'quote' => $quote, 'qh' => $qh,
 		'deal' => (int) ($in['deal'] ?? 0), 'dealTitle' => mb_substr(sanitize_text_field((string) ($in['dealTitle'] ?? '')), 0, 255), 'known' => (int) ($in['known'] ?? 0),
 		'atts' => array_slice(array_values(array_filter(array_map(function ($a) { return is_array($a) && !empty($a['tok']) ? array('n' => mb_substr(sanitize_text_field((string) ($a['n'] ?? '')), 0, 190), 'size' => (int) ($a['size'] ?? 0), 'tok' => preg_replace('/[^A-Za-z0-9._-]/', '', (string) $a['tok'])) : null; }, (array) ($in['atts'] ?? array())))), 0, 20), 't' => time());
-	$all = cp_mail_drafts_get($me);
-	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
 	if ($id === '' || !isset($all[$id])) { $id = 'd' . base_convert((string) time(), 10, 36) . wp_generate_password(5, false, false); $id = strtolower(preg_replace('/[^a-z0-9]/i', '', $id)); }
 	/* üres piszkozatot nem tárol (és a meglévőt törli) */
 	$empty = !$x['to'] && !$x['cc'] && $x['subject'] === '' && trim(wp_strip_all_tags(str_replace((string) $x['quote'], '', (string) $x['body']))) === '' && !$x['atts'];

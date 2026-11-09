@@ -88,10 +88,10 @@ function cp_send_append($mime) {
 function cp_send_parent_id($thread) {
 	global $wpdb;
 	$M = cp_mail_t('messages');
-	$cols = $wpdb->get_col("SHOW COLUMNS FROM $M");
-	$m = $wpdb->get_row($wpdb->prepare("SELECT * FROM $M WHERE thread_id = %d AND dir = 'in' ORDER BY sent_at DESC, id DESC LIMIT 1", $thread), ARRAY_A);
+	/* v2.9.58: csak a szükséges oszlopok; a msgid oszlop (v6 óta) mindig megvan – nincs SHOW COLUMNS */
+	$m = $wpdb->get_row($wpdb->prepare("SELECT id, mid, msgid, sent_at, from_email FROM $M WHERE thread_id = %d AND dir = 'in' ORDER BY sent_at DESC, id DESC LIMIT 1", $thread), ARRAY_A);
 	if (!$m) { return ''; }
-	if (in_array('msgid', $cols, true) && !empty($m['msgid'])) { return $m['msgid']; }
+	if (!empty($m['msgid'])) { return $m['msgid']; }
 	if (empty($m['mid']) || !function_exists('cp_imp_open')) { return ''; }
 	$mb = cp_imp_open('INBOX');
 	if (is_wp_error($mb)) { return ''; }
@@ -103,7 +103,7 @@ function cp_send_parent_id($thread) {
 		if ($h && !empty($h->message_id) && md5(trim($h->message_id)) === $m['mid']) { $found = trim($h->message_id); break; }
 	}
 	imap_errors(); imap_close($mb);
-	if ($found !== '' && in_array('msgid', $cols, true)) { $wpdb->update($M, array('msgid' => $found), array('id' => (int) $m['id'])); }
+	if ($found !== '') { $wpdb->update($M, array('msgid' => $found), array('id' => (int) $m['id'])); }
 	return $found;
 }
 
@@ -127,6 +127,9 @@ function cp_send_ajax() {
 	$sid = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['sid'] ?? '')));
 	$sidk = $sid !== '' ? 'cp_send_sid_' . md5($me . '|' . $sid) : '';
 	if ($sidk !== '' && !$test) {
+		/* v2.9.58: a küldési azonosító atomi lefoglalása – a párhuzamos / újrapróbált beküldés itt megáll (a zár a kérés végéig tart,
+		   összeomláskor magától felszabadul); a foglalás után olvasott állapot már a másik kérés eredményét mutatja */
+		if (!cp_mail_lock('send|' . $sidk)) { cp_el_err('Ez a levél épp most megy ki – várj pár másodpercet, és frissítsd a levélszálat.'); }
 		$prev = get_transient($sidk);
 		if ($prev === 'sending') { cp_el_err('Ez a levél épp most megy ki – várj pár másodpercet, és frissítsd a levélszálat.'); }
 		if (is_array($prev)) { wp_send_json_success($prev + array('dup' => 1)); }
@@ -224,9 +227,10 @@ function cp_send_ajax() {
 	}
 	$who = function_exists('cp_panel_who') ? cp_panel_who() : '';
 	$row = array('thread_id' => (int) $t['id'], 'dir' => 'out', 'from_name' => (string) $o['from_name'] . ($who !== '' ? ' (' . $who . ')' : ''), 'from_email' => $i['user'], 'to_list' => implode(', ', $to), 'cc_list' => implode(', ', $cc), 'subject' => mb_substr($subj, 0, 255), 'body' => $html, 'attachments' => wp_json_encode($alist), 'status' => 'Elküldve a panelből', 'sent_at' => $now, 'mid' => md5($msgid));
-	if (in_array('msgid', $wpdb->get_col('SHOW COLUMNS FROM ' . cp_mail_t('messages')), true)) { $row['msgid'] = $msgid; }
+	$row['msgid'] = $msgid; /* v2.9.58: az oszlop mindig megvan (nincs SHOW COLUMNS) */
 	$wpdb->insert(cp_mail_t('messages'), $row);
-	$wpdb->update($T, array('msg_count' => (int) $t['msg_count'] + 1, 'last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
+	$wpdb->query($wpdb->prepare("UPDATE $T SET msg_count = msg_count + 1 WHERE id = %d", (int) $t['id'])); /* v2.9.58: az adatbázisban nő */
+	$wpdb->update($T, array('last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => 'send', 'text' => 'Levél elküldve a panelből: ' . mb_substr(implode(', ', $to), 0, 200), 'author_uid' => $me, 'author' => $who, 'created_at' => $now));
 	if ($sidk !== '') { set_transient($sidk, array('thread' => (int) $t['id'], 'warn' => $warn), 30 * MINUTE_IN_SECONDS); }
 	/* v2.9: az elküldött levél piszkozata törlődik */

@@ -16,7 +16,7 @@
 	setTimeout(() => { try { const o = localStorage.getItem('cpmail_draft'); if (o) { post('cp_mail_draft_save', { d: o }).then(() => { localStorage.removeItem('cpmail_draft'); }).catch(() => {}); } } catch (e) { /* privát mód */ } }, 1500);
 
 	/* v1.67: a mappák / fülek listája gyorsítótárban – váltáskor azonnal megjelenik, a friss adat a háttérben jön */
-	const RO = ['cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save'];
+	const RO = ['cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save', 'cp_mail_fill', 'cp_ai_draft']; /* v2.9.58: a kitöltés és az AI-piszkozat sem módosít listát */
 	S.lc = {}; S.lcAt = {};
 	async function post(action, params) {
 		if (!RO.includes(action)) { S.lc = {}; S.lcAt = {}; } /* bármilyen módosítás után friss lista */
@@ -79,7 +79,7 @@
 			const b = el.querySelector('[data-presrf]'); if (b) b.addEventListener('click', () => open(c.th));
 		});
 	}
-	PR.t = setInterval(presPing, 15000);
+	PR.t = setInterval(presPing, 45000); /* v2.9.58: 15 → 45 mp (a szerver csak változáskor ír) */
 	/* v2.8.2: billentyűparancsok a Levelezésben (ha nem szövegmezőben gépelsz) */
 	const KEYS = [['j / ↓', 'Következő levélszál'], ['k / ↑', 'Előző levélszál'], ['r', 'Válasz'], ['a', 'Válasz mindenkinek'], ['e', 'Archiválás (Archívból: vissza)'], ['# / Delete', 'Kukába'], ['s', 'Szundi'], ['u', 'Olvasatlannak jelölés'], ['x', 'Kijelölés'], ['c', 'Új levél'], ['/', 'Keresés'], ['Esc', 'Szál bezárása'], ['?', 'Ez a súgó']];
 	function keyHelp() {
@@ -290,6 +290,15 @@
 	/* v1.54: a melléklet letöltése a postafiókból (képnél / PDF-nél megnyitás a böngészőben) */
 	/* v1.67.1: sima szöveges (importált / idézetből kinyert) levél olvashatóbban: a levelezőprogramok szöveges
 	 * jelölései ([kép-cím], szöveg<link>, <tel:…>, <mailto:…>) helyett kattintható link, a régebbi idézett levelek lenyithatók */
+	/* v2.9.58: a keret nélkül megjelenített levéltörzsben (pl. Salesmate-ből átvett HTML) a külső képek nem töltődnek be maguktól –
+	 * mint az eredeti nézetnél: a src / srcset félretéve (data-xsrc), a „Képek megjelenítése” gomb teszi vissza */
+	const noExtImg = h => String(h || '').replace(/<img\b[^>]*>/gi, t => /\ssrc(?:set)?\s*=\s*["']?\s*(?:https?:)?\/\//i.test(t) ? t.replace(/\s(src|srcset)\s*=/gi, ' data-x$1=') : t);
+	document.addEventListener('click', e => {
+		const b = e.target.closest && e.target.closest('[data-ximgs]'); if (!b) return;
+		const mb = b.closest('.ml-mb'); if (!mb) return;
+		mb.querySelectorAll('img[data-xsrc], img[data-xsrcset]').forEach(i => { ['src', 'srcset'].forEach(a => { if (i.hasAttribute('data-x' + a)) { i.setAttribute(a, i.getAttribute('data-x' + a)); i.removeAttribute('data-x' + a); } }); });
+		const bar = b.closest('.ml-extbar'); if (bar) bar.remove();
+	});
 	function tidyBody(h) {
 		h = String(h || '');
 		h = h.replace(/\[(?:cid:[^\]]*|https?:\/\/[^\]\s]+?\.(?:png|jpe?g|gif|webp|bmp)(?:\?[^\]\s]*)?)\]/gi, '');
@@ -520,7 +529,8 @@
 			let r = c;
 			if (!c) { box.querySelectorAll('.ml-items, .ml-list').forEach(x => x.classList.add('ml-busy')); try { r = await post('cp_mail_threads', P); S.lc[key] = r; S.lcAt[key] = Date.now(); } catch (e) { r = null; S.err = e.message; } }
 			/* a szomszédos fülek (Nyitott / Kiosztatlan / Mind) előre betöltve, hogy a váltás azonnali legyen */
-			if (!c && r) setTimeout(() => ['open', 'unassigned', 'all'].filter(x => x !== P.tab).forEach(x => { const Q = Object.assign({}, P, { tab: x }), k = JSON.stringify(Q); if (!S.lc[k]) post('cp_mail_threads', Q).then(n => { S.lc[k] = n; S.lcAt[k] = Date.now(); }).catch(() => {}); }), 300);
+			/* v2.9.58: lusta előtöltés – csak egy (a következő) fül, 3 mp múlva, és csak ha a lap látható és közben nem váltottál */
+			if (!c && r) setTimeout(() => { if (document.hidden || !box.isConnected || S.tab !== P.tab || S.folder !== P.folder) return; ['open', 'unassigned', 'all'].filter(x => x !== P.tab).slice(0, 1).forEach(x => { const Q = Object.assign({}, P, { tab: x }), k = JSON.stringify(Q); if (!S.lc[k]) post('cp_mail_threads', Q).then(n => { S.lc[k] = n; S.lcAt[k] = Date.now(); }).catch(() => {}); }); }, 3000);
 			else if (Date.now() - (S.lcAt[key] || 0) > 4000) {
 				/* háttérfrissítés: ha változott és még ugyanezt nézed (nyitott levél nélkül), újrarajzol */
 				S.lcAt[key] = Date.now();
@@ -849,7 +859,7 @@
 			timeline(x).map((it, ix) => it.ev ? '<div class="ml-ev"><span class="ml-av ml-av1 ev" style="background:' + avc(it.ev.author) + '">' + esc(ini(it.ev.author).slice(0, 1)) + '</span><span><b>' + esc(it.ev.text) + '</b>' + (it.ev.author ? ' – ' + esc(it.ev.author) : '') + '</span><small>' + esc(ago(it.ev.created_at)) + '</small></div>' : (m => '<article class="ml-msg' + (isOpen(m) ? '' : ' cl') + '" data-mk="' + esc(mk(m)) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 				(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(snip(m.body)) + '</div>' +
 				(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma"><button type="button"' + ((M.send && M.send.on) ? ' data-reply="' + ix + '"' : ' disabled') + ' title="Válasz">' + RE_I + '</button><button type="button"' + ((M.send && M.send.on) ? ' data-replyall="' + ix + '"' : ' disabled') + ' title="Válasz mindenkinek">' + REA_I + '</button><button type="button"' + (t.id > 0 ? ' data-mdel' : ' disabled') + ' title="Törlés (a levélszál a Kukába kerül)">' + DEL_I + '</button><button type="button"' + (t.id > 0 ? ' data-mmore="' + ix + '"' : ' disabled') + ' title="Továbbiak">' + MORE_I + '</button></span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
-				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : tidyBody(m.body)) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener"' + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dvHtml(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>')(it.m)).join('') +
+				'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener"' + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dvHtml(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>')(it.m)).join('') +
 			'</div>' +
 			/* v1.85: mobilon a szál alján válasz-gombok (a lebegő „+” helyett) */
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
@@ -996,7 +1006,7 @@
 				}
 				else if (k === 'fw') forward(m);
 				else if (k === 'unread') { S.th = null; S.reading = false; bulk(box, [t.id], 'unread', ''); }
-				else if (k === 'copy') { const tmp = document.createElement('div'); tmp.innerHTML = m.body || ''; try { await navigator.clipboard.writeText(tmp.innerText.trim()); toast('A levél szövege a vágólapon.'); } catch (er) { toast('A másolás nem sikerült.', true); } }
+				else if (k === 'copy') { const tmp = document.createElement('div'); tmp.innerHTML = noExtImg(m.body); /* v2.9.58: külső kép a másoláskor se töltődjön */ try { await navigator.clipboard.writeText(tmp.innerText.trim()); toast('A levél szövege a vágólapon.'); } catch (er) { toast('A másolás nem sikerült.', true); } }
 				else if (k === 'print') printMsg(m);
 				else if (k === 'spam') { if (!window.confirm('Spamnek jelölöd ezt a levélszálat? A Spam mappába kerül (csak a panelben – onnan visszaállítható).')) return; S.th = null; S.reading = false; bulk(box, [t.id], 'spam', ''); }
 			}));
@@ -1482,7 +1492,7 @@
 				else if (/\{\{/.test((t.subject || '') + (t.body || ''))) { toast('Melyik dealhez írod? Válaszd ki fent a deal-keresőben, és a sablon adatait rögtön kitöltöm.'); const c = q('.ml-compose'); c.classList.add('dp-on'); const i = q('[data-dp] input'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
 			});
 		});
-		/* v2.9: automatikus mentés a szerverre (4 mp-enként, ha változott; a levélíró elhagyásakor is) */
+		/* v2.9: automatikus mentés a szerverre (v2.9.58: 15 mp-enként – korábban 4 –, ha változott; a levélíró elhagyásakor is) */
 		const dstate = () => JSON.stringify({ to: to.get(), cc: cc.get(), bcc: bcc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) });
 		let dlast = dstate(), dsent = false, dbusy = null;
 		const dsave = async (force) => {
@@ -1494,7 +1504,7 @@
 			try { const r = await dbusy; dlast = st; draftId = r.id || ''; const el = box.querySelector('[data-dst]'); if (el) el.textContent = r.id ? 'Piszkozat mentve ' + r.at : ''; } catch (e) { /* a következő körben újra */ } finally { dbusy = null; }
 			return draftId;
 		};
-		const dtimer = setInterval(() => { if (!box.isConnected || S.view !== 'compose') { clearInterval(dtimer); window.removeEventListener('pagehide', dhide); dsave(false); return; } dsave(false); }, 4000);
+		const dtimer = setInterval(() => { if (!box.isConnected || S.view !== 'compose') { clearInterval(dtimer); window.removeEventListener('pagehide', dhide); dsave(false); return; } dsave(false); }, 15000);
 		const dhide = () => { if (dsent || dstate() === dlast || !navigator.sendBeacon) return; const fd = new FormData(); fd.append('action', 'cp_mail_draft_save'); fd.append('t', C.t); fd.append('id', draftId); fd.append('d', dstate()); navigator.sendBeacon(C.ajax, fd); };
 		window.addEventListener('pagehide', dhide);
 		q('[data-save]').addEventListener('click', async () => { const id = await dsave(true); toast(id ? 'Piszkozat mentve a Piszkozatok közé.' : 'Üres levél – nincs mit menteni.'); });

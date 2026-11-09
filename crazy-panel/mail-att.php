@@ -44,7 +44,9 @@ function cp_att_parts($mb, $uid) {
 }
 
 /* a levél helye a postafiókban (mappa + UID): a táblából, vagy Message-ID alapján megkeresve */
-function cp_att_locate($m) {
+/* v2.9.58: $neterr – igaz, ha egyetlen mappát sem sikerült megnyitni (kapcsolati hiba, nem „nincs meg”) */
+function cp_att_locate($m, &$neterr = null) {
+	$neterr = false;
 	global $wpdb;
 	$M = cp_mail_t('messages');
 	if (!empty($m['imap_folder']) && !empty($m['imap_uid'])) { return array($m['imap_folder'], (int) $m['imap_uid']); }
@@ -53,9 +55,15 @@ function cp_att_locate($m) {
 	if ($m['dir'] === 'out' && function_exists('cp_send_sent_folder')) { $sf = cp_send_sent_folder(); if ($sf !== '') { array_unshift($folders, $sf); } }
 	foreach ((array) (cp_imp_state()['folders'] ?? array()) as $f) { if (!empty($f['raw']) && !in_array($f['raw'], $folders, true)) { $folders[] = $f['raw']; } }
 	$ts = strtotime($m['sent_at'] . ' UTC') ?: time();
+	/* v2.9.58: egy IMAP-kapcsolat, mappaváltás imap_reopen-nel (nem új bejelentkezés mappánként) */
+	$mb = null; $opened = 0;
 	foreach (array_slice($folders, 0, 6) as $fd) {
-		$mb = cp_imp_open($fd);
-		if (is_wp_error($mb)) { continue; }
+		if (!$mb || !@imap_reopen($mb, cp_imp_ref() . $fd, OP_READONLY)) {
+			if ($mb) { @imap_close($mb); imap_errors(); }
+			$mb = cp_imp_open($fd);
+			if (is_wp_error($mb)) { $mb = null; continue; }
+		}
+		$opened++;
 		$crit = 'SINCE "' . gmdate('d-M-Y', $ts - 2 * DAY_IN_SECONDS) . '" BEFORE "' . gmdate('d-M-Y', $ts + 2 * DAY_IN_SECONDS) . '"';
 		if ($m['dir'] === 'in' && !empty($m['from_email'])) { $crit .= ' FROM "' . addcslashes($m['from_email'], '"\\') . '"'; }
 		$hit = 0;
@@ -64,9 +72,11 @@ function cp_att_locate($m) {
 			$raw = $h && !empty($h->message_id) ? trim($h->message_id) : '';
 			if ($raw !== '' && md5($raw) === $m['mid']) { $hit = (int) $uid; break; }
 		}
-		imap_errors(); imap_close($mb);
-		if ($hit) { $wpdb->update($M, array('imap_folder' => $fd, 'imap_uid' => $hit), array('id' => (int) $m['id'])); return array($fd, $hit); }
+		imap_errors();
+		if ($hit) { imap_close($mb); $wpdb->update($M, array('imap_folder' => $fd, 'imap_uid' => $hit), array('id' => (int) $m['id'])); return array($fd, $hit); }
 	}
+	if ($mb) { imap_close($mb); }
+	$neterr = $opened === 0;
 	return null;
 }
 
@@ -83,8 +93,9 @@ function cp_att_send_file($name, $mime, $data, $inline) {
 	echo $data;
 	exit;
 }
-function cp_att_fail($msg, $code = 404) {
-	if (!empty($GLOBALS['cp_att_capture'])) { status_header(404); header('Cache-Control: no-store'); exit; } /* átmeneti hiba (pl. postafiók): nem jegyzi meg */
+/* v2.9.58: $perm – végleges hiba (a levél / melléklet nincs meg): a bélyegkép-kérés „nincs” jelölőt kap, és többé nem keres a postafiókban */
+function cp_att_fail($msg, $code = 404, $perm = false) {
+	if (!empty($GLOBALS['cp_att_capture'])) { if ($perm && !empty($GLOBALS['cp_thumb_req'])) { cp_thumb_none(); } status_header(404); header('Cache-Control: no-store'); exit; } /* átmeneti hiba (pl. postafiók): nem jegyzi meg */
 	status_header($code);
 	nocache_headers();
 	header('Content-Type: text/html; charset=utf-8');
@@ -99,22 +110,23 @@ function cp_att_ajax_get() {
 	if (!function_exists('cp_panel_authed') || !cp_panel_authed() || !hash_equals(cp_panel_csrf(), (string) wp_unslash($_REQUEST['t'] ?? ''))) { cp_att_fail('Lejárt a belépés – töltsd újra a panelt.', 403); }
 	if (function_exists('cp_panel_can') && !cp_panel_can('mail')) { cp_att_fail('A Levelezés füled nincs bekapcsolva.', 403); }
 	global $wpdb;
-	$m = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('messages') . ' WHERE id = %d', (int) ($_REQUEST['m'] ?? 0)), ARRAY_A);
-	if (!$m) { cp_att_fail('Nincs ilyen levél.'); }
+	/* v2.9.58: csak a szükséges oszlopok (a törzs és a HTML nélkül) */
+	$m = $wpdb->get_row($wpdb->prepare('SELECT id, dir, from_email, attachments, sent_at, mid, imap_folder, imap_uid FROM ' . cp_mail_t('messages') . ' WHERE id = %d', (int) ($_REQUEST['m'] ?? 0)), ARRAY_A);
+	if (!$m) { cp_att_fail('Nincs ilyen levél.', 404, true); }
 	$i = (int) ($_REQUEST['i'] ?? 0);
 	$list = json_decode((string) $m['attachments'], true) ?: array();
-	if (!isset($list[$i])) { cp_att_fail('Nincs ilyen melléklet.'); }
+	if (!isset($list[$i])) { cp_att_fail('Nincs ilyen melléklet.', 404, true); }
 	$a = $list[$i];
 	$inline = !empty($_REQUEST['view']);
 	/* a panelből küldött levél melléklete: a szerveren */
 	if (!empty($a['f'])) {
 		$path = cp_att_dir() . '/' . basename(dirname($a['f'])) . '/' . basename($a['f']);
-		if (!is_file($path)) { cp_att_fail('A fájl már nincs meg a szerveren.'); }
+		if (!is_file($path)) { cp_att_fail('A fájl már nincs meg a szerveren.', 404, true); }
 		cp_att_send_file($a['n'], (string) ($a['mime'] ?? 'application/octet-stream'), (string) file_get_contents($path), $inline);
 	}
 	if (!function_exists('cp_imp_open') || cp_imp_pw() === '') { cp_att_fail('A postafiók nincs bekötve.'); }
-	$loc = cp_att_locate($m);
-	if (!$loc) { cp_att_fail('A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).'); }
+	$loc = cp_att_locate($m, $nerr);
+	if (!$loc) { cp_att_fail($nerr ? 'A postafiókhoz most nem sikerült csatlakozni – próbáld újra később.' : 'A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).', $nerr ? 502 : 404, !$nerr); }
 	$mb = cp_imp_open($loc[0]);
 	if (is_wp_error($mb)) { cp_att_fail('A postafiókhoz nem sikerült csatlakozni: ' . $mb->get_error_message(), 502); }
 	/* v1.99.2: a tárolt helyen tényleg ez a levél van-e (a szerver újraszámozhatja a leveleket) – különben újrakeresés Message-ID alapján */
@@ -127,8 +139,8 @@ function cp_att_ajax_get() {
 			global $wpdb;
 			$wpdb->update(cp_mail_t('messages'), array('imap_folder' => '', 'imap_uid' => null), array('id' => (int) $m['id']));
 			$m['imap_folder'] = ''; $m['imap_uid'] = null;
-			$loc = cp_att_locate($m);
-			if (!$loc) { cp_att_fail('A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).'); }
+			$loc = cp_att_locate($m, $nerr);
+			if (!$loc) { cp_att_fail($nerr ? 'A postafiókhoz most nem sikerült csatlakozni – próbáld újra később.' : 'A levelet nem találom a postafiókban (lehet, hogy azóta törölték vagy áthelyezték).', $nerr ? 502 : 404, !$nerr); }
 			$mb = cp_imp_open($loc[0]);
 			if (is_wp_error($mb)) { cp_att_fail('A postafiókhoz nem sikerült csatlakozni: ' . $mb->get_error_message(), 502); }
 		}
@@ -139,8 +151,8 @@ function cp_att_ajax_get() {
 	$nn = function ($v) { return function_exists('cp_mail_fname') ? cp_mail_fname((string) $v) : (string) $v; };
 	$p = isset($parts[$i]) && $nn($parts[$i]['n']) === $nn($a['n']) ? $parts[$i] : null;
 	if (!$p) { foreach ($parts as $x) { if ($nn($x['n']) === $nn($a['n'])) { $p = $x; break; } } }
-	if (!$p) { imap_close($mb); cp_att_fail('A melléklet nincs meg a levélben.'); }
-	if ($p['size'] > 40 * 1024 * 1024) { imap_close($mb); cp_att_fail('A melléklet túl nagy a panelhez (40 MB felett) – nyisd meg levelezőprogramból.'); }
+	if (!$p) { imap_close($mb); cp_att_fail('A melléklet nincs meg a levélben.', 404, true); }
+	if ($p['size'] > 40 * 1024 * 1024) { imap_close($mb); cp_att_fail('A melléklet túl nagy a panelhez (40 MB felett) – nyisd meg levelezőprogramból.', 404, true); }
 	$raw = (string) imap_fetchbody($mb, $loc[1], $p['num'], FT_UID | FT_PEEK);
 	imap_errors(); imap_close($mb);
 	$data = $p['enc'] === 3 ? base64_decode($raw) : ($p['enc'] === 4 ? quoted_printable_decode($raw) : $raw);
@@ -242,6 +254,7 @@ function cp_thumb_ajax() {
 	$out = function ($b) { header('Content-Type: ' . (strncmp($b, 'RIFF', 4) === 0 ? 'image/webp' : (strncmp($b, "\x89PNG", 4) === 0 ? 'image/png' : 'image/jpeg'))); header('Cache-Control: private, max-age=2592000'); header('X-Content-Type-Options: nosniff'); header('Content-Length: ' . strlen($b)); echo $b; exit; };
 	if (is_file($f . '.webp')) { @touch($f . '.webp'); $out((string) file_get_contents($f . '.webp')); }
 	@set_time_limit(40);
+	$GLOBALS['cp_thumb_req'] = 1; /* v2.9.58: a végleges „nincs meg” hibánál „nincs” jelölő (a zip-ellenőrzés nem ír ilyet) */
 	$GLOBALS['cp_att_capture'] = function ($name, $mime, $data) use ($f, $out) {
 		$b = cp_thumb_make((string) $data);
 		if ($b === null) { cp_thumb_none(); }

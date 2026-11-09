@@ -68,7 +68,8 @@ add_action('wp_ajax_nopriv_cp_mail_att_zip', 'cp_zip_ajax');
 add_action('wp_ajax_cp_mail_att_zip', 'cp_zip_ajax');
 function cp_zip_ajax() {
 	if (!function_exists('cp_panel_authed') || !cp_panel_authed() || !hash_equals(cp_panel_csrf(), (string) wp_unslash($_REQUEST['t'] ?? ''))) { wp_send_json_error(array('msg' => 'auth'), 403); }
-	if (function_exists('cp_panel_can') && !cp_panel_can('mail') && !cp_panel_can('deals')) { wp_send_json_error(array('msg' => 'Nincs jogosultság.'), 403); }
+	/* v2.9.58: ugyanaz a jogosultság, mint a melléklet-letöltésnél (cp_att_ajax_get): Levelezés fül – a csak deal-jogú kolléga a gyorsítótárból sem kap eredményt */
+	if (function_exists('cp_panel_can') && !cp_panel_can('mail')) { wp_send_json_error(array('msg' => 'Nincs jogosultság.'), 403); }
 	$key = 'cp_zip_' . md5((int) ($_REQUEST['m'] ?? 0) . '|' . (int) ($_REQUEST['i'] ?? 0) . '|v2');
 	$c = get_transient($key);
 	if (is_array($c)) { wp_send_json_success($c); }

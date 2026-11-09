@@ -42,7 +42,7 @@ add_action('init', function () {
 		PRIMARY KEY  (id),
 		KEY at (at)
 	) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_ai_log_ver', '1', false);
+	update_option('cp_ai_log_ver', '1', true); /* v2.9.58: automatikusan betöltve (minden AI-hívás olvassa) */
 });
 function cp_ai_feats() { return array('valasz' => 'AI válasz (levél)', 'deal' => 'Deal-adatok kiolvasása', 'szamla' => 'Számla-kiolvasás', 'teszt' => 'Kapcsolatpróba'); }
 function cp_ai_log_add($feat, $model, $j, $ok, $ref = '') {
@@ -375,7 +375,7 @@ function cp_ai_deal_ajax() {
 	wp_send_json_success(array('known' => $k, 'ai' => $ai, 'aierr' => $aierr, 'ai_on' => cp_ai_ready()));
 }
 
-function cp_ai_cfg() { return array('on' => cp_ai_ready()); }
+/* v2.9.58: a nem használt cp_ai_cfg() kivéve */
 
 /* ------------------------------------------------------------ beállítások: Beállítások → Crazy AI */
 add_action('admin_menu', function () {

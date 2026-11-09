@@ -158,16 +158,5 @@ function cp_mail_tag_add($tid, $tag) {
 	cp_mail_tag_register(array($tag));
 	return true;
 }
-/* egyszeri visszamenőleges címkézés (az elmúlt 12 hónap bejövő levelei), a levélszinkron első futásakor */
-function cp_mail_inv_backfill() {
-	/* v2.9.39: „2” – újrafuttatás a bővített szabállyal (SZLA_… mellékletnév); csak címkét tesz rá, kétszer nem */
-	if (get_option('cp_mail_inv_back') === '2') { return; }
-	update_option('cp_mail_inv_back', '2', false);
-	global $wpdb;
-	$n = 0;
-	foreach ((array) $wpdb->get_results('SELECT thread_id, subject, from_email, attachments FROM ' . cp_mail_t('messages') . " WHERE dir = 'in' AND sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 365 DAY) ORDER BY id DESC LIMIT 20000", ARRAY_A) as $r) {
-		if (cp_mail_inv_match($r['subject'], $r['from_email'], json_decode((string) $r['attachments'], true) ?: array()) && cp_mail_tag_add((int) $r['thread_id'], CP_MAIL_INV_TAG)) { $n++; }
-	}
-	update_option('cp_mail_inv_back_n', $n, false);
-}
+/* v2.9.58: az egyszeri visszamenőleges számlacímkézés (cp_mail_inv_backfill, „cp_mail_inv_back” = 2) lefutott – kivéve */
 

@@ -186,7 +186,7 @@ function cp_mdr_is_pdf($n) { return (bool) preg_match('/\.pdf$/i', (string) $n);
 function cp_mdr_save($mid, $i, $by = '') {
 	global $wpdb;
 	$M = cp_mail_t('messages');
-	$m = $wpdb->get_row($wpdb->prepare("SELECT * FROM $M WHERE id = %d", $mid), ARRAY_A);
+	$m = $wpdb->get_row($wpdb->prepare("SELECT id, thread_id, dir, from_email, attachments, sent_at, mid, imap_folder, imap_uid FROM $M WHERE id = %d", $mid), ARRAY_A); /* v2.9.58: csak a szükséges oszlopok (a törzs és a HTML nélkül) */
 	if (!$m) { return new WP_Error('cp_mdr', 'Nincs ilyen levél.'); }
 	$list = json_decode((string) $m['attachments'], true) ?: array();
 	if (!isset($list[$i])) { return new WP_Error('cp_mdr', 'Nincs ilyen melléklet.'); }
@@ -245,14 +245,19 @@ function cp_mdr_run() {
 	set_transient('cp_mdr_lock', 1, 180);
 	global $wpdb;
 	$t0 = time();
+	$done = array(); /* v2.9.58: a feldolgozott tételek (törlendő: true, újrapróbálandó: a próbák száma) */
 	foreach (array_slice($q, 0, 5, true) as $mid => $tries) {
 		if (time() - $t0 > 90) { break; }
 		$list = json_decode((string) $wpdb->get_var($wpdb->prepare('SELECT attachments FROM ' . cp_mail_t('messages') . ' WHERE id = %d', $mid)), true) ?: array();
 		$err = '';
 		foreach ($list as $i => $a) { if (cp_mdr_is_pdf($a['n'] ?? '') && empty($a['dv'])) { $r = cp_mdr_save((int) $mid, (int) $i); if (is_wp_error($r)) { $err = $r->get_error_message(); } } }
 		/* hiba: legfeljebb 3 próbálkozás (a következő körökben) */
-		if ($err !== '' && $tries < 2) { $q[$mid] = $tries + 1; } else { unset($q[$mid]); if ($err !== '') { update_option('cp_mdr_err', array('t' => time(), 'm' => (int) $mid, 'e' => mb_substr($err, 0, 200)), false); } }
+		if ($err !== '' && $tries < 2) { $done[$mid] = $tries + 1; } else { $done[$mid] = true; if ($err !== '') { update_option('cp_mdr_err', array('t' => time(), 'm' => (int) $mid, 'e' => mb_substr($err, 0, 200)), false); } }
 	}
+	/* v2.9.58: írás előtt friss olvasás – a futás közben (pl. a levélszinkronból) sorba került számla nem vész el; csak a feldolgozottak változnak */
+	wp_cache_delete('cp_mdr_q', 'options'); wp_cache_delete('notoptions', 'options');
+	$q = get_option('cp_mdr_q', array()); if (!is_array($q)) { $q = array(); }
+	foreach ($done as $mid => $v) { if ($v === true) { unset($q[$mid]); } else { $q[$mid] = $v; } }
 	update_option('cp_mdr_q', $q, false);
 	delete_transient('cp_mdr_lock');
 }
