@@ -192,6 +192,9 @@ function cp_iv_notify($text) {
 	}
 }
 
+/* a pontosság fontossága (a rövid, egymást követő időpontok miatt) – az oldalon és minden levélben */
+function cp_iv_punct($dur) { return array('Kérjük, érkezz pontosan – inkább 5 perccel korábban.', 'Az interjúk ' . (int) $dur . ' percenként követik egymást, ezért a késés a következő jelentkező idejéből venne el, és előfordulhat, hogy új időpontot kell egyeztetnünk. Ha mégis késnél, minél előbb jelezd nekünk.'); }
+
 /* ------------------------------------------------------------ e-mailek */
 function cp_iv_ics($b, $s) {
 	$o = cp_iv_opts();
@@ -227,6 +230,8 @@ function cp_iv_mail_body($b, $s, $kind) {
 	$h .= '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#FAF8F4;border-radius:12px;margin:0 0 18px"><tr><td style="padding:14px 16px;font-size:15px;line-height:1.6">'
 		. '<b style="font-size:17px">' . esc_html($when) . '</b><br>Időtartam: kb. ' . (int) $s['dur'] . ' perc'
 		. ($o['location'] !== '' ? '<br>Helyszín: ' . nl2br(esc_html($o['location'])) : '') . '</td></tr></table>';
+	$pu = cp_iv_punct($s['dur']);
+	$h .= '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#FFF1E4;border:1px solid #F4CDAB;border-radius:12px;margin:0 0 18px"><tr><td style="padding:12px 14px;font-size:14px;line-height:1.55;color:#5A2E0C"><b style="color:#141C33">' . esc_html($pu[0]) . '</b><br>' . esc_html($pu[1]) . '</td></tr></table>';
 	if (trim((string) $o['note']) !== '') { $h .= '<p style="margin:0 0 16px">' . nl2br(esc_html($o['note'])) . '</p>'; }
 	$h .= '<p style="margin:0 0 6px">' . $btn(cp_iv_gcal_link($b, $s), 'Hozzáadás a Google Naptárhoz', true) . $btn(cp_iv_url(array('t' => $b['token'], 'ics' => 1)), 'Naptárfájl (.ics)', false) . '</p>';
 	$h .= '<p style="margin:14px 0 6px">Ha mégsem érsz rá (legkésőbb ' . (int) $o['cancel_h'] . ' órával előtte):</p><p style="margin:0">' . $btn(cp_iv_url(array('t' => $b['token'])), 'Időpont módosítása', false) . $btn(cp_iv_url(array('t' => $b['token'], 'lemond' => 1)), 'Lemondás', false) . '</p>';
@@ -335,6 +340,8 @@ function cp_iv_render_page($o, $b, $val, $err) {
 		return $h;
 	};
 	$where = $o['location'] !== '' ? '<p class="loc"><b>Helyszín:</b> ' . nl2br(esc_html($o['location'])) . '</p>' : '';
+	$pu = cp_iv_punct($s ? $s['dur'] : $o['dur']);
+	$punct = '<div class="punct" role="note"><b>' . esc_html($pu[0]) . '</b> ' . esc_html($pu[1]) . '</div>';
 	ob_start();
 	echo '<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>' . esc_html($o['title']) . '</title>';
 	echo '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">';
@@ -348,7 +355,7 @@ function cp_iv_render_page($o, $b, $val, $err) {
 		if ($b['status'] === 'cancel' || !$s) {
 			echo '<h1>A foglalásod le van mondva</h1><p class="lead">' . (!empty($_GET['lemondva']) ? 'Köszönjük, hogy jelezted. ' : '') . 'Ha mégis jönnél, foglalj új időpontot.</p><p><a class="btn" href="' . esc_url(cp_iv_url()) . '">Új időpont foglalása</a></p>';
 		} else {
-			echo '<h1>Az interjúd időpontja</h1><div class="card when"><span class="big">' . esc_html(cp_iv_slot_label($s)) . '</span><span>Időtartam: kb. ' . (int) $s['dur'] . ' perc</span>' . $where . '</div>';
+			echo '<h1>Az interjúd időpontja</h1><div class="card when"><span class="big">' . esc_html(cp_iv_slot_label($s)) . '</span><span>Időtartam: kb. ' . (int) $s['dur'] . ' perc</span>' . $where . '</div>' . $punct;
 			echo '<p class="cal"><a class="btn" href="' . esc_url(cp_iv_gcal_link($b, $s)) . '" target="_blank" rel="noopener">Hozzáadás a Google Naptárhoz</a> <a class="btn ghost" href="' . esc_url(cp_iv_url(array('t' => $b['token'], 'ics' => 1))) . '">Naptárfájl (.ics)</a></p>';
 			if ($late) { echo '<p class="muted">Az interjú előtti ' . (int) $o['cancel_h'] . ' órában az időpont már nem módosítható. Ha közbejött valami, kérjük, hívj minket.</p>'; }
 			else {
@@ -362,7 +369,7 @@ function cp_iv_render_page($o, $b, $val, $err) {
 			}
 		}
 	} else {
-		echo '<h1>Válassz időpontot az interjúra</h1><p class="lead">Az interjú kb. ' . (int) $o['dur'] . ' perces, személyes beszélgetés. Válaszd ki, mikor érsz rá, és add meg az elérhetőségeidet – a visszaigazolást e-mailben küldjük.</p>' . $where;
+		echo '<h1>Válassz időpontot az interjúra</h1><p class="lead">Az interjú kb. ' . (int) $o['dur'] . ' perces, személyes beszélgetés. Válaszd ki, mikor érsz rá, és add meg az elérhetőségeidet – a visszaigazolást e-mailben küldjük.</p>' . $where . $punct;
 		if (empty($o['on'])) { echo '<div class="err" role="status">A foglalás jelenleg nincs nyitva.</div>'; }
 		if ($err !== '') { echo '<div class="err" role="alert">' . esc_html($err) . '</div>'; }
 		echo '<form method="post" class="f" novalidate>' . $hidden . '<input type="hidden" name="iv_act" value="book">';
@@ -398,7 +405,7 @@ function cp_iv_css() {
 		. '.btn:hover{filter:brightness(.95)}.btn:focus-visible{outline:3px solid var(--n);outline-offset:2px}.btn[disabled]{opacity:.5;cursor:not-allowed}.btn.ghost{background:#fff;color:var(--n);border:1.5px solid var(--li)}.btn.wide{width:100%;margin:22px 0 0}'
 		. '.card{background:#fff;border:1px solid var(--li);border-radius:16px;padding:18px;margin:16px 0}.when{display:flex;flex-direction:column;gap:4px}.when .big{font:800 22px "Plus Jakarta Sans",Inter,sans-serif;letter-spacing:-.01em}'
 		. 'details summary{cursor:pointer;font-weight:700;list-style:none}details summary::-webkit-details-marker{display:none}details[open] summary{margin-bottom:12px}.acts{display:flex;flex-wrap:wrap;gap:0 8px;align-items:flex-start;margin:6px 0}.btn.danger{background:var(--bad);color:#fff}.btn.danger-t{color:var(--bad);border-color:#F1C3BE}.confirm p{margin:0 0 14px}.link{background:none;border:0;padding:0;color:var(--bad);font:600 15px Inter,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer}'
-		. '.ok,.err{border-radius:12px;padding:12px 14px;margin:0 0 18px}.ok{background:var(--okb);color:var(--ok)}.err{background:var(--badb);color:var(--bad)}.empty{color:var(--mu)}'
+		. '.punct{background:#FFF1E4;border:1px solid #F4CDAB;border-radius:12px;padding:12px 14px;margin:14px 0 4px;font-size:15px;color:#5A2E0C}.punct b{color:var(--n)}.ok,.err{border-radius:12px;padding:12px 14px;margin:0 0 18px}.ok{background:var(--okb);color:var(--ok)}.err{background:var(--badb);color:var(--bad)}.empty{color:var(--mu)}'
 		. '.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}.foot{color:var(--mu);font-size:13px;padding:8px 16px 32px}.foot a{color:var(--mu)}'
 		. '@media (prefers-reduced-motion:reduce){*{transition:none!important}}';
 }
