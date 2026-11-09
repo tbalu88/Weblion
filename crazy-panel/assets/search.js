@@ -70,7 +70,7 @@
 		const my = ++S.seq;
 		S.el.querySelector('.sr-res').classList.add('busy');
 		let r;
-		try { r = await post('cp_search', { q: q, k: S.k, st: S.st, own: S.own }); } catch (e) { if (my === S.seq) draw([], e.message); return; }
+		try { r = await post('cp_search', { q: q, k: S.k, st: S.st, own: S.own }); } catch (e) { if (my === S.seq && S.el) { S.el.querySelector('.sr-res').classList.remove('busy'); draw([], e.message); } return; }
 		if (my !== S.seq || !S.el) return;
 		S.el.querySelector('.sr-res').classList.remove('busy');
 		S.i = 0;

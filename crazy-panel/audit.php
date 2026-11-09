@@ -32,7 +32,7 @@ add_action('init', function () {
   KEY uid (uid),
   KEY area (area)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_audit_db_ver', CP_AUDIT_DB_VER, false);
+	update_option('cp_audit_db_ver', CP_AUDIT_DB_VER, true); /* v2.9.58: minden kérés olvassa → autoload */
 }, 7);
 function cp_audit_db_ok() { return get_option('cp_audit_db_ver') === CP_AUDIT_DB_VER; }
 
@@ -71,9 +71,9 @@ function cp_audit_actions() {
 		'cp_kb_list_save' => array('feladatok', 'Lista módosítása'), 'cp_kb_board_save' => array('feladatok', 'Tábla módosítása'),
 		'cp_lead_set' => array('deal', 'Megkeresés jelölése'), 'cp_flow_set' => array('rendszer', 'Automatizmus kapcsolása'),
 		'cp_el_save' => array('elszamolas', 'Elszámolás mentése'), 'cp_el_row' => array('elszamolas', 'Elszámolás sor'), 'cp_el_pay' => array('elszamolas', 'Kifizetés'), 'cp_el_manual' => array('elszamolas', 'Kézi tétel'),
-		'cp_el_lock' => array('elszamolas', 'Hónap zárolása'), 'cp_el_import' => array('elszamolas', 'Import'), 'cp_el_kez' => array('elszamolas', 'Kezelő mentése'), 'cp_el_up' => array('elszamolas', 'Fotó feltöltése'),
+		'cp_el_lock' => array('elszamolas', 'Hónap zárolása'), 'cp_el_kez' => array('elszamolas', 'Kezelő mentése'), 'cp_el_up' => array('elszamolas', 'Fotó feltöltése'),
 		'cp_el_phdel' => array('elszamolas', 'Fotó törlése'), 'cp_el_calpush' => array('elszamolas', 'Naptárba írás'),
-		'cp_tw_save' => array('tarca', 'Tárca tétel mentése'), 'cp_tw_del' => array('tarca', 'Tárca tétel törlése'), 'cp_tw_import' => array('tarca', 'Tárca import'), 'cp_tw_cfg' => array('tarca', 'Tárca beállítás'),
+		'cp_tw_save' => array('tarca', 'Tárca tétel mentése'), 'cp_tw_del' => array('tarca', 'Tárca tétel törlése'), 'cp_tw_cfg' => array('tarca', 'Tárca beállítás'),
 		'cp_panel_setbg' => array('naptar', 'Háttér beállítása'), 'cp_panel_setstage' => array('naptar', 'Szakasz a naptárból'), 'cp_panel_track' => array('kovetes', 'Követés jelölése'),
 		'cp_st_mail_ok' => array('stat', 'Levél „rendben” jelölése'),
 		'cp_bil_issue' => array('deal', 'Billingo-bizonylat kiállítása'), 'cp_bil_act' => array('deal', 'Billingo-bizonylat kiküldése / megnyitása'), 'cp_ct_lib_set' => array('rendszer', 'Szerződésmodul módosítása'), 'cp_ct_file' => array('deal', 'Szerződés letöltése'),
@@ -192,20 +192,30 @@ add_action('admin_init', function () {
 	foreach ((array) $_GET as $k => $v) { if (is_scalar($v) && !isset($p[sanitize_key($k)])) { $p[sanitize_key($k)] = mb_substr(sanitize_text_field(wp_unslash((string) $v)), 0, 300); } }
 	/* a név még a művelet előtt (pl. törlésnél utána már nem lenne meg) */
 	list($obj, $sum) = cp_audit_summary($a, $p);
-	register_shutdown_function(function () use ($a, $map, $obj, $sum) {
+	/* v2.9.58: a wp_send_json_error 200-as kóddal megy ki – a válasz elejét megnézzük, és a „success:false” is hibának számít.
+	 * A puffer 8 KB-onként továbbenged (nagy válasznál sem tart memóriát), csak az első bájtokat jegyzi meg. */
+	$head = '';
+	ob_start(function ($buf) use (&$head) { if ($head === '' && $buf !== '') { $head = substr(ltrim($buf), 0, 20); } return $buf; }, 8192);
+	register_shutdown_function(function () use ($a, $map, $obj, $sum, &$head) {
 		$code = (int) http_response_code();
 		if ($code && ($code < 200 || $code >= 300)) { return; }
+		$h = $head !== '' ? $head : (ob_get_level() > 0 ? substr(ltrim((string) ob_get_contents()), 0, 20) : '');
+		if (strpos($h, '{"success":false') === 0) { return; }
 		if (function_exists('cp_panel_authed') && !cp_panel_authed()) { return; }
 		cp_audit_add($map[$a][0], $a, $map[$a][1], $obj, $sum);
 	});
 }, 1);
 
-/* 2 évnél régebbi bejegyzések törlése (naponta) */
+/* 2 évnél régebbi bejegyzések törlése (naponta)
+ * v2.9.58: napi WP-cron esemény – korábban minden kérés egy tranziens-lekérdezéssel ellenőrizte */
 add_action('init', function () {
-	if (!cp_audit_db_ok() || get_transient('cp_audit_gc')) { return; }
-	set_transient('cp_audit_gc', 1, DAY_IN_SECONDS);
+	if (!wp_next_scheduled('cp_audit_gc_ev')) { wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'cp_audit_gc_ev'); }
+});
+add_action('cp_audit_gc_ev', function () {
+	if (!cp_audit_db_ok()) { return; }
 	global $wpdb;
-	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_audit_t() . ' WHERE created_at < %s', gmdate('Y-m-d H:i:s', time() - 730 * DAY_IN_SECONDS)));
+	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_audit_t() . ' WHERE created_at < %s LIMIT 5000', gmdate('Y-m-d H:i:s', time() - 730 * DAY_IN_SECONDS)));
+	delete_transient('cp_audit_gc');
 });
 
 /* ------------------------------------------------------------ a napló megtekintése: csak admin */

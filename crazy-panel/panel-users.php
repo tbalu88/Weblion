@@ -281,8 +281,15 @@ function cp_pu_admin_page() {
 			}
 		} elseif ($uid && isset($d['list'][$uid])) {
 			$u = $d['list'][$uid];
+			/* v2.9.58: a WP-admin oldal a panel elérhetetlensége esetére marad (vészkijárat), de a panel védelmeivel:
+			 * az utolsó aktív admin nem tiltható le / nem fokozható le, aktív fiók nem törölhető, és minden művelet a Naplóba kerül */
+			$lastAdmin = !empty($u['a']) && $u['r'] === 'admin' && count(array_filter($d['list'], function ($x) { return !empty($x['a']) && ($x['r'] ?? '') === 'admin'; })) <= 1;
+			$r0 = sanitize_key(wp_unslash($_POST['r'] ?? $u['r']));
+			if ($lastAdmin && ($do === 'off' || ($do === 'save' && $r0 !== 'admin'))) { $do = 'blocked'; $msg = 'Ő az utolsó aktív admin – előbb adj admin jogot valaki másnak.'; }
+			if ($do === 'del' && !empty($u['a'])) { $do = 'blocked'; $msg = 'Előbb tiltsd le, utána törölheted.'; }
+			if ($do !== 'blocked' && function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'wp_user_' . $do, 'Felhasználó-kezelés (WP admin)', '', $do . ': ' . $u['n'], 0, 'WP admin', 'admin'); }
 			if ($do === 'save') {
-				$r = sanitize_key(wp_unslash($_POST['r'] ?? $u['r']));
+				$r = $r0;
 				$d['list'][$uid]['r'] = isset(cp_pu_roles()[$r]) ? $r : $u['r'];
 				$d['list'][$uid]['n'] = sanitize_text_field(wp_unslash($_POST['n'] ?? $u['n'])) ?: $u['n'];
 				$d['list'][$uid]['sm'] = (int) ($_POST['sm'] ?? $u['sm']);
@@ -319,6 +326,7 @@ function cp_pu_admin_page() {
 			update_option('cp_panel_shared_off', !empty($_POST['off']) ? '1' : '0', false);
 			$msg = !empty($_POST['off']) ? 'A közös jelszavak kikapcsolva – mostantól csak személyes fiókkal lehet belépni.' : 'A közös jelszavak újra működnek.';
 		}
+		if (in_array($do, array('add', 'vis', 'notif', 'shared'), true) && function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'wp_user_' . $do, 'Felhasználó-kezelés (WP admin)', '', $do . ': ' . mb_substr($msg, 0, 200), 0, 'WP admin', 'admin'); } /* v2.9.58 */
 	}
 	$d = cp_pu_data();
 	$sm = function_exists('cp_crm_users') ? cp_crm_users() : array();

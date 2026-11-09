@@ -22,7 +22,7 @@ function cp_sx_bg($job, $label) {
 	return $label . ' elindult a háttérben – pár perc múlva frissítsd ezt az oldalt az eredményért.';
 }
 function cp_sx_dt($ts) { return $ts ? wp_date('Y.m.d. H:i', is_numeric($ts) ? (int) $ts : strtotime((string) $ts)) : '–'; }
-function cp_sx_pumble($v) { return preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', (string) $v) ? (string) $v : new WP_Error('cp_sx', 'A Pumble webhook címe nem https://api.pumble.com/… kezdetű, ezért nem mentettem.'); }
+function cp_sx_pumble($v) { return cp_nt_hook_ok($v) ? (string) $v : new WP_Error('cp_sx', 'A Pumble webhook címe nem https://api.pumble.com/… kezdetű, ezért nem mentettem.'); }
 function cp_sx_regex($def) { return function ($v) use ($def) { return @preg_match('/' . str_replace('/', '\/', (string) $v) . '/iu', '') === false ? $def : $v; }; }
 
 add_filter('cp_sx_sections', function ($S) {
@@ -121,7 +121,7 @@ add_filter('cp_sx_sections', function ($S) {
 		),
 		'after' => function () { delete_transient('cp_panel_webbg'); if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); } },
 		'acts' => array(
-			array('k' => 'webbg', 'l' => 'Háttérlista frissítése a weboldalról', 'fn' => function () { delete_transient('cp_panel_webbg'); $w = function_exists('cp_panel_web_bgs') ? cp_panel_web_bgs() : array(); return !empty($w['err']) ? new WP_Error('cp_sx', 'Hiba: ' . $w['err']) : 'Frissítve: ' . count((array) ($w['list'] ?? array())) . ' háttér.'; }),
+			array('k' => 'webbg', 'l' => 'Háttérlista frissítése a weboldalról', 'fn' => function () { delete_transient('cp_panel_webbg'); $w = function_exists('cp_panel_web_bgs') ? cp_panel_web_bgs(true) : array(); /* v2.9.58: kényszerített (a régi lista nem elég) */ return !empty($w['err']) ? new WP_Error('cp_sx', 'Hiba: ' . $w['err']) : 'Frissítve: ' . count((array) ($w['list'] ?? array())) . ' háttér.'; }),
 		),
 	);
 

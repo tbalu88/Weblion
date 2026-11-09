@@ -34,13 +34,9 @@ add_action('init', function () {
 		), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 		exit;
 	}
-	/* v2.8.3: értesítésre kattintás naplója (a hibakereséshez: milyen címet kapott / nyitott meg a telefon), az utolsó 20 */
-	if ($what === 'click') {
-		$l = get_option('cp_pwa_clicks', array()); if (!is_array($l)) { $l = array(); }
-		array_unshift($l, array('t' => time(), 'u' => mb_substr(esc_url_raw((string) wp_unslash($_GET['u'] ?? '')), 0, 200), 'o' => mb_substr(esc_url_raw((string) wp_unslash($_GET['o'] ?? '')), 0, 200), 'ua' => mb_substr(sanitize_text_field((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 120)));
-		update_option('cp_pwa_clicks', array_slice($l, 0, 20), false);
-		header('Content-Type: text/plain'); echo 'ok'; exit;
-	}
+	/* v2.9.58: a belépés nélküli kattintás-napló (?cp_pwa=click → cp_pwa_clicks) megszűnt – semmi nem olvasta, és bárki adatbázis-írást válthatott ki vele;
+	 * a régi service workerek pingje (amíg frissülnek) olcsó 204-et kap, a panel oldala helyett */
+	if ($what === 'click') { status_header(204); exit; }
 	if ($what === 'sw') {
 		header('Content-Type: application/javascript; charset=utf-8');
 		header('Service-Worker-Allowed: ' . cp_pwa_base());
@@ -132,6 +128,15 @@ function cp_push_encrypt($payload, $p256dh, $auth) {
 	return $salt . pack('N', 4096) . chr(65) . $asPub . $ct . $tag;
 }
 
+/* v2.9.58: csak ismert push-szolgáltatók címére küldünk (Chrome/Android, Safari/iOS, Firefox, Edge/Windows) – belső / tetszőleges cím nem fogadható el */
+function cp_push_host_ok($ep) {
+	$u = wp_parse_url((string) $ep);
+	if (!is_array($u) || ($u['scheme'] ?? '') !== 'https' || empty($u['host']) || isset($u['port']) || isset($u['user'])) { return false; }
+	$h = strtolower($u['host']);
+	if (in_array($h, array('fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'), true)) { return true; }
+	return (bool) preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)*\.(push\.apple\.com|notify\.windows\.com)$/', $h);
+}
+
 /* ------------------------------------------------------------ feliratkozások (kollégánként, eszközönként) */
 function cp_push_subs() { $s = get_option('cp_push_subs', array()); return is_array($s) ? $s : array(); }
 function cp_push_auth() { cp_el_auth(); $me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; if ($me <= 0) { cp_el_err('Az értesítésekhez személyes fiókkal kell belépni.'); } return $me; }
@@ -151,7 +156,7 @@ function cp_push_ajax_sub() {
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	$sub = json_decode((string) wp_unslash($_POST['sub'] ?? ''), true);
 	$ep = is_array($sub) ? (string) ($sub['endpoint'] ?? '') : '';
-	if (!preg_match('#^https://[a-z0-9.-]+(:\d+)?/#i', $ep) || strlen($ep) > 1000 || empty($sub['keys']['p256dh']) || empty($sub['keys']['auth'])) { cp_el_err('Hibás feliratkozás.'); }
+	if (!preg_match('#^https://[a-z0-9.-]+(:\d+)?/#i', $ep) || !cp_push_host_ok($ep) || strlen($ep) > 1000 || empty($sub['keys']['p256dh']) || empty($sub['keys']['auth'])) { cp_el_err('Hibás feliratkozás.'); }
 	$all = cp_push_subs();
 	$h = md5($ep);
 	/* ugyanaz az eszköz másik kollégánál (közös telefon) – ott törlődik */
@@ -185,12 +190,13 @@ function cp_push_send($uid, $title, $body, $hash) {
 		$out['n']++;
 		$enc = cp_push_encrypt($payload, $s['p'], $s['a']);
 		$auth = cp_push_vapid_hdr($s['ep'], $keys);
+		if (!cp_push_host_ok($s['ep'])) { $out['err'] = 'ismeretlen push-szolgáltató'; continue; }
 		if ($enc === null || $auth === '') { $out['err'] = 'titkosítás'; continue; }
-		$r = wp_remote_post($s['ep'], array('timeout' => 4, 'headers' => array('Content-Type' => 'application/octet-stream', 'Content-Encoding' => 'aes128gcm', 'TTL' => '86400', 'Urgency' => 'high', 'Authorization' => $auth), 'body' => $enc));
+		$r = wp_safe_remote_post($s['ep'], array('timeout' => 4, 'headers' => array('Content-Type' => 'application/octet-stream', 'Content-Encoding' => 'aes128gcm', 'TTL' => '86400', 'Urgency' => 'high', 'Authorization' => $auth), 'body' => $enc));
 		$code = is_wp_error($r) ? 0 : (int) wp_remote_retrieve_response_code($r);
 		if ($code >= 200 && $code < 300) { $out['ok']++; }
 		elseif ($code === 404 || $code === 410) { unset($all[(int) $uid][$h]); $changed = true; $out['gone']++; }
-		else { $out['err'] = is_wp_error($r) ? $r->get_error_message() : ('HTTP ' . $code . ' ' . mb_substr(wp_remote_retrieve_body($r), 0, 120)); }
+		else { $out['err'] = is_wp_error($r) ? 'kapcsolódási hiba' : ('HTTP ' . $code); } /* v2.9.58: a szolgáltató válaszszövege nem megy vissza a böngészőnek */
 	}
 	if ($changed) { update_option('cp_push_subs', $all, false); }
 	return $out;

@@ -4,7 +4,7 @@
 	const C = window.CPX || {};
 	if (!C.nt || !C.nt.on) return;
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-	const S = { n: 0, btn: null, pop: null, t: null };
+	const S = { n: 0, btn: null, t: null, tabsMo: null };
 
 	async function post(action, params) {
 		const fd = new FormData();
@@ -32,6 +32,7 @@
 		const b = S.btn.querySelector('.cpx-bell-n');
 		b.textContent = S.n > 99 ? '99+' : String(S.n);
 		b.hidden = !S.n;
+		if (window.CPMNav && window.CPMNav.mark) window.CPMNav.mark(); /* v2.9.58: a mobil menü pöttye eseményre frissül (időzítő helyett) */
 		S.btn.title = S.n ? S.n + ' olvasatlan értesítés' : 'Értesítések';
 	}
 	/* v2.7.9: olvasatlan levelek száma a Levelezés menüpont mellett (a menü újrarajzolása után is visszakerül) */
@@ -44,9 +45,15 @@
 			btn.title = 'Levelezés – ' + S.mail + ' olvasatlan levél a Beérkezettben';
 		});
 	}
-	new MutationObserver(() => { if (S.mail && !document.querySelector('.cpx-tabs [data-tab="mail"] .cpx-tab-n')) mailBadge(); }).observe(document.documentElement, { childList: true, subtree: true });
-	async function poll() {
-		try { const r = await post('cp_nt_list', { count: 1 }); S.n = r.unread || 0; badge(); if (r.mail != null) { S.mail = r.mail; mailBadge(); } } catch (e) { /* csendben újra */ }
+	/* v2.9.58: csak a fülsávot figyeli (a teljes oldal helyett) – lásd a mount() utáni indítást */
+	function watchTabs() {
+		const tb = document.querySelector('.cpx-tabs');
+		if (!tb || S.tabsMo) return;
+		S.tabsMo = new MutationObserver(() => { if (S.mail && !tb.querySelector('[data-tab="mail"] .cpx-tab-n')) mailBadge(); });
+		S.tabsMo.observe(tb, { childList: true, subtree: true });
+	}
+	async function poll(fresh) {
+		try { const r = await post('cp_nt_list', fresh === true ? { count: 1, fresh: 1 } : { count: 1 }); /* v2.9.58: a levél-számláló 30 mp-ig gyorsítótárazott; kattintás után friss */ S.n = r.unread || 0; badge(); if (r.mail != null) { S.mail = r.mail; mailBadge(); } } catch (e) { /* csendben újra */ }
 	}
 
 	/* a cél megnyitása: „feladatok:12”, „feladatok:mine”, „mail:3” */
@@ -62,34 +69,7 @@
 		}
 	}
 
-	function close() { if (S.pop) { S.pop.remove(); S.pop = null; } }
-	async function open() {
-		if (S.pop) { close(); return; }
-		const pop = document.createElement('div');
-		pop.className = 'cpx-ntpop';
-		pop.innerHTML = '<div class="cpx-nth"><b>Értesítések</b><button type="button" data-all>Mind olvasott</button></div><div class="cpx-ntl"><div class="cpx-ntn">Betöltés…</div></div>';
-		document.body.appendChild(pop);
-		S.pop = pop;
-		const r0 = S.btn.getBoundingClientRect();
-		const w = Math.min(360, window.innerWidth - 16);
-		pop.style.width = w + 'px';
-		pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r0.right + 8 > window.innerWidth - w ? r0.right - w : r0.right + 8)) + 'px';
-		pop.style.top = Math.max(8, Math.min(window.innerHeight - 440, r0.top - 8)) + 'px';
-		setTimeout(() => document.addEventListener('click', function off(e) { if (!S.pop) { document.removeEventListener('click', off); return; } if (!pop.contains(e.target) && !S.btn.contains(e.target)) { close(); document.removeEventListener('click', off); } }), 0);
-		pop.querySelector('[data-all]').addEventListener('click', async () => { try { const r = await post('cp_nt_read', { all: 1 }); S.n = r.unread; badge(); pop.querySelectorAll('.cpx-nti.new').forEach(x => x.classList.remove('new')); } catch (e) { /* később */ } });
-		let x;
-		try { x = await post('cp_nt_list', {}); } catch (e) { pop.querySelector('.cpx-ntl').innerHTML = '<div class="cpx-ntn">' + esc(e.message) + '</div>'; return; }
-		S.n = x.unread; badge();
-		const l = pop.querySelector('.cpx-ntl');
-		if (x.off) { l.innerHTML = '<div class="cpx-ntn">Értesítéseket személyes fiókkal kapsz.</div>'; return; }
-		l.innerHTML = x.rows.length ? x.rows.map(n => '<button type="button" class="cpx-nti' + (n.read ? '' : ' new') + '" data-id="' + n.id + '" data-link="' + esc(n.link) + '"><span class="cpx-ntk">' + (n.kind.indexOf('mail') === 0 ? '✉' : n.kind === 'lead' ? '★' : '☑') + '</span><span><b>' + esc(n.by_name || 'Valaki') + '</b> ' + esc(n.text) + '<small>' + esc(ago(n.created_at)) + '</small></span></button>').join('') :
-			'<div class="cpx-ntn">Még nincs értesítésed. Ha valaki megemlít (@Neved) vagy rád oszt egy kártyát, levelet, itt látod.</div>';
-		l.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', async () => {
-			close();
-			go(b.dataset.link);
-			if (b.classList.contains('new')) { try { const r = await post('cp_nt_read', { id: b.dataset.id }); S.n = r.unread; badge(); } catch (e) { /* később */ } }
-		}));
-	}
+	/* v2.9.58: a régi felugró értesítés-ablak (open/close) törölve – a csengő mindig az Értesítések oldalra visz */
 
 	/* v2.7.6: külön oldal (#ertesitesek) a felugró ablak helyett */
 	const V = { lim: 60, un: false, main: null };
@@ -168,7 +148,7 @@
 	}
 	function flash(t) { let d = document.getElementById('cpx-toast'); if (!d) { d = document.createElement('div'); d.id = 'cpx-toast'; d.className = 'cpx-toast'; document.body.appendChild(d); } d.textContent = t; d.classList.add('on'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), 4000); }
 	document.addEventListener('cp-pwa', () => { if (V.main && V.main.isConnected) drawDev(V.main); });
-	function openPage() { if (window.CPXGo) { V.lim = 60; window.CPXGo('ertesitesek'); } else { open(); } }
+	function openPage() { if (window.CPXGo) { V.lim = 60; window.CPXGo('ertesitesek'); } }
 
 	function mount() {
 		const host = document.querySelector('.cpx-top-r');
@@ -183,14 +163,11 @@
 		b.addEventListener('click', e => { e.stopPropagation(); openPage(); });
 		S.btn = b;
 		badge();
+		watchTabs();
 		return true;
 	}
 	const css = document.createElement('style');
 	css.textContent = '.cpx-bell{position:relative}.cpx-bell-n{position:absolute;top:2px;left:22px;background:#C53A24;color:#fff;border-radius:999px;font:700 10.5px/16px Inter,sans-serif;min-width:16px;padding:0 4px;text-align:center}' +
-		'.cpx-ntpop{position:fixed;z-index:90;background:#fff;border:1px solid #E6E3DE;border-radius:14px;box-shadow:0 24px 50px -20px rgba(20,28,51,.45);max-height:440px;display:flex;flex-direction:column;overflow:hidden;color:#141C33}' +
-		'.cpx-nth{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #EEEAE4;font-size:14px}.cpx-nth button{border:0;background:none;color:#2F5BD8;font:600 12.5px Inter,sans-serif;cursor:pointer}' +
-		'.cpx-ntl{overflow-y:auto}.cpx-nti{display:flex;gap:10px;width:100%;border:0;border-bottom:1px solid #F2EFEA;background:#fff;text-align:left;padding:9px 14px;cursor:pointer;font:13px/1.4 Inter,sans-serif;color:#141C33}' +
-		'.cpx-nti:hover{background:#FAF8F5}.cpx-nti.new{background:#EEF3FD}.cpx-nti.new:hover{background:#E4ECFC}.cpx-nti small{display:block;color:#656973;font-size:11.5px;margin-top:2px}.cpx-ntk{flex:none;width:18px;color:#656973}' +
 		'.cpx-ntn{padding:18px 14px;color:#656973;font-size:13px}' +
 		'.ntp{max-width:820px;margin:0 auto;padding:4px 0 40px}.ntp-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px}.ntp-h h2{margin:0;font:800 22px "Plus Jakarta Sans",Inter,sans-serif;color:#141C33}' +
 		'.ntp-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ntp-seg{display:inline-flex;background:#F1EDE7;border-radius:999px;padding:3px}.ntp-seg button{border:0;background:none;border-radius:999px;padding:6px 14px;font:600 13px Inter,sans-serif;color:#5B6275;cursor:pointer}.ntp-seg button.on{background:#fff;color:#141C33;box-shadow:0 1px 2px rgba(20,28,51,.12)}.ntp-seg b{background:#C53A24;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px}' +
@@ -206,5 +183,5 @@
 	const t = setInterval(() => { if (mount() || ++tries > 50) { clearInterval(t); poll(); setInterval(() => { if (!document.hidden) poll(); }, 60000); } }, 200);
 	window.CPNotify = { go, poll, view: m => view(m), refresh: () => view() };
 	/* a levél megnyitása / olvasottnak jelölése után hamarabb frissüljön a szám */
-	document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.ml-item, [data-one="read"], [data-bulk], [data-tab="mail"]')) { clearTimeout(S.mt); S.mt = setTimeout(poll, 2500); } }, true);
+	document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.ml-item, [data-one="read"], [data-bulk], [data-tab="mail"]')) { clearTimeout(S.mt); S.mt = setTimeout(() => poll(true), 2500); } }, true);
 })();

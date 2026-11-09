@@ -81,9 +81,15 @@
 			else go(id);
 		}));
 		new MutationObserver(mark).observe(document.querySelector('.cpx-tabs'), { attributes: true, subtree: true, attributeFilter: ['class'] });
-		/* a levélírás és a megnyitott levél teljes képernyős – ott (a Salesmate-hez hasonlóan) nincs alsó sáv */
-		setInterval(() => { document.body.classList.toggle('mn-hide', !!document.querySelector('.ml-compose, .ml-inbox.reading, #cpx-modal:not([hidden])')); mark(); }, 400);
-		mark();
+		/* a levélírás és a megnyitott levél teljes képernyős – ott (a Salesmate-hez hasonlóan) nincs alsó sáv
+		 * v2.9.58: a 400 ms-os örök időzítő helyett csak a tartalom (#cpx-main) és az ablak (#cpx-modal) változására, képkockánként legfeljebb egyszer */
+		let raf = 0;
+		const upd = () => { raf = 0; document.body.classList.toggle('mn-hide', !!document.querySelector('.ml-compose, .ml-inbox.reading, #cpx-modal:not([hidden])')); mark(); };
+		const later = () => { if (!raf) raf = requestAnimationFrame(upd); };
+		const mm = document.getElementById('cpx-main'), md = document.getElementById('cpx-modal');
+		if (mm) new MutationObserver(later).observe(mm, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+		if (md) new MutationObserver(later).observe(md, { attributes: true, attributeFilter: ['hidden'] });
+		upd();
 		return true;
 	}
 
@@ -115,5 +121,5 @@
 	document.head.appendChild(css);
 	let tries = 0;
 	const t = setInterval(() => { if (mount() || ++tries > 60) clearInterval(t); }, 200);
-	window.CPMNav = { open: openSheet, close: closeSheet };
+	window.CPMNav = { open: openSheet, close: closeSheet, mark: mark };
 })();

@@ -29,7 +29,9 @@ function cp_sml_get($m, $id) {
 	/* ami a nyers adatban nincs (pl. régi sor), a tábla oszlopaiból */
 	foreach (cp_crm_spec($m) as $col => $f) { if (!array_key_exists($f[0], $o) && array_key_exists($col, $row) && $row[$col] !== null) { $o[$f[0]] = $row[$col]; } }
 	$o['id'] = (int) $id;
-	if (!empty($row['deleted_at'])) { $o['_deleted'] = true; }
+	/* v2.9.58: a törlést a Salesmate-alakú jelzővel is adjuk vissza (a hívók isDeleted/deletedAt-ot néznek); _deleted a régi kód miatt marad */
+	if (!empty($row['deleted_at'])) { $o['_deleted'] = true; $o['isDeleted'] = true; $o['deletedAt'] = gmdate('Y-m-d\TH:i:s.000\Z', strtotime($row['deleted_at'] . ' UTC')); }
+	else { unset($o['isDeleted'], $o['deletedAt']); }
 	return $o;
 }
 
@@ -40,9 +42,12 @@ function cp_sml_put($m, $id, $body, $create = false) {
 	global $wpdb;
 	$o = $create ? array() : cp_sml_get($m, $id);
 	if ($o === null) { return cp_sml_err('Nincs ilyen rekord (#' . (int) $id . ').'); }
+	/* v2.9.58: a PUT nem támasztja fel a törölt rekordot – az isDeleted/deletedAt megmarad, így a tárolás deleted_at-ot hagy */
+	$was_del = !empty($o['_deleted']);
 	unset($o['_deleted']);
 	foreach ((array) $body as $k => $v) { $o[$k] = $v; }
 	$o['id'] = (int) $id;
+	if ($was_del) { $o['isDeleted'] = true; if (empty($o['deletedAt'])) { $o['deletedAt'] = cp_sml_now(); } }
 	/* kontakt: a teljes név a vezeték- és keresztnévből */
 	if ($m === 'contact' && (array_key_exists('firstName', (array) $body) || array_key_exists('lastName', (array) $body))) {
 		$o['name'] = trim(trim((string) ($o['firstName'] ?? '')) . ' ' . trim((string) ($o['lastName'] ?? '')));

@@ -32,7 +32,7 @@ add_action('init', function () {
   PRIMARY KEY  (id),
   KEY uid (uid, read_at)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_nt_db_ver', CP_NT_DB_VER, false);
+	update_option('cp_nt_db_ver', CP_NT_DB_VER, true); /* v2.9.58: minden kérés olvassa → autoload */
 }, 7);
 
 function cp_nt_db_ok() { return get_option('cp_nt_db_ver') === CP_NT_DB_VER; }
@@ -72,13 +72,28 @@ function cp_notify($uid, $kind, $text, $hash, $by_name = null) {
 	wp_remote_post($hook, array('timeout' => 3, 'blocking' => false, 'headers' => array('Content-Type' => 'application/json'), 'body' => wp_json_encode(array('text' => $msg))));
 }
 
-/* a szövegben @Név formában megemlített aktív kollégák azonosítói */
-function cp_nt_mentions($body) {
-	$out = array();
-	if (!function_exists('cp_pu_data')) { return $out; }
-	foreach (cp_pu_data()['list'] as $id => $u) { if (!empty($u['a']) && mb_stripos((string) $body, '@' . $u['n']) !== false) { $out[] = (int) $id; } }
-	return $out;
+/* v2.9.58: cp_nt_mentions törölve – sehonnan nem hívták */
+
+/* v2.9.58: a Beérkezett olvasatlan nyitott szálainak száma (Levelezés-számláló, Kezdőlap) – 30 mp-es közös gyorsítótárral.
+ * Minden nyitott fül percenként lekérte, és a lekérdezés index nélkül végigolvasta a szálakat. A szám nem függ a kollégától,
+ * ezért egy közös kulcs elég; a levél megnyitása utáni gyors frissítés (fresh=1) megkerüli és újratölti. */
+function cp_nt_mail_unread($fresh = false) {
+	global $wpdb;
+	if (!$fresh) { $c = get_transient('cp_nt_mailn'); if ($c !== false) { return (int) $c; } }
+	$n = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE folder = 'inbox' AND status = 'open' AND (seen_at IS NULL OR seen_at < last_at)");
+	set_transient('cp_nt_mailn', $n, 30);
+	return $n;
 }
+
+/* v2.9.58: a 180 napnál régebbi, már olvasott értesítések törlése – napi esemény, kis adagokban */
+add_action('init', function () {
+	if (!wp_next_scheduled('cp_nt_prune_ev')) { wp_schedule_event(time() + 2 * HOUR_IN_SECONDS, 'daily', 'cp_nt_prune_ev'); }
+});
+add_action('cp_nt_prune_ev', function () {
+	if (!cp_nt_db_ok()) { return; }
+	global $wpdb;
+	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_nt_t() . ' WHERE read_at IS NOT NULL AND read_at < %s LIMIT 2000', gmdate('Y-m-d H:i:s', time() - 180 * DAY_IN_SECONDS)));
+});
 function cp_nt_quote($s, $n = 120) { $s = trim(preg_replace('/\s+/u', ' ', (string) $s)); return '„' . (mb_strlen($s) > $n ? mb_substr($s, 0, $n - 1) . '…' : $s) . '”'; }
 
 /* ------------------------------------------------------------ a panel csengője */
@@ -94,7 +109,7 @@ function cp_nt_ajax_list() {
 		/* v2.7.9: a Levelezés menüpont számlálója – a Beérkezett olvasatlan nyitott szálai */
 		$mu = null;
 		if (function_exists('cp_mail_t') && function_exists('cp_mail_db_ok') && cp_mail_db_ok() && (!function_exists('cp_pu_can') || cp_pu_can('mail'))) {
-			$mu = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_mail_t('threads') . " WHERE folder = 'inbox' AND status = 'open' AND (seen_at IS NULL OR seen_at < last_at)");
+			$mu = cp_nt_mail_unread(!empty($_POST['fresh']));
 		}
 		wp_send_json_success(array('unread' => $unread, 'mail' => $mu));
 	}

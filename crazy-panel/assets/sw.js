@@ -21,7 +21,7 @@ self.addEventListener('notificationclick', e => {
 	const raw = (e.notification.data && e.notification.data.url) || '', scope = self.registration.scope;
 	const hash = raw.indexOf('#') >= 0 ? raw.slice(raw.indexOf('#')) : '';
 	const url = scope + hash;
-	try { fetch(scope + '?cp_pwa=click&u=' + encodeURIComponent(raw) + '&o=' + encodeURIComponent(url), { credentials: 'omit', keepalive: true }).catch(() => {}); } catch (x) { /* napló */ }
+	/* v2.9.58: a kattintás-napló kérése megszűnt */
 	e.waitUntil((async () => {
 		const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 		for (const c of all) {

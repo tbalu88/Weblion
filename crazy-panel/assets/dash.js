@@ -4,7 +4,7 @@
 (function () {
 	'use strict';
 	const C = window.CPX || {};
-	const S = { main: null, x: null, err: '', at: 0, mine: false, timer: 0, tsel: new Set(), oldOpen: false, groups: {} };
+	const S = { seq: 0, main: null, x: null, err: '', at: 0, mine: false, timer: 0, tsel: new Set(), oldOpen: false, groups: {} };
 	try { S.mine = localStorage.getItem('cpdash_mine') === '1'; } catch (e) { /* privát mód */ }
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const pad = n => String(n).padStart(2, '0');
@@ -35,8 +35,12 @@
 	const active = () => { const b = document.querySelector('.cpx-tabs [data-tab].on'); return !!(S.main && S.main.isConnected && b && b.dataset.tab === 'kezdolap'); };
 	async function load(quiet) {
 		if (!quiet) { S.err = ''; }
-		try { S.x = await post('cp_dash_data', {}); S.at = Date.now(); S.err = ''; }
-		catch (e) { S.err = e.message; }
+		/* v2.9.58: kérés-sorszám – a későbbi kérés válasza nyer, a régebbi nem írja felül */
+		const my = ++S.seq;
+		let x = null, err = '';
+		try { x = await post('cp_dash_data', {}); } catch (e) { err = e.message; }
+		if (my !== S.seq) return;
+		if (x) { S.x = x; S.at = Date.now(); S.err = ''; } else { S.err = err; }
 		if (active()) { draw(); status(document.getElementById('cpx-status')); }
 	}
 
@@ -77,7 +81,7 @@
 		if (x.todo) {
 			/* v1.68: csoportok (aktuális / lejárt 30 napon belül / régi lejárt – összecsukva), tömeges kijelölés */
 			const t = x.todo.slice().sort((a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999')));
-			const G = [['now', 'Ma és a következő napok', t.filter(i => !i.due || dayDiff(i.due) >= 0).reverse().reverse()], ['late', 'Lejárt (30 napon belül)', t.filter(i => i.due && dayDiff(i.due) < 0 && dayDiff(i.due) >= -30).reverse()], ['old', 'Régi lejárt (30+ napja)', t.filter(i => i.due && dayDiff(i.due) < -30).reverse()]].filter(g => g[2].length);
+			const G = [['now', 'Ma és a következő napok', t.filter(i => !i.due || dayDiff(i.due) >= 0)], ['late', 'Lejárt (30 napon belül)', t.filter(i => i.due && dayDiff(i.due) < 0 && dayDiff(i.due) >= -30).reverse()], ['old', 'Régi lejárt (30+ napja)', t.filter(i => i.due && dayDiff(i.due) < -30).reverse()]].filter(g => g[2].length);
 			const li = i => '<li class="dh-ti' + (S.tsel.has(i.k + ':' + i.id) ? ' sel' : '') + '"><label class="dh-ck" title="Kijelölés"><input type="checkbox" data-tsel="' + i.k + ':' + i.id + '"' + (S.tsel.has(i.k + ':' + i.id) ? ' checked' : '') + '></label><button type="button" data-todo="' + i.k + ':' + i.id + ':' + (i.deal || 0) + '"><b>' + esc(i.t) + '</b><small>' + (i.k === 'act' ? esc(i.ty || 'Tevékenység') + (i.dt ? ' · ' + esc(i.dt) : '') : 'Feladat · ' + esc(i.bn)) + (i.due ? ' · ' + dueTxt(i.due) : '') + '</small></button></li>';
 			const grp = g => { const open = g[0] !== 'old' || S.oldOpen; return '<li class="dh-tg"><label><input type="checkbox" data-tall="' + g[0] + '"' + (g[2].every(i => S.tsel.has(i.k + ':' + i.id)) ? ' checked' : '') + ' title="Mind kijelölése"></label><button type="button" data-tgo="' + g[0] + '">' + esc(g[1]) + ' <em>' + g[2].length + '</em>' + (g[0] === 'old' ? ' <span>' + (open ? '▾' : '▸') + '</span>' : '') + '</button></li>' + (open ? g[2].slice(0, g[0] === 'old' ? 300 : 100).map(li).join('') : ''); };
 			S.groups = {}; G.forEach(g => { S.groups[g[0]] = g[2].map(i => i.k + ':' + i.id); });

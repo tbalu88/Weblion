@@ -112,17 +112,20 @@ function cp_nt_settings_save($prefs, $chs, $hooks) {
 			foreach (array('b', 'p', 'u') as $x) { if (isset($c[$x]) && (bool) $c[$x] !== cp_nt_default($k, $x)) { $store[(int) $uid][$k][$x] = $c[$x] ? 1 : 0; } }
 		}
 	}
-	update_option('cp_nt_prefs', $store, false);
-	foreach (cp_ch_defs() as $k => $x) { if (isset($chs[$k]) && (bool) $chs[$k] !== cp_ch_on($k)) { cp_ch_set_on($k, (bool) $chs[$k]); } }
-	$msg = array();
+	/* v2.9.58: előbb minden webhook-címet ellenőrzünk, és csak ha mind jó, akkor mentünk (korábban hibás címnél félig mentett állapot maradt) */
+	$defs = cp_ch_defs(); $todo = array();
 	foreach ((array) $hooks as $k => $h) {
-		if (!isset(cp_ch_defs()[$k]) || !is_array($h)) { continue; }
-		if (!empty($h['clear'])) { cp_ch_hook_set($k, ''); $msg[] = cp_ch_defs()[$k][0] . ': webhook törölve.'; continue; }
+		if (!isset($defs[$k]) || !is_array($h)) { continue; }
+		if (!empty($h['clear'])) { $todo[$k] = ''; continue; }
 		$v = trim((string) ($h['v'] ?? ''));
 		if ($v === '') { continue; }
-		if (!preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', $v)) { return new WP_Error('cp_nt', cp_ch_defs()[$k][0] . ': a cím nem https://api.pumble.com/… kezdetű, nem mentettem.'); }
-		cp_ch_hook_set($k, $v); $msg[] = cp_ch_defs()[$k][0] . ': webhook elmentve.';
+		if (!cp_nt_hook_ok($v)) { return new WP_Error('cp_nt', $defs[$k][0] . ': a cím nem https://api.pumble.com/… kezdetű, semmit nem mentettem.'); }
+		$todo[$k] = $v;
 	}
+	update_option('cp_nt_prefs', $store, false);
+	foreach ($defs as $k => $x) { if (isset($chs[$k]) && (bool) $chs[$k] !== cp_ch_on($k)) { cp_ch_set_on($k, (bool) $chs[$k]); } }
+	$msg = array();
+	foreach ($todo as $k => $v) { cp_ch_hook_set($k, $v); $msg[] = $defs[$k][0] . ($v === '' ? ': webhook törölve.' : ': webhook elmentve.'); }
 	if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'notif', 'Értesítés-beállítások mentve', '', ''); }
 	return $msg ? implode(' ', $msg) : 'Értesítések mentve.';
 }

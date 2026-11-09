@@ -4,7 +4,7 @@
 	const C = window.CPX || {};
 	if (!C.au || !C.au.on) return;
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-	const S = { main: null, f: { who: '', area: '', from: '', to: '', q: '' }, p: 0, data: null, err: '' };
+	const S = { seq: 0, main: null, f: { who: '', area: '', from: '', to: '', q: '' }, p: 0, data: null, err: '' };
 	const AREAS = [['', 'Minden terület'], ['deal', 'Deal-ek'], ['levelezes', 'Levelezés'], ['feladatok', 'Feladatok'], ['elszamolas', 'Elszámolás'], ['tarca', 'Tárca'], ['naptar', 'Naptár'], ['kovetes', 'Követés'], ['stat', 'Statisztikák'], ['rendszer', 'Belépés és beállítások']];
 	const AN = {}; AREAS.forEach(a => { AN[a[0]] = a[1]; });
 
@@ -65,7 +65,11 @@
 		if (!main || !main.isConnected) return;
 		const box = main.querySelector('.au-box');
 		let r;
-		try { r = await post('cp_audit_list', Object.assign({ p: S.p }, qs())); S.err = ''; } catch (e) { S.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		/* v2.9.58: kérés-sorszám – gyors szűrő-/lapváltásnál a régebbi válasz nem írja felül az újat */
+		const my = ++S.seq;
+		try { r = await post('cp_audit_list', Object.assign({ p: S.p }, qs())); } catch (e) { if (my !== S.seq) return; S.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		if (my !== S.seq || !main.isConnected) return;
+		S.err = '';
 		S.data = r;
 		const sel = main.querySelector('[data-f="who"]');
 		sel.innerHTML = '<option value="">Mindenki</option>' + r.whos.map(w => '<option' + (w === S.f.who ? ' selected' : '') + '>' + esc(w) + '</option>').join('');

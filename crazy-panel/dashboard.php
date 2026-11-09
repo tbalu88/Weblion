@@ -68,7 +68,8 @@ function cp_dash_ajax_data() {
 		$pick = 'SELECT id, subject, contact_name, contact_email, snippet, last_at, assignee_uid, deal_id, seen_at FROM ' . $T;
 		$fmt = function ($r) use ($loc) { return array('id' => (int) $r['id'], 's' => (string) $r['subject'], 'c' => (string) ($r['contact_name'] !== '' ? $r['contact_name'] : $r['contact_email']), 'sn' => html_entity_decode((string) $r['snippet'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), 'at' => $loc($r['last_at']), 'un' => empty($r['seen_at']) || $r['seen_at'] < $r['last_at'] ? 1 : 0, 'as' => (int) $r['assignee_uid']); };
 		$out['mail'] = array(
-			'unread' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $T WHERE $base AND $un"),
+			/* v2.9.58: ugyanaz a szám, mint a Levelezés-számlálóé – a közös 30 mp-es gyorsítótárból */
+			'unread' => function_exists('cp_nt_mail_unread') ? cp_nt_mail_unread() : (int) $wpdb->get_var("SELECT COUNT(*) FROM $T WHERE $base AND $un"),
 			'unassigned' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $T WHERE $base AND assignee_uid IS NULL"),
 			'mine_n' => $uid ? (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T WHERE $base AND assignee_uid = %d", $uid)) : 0,
 			'mine' => $uid ? array_map($fmt, (array) $wpdb->get_results($wpdb->prepare("$pick WHERE $base AND assignee_uid = %d ORDER BY $un DESC, last_at DESC LIMIT 6", $uid), ARRAY_A)) : array(),

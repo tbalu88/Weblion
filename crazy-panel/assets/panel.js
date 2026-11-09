@@ -316,10 +316,13 @@
 	if (S.tab === 'deals') { pollTrack(false); elPoll(false); if (window.CPCrm) window.CPCrm.view(main); else main.innerHTML = '<div class="cpx-empty err">A Deal-ek fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'sablon') { pollTrack(false); elPoll(false); if (window.CPSablon) window.CPSablon.view(main, SBX); else main.innerHTML = '<div class="cpx-empty err">A Sablonkészítő nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	elPoll(false);
-    const m = S.tab === 'munkalap' || S.tab === 'ellenorzes' ? monthKey(S.day) : S.month;
+    const wantM = () => S.tab === 'munkalap' || S.tab === 'ellenorzes' ? monthKey(S.day) : S.month;
+    const m = wantM(), tab0 = S.tab;
     if (!S.cache[m]) {
       main.innerHTML = '<div class="cpx-empty">Adatok betöltése a Salesmate-ből…</div>';
-      try { await load(m); } catch (e) { main.innerHTML = '<div class="cpx-empty err">' + esc(S.err) + '<br><button class="cpx-btn" id="cpx-retry">Újra</button></div>'; main.querySelector('#cpx-retry').onclick = () => render(); return; }
+      try { await load(m); } catch (e) { if (S.tab !== tab0 || wantM() !== m) return; main.innerHTML = '<div class="cpx-empty err">' + esc(S.err) + '<br><button class="cpx-btn" id="cpx-retry">Újra</button></div>'; main.querySelector('#cpx-retry').onclick = () => render(); return; }
+      /* v2.9.58: közben másik hónapra/fülre lépett – a frissebb render rajzol (régi adat és TypeError helyett) */
+      if (S.tab !== tab0 || wantM() !== m || !S.cache[m]) return;
     }
     pollTrack(S.tab === 'kovetes');
     if (S.tab === 'naptar') viewCalendar(main);
@@ -411,7 +414,8 @@
     const y = S.month.slice(0, 4), ms = Array.from({ length: 12 }, (_, i) => y + '-' + pad(i + 1));
     const wrap = el('div', { class: 'cpx-year' }, '<div class="cpx-empty">Az év adatainak betöltése…</div>');
     main.appendChild(wrap);
-    try { await Promise.all(ms.map(m => load(m))); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(S.err || e.message) + '</div>'; return; }
+    /* v2.9.58: egymás után töltjük (12 párhuzamos nehéz kérés helyett); ha közben elnavigált, abbahagyja */
+    try { for (const m of ms) { if (!wrap.isConnected) return; await load(m); } } catch (e) { if (!wrap.isConnected) return; wrap.innerHTML = '<div class="cpx-empty err">' + esc(S.err || e.message) + '</div>'; return; }
     if (!wrap.isConnected) return;
     const tdy = today(); let risky = 0, full = 0, booked = 0;
     wrap.innerHTML = '<div class="yh">' + y + '</div>' + ms.map(m => {
@@ -752,7 +756,9 @@
       if (e) setTrack(e, sel.dataset.f, sel.value);
     });
     tools.querySelectorAll('#tk-f button').forEach(b => b.addEventListener('click', () => { S.tf = b.dataset.v; tools.querySelectorAll('#tk-f button').forEach(x => x.classList.toggle('on', x === b)); draw(); }));
-    tools.querySelector('#tk-q').addEventListener('input', e => { S.tq = e.target.value; draw(); });
+    /* v2.9.58: 200 ms-os pergetés – nem rajzol újra minden leütésre */
+    let tkQT = 0;
+    tools.querySelector('#tk-q').addEventListener('input', e => { S.tq = e.target.value; clearTimeout(tkQT); tkQT = setTimeout(draw, 200); });
     tools.querySelector('#tk-csv').addEventListener('click', exportCsv);
     draw();
   }
@@ -1261,19 +1267,33 @@ function elPqStart(id, i) {
 function elPqLater() { if (!elPqKey) return; if (elPqT) clearTimeout(elPqT); elPqT = setTimeout(elPqTick, EL_PQ_WAIT); }
 window.addEventListener('pagehide', elPqFlush);
 
-async function elLoad(m, force) {
+/* v2.9.58: egy hónapra egyszerre csak egy cp_el_data kérés fut – a párhuzamos hívók (nézet, tárca-becslés, frissítés) ugyanazt a választ kapják */
+const EL_INF = {};
+function elFetchM(m, force) {
+	const k = m + (force ? '!' : '');
+	if (EL_INF[k]) return EL_INF[k];
 	const [from, to] = monthRange(m);
-	S.loading = true; S.err = ''; renderStatus();
-	try {
+	const p = (async () => {
 		const r = await fetch(C.ajax + '?action=cp_el_data&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to + (force ? '&refresh=1' : ''), { credentials: 'same-origin' });
 		let j;
 		try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); }
 		if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Hiba a lekérdezésben.');
 		const d = j.data;
-		d.store = d.store || {}; d.portal = d.portal || {}; d.hx = d.hx || {}; d.links = d.links || {}; d.geo = d.geo || {}; d.cal = d.cal || {}; d.geoc = d.geoc || {};
+		['store', 'portal', 'hx', 'links', 'geo', 'cal', 'geoc'].forEach(x => { d[x] = d[x] || {}; });
 		EL.cache[m] = d;
 		EL.kez = d.kez || EL.kez;
 		return d;
+	})();
+	EL_INF[k] = p;
+	const done = () => { if (EL_INF[k] === p) delete EL_INF[k]; };
+	p.then(done, done);
+	return p;
+}
+
+async function elLoad(m, force) {
+	S.loading = true; S.err = ''; renderStatus();
+	try {
+		return await elFetchM(m, force);
 	} catch (e) {
 		S.err = e.message || String(e);
 		throw e;
@@ -1572,7 +1592,9 @@ function viewEl(main) {
 	});
 	kfSel.addEventListener('change', e => { EL.kf = e.target.value; draw(); });
 	tools.querySelectorAll('#el-only button').forEach(b => b.addEventListener('click', () => { EL.only = b.dataset.v; tools.querySelectorAll('#el-only button').forEach(x => x.classList.toggle('on', x === b)); draw(); }));
-	tools.querySelector('#el-q').addEventListener('input', e => { EL.q = e.target.value; draw(); });
+	/* v2.9.58: 200 ms-os pergetés */
+	let elQT = 0;
+	tools.querySelector('#el-q').addEventListener('input', e => { EL.q = e.target.value; clearTimeout(elQT); elQT = setTimeout(draw, 200); });
 	tools.querySelector('#el-kez').addEventListener('click', () => kezListModal());
 	tools.querySelector('#el-man').addEventListener('click', () => manualModal(null));
 	tools.querySelector('#el-csv').addEventListener('click', elCsv);
@@ -1816,15 +1838,9 @@ function elSafeDraw() {
 	if (EL.draw && S.tab === 'elszamolas') EL.draw();
 }
 
-function elPoll(on) {
+/* v2.9.58: az Elszámolás saját 30 mp-es időzítője megszűnt – a frissítést a közös twTick végzi (90 mp, csak a látott hónap) */
+function elPoll(on) { // eslint-disable-line no-unused-vars
 	if (EL.pollT) { clearInterval(EL.pollT); EL.pollT = null; }
-	if (!on) return;
-	EL.pollT = setInterval(async () => {
-		if (document.hidden || S.tab !== 'elszamolas' || S.loading) return;
-		const ae = document.activeElement;
-		if (ae && /^(SELECT|INPUT|TEXTAREA)$/.test(ae.tagName) || !document.getElementById('cpx-modal').hidden) return;
-		try { await elLoad(S.month); if (EL.draw && S.tab === 'elszamolas') EL.draw(); } catch (e) { /* állapotsorban látszik */ }
-	}, 30000);
 }
 
 /* ---- részletek */
@@ -2258,17 +2274,7 @@ function elCsv() {
 	async function twEnsureEl() {
 		for (const m of twMonths()) {
 			if (EL.cache[m]) continue;
-			const [from, to] = monthRange(m);
-			try {
-				const r = await fetch(C.ajax + '?action=cp_el_data&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to, { credentials: 'same-origin' });
-				const j = await r.json();
-				if (j && j.success && !EL.cache[m]) {
-					const x = j.data;
-					['store', 'portal', 'hx', 'links', 'geo', 'cal', 'geoc'].forEach(k => { x[k] = x[k] || {}; });
-					EL.cache[m] = x;
-					if (x.kez) EL.kez = x.kez;
-				}
-			} catch (e) { /* a becslés enélkül is működik */ }
+			try { await elFetchM(m); } catch (e) { /* a becslés enélkül is működik */ }
 		}
 	}
 	function twUnpaid() {
@@ -2600,33 +2606,21 @@ function elCsv() {
 	}
 
 /* ------------------------------------------------------------ Tárca + Elszámolás automatikus frissítés (v1.9.7) */
-	const TW_POLL_MS = 30000;
-	async function twRefreshEl(skip) {
-		for (const m of twMonths()) {
-			if (m === skip) continue;
-			const [from, to] = monthRange(m);
-			try {
-				const r = await fetch(C.ajax + '?action=cp_el_data&t=' + encodeURIComponent(C.t) + '&from=' + from + '&to=' + to, { credentials: 'same-origin' });
-				const j = await r.json();
-				if (j && j.success) {
-					const x = j.data;
-					['store', 'portal', 'hx', 'links', 'geo', 'cal', 'geoc'].forEach(k => { x[k] = x[k] || {}; });
-					EL.cache[m] = x;
-					if (x.kez) EL.kez = x.kez;
-				}
-			} catch (e) { /* a következő körben újra */ }
-		}
-	}
+	/* v2.9.58: egyetlen 90 mp-es frissítés (a korábbi két 30 mp-es helyett); csak a képernyőn látott hónap(ok) adata jön újra */
+	const TW_POLL_MS = 90000;
 	const twBusy = () => { const ae = document.activeElement; return !!(ae && /^(SELECT|INPUT|TEXTAREA)$/.test(ae.tagName) && ae.id !== 'tw-q') || !document.getElementById('cpx-modal').hidden; };
 	let twTicking = false;
 	async function twTick(now) {
 		if (twTicking || document.hidden || (S.tab !== 'tarca' && S.tab !== 'elszamolas')) return;
-		if (!now && twBusy()) return;
+		if (!now && (twBusy() || S.loading)) return;
+		const onEl = S.tab === 'elszamolas', m0 = S.month;
+		/* Elszámolás: a látott hónap (fülváltáskor a nézet maga tölti be); Tárca: az előző + aktuális hónap */
+		const ms = onEl ? (now ? [] : [m0]) : twMonths();
 		twTicking = true;
-		try { await Promise.all([twLoad(), twRefreshEl(S.tab === 'elszamolas' ? S.month : '')]); } catch (e) { /* állapotsor */ }
+		try { await Promise.all([twLoad()].concat(ms.map(m => elFetchM(m).catch(() => { /* a következő körben újra */ })))); } catch (e) { /* állapotsor */ }
 		twTicking = false;
 		if (S.tab === 'tarca' && TW.draw && !twBusy()) TW.draw();
-		if (S.tab === 'elszamolas') twBadgeDraw();
+		if (S.tab === 'elszamolas') { if (ms.length && S.month === m0 && EL.draw && !twBusy()) EL.draw(); twBadgeDraw(); }
 		renderStatus();
 	}
 	setInterval(() => twTick(false), TW_POLL_MS);

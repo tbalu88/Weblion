@@ -345,13 +345,11 @@ a{color:var(--ot)}
 .el-sat.mid{background:var(--midb);color:#8A5A10}
 .el-sat.bad{background:var(--fullb);color:var(--full)}
 .el-note{max-width:190px;font-size:12.5px}
-.el-t small.el-ph{color:#6B4FD6;font-weight:700}
 .el-tot b{font:800 14px "Plus Jakarta Sans",sans-serif;white-space:nowrap}
 .el-tot small{white-space:normal;max-width:150px;margin-left:auto}
 .tk.pay.on{background:var(--ok);border-color:var(--ok)}
 .el-t .td-c{text-align:center}
 .el-t .td-c small{margin-top:2px;white-space:nowrap}
-.el-det{width:34px}
 .el-t tr.el-foot td{background:#F4F1EC;font-weight:700;border-top:2px solid var(--li);position:sticky;bottom:0}
 .el-sel{height:38px;border:1.5px solid var(--li);border-radius:999px;padding:0 12px;background:#fff;max-width:210px}
 .cpx-btn.sm{height:32px;padding:0 12px;font-size:13px}
@@ -391,7 +389,7 @@ a{color:var(--ot)}
 .el-paytot b{font:800 18px "Plus Jakarta Sans",sans-serif}
 .el-kz td{white-space:nowrap}
 @media (max-width:760px){.el-wrap{max-height:none}.el-sel{flex:1;max-width:none}}
-@media print{.el-wrap{max-height:none;overflow:visible}.el-acts,.el-det{display:none!important}}
+@media print{.el-wrap{max-height:none;overflow:visible}.el-acts{display:none!important}}
 
 /* kezelői adatlap (link, jelszó nélkül) */
 .cpk{background:var(--bg)}
@@ -433,12 +431,8 @@ a{color:var(--ot)}
 /* v1.4.3: eszközválasztás, hosszabbítás, gép működése */
 .cpk-card select{display:block;width:100%;margin-top:6px;height:50px;border:1.5px solid var(--li);border-radius:12px;padding:0 12px;font-size:17px;background:#fff;color:var(--ink)}
 .cpk-card select:disabled{background:#F6F3EE;color:var(--mu)}
-.cpk-multi label{flex:1 1 30%;min-width:92px}
-.cpk-multi label span{min-height:42px;padding:0 8px;font-size:14px}
 .cpk-gmn{margin-top:10px}
 .el-t small.el-sv{color:#2F5E9E;font-weight:600}
-.el-t small.el-gm{font-weight:700;color:#8A5A10}
-.el-t small.el-gm.bad{color:var(--full)}
 .el-svs{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
 .el-svs>span{flex:0 0 100%;font-size:12.5px;font-weight:600;color:var(--mu)}
 
