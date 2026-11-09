@@ -249,7 +249,7 @@ function cp_wf_create($lid) {
 	}
 	if (!$cid) {
 		$cb = array('firstName' => '', 'lastName' => $name, 'email' => $email, 'mobile' => $phone, 'tags' => $tags, 'owner' => 19);
-		foreach (array('utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent') as $u) { if (!empty($pairs['Contact.' . $u])) { $cb[$u] = mb_substr((string) $pairs['Contact.' . $u], 0, 200); } }
+		/* 2026-11-09: az UTM-mezőket a Salesmate a kontakt létrehozásakor elutasítja („Unknown column 'utmSource'”) – nem küldjük, különben nem jön létre se kontakt, se deal */
 		if (!function_exists('cp_crm_users') || !isset(cp_crm_users()[19])) { unset($cb['owner']); }
 		$cr = cp_sm_request('POST', '/apis/contact/v4', array_filter($cb, function ($v) { return $v !== ''; }));
 		if (is_wp_error($cr)) { return $fail('A kontaktot nem sikerült létrehozni: ' . $cr->get_error_message()); }
