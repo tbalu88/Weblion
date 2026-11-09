@@ -52,8 +52,24 @@
 		S.tabsMo = new MutationObserver(() => { if (S.mail && !tb.querySelector('[data-tab="mail"] .cpx-tab-n')) mailBadge(); });
 		S.tabsMo.observe(tb, { childList: true, subtree: true });
 	}
+	/* v2.9.59 (P1): a percenkénti háttérkérés a könnyített cp_ping – egy kérésben az értesítés- és levélszámláló, a Deal-ek
+	   változásjelzője (crm) és nyitott levéllistánál a levelek ujjlenyomata (ms); a szerver a bővítmények betöltése nélkül válaszol.
+	   Az eredményt „cp-ping” eseményként a Deal-ek és a Levelezés is megkapja (a saját percenkénti kérésük helyett).
+	   Ha a cp_ping nem érhető el, a régi cp_nt_list számlálóra esik vissza. */
 	async function poll(fresh) {
-		try { const r = await post('cp_nt_list', fresh === true ? { count: 1, fresh: 1 } : { count: 1 }); /* v2.9.58: a levél-számláló 30 mp-ig gyorsítótárazott; kattintás után friss */ S.n = r.unread || 0; badge(); if (r.mail != null) { S.mail = r.mail; mailBadge(); } } catch (e) { /* csendben újra */ }
+		const p = {};
+		if (fresh === true) p.fresh = 1; /* v2.9.58: a levél-számláló 30 mp-ig gyorsítótárazott; kattintás után friss */
+		if (document.querySelector('.ml-items')) p.ms = 1;
+		let r;
+		try { r = await post('cp_ping', p); } catch (e) {
+			try { const x = await post('cp_nt_list', fresh === true ? { count: 1, fresh: 1 } : { count: 1 }); S.n = x.unread || 0; badge(); if (x.mail != null) { S.mail = x.mail; mailBadge(); } } catch (e2) { /* csendben újra */ }
+			return;
+		}
+		S.lastPing = Date.now();
+		S.n = r.nt || 0; badge();
+		if (r.mail != null) { S.mail = r.mail; mailBadge(); }
+		window.CPXPing = { at: S.lastPing, d: r };
+		document.dispatchEvent(new CustomEvent('cp-ping', { detail: r }));
 	}
 
 	/* a cél megnyitása: „feladatok:12”, „feladatok:mine”, „mail:3” */
@@ -181,6 +197,8 @@
 	document.head.appendChild(css);
 	let tries = 0;
 	const t = setInterval(() => { if (mount() || ++tries > 50) { clearInterval(t); poll(); setInterval(() => { if (!document.hidden) poll(); }, 60000); } }, 200);
+	/* v2.9.59: az ablakba visszatérve azonnal (ha az utolsó jelzés 20 mp-nél régebbi) – a Deal-ek és a Levelezés is ebből frissül */
+	document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - (S.lastPing || 0) > 20000) poll(); });
 	window.CPNotify = { go, poll, view: m => view(m), refresh: () => view() };
 	/* a levél megnyitása / olvasottnak jelölése után hamarabb frissüljön a szám */
 	document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.ml-item, [data-one="read"], [data-bulk], [data-tab="mail"]')) { clearTimeout(S.mt); S.mt = setTimeout(() => poll(true), 2500); } }, true);

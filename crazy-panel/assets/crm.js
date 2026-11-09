@@ -1842,11 +1842,14 @@
 	const AUTO = { t: 0, k: '', n: 0, ln: 0, busy: false };
 	const autoBlocked = () => !!(document.hidden || !live() || S.loading || document.querySelector('#cpx-main > .crm-page') || (document.getElementById('cpx-modal') && !document.getElementById('cpx-modal').hidden)
 		|| (document.activeElement && document.activeElement.closest && document.activeElement.closest('#crm-body textarea, #crm-body input:not([type=search]), #crm-body select')) || (S.main && S.main.querySelector('.crm-qn')));
-	async function autoTick() {
+	/* v2.9.59 (P1): a változásjelzőt a csengő percenkénti könnyített kérése (cp_ping) hozza „cp-ping” eseményként ($pre);
+	   saját cp_crm_stamp kérés csak akkor megy, ha 150 mp óta nem jött jelzés (pl. az értesítések ki vannak kapcsolva) */
+	const pingFresh = () => !!(window.CPXPing && Date.now() - window.CPXPing.at < 150000);
+	async function autoTick(pre) {
 		if (AUTO.busy || autoBlocked()) return;
 		AUTO.busy = true;
 		try {
-			const r = await post('cp_crm_stamp', {});
+			const r = pre && pre.k ? pre : await post('cp_crm_stamp', {});
 			if (AUTO.k && r.k !== AUTO.k && !autoBlocked()) {
 				const dn = r.n - AUTO.n, dl = r.ln - AUTO.ln;
 				const y = window.scrollY, bd = S.main && S.main.querySelector('.crm-board'), x = bd ? bd.scrollLeft : 0;
@@ -1858,7 +1861,13 @@
 		} catch (e) { /* csendben – a következő körben újra */ }
 		AUTO.busy = false;
 	}
-	function autoStart() { if (AUTO.t) return; AUTO.t = setInterval(autoTick, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) autoTick(); }); setTimeout(autoTick, 4000); }
+	function autoStart() {
+		if (AUTO.t) return;
+		document.addEventListener('cp-ping', e => { if (e.detail && e.detail.crm) autoTick(e.detail.crm); });
+		AUTO.t = setInterval(() => { if (!pingFresh()) autoTick(); }, 60000);
+		document.addEventListener('visibilitychange', () => { if (!document.hidden && !pingFresh()) autoTick(); });
+		setTimeout(() => { if (!AUTO.k) autoTick(window.CPXPing && window.CPXPing.d && window.CPXPing.d.crm); }, 4000);
+	}
 
 	/* mélylink: #deals:leads = a Megkeresések nézet */
 	function deep(arg) { if (arg === 'leads') { S.mode = 'board'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }

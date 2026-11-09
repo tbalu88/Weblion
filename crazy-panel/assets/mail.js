@@ -254,9 +254,14 @@
 			}
 		}).catch(() => {});
 	}
+	/* v2.9.59 (P1): a levéllista csak akkor töltődik újra, ha a csengő percenkénti könnyített kérése (cp_ping) szerint a levélszálak
+	   ujjlenyomata (ms) változott; ha 150 mp óta nem jött jelzés, a régi percenkénti lekérés megy (tartalék) */
+	const pingFresh = () => !!(window.CPXPing && Date.now() - window.CPXPing.at < 150000);
 	if (M.sync) {
-		setInterval(autoTick, 60000);
-		document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(autoTick, 800); });
+		let lastMs = '';
+		document.addEventListener('cp-ping', e => { const ms = e.detail && e.detail.ms; if (!ms) return; if (ms !== lastMs) { lastMs = ms; autoTick(); } });
+		setInterval(() => { if (!pingFresh()) autoTick(); }, 60000);
+		document.addEventListener('visibilitychange', () => { if (!document.hidden && !pingFresh()) setTimeout(autoTick, 800); });
 	}
 	function view(main) {
 		S.main = main;
