@@ -528,11 +528,44 @@ function cp_mail_ajax_threads() {
 	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0, 'tags' => cp_mail_tags_all()));
 }
 
+/* v2.9.68: az ügyfél válaszában idézett szövegből visszaállított saját levelünk („idézetből”) duplikátum-e.
+   A szöveg összevetéséhez: címkék, idézőjelek (>) és minden nem betű/szám nélkül, kisbetűsen, az első 600 jel. */
+function cp_mail_qd_norm($s) {
+	$s = preg_replace('#<(style|script|head)[^>]*>.*?</\1>#is', '', (string) $s);
+	$s = html_entity_decode(strip_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/blockquote)\b[^>]*>#i', "\n", $s)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	$s = preg_replace('/^[ \t]*(>[ \t]?)+/mu', '', $s);
+	return mb_substr(mb_strtolower((string) preg_replace('/[^\p{L}\p{N}]+/u', '', $s)), 0, 600);
+}
+/* v2.9.68: ugyanaz a szöveg-e: a rövidebb elejének (40 jel) benne kell lennie a másik elején (az eredetinél lehet egy
+   plusz fejléc- vagy megszólítássor); $k: a vizsgált hossz; nagyon rövid szövegnél csak a teljes egyezés számít */
+function cp_mail_qd_same($a, $b, $k = 40) {
+	$a = cp_mail_qd_norm($a); $b = cp_mail_qd_norm($b);
+	if ($a === '' || $b === '') { return false; }
+	if (mb_strlen($a) < 12 || mb_strlen($b) < 12) { return $a === $b; }
+	return mb_strpos($b, mb_substr($a, 0, $k)) !== false || mb_strpos($a, mb_substr($b, 0, $k)) !== false;
+}
+/* v2.9.68: mely „idézetből” visszaállított levelek rejtendők, mert megvan az eredeti kimenő levél (±$win mp, azonos szövegkezdet).
+   $rows: array(array('id', 'dir', 'q' => bool, 'ts' => unix, 'body')); visszaad: array(id => true). Adatot nem töröl. */
+function cp_mail_qd_hide(array $rows, $win = 120) {
+	$hide = array();
+	foreach ($rows as $q) {
+		if (empty($q['q'])) { continue; }
+		foreach ($rows as $o) {
+			if (!empty($o['q']) || $o['dir'] !== 'out' || abs((int) $o['ts'] - (int) $q['ts']) > $win) { continue; }
+			if (cp_mail_qd_same((string) $q['body'], (string) $o['body'])) { $hide[(int) $q['id']] = true; break; }
+		}
+	}
+	return $hide;
+}
+
 function cp_mail_thread_full($id) {
 	global $wpdb;
 	$t = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $id), ARRAY_A);
 	if (!$t) { return null; }
 	$msgs = $wpdb->get_results($wpdb->prepare('SELECT id, dir, from_name, from_email, to_list, cc_list, subject, body, attachments, status, sent_at, reply_to, CASE WHEN html IS NULL THEN -1 WHEN html = \'\' THEN 0 ELSE 1 END hh FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at, id', $id), ARRAY_A);
+	/* v2.9.68: a szálon belül a visszaállított másolat rejtve, ha az eredeti kimenő levél is megvan (az adat marad) */
+	$qh = cp_mail_qd_hide(array_map(function ($m) { return array('id' => $m['id'], 'dir' => $m['dir'], 'q' => $m['status'] === 'idézetből', 'ts' => strtotime($m['sent_at'] . ' UTC'), 'body' => $m['body']); }, (array) $msgs));
+	if ($qh) { $msgs = array_values(array_filter($msgs, function ($m) use ($qh) { return !isset($qh[(int) $m['id']]); })); }
 	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
 	unset($m);
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);

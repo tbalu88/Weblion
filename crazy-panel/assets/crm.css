@@ -660,3 +660,35 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-ie{position:static;max-width:none;width:auto}
 }
 @media (prefers-reduced-motion:reduce){.crm-flash{animation:none}.crm-ied{transition:none}}
+/* v2.9.68: levélszál-kártya (idővonal, kontakt- és céglap) – egy szál = egy kártya; mozgás nincs (munkafelület) */
+.d3-tcs{display:flex;flex-direction:column;margin-top:6px}
+.d3-tc{width:100%;text-align:left;font:inherit;color:#141C33;cursor:pointer;align-items:flex-start;-webkit-tap-highlight-color:transparent}
+.d3-tc:focus-visible{outline:2px solid var(--o,#E8894A);outline-offset:-1px}
+@media (hover:hover) and (pointer:fine){.d3-tc:hover{background:#FAF8F5;border-color:#E1DDD6}}
+.d3-tc>i{margin-top:1px}
+.d3-tcb{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.d3-tch{display:flex;align-items:baseline;gap:8px;min-width:0}
+.d3-tcs{flex:1;min-width:0;font:600 13.5px/1.35 Inter,sans-serif;color:#141C33;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.d3-tch small{flex:none;color:#656973;font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.d3-tcl{display:flex;align-items:baseline;gap:4px;min-width:0;font-size:12.5px;line-height:1.4;color:#4A4F5A}
+.d3-tcw{flex:0 1 auto;max-width:45%;min-width:0;font-weight:600;color:#141C33;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d3-tcd{flex:none;color:#656973;white-space:nowrap;font-variant-numeric:tabular-nums}
+.d3-tcx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d3-tce{font-style:italic;color:#656973}
+.d3-tcm{display:flex;flex-wrap:wrap;gap:4px;margin-top:1px}
+.d3-tcm .d3-q{display:inline-flex;align-items:center;gap:3px;line-height:18px}
+.d3-tca svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.d3-q.d3-tcwo{background:#E4ECFC;color:#24489E}
+.d3-q.d3-tccl{background:transparent;box-shadow:inset 0 0 0 1px #DCD8D1}
+.d3-tc.closed .d3-tcs{color:#4A4F5A}
+.d3-tabs button[aria-pressed=true]{background:#141C33;color:#fff;border-color:#141C33}
+.d3-tabs button:focus-visible{outline:2px solid var(--o,#E8894A);outline-offset:2px}
+.d3-tl0{padding:14px 2px}
+@media (max-width:760px){
+  .d3-tc{display:flex;padding:9px 9px;gap:8px}
+  .d3-tc>i{width:24px;height:24px}
+  .d3-tch{flex-wrap:wrap;row-gap:0}
+  .d3-tch small{order:-1;flex-basis:100%}
+  .d3-tcl{font-size:13px}
+  .d3-tcw{max-width:40%}
+}

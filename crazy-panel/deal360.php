@@ -30,22 +30,80 @@ function cp_d360_deals($where) {
 }
 
 /* levélszálak és levelek: a deal-hez csatoltak, illetve a kontakt e-mail-címével érkezett, máshoz nem csatolt szálak */
+/* v2.6.9: a bekezdések / sorok határán szóköz (különben „Anita!A rendezvény”), a kódolt betűk visszaalakítva; v2.9.68: külön függvény (szálkártya) */
+function cp_d360_txt($body) {
+	return trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6]|/td|/blockquote)\b[^>]*>#i', "\n", (string) $body)), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+}
 function cp_d360_mail($thread_where, $msg_limit = 80) {
 	global $wpdb;
 	if (!function_exists('cp_mail_db_ok') || !cp_mail_db_ok() || (function_exists('cp_panel_can') && !cp_panel_can('mail'))) { return array('threads' => array(), 'msgs' => array(), 'notes' => array(), 'files' => array(), 'off' => 1); }
-	$T = cp_mail_t('threads');
+	$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
 	$threads = (array) $wpdb->get_results("SELECT id, subject, contact_name, contact_email, deal_id, assignee_uid, status, folder, msg_count, last_at, snippet FROM $T WHERE folder NOT IN ('trash', 'spam') AND ($thread_where) ORDER BY last_at DESC LIMIT 100", ARRAY_A);
 	$ids = array_map(function ($t) { return (int) $t['id']; }, $threads);
 	$out = array('threads' => array(), 'msgs' => array(), 'notes' => array(), 'files' => array());
-	foreach ($threads as $t) { $out['threads'][] = array('id' => (int) $t['id'], 'subj' => $t['subject'], 'ce' => $t['contact_email'], 'deal' => (int) $t['deal_id'], 'as' => (int) $t['assignee_uid'], 'st' => $t['status'], 'folder' => $t['folder'], 'cnt' => (int) $t['msg_count'], 'at' => cp_crm_local($t['last_at'])); }
 	if (!$ids) { return $out; }
 	$in = implode(',', $ids);
-	$msgs = (array) $wpdb->get_results('SELECT id, thread_id, dir, from_name, from_email, subject, body, attachments, status, sent_at FROM ' . cp_mail_t('messages') . " WHERE thread_id IN ($in) ORDER BY sent_at DESC, id DESC LIMIT " . (int) $msg_limit, ARRAY_A);
-	foreach ($msgs as $m) {
-		/* v2.6.9: a bekezdések / sorok határán szóköz (különben „Anita!A rendezvény”), a kódolt betűk visszaalakítva */
-		$txt = trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6]|/td|/blockquote)\b[^>]*>#i', "\n", (string) $m['body'])), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+	/* v2.9.68: a szálkártyákhoz minden levél könnyű sora (szöveg nélkül), a legújabbtól; a levélszám és az első / utolsó dátum
+	   pontosan SQL-ből, így a 80-as (kontaktnál 40-es) levélkorlát és a 3000-es sorkorlát sem torzítja a kártyát */
+	$L = (array) $wpdb->get_results("SELECT id, thread_id, dir, from_name, from_email, status, sent_at, attachments FROM $M WHERE thread_id IN ($in) ORDER BY sent_at DESC, id DESC LIMIT 3000", ARRAY_A);
+	$agg = array();
+	foreach ((array) $wpdb->get_results("SELECT thread_id, COUNT(*) n, MIN(sent_at) f, MAX(sent_at) l FROM $M WHERE thread_id IN ($in) GROUP BY thread_id", ARRAY_A) as $r) { $agg[(int) $r['thread_id']] = $r; }
+	/* v2.9.68: duplikátum – az „idézetből” visszaállított saját levelünk rejtve, ha a deal levelei között megvan az eredeti
+	   kimenő levél (±2 perc, azonos szövegkezdet), akár másik szálban, más tárggyal. Adatot nem törlünk. */
+	$hide = array();
+	if (function_exists('cp_mail_qd_hide')) {
+		$need = array(); $ts = array();
+		foreach ($L as $r) { $ts[(int) $r['id']] = strtotime($r['sent_at'] . ' UTC'); }
+		foreach ($L as $q) {
+			if ($q['status'] !== 'idézetből') { continue; }
+			foreach ($L as $o) { if ($o['dir'] === 'out' && $o['status'] !== 'idézetből' && abs($ts[(int) $o['id']] - $ts[(int) $q['id']]) <= 120) { $need[(int) $q['id']] = 1; $need[(int) $o['id']] = 1; } }
+		}
+		if ($need) {
+			$bodies = array();
+			foreach ((array) $wpdb->get_results('SELECT id, SUBSTRING(body, 1, 6000) body FROM ' . $M . ' WHERE id IN (' . implode(',', array_map('intval', array_keys(array_slice($need, 0, 400, true)))) . ')', ARRAY_A) as $b) { $bodies[(int) $b['id']] = $b['body']; }
+			$rows = array();
+			foreach ($L as $r) { $i = (int) $r['id']; if (isset($bodies[$i])) { $rows[] = array('id' => $i, 'dir' => $r['dir'], 'q' => $r['status'] === 'idézetből', 'ts' => $ts[$i], 'body' => $bodies[$i]); } }
+			$hide = cp_mail_qd_hide($rows, 120);
+		}
+	}
+	/* szálonkénti összesítő a látható levelekből: utolsó levél (irány, feladó), mellékletszám (aláíráskép nélkül), első dátum */
+	$per = array();
+	foreach ($L as $r) {
+		if (isset($hide[(int) $r['id']])) { continue; }
+		$th = (int) $r['thread_id'];
+		if (!isset($per[$th])) { $per[$th] = array('last' => $r, 'na' => 0, 'rows' => 0, 'first' => $r['sent_at'], 'hid' => 0); }
+		$per[$th]['rows']++; $per[$th]['first'] = $r['sent_at'];
+		foreach ((json_decode((string) $r['attachments'], true) ?: array()) as $a) { if (!empty($a['n']) && !(!empty($a['cid']) && cp_d360_is_emb((string) $a['n']))) { $per[$th]['na']++; } }
+	}
+	foreach ($hide as $hid => $x) { foreach ($L as $r) { if ((int) $r['id'] === $hid && isset($per[(int) $r['thread_id']])) { $per[(int) $r['thread_id']]['hid']++; } } }
+	/* az utolsó levelek szövegének eleje (szálanként egy, legfeljebb 100) */
+	$snip = array();
+	$lastIds = array_map(function ($p) { return (int) $p['last']['id']; }, $per);
+	if ($lastIds) {
+		foreach ((array) $wpdb->get_results('SELECT id, SUBSTRING(body, 1, 3000) body FROM ' . $M . ' WHERE id IN (' . implode(',', $lastIds) . ')', ARRAY_A) as $b) { $snip[(int) $b['id']] = mb_substr(cp_d360_txt($b['body']), 0, 160); }
+	}
+	foreach ($threads as $t) {
+		$th = (int) $t['id']; $p = $per[$th] ?? null; $g = $agg[$th] ?? null;
+		$row = array('id' => $th, 'subj' => $t['subject'], 'ce' => $t['contact_email'], 'deal' => (int) $t['deal_id'], 'as' => (int) $t['assignee_uid'], 'st' => $t['status'], 'folder' => $t['folder'], 'cnt' => (int) $t['msg_count'], 'at' => cp_crm_local($t['last_at']));
+		if ($g) {
+			$hidN = $p ? $p['hid'] : 0;
+			$row['n'] = max(0, (int) $g['n'] - $hidN);
+			/* ha a szál minden levele benne van a könnyű listában, az első dátum abból (a rejtett nélkül), különben SQL-ből */
+			$row['f'] = cp_crm_local($p && $p['rows'] + $hidN >= (int) $g['n'] ? $p['first'] : $g['f']);
+		}
+		if ($p) {
+			$lm = $p['last'];
+			$row += array('la' => cp_crm_local($lm['sent_at']), 'ld' => $lm['dir'] === 'out' ? 'out' : 'in', 'lf' => $lm['from_name'] !== '' ? $lm['from_name'] : $lm['from_email'], 'ls' => $snip[(int) $lm['id']] ?? '', 'na' => $p['na']);
+		}
+		$out['threads'][] = $row;
+	}
+	/* a levelek (összkép: ki írt utoljára; Fájlok) – a könnyű sorokból, a rejtett duplikátum nélkül; v2.9.68: szöveg nélkül (az idővonal szálkártyát mutat) */
+	$k = 0;
+	foreach ($L as $m) {
+		if (isset($hide[(int) $m['id']])) { continue; }
+		if (++$k > $msg_limit) { break; }
 		$att = json_decode((string) $m['attachments'], true) ?: array();
-		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'subj' => $m['subject'], 'snip' => mb_substr($txt, 0, 260), 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
+		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
 		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + ((!empty($a['cid']) && cp_d360_is_emb((string) $a['n'])) || (preg_match('/\.(jpe?g|png|gif|webp|bmp|heic)$/i', (string) $a['n']) && function_exists('cp_thumb_tiny') && cp_thumb_tiny((int) $m['id'], (int) $ai, $a['s'] ?? null)) ? array('emb' => 1) : array()); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
 	}
 	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);

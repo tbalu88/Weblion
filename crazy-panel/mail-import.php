@@ -357,6 +357,31 @@ function cp_imp_relink_recent() {
 	foreach ($rows as $r) { cp_imp_relink((int) $r['id'], $r['contact_email'], $r['last_at']); }
 }
 
+/* v2.9.68: döntés – az idézetből visszaállítandó saját levelünk megvan-e már eredetiben a jelöltek között.
+   $qr: cp_imp_quoted_reply() eredménye (text, ts); $cands: array(array('ts' => unix, 'body' => …)) – kimenő, nem „idézetből” levelek.
+   Ha az idézet fejlécéből ismert az időpont: ±180 mp és azonos szövegkezdet (40 jel); ha nem: csak a hosszabb (120 jeles) szövegegyezés. */
+function cp_imp_q_dup_decide($qr, array $cands) {
+	if (!$qr || !function_exists('cp_mail_qd_same')) { return false; }
+	foreach ($cands as $c) {
+		if (!empty($qr['ts']) && abs((int) $c['ts'] - (int) $qr['ts']) > 180) { continue; }
+		if (cp_mail_qd_same((string) $qr['text'], (string) $c['body'], !empty($qr['ts']) ? 40 : 120)) { return true; }
+	}
+	return false;
+}
+/* v2.9.68: a jelöltek: a szál és a deal többi szálának kimenő levelei (indexelt thread_id / deal_id alapján, teljes tábla-olvasás nélkül);
+   ismert időpontnál ±3 perc, különben az elmúlt 90 nap (legfeljebb 30 levél) */
+function cp_imp_q_orig_exists($tid, $deal, $qr, $at) {
+	global $wpdb;
+	$M = cp_mail_t('messages');
+	$tids = array((int) $tid);
+	if ($deal > 0) { foreach ((array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_mail_t('threads') . ' WHERE deal_id = %d LIMIT 200', $deal)) as $x) { $tids[] = (int) $x; } }
+	$tids = array_unique(array_filter($tids));
+	if (!$tids) { return false; }
+	$from = !empty($qr['ts']) ? gmdate('Y-m-d H:i:s', (int) $qr['ts'] - 180) : gmdate('Y-m-d H:i:s', strtotime($at . ' UTC') - 90 * DAY_IN_SECONDS);
+	$to = !empty($qr['ts']) ? gmdate('Y-m-d H:i:s', (int) $qr['ts'] + 180) : $at;
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT SUBSTRING(body, 1, 6000) body, sent_at FROM $M WHERE thread_id IN (" . implode(',', array_map('intval', $tids)) . ") AND dir = 'out' AND status <> 'idézetből' AND sent_at BETWEEN %s AND %s ORDER BY sent_at DESC LIMIT 30", $from, $to), ARRAY_A);
+	return cp_imp_q_dup_decide($qr, array_map(function ($r) { return array('ts' => strtotime($r['sent_at'] . ' UTC'), 'body' => $r['body']); }, $rows));
+}
 /* egy levél (UID) átvétele; visszaad: 'ok' | 'dup' | 'skip' */
 function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	global $wpdb;
@@ -424,7 +449,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
 		if (!$wpdb->insert_id) { throw new \Exception('A levélszál mentése nem sikerült: ' . $wpdb->last_error); }
-		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'));
+		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'deal_id' => $deal ?: 0);
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),
@@ -438,6 +463,9 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	if (!$out && !(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE thread_id = %d AND dir = 'out' AND status <> 'idézetből' AND sent_at <= %s", (int) $t['id'], $at))) {
 		/* v1.99.2: csak ha a szálban még nincs meg a saját (panelből vagy az Elküldöttből átvett) levelünk – különben kétszer látszana */
 		$qr = cp_imp_quoted_reply($acc['plain'] ?? '', $acc['html'] ?? null);
+		/* v2.9.68: az eredeti kimenő levél lehet a deal másik szálában is (más címzett, más tárgy – pl. „EventCrazy ajánlat …” vs. „RE: …”):
+		   ha ott ugyanaz a szöveg ugyanakkor (±3 perc) már megvan, nem készül visszaállított másolat */
+		if ($qr && cp_imp_q_orig_exists((int) $t['id'], (int) ($t['deal_id'] ?? 0), $qr, $at)) { $qr = null; }
 		if ($qr) {
 			$qmid = md5('q|' . $tkey . '|' . mb_strtolower(preg_replace('/\W+/u', '', mb_substr($qr['text'], 0, 400))));
 			if (!(int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $qmid))) {
