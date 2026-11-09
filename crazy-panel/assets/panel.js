@@ -19,6 +19,11 @@
   const norm = s => String(s || '').trim().toLowerCase();
   /* keresésekhez: ékezet- és kisbetű-független (szabo = Szabó) */
   const fold = s => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  /* v2.9.70: többnapos rendezvény – a 2..n. nap azonosítója „<dealId>:<nap>”, a deal azonosítója e.deal; címke: „2/3. nap” */
+  const dealOf = e => String((e && e.deal) || (e && e.id) || '');
+  const dayTxt = e => e && e.dof ? e.dn + '/' + e.dof + '. nap' : '';
+  const dayTag = e => e && e.dof ? ' <span class="dtag" title="Többnapos rendezvény">' + esc(dayTxt(e)) + '</span>' : '';
+  const DEAL_F = ['sz', 'dj', 'sp'];  /* dealszintű követés (szerződés, díjbekérő): mindig a deal (1. nap) kulcsán */
   function el(tag, attrs, html) {
     const e = document.createElement(tag);
     if (attrs) for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else e.setAttribute(k, attrs[k]); }
@@ -70,7 +75,7 @@
       if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Hiba a lekérdezésben.');
       S.cache[m] = { events: j.data.events || [], subs: j.data.subs || {}, at: j.data.at };
       const tr = j.data.track || {};
-      S.cache[m].events.forEach(e => { S.track[e.id] = tr[e.id] || {}; });
+      S.cache[m].events.forEach(e => { S.track[e.id] = tr[e.id] || {}; if (e.deal && e.deal !== e.id) S.track[e.deal] = tr[e.deal] || S.track[e.deal] || {}; });
       Object.assign(S.portal, j.data.portal || {});
       return S.cache[m];
     } catch (e) {
@@ -576,7 +581,7 @@
     return '<div class="capbox ' + (free <= 0 ? 'full' : free <= 2 ? 'mid' : 'ok') + '"><span>' + label + '</span><b>' + Math.max(0, free) + ' szabad</b><small>' + used + ' foglalt / ' + cap + ' kapacitás' + (pend ? ' · ' + pend + ' függő' : '') + '</small></div>';
   }
   function evRow(e) {
-    return '<div class="evrow ' + e.state + '"' + (Number(e.id) > 0 ? ' data-deal="' + Number(e.id) + '"' : '') + '><div><b>' + esc(e.title || 'Deal #' + e.id) + '</b> ' + stateBadge(e) + '</div><small>' +
+    return '<div class="evrow ' + e.state + '"' + (Number(dealOf(e)) > 0 ? ' data-deal="' + Number(dealOf(e)) + '"' : '') + '><div><b>' + esc(e.title || 'Deal #' + dealOf(e)) + '</b>' + dayTag(e) + ' ' + stateBadge(e) + '</div><small>' +
       [e.time, kindLabel(e), e.loc, e.bg ? 'Háttér: ' + e.bg : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
       (e.state === 'booked' ? prepLine(e) : '') + '</div>';
   }
@@ -637,7 +642,7 @@
         const pd = evs.filter(e => e.state !== 'booked');
         const own = bk.some(e => norm(e.bg) === norm(b.name));
         const cls = bk.length >= b.qty ? 'full' + (own ? '' : ' via') : pd.length || bk.length ? 'pend' : '';
-        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title + (norm(e.bg) !== norm(b.name) ? ' (a pár másik oldala: ' + e.bg + ')' : '')).join('\n');
+        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title + (e.dof ? ' (' + dayTxt(e) + ')' : '') + (norm(e.bg) !== norm(b.name) ? ' (a pár másik oldala: ' + e.bg + ')' : '')).join('\n');
         h += '<td class="' + cls + '" data-date="' + date + '" title="' + esc(tip) + '">' + (bk.length ? (own ? '●' : '◐') : pd.length ? '?' : '') + '</td>';
       }
       h += '</tr>';
@@ -652,7 +657,7 @@
     const missing = c.events.filter(e => e.state === 'booked' && !names.has(norm(e.bg)));
     const box = el('div', { class: 'cpx-card' });
     box.innerHTML = '<h3>Foglalás háttér nélkül / egyedi háttérrel (' + missing.length + ')</h3>' +
-      (missing.length ? missing.map(e => '<div class="mini"><b>' + esc(huDate(e.date)) + '</b>' + esc(e.title) + '<span>' + esc(e.bg || 'nincs kiválasztva') + '</span></div>').join('') : '<p class="cpx-muted">Minden foglaláshoz van háttér választva.</p>');
+      (missing.length ? missing.map(e => '<div class="mini"><b>' + esc(huDate(e.date)) + '</b>' + esc(e.title) + dayTag(e) + '<span>' + esc(e.bg || 'nincs kiválasztva') + '</span></div>').join('') : '<p class="cpx-muted">Minden foglaláshoz van háttér választva.</p>');
     main.appendChild(box);
   }
 
@@ -676,7 +681,7 @@
   const hxLabel = v => (HX.find(o => o[0] === v) || ['', ''])[1];
   const hxOf = e => (C.hxSm && e.hx) ? e.hx : (trk(e).hx || '');
   const HXO = (C.hxSm && C.hxInt) ? HX.filter(o => !/\./.test(o[0])) : HX;  // egész órás Salesmate mezőhöz nincs félóra
-  const trk = e => S.track[e.id] || {};
+  const trk = e => { const t = S.track[e.id] || {}; if (!e.deal || e.deal === e.id) return t; const b = S.track[e.deal] || {}, o = Object.assign({}, t); DEAL_F.forEach(k => { delete o[k]; if (b[k] != null) o[k] = b[k]; }); return o; };
   const who = e => {
     const t = String(e.title || '').replace(/^\s*\[[^\]]*\]\s*/, '').replace(/\s*\|.*$/, '').replace(/[\s,–-]*\d{4}[-.]\s?\d{2}[-.]\s?\d{2}\.?\s*$/, '').trim();
     return t || (e.contact && e.contact.name) || ('Deal #' + e.id);
@@ -723,7 +728,7 @@
     if (!bgOk) miss.push(clash ? 'Háttér-ütközés' : 'Háttér');
     if (!djOk) miss.push('Díjbekérő');
     if (after && !gl) miss.push('Galéria');
-    const pt = S.portal[e.id];
+    const pt = S.portal[dealOf(e)];
     const ad = !pt || pt.done >= pt.total;
     if (!ad && !after) miss.push('Adatlap');
     const preMiss = miss.filter(x => x !== 'Galéria').length;
@@ -790,8 +795,8 @@
       const e = find(tr.dataset.id);
       if (!e) return;
       if (ev.target.closest('[data-note]')) { noteModal(e); return; }
-      if (ev.target.closest('[data-sb]')) { S.sbDeal = e.id; go('sablon'); return; }
-      if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(e.id, who(e) + ' – ' + huDate(e.date), e); return; }
+      if (ev.target.closest('[data-sb]')) { S.sbDeal = dealOf(e); go('sablon'); return; }
+      if (ev.target.closest('[data-portal]')) { if (window.CPPortal) window.CPPortal.open(dealOf(e), who(e) + ' – ' + huDate(e.date), e); return; }
       if (ev.target.closest('[data-pick]')) { bgPicker(e); return; }
       if (!b || b.tagName === 'SELECT') return;
       const f = b.dataset.f, k = chk(e);
@@ -849,7 +854,7 @@
     const sub = [e.time, kindLabel(e)].filter(Boolean).join(' · ');
     return '<tr class="g' + g + ' st-' + k.st + '" data-id="' + esc(e.id) + '">' +
       '<td class="td-d" data-l="Dátum"><b>' + dn + '</b><small>' + HU_DAYS[(d.getDay() + 6) % 7] + (k.dleft >= 0 && k.dleft <= 7 ? ' · ' + (k.dleft === 0 ? 'ma' : k.dleft + ' nap') : '') + '</small></td>' +
-      '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="' + esc(C.sm + e.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(who(e)) + '</a>' +
+      '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="' + esc(C.sm + dealOf(e) + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(who(e)) + '</a>' + dayTag(e) +
       '<button type="button" class="nt ' + (k.t.note ? 'has' : '') + '" data-note title="' + esc(k.t.note || 'Megjegyzés hozzáadása') + '">' + (k.t.note ? '📝' : '+ megj.') + '</button></div><small>' + esc(sub) + (norm(e.stage) === 'szerződés kiküldve' ? ' · <span class="mut">szerződés kiküldve</span>' : '') + '</small>' + (k.t.note ? '<small class="ntx">' + esc(k.t.note) + '</small>' : '') + '</td>' +
       '<td class="td-c" data-l="Szerződés">' + tick('sz', k.sz, k.szAuto ? 'auto' : '', k.szAuto ? 'Salesmate szerint aláírva (' + e.stage + ')' : '') + '</td>' +
       '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + (lzHas('sablon') ? '<button type="button" class="sbgo" data-sb title="Sablon elkészítése a Sablonkészítőben (lyukasztott PNG)">✎ sablon</button>' : '') + '</td>' +
@@ -869,12 +874,12 @@
     toast(dir === 'sign' ? 'Szakaszváltás a Salesmate-ben…' : 'Visszaállítás a Salesmate-ben…');
     try {
       const fd = new FormData();
-      fd.append('action', 'cp_panel_setstage'); fd.append('t', C.t); fd.append('id', e.id); fd.append('dir', dir); fd.append('d', e.date);
+      fd.append('action', 'cp_panel_setstage'); fd.append('t', C.t); fd.append('id', dealOf(e)); fd.append('dir', dir); fd.append('d', e.date);
       const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
       const j = await r.json();
       if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Mentési hiba');
-      eachEv(e.id, x => { x.stage = j.data.stage; });
-      S.track[e.id] = j.data.track || {};
+      Object.keys(S.cache).forEach(mm => S.cache[mm].events.forEach(x => { if (dealOf(x) === dealOf(e)) x.stage = j.data.stage; })); /* v2.9.70: a deal minden napja */
+      S.track[dealOf(e)] = j.data.track || {};
       toast(j.data.changed ? 'Salesmate szakasz: ' + j.data.stage : 'A deal már ebben a szakaszban volt: ' + j.data.stage);
     } catch (x) {
       alert('Nem sikerült: ' + x.message);
@@ -883,21 +888,23 @@
   }
 
   async function setTrack(e, f, v) {
-    const prev = Object.assign({}, trk(e));
+    /* v2.9.70: a dealszintű mezők (szerződés, díjbekérő) a deal kulcsán, a többi a nap kulcsán */
+    const key = DEAL_F.includes(f) ? dealOf(e) : e.id;
+    const prev = Object.assign({}, S.track[key] || {});
     const nx = Object.assign({}, prev);
     if (v === '') delete nx[f]; else nx[f] = v;
-    S.track[e.id] = nx;
+    S.track[key] = nx;
     if (S.trackDraw && S.tab === 'kovetes') S.trackDraw();
     try {
       const fd = new FormData();
-      fd.append('action', 'cp_panel_track'); fd.append('t', C.t); fd.append('id', e.id); fd.append('f', f); fd.append('v', v); fd.append('d', e.date);
+      fd.append('action', 'cp_panel_track'); fd.append('t', C.t); fd.append('id', key); fd.append('f', f); fd.append('v', v); fd.append('d', key === e.id ? e.date : (S.track[key] && S.track[key].d) || e.date);
       const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
       const j = await r.json();
       if (!j.success) throw new Error(j.data && j.data.msg === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : (j.data && j.data.msg) || 'Mentési hiba');
-      S.track[e.id] = j.data.track || {};
-      if (f === 'hx' && C.hxSm) { eachEv(e.id, x => { x.hx = v; }); toast('Hosszabbítás mentve a Salesmate-be: ' + (hxLabel(v) || '–')); }
+      S.track[key] = j.data.track || {};
+      if (f === 'hx' && C.hxSm && key === dealOf(e)) { eachEv(e.id, x => { x.hx = v; }); toast('Hosszabbítás mentve a Salesmate-be: ' + (hxLabel(v) || '–')); }
     } catch (x) {
-      S.track[e.id] = prev;
+      S.track[key] = prev;
       alert('Nem sikerült menteni: ' + x.message);
     }
     if (S.trackDraw && S.tab === 'kovetes') S.trackDraw();
@@ -925,7 +932,7 @@
     const web = bs.list.filter(b => imgOf[norm(b.name)]), rest = bs.list.filter(b => !imgOf[norm(b.name)]);
     const dlg = document.getElementById('cpx-modal');
     dlg.innerHTML = '<div class="cpx-sheet wide"><div class="cpx-sheet-h"><h3>Háttér – ' + esc(who(e)) + '</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
-      '<p class="cpx-muted">' + esc(huDate(e.date)) + ' · jelenleg: <b>' + esc(e.bg || 'nincs megadva') + '</b><br>A választás azonnal mentődik a Salesmate dealbe. A szürke (foglalt) háttereket erre a napra már másik szerződés kérte.</p>' +
+      '<p class="cpx-muted">' + esc(huDate(e.date)) + (e.dof ? ' · ' + esc(dayTxt(e)) : '') + ' · jelenleg: <b>' + esc(e.bg || 'nincs megadva') + '</b><br>' + (e.dof ? 'Többnapos rendezvény: a választás csak erre a napra szól, a panelben marad (a Salesmate-be nem kerül).' : 'A választás azonnal mentődik a Salesmate dealbe.') + ' A szürke (foglalt) háttereket erre a napra már másik szerződés kérte.</p>' +
       '<input type="search" id="pk-q" class="pk-q" placeholder="Keresés a hátterek között…">' +
       '<div class="pgrid" id="pk-grid">' + web.map(card).join('') + '</div>' +
       (rest.length ? '<h4>További hátterek (a weboldalon nem szerepelnek)</h4><div class="pgrid small">' + rest.map(card).join('') + '</div>' : '') +
@@ -935,7 +942,7 @@
     dlg.hidden = false;
     const msg = dlg.querySelector('#pk-msg');
     const save = async (name, force) => {
-      msg.textContent = 'Mentés a Salesmate-be…'; msg.className = 'cpx-muted';
+      msg.textContent = e.dof ? 'Mentés…' : 'Mentés a Salesmate-be…'; msg.className = 'cpx-muted';
       dlg.querySelectorAll('.pcard,.pk-other button').forEach(b => { b.disabled = true; });
       try {
         const fd = new FormData();
@@ -953,7 +960,7 @@
         }
         Object.keys(S.cache).forEach(mm => S.cache[mm].events.forEach(x => { if (x.id === e.id) x.bg = j.data.bg; }));
         closeModal();
-        toast('Háttér mentve a Salesmate-be: ' + (j.data.bg || '–'));
+        toast((j.data.day ? 'Háttér mentve erre a napra: ' : 'Háttér mentve a Salesmate-be: ') + (j.data.bg || '–'));
         if (S.trackDraw && S.tab === 'kovetes') S.trackDraw();
       } catch (x) {
         msg.textContent = 'Hiba: ' + x.message; msg.className = 'err';
@@ -1001,7 +1008,7 @@
     trackEvents().forEach(e => {
       const k = chk(e, clashes);
       const dj = (DJ.find(o => o[0] === k.dj) || ['', ''])[1].replace('✓ ', '');
-      lines.push([e.date.replace(/-/g, '.') + '.', e.time, who(e), kindLabel(e), k.sz ? 'igen' : 'nem', k.tp ? 'igen' : 'nem', e.bg, k.bgOk ? 'igen' : 'nem', k.dj ? dj : (k.paidAuto ? 'utalás bejött' : ''), k.gl ? 'igen' : (k.after ? 'nem' : ''), hxOf(e) ? hxLabel(hxOf(e)) : '', k.st === 'done' ? 'Kész' : 'Hiányzik: ' + k.miss.join(', '), k.t.note || '', C.sm + e.id + '/detail'].map(q).join(';'));
+      lines.push([e.date.replace(/-/g, '.') + '.', e.time, who(e) + (e.dof ? ' (' + dayTxt(e) + ')' : ''), kindLabel(e), k.sz ? 'igen' : 'nem', k.tp ? 'igen' : 'nem', e.bg, k.bgOk ? 'igen' : 'nem', k.dj ? dj : (k.paidAuto ? 'utalás bejött' : ''), k.gl ? 'igen' : (k.after ? 'nem' : ''), hxOf(e) ? hxLabel(hxOf(e)) : '', k.st === 'done' ? 'Kész' : 'Hiányzik: ' + k.miss.join(', '), k.t.note || '', C.sm + dealOf(e) + '/detail'].map(q).join(';'));
     });
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = el('a', { href: URL.createObjectURL(blob), download: 'rendezveny-kovetes-' + S.month + '.csv' });
@@ -1026,9 +1033,9 @@
         if (!j.success) return;
         const tr = j.data.track || {};
         let changed = false;
-        c.events.forEach(e => { const nv = tr[e.id] || {}; if (JSON.stringify(nv) !== JSON.stringify(S.track[e.id] || {})) { S.track[e.id] = nv; changed = true; } });
+        c.events.forEach(e => [e.id].concat(e.deal && e.deal !== e.id ? [e.deal] : []).forEach(k => { const nv = tr[k] || {}; if (JSON.stringify(nv) !== JSON.stringify(S.track[k] || {})) { S.track[k] = nv; changed = true; } }));
         const pt = j.data.portal || {};
-        c.events.forEach(e => { const nv = pt[e.id]; if (JSON.stringify(nv || null) !== JSON.stringify(S.portal[e.id] || null)) { if (nv) S.portal[e.id] = nv; else delete S.portal[e.id]; changed = true; } });
+        c.events.forEach(e => { const k = dealOf(e), nv = pt[k]; if (JSON.stringify(nv || null) !== JSON.stringify(S.portal[k] || null)) { if (nv) S.portal[k] = nv; else delete S.portal[k]; changed = true; } });
         if (changed && S.trackDraw) S.trackDraw();
       } catch (x) { /* csendben */ }
     }, 60000);
@@ -1237,12 +1244,12 @@
       ['Háttér', e.bg],
       ['Helyszín', e.loc ? esc(e.loc) + (maps ? ' <a href="' + maps + '" target="_blank" rel="noopener">térkép ↗</a>' : '') : '', true],
       ['Kapcsolattartó', e.contact ? [e.contact.name, tel ? '<a href="tel:' + esc(tel) + '">' + esc(e.contact.phone) + '</a>' : '', e.contact.email].filter(Boolean).map((x, i) => i === 1 ? x : esc(x)).join(' · ') : '', true]
-    ].concat(PORTAL ? window.CPPortal.info(S.portal[e.id]) : []).concat((e.extra || []).map(x => [x[0], x[1]]));
-    return '<article class="wcard ' + e.state + '"><header><b>' + esc(e.title || ('Deal #' + e.id)) + '</b>' + stateBadge(e) +
-      '<a class="smlink noprint" href="' + esc(C.sm + e.id + '/detail') + '" target="_blank" rel="noopener">Salesmate ↗</a></header>' +
+    ].concat(PORTAL ? window.CPPortal.info(S.portal[dealOf(e)]) : []).concat((e.extra || []).map(x => [x[0], x[1]]));
+    return '<article class="wcard ' + e.state + '"><header><b>' + esc(e.title || ('Deal #' + dealOf(e))) + '</b>' + dayTag(e) + stateBadge(e) +
+      '<a class="smlink noprint" href="' + esc(C.sm + dealOf(e) + '/detail') + '" target="_blank" rel="noopener">Salesmate ↗</a></header>' +
       (e.state === 'booked' ? prepLine(e) : '') +
       (trk(e).note ? '<p class="note">📝 ' + esc(trk(e).note) + '</p>' : '') +
-      (PORTAL ? window.CPPortal.flags(S.portal[e.id], 'munkalap') : '') +
+      (PORTAL ? window.CPPortal.flags(S.portal[dealOf(e)], 'munkalap') : '') +
       '<dl>' + rows.filter(r => r[1]).map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + (r[2] ? r[1] : esc(r[1])) + '</dd>').join('') + '</dl>' +
       (e.note ? '<p class="note">' + esc(e.note) + '</p>' : '') + '</article>';
   }
@@ -1397,7 +1404,7 @@ function elR0Kez(d, row, cal) {
 		if (row.k) return { id: row.k, unk: '', src: row.im ? '' : 'kézi' };
 		if (cal.k0) return { id: cal.k0, unk: '', src: 'naptár' };
 	}
-	if (!d.manual && ELC.gkWrite) {
+	if (!d.manual && ELC.gkWrite && !d.dof) { /* v2.9.70: többnapos: a napi kezelő a panelben */
 		if (row.kf && norm(row.ksm) === norm(d.gk)) return { id: row.k || '', unk: '' };
 		const m = kezBySm(d.gk);
 		if (m) return { id: m.id, unk: '' };
@@ -1720,8 +1727,8 @@ function elRowHtml(L, g, locked) {
 	const locFromCal = L.useCal && locS !== (d.loc || '');
 	let who;
 	if (first) {
-		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="' + esc(C.sm + d.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(d.who) + '</a>') + '</div>' +
-			'<small>' + esc(sub) + '</small>' + (PORTAL && !d.manual ? window.CPPortal.flags(((EL.cache[S.month] || {}).portal || {})[d.id], 'elszamolas') : '') + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
+		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="' + esc(C.sm + dealOf(d) + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(d.who) + '</a>' + dayTag(d)) + '</div>' +
+			'<small>' + esc(sub) + '</small>' + (PORTAL && !d.manual ? window.CPPortal.flags(((EL.cache[S.month] || {}).portal || {})[dealOf(d)], 'elszamolas') : '') + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
 			'<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button><button type="button" class="el-a" data-act="link" title="Kezelői adatlap linkjének másolása">Link ⧉</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="add" title="Még egy kezelő ehhez a rendezvényhez">+ kezelő</button>' + (((EL.cache[S.month] || {}).store || {})[d.id] && EL.cache[S.month].store[d.id].hid ? '<button type="button" class="el-a" data-act="unhide" title="Visszakerül az elszámolásba">↺ visszaállítás</button>' : '<button type="button" class="el-a" data-act="hide" title="Kivétel az elszámolásból (pl. ha nem a mi kezelőnk dolgozott rajta) – a dealt nem érinti">× sor törlése</button>') +
 			(d.manual ? '<button type="button" class="el-a" data-act="medit">✎ tétel</button><button type="button" class="el-a" data-act="mdel">törlés</button>' : '')) + '</div>';
 	} else {
@@ -1796,7 +1803,7 @@ async function elSave(L, fields, quiet) {
 	const d = L.d;
 	const body = { action: 'cp_el_save', id: d.id, i: L.row.i, d: d.date, fields: JSON.stringify(fields) };
 	if (fields.h !== undefined && L.row.i === 'r0') body.smv = d.hours == null ? '' : d.hours;
-	const slow = (fields.k !== undefined || fields.h !== undefined) && L.row.i === 'r0' && !d.manual;
+	const slow = (fields.k !== undefined || fields.h !== undefined) && L.row.i === 'r0' && !d.manual && !d.dof; /* v2.9.70: többnapos: csak a panelben */
 	if (slow) toast('Mentés a Salesmate-be…');
 	try {
 		const res = await elPost(body);
@@ -2280,7 +2287,7 @@ function elCsv() {
 	const lines = [['Dátum', 'Kezelő', 'Ügyfél', 'Helyszín', 'Szolgáltatás', 'Óraszám', 'Óradíj', 'Raktár pakolás', 'Hosszabbítás (óra)', 'Munkadíj', 'Település / km', 'Kiszállási díj', 'Parkolás', 'Jatt', 'Korrekció', 'Összesen', 'Papír fogyasztás', 'Nyomtató típusa', 'Ügyfél elégedettség', 'Szolgáltatás (eszköz)', 'Gép működése', 'Gép megjegyzés', 'Megjegyzés', 'Ellenőrizve', 'Fizetve', 'Ki fizette', 'Kifizetett összeg', 'Salesmate', 'Fizetés módja'].map(q).join(';')];
 	elLines(S.month).forEach(L => {
 		const r = L.row;
-		lines.push([L.d.date.replace(/-/g, '.') + '.', elKezName(L), L.d.who, L.d.loc, L.d.svc, String(L.h).replace('.', ','), elNum(L.R.rate), L.pack, String(L.hx || '').replace('.', ','), Math.round(L.munka), L.kiszTxt, Math.round(L.kisz), L.pk || '', L.jt || '', L.corr || '', Math.round(L.tot), r.pa || '', r.pt || '', r.sa || '', r.sv || '', r.gm || '', r.gmn || '', [r.no, r.cn].filter(Boolean).join(' | '), L.ok ? 'igen' : '', r.pd || '', r.pb || '', r.pv || '', L.d.manual ? 'kézi tétel' : C.sm + L.d.id + '/detail', r.pm === 'keszpenz' ? 'készpénz' : r.pm === 'atutalas' ? 'átutalás' : ''].map(q).join(';'));
+		lines.push([L.d.date.replace(/-/g, '.') + '.', elKezName(L), L.d.who + (L.d.dof ? ' (' + dayTxt(L.d) + ')' : ''), L.d.loc, L.d.svc, String(L.h).replace('.', ','), elNum(L.R.rate), L.pack, String(L.hx || '').replace('.', ','), Math.round(L.munka), L.kiszTxt, Math.round(L.kisz), L.pk || '', L.jt || '', L.corr || '', Math.round(L.tot), r.pa || '', r.pt || '', r.sa || '', r.sv || '', r.gm || '', r.gmn || '', [r.no, r.cn].filter(Boolean).join(' | '), L.ok ? 'igen' : '', r.pd || '', r.pb || '', r.pv || '', L.d.manual ? 'kézi tétel' : C.sm + dealOf(L.d) + '/detail', r.pm === 'keszpenz' ? 'készpénz' : r.pm === 'atutalas' ? 'átutalás' : ''].map(q).join(';'));
 	});
 	const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
 	const a = el('a', { href: URL.createObjectURL(blob), download: 'kezeloi-elszamolas-' + S.month + '.csv' });

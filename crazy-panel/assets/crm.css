@@ -697,3 +697,35 @@ a.d3-who:hover{background:#F6F3EE}
   .d3-tgs{flex-basis:100%}
   .d3-tmx{-webkit-line-clamp:4;line-clamp:4}
 }
+/* v2.9.70: többnapos rendezvény – napok a Deal-adatlapon (a d3-trv kártya nyelvén; mozgás nincs, munkafelület) */
+.d3-days{margin-top:10px;border:1px solid #E6E3DE;background:#FAF8F5;border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:13px;min-width:0}
+.d3-dayh{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.d3-dayh>span{min-width:0;overflow-wrap:anywhere;color:var(--mu)}.d3-dayh b{color:var(--ink)}
+.d3-dayadd{flex:none;height:28px;padding:0 10px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;color:var(--ink);font:600 12px Inter,sans-serif;cursor:pointer}
+.d3-dayadd:hover{border-color:var(--o)}.d3-dayadd:focus-visible,.d3-dayt:focus-visible,.d3-daydel:focus-visible{outline:2px solid var(--o);outline-offset:2px}
+.d3-dayl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:420px;overflow:auto;overscroll-behavior:contain}
+.d3-day{background:#fff;border:1px solid #E6E3DE;border-radius:9px;min-width:0}
+.d3-day.on{border-color:#D9C9B4}
+.d3-dayr{display:flex;align-items:flex-start;min-width:0}
+.d3-dayt{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:6px 8px;border:0;background:none;text-align:left;font:inherit;color:var(--ink);cursor:pointer;border-radius:9px}
+.d3-dayt b{font-weight:600;font-variant-numeric:tabular-nums}
+.d3-dayt small{color:#656973;font-size:11.5px}
+.d3-days-s{flex-basis:100%;min-width:0;font-size:12px;color:#656973;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d3-days-s i{font-style:normal;margin:0 5px;color:#B5AEA3}
+.d3-days-s .ov{color:var(--ink);font-weight:600}
+.d3-daydel{flex:none;width:32px;height:32px;margin:2px;border:0;background:none;color:#8A8F99;font-size:18px;line-height:1;border-radius:8px;cursor:pointer}
+.d3-daydel:hover{background:var(--fullb);color:var(--full)}
+.d3-dayf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;padding:2px 8px 8px}
+.d3-dayf label,.d3-dayform label{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--mu);min-width:0}
+.d3-dayf label.w{grid-column:1/-1}
+.d3-dayf input,.d3-dayform input{height:30px;border:1px solid #DDD8D0;border-radius:8px;padding:0 8px;font:500 13px Inter,sans-serif;background:#fff;color:var(--ink);min-width:0;width:100%;box-sizing:border-box}
+.d3-dayf input::placeholder{color:#8A8F99}
+.d3-dayf input:focus,.d3-dayform input:focus{outline:2px solid var(--o);outline-offset:0;border-color:transparent}
+.d3-dayform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;padding-top:6px;border-top:1px dashed #E6E3DE}
+.d3-dayform small{font-size:11px}
+.d3-dayb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1}
+.d3-days .cpx-btn.sm{height:30px;font-size:12.5px;padding:0 12px}
+.d3-daysave{padding-top:6px;border-top:1px dashed #E6E3DE}.d3-daysave small{color:var(--mu);font-size:11.5px}
+.d3-daymsg{margin:0;font-size:12px;color:var(--mu)}.d3-daymsg.err{color:var(--full)}
+@media (max-width:560px){.d3-dayf{grid-template-columns:repeat(2,minmax(0,1fr))}.d3-dayf label.w{grid-column:1/-1}.d3-dayform{grid-template-columns:1fr}}
+.d3-dayhint{grid-column:1/-1;color:#656973;font-size:11.5px}

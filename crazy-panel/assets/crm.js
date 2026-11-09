@@ -1017,7 +1017,7 @@
 		template_paid: 'Fizetős template', melange_pkg: 'Melange csomag', pkg_v2: 'Választott csomag', pkg_fix: 'Választott csomag 2', template_link: 'Sablon kép',
 		portal_link: 'Ügyfélportál', guests: 'Tervezett létszám', km_fee: 'Kiszállási díj', hours: 'Rendelkezésre állás (óra)', extension: 'Hosszabbítás',
 		coupon: 'Kuponkód', services_more: 'További szolgáltatások', extras: 'Választott extra', services_ec: 'EventCrazy szolgáltatás(ok)', services_cp: 'Választott szolgáltatás',
-		package: 'Csomag'
+		package: 'Csomag', event_days: 'Rendezvénynapok' /* v2.9.70 */
 	};
 	function fmtVal(k, v, d) {
 		if (v == null || v === '') return '';
@@ -1433,6 +1433,116 @@
 		if (b) b.addEventListener('click', () => save(fee, b));
 		wire();
 	}
+
+	/* ------------------------------------------------------------ v2.9.70: többnapos rendezvény – napok a Deal-adatlapon
+	 * A napok listája csak a panelé (a Salesmate-be nem ír). Az 1. nap a deal „Rendezvény dátuma” – itt nem mozgatható,
+	 * nem törölhető. A napi mezők üresen a deal értékét öröklik (a mezőben halványan látszik). Mentés: cp_crm_days_save. */
+	const MD_MAX = 62;
+	const ymdDiff = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 864e5);
+	/* a PHP cp_mday_label() párja: „dec. 3., 5., 12. (3 nap)”, „dec. 14–16. (3 nap)”, „dec. 30. – jan. 1. (3 nap)” */
+	function mdayLabel(list) {
+		const days = Array.from(new Set((list || []).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)))).sort();
+		if (!days.length) return '';
+		const multiY = days[0].slice(0, 4) !== days[days.length - 1].slice(0, 4);
+		const runs = []; let s = days[0], p = days[0];
+		for (let i = 1; i <= days.length; i++) { const d = days[i]; if (d && ymdDiff(p, d) === 1) { p = d; continue; } runs.push([s, p]); if (d) { s = d; p = d; } }
+		let lastY = '', lastM = '';
+		const fmt = (d, forceM) => { const y = d.slice(0, 4), m = d.slice(0, 7); let t = ''; if (multiY && y !== lastY) t += y + '. '; if (forceM || m !== lastM) t += HU_MS[+d.slice(5, 7) - 1] + ' '; lastY = y; lastM = m; return t + (+d.slice(8, 10)); };
+		const out = runs.map(r => {
+			if (r[0] === r[1]) return fmt(r[0], false) + '.';
+			const a = fmt(r[0], false);
+			if (r[0].slice(0, 7) === r[1].slice(0, 7)) { lastY = r[1].slice(0, 4); return a + '–' + (+r[1].slice(8, 10)) + '.'; }
+			return a + '. – ' + fmt(r[1], true) + '.';
+		});
+		return out.join(', ') + ' (' + days.length + ' nap)';
+	}
+	const MD_F = [['start_t', 'Kezdés', 'time'], ['hours', 'Üzemóra', 'num'], ['guests', 'Létszám', 'int'], ['venue', 'Helyszín', 'text'], ['bg', 'Háttér', 'text'], ['note', 'Megjegyzés', 'text']];
+	function daysCard(box, d, reload) {
+		const base = { start_t: d.start_at ? String(d.start_at).slice(11, 16) : '', hours: d.hours != null ? String(d.hours) : '', guests: d.guests != null ? String(d.guests) : '', venue: d.venue || '', bg: d.background || '', note: d.note || '' };
+		const blank = day => ({ id: 0, day: day, start_t: '', hours: '', guests: '', venue: '', bg: '', note: '' });
+		const norm0 = x => Object.assign(blank(x.day), x, { hours: x.hours == null ? '' : String(x.hours), guests: x.guests == null ? '' : String(x.guests) });
+		const orig = (d.days || []).map(norm0);
+		let L = orig.map(x => Object.assign({}, x));
+		let open = new Set(), adding = false, busy = false, msg = '';
+		const dirty = () => JSON.stringify(L) !== JSON.stringify(orig);
+		const shortDay = s => { const p = s.split('-').map(Number), x = new Date(p[0], p[1] - 1, p[2]); return HU_MS[p[1] - 1] + ' ' + p[2] + '. (' + DOW[x.getDay()] + ')' + (p[0] !== new Date().getFullYear() ? ' ' + p[0] : ''); };
+		const ovr = x => MD_F.filter(f => String(x[f[0]] || '') !== '');
+		const sumLine = x => MD_F.map(f => { const v = String(x[f[0]] || ''), b = base[f[0]]; const t = v !== '' ? v : b; if (!t) return ''; const show = f[0] === 'hours' ? t + ' óra' : f[0] === 'guests' ? t + ' fő' : t; return '<span class="' + (v !== '' ? 'ov' : 'inh') + '"' + (v !== '' ? ' title="Erre a napra megadva"' : ' title="A deal értéke"') + '>' + esc(show) + '</span>'; }).filter(Boolean).join('<i>·</i>');
+		const rowHead = (x, i, n) => { const ov = ovr(x).length; return '<b>' + esc(shortDay(x.day)) + '</b><small>' + (i + 1) + '/' + n + '. nap' + (i === 0 ? ' · a deal dátuma' : '') + (ov ? ' · ' + ov + ' saját adat' : '') + '</small><span class="d3-days-s">' + sumLine(x) + '</span>'; };
+		const foot = () => (dirty() ? '<div class="d3-dayb d3-daysave"><button type="button" class="cpx-btn sm" data-dsave' + (busy ? ' disabled' : '') + '>' + (busy ? 'Mentés…' : 'Napok mentése') + '</button><button type="button" class="cpx-btn sm ghost" data-drev' + (busy ? ' disabled' : '') + '>Elvetés</button><small>Csak a panelben – a Salesmate-be nem kerül.</small></div>' : '') + (msg ? '<p class="d3-daymsg err" role="alert">' + esc(msg) + '</p>' : '');
+		function draw() {
+			const n = L.length;
+			let h = '';
+			if (n < 2) {
+				h = '<div class="d3-dayh"><span>Egynapos rendezvény</span>' + (adding ? '' : '<button type="button" class="d3-dayadd" data-dadd>+ nap</button>') + '</div>';
+				if (n === 1) h += '<p class="d3-daymsg">Egy nap maradt – mentéskor a deal újra egynapos lesz (a deal mezői érvényesek).</p>';
+			} else {
+				h = '<div class="d3-dayh"><span><b>' + esc(mdayLabel(L.map(x => x.day)).replace(/ \(\d+ nap\)$/, '')) + '</b> (' + n + ' nap)</span>' + (adding || n >= MD_MAX ? '' : '<button type="button" class="d3-dayadd" data-dadd>+ nap</button>') + '</div><ol class="d3-dayl">' +
+					L.map((x, i) => {
+						const o = open.has(i), first = i === 0, ov = ovr(x).length;
+						return '<li class="d3-day' + (o ? ' on' : '') + '" data-di="' + i + '"><div class="d3-dayr"><button type="button" class="d3-dayt" data-dtog aria-expanded="' + (o ? 'true' : 'false') + '">' + rowHead(x, i, n) + '</button>' +
+							(first ? '' : '<button type="button" class="d3-daydel" data-ddel aria-label="' + esc(shortDay(x.day)) + ' törlése" title="Nap törlése">×</button>') + '</div>' +
+							(o ? '<div class="d3-dayf">' + (first ? '' : '<label class="w">Dátum<input type="date" data-dk="day" value="' + esc(x.day) + '" min="' + esc(d.event_d) + '"></label>') +
+								MD_F.map(f => '<label' + (f[0] === 'venue' || f[0] === 'note' ? ' class="w"' : '') + '>' + f[1] + '<input data-dk="' + f[0] + '" ' + (f[2] === 'time' ? 'type="time"' : f[2] === 'text' ? 'type="text" maxlength="' + (f[0] === 'bg' ? 80 : f[0] === 'venue' ? 255 : 1000) + '"' : 'type="number" inputmode="' + (f[2] === 'num' ? 'decimal' : 'numeric') + '" min="' + (f[2] === 'num' ? '0.5' : '1') + '" step="' + (f[2] === 'num' ? '0.5' : '1') + '"') + ' value="' + esc(x[f[0]]) + '" placeholder="' + esc(base[f[0]] ? String(base[f[0]]).slice(0, 60) : '–') + '"></label>').join('') + '<small class="d3-dayhint">Üres mező = a deal értéke (halványan látszik).</small></div>' : '') + '</li>';
+					}).join('') + '</ol>';
+			}
+			if (adding) h += '<form class="d3-dayform" data-dform novalidate><label>Nap<input type="date" data-a1 required min="' + esc(d.event_d) + '"></label><label>Utolsó nap <small>(tartományhoz)</small><input type="date" data-a2 min="' + esc(d.event_d) + '"></label><div class="d3-dayb"><button type="submit" class="cpx-btn sm">Hozzáadás</button><button type="button" class="cpx-btn sm ghost" data-dcan>Mégse</button></div></form>';
+			box.innerHTML = h + '<div data-dfoot>' + foot() + '</div>';
+			const a1 = box.querySelector('[data-a1]');
+			if (a1) a1.focus();
+		}
+		function addDays(a, b) {
+			msg = '';
+			if (!/^\d{4}-\d{2}-\d{2}$/.test(a)) { msg = 'Válassz napot.'; return false; }
+			if (b && !/^\d{4}-\d{2}-\d{2}$/.test(b)) b = '';
+			if (b && b < a) { const t = a; a = b; b = t; }
+			if (a < d.event_d) { msg = 'Az 1. nap a deal „Rendezvény dátuma” (' + huD(d.event_d) + '). Korábbi napot ott állíts be.'; return false; }
+			if (!L.length) L = [blank(d.event_d)];
+			const have = new Set(L.map(x => x.day)), add = [];
+			for (let x = a, k = 0; x <= (b || a) && k < 400; x = addDays1(x), k++) if (!have.has(x)) add.push(x);
+			if (!add.length) { msg = 'Ez a nap már szerepel.'; return false; }
+			if (L.length + add.length > MD_MAX) { msg = 'Legfeljebb ' + MD_MAX + ' nap adható meg (most ' + (L.length + add.length) + ' lenne).'; return false; }
+			L = L.concat(add.map(blank)).sort((x, y) => x.day < y.day ? -1 : 1);
+			open = new Set();
+			return true;
+		}
+		const addDays1 = x => { const p = x.split('-').map(Number), t = new Date(Date.UTC(p[0], p[1] - 1, p[2] + 1)); return t.getUTCFullYear() + '-' + pad(t.getUTCMonth() + 1) + '-' + pad(t.getUTCDate()); };
+		box.addEventListener('click', async ev => {
+			const t = ev.target;
+			if (t.closest('[data-dadd]')) { adding = true; msg = ''; draw(); return; }
+			if (t.closest('[data-dcan]')) { adding = false; msg = ''; draw(); return; }
+			if (t.closest('[data-drev]')) { L = orig.map(x => Object.assign({}, x)); adding = false; open = new Set(); msg = ''; draw(); return; }
+			const li = t.closest('[data-di]');
+			if (li && t.closest('[data-dtog]')) { const i = +li.dataset.di; if (open.has(i)) open.delete(i); else open.add(i); draw(); const f = box.querySelector('[data-di="' + i + '"] [data-dk]'); if (f && open.has(i)) f.focus(); return; }
+			if (li && t.closest('[data-ddel]')) { const i = +li.dataset.di; if (i === 0) return; L.splice(i, 1); open = new Set(); msg = ''; draw(); return; }
+			if (t.closest('[data-dsave]')) {
+				busy = true; msg = ''; draw();
+				try {
+					const payload = L.length >= 2 ? L.map(x => ({ id: x.id || 0, day: x.day, start_t: x.start_t, hours: x.hours, guests: x.guests, venue: x.venue, bg: x.bg, note: x.note })) : [];
+					const r = await post('cp_crm_days_save', { id: d.id, days: JSON.stringify(payload) });
+					toast(r.label ? 'Napok mentve: ' + r.label : 'A deal újra egynapos.');
+					reload();
+				} catch (e) { busy = false; msg = e.message; draw(); }
+			}
+		});
+		box.addEventListener('submit', ev => { const f = ev.target.closest('[data-dform]'); if (!f) return; ev.preventDefault(); if (addDays(f.querySelector('[data-a1]').value, f.querySelector('[data-a2]').value)) adding = false; draw(); });
+		box.addEventListener('change', ev => {
+			const inp = ev.target.closest('[data-dk]'), li = ev.target.closest('[data-di]');
+			if (!inp || !li) return;
+			const i = +li.dataset.di, k = inp.dataset.dk;
+			let v = inp.value.trim();
+			if (k === 'day') {
+				if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v <= d.event_d) { msg = 'A ' + (i + 1) + '. nap a deal dátuma (' + huD(d.event_d) + ') utáni nap lehet.'; draw(); return; }
+				if (L.some((x, j) => j !== i && x.day === v)) { msg = 'Ez a nap már szerepel.'; draw(); return; }
+				L[i].day = v; L.sort((x, y) => x.day < y.day ? -1 : 1); open = new Set([L.findIndex(x => x.day === v)]); msg = ''; draw(); return;
+			}
+			/* mezőváltozásnál nincs teljes újrarajzolás (a fókusz a következő mezőn marad): csak a sor feje és a mentés-sáv */
+			L[i][k] = v; msg = '';
+			const hd = li.querySelector('[data-dtog]'); if (hd) hd.innerHTML = rowHead(L[i], i, L.length);
+			const ft = box.querySelector('[data-dfoot]'); if (ft) ft.innerHTML = foot();
+		});
+		draw();
+	}
 	async function openDeal(id, back, fromHist) {
 		if (!fromHist) pushDeal(id);
 		if (S.pend && S.pend.fresh && S.pend.fresh[id]) { const lid = S.pend.fresh[id]; delete S.pend.fresh[id]; post('cp_lead_set', { id: lid, st: 'seen' }).catch(() => {}); if (S.mode === 'board' && S.board) setTimeout(redrawBoard, 0); }
@@ -1473,8 +1583,8 @@
 			'<div class="d3">' +
 			/* bal: összefoglaló, kontakt, cég, mezők */
 			'<aside class="d3-l"><section class="d3-c d3-sum">' + retBadge(otherCt.concat(otherCo), c) + '<div class="d3-val"' + ikA('value', d) + '>' + (d.est && !(d.value > 0) ? '<span class="crm-est d3-est" title="' + esc('Becsült ár ' + estSrc(d.est) + (d.est.a ? ' (hiányos adatokból)' : '') + ':\n' + d.est.l.join('\n')) + '">~' + esc(money(d.est.p, 'HUF')) + (d.est.a ? '<sup>?</sup>' : '') + '</span><small class="d3-estl">becsült ár' + (d.est.v === 'ec' ? ' (nettó, + ÁFA)' : (d.est.v === 'p' || d.est.v === 'pb') ? ' (bruttó – magánszemély, Crazyphoto-árak)' : '') + ' – még nincs ajánlat</small>' : esc(money(d.value, d.currency))) + '</div>' + (d.cap ? '<div class="d3-cap">' + capHtml(d.cap, true) + '<small>' + esc('a rendezvény napján (' + d.cap.cs + ' szelfigép, ' + d.cap.cp + ' spinner)') + '</small></div>' : '') + (d.est && !(d.value > 0) && W && c && c.email && window.CPMail && window.CPMail.compose ? '<button type="button" class="cpx-btn d3-offer" data-offer' + (window.CPMail.canSend && !window.CPMail.canSend() ? ' disabled title="A levélküldés a panelből neked nincs bekapcsolva (Beállítások → Levelezés)"' : '') + '>Ajánlat küldése ezzel az árral</button>' : '') + '<dl class="crm-dl">' +
-				(d.event_d ? '<dt>Rendezvény</dt><dd' + ikA('event_d', d) + '>' + esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '') + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd' + ikA('venue', d) + '>' + esc(d.venue) + '</dd>' : '') +
-				'<dt>Felelős</dt><dd' + ikA('owner_id', d) + '>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd' + ikA('source', d) + '>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd' + ikA('service', d) + '>' + esc(d.service) + '</dd>' : '') + '</dl>' + (d.venue && !d.deleted_at ? '<div class="d3-trv" data-trv><small class="cpx-muted">Kiszállási díj számolása…</small></div>' : '') + '</section>' +
+				(d.event_d ? '<dt>Rendezvény</dt><dd' + ikA('event_d', d) + '>' + (d.days && d.days.length > 1 ? esc(d.days_label || mdayLabel(d.days.map(x => x.day))) /* v2.9.70 */ : esc(huD(d.event_d)) + (d.event_end_d ? ' – ' + esc(huD(d.event_end_d)) : '')) + '</dd>' : '') + (d.venue ? '<dt>Helyszín</dt><dd' + ikA('venue', d) + '>' + esc(d.venue) + '</dd>' : '') +
+				'<dt>Felelős</dt><dd' + ikA('owner_id', d) + '>' + esc(d.owner || '–') + '</dd><dt>Szakasz</dt><dd>' + esc(d.stage) + '</dd>' + (d.source ? '<dt>Forrás</dt><dd' + ikA('source', d) + '>' + esc(d.source) + '</dd>' : '') + (d.service ? '<dt>Szolgáltatás</dt><dd' + ikA('service', d) + '>' + esc(d.service) + '</dd>' : '') + '</dl>' + (d.event_d && !d.deleted_at ? '<div class="d3-days" data-days></div>' : '') + (d.venue && !d.deleted_at ? '<div class="d3-trv" data-trv><small class="cpx-muted">Kiszállási díj számolása…</small></div>' : '') + '</section>' +
 			'<section class="d3-c"><h4>Kontakt</h4>' + (c ? '<a href="#" class="d3-who" data-ct="' + c.id + '"><span class="d3-av" style="background:' + avColor(c.id) + '">' + esc(initials(c.name)) + '</span><span><b>' + esc(c.name || c.email) + '</b><small>' + (otherCt.length ? (otherCt.length + 1) + ' deal · ' + (x.ct_stats ? x.ct_stats.won : 0) + ' megnyert' : 'első deal') + '</small></span></a><dl class="crm-dl">' +
 				(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a></dd>' : '') +
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
@@ -1531,6 +1641,9 @@
 		/* v2.5: kiszállási díj a helyszínből (Crazyphoto-árkalkulátor szabályai) */
 		const trv = sh.querySelector('[data-trv]');
 		if (trv) trvCard(trv, d, () => openDeal(id, back));
+		/* v2.9.70: többnapos rendezvény – napok */
+		const dys = sh.querySelector('[data-days]');
+		if (dys) daysCard(dys, d, () => openDeal(id, back));
 		/* v1.96: cégjavaslat a domainből / aláírásból / weboldalból – csak jóváhagyás után kerül a Salesmate-be */
 		const cos = sh.querySelector('[data-cos]');
 		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
