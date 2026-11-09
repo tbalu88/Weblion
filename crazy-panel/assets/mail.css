@@ -92,6 +92,10 @@
 .ml-dp-l button:hover{background:#F6F3EE}
 .ml-dp-l small{color:var(--mu);font-size:12px}
 .ml-dp-n{padding:10px;color:var(--mu);font-size:13px}
+.ml-dp-h{padding:6px 10px 4px;font:700 11px/1.3 Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}
+.ml-dp-l small.ml-dp-why{color:#2F5BD8;font-size:11.5px;overflow-wrap:anywhere}
+.ml-dp-st{font:600 11px Inter,sans-serif;color:var(--mu);background:#F1EDE7;border-radius:999px;padding:1px 7px;margin-left:4px;vertical-align:1px}
+.ml-dp-l b{overflow-wrap:anywhere}
 /* előnézet */
 .ml-prev{margin-top:16px;border:1.5px dashed #E1D3C4;border-radius:14px;padding:12px 16px;background:#FFFDFB}
 .ml-prev-h{display:flex;gap:10px;align-items:baseline;margin-bottom:8px}

@@ -299,6 +299,17 @@ function cp_imp_pick_deal($email, $at) {
 	global $wpdb;
 	return (int) $wpdb->get_var($wpdb->prepare('SELECT d.id FROM ' . cp_crm_t('deals') . ' d JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE c.email = %s AND d.deleted_at IS NULL AND c.deleted_at IS NULL ORDER BY (d.status = 'Open') DESC, IF(d.status = 'Open', UNIX_TIMESTAMP(d.created_at), 0) DESC, ABS(DATEDIFF(d.created_at, %s)) LIMIT 1", strtolower($email), $at));
 }
+/* v2.9.62: a szál összes ügyfél-résztvevője (feladók, címzettek, másolatok – a saját címeink nélkül), a szál kontaktja elöl.
+ * Ok: a szál kontaktja gyakran egy közös iroda@ cím, a dealhez tartozó kolléga (pl. aki a szerződést intézi) csak címzett/másolat. */
+function cp_imp_thread_parts($tid, $first = '') {
+	global $wpdb;
+	$out = $first !== '' ? array(strtolower($first)) : array();
+	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT from_email, to_list, cc_list FROM ' . cp_mail_t('messages') . ' WHERE thread_id = %d ORDER BY sent_at DESC LIMIT 40', $tid), ARRAY_A) as $m) {
+		if (!preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $m['from_email'] . ' ' . $m['to_list'] . ' ' . $m['cc_list'], $mm)) { continue; }
+		foreach ($mm[0] as $e) { $e = strtolower($e); if (!cp_imp_ours($e) && !in_array($e, $out, true)) { $out[] = $e; } }
+	}
+	return array_slice($out, 0, 15);
+}
 function cp_imp_deal_manual($tid) {
 	global $wpdb;
 	return (bool) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'deal'", $tid))
@@ -325,6 +336,8 @@ function cp_imp_relink($tid, $email, $at) {
 	}
 	if (cp_imp_deal_manual($tid)) { return; }
 	$best = cp_imp_pick_deal($email, $at);
+	/* v2.9.62: ha a szál kontaktjához nincs deal, a többi résztvevőhöz keresünk (mint a Salesmate, amely a teljes levelezést nézi) */
+	if (!$best) { foreach (cp_imp_thread_parts($tid) as $pe) { if ($pe !== strtolower($email)) { $best = cp_imp_pick_deal($pe, $at); if ($best) { break; } } } }
 	if (!$best || $best === $cur) { return; }
 	$st = (string) $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
 	if (!empty($late) && $st !== 'Open') { return; } /* lezártról csak nyitottra */

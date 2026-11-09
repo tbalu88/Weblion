@@ -1033,7 +1033,7 @@
 		const att = rd.querySelector('[data-attach]');
 		if (att) att.addEventListener('click', () => {
 			const h = rd.querySelector('[data-dpat]'); h.hidden = !h.hidden;
-			if (!h.hidden) dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }));
+			if (!h.hidden) dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }), t.id);
 		});
 		/* v1.38: AI válaszvarázsló – piszkozat, amit a levélíróban nézel át */
 		const aib = rd.querySelector('[data-ai]');
@@ -1225,21 +1225,35 @@
 	}
 
 	/* ------------------------------------------------------------ deal-választó (címzett és változók) */
-	function dealPicker(host, onPick) {
+	/* v2.9.62: sugTh = levélszál azonosítója → a mező alatt azonnal javaslatok (a levelezés résztvevői, azonos cég, azonos név) indoklással;
+	   gépeléskor a szokásos keresés, a mező kiürítésekor újra a javaslatok */
+	function dealPicker(host, onPick, sugTh) {
 		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
 		const inp = host.querySelector('input'), list = host.querySelector('.ml-dp-l');
-		let t = null;
+		let t = null, sug = null, seq = 0;
+		const row = x => '<button type="button" data-id="' + x.id + '"><b>' + esc(x.title) + (x.st && x.st !== 'Open' ? ' <span class="ml-dp-st">' + esc(x.st === 'Won' ? 'megnyert' : x.st === 'Lost' ? 'elvesztett' : x.st) + '</span>' : '') + '</b><small>' + esc([x.cn, x.ce, x.ev].filter(Boolean).join(' · ')) + '</small>' + (x.why ? '<small class="ml-dp-why">' + esc(x.why) + '</small>' : '') + '</button>';
+		const show = (rows, head, empty) => {
+			list.innerHTML = (head && rows.length ? '<div class="ml-dp-h">' + esc(head) + '</div>' : '') + (rows.length ? rows.map(row).join('') : '<div class="ml-dp-n">' + esc(empty) + '</div>');
+			list.hidden = false;
+			list.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => { const x = rows.find(y => String(y.id) === b.dataset.id); inp.value = x.title; list.hidden = true; onPick(x); }));
+		};
+		const showSug = () => { if (sug && sug.length) show(sug, 'Javaslatok ehhez a levelezéshez', ''); else if (sug) show([], '', 'Nincs javaslat – keress név, e-mail vagy #szám alapján.'); };
+		if (sugTh) {
+			list.innerHTML = '<div class="ml-dp-n">Javaslatok keresése…</div>'; list.hidden = false;
+			const my = ++seq;
+			post('cp_mail_deal_suggest', { th: sugTh }).then(r => { sug = r.rows || []; if (my === seq && inp.value.trim().length < 2) showSug(); }).catch(() => { sug = []; if (my === seq && inp.value.trim().length < 2) list.hidden = true; });
+		}
 		inp.addEventListener('input', () => {
 			clearTimeout(t);
 			t = setTimeout(async () => {
 				const q = inp.value.trim();
-				if (q.length < 2) { list.hidden = true; return; }
+				const my = ++seq;
+				if (q.length < 2) { if (sug) showSug(); else list.hidden = true; return; }
 				try {
 					const r = await post('cp_mail_deals', { q: q });
-					list.innerHTML = r.rows.length ? r.rows.map(x => '<button type="button" data-id="' + x.id + '"><b>' + esc(x.title) + '</b><small>' + esc([x.cn, x.ce, x.ev].filter(Boolean).join(' · ')) + '</small></button>').join('') : '<div class="ml-dp-n">Nincs találat.</div>';
-					list.hidden = false;
-					list.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => { const x = r.rows.find(y => String(y.id) === b.dataset.id); inp.value = x.title; list.hidden = true; onPick(x); }));
-				} catch (e) { list.innerHTML = '<div class="ml-dp-n">' + esc(e.message) + '</div>'; list.hidden = false; }
+					if (my !== seq) return;
+					show(r.rows, '', 'Nincs találat.');
+				} catch (e) { if (my === seq) { list.innerHTML = '<div class="ml-dp-n">' + esc(e.message) + '</div>'; list.hidden = false; } }
 			}, 250);
 		});
 	}

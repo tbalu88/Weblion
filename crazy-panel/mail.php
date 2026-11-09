@@ -401,6 +401,48 @@ function cp_mail_ajax_deals() {
 }
 
 
+/* v2.9.62: „Deal csatolása” – javaslatok a szálhoz, indoklással. Sorrend: a szál résztvevőinek (feladó, címzett, másolat) címéhez
+ * tartozó dealek, majd az azonos cégdomainű kontaktok dealjei (ingyenes levelezők – gmail stb. – és a saját domainjeink nélkül),
+ * végül a szál kontaktjának nevével egyező kontakt dealjei. Egy csoporton belül a nyitott dealek elöl, majd a levelezés idejéhez
+ * legközelebbi rendezvény. Csak olvas. */
+add_action('wp_ajax_nopriv_cp_mail_deal_suggest', 'cp_mail_ajax_deal_suggest');
+add_action('wp_ajax_cp_mail_deal_suggest', 'cp_mail_ajax_deal_suggest');
+function cp_mail_ajax_deal_suggest() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if (!function_exists('cp_crm_t') || !function_exists('cp_imp_thread_parts') || !function_exists('cp_crm_panel_on') || !cp_crm_panel_on()) { wp_send_json_success(array('rows' => array())); }
+	global $wpdb;
+	$t = $wpdb->get_row($wpdb->prepare('SELECT id, contact_email, contact_name, last_at FROM ' . cp_mail_t('threads') . ' WHERE id = %d', (int) ($_POST['th'] ?? 0)), ARRAY_A);
+	if (!$t) { wp_send_json_success(array('rows' => array())); }
+	$D = cp_crm_t('deals'); $C = cp_crm_t('contacts');
+	$at = (string) ($t['last_at'] ?: gmdate('Y-m-d H:i:s'));
+	$sel = "SELECT d.id, d.title, d.status, d.event_d, c.name cn, c.email ce FROM $D d JOIN $C c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND c.deleted_at IS NULL AND ";
+	$ord = $wpdb->prepare(" ORDER BY (d.status = 'Open') DESC, ABS(DATEDIFF(COALESCE(d.event_d, DATE(d.created_at)), %s)) LIMIT 8", $at);
+	$out = array(); $seen = array();
+	$add = function ($rows, $why) use (&$out, &$seen) {
+		foreach ((array) $rows as $r) {
+			if (isset($seen[$r['id']]) || count($out) >= 8) { continue; }
+			$seen[$r['id']] = 1;
+			$out[] = array('id' => (int) $r['id'], 'title' => (string) $r['title'], 'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'ev' => (string) $r['event_d'], 'st' => (string) $r['status'], 'why' => is_callable($why) ? $why($r) : $why);
+		}
+	};
+	$parts = cp_imp_thread_parts((int) $t['id'], (string) $t['contact_email']);
+	if ($parts) {
+		$in = implode(',', array_fill(0, count($parts), '%s'));
+		$add($wpdb->get_results($wpdb->prepare($sel . "c.email IN ($in)", $parts) . $ord, ARRAY_A), function ($r) { return 'A levelezésben szerepel: ' . $r['ce']; });
+	}
+	$doms = array();
+	foreach ($parts as $e) { $d = substr(strrchr($e, '@'), 1); if ($d !== '' && !cp_imp_ours($e) && !(function_exists('cp_cos_free') && cp_cos_free($d)) && !in_array($d, $doms, true)) { $doms[] = $d; } }
+	foreach (array_slice($doms, 0, 3) as $d) {
+		$add($wpdb->get_results($wpdb->prepare($sel . 'c.email LIKE %s', '%@' . $wpdb->esc_like($d)) . $ord, ARRAY_A), 'Azonos cég (' . $d . ')');
+	}
+	$nm = trim((string) $t['contact_name']);
+	if (mb_strlen($nm) >= 5 && strpos($nm, '@') === false && strpos($nm, ' ') !== false) {
+		$add($wpdb->get_results($wpdb->prepare($sel . 'c.name = %s', $nm) . $ord, ARRAY_A), 'Azonos név: ' . $nm);
+	}
+	wp_send_json_success(array('rows' => $out));
+}
+
 /* ------------------------------------------------------------ levélszálak és jegyzetek (v1.34) */
 
 /* a megemlíthető / kiosztható kollégák: a panel aktív felhasználói */
