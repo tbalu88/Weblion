@@ -54,5 +54,4 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 ## Teljesítmény (2026-11-09, a felhasználó jónak tartja, későbbre félretéve)
 | # | Javaslat | Becslés |
 |---|---|---|
-| P1 | Könnyített „változott-e valami?” végpont a háttér-lekérdezésekhez (Deal-ek percenként, Levelezés percenként, értesítések, jelenlét): WordPress-bővítmények betöltése nélkül, egy kis időbélyeget nézve; teljes adat csak változáskor. Most minden ilyen kérés teljes WordPress-betöltés (lassú tárhelyen 2–3 s). | ~0,5 nap |
 | P3 | A panel a megnyitáskor mind a 23 JavaScript-fájlt betölti (1,26 MB, tömörítve ~350 KB), azokat is, amelyek fülét a felhasználó meg sem nyitja (Levelezés, Statisztika, Beállítások, Feladatok…). Ezeket csak az adott fül első megnyitásakor kellene betölteni: telefonon gyorsabb indulás, kevesebb memória. | ~0,5–1 nap |
