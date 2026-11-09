@@ -485,7 +485,8 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-fg{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
 .d3-ft{display:flex;flex-direction:column;gap:4px;width:100%;border:0;background:none;padding:0;text-align:left;cursor:pointer;text-decoration:none;color:#141C33;min-width:0}
 .d3-ft b{font:600 12px/1.3 Inter,sans-serif;color:#2F5BD8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.d3-ft small{font-size:11px;color:#656973;line-height:1.3}
+.d3-ft small{font-size:11px;color:#656973;line-height:1.3;overflow-wrap:anywhere} /* v2.9.65: a hosszú feladócím ne lógjon át a szomszéd oszlopba */
+.d3-fg > li{min-width:0}
 .d3-tb{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid #ECE8E1;background:#F4F2EE}
 .d3-tb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .d3-tb i{font:800 12px Inter,sans-serif;font-style:normal;letter-spacing:.04em;padding:3px 7px;border-radius:6px;color:#fff;background:#656973}
