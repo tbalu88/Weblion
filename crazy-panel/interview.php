@@ -229,7 +229,7 @@ function cp_iv_mail_body($b, $s, $kind) {
 		. ($o['location'] !== '' ? '<br>Helyszín: ' . nl2br(esc_html($o['location'])) : '') . '</td></tr></table>';
 	if (trim((string) $o['note']) !== '') { $h .= '<p style="margin:0 0 16px">' . nl2br(esc_html($o['note'])) . '</p>'; }
 	$h .= '<p style="margin:0 0 6px">' . $btn(cp_iv_gcal_link($b, $s), 'Hozzáadás a Google Naptárhoz', true) . $btn(cp_iv_url(array('t' => $b['token'], 'ics' => 1)), 'Naptárfájl (.ics)', false) . '</p>';
-	$h .= '<p style="margin:12px 0 0">Ha mégsem érsz rá, <a href="' . esc_url(cp_iv_url(array('t' => $b['token']))) . '" style="color:#A85617;font-weight:bold">itt módosíthatod vagy lemondhatod</a> az időpontot (legkésőbb ' . (int) $o['cancel_h'] . ' órával előtte).</p>';
+	$h .= '<p style="margin:14px 0 6px">Ha mégsem érsz rá (legkésőbb ' . (int) $o['cancel_h'] . ' órával előtte):</p><p style="margin:0">' . $btn(cp_iv_url(array('t' => $b['token'])), 'Időpont módosítása', false) . $btn(cp_iv_url(array('t' => $b['token'], 'lemond' => 1)), 'Lemondás', false) . '</p>';
 	$h .= '<p style="margin:16px 0 0">Várunk szeretettel!<br>Az EventCrazy csapata</p>';
 	return $h;
 }
@@ -352,8 +352,13 @@ function cp_iv_render_page($o, $b, $val, $err) {
 			echo '<p class="cal"><a class="btn" href="' . esc_url(cp_iv_gcal_link($b, $s)) . '" target="_blank" rel="noopener">Hozzáadás a Google Naptárhoz</a> <a class="btn ghost" href="' . esc_url(cp_iv_url(array('t' => $b['token'], 'ics' => 1))) . '">Naptárfájl (.ics)</a></p>';
 			if ($late) { echo '<p class="muted">Az interjú előtti ' . (int) $o['cancel_h'] . ' órában az időpont már nem módosítható. Ha közbejött valami, kérjük, hívj minket.</p>'; }
 			else {
-				echo '<details class="card"><summary>Másik időpont választása</summary><form method="post" class="f">' . $hidden . '<input type="hidden" name="t" value="' . esc_attr($b['token']) . '"><input type="hidden" name="iv_act" value="move">' . $picker((int) $b['slot_id'], (int) $b['slot_id']) . '<button class="btn" type="submit">Időpont módosítása</button></form></details>';
-				echo '<form method="post" class="cancel" onsubmit="return confirm(\'Biztosan lemondod az interjút?\')">' . $hidden . '<input type="hidden" name="t" value="' . esc_attr($b['token']) . '"><input type="hidden" name="iv_act" value="cancel"><button class="link" type="submit">Nem tudok jönni – lemondom az időpontot</button></form>';
+				if (!empty($_GET['lemond'])) {
+					echo '<div class="card confirm"><p><b>Biztosan lemondod az interjút?</b><br>' . esc_html(cp_iv_slot_label($s)) . '</p><form method="post">' . $hidden . '<input type="hidden" name="t" value="' . esc_attr($b['token']) . '"><input type="hidden" name="iv_act" value="cancel"><button class="btn danger" type="submit">Igen, lemondom</button><a class="btn ghost" href="' . esc_url(cp_iv_url(array('t' => $b['token']))) . '">Mégsem</a></form></div>';
+				} else {
+					echo '<div class="acts"><a class="btn ghost" href="' . esc_url(cp_iv_url(array('t' => $b['token'], 'valt' => 1))) . '#valt">Másik időpont választása</a><a class="btn ghost danger-t" href="' . esc_url(cp_iv_url(array('t' => $b['token'], 'lemond' => 1))) . '">Lemondás</a></div>';
+					if (!empty($_GET['valt'])) { echo '<div class="card" id="valt"><h2 style="margin-top:0">Válassz új időpontot</h2><form method="post" class="f">' . $hidden . '<input type="hidden" name="t" value="' . esc_attr($b['token']) . '"><input type="hidden" name="iv_act" value="move">' . $picker((int) $b['slot_id'], (int) $b['slot_id']) . '<button class="btn" type="submit">Időpont módosítása</button> <a class="btn ghost" href="' . esc_url(cp_iv_url(array('t' => $b['token']))) . '">Mégsem</a></form></div>'; }
+				}
+
 			}
 		}
 	} else {
@@ -392,7 +397,7 @@ function cp_iv_css() {
 		. '.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border:0;border-radius:999px;background:var(--o);color:var(--n);font:700 16px Inter,sans-serif;text-decoration:none;cursor:pointer;margin:0 8px 8px 0;transition:filter .15s}'
 		. '.btn:hover{filter:brightness(.95)}.btn:focus-visible{outline:3px solid var(--n);outline-offset:2px}.btn[disabled]{opacity:.5;cursor:not-allowed}.btn.ghost{background:#fff;color:var(--n);border:1.5px solid var(--li)}.btn.wide{width:100%;margin:22px 0 0}'
 		. '.card{background:#fff;border:1px solid var(--li);border-radius:16px;padding:18px;margin:16px 0}.when{display:flex;flex-direction:column;gap:4px}.when .big{font:800 22px "Plus Jakarta Sans",Inter,sans-serif;letter-spacing:-.01em}'
-		. 'details summary{cursor:pointer;font-weight:700}details[open] summary{margin-bottom:12px}.link{background:none;border:0;padding:0;color:var(--bad);font:600 15px Inter,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer}'
+		. 'details summary{cursor:pointer;font-weight:700;list-style:none}details summary::-webkit-details-marker{display:none}details[open] summary{margin-bottom:12px}.acts{display:flex;flex-wrap:wrap;gap:0 8px;align-items:flex-start;margin:6px 0}.btn.danger{background:var(--bad);color:#fff}.btn.danger-t{color:var(--bad);border-color:#F1C3BE}.confirm p{margin:0 0 14px}.link{background:none;border:0;padding:0;color:var(--bad);font:600 15px Inter,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer}'
 		. '.ok,.err{border-radius:12px;padding:12px 14px;margin:0 0 18px}.ok{background:var(--okb);color:var(--ok)}.err{background:var(--badb);color:var(--bad)}.empty{color:var(--mu)}'
 		. '.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}.foot{color:var(--mu);font-size:13px;padding:8px 16px 32px}.foot a{color:var(--mu)}'
 		. '@media (prefers-reduced-motion:reduce){*{transition:none!important}}';
