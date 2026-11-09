@@ -45,10 +45,14 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 ## UI/UX-javaslatok (2026-11-06, felajánlva, még nem kért) – a Superhuman, Front, Linear, HubSpot, Pipedrive mintájára
 | # | Javaslat | Minta | Becslés |
 |---|---|---|---|
-| U4 | Mentett nézetek a Deal-eken és a Levelezésben (pl. „Saját nyitott”, „E heti rendezvények”, „Válaszra vár”), a menüből egy kattintással | Linear, HubSpot | ~0,5 nap |
+| U4 | Mentett nézetek a Levelezésben (pl. „Válaszra vár”) – a Deal-eken 2026-11-08-án elkészült (2.9.53) | Linear, HubSpot | ~0,5 nap |
 | U6 | Előnézet rámutatásra: ügyfél / deal neve fölött kis kártya (telefon, nyitott deal, utolsó levél, visszatérő-e) | Linear, Front | ~0,5 nap |
-| U7 | Inline szerkesztés a deal-listában: dátum, helyszín, felelős, érték kattintásra, az adatlap megnyitása nélkül | Pipedrive, Airtable | ~1 nap |
 | U8 | „Mai fókusz” a Kezdőlapon: egy listában a mai teendők, válaszra váró levelek, lejárt határidők, kipipálhatóan | Linear „My issues”, HubSpot Tasks | ~0,5 nap |
 | U9 | Mikro-visszajelzések: sima átmenetek fülváltáskor, mentéskor kis pipa, egységes értesítő buborék egy helyen | Linear, Stripe | ~0,5 nap |
 | U10 | Akadálymentesség és érintés: látható fókuszkeret billentyűzetnél, legalább 44 px-es érintési felületek mobilon, kontraszt-ellenőrzés | Apple HIG | ~0,5 nap |
 
+## Teljesítmény (2026-11-09, a felhasználó jónak tartja, későbbre félretéve)
+| # | Javaslat | Becslés |
+|---|---|---|
+| P1 | Könnyített „változott-e valami?” végpont a háttér-lekérdezésekhez (Deal-ek percenként, Levelezés percenként, értesítések, jelenlét): WordPress-bővítmények betöltése nélkül, egy kis időbélyeget nézve; teljes adat csak változáskor. Most minden ilyen kérés teljes WordPress-betöltés (lassú tárhelyen 2–3 s). | ~0,5 nap |
+| P2 | A levél „ki nézi / ki válaszol” jelenlét-pingje 15 helyett 30 másodpercenként (felére csökkenti ezeket a kéréseket) | ~10 perc |
