@@ -233,7 +233,14 @@ function cp_crm_deal_data($id) {
 	foreach (array('closed_at', 'last_note_at', 'last_comm_at', 'created_at', 'modified_at', 'start_at', 'synced_at', 'deleted_at') as $k) { $deal[$k] = cp_crm_local($deal[$k]); }
 	/* v1.83.2: ajánlat előtt (első szakasz, érték nélkül) becsült ár, mint a csempén */
 	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && !((float) $deal['value'] > 0) && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } }
-	if (function_exists('cp_cap_day') && $deal['status'] === 'Open' && !empty($deal['event_d']) && $deal['event_d'] >= wp_date('Y-m-d')) { $k = cp_cap_day($deal['event_d']); if ($k) { $deal['cap'] = $k; } }
+	/* v2.9.70: többnapos rendezvény: a napok listája (az 1. nap igazítva az event_d-hez) és a tömör kiírás */
+	$mdays = function_exists('cp_mday_get') && !empty($deal['event_d']) ? cp_mday_align(cp_mday_get($id), (string) $deal['event_d']) : array();
+	if ($mdays) { $deal['days'] = $mdays; $deal['days_label'] = cp_mday_label(wp_list_pluck($mdays, 'day')); }
+	if (function_exists('cp_cap_day') && $deal['status'] === 'Open' && !empty($deal['event_d']) && ($deal['event_d'] >= wp_date('Y-m-d') || ($mdays && end($mdays)['day'] >= wp_date('Y-m-d')))) {
+		/* v2.9.70: többnaposnál a legszűkebb nap (a dupla foglalás minden napot figyel) */
+		$k = $mdays ? cp_mday_cap_worst(wp_list_pluck($mdays, 'day')) : cp_cap_day($deal['event_d']);
+		if ($k) { $deal['cap'] = $k; }
+	}
 	$deal['owner'] = cp_crm_user_name($deal['owner_id']);
 	$deal['created_by_n'] = cp_crm_user_name($deal['created_by']);
 	$deal['modified_by_n'] = cp_crm_user_name($deal['modified_by']);
@@ -480,6 +487,8 @@ function cp_crm_del_clean($id, $plan) {
 		foreach ($plan['threads'] as $tid) { $wpdb->query($wpdb->prepare("UPDATE $T SET prev_folder = IF(folder IN ('trash','spam'), 'inbox', folder), folder = 'trash' WHERE id = %d", $tid)); }
 		$r[] = count($plan['threads']) . ' levélszál a Kukába';
 	}
+	/* v2.9.70: a többnapos rendezvény napjai (a döntés szerint a deallel minden törlődik) */
+	if (function_exists('cp_mday_db_ok') && cp_mday_db_ok() && $wpdb->delete(cp_mday_t(), array('deal_id' => (int) $id))) { $r[] = 'a rendezvénynapok listája'; }
 	return $r;
 }
 

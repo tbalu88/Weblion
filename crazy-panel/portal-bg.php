@@ -47,7 +47,7 @@ function cp_portal_bg_taken($date, $except_deal = '') {
 	/* kétoldalas háttér: a pár egyik oldalának foglalása a másikat is foglalja */
 	$out = array();
 	foreach ($rows as $id => $bg) {
-		if ((string) $id === (string) $except_deal) { continue; }
+		if ((function_exists('cp_mday_base') ? cp_mday_base($id) : (string) $id) === (string) $except_deal) { continue; } /* v2.9.70: a saját deal napi kulccsal is */
 		$out[$bg] = (isset($out[$bg]) ? $out[$bg] : 0) + 1;
 		$pk = function_exists('cp_panel_bg_partner') ? cp_panel_lc(cp_panel_bg_partner($bg)) : '';
 		if ($pk !== '') { $out[$pk] = (isset($out[$pk]) ? $out[$pk] : 0) + 1; }

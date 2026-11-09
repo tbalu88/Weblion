@@ -302,6 +302,7 @@ function cp_crm_store($m, $raw, $via = 'search') {
 	};
 	$skip = array_flip(cp_crm_hist_skip());
 	$hist = array(); $same = array(); $chg = 0;
+	$moved = array(); /* v2.9.70: a rendezvény dátuma változott → a többnapos naplista eltolása (mday.php) */
 	foreach ($rows as $id => $row) {
 		if (isset($old[$id])) {
 			$o = $old[$id];
@@ -311,6 +312,7 @@ function cp_crm_store($m, $raw, $via = 'search') {
 		}
 		/* változásnapló: csak a már meglévő deal-eknél, a ténylegesen megváltozott mezőkről */
 		if ($m === 'deal' && isset($old[$id])) {
+			if ((string) $old[$id]['event_d'] !== (string) $row['event_d'] && $old[$id]['event_d'] && $row['event_d']) { $moved[(int) $id] = array((string) $old[$id]['event_d'], (string) $row['event_d']); }
 			$by = cp_crm_user_name($row['modified_by']);
 			$at = $row['modified_at'] ? $row['modified_at'] : gmdate('Y-m-d H:i:s');
 			foreach ($old[$id] as $col => $ov) {
@@ -337,6 +339,7 @@ function cp_crm_store($m, $raw, $via = 'search') {
 			$wpdb->query('INSERT INTO ' . cp_crm_t('history') . ' (deal_id, field, old_val, new_val, by_user, at, src) VALUES ' . implode(', ', $ch));
 		}
 	}
+	if ($moved && function_exists('cp_mday_on_moved')) { foreach ($moved as $mid => $mv) { cp_mday_on_moved($mid, $mv[0], $mv[1]); } }
 	/* v2.9.58: a ténylegesen megváltozott sorok száma (a szinkron csak ekkor üríti a panel gyorsítótárát) */
 	if ($chg) {
 		$GLOBALS['cp_crm_chg'] = (int) ($GLOBALS['cp_crm_chg'] ?? 0) + $chg;

@@ -368,6 +368,7 @@ function cp_portal_hourly_scan() {
 	$cands = array();
 	foreach ($rows as $r) {
 		$id = cp_panel_str(cp_panel_get($r, 'id'));
+		if (isset($r['_mday'])) { $id = (string) $r['_mday']['deal']; } /* v2.9.70: többnapos deal: egyszer, a deal azonosítójával */
 		if ($id === '' || cp_panel_lc(cp_panel_str(cp_panel_get($r, 'stage'))) !== $want) { continue; }
 		if (cp_panel_lc(cp_panel_str(cp_panel_get($r, 'status'))) === 'lost') { continue; }
 		if (!cp_portal_deal_allowed($id)) { continue; }

@@ -380,7 +380,8 @@ function cp_sm_fetch_range($from, $to, &$info = null, $fields = null) {
 	/* v1.27: a saját CRM-táblákból (ha a szinkron friss), különben a Salesmate-ből */
 	if (function_exists('cp_crm_source_on') && cp_crm_source_on()) {
 		$rows = cp_crm_range_rows($from, $to);
-		if (!is_wp_error($rows)) { $info['mode'] = 'crm'; return $rows; }
+		/* v2.9.70: többnapos deal: minden napja külön sor (a tartományba esők) */
+		if (!is_wp_error($rows)) { $info['mode'] = 'crm'; return function_exists('cp_mday_expand_raw') ? cp_mday_expand_raw($rows, $from, $to) : $rows; }
 	}
 	$modes = $o['search_mode'] === 'auto' ? array('after_before', 'between', 'between_str', 'scan') : array($o['search_mode']);
 	$last_err = null;
@@ -411,6 +412,8 @@ function cp_sm_fetch_range($from, $to, &$info = null, $fields = null) {
 		}
 		if ($mode !== 'scan' && count($rows) > 0 && $in === 0) { continue; }
 		$info['mode'] = $mode;
+		/* v2.9.70: a tartomány előtt kezdődő többnapos deal-ek pótlása a saját táblából, majd napokra bontás */
+		if (function_exists('cp_mday_expand_raw')) { $rows = cp_mday_expand_raw(cp_mday_supplement($rows, $from, $to), $from, $to); }
 		return $rows;
 	}
 	return $last_err ? $last_err : new WP_Error('cp_empty', 'Nem sikerült lekérdezni a dealeket.');
@@ -546,7 +549,7 @@ function cp_panel_normalize($rows) {
 			'owner'   => cp_panel_str(cp_panel_get($r, 'owner')),
 			'contact' => $contact,
 			'extra'   => $ex,
-		);
+		) + (isset($r['_mday']) ? array('deal' => $r['_mday']['deal'], 'dn' => $r['_mday']['n'], 'dof' => $r['_mday']['of']) : array()); /* v2.9.70: többnapos: deal-azonosító, „n/N. nap” */
 	}
 	usort($out, function ($a, $b) { return strcmp($a['date'] . $a['time'], $b['date'] . $b['time']); });
 	return $out;
@@ -592,8 +595,9 @@ function cp_panel_ajax_data() {
 		'at'     => $cached['at'],
 		'mode'   => $cached['mode'],
 		'subs'   => (object) $sub_out,
-		'track'  => (object) array_intersect_key(cp_panel_track_all(), array_flip(array_map('strval', wp_list_pluck($cached['events'], 'id')))),
-		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(wp_list_pluck($cached['events'], 'id')) : new stdClass(),
+		/* v2.9.70: a napi kulcsok mellett a deal (1. nap) követése is kell – a Szerződés / Díjbekérő dealszintű */
+		'track'  => (object) array_intersect_key(cp_panel_track_all(), array_flip(array_merge(array_map('strval', wp_list_pluck($cached['events'], 'id')), function_exists('cp_mday_base_ids') ? cp_mday_base_ids(wp_list_pluck($cached['events'], 'id')) : array()))),
+		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(function_exists('cp_mday_base_ids') ? cp_mday_base_ids(wp_list_pluck($cached['events'], 'id')) : wp_list_pluck($cached['events'], 'id')) : new stdClass(),
 	));
 }
 
@@ -680,12 +684,14 @@ function cp_panel_ajax_track() {
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) { wp_send_json_error(array('msg' => 'Hibás dátum.'), 400); }
 		wp_send_json_success(array('track' => (object) cp_panel_track_range($from, $to), 'portal' => function_exists('cp_portal_panel_map_range') ? cp_portal_panel_map_range($from, $to) : new stdClass()));
 	}
-	$id = isset($_POST['id']) ? preg_replace('/[^0-9]/', '', wp_unslash($_POST['id'])) : '';
+	/* v2.9.70: többnapos deal 2..n. napja: „<dealId>:<ÉÉÉÉ-HH-NN>” */
+	$id = isset($_POST['id']) ? preg_replace('/[^0-9:-]/', '', wp_unslash($_POST['id'])) : '';
+	if ($id !== '' && !preg_match('/^\d{1,20}(:\d{4}-\d{2}-\d{2})?$/', $id)) { $id = ''; }
 	$f = isset($_POST['f']) ? sanitize_key(wp_unslash($_POST['f'])) : '';
 	$v = isset($_POST['v']) ? (string) wp_unslash($_POST['v']) : '';
 	$d = isset($_POST['d']) ? preg_replace('/[^0-9-]/', '', wp_unslash($_POST['d'])) : '';
 	$fields = cp_panel_track_fields();
-	if ($id === '' || strlen($id) > 20 || !array_key_exists($f, $fields)) { wp_send_json_error(array('msg' => 'Hibás kérés.'), 400); }
+	if ($id === '' || strlen($id) > 31 || !array_key_exists($f, $fields)) { wp_send_json_error(array('msg' => 'Hibás kérés.'), 400); }
 	if ($f === 'note') {
 		$v = mb_substr(sanitize_textarea_field($v), 0, 600);
 	} elseif (!in_array($v, $fields[$f], true)) {
@@ -693,7 +699,7 @@ function cp_panel_ajax_track() {
 	}
 	// hosszabbítás: ha be van állítva Salesmate mező, oda is beírjuk
 	$o = cp_panel_opts();
-	if ($f === 'hx' && $o['f_hx'] !== '') {
+	if ($f === 'hx' && $o['f_hx'] !== '' && ctype_digit($id)) { /* v2.9.70: a 2..n. nap hosszabbítása csak a panelben */
 		$val = cp_panel_hx_value($o['f_hx'], $v);
 		if (is_wp_error($val)) { wp_send_json_error(array('msg' => $val->get_error_message()), 400); }
 		$w = cp_sm_write_field($id, $o['f_hx'], $val);
@@ -1098,11 +1104,14 @@ function cp_panel_ajax_setbg() {
 	cp_tab_need(cp_tabs_panel());
 	$o = cp_panel_opts();
 	if (empty($o['bg_write']) || $o['f_bg'] === '') { wp_send_json_error(array('msg' => 'A háttér visszaírása ki van kapcsolva.'), 400); }
-	$id = isset($_POST['id']) ? preg_replace('/[^0-9]/', '', wp_unslash($_POST['id'])) : '';
+	/* v2.9.70: többnapos deal napja is jöhet („<dealId>:<nap>”) */
+	$id = isset($_POST['id']) ? preg_replace('/[^0-9:-]/', '', wp_unslash($_POST['id'])) : '';
+	$mdk = function_exists('cp_mday_parse_key') ? cp_mday_parse_key($id) : null;
+	if ($id !== '' && !$mdk && !ctype_digit($id)) { $id = ''; }
 	$date = isset($_POST['d']) ? preg_replace('/[^0-9-]/', '', wp_unslash($_POST['d'])) : '';
 	$bg = isset($_POST['bg']) ? trim(sanitize_text_field(wp_unslash($_POST['bg']))) : '';
 	$force = !empty($_POST['force']);
-	if ($id === '' || strlen($id) > 20 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || mb_strlen($bg) > 80) {
+	if ($id === '' || strlen($id) > 31 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || mb_strlen($bg) > 80) {
 		wp_send_json_error(array('msg' => 'Hibás kérés.'), 400);
 	}
 	// dupla foglalás elleni védelem: friss adat az adott napra
@@ -1126,6 +1135,15 @@ function cp_panel_ajax_setbg() {
 				wp_send_json_error(array('msg' => 'conflict', 'who' => $who), 409);
 			}
 		}
+	}
+	/* v2.9.70: többnapos deal: a háttér az adott nap felülírása (csak a panelben, a Salesmate-be nem ír) */
+	if ($mdk && function_exists('cp_mday_get') && count(cp_mday_get($mdk[0])) >= 2) {
+		$dd = $mdk[1] !== '' ? $mdk[1] : $date;
+		if (!cp_mday_set_bg($mdk[0], $dd, $bg)) {
+			$has = false; foreach (cp_mday_get($mdk[0]) as $x) { if ($x['day'] === $dd && $x['bg'] === $bg) { $has = true; } }
+			if (!$has) { wp_send_json_error(array('msg' => 'Ez a nap nem található a deal napjai között – frissítsd az oldalt.'), 409); }
+		}
+		wp_send_json_success(array('id' => $id, 'bg' => $bg, 'verified' => true, 'day' => 1));
 	}
 	/* v2.9.58: a közös írás/olvasás segédekkel; az ellenőrző olvasás az írás utáni (after_write) lekérést használja újra */
 	$res = cp_sm_put_deal($id, array($o['f_bg'] => $bg));
@@ -1586,7 +1604,8 @@ function cp_el_kez_by_label($label) {
 /* ------------------------------------------------------------ tárolás */
 
 function cp_el_id_ok($id) {
-	return is_string($id) && preg_match('/^m?\d{1,20}$/', $id) === 1;
+	/* v2.9.70: többnapos deal 2..n. napja: „<dealId>:<ÉÉÉÉ-HH-NN>” – saját kezelő-sorokkal */
+	return is_string($id) && preg_match('/^(m?\d{1,20}|\d{1,20}:\d{4}-\d{2}-\d{2})$/', $id) === 1;
 }
 
 function cp_el_st_get($id) {
@@ -1763,7 +1782,7 @@ function cp_el_link($id) {
 }
 
 function cp_el_check_tok($tok) {
-	if (!preg_match('/^(m?\d{1,20})\.([a-f0-9]{14})$/', (string) $tok, $m)) { return ''; }
+	if (!preg_match('/^(m?\d{1,20}|\d{1,20}:\d{4}-\d{2}-\d{2})\.([a-f0-9]{14})$/', (string) $tok, $m)) { return ''; } /* v2.9.70: napi kulcs is */
 	return hash_equals(cp_el_sig($m[1]), $m[2]) ? $m[1] : '';
 }
 
@@ -1834,7 +1853,7 @@ function cp_el_norm_one($r) {
 		'svc' => $svcTxt,
 		'svcx' => $svcx,
 		'kd' => ($o['f_kd'] !== '' && is_numeric(cp_panel_get($r, $o['f_kd']))) ? (int) round((float) cp_panel_get($r, $o['f_kd'])) : null,
-	);
+	) + (isset($r['_mday']) ? array('deal' => $r['_mday']['deal'], 'dn' => $r['_mday']['n'], 'dof' => $r['_mday']['of']) : array()); /* v2.9.70: napi sor */
 }
 
 function cp_el_normalize($rows, $from, $to) {
@@ -2046,7 +2065,7 @@ function cp_el_ajax_data() {
 		'cal' => (object) $calOut,
 		'geoc' => (object) $geoc,
 		'calSync' => get_option('cp_el_cal_at', null),
-		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(array_keys($ids)) : new stdClass(),
+		'portal' => function_exists('cp_portal_panel_map') ? cp_portal_panel_map(function_exists('cp_mday_base_ids') ? cp_mday_base_ids(array_keys($ids)) : array_keys($ids)) : new stdClass(), /* v2.9.70: a deal azonosítóival */
 	));
 }
 
@@ -2063,7 +2082,9 @@ function cp_el_ajax_save() {
 	if (!is_array($fields) || !$fields || count($fields) > 30) { cp_el_err('Hibás kérés.'); }
 	cp_el_lock_guard(cp_el_req_date('d') !== '' ? cp_el_req_date('d') : cp_el_s(cp_el_st_get($id), 'd'));
 	$o = cp_el_opts();
-	$isSm = ctype_digit($id);
+	/* v2.9.70: többnapos deal minden napja (az 1. is) panel-szintű: a kezelő és az óraszám nem íródik a Salesmate-be */
+	$isMd = !ctype_digit($id) ? (strpos($id, ':') !== false) : (function_exists('cp_mday_get') && count(cp_mday_get((int) $id)) >= 2);
+	$isSm = ctype_digit($id) && !$isMd;
 	$st = cp_el_st_get($id);
 	$date = cp_el_req_date('d');
 	if ($date !== '') { $st['d'] = $date; }
@@ -2144,6 +2165,7 @@ function cp_el_ajax_save() {
 		}
 
 		if ($x === '') { unset($row[$f]); } else { $row[$f] = $x; }
+		if ($isMd && $i === 'r0' && $f === 'h') { if ($x === '') { unset($row['hsm']); } else { $row['hsm'] = isset($_POST['smv']) ? (string) wp_unslash($_POST['smv']) : ''; } } /* v2.9.70: a napi óraszám felülírása */
 		if ($f === 'ok') {
 			if ($x === '1') { $row['okt'] = time(); } else { unset($row['okt']); }
 		}
@@ -2873,8 +2895,16 @@ function cp_el_form_event($id) {
 	$ck = 'cp_el_fd_' . $id;
 	$d = get_transient($ck);
 	if (!is_array($d)) {
-		$raw = cp_sm_get_deal($id);
+		/* v2.9.70: többnapos deal napja: a deal adatai az adott nap felülírásaival */
+		$mk = function_exists('cp_mday_parse_key') ? cp_mday_parse_key($id) : null;
+		$raw = cp_sm_get_deal($mk ? (string) $mk[0] : $id);
 		if (is_wp_error($raw)) { return $raw; }
+		if ($mk && function_exists('cp_mday_expand_raw')) {
+			$pick = null;
+			foreach (cp_mday_expand_raw(array($raw)) as $x) { if ((string) cp_panel_get($x, 'id') === (string) $id || ($mk[1] === '' && !isset($x['_mday']))) { $pick = $x; break; } }
+			if ($pick === null && $mk[1] !== '') { return null; }
+			if ($pick !== null) { $raw = $pick; }
+		}
 		$d = cp_el_norm_one($raw);
 		if (!$d) { return null; }
 		set_transient($ck, $d, 10 * MINUTE_IN_SECONDS);
@@ -3665,7 +3695,7 @@ function cp_el_img_route() {
 	$p = cp_panel_opts();
 	$slug = trim($p['slug'], '/');
 	$path = trim((string) wp_parse_url(isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '', PHP_URL_PATH), '/');
-	if ($slug === '' || !preg_match('#^' . preg_quote($slug, '#') . '/(kep|foto)/(m?\d{1,20})\.([a-f0-9]{14})/([^/]+)$#', $path, $m)) { return; }
+	if ($slug === '' || !preg_match('#^' . preg_quote($slug, '#') . '/(kep|foto)/(m?\d{1,20}|\d{1,20}:\d{4}-\d{2}-\d{2})\.([a-f0-9]{14})/([^/]+)$#', rawurldecode($path), $m)) { return; } /* v2.9.70: napi kulcs is */
 	if (!defined('DONOTCACHEPAGE')) { define('DONOTCACHEPAGE', true); }
 	$id = $m[2];
 	$seg = basename(rawurldecode($m[4]));
@@ -3710,6 +3740,7 @@ require_once __DIR__ . '/stat.php';
 require_once __DIR__ . '/crm.php';
 require_once __DIR__ . '/crm-panel.php';
 require_once __DIR__ . '/crm-source.php';
+require_once __DIR__ . '/mday.php'; /* v2.9.70: többnapos rendezvény (napok listája) */
 require_once __DIR__ . '/panel-users.php';
 require_once __DIR__ . '/mail.php';
 require_once __DIR__ . '/kanban.php';
@@ -3990,6 +4021,7 @@ function cp_tw_aam_deals($o, $force) {
 			$id = cp_panel_str(cp_panel_get($r, 'id'));
 			if ($id === '' || isset($seen[$id])) { continue; }
 			$seen[$id] = 1;
+			if (isset($r['_mday']) && (int) $r['_mday']['n'] > 1) { continue; } /* v2.9.70: a deal egyszer, az 1. napján (egy összeg) */
 			if (cp_panel_lc(cp_panel_str(cp_panel_get($r, 'status'))) === 'lost') { continue; }
 			if (cp_panel_lc(trim(cp_panel_str(cp_panel_get($r, $o['f_ev'])))) !== $ev) { continue; }
 			$date = cp_panel_norm_date(cp_panel_get($r, $p['f_date']));

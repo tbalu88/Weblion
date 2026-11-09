@@ -43,7 +43,11 @@ function cp_crm_range_rows($from, $to) {
 	global $wpdb;
 	cp_crm_source_fresh();
 	$d = cp_crm_t('deals'); $c = cp_crm_t('contacts');
-	$rows = $wpdb->get_results($wpdb->prepare("SELECT d.id, d.raw, d.owner_id, d.contact_id, d.start_at, c.name cn, c.email ce, c.phone cp, c.mobile cm FROM $d d LEFT JOIN $c c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.event_d BETWEEN %s AND %s ORDER BY d.id DESC", $from, $to), ARRAY_A);
+	/* v2.9.70: a többnapos deal akkor is benne van, ha az 1. napja a tartomány előtt van, de más napja beleesik.
+	   A napok táblájából (day index) előbb az azonosítók, majd „event_d tartomány VAGY id IN (…)” – mindkét ág indexelt, nincs teljes táblaszken */
+	$mids = function_exists('cp_mday_ids_in_range') ? array_slice(cp_mday_ids_in_range($from, $to), 0, 500) : array();
+	$md = $mids ? ' OR d.id IN (' . implode(',', array_map('intval', $mids)) . ')' : '';
+	$rows = $wpdb->get_results($wpdb->prepare("SELECT d.id, d.raw, d.owner_id, d.contact_id, d.start_at, c.name cn, c.email ce, c.phone cp, c.mobile cm FROM $d d LEFT JOIN $c c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND (d.event_d BETWEEN %s AND %s", $from, $to) . $md . ') ORDER BY d.id DESC', ARRAY_A);
 	if ($wpdb->last_error) { return new WP_Error('cp_crm_db', 'Adatbázis-hiba: ' . $wpdb->last_error); }
 	$out = array();
 	foreach ((array) $rows as $x) { $n = cp_crm_row_shape($x); if ($n) { $out[] = $n; } }

@@ -51,8 +51,15 @@ function cp_cap_for_rows($rows) {
 	if (!$rows || !function_exists('cp_crm_stages')) { return array(); }
 	$st = array_slice(cp_crm_stages(), 0, 2); $t = wp_date('Y-m-d'); $max = wp_date('Y-m-d', time() + 365 * DAY_IN_SECONDS);
 	$out = array(); $days = array();
+	/* v2.9.70: többnapos deal: a legszűkebb jövőbeli napja számít */
+	$md = function_exists('cp_mday_many') ? cp_mday_many(array_map(function ($r) { return (int) $r['id']; }, $rows)) : array();
 	foreach ($rows as $r) {
 		$d = (string) ($r['ev'] ?? '');
+		if (isset($md[(int) $r['id']]) && $r['status'] === 'Open' && in_array($r['stage'], $st, true) && $d !== '') {
+			$k = cp_mday_cap_worst(array_filter(wp_list_pluck(cp_mday_align($md[(int) $r['id']], $d), 'day'), function ($x) use ($max) { return $x <= $max; }), true);
+			if ($k) { $out[(int) $r['id']] = $k; }
+			continue;
+		}
 		if ($r['status'] !== 'Open' || !in_array($r['stage'], $st, true) || $d < $t || $d > $max) { continue; }
 		if (!isset($days[$d])) { $days[$d] = cp_cap_day($d, true); }
 		if ($days[$d]) { $out[(int) $r['id']] = $days[$d]; }
