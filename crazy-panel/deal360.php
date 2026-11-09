@@ -34,6 +34,48 @@ function cp_d360_deals($where) {
 function cp_d360_txt($body) {
 	return trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6]|/td|/blockquote)\b[^>]*>#i', "\n", (string) $body)), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
 }
+/* v2.9.69: egy levél az idővonal-csoportban (szöveg csak kezdetként, HTML soha) */
+function cp_d360_msg_row($r, $sn) {
+	$att = json_decode((string) $r['attachments'], true) ?: array();
+	return array('id' => (int) $r['id'], 'dir' => $r['dir'] === 'out' ? 'out' : 'in', 'from' => $r['from_name'] !== '' ? $r['from_name'] : $r['from_email'], 'at' => cp_crm_local($r['sent_at']), 'sn' => (string) $sn,
+		'att' => count(array_filter($att, function ($a) { return !empty($a['n']) && !(!empty($a['cid']) && cp_d360_is_emb((string) $a['n'])); })), 'q' => $r['status'] === 'idézetből' ? 1 : 0);
+}
+/* v2.9.69: egy szál korábbi levelei az idővonal „+N korábbi levél” sorához – csak olvas (NEM jelöli olvasottnak), csak szövegkezdetet ad.
+   Jogosultság: mint a deal / kontakt / cég adatlap (cp_crm_ajax_guard) + a Levelezés fül (cp_panel_can('mail')).
+   A duplikátum-rejtés ugyanaz, mint az adatlapon: a deal bármely szálában meglévő eredeti mellett a visszaállított másolat nem látszik. */
+add_action('wp_ajax_nopriv_cp_crm_thread_msgs', 'cp_d360_thread_msgs');
+add_action('wp_ajax_cp_crm_thread_msgs', 'cp_d360_thread_msgs');
+function cp_d360_thread_msgs() {
+	cp_crm_ajax_guard();
+	global $wpdb;
+	if (!function_exists('cp_mail_db_ok') || !cp_mail_db_ok() || (function_exists('cp_panel_can') && !cp_panel_can('mail'))) { cp_el_err('A Levelezés füled nincs bekapcsolva.', 403); }
+	$th = (int) ($_REQUEST['th'] ?? 0); $skip = max(0, min(50, (int) ($_REQUEST['skip'] ?? 0))); $cap = 200;
+	$T = cp_mail_t('threads'); $M = cp_mail_t('messages');
+	$t = $th ? $wpdb->get_row($wpdb->prepare("SELECT id, deal_id FROM $T WHERE id = %d AND folder NOT IN ('trash', 'spam')", $th), ARRAY_A) : null;
+	if (!$t) { cp_el_err('Nincs ilyen levélszál.', 404); }
+	$L = (array) $wpdb->get_results($wpdb->prepare("SELECT id, thread_id, dir, from_name, from_email, status, sent_at, attachments FROM $M WHERE thread_id = %d ORDER BY sent_at DESC, id DESC LIMIT 2000", $th), ARRAY_A);
+	$hide = cp_d360_thread_hide($L, (int) $t['deal_id']);
+	$vis = array_values(array_filter($L, function ($r) use ($hide) { return !isset($hide[(int) $r['id']]); }));
+	$page = array_slice($vis, $skip, $cap);
+	$snip = array();
+	if ($page) { foreach ((array) $wpdb->get_results('SELECT id, SUBSTRING(body, 1, 3000) body FROM ' . $M . ' WHERE id IN (' . implode(',', array_map(function ($r) { return (int) $r['id']; }, $page)) . ')', ARRAY_A) as $b) { $snip[(int) $b['id']] = mb_substr(cp_d360_txt($b['body']), 0, 260); } }
+	wp_send_json_success(array('th' => $th, 'msgs' => array_map(function ($r) use ($snip) { return cp_d360_msg_row($r, $snip[(int) $r['id']] ?? ''); }, $page), 'more' => max(0, count($vis) - $skip - count($page))));
+}
+/* v2.9.69: a szál visszaállított másolatai közül a rejtendők – a szálon belül és a deal többi szálának kimenő leveleivel (±2 perc) összevetve */
+function cp_d360_thread_hide($L, $deal) {
+	global $wpdb;
+	if (!function_exists('cp_mail_qd_hide')) { return array(); }
+	$M = cp_mail_t('messages'); $rows = array(); $ids = array();
+	foreach ($L as $r) { if ($r['status'] === 'idézetből') { $ids[] = (int) $r['id']; } }
+	if (!$ids) { return array(); }
+	$tids = array((int) $L[0]['thread_id']);
+	if ($deal > 0) { foreach ((array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_mail_t('threads') . " WHERE deal_id = %d AND folder NOT IN ('trash', 'spam') LIMIT 100", $deal)) as $x) { $tids[] = (int) $x; } }
+	$q = array();
+	foreach ($L as $r) { if ($r['status'] === 'idézetből') { $q[] = $wpdb->prepare('sent_at BETWEEN %s AND %s', gmdate('Y-m-d H:i:s', strtotime($r['sent_at'] . ' UTC') - 120), gmdate('Y-m-d H:i:s', strtotime($r['sent_at'] . ' UTC') + 120)); } }
+	$cand = (array) $wpdb->get_results('SELECT id, dir, status, sent_at, SUBSTRING(body, 1, 6000) body FROM ' . $M . ' WHERE thread_id IN (' . implode(',', array_unique($tids)) . ") AND ((dir = 'out' AND status <> 'idézetből' AND (" . implode(' OR ', array_slice($q, 0, 50)) . ')) OR id IN (' . implode(',', array_slice($ids, 0, 50)) . ')) LIMIT 300', ARRAY_A);
+	foreach ($cand as $r) { $rows[] = array('id' => (int) $r['id'], 'dir' => $r['dir'], 'q' => $r['status'] === 'idézetből', 'ts' => strtotime($r['sent_at'] . ' UTC'), 'body' => $r['body']); }
+	return cp_mail_qd_hide($rows, 120);
+}
 function cp_d360_mail($thread_where, $msg_limit = 80) {
 	global $wpdb;
 	if (!function_exists('cp_mail_db_ok') || !cp_mail_db_ok() || (function_exists('cp_panel_can') && !cp_panel_can('mail'))) { return array('threads' => array(), 'msgs' => array(), 'notes' => array(), 'files' => array(), 'off' => 1); }
@@ -71,16 +113,18 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 	foreach ($L as $r) {
 		if (isset($hide[(int) $r['id']])) { continue; }
 		$th = (int) $r['thread_id'];
-		if (!isset($per[$th])) { $per[$th] = array('last' => $r, 'na' => 0, 'rows' => 0, 'first' => $r['sent_at'], 'hid' => 0); }
+		if (!isset($per[$th])) { $per[$th] = array('last' => $r, 'lm' => array(), 'na' => 0, 'rows' => 0, 'first' => $r['sent_at'], 'hid' => 0); }
+		if (count($per[$th]['lm']) < 2) { $per[$th]['lm'][] = $r; } /* v2.9.69: a szál 2 legújabb (látható) levele az idővonalra */
 		$per[$th]['rows']++; $per[$th]['first'] = $r['sent_at'];
 		foreach ((json_decode((string) $r['attachments'], true) ?: array()) as $a) { if (!empty($a['n']) && !(!empty($a['cid']) && cp_d360_is_emb((string) $a['n']))) { $per[$th]['na']++; } }
 	}
 	foreach ($hide as $hid => $x) { foreach ($L as $r) { if ((int) $r['id'] === $hid && isset($per[(int) $r['thread_id']])) { $per[(int) $r['thread_id']]['hid']++; } } }
-	/* az utolsó levelek szövegének eleje (szálanként egy, legfeljebb 100) */
+	/* v2.9.69: a 2 legújabb levél szövegének eleje (szálanként kettő, legfeljebb 200 levél, egy lekérdezésben) */
 	$snip = array();
-	$lastIds = array_map(function ($p) { return (int) $p['last']['id']; }, $per);
+	$lastIds = array();
+	foreach ($per as $p) { foreach ($p['lm'] as $r) { $lastIds[] = (int) $r['id']; } }
 	if ($lastIds) {
-		foreach ((array) $wpdb->get_results('SELECT id, SUBSTRING(body, 1, 3000) body FROM ' . $M . ' WHERE id IN (' . implode(',', $lastIds) . ')', ARRAY_A) as $b) { $snip[(int) $b['id']] = mb_substr(cp_d360_txt($b['body']), 0, 160); }
+		foreach ((array) $wpdb->get_results('SELECT id, SUBSTRING(body, 1, 3000) body FROM ' . $M . ' WHERE id IN (' . implode(',', $lastIds) . ')', ARRAY_A) as $b) { $snip[(int) $b['id']] = mb_substr(cp_d360_txt($b['body']), 0, 260); }
 	}
 	foreach ($threads as $t) {
 		$th = (int) $t['id']; $p = $per[$th] ?? null; $g = $agg[$th] ?? null;
@@ -93,7 +137,9 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		}
 		if ($p) {
 			$lm = $p['last'];
-			$row += array('la' => cp_crm_local($lm['sent_at']), 'ld' => $lm['dir'] === 'out' ? 'out' : 'in', 'lf' => $lm['from_name'] !== '' ? $lm['from_name'] : $lm['from_email'], 'ls' => $snip[(int) $lm['id']] ?? '', 'na' => $p['na']);
+			$row += array('la' => cp_crm_local($lm['sent_at']), 'ld' => $lm['dir'] === 'out' ? 'out' : 'in', 'na' => $p['na'],
+				/* v2.9.69: lm = a 2 legújabb levél (legújabb elöl): id, irány, feladó, idő, szövegkezdet (~3 sor), mellékletszám, visszaállított-e */
+				'lm' => array_map(function ($r) use ($snip) { return cp_d360_msg_row($r, $snip[(int) $r['id']] ?? ''); }, $p['lm']));
 		}
 		$out['threads'][] = $row;
 	}

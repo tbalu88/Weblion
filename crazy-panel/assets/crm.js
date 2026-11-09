@@ -1141,41 +1141,76 @@
 		return '<div class="d3-stat"><span><b>' + s.n + '</b> deal</span><span><b>' + s.won + '</b> megnyert</span><span><b>' + esc(money(s.won_v)) + '</b> bevétel</span>' + (s.open ? '<span><b>' + s.open + '</b> nyitott · ' + esc(money(s.open_v)) + '</span>' : '') + '</div>' +
 			(s.first ? '<p class="d3-sub">Első megkeresés: ' + esc(huD(s.first.slice(0, 10))) + (s.last_ev ? ' · legutóbbi rendezvény: ' + esc(huD(s.last_ev)) : '') + '</p>' : '');
 	}
-	/* v2.9.68: egy levélszál = egy kártya (idővonal, kontakt- és céglap): tárgy, levélszám, időszak, az utolsó levél egy sorban,
-	   mellékletek és állapot. A szálankénti összesítőt (n, f, la, ld, lf, ls, na) a szerver számolja (cp_d360_mail). */
+	/* v2.9.69: hibrid szálcsoport (idővonal, kontakt- és céglap): egy szál = egy csoport a legújabb levelénél – fejléc (tárgy, levélszám,
+	   időszak, mellékletek, állapot), alatta a 2 legújabb levél a régi levélelem-stílusban, „+N korábbi levél” helyben kinyitható
+	   (lustán, a csak olvasó cp_crm_thread_msgs végpontról – nem jelöli olvasottnak). Az összesítőt és az lm-et a szerver adja (cp_d360_mail). */
 	const CLIP_S = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>';
 	const tcD = (s, yr) => { const p = s.slice(0, 10).split('-').map(Number); return (yr || p[0] !== new Date().getFullYear() ? p[0] + '. ' : '') + HU_MS[p[1] - 1] + ' ' + p[2] + '.'; };
 	const tcSpan = (f, l) => { if (!l) return ''; if (!f || f.slice(0, 10) === l.slice(0, 10)) return tcD(l); const yr = f.slice(0, 4) !== l.slice(0, 4); return tcD(f, yr) + ' – ' + tcD(l, yr); };
-	const tcWhen = s => { if (!s) return ''; const n = daysAgo(s.slice(0, 10) + ' 00:00:00'); return n === 0 ? 'ma ' + s.slice(11, 16) : n === 1 ? 'tegnap ' + s.slice(11, 16) : tcD(s); };
-	function threadCard(t) {
-		const n = t.n != null ? t.n : t.cnt, last = t.la || t.at, dir = t.ld === 'out' ? 'out' : t.ld === 'in' ? 'in' : '', closed = t.st === 'closed';
-		const chips = '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + t.na + ' melléklet a szálban">' + CLIP_S + t.na + '</span>' : '') +
+	const TG = { open: new Set(), cache: new Map() }; /* kinyitott csoportok és a betöltött korábbi levelek (szűrőváltás / újrarajzolás után is) */
+	const tmItem = (t, g) => '<div class="d3-ti d3-tm ' + (g.dir === 'out' ? 'out' : 'in') + '" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" role="button" tabindex="0"><i>' + (g.dir === 'out' ? I.mail_out : I.mail_in) + '</i><div><div class="d3-tt"><b>' + (g.dir === 'out' ? 'Levél tőlünk' : 'Levél érkezett') + '</b> <span class="d3-tmf">– ' + esc(g.from || '?') + '</span>' +
+		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
+		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
+	const tgMoreTxt = n => '+' + n + ' korábbi levél';
+	function threadGroup(t) {
+		const n = t.n != null ? t.n : t.cnt, lm = t.lm || [], rest = Math.max(0, n - lm.length), dir = t.ld === 'out' ? 'out' : t.ld === 'in' ? 'in' : '', closed = t.st === 'closed';
+		const key = t.id + '|' + (t.la || t.at), cached = TG.cache.get(t.id), open = rest > 0 && TG.open.has(t.id) && cached && cached.key === key;
+		const chips = '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + Number(t.na) + ' melléklet a szálban">' + CLIP_S + Number(t.na) + '</span>' : '') +
 			(dir === 'out' ? ' <span class="d3-q d3-tcwo">Ügyfél válaszára vár</span>' : dir === 'in' ? ' <span class="d3-q' + (closed ? '' : ' warn') + '">Válaszra vár</span>' : '') + (closed ? ' <span class="d3-q d3-tccl">lezárva</span>' : '');
-		return '<button type="button" class="d3-ti d3-tc ' + (dir || 'in') + (closed ? ' closed' : '') + '" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '"><i>' + (dir === 'out' ? I.mail_out : I.mail_in) + '</i><span class="d3-tcb">' +
-			'<span class="d3-tch"><b class="d3-tcs">' + esc(t.subj || '(nincs tárgy)') + '</b> <small>' + esc(tcSpan(t.f, last)) + '</small></span>' +
-			(t.lf != null ? '<span class="d3-tcl"><span class="d3-tcw">' + esc(t.lf || '?') + '</span> <span class="d3-tcd">(' + esc(tcWhen(last)) + '):</span> ' + (t.ls ? '<span class="d3-tcx">' + esc(t.ls) + '</span>' : '<span class="d3-tcx d3-tce">(nincs szöveg)</span>') + '</span>' : '') +
-			' <span class="d3-tcm">' + chips + '</span></span></button>';
+		return '<section class="d3-tg' + (closed ? ' closed' : '') + '" data-tg="' + t.id + '" data-tgk="' + esc(key) + '">' +
+			'<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
+			'<div class="d3-tgl">' + lm.map(g => tmItem(t, g)).join('') +
+			(rest ? '<button type="button" class="d3-tgx" data-tgx="' + rest + '" data-skip="' + lm.length + '" aria-expanded="' + !!open + '">' + (open ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest)) + '</button><div class="d3-tgo" data-tgo' + (open ? '>' + cached.html : ' hidden>') + '</div>' : '') +
+			'</div></section>';
 	}
 	const tcSort = m => (m.threads || []).slice().sort((a, b) => ((a.la || a.at || '') < (b.la || b.at || '') ? 1 : (a.la || a.at || '') > (b.la || b.at || '') ? -1 : 0));
 	function threadCards(m) {
 		if (m.off) return '<p class="cpx-muted">A Levelezés füled nincs bekapcsolva.</p>';
 		if (!(m.threads || []).length) return '<p class="cpx-muted d3-tl0">Nincs levélszál.</p>';
-		return '<div class="d3-tcs">' + tcSort(m).map(threadCard).join('') + '</div>';
+		return '<div class="d3-tgs-l">' + tcSort(m).map(threadGroup).join('') + '</div>';
 	}
-	/* gomb: az Enter / szóköz magától kattint, külön billentyűkezelő nem kell (különben kétszer nyílna) */
-	const bindTc = root => root.querySelectorAll('.d3-tc[data-th]').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
+	const bindTm = el => { const go = () => openTh(Number(el.dataset.th), el); el.addEventListener('click', go); el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }); };
+	async function tgToggle(b) {
+		const g = b.closest('.d3-tg'), id = Number(g.dataset.tg), box = g.querySelector('[data-tgo]'), rest = Number(b.dataset.tgx);
+		const show = on => { box.hidden = !on; b.setAttribute('aria-expanded', String(on)); b.textContent = on ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest); if (on) TG.open.add(id); else TG.open.delete(id); };
+		if (!box.hidden) return show(false);
+		const c = TG.cache.get(id);
+		if (!(c && c.key === g.dataset.tgk)) {
+			b.disabled = true; b.textContent = 'Korábbi levelek betöltése…';
+			try {
+				const r = await post('cp_crm_thread_msgs', { th: id, skip: b.dataset.skip });
+				const t = { id: id, subj: g.querySelector('.d3-tgh').dataset.ths };
+				const html = (r.msgs || []).map(m => tmItem(t, m)).join('') + (r.more ? '<p class="d3-tgn">További ' + Number(r.more) + ' levél nem fért ide – a teljes szál a gyorsnézetben (a tárgyra kattintva).</p>' : '') + (!(r.msgs || []).length ? '<p class="d3-tgn">Nincs több megjeleníthető levél.</p>' : '') +
+					/* hosszú listánál alul is van elrejtés (a fókusz a felső gombra ugrik, így a csoport eleje látszik) */
+					((r.msgs || []).length > 4 ? '<button type="button" class="d3-tgx" data-tgc>Korábbi levelek elrejtése</button>' : '');
+				TG.cache.set(id, { key: g.dataset.tgk, html: html });
+			} catch (e) { b.disabled = false; b.textContent = tgMoreTxt(rest); toast(e.message, true); return; }
+			b.disabled = false;
+		}
+		box.innerHTML = TG.cache.get(id).html;
+		box.querySelectorAll('.d3-tm').forEach(bindTm);
+		box.querySelectorAll('[data-tgc]').forEach(c => c.addEventListener('click', () => { tgToggle(b); b.focus(); }));
+		show(true);
+	}
+	function bindTc(root) {
+		root.querySelectorAll('.d3-tgh[data-th]').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
+		root.querySelectorAll('.d3-tg .d3-tm').forEach(bindTm);
+		root.querySelectorAll('[data-tgx]').forEach(b => b.addEventListener('click', () => tgToggle(b)));
+		root.querySelectorAll('.d3-tg [data-tgc]').forEach(c => c.addEventListener('click', () => { const b = c.closest('.d3-tg').querySelector('[data-tgx]'); tgToggle(b); b.focus(); }));
+	}
 	function bindCommon(sh, back) {
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open), back)));
 		/* az idővonal elemeit (.d3-ti) a drawTimeline köti be – itt nem, különben kétszer nyílna meg a levél */
-		sh.querySelectorAll('[data-th]:not(.d3-ti)').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
+		/* v2.9.69: a szálcsoport fejlécét (.d3-tgh) a bindTc köti be */
+		sh.querySelectorAll('[data-th]:not(.d3-ti):not(.d3-tgh)').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
 		sh.querySelectorAll('[data-ct]').forEach(b => { if (!(Number(b.dataset.ct) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openContact(Number(b.dataset.ct), back); }); });
 		sh.querySelectorAll('[data-co]').forEach(b => { if (!(Number(b.dataset.co) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openCompany(Number(b.dataset.co), back); }); });
 	}
 	/* a deal teljes idővonala: levelek, jegyzetek, tevékenységek, feladatok, megkeresések, automatizmusok, változások */
 	function timeline(x) {
 		const d = x.deal, m = x.mail || { msgs: [], notes: [] }, it = [];
-		/* v2.9.68: levelenkénti elemek helyett szálanként egy kártya, a szál legutóbbi levelének idejénél (új levéllel a szál felülre kerül) */
-		(m.off ? [] : m.threads || []).forEach(t => it.push({ k: 'mail', at: t.la || t.at, h: threadCard(t) }));
+		/* v2.9.68: levelenkénti elemek helyett szálanként egy csoport, a szál legutóbbi levelének idejénél (új levéllel a szál felülre kerül); v2.9.69: hibrid csoport */
+		(m.off ? [] : m.threads || []).forEach(t => it.push({ k: 'mail', at: t.la || t.at, h: threadGroup(t) }));
 		(x.dnotes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note dnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a dealen</b> – ' + esc(n.author || '') + (n.src === 'sm' ? ' <span class="d3-q" title="A Salesmate-ben írták">Salesmate</span>' : '') + '<small>' + esc(huDT(n.at)) + '</small>' + (W && (n.mine || (C.au && C.au.on)) ? '<button type="button" class="d3-x" data-ndel="' + n.id + '" title="Jegyzet törlése (a Salesmate-ből is)">×</button>' : '') + '</div><div class="d3-tx">' + nl(n.body) + '</div></div></div>' }));
 		(m.notes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note" data-th="' + n.th + '" role="button" tabindex="0"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div></div></div>' }));
 		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small>' + (W && Number(a.related_id) === d.id ? '<button type="button" class="d3-ab" data-aundo="' + a.id + '" title="Visszanyitás">↺</button>' : '') + '</div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));
@@ -1219,7 +1254,7 @@
 		box.querySelectorAll('[data-aundo]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.aundo, done: '' }, 'Visszanyitva – a Salesmate-ben is.'); }));
 		box.querySelectorAll('[data-aedit]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const a = (x.acts || []).find(z => String(z.id) === b.dataset.aedit); const c = document.querySelector('.crm-360 [data-comp]'); if (a && c) compose(c, x, 'act', a); }));
 		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
-		box.querySelectorAll('.d3-ti[data-th]:not(.d3-tc)').forEach(b => { const go = () => openTh(Number(b.dataset.th), b); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+		box.querySelectorAll('.d3-ti[data-th]:not(.d3-tm)').forEach(b => { const go = () => openTh(Number(b.dataset.th), b); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 		bindTc(box);
 		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { hideModal(); closePage(); if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 	}
