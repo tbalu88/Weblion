@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) { exit; }
 function cp_nt_kinds() {
 	return array(
 		'lead'        => array('Ajánlatkérés és deal', 'Új ajánlatkérés', 'Weboldali űrlapról vagy webes megkeresésből új ajánlatkérés érkezett.', 'minden aktív kolléga', 1),
+		'iv_book'     => array('Ajánlatkérés és deal', 'Interjú-foglalás (kezelő-jelentkező)', 'Egy kezelő-jelentkező időpontot foglalt, módosított vagy lemondott az interjú-foglaló oldalon.', 'adminok (vagy a beállított kollégák)', 0),
 		'lead_fail'   => array('Ajánlatkérés és deal', 'Sikertelen deal-létrehozás', 'Egy weboldali ajánlatkérésből 3 próbálkozás után sem jött létre deal – kézzel kell felvenni.', 'adminok', 1),
 		'deal_note'   => array('Ajánlatkérés és deal', 'Megemlítés deal-jegyzetben', 'Valaki @Név formában megemlít egy deal jegyzetében.', 'akit megemlítenek', 0),
 		'mail_assign' => array('Levelezés', 'Levélszál kiosztása', 'Valaki rád oszt egy levélszálat (egyenként vagy többet egyszerre).', 'akire kiosztják', 0),
@@ -29,7 +30,7 @@ function cp_nt_kinds() {
 }
 function cp_nt_prefs() { $p = get_option('cp_nt_prefs', array()); return is_array($p) ? $p : array(); }
 /* $ch: b = csengő, p = telefon (push), u = Pumble */
-function cp_nt_default($kind, $ch) { return !($kind === 'lead' && $ch === 'u'); } /* az új ajánlatkérésről alapból nem megy Pumble (2026-11-08-i döntés) */
+function cp_nt_default($kind, $ch) { return !(in_array($kind, array('lead', 'iv_book'), true) && $ch === 'u'); } /* az új ajánlatkérésről alapból nem megy Pumble (2026-11-08-i döntés) */
 function cp_nt_on($uid, $kind, $ch) {
 	$p = cp_nt_prefs();
 	return isset($p[(int) $uid][$kind][$ch]) ? !empty($p[(int) $uid][$kind][$ch]) : cp_nt_default($kind, $ch);

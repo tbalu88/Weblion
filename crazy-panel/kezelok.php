@@ -52,7 +52,7 @@ function cp_kz_ok() { return get_option('cp_kz_db_ver') === CP_KZ_DB_VER && func
 function cp_kz_cfg() {
 	$on = cp_kz_ok() && function_exists('cp_panel_can') && cp_panel_can('kezelok');
 	$adm = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
-	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
+	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
 }
 function cp_kz_auth($admin = false) {
 	cp_el_auth();
@@ -193,3 +193,6 @@ add_action('wp_ajax_cp_kz_csv', function () {
 	foreach ($rows as $r) { $sv = cp_kz_sens_get($r); $o = array($KN[$r['kind']] ?? $r['kind'], $r['name'], $r['email'], $r['phone'], $r['plate'], $r['car'] !== '' ? $r['car'] : ($r['has_car'] ? 'van' : ''), implode(', ', array_map(function ($k) use ($SKL) { return $SKL[$k] ?? $k; }, array_filter(explode(',', $r['skills'])))), $r['extra']); foreach (array_keys(cp_kz_sens_keys()) as $k) { $o[] = $sv[$k] ?? ''; } $o[] = $r['note']; $o[] = $r['active'] ? 'igen' : 'nem'; fputcsv($fh, $o, ';'); }
 	fclose($fh); exit;
 });
+
+/* v2.9.57: interjú-időpontfoglalás (kezelő-jelentkezők) */
+require_once __DIR__ . '/interview.php';
