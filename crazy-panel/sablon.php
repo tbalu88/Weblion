@@ -29,10 +29,14 @@ function cp_sb_cfg() {
 }
 
 /* a panel oldalába: CSS + JS, a fájl módosítási idejével (frissítés után ne a böngésző régi példánya fusson) */
-function cp_sb_assets() {
-	foreach (array('css', 'js') as $t) {
-		$f = __DIR__ . '/assets/sablon.' . $t;
-		$u = esc_url(plugins_url('assets/sablon.' . $t, __FILE__) . '?v=' . CP_PANEL_VER . '.' . (is_file($f) ? filemtime($f) : 0));
+function cp_sb_asset_url($t) {
+	$f = __DIR__ . '/assets/sablon.' . $t;
+	return plugins_url('assets/sablon.' . $t, __FILE__) . '?v=' . CP_PANEL_VER . '.' . (is_file($f) ? filemtime($f) : 0);
+}
+/* v2.9.60 (P3): $js = false → csak a CSS (a .sbgo gomb a Követés fülön is kell); a sablon.js-t a panel igény szerint tölti (C.lazy.sablon) */
+function cp_sb_assets($js = true) {
+	foreach ($js ? array('css', 'js') : array('css') as $t) {
+		$u = esc_url(cp_sb_asset_url($t));
 		echo $t === 'css' ? '<link rel="stylesheet" href="' . $u . '">' : '<script src="' . $u . '"></script>';
 	}
 }

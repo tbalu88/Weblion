@@ -803,7 +803,9 @@
 		if (window.matchMedia && window.matchMedia('(max-width:760px)').matches) window.scrollTo(0, 0);
 		rd.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
 		let x;
-		try { x = id > 0 ? await post('cp_mail_thread', { id: id }) : await thAct(id, 'view', {}); } catch (e) { if (rd.isConnected && S.th === id) rd.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		/* v2.9.60 (P3): a Feladatok modul (teendő, kapcsolt kártyák) igény szerint töltődik – a szállal párhuzamosan */
+		const kbP = window.CPXNeed ? window.CPXNeed('kanban').catch(() => {}) : null;
+		try { x = id > 0 ? await post('cp_mail_thread', { id: id }) : await thAct(id, 'view', {}); await kbP; } catch (e) { if (rd.isConnected && S.th === id) rd.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		/* közben másik levelet nyitottak meg, vagy újrarajzolódott a fül: ez a válasz már elavult */
 		if (!rd.isConnected || S.th !== id) return;
 		drawThread(box, rd, x);

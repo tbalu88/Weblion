@@ -791,29 +791,37 @@ function cp_panel_render_app() {
 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
 		'pwa'        => function_exists('cp_pwa_cfg') ? cp_pwa_cfg() : array('on' => false),
 	);
+	/* v2.9.60 (P3): a fülhöz kötött modulok nem az oldallal töltődnek, hanem az első használatkor (panel.js: CPXNeed).
+	 * A térképben csak a bekapcsolt modulok vannak; a modulok CSS-e a szkripttel együtt jön. */
+	$asset = function ($f) { return plugins_url('assets/' . $f . '.js', __FILE__) . '?v=' . CP_PANEL_VER; };
+	$lazy = array();
+	if (!empty($cfg['dash']['on'])) { $lazy['dash'] = array('js' => $asset('dash')); }
+	if (!empty($cfg['st']['on'])) { $lazy['stat'] = array('js' => $asset('stat'), 'css' => (string) $cfg['st']['css']); }
+	if (!empty($cfg['set']['on'])) { $lazy['settings'] = array('js' => $asset('settings')); }
+	if (!empty($cfg['crm']['on'])) { $lazy['contacts'] = array('js' => $asset('contacts')); }
+	if (!empty($cfg['au']['on'])) { $lazy['audit'] = array('js' => $asset('audit')); }
+	if (!empty($cfg['fl']['on'])) { $lazy['flows'] = array('js' => $asset('flows')); }
+	if (!empty($cfg['kb']['on'])) { $lazy['kanban'] = array('js' => $asset('kanban'), 'css' => (string) $cfg['kb']['css']); }
+	if (!empty($cfg['ct']['on'])) { $lazy['contract'] = array('js' => $asset('contract')); }
+	if (!empty($cfg['bil']['on'])) { $lazy['bill'] = array('js' => $asset('bill')); }
+	if (!empty($cfg['kz']['on'])) { $lazy['kezelok'] = array('js' => $asset('kezelok')); }
+	if (!empty($cfg['gcal']['on'])) { $lazy['gcal'] = array('js' => $asset('gcal')); }
+	$lazy['bgcat'] = array('js' => $asset('bgcat'));
+	if (function_exists('cp_sb_asset_url')) { $lazy['sablon'] = array('js' => cp_sb_asset_url('js')); }
+	$cfg['lazy'] = $lazy;
 	cp_panel_head('Crazy panel');
 	echo '<body><div id="cpx-app"></div>';
 	echo '<script>window.CPX=' . wp_json_encode($cfg) . ';</script>';
 	if (!empty($cfg['portal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/portal-panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (function_exists('cp_sb_assets')) { cp_sb_assets(); }
-	if (!empty($cfg['st']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['st']['css']) . '"><script src="' . esc_url(plugins_url('assets/stat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
+	/* v2.9.60 (P3): a Sablonkészítőből itt csak a CSS (a sablon.js igény szerint); régi sablon.php-val (nincs cp_sb_asset_url) minden marad a régiben */
+	if (function_exists('cp_sb_assets')) { cp_sb_assets(!function_exists('cp_sb_asset_url')); }
+	/* a levelezés és a CRM a többi modulból is szinkron hívódik (deal-adatlap, levélküldés, keresés, értesítés) és induláskor is dolgozik → az oldallal együtt töltődik */
 	if (!empty($cfg['mail']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['mail']['css']) . '"><script src="' . esc_url(plugins_url('assets/mail.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	echo '<script src="' . esc_url(plugins_url('assets/bgcat.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
 	echo '<script src="' . esc_url(plugins_url('assets/motion.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
-	if (!empty($cfg['set']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/settings.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	if (!empty($cfg['sr']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/search.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['crm']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contacts.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['au']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/audit.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['fl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/flows.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	if (!empty($cfg['nt']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/notify.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['kb']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['kb']['css']) . '"><script src="' . esc_url(plugins_url('assets/kanban.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	if (!empty($cfg['crm']['on'])) { echo '<link rel="stylesheet" href="' . esc_url($cfg['crm']['css']) . '"><script src="' . esc_url(plugins_url('assets/crm.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['dash']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/dash.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['ct']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/contract.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['bil']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/bill.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	if (!empty($cfg['wl']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/worklog.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['kz']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/kezelok.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
-	if (!empty($cfg['gcal']['on'])) { echo '<script src="' . esc_url(plugins_url('assets/gcal.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	if (function_exists('cp_pwa_cfg')) { echo '<script src="' . esc_url(plugins_url('assets/pwa.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>'; }
 	echo '<script src="' . esc_url(plugins_url('assets/panel.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';
 	echo '<script src="' . esc_url(plugins_url('assets/mnav.js', __FILE__)) . '?v=' . CP_PANEL_VER . '"></script>';

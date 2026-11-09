@@ -133,7 +133,8 @@
 		}));
 		m.querySelectorAll('[data-todo]').forEach(b => b.addEventListener('click', () => {
 			const [k, id, deal] = b.dataset.todo.split(':');
-			if (k === 'card' && window.CPKanban) window.CPKanban.openCard(Number(id), () => load(true));
+			/* v2.9.60 (P3): a Feladatok modul igény szerint töltődik */
+			if (k === 'card' && (window.CPKanban || (window.CPXHas && window.CPXHas('kanban')))) (window.CPXNeed ? window.CPXNeed('kanban') : Promise.resolve()).then(() => window.CPKanban.openCard(Number(id), () => load(true)), e => toast(e.message, true));
 			else if (k === 'act' && Number(deal) && window.CPCrm) window.CPCrm.open(Number(deal));
 			else if (k === 'act') toast('Ez a tevékenység nincs dealhez kötve – a Salesmate-ben látod.');
 		}));

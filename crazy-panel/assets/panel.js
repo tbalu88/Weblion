@@ -247,6 +247,53 @@
     if (c && c.at) { const d = new Date(c.at * 1000); s.textContent = 'Adatok: ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); s.className = 'cpx-status'; }
   }
 
+  /* ------------------------------------------------------------ v2.9.60 (P3): igény szerint betöltött modulok */
+  /* A fülhöz kötött modulok (és a CSS-ük) nem az oldallal együtt töltődnek, hanem a fül első megnyitásakor.
+   * C.lazy (a PHP írja ki): { név: { js, css? } } – csak a bekapcsolt modulok szerepelnek benne.
+   * window.CPXNeed('kanban', …) → Promise: betölti (egyszer) a szkriptet és a CSS-t; hibánál elutasít, a következő hívás újrapróbálja.
+   * window.CPXHas('kanban') → elérhető-e a modul (betöltve vagy betölthető). */
+  const LZ = C.lazy || {};
+  const LZ_G = { stat: 'CPStat', settings: 'CPSettings', audit: 'CPAudit', flows: 'CPFlows', kanban: 'CPKanban', dash: 'CPDash', gcal: 'CPGcal', kezelok: 'CPKezelok', contacts: 'CPContacts', bgcat: 'CPBgCat', sablon: 'CPSablon', bill: 'CPBill', contract: 'CPContract' };
+  const LZ_TAB = { stat: 'stat', beallitasok: 'settings', naplo: 'audit', flows: 'flows', feladatok: 'kanban', kezdolap: 'dash', gnaptar: 'gcal', kezelok: 'kezelok', kapcsolatok: 'contacts', hatterkat: 'bgcat', sablon: 'sablon' };
+  const LZ_P = {};
+  const lzReady = n => !!(LZ_G[n] && window[LZ_G[n]]);
+  const lzHas = n => lzReady(n) || !!(LZ[n] && LZ[n].js);
+  function lzTag(tag, url) {
+    return new Promise((res, rej) => {
+      const e = document.createElement(tag);
+      if (tag === 'link') { e.rel = 'stylesheet'; e.href = url; } else { e.src = url; e.async = false; }
+      e.onload = () => res();
+      e.onerror = () => { e.remove(); rej(new Error(url)); };
+      document.head.appendChild(e);
+    });
+  }
+  function lzOne(n) {
+    if (lzReady(n)) return Promise.resolve();
+    const m = LZ[n];
+    if (!m || !m.js) return Promise.resolve(); /* kikapcsolt modul: nincs mit betölteni (a hívó úgy viselkedik, mint eddig, ha nem volt kiírva) */
+    if (LZ_P[n]) return LZ_P[n];
+    /* a CSS a szkripttel párhuzamosan jön, de a nézet csak mindkettő után rajzol (ne villanjon stílus nélkül) */
+    LZ_P[n] = Promise.all([m.css ? lzTag('link', m.css) : null, lzTag('script', m.js)]).then(() => {}, () => {
+      delete LZ_P[n];
+      throw new Error('A modul nem töltődött be – ellenőrizd az internetkapcsolatot, és próbáld újra.');
+    });
+    return LZ_P[n];
+  }
+  window.CPXNeed = (...names) => Promise.all(names.map(lzOne)).then(() => {});
+  window.CPXHas = lzHas;
+  /* üresjáratban (az indulás után pár mp-cel) előtöltés a böngésző gyorsítótárába – nem futtatja, csak letölti; adattakarékos módban kimarad */
+  function lzPrefetch() {
+    try { if (navigator.connection && navigator.connection.saveData) return; } catch (e) { /* nem támogatott */ }
+    Object.keys(LZ).forEach(n => {
+      if (lzReady(n) || LZ_P[n]) return;
+      [[LZ[n].js, 'script'], [LZ[n].css, 'style']].forEach(([u, as]) => {
+        if (!u) return;
+        const l = document.createElement('link'); l.rel = 'prefetch'; l.as = as; l.href = u; document.head.appendChild(l);
+      });
+    });
+  }
+  window.addEventListener('load', () => setTimeout(() => { if (window.requestIdleCallback) window.requestIdleCallback(lzPrefetch, { timeout: 5000 }); else lzPrefetch(); }, 4000));
+
   /* v1.35: a modulok (Levelezés, Feladatok, Deal-ek) egymás fülére is átléphetnek */
   window.CPXGo = tab => go(tab);
   window.CPXStatus = () => renderStatus();
@@ -296,8 +343,26 @@
     markTp: async id => { let ev = null; eachEv(id, x => { if (!ev) ev = x; }); if (!ev) throw new Error('Ez a rendezvény nincs betöltve a panelen – pipáld a Követés fülön.'); await setTrack(ev, 'tp', '1'); return (S.track[id] || {}).tp === '1'; },
     toast: t => toast(t)
   };
+  let rSeq = 0;
   async function render() {
     const main = document.getElementById('cpx-main');
+    /* v2.9.60 (P3): a fül modulja még nincs betöltve → „Betöltés…”, majd a betöltés után rajzol; hibánál üzenet + Újra (a fülre kattintás is újrapróbálja) */
+    const lzN = LZ_TAB[S.tab], my = ++rSeq;
+    if (lzN && !lzReady(lzN) && lzHas(lzN)) {
+      pollTrack(false); elPoll(false);
+      main.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
+      const st = document.getElementById('cpx-status'); if (st) { st.textContent = 'Betöltés…'; st.className = 'cpx-status'; }
+      try { await window.CPXNeed(lzN); }
+      catch (e) {
+        if (my !== rSeq) return;
+        main.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '<br><button class="cpx-btn" id="cpx-retry">Újra</button></div>';
+        if (st) { st.textContent = ''; st.className = 'cpx-status'; }
+        main.querySelector('#cpx-retry').onclick = () => render();
+        return;
+      }
+      /* közben másik fülre lépett (vagy újrarajzolás indult): az újabb render rajzol */
+      if (my !== rSeq) return;
+    }
 	if (S.tab === 'kezdolap') { pollTrack(false); elPoll(false); if (window.CPDash) window.CPDash.view(main); else main.innerHTML = '<div class="cpx-empty err">A Kezdőlap nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'gnaptar') { pollTrack(false); elPoll(false); if (window.CPGcal) window.CPGcal.view(main); else main.innerHTML = '<div class="cpx-empty err">A Naptár nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'tarca') { pollTrack(false); elPoll(false); viewTw(main); renderStatus(); return; }
@@ -787,7 +852,7 @@
       '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="' + esc(C.sm + e.id + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(who(e)) + '</a>' +
       '<button type="button" class="nt ' + (k.t.note ? 'has' : '') + '" data-note title="' + esc(k.t.note || 'Megjegyzés hozzáadása') + '">' + (k.t.note ? '📝' : '+ megj.') + '</button></div><small>' + esc(sub) + (norm(e.stage) === 'szerződés kiküldve' ? ' · <span class="mut">szerződés kiküldve</span>' : '') + '</small>' + (k.t.note ? '<small class="ntx">' + esc(k.t.note) + '</small>' : '') + '</td>' +
       '<td class="td-c" data-l="Szerződés">' + tick('sz', k.sz, k.szAuto ? 'auto' : '', k.szAuto ? 'Salesmate szerint aláírva (' + e.stage + ')' : '') + '</td>' +
-      '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + (window.CPSablon ? '<button type="button" class="sbgo" data-sb title="Sablon elkészítése a Sablonkészítőben (lyukasztott PNG)">✎ sablon</button>' : '') + '</td>' +
+      '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + (lzHas('sablon') ? '<button type="button" class="sbgo" data-sb title="Sablon elkészítése a Sablonkészítőben (lyukasztott PNG)">✎ sablon</button>' : '') + '</td>' +
       '<td class="td-bg" data-l="Háttér">' + bgCell + '</td>' +
       '<td class="td-c" data-l="Díjbekérő">' + djSel + '</td>' +
       '<td class="td-c" data-l="Galéria">' + tick('gl', k.gl, k.after ? '' : 'later', k.after ? '' : 'A rendezvény után esedékes') + '</td>' +
@@ -2631,7 +2696,8 @@ function elCsv() {
   render();
   if (DEEP && (S.tab === 'feladatok' || S.tab === 'mail' || S.tab === 'deals')) {
     history.replaceState(null, '', '#' + S.tab);
-    setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); else if (S.tab === 'deals' && window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(DEEP); }, 300);
+    /* v2.9.60 (P3): a Feladatok modul igény szerint töltődik – a mélylink a betöltése után nyílik */
+    window.CPXNeed(S.tab === 'feladatok' ? 'kanban' : '').catch(() => { /* a fül maga mutatja a hibát */ }).then(() => setTimeout(() => { if (S.tab === 'mail' && window.CPMail && window.CPMail.open) window.CPMail.open(Number(DEEP)); else if (S.tab === 'feladatok' && window.CPKanban && window.CPKanban.deep) window.CPKanban.deep(DEEP); else if (S.tab === 'deals' && window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(DEEP); }, 300));
   }
 })();
 

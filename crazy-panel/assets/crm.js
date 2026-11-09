@@ -1370,7 +1370,8 @@
 		if (!sh) return;
 		bindBack(sh, back);
 		let x;
-		try { x = await post('cp_crm_deal', { id: id }); }
+		/* v2.9.60 (P3): a Feladatok / Számlázás / Szerződés modul igény szerint töltődik – a deal adataival párhuzamosan (hibánál nélkülük rajzol) */
+		try { [x] = await Promise.all([post('cp_crm_deal', { id: id }), window.CPXNeed ? window.CPXNeed('kanban', 'bill', 'contract').catch(() => {}) : null]); }
 		catch (e) { if (sh.isConnected) { sh.innerHTML = head360('Deal #' + id, back, id) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); } return; }
 		if (!sh.isConnected) return;
 		const d = x.deal, c = x.contact, co = x.company, m = x.mail || { threads: [], msgs: [], notes: [], files: [] };

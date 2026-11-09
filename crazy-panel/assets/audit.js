@@ -39,7 +39,8 @@
 		if (k === 'deal' && window.CPCrm && window.CPCrm.open) { window.CPCrm.open(id); return; }
 		if (k === 'mail' && window.CPMail && window.CPMail.open) { window.CPMail.open(id); return; }
 		if (k === 'card' && window.CPNotify && window.CPNotify.go) { window.CPNotify.go('feladatok:' + id); return; }
-		if (k === 'card' && window.CPKanban) { if (window.CPXGo) window.CPXGo('feladatok'); setTimeout(() => window.CPKanban.deep(String(id)), 60); }
+		/* v2.9.60 (P3): a Feladatok modul igény szerint töltődik */
+		if (k === 'card' && (window.CPKanban || (window.CPXHas && window.CPXHas('kanban')))) { if (window.CPXGo) window.CPXGo('feladatok'); (window.CPXNeed ? window.CPXNeed('kanban') : Promise.resolve()).then(() => setTimeout(() => { if (window.CPKanban) window.CPKanban.deep(String(id)); }, 60), () => { /* a fül maga mutatja a hibát */ }); }
 	}
 	function when(s) { return s ? String(s).slice(0, 16).replace(/-/g, '.').replace(' ', '. ') : ''; }
 

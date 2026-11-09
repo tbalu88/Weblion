@@ -169,7 +169,7 @@
     return '<h4>Fotósablon <small class="cpx-muted">– az ügyfél mentette: ' + esc(dt(s.at)) + (s.name ? ' · ' + esc(s.name) : '') + '</small></h4>' +
       '<div class="pp-sb">' + (s.preview ? '<a href="' + esc(sbUrl(s.preview)) + '" target="_blank" rel="noopener"><img src="' + esc(sbUrl(s.preview)) + '" alt="Sablon-előnézet" loading="lazy"></a>' : '') +
       '<div><p class="cpx-muted">A Sablonkészítőben az ügyfél beállításaival nyílik meg (sablon, felirat' + (s.logo ? ', logó' : '') + ') – onnan töltsd le a lyukasztott PNG-t.</p>' +
-      (window.CPSablon ? '<button type="button" class="cpx-btn sm" data-act="sablon">Megnyitás a Sablonkészítőben</button>' : '') + '</div></div>';
+      ((window.CPSablon || (window.CPXHas && window.CPXHas('sablon'))) ? '<button type="button" class="cpx-btn sm" data-act="sablon">Megnyitás a Sablonkészítőben</button>' : '') + '</div></div>';
   }
   async function openSablon(p) {
     const s = p.sablon;
