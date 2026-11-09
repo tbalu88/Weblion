@@ -89,7 +89,7 @@ add_action('init', function () {
   PRIMARY KEY  (id),
   KEY card_id (card_id)
 ) $cs;");
-	update_option('cp_kb_db_ver', CP_KB_DB_VER, false);
+	update_option('cp_kb_db_ver', CP_KB_DB_VER, true); /* v2.9.58: autoload – minden kérés olvassa */
 }, 7);
 
 function cp_kb_db_ok() { return get_option('cp_kb_db_ver') === CP_KB_DB_VER; }
@@ -412,6 +412,12 @@ function cp_kb_ajax_card_save() {
 				$set['list_id'] = $lid; $set['pos'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(MAX(pos), -1) + 1 FROM $C WHERE list_id = %d", $lid));
 			}
 		}
+		/* v2.9.58: archívumból visszaállított kártya, amelynek a listáját közben törölték → a tábla első élő listájára kerül (különben eltűnne) */
+		if (array_key_exists('archived_at', $set) && $set['archived_at'] === null && $c['archived_at'] && !isset($set['list_id'])
+			&& !(int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_kb_t('lists') . ' WHERE id = %d AND deleted_at IS NULL', $c['list_id']))) {
+			$lid = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_kb_t('lists') . ' WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id LIMIT 1', $c['board_id']));
+			if ($lid) { $set['list_id'] = $lid; $set['pos'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(MAX(pos), -1) + 1 FROM $C WHERE list_id = %d", $lid)); }
+		}
 		if ($set) { $set['updated_at'] = cp_kb_now(); $wpdb->update($C, $set, array('id' => $id)); cp_kb_diff($c, $set, $id); }
 	}
 	wp_send_json_success(cp_kb_card_full($id));
@@ -471,7 +477,16 @@ function cp_kb_mine_rows($me) {
 		ORDER BY c.due IS NULL, c.due, c.updated_at DESC LIMIT 200";
 	return (array) $wpdb->get_results($wpdb->prepare($sql, $me, $me, $me), ARRAY_A);
 }
-function cp_kb_mine_count() { return count(cp_kb_mine_rows(cp_kb_me())); }
+/* v2.9.58: a számlálóhoz elég egy COUNT(*) – nem kell a teljes kártyasorokat lekérni */
+function cp_kb_mine_count() {
+	global $wpdb;
+	$me = cp_kb_me();
+	if ($me <= 0) { return 0; }
+	$C = cp_kb_t('cards'); $B = cp_kb_t('boards');
+	return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL
+		WHERE c.archived_at IS NULL AND c.done = 0 AND (b.kind = 'team' OR b.owner_uid = %d)
+		AND (FIND_IN_SET(%d, c.assignees) OR c.id IN (SELECT card_id FROM " . cp_kb_t('comments') . " WHERE deleted_at IS NULL AND FIND_IN_SET(%d, mentions)))", $me, $me, $me));
+}
 
 add_action('wp_ajax_nopriv_cp_kb_mine', 'cp_kb_ajax_mine');
 add_action('wp_ajax_cp_kb_mine', 'cp_kb_ajax_mine');

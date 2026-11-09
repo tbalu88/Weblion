@@ -118,7 +118,7 @@ function cp_st_db_maybe_upgrade() {
 	set_transient('cp_st_db_lock', 1, 60);
 	$was = (string) get_option('cp_st_db_ver', '');
 	cp_st_db_install();
-	update_option('cp_st_db_ver', CP_ST_DB_VER, false);
+	update_option('cp_st_db_ver', CP_ST_DB_VER, true); /* v2.9.58: autoload – minden kérés olvassa */
 	/* v5: új mezők (cím, rohadási dátum, fizetési mód, utolsó bejövő levél) – egy teljes újraolvasás tölti fel */
 	if ($was !== '' && version_compare($was, '6', '<')) {
 		$st = cp_st_state();
@@ -231,6 +231,17 @@ function cp_st_db_install() {
 function cp_st_db_ok() {
 	return get_option('cp_st_db_ver') === CP_ST_DB_VER;
 }
+
+/* v2.9.58: a minden kérésnél olvasott apró verziójelzők (eddig autoload nélkül → kérésenként 1-1 külön lekérdezés)
+ * egyszeri átállítása autoloadra. Ha már a betöltött (autoload) listában van, csak egy tömbkeresés; ha nincs, a get_option
+ * úgyis lekérdezné – ekkor egyszer átállítjuk, utána a WP az előre betöltött listából adja. */
+add_action('init', function () {
+	if (!function_exists('wp_set_option_autoload') || !function_exists('wp_load_alloptions')) { return; }
+	$all = wp_load_alloptions();
+	foreach (array('cp_st_db_ver', 'cp_kb_db_ver', 'cp_wl_db_ver', 'cp_kz_db_ver') as $n) {
+		if (!array_key_exists($n, $all) && get_option($n) !== false) { wp_set_option_autoload($n, true); }
+	}
+}, 1);
 
 /* ------------------------------------------------------------ segédfüggvények */
 
@@ -585,8 +596,8 @@ function cp_st_mail_capture() {
 /* egy szinkron-kör: a teljes beolvasás lapokban halad (óránként legfeljebb ~20 Salesmate-hívás), utána a változások */
 function cp_st_sync($manual = false) {
 	if (!function_exists('cp_sm_request') || !cp_st_db_ok()) { return 'Az adatbázis még nem kész.'; }
-	if (get_transient('cp_st_sync_lock')) { return 'Már fut egy szinkron.'; }
-	set_transient('cp_st_sync_lock', 1, 10 * MINUTE_IN_SECONDS);
+	/* v2.9.58: közös, atomi zár a gyors szinkronnal (cp_st_quick_sync) – egyszerre futva megduplázták a levél-eseményeket */
+	if (!cp_st_dg_lock('cp_st_run_lock', 10 * MINUTE_IN_SECONDS)) { return 'Már fut egy szinkron.'; }
 	@set_time_limit(240);
 	$st = cp_st_state();
 	/* v2: ablakos teljes beolvasás – a korábbi (hiányos, instabil lapozású) beolvasás eredményét egyszer újratöltjük */
@@ -709,7 +720,7 @@ function cp_st_sync($manual = false) {
 	$st['last_sec'] = round(microtime(true) - $t0, 1);
 	cp_st_state_set($st);
 	cp_st_bump();
-	delete_transient('cp_st_sync_lock');
+	cp_st_dg_unlock('cp_st_run_lock');
 	return $st['last_err'] !== '' ? 'HIBA: ' . $st['last_err'] : ('OK – ' . $st['last_log']);
 }
 
@@ -1901,23 +1912,8 @@ function cp_st_gads_script() {
 		. "}\n";
 }
 
-/* költségtábla-összesítő a hibakereséshez (csatorna × fiók × hónap; titkot nem tartalmaz, a Claude-híd olvashatja) */
-add_action('init', function () {
-	if (get_transient('cp_st_adsdiag_t') || !cp_st_db_ok()) { return; }
-	set_transient('cp_st_adsdiag_t', 1, 10 * MINUTE_IN_SECONDS);
-	global $wpdb;
-	$t = cp_st_t('ads');
-	$r = $wpdb->get_results("SELECT channel, IF(LOCATE(':', campaign_id) > 0, SUBSTRING_INDEX(campaign_id, ':', 1), '(nincs)') acct, DATE_FORMAT(d, '%Y-%m') m, COUNT(*) n, COUNT(DISTINCT campaign_id) camps, ROUND(SUM(spend)) s, SUM(clicks) c, SUM(impressions) i, MAX(updated_at) u FROM $t WHERE d >= DATE_SUB(CURDATE(), INTERVAL 14 MONTH) GROUP BY channel, acct, m ORDER BY channel, acct, m", ARRAY_A);
-	$top = $wpdb->get_results("SELECT d, campaign_id, campaign_name, spend, clicks, impressions FROM $t WHERE channel = 'google' ORDER BY spend DESC LIMIT 15", ARRAY_A);
-	$d = cp_st_t('deals'); $c = cp_st_t('contacts');
-	$src = $wpdb->get_results("SELECT DATE_FORMAT(x.created_d, '%Y-%m') m, x.source, IFNULL(k.utm_source, '') us, IFNULL(k.utm_medium, '') um, COUNT(*) n FROM $d x LEFT JOIN $c k ON k.id = x.contact_id WHERE x.created_d >= DATE_SUB(CURDATE(), INTERVAL 13 MONTH) GROUP BY m, x.source, us, um ORDER BY m, n DESC", ARRAY_A);
-	update_option('cp_st_adsdiag', array('at' => time(), 'rows' => $r, 'google_top' => $top, 'lead_src' => $src), false);
-});
-
-/* az egyszeri riport-adatgyűjtés ideiglenes adatának törlése */
-add_action('init', function () { if (get_option('cp_st_report_tmp') !== false) { delete_option('cp_st_report_tmp'); } });
-
-add_action('init', function () { if (get_option('cp_st_adsdump_tmp') !== false) { delete_option('cp_st_adsdump_tmp'); } });
+/* v2.9.58: törölve a cp_st_adsdiag hibakereső összesítő (minden kérésnél 10 percenként 3 nehéz lekérdezés, a kód sehol nem olvasta)
+ * és a két egyszeri takarító init-horog (cp_st_report_tmp, cp_st_adsdump_tmp – már lefutottak) */
 
 /* élő figyelmeztetések (Figyelmeztetések csempe) */
 require_once __DIR__ . '/stat-alerts.php';

@@ -11,7 +11,7 @@
 
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-	const S = { boards: null, mineN: 0, cur: null, data: null, q: '', onlyMine: false, arch: false, main: null, err: '', loading: false, pending: null };
+	const S = { boards: null, mineN: 0, cur: null, data: null, q: '', onlyMine: false, arch: false, main: null, err: '', seq: 0 };
 	try { S.hideActs = localStorage.getItem('cpkb_hideacts') === '1'; } catch (e) { /* privát mód */ }
 	try { const v = localStorage.getItem('cpkb_cur'); if (v) S.cur = v === 'mine' || v === 'people' ? v : Number(v); } catch (e) { /* privát mód */ }
 
@@ -159,14 +159,14 @@
 		const n = window.prompt('Az új tábla neve:');
 		if (!n || !n.trim()) return;
 		const own = ME ? window.confirm('Saját (csak te látod) tábla legyen?\n\nOK = saját tábla · Mégse = csapattábla (mindenki látja)') : false;
-		try { const r = await post('cp_kb_board_save', { name: n.trim(), kind: own ? 'personal' : 'team' }); await loadBoards(); S.cur = r.id; S.data = null; view(S.main); toast('Tábla létrehozva.'); } catch (e) { toast(e.message, true); }
+		try { const r = await post('cp_kb_board_save', { name: n.trim(), kind: own ? 'personal' : 'team' }); TARGETS = null; await loadBoards(); S.cur = r.id; S.data = null; view(S.main); toast('Tábla létrehozva.'); } catch (e) { toast(e.message, true); }
 	}
 	function boardMenu(btn, b) {
 		popMenu(btn, [
-			{ t: 'Tábla átnevezése', fn: async () => { const n = window.prompt('A tábla új neve:', b.n); if (!n || !n.trim()) return; try { await post('cp_kb_board_save', { id: b.id, name: n.trim() }); await loadBoards(); view(S.main); } catch (e) { toast(e.message, true); } } },
+			{ t: 'Tábla átnevezése', fn: async () => { const n = window.prompt('A tábla új neve:', b.n); if (!n || !n.trim()) return; try { await post('cp_kb_board_save', { id: b.id, name: n.trim() }); TARGETS = null; await loadBoards(); view(S.main); } catch (e) { toast(e.message, true); } } },
 			{ t: 'Új lista', fn: () => addList() },
 			null,
-			{ t: 'Tábla törlése', bad: true, fn: async () => { if (!window.confirm('Biztosan törlöd a(z) „' + b.n + '” táblát a kártyáival együtt?')) return; try { await post('cp_kb_board_save', { id: b.id, del: 1 }); await loadBoards(); S.cur = null; view(S.main); toast('Tábla törölve.'); } catch (e) { toast(e.message, true); } } }
+			{ t: 'Tábla törlése', bad: true, fn: async () => { if (!window.confirm('Biztosan törlöd a(z) „' + b.n + '” táblát a kártyáival együtt?')) return; try { await post('cp_kb_board_save', { id: b.id, del: 1 }); TARGETS = null; await loadBoards(); S.cur = null; view(S.main); toast('Tábla törölve.'); } catch (e) { toast(e.message, true); } } }
 		]);
 	}
 
@@ -176,7 +176,12 @@
 		if (!body) return;
 		if (reload || !S.data || S.data.board.id !== S.cur) {
 			if (!S.data || S.data.board.id !== S.cur) body.innerHTML = '<div class="cpx-empty">Betöltés…</div>';
-			try { S.data = await post('cp_kb_board', { id: S.cur, arch: S.arch ? 1 : 0 }); S.err = ''; } catch (e) { S.err = e.message; body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+			/* v2.9.58: gyors táblaváltásnál a már nem aktuális tábla (vagy archív nézet) válaszát eldobjuk */
+			const cur = S.cur, arch = S.arch, seq = ++S.seq;
+			let d;
+			try { d = await post('cp_kb_board', { id: cur, arch: arch ? 1 : 0 }); } catch (e) { if (seq !== S.seq || S.cur !== cur) return; S.err = e.message; body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+			if (seq !== S.seq || S.cur !== cur || S.arch !== arch || !body.isConnected) return;
+			S.data = d; S.err = '';
 		}
 		const x = S.data, q = fold(S.q);
 		const vis = c => (!q || fold(c.title).includes(q) || c.lb.some(l => fold(lname(l)).includes(q)) || c.as.some(id => fold(pname(id)).includes(q))) && (!S.onlyMine || c.as.includes(ME));
@@ -199,7 +204,6 @@
 		body.querySelectorAll('[data-lmenu]').forEach(b => b.addEventListener('click', () => listMenu(b, Number(b.closest('.kb-list').dataset.list))));
 		body.querySelectorAll('[data-lname]').forEach(h => h.addEventListener('dblclick', () => renameList(Number(h.closest('.kb-list').dataset.list))));
 		dnd(body);
-		if (S.pending) { const id = S.pending; S.pending = null; openCard(id); }
 	}
 
 	function addCardForm(sec) {
@@ -221,13 +225,13 @@
 	async function addList() {
 		const n = window.prompt('Az új lista neve:');
 		if (!n || !n.trim()) return;
-		try { await post('cp_kb_list_save', { board: S.cur, name: n.trim() }); drawBoard(true); } catch (e) { toast(e.message, true); }
+		try { await post('cp_kb_list_save', { board: S.cur, name: n.trim() }); TARGETS = null; drawBoard(true); } catch (e) { toast(e.message, true); }
 	}
 	async function renameList(id) {
 		const l = S.data.lists.find(x => x.id === id);
 		const n = window.prompt('A lista új neve:', l.n);
 		if (!n || !n.trim()) return;
-		try { await post('cp_kb_list_save', { board: S.cur, id: id, name: n.trim() }); drawBoard(true); } catch (e) { toast(e.message, true); }
+		try { await post('cp_kb_list_save', { board: S.cur, id: id, name: n.trim() }); TARGETS = null; drawBoard(true); } catch (e) { toast(e.message, true); }
 	}
 	function listMenu(btn, id) {
 		const ids = S.data.lists.map(l => l.id), i = ids.indexOf(id);
@@ -238,7 +242,7 @@
 			{ t: '← Mozgatás balra', off: i === 0, fn: () => move(-1) },
 			{ t: 'Mozgatás jobbra →', off: i === ids.length - 1, fn: () => move(1) },
 			null,
-			{ t: 'Lista törlése', bad: true, fn: async () => { if (!window.confirm('Törlöd a listát? (Csak üres lista törölhető.)')) return; try { await post('cp_kb_list_save', { board: S.cur, id: id, del: 1 }); drawBoard(true); } catch (e) { toast(e.message, true); } } }
+			{ t: 'Lista törlése', bad: true, fn: async () => { if (!window.confirm('Törlöd a listát? (Csak üres lista törölhető.)')) return; try { await post('cp_kb_list_save', { board: S.cur, id: id, del: 1 }); TARGETS = null; drawBoard(true); } catch (e) { toast(e.message, true); } } }
 		]);
 	}
 
@@ -385,9 +389,22 @@
 		try { x = await post('cp_kb_card', { id: id }); } catch (e) { sh.innerHTML = '<div class="cpx-sheet-h"><h3>Kártya</h3><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div><div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		drawCard(sh, x);
 	}
-	function changed(sh) {
+	function changed(sh, r) {
 		if (sh && sh._after) sh._after();
-		if (S.main && S.main.isConnected && S.main.querySelector('.kb')) { if (S.cur === 'mine') drawMine(); else if (S.cur === 'people') drawPeople(true); else drawBoard(true); }
+		if (S.main && S.main.isConnected && S.main.querySelector('.kb')) { if (S.cur === 'mine') drawMine(); else if (S.cur === 'people') drawPeople(true); else if (!patchCard(r)) drawBoard(true); }
+	}
+	/* v2.9.58: a kártyalapon mentett kártyát helyben frissítjük a táblán (nem töltjük újra az egész táblát) */
+	function patchCard(r) {
+		const c = r && r.card, x = S.data;
+		if (!c || !x || x.board.id !== S.cur || c.board !== x.board.id) return false;
+		const i = x.cards.findIndex(z => z.id === c.id);
+		const keep = c.arch === (S.arch ? 1 : 0);
+		if (i >= 0 && (!keep || x.cards[i].list !== c.list)) x.cards.splice(i, 1);
+		if (keep) { if (i >= 0 && x.cards[i] && x.cards[i].id === c.id) x.cards[i] = c; else x.cards.push(c); }
+		const L = r.links || {}; x.links = x.links || {};
+		['deals', 'threads'].forEach(k => { x.links[k] = Object.assign({}, x.links[k] || {}, L[k] || {}); });
+		drawBoard();
+		return true;
 	}
 
 	function drawCard(sh, x) {
@@ -414,7 +431,7 @@
 				'<ul class="kb-coms">' + feed(x).map(it => it.a ? (S.hideActs ? '' : '<li class="kb-act"><span class="kb-dot"></span><div><b>' + esc(it.a.author || '–') + '</b> ' + esc(it.a.text) + ' <small>' + esc(ago(it.a.created_at)) + '</small></div></li>') : (m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + '<p>' + nl2br(m.body) + '</p></div></li>')(it.m)).join('') + '</ul></div>' +
 			'<div class="kb-shf"><small class="cpx-muted">Létrehozta: ' + esc(c.by || '–') + ' · ' + esc(ago(c.at)) + '</small><span class="crm-bgap"></span>' +
 				'<button type="button" class="cpx-btn ghost' + (c.arch ? '' : ' bad') + '" data-arch>' + (c.arch ? 'Visszaállítás' : 'Archiválás') + '</button></div></div>';
-		const save = async p => { try { const r = await post('cp_kb_card_save', Object.assign({ id: c.id }, p)); if (sh.isConnected) drawCard(sh, r); changed(sh); return r; } catch (e) { toast(e.message, true); return null; } };
+		const save = async p => { try { const r = await post('cp_kb_card_save', Object.assign({ id: c.id }, p)); if (sh.isConnected) drawCard(sh, r); changed(sh, r); return r; } catch (e) { toast(e.message, true); return null; } };
 		const ti = sh.querySelector('[data-title]');
 		const fit = () => { ti.style.height = 'auto'; ti.style.height = ti.scrollHeight + 'px'; };
 		fit(); ti.addEventListener('input', fit);
@@ -448,10 +465,10 @@
 		sh.querySelector('[data-acts]').addEventListener('change', e => { S.hideActs = !e.target.checked; try { localStorage.setItem('cpkb_hideacts', S.hideActs ? '1' : '0'); } catch (er) { /* privát mód */ } drawCard(sh, x); });
 		const ta = sh.querySelector('[data-com]');
 		mention(ta, sh.querySelector('.kb-mpop'));
-		const send = async () => { const b = ta.value.trim(); if (!b) return; ta.disabled = true; try { const r = await post('cp_kb_comment', { card: c.id, body: b }); if (sh.isConnected) drawCard(sh, r); changed(sh); } catch (e) { toast(e.message, true); ta.disabled = false; } };
+		const send = async () => { const b = ta.value.trim(); if (!b) return; ta.disabled = true; try { const r = await post('cp_kb_comment', { card: c.id, body: b }); if (sh.isConnected) drawCard(sh, r); changed(sh, r); } catch (e) { toast(e.message, true); ta.disabled = false; } };
 		sh.querySelector('[data-csend]').addEventListener('click', send);
 		ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
-		sh.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Törlöd a hozzászólást?')) return; try { const r = await post('cp_kb_comment', { del: b.dataset.cdel }); drawCard(sh, r); changed(sh); } catch (e) { toast(e.message, true); } }));
+		sh.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Törlöd a hozzászólást?')) return; try { const r = await post('cp_kb_comment', { del: b.dataset.cdel }); drawCard(sh, r); changed(sh, r); } catch (e) { toast(e.message, true); } }));
 		sh.querySelector('[data-arch]').addEventListener('click', async () => { if (!c.arch && !window.confirm('Archiválod a kártyát? (Az Archív nézetből visszaállítható.)')) return; const r = await save({ arch: c.arch ? 0 : 1 }); if (r && !c.arch) { closeSheet(); toast('Kártya archiválva.'); } });
 	}
 	/* hozzászólások és változások időrendben, a legfrissebb felül */

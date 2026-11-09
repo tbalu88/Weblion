@@ -78,8 +78,9 @@ function cp_st_dg_maybe_send() {
 		if (empty($o[$kind]) || !empty($sent[$t['key']])) { continue; }
 		$late = time() - $t['at'];
 		if ($late < 0 || $late > 36 * HOUR_IN_SECONDS) { continue; }
-		/* atomikus zár: két egyszerre futó kör ne küldjön kétszer */
-		if (!cp_st_dg_lock('cp_st_dg_lock_' . $t['key'])) { continue; }
+		/* atomikus zár: két egyszerre futó kör ne küldjön kétszer
+		 * v2.9.58: 30 perces elavulási idővel – ha a PHP küldés közben elhal, a beragadt zár nem akadályozza meg örökre a küldést */
+		if (!cp_st_dg_lock('cp_st_dg_lock_' . $t['key'], 1800)) { continue; }
 		/* a zár megszerzése után újra ellenőrizzük, hogy közben nem küldte-e el egy másik kör */
 		$sent = get_option('cp_st_dg_sent', array());
 		if (!is_array($sent)) { $sent = array(); }
@@ -103,13 +104,20 @@ function cp_st_dg_send($kind, $from, $to, $test) {
 	if (!$test) { if (function_exists('cp_ch_on') && !cp_ch_on('digest')) { return new WP_Error('chan_off', 'Ez a csatorna-üzenet ki van kapcsolva (Beállítások → Értesítések).'); } }
 	$hook = cp_st_dg_hook();
 	if ($hook === '') { return new WP_Error('nohook', 'Nincs megadva az összesítő Pumble-webhookja.'); }
+	$GLOBALS['cp_st_dg_snap_new'] = null;
 	$txt = cp_st_dg_text($kind, $from, $to, !$test);
 	if ($test) { $txt = "🧪 TESZT – " . $txt; }
-	if (function_exists('cp_el_pumble')) { return cp_el_pumble($txt, $hook); }
-	$res = wp_remote_post($hook, array('timeout' => 15, 'headers' => array('Content-Type' => 'application/json'), 'body' => wp_json_encode(array('text' => $txt))));
-	if (is_wp_error($res)) { return $res; }
-	$code = (int) wp_remote_retrieve_response_code($res);
-	return $code >= 200 && $code < 300 ? true : new WP_Error('pumble', 'Pumble hiba (' . $code . ')');
+	if (function_exists('cp_el_pumble')) { $ok = cp_el_pumble($txt, $hook); }
+	else {
+		$res = wp_remote_post($hook, array('timeout' => 15, 'headers' => array('Content-Type' => 'application/json'), 'body' => wp_json_encode(array('text' => $txt))));
+		if (is_wp_error($res)) { return $res; }
+		$code = (int) wp_remote_retrieve_response_code($res);
+		$ok = $code >= 200 && $code < 300 ? true : new WP_Error('pumble', 'Pumble hiba (' . $code . ')');
+	}
+	/* v2.9.58: a kintlévőség-pillanatkép csak sikeres küldés után mentődik (különben a következő próbálkozás „változása” hamis lenne) */
+	if ($ok === true && !$test && is_array($GLOBALS['cp_st_dg_snap_new'])) { update_option('cp_st_dg_snap', $GLOBALS['cp_st_dg_snap_new'], false); }
+	$GLOBALS['cp_st_dg_snap_new'] = null;
+	return $ok;
 }
 
 /* ------------------------------------------------------------ adatok */
@@ -328,7 +336,7 @@ function cp_st_dg_text($kind, $f, $t, $commit = false) {
 		$L[] = 'ebből lejárt: ' . $B(cp_st_dg_ft($ov)) . ' (' . (int) ($osum && isset($osum['n']) ? $osum['n'] : 0) . ' deal)' . ($osum && !empty($osum['items']) ? ' · a legrégebbi ' . $osum['items'][0]['late'] . ' napja' : '');
 		if ($chg !== null) { $L[] = 'az előző összesítő óta: ' . ($chg > 0 ? '+' : ($chg < 0 ? '−' : '')) . cp_st_dg_ft(abs($chg)); }
 		$L[] = '';
-		if ($commit) { $snap[$kind] = array('recv' => $rv, 'over' => $ov, 't' => time()); update_option('cp_st_dg_snap', $snap, false); }
+		if ($commit) { $snap[$kind] = array('recv' => $rv, 'over' => $ov, 't' => time()); $GLOBALS['cp_st_dg_snap_new'] = $snap; } /* v2.9.58: mentés a sikeres küldés után (cp_st_dg_send) */
 	}
 
 	/* hirdetés */
@@ -502,7 +510,12 @@ function cp_st_ms_check() {
 	if (isset($o['ms']) && !$o['ms']) { return; }
 	$st = cp_st_state();
 	if (empty($st['deal_full_at']) || !empty($st['deal_redo'])) { return; }
+	/* v2.9.58: a teljes újraszámolás csak akkor fut, ha az adat változott (cp_st_ver) – különben legfeljebb óránként egyszer */
+	$ver = (string) get_option('cp_st_ver', '');
+	$seen = get_option('cp_st_ms_seen', array());
+	if (is_array($seen) && isset($seen['v'], $seen['t']) && $seen['v'] === $ver && time() - (int) $seen['t'] < HOUR_IN_SECONDS) { return; }
 	if (!cp_st_dg_lock('cp_st_ms_lock', 300)) { return; }
+	update_option('cp_st_ms_seen', array('v' => $ver, 't' => time()), false);
 	$x = cp_st_ms_values();
 	$steps = cp_st_ms_steps();
 	$defs = cp_st_ms_defs();

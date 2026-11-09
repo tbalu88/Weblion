@@ -17,7 +17,7 @@
 	const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 	const PAY = { kp: 'készpénz', kartya: 'saját kártya', ceges: 'céges kártya', atutalas: 'átutalás' };
 	const ST = { draft: ['folyamatban', 'd'], submitted: ['lezárva – jóváhagyásra vár', 's'], approved: ['jóváhagyva', 'a'] };
-	const S = { uid: W.main || W.me, day: today(), mode: 'day', e: null, sug: [], prev: null, main: null, saving: 0, dirty: {}, t: null, m: today().slice(0, 7) };
+	const S = { uid: W.main || W.me, day: today(), mode: 'day', e: null, sug: [], prev: null, main: null, saving: 0, seq: 0, dirty: {}, t: null, m: today().slice(0, 7) };
 	try { const k = JSON.parse(localStorage.getItem('cpx_wl') || '{}'); if (k.uid && (W.users || []).some(u => u.id === k.uid)) S.uid = k.uid; } catch (e) { /* privát mód */ }
 
 	async function post(action, params, file) {
@@ -75,12 +75,15 @@
 		main.innerHTML = '<div class="wl">' + head() + '<div class="wl-b"><div class="cpx-empty">Betöltés…</div></div></div>';
 		bindHead(main);
 		const b = main.querySelector('.wl-b');
+		/* v2.9.58: kérés-sorszám – gyors napváltásnál a régebbi (elavult) válasz nem írhatja felül az újat */
+		const seq = ++S.seq;
 		try {
-			if (S.mode === 'month') { const r = await post('cp_wl_month', { uid: S.uid, m: S.m }); if (main.isConnected) drawMonth(b, r); return; }
+			if (S.mode === 'month') { const r = await post('cp_wl_month', { uid: S.uid, m: S.m }); if (seq === S.seq && main.isConnected) drawMonth(b, r); return; }
 			const r = await post('cp_wl_get', { uid: S.uid, day: S.day });
+			if (seq !== S.seq) return;
 			S.e = r.e; S.sug = r.sug || []; S.prev = r.prev; S.dirty = {};
 			if (main.isConnected) drawDay(b);
-		} catch (e) { b.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; }
+		} catch (e) { if (seq === S.seq) b.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; }
 	}
 
 	/* ------------------------------------------------------------ nap */
@@ -209,13 +212,16 @@
 		b.querySelectorAll('[data-upl]').forEach(inp => inp.addEventListener('change', async () => {
 			const files = Array.from(inp.files || []); if (!files.length) return;
 			const kind = inp.dataset.upl, forI = inp.dataset.for;
+			/* v2.9.58: a nap rögzítése a kiválasztáskor – napváltás közben is arra a napra megy a kép, amelyiknél kijelölték */
+			const day = S.day;
 			await flush();
 			let n = 0, last = 0;
 			for (const f0 of files) {
 				toast('Feltöltés: ' + (++n) + ' / ' + files.length + '…');
-				try { const f = await shrink(f0); const r = await post('cp_wl_upload', { day: S.day, kind: kind }, f); S.e = r.e; last = r.id; }
+				try { const f = await shrink(f0); const r = await post('cp_wl_upload', { day: day, kind: kind }, f); if (day === S.day && S.uid === W.me) S.e = r.e; last = r.id; }
 				catch (e) { toast(e.message, true); }
 			}
+			if (day !== S.day || S.uid !== W.me || !b.isConnected) { toast(files.length > 1 ? files.length + ' kép feltöltve (' + day + ').' : 'Feltöltve (' + day + ').'); return; }
 			if (kind === 'receipt' && last && forI !== undefined) { const l = costs(); if (l[Number(forI)]) { l[Number(forI)].file = last; await setCosts(l, true); return; } }
 			toast(files.length > 1 ? files.length + ' kép feltöltve.' : 'Feltöltve.');
 			drawDay(b);

@@ -202,6 +202,12 @@ function cp_sudoku_api_create(WP_REST_Request $req) {
 	$p = (string) $req->get_param('puzzle');
 	$s = (string) $req->get_param('solution');
 	if (!cp_sudoku_valid_puzzle($p, $s)) { return cp_sudoku_err('cp_sdk_puzzle', 'Hibás feladvány.', 400); }
+	/* v2.9.58: egyszerű IP-nkénti korlát (óránként legfeljebb 20 új szoba) – a nyilvános végpont ne legyen tömeges
+	 * transient-írással terhelhető */
+	$rk = 'cp_sdk_rl_' . substr(hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? '') . wp_salt('nonce')), 0, 20) . gmdate('H');
+	$rn = (int) get_transient($rk);
+	if ($rn >= 20) { return cp_sudoku_err('cp_sdk_rate', 'Túl sok új szoba – próbáld újra kicsit később.', 429); }
+	set_transient($rk, $rn + 1, HOUR_IN_SECONDS);
 	$chars = 'abcdefghjkmnpqrstuvwxyz23456789';
 	do {
 		$id = '';

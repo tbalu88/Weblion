@@ -36,22 +36,30 @@ function cp_st_quick_sync($force) {
 	$st = cp_st_state();
 	if (empty($st['deal_full_at']) || empty($st['contact_full_at'])) { return; }
 	if (!$force && time() - (int) (isset($st['quick_at']) ? $st['quick_at'] : 0) < 8 * MINUTE_IN_SECONDS) { return; }
-	if (get_transient('cp_st_sync_lock') || get_transient('cp_st_quick_lock')) { return; }
-	set_transient('cp_st_quick_lock', 1, 2 * MINUTE_IN_SECONDS);
+	/* v2.9.58: közös, atomi zár az óránkénti szinkronnal (cp_st_sync) – egyszerre futva megduplázták a levél-eseményeket */
+	if (!cp_st_dg_lock('cp_st_run_lock', 10 * MINUTE_IN_SECONDS)) { return; }
 	$since = gmdate('Y-m-d', time() - DAY_IN_SECONDS);
 	$err = '';
+	$prev_fp = isset($st['quick_fp']) ? (string) $st['quick_fp'] : '';
 	$r = cp_st_search('deal', 4, cp_st_deal_fields(), cp_st_mod_rule('deal', $since), 0);
-	if (is_wp_error($r)) { $err = $r->get_error_message(); } else { cp_st_store_deals($r, false); }
 	$c = cp_st_search('contact', 1, cp_st_contact_fields(), cp_st_mod_rule('contact', $since), 0);
-	if (is_wp_error($c)) { $err = $c->get_error_message(); } else { cp_st_store_contacts($c); }
-	cp_st_mail_capture();
+	/* v2.9.58: ha a Salesmate ugyanazt adta vissza, mint az előző gyors körben, nincs mit tárolni, és a statisztika
+	 * gyorsítótárát sem kell érvényteleníteni (cp_st_bump) */
+	$fp = is_wp_error($r) || is_wp_error($c) ? '' : md5(serialize($r) . '|' . serialize($c));
+	$same = $fp !== '' && $fp === $prev_fp;
+	if (!$same) {
+		if (is_wp_error($r)) { $err = $r->get_error_message(); } else { cp_st_store_deals($r, false); }
+		if (is_wp_error($c)) { $err = $c->get_error_message(); } else { cp_st_store_contacts($c); }
+		cp_st_mail_capture();
+	}
 	$st = cp_st_state();
 	$st['quick_at'] = time();
 	$st['quick_err'] = mb_substr($err, 0, 200);
+	$st['quick_fp'] = $fp;
 	if ($err === '') { $st['quick_ok'] = time(); }
 	cp_st_state_set($st);
-	cp_st_bump();
-	delete_transient('cp_st_quick_lock');
+	if (!$same) { cp_st_bump(); }
+	cp_st_dg_unlock('cp_st_run_lock');
 }
 
 /* ------------------------------------------------------------ figyelmeztetések */
@@ -388,7 +396,8 @@ function cp_st_ajax_alerts() {
 	/* „élő”: ha valaki nézi a fület, és 10 percnél régebbi a gyors szinkron, most frissít */
 	$st = cp_st_state();
 	if (time() - (int) (isset($st['quick_at']) ? $st['quick_at'] : 0) > 10 * MINUTE_IN_SECONDS) { cp_st_quick_sync(false); }
-	$ck = 'cp_st_al_' . md5(get_option('cp_st_ver', '') . cp_st_today() . gmdate('YmdHi'));
+	/* v2.9.58: állandó kulcs (adatverzió + nap) 90 mp-es élettartammal – a korábbi percenként változó kulcs szinte sosem talált */
+	$ck = 'cp_st_al_' . md5(get_option('cp_st_ver', '') . '|' . cp_st_today());
 	$c = get_transient($ck);
 	if (!is_array($c)) {
 		$c = cp_st_alerts();

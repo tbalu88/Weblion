@@ -68,7 +68,7 @@ add_action('init', function () {
   PRIMARY KEY  (id),
   KEY entry_id (entry_id)
 ) $c;");
-	update_option('cp_wl_db_ver', CP_WL_DB_VER, false);
+	update_option('cp_wl_db_ver', CP_WL_DB_VER, true); /* v2.9.58: autoload – minden kérés olvassa */
 }, 8);
 function cp_wl_db_ok() { return get_option('cp_wl_db_ver') === CP_WL_DB_VER; }
 
@@ -231,7 +231,11 @@ function cp_wl_ajax_status() {
 	if ($to === 'submitted') {
 		if ($uid !== $me) { cp_el_err('Csak a saját napodat zárhatod le.'); }
 		if ($e['status'] === 'approved') { cp_el_err('Már jóvá van hagyva.'); }
-		$wpdb->update(cp_wl_t('entries'), array('status' => 'submitted', 'updated_at' => gmdate('Y-m-d H:i:s')), array('id' => (int) $e['id']));
+		/* v2.9.58: már beküldött nap újraküldése (dupla kattintás / két fül) nem küld második értesítést és Pumble-riportot;
+		 * a feltételes UPDATE miatt két egyidejű kérésből is csak az egyik „nyer” */
+		if ($e['status'] === 'submitted') { wp_send_json_success(array('e' => cp_wl_out($e))); }
+		$ok = $wpdb->query($wpdb->prepare('UPDATE ' . cp_wl_t('entries') . " SET status = 'submitted', updated_at = %s WHERE id = %d AND status = 'draft'", gmdate('Y-m-d H:i:s'), (int) $e['id']));
+		if (!$ok) { wp_send_json_success(array('e' => cp_wl_out(cp_wl_get_row($uid, $day)))); }
 		cp_wl_notify_admins('lezárta a munkanaplóját (' . $day . ', ' . cp_wl_hours($e) . ' óra) – jóváhagyásra vár.', $day);
 		/* v2.6: összefoglaló a Pumble riport-csatornájába */
 		$pr = cp_wl_pumble_report($uid, $day);
@@ -252,7 +256,9 @@ function cp_wl_ajax_comment() {
 	$uid = cp_wl_uid_param(); $day = cp_wl_day($_POST['day'] ?? '');
 	$body = mb_substr(trim(sanitize_textarea_field(wp_unslash((string) ($_POST['body'] ?? '')))), 0, 3000);
 	if ($body === '' || !$day) { cp_el_err('Üres a hozzászólás.'); }
-	$e = cp_wl_ensure($uid, $day);
+	/* v2.9.58: más kolléga napjához hozzászólva ne jöjjön létre neki üres „folyamatban” bejegyzés */
+	$e = $uid === cp_wl_me() ? cp_wl_ensure($uid, $day) : cp_wl_get_row($uid, $day);
+	if (!$e) { cp_el_err('Erre a napra még nincs bejegyzés – hozzászólni csak meglévő naphoz lehet.'); }
 	$wpdb->insert(cp_wl_t('comments'), array('entry_id' => (int) $e['id'], 'uid' => cp_wl_me(), 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'body' => $body, 'created_at' => gmdate('Y-m-d H:i:s')));
 	if (function_exists('cp_notify')) {
 		$to = array($uid); foreach (cp_wl_users() as $u) { if ($u['admin']) { $to[] = $u['id']; } }
@@ -353,7 +359,9 @@ function cp_wl_ajax_month() {
 		$fh = fopen('php://output', 'w');
 		fputcsv($fh, array('Dátum', 'Kezdés', 'Befejezés', 'Óra', 'Munka típusa', 'Helyszín', 'Km', 'Költség (Ft)', 'Fotók', 'Feladatok (kész/összes)', 'Állapot', 'Megjegyzés'), ';');
 		$st = array('draft' => 'folyamatban', 'submitted' => 'lezárva', 'approved' => 'jóváhagyva');
-		foreach ($out as $r) { fputcsv($fh, array($r['day'], $r['t_start'], $r['t_end'], str_replace('.', ',', (string) $r['hours']), implode(', ', $r['kinds']), $r['place'], $r['km'], $r['cost'], $r['photos'], $r['done'] . '/' . $r['tasks'], $st[$r['status']] ?? $r['status'], $r['notes']), ';'); }
+		/* v2.9.58: CSV-képletbefecskendezés ellen – a szöveges (felhasználói) cellák elé ' kerül, ha =, +, -, @ jellel kezdődnek */
+		$cs = function ($v) { $v = (string) $v; return $v !== '' && strpos("=+-@\t\r", $v[0]) !== false ? "'" . $v : $v; };
+		foreach ($out as $r) { fputcsv($fh, array($r['day'], $r['t_start'], $r['t_end'], str_replace('.', ',', (string) $r['hours']), $cs(implode(', ', $r['kinds'])), $cs($r['place']), $r['km'], $r['cost'], $r['photos'], $r['done'] . '/' . $r['tasks'], $st[$r['status']] ?? $r['status'], $cs($r['notes'])), ';'); }
 		fputcsv($fh, array('Összesen', '', '', str_replace('.', ',', (string) $tot['hours']), '', '', $tot['km'], $tot['cost'], '', '', '', $tot['days'] . ' munkanap'), ';');
 		fclose($fh); exit;
 	}

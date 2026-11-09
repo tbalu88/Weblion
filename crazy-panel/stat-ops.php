@@ -22,7 +22,14 @@ function cp_st_ops($rows, $f, $t) {
 	global $wpdb;
 	$today = cp_st_today();
 	if ($t > $today) { $t = $today; }
-	$titles = $wpdb->get_results('SELECT id, title FROM ' . cp_st_t('deals'), OBJECT_K);
+	/* v2.9.58: a deal-címek és az Elszámolás-adatok kérésenként egyszer töltődnek be (a hívók ugyanabban a kérésben
+	 * kétszer hívják: aktuális + előző időszak), és a hiányzó-lista nem kér le rendezvényenként külön beállítást */
+	static $cache = null;
+	if ($cache === null) {
+		$cache = array('titles' => $wpdb->get_results('SELECT id, title FROM ' . cp_st_t('deals'), OBJECT_K), 'all' => cp_el_st_all(), 'map' => array());
+		foreach ($cache['all'] as $pair) { $cache['map'][(string) $pair[0]] = $pair[1]; }
+	}
+	$titles = $cache['titles'];
 	$by = array();
 	foreach ($rows as $r) { $by[(string) $r['id']] = $r; }
 	$o = array(
@@ -47,7 +54,7 @@ function cp_st_ops($rows, $f, $t) {
 		}
 	}
 	$o['sat']['events'] = count($evs);
-	foreach (cp_el_st_all() as $pair) {
+	foreach ($cache['all'] as $pair) {
 		list($id, $st) = $pair;
 		if (empty($st['r']) || !is_array($st['r'])) { continue; }
 		$id = (string) $id;
@@ -104,7 +111,7 @@ function cp_st_ops($rows, $f, $t) {
 	/* hiányzó adat rendezvényenként (csak a fülre): fotós rendezvény papírfogyasztás nélkül, értékelés / gépállapot nélküli rendezvény */
 	$miss = array('pa' => array(), 'sa' => array(), 'gm' => array());
 	foreach ($evs as $eid => $r) {
-		$it = array('id' => $eid, 't' => isset($titles[$eid]) ? (string) $titles[$eid]->title : ('Deal #' . $eid), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => function_exists('cp_el_st_get') ? (int) !empty(cp_el_st_get($eid)['r']) : 0);
+		$it = array('id' => $eid, 't' => isset($titles[$eid]) ? (string) $titles[$eid]->title : ('Deal #' . $eid), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => (int) !empty($cache['map'][(string) $eid]['r']));
 		if (cp_st_is_print($r) && empty($has['pa'][$eid])) { $miss['pa'][] = $it; }
 		if (empty($has['sa'][$eid])) { $miss['sa'][] = $it; }
 		if (empty($has['gm'][$eid]) && ($o['since']['gm'] === '' || $r['event_d'] >= $o['since']['gm'])) { $miss['gm'][] = $it; }

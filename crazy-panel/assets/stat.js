@@ -19,7 +19,7 @@
 	const md = s => { const d = pd(s); return HU_MS[d.getMonth()] + ' ' + d.getDate() + '.'; };
 	const hrs = h => h == null ? '–' : (h < 1 ? Math.round(h * 60) + ' perc' : (h < 48 ? (Math.round(h * 10) / 10).toString().replace('.', ',') + ' óra' : Math.round(h / 24) + ' nap'));
 
-	const S = { gran: 'month', a: ymd(new Date()), data: null, ga: null, err: '', loading: false, gaTimer: null, yoy: true, main: null, sel: -1 };
+	const S = { gran: 'month', a: ymd(new Date()), data: null, ga: null, err: '', loading: false, gaTimer: null, yoy: true, main: null, sel: -1, seq: 0, rlT: null };
 	try { const g = localStorage.getItem('cpst_gran'); if (g && GRANS.some(x => x[0] === g)) S.gran = g; } catch (e) { /* privát mód */ }
 	S.edit = false;
 	/* egyéni intervallum (alapból az utolsó 30 nap) */
@@ -61,22 +61,31 @@
 		S.a = ymd(d);
 	}
 
+	/* v2.9.58: kérés-sorszám – gyors időszakváltásnál csak a legutolsó kérés válasza kerül a képernyőre; false = elavult válasz */
 	async function load(force) {
+		const seq = ++S.seq;
 		S.loading = true; S.err = '';
 		status();
+		let d = null, err = '';
 		try {
-			S.data = await post('cp_st_data', Object.assign({ g: S.gran, a: S.a, refresh: force ? 1 : '' }, S.gran === 'custom' ? { cf: S.cf, ct: S.ct } : {}));
-		} catch (e) { S.err = e.message; }
+			d = await post('cp_st_data', Object.assign({ g: S.gran, a: S.a, refresh: force ? 1 : '' }, S.gran === 'custom' ? { cf: S.cf, ct: S.ct } : {}));
+		} catch (e) { err = e.message; }
+		if (seq !== S.seq) return false;
+		if (d) S.data = d;
+		S.err = err;
 		S.loading = false;
 		status();
+		return true;
 	}
 
 	async function loadGa() {
 		const d = S.data;
 		if (!d || !d.sync || !d.sync.ga) { S.ga = { off: true }; return; }
+		let g;
 		try {
-			S.ga = await post('cp_st_ga', { f: d.from, to: d.curTo, pf: d.prev[0], pt: d.prev[1], yf: d.yoy[0], yt: d.yoy[1] });
-		} catch (e) { S.ga = { err: e.message }; }
+			g = await post('cp_st_ga', { f: d.from, to: d.curTo, pf: d.prev[0], pt: d.prev[1], yf: d.yoy[0], yt: d.yoy[1] });
+		} catch (e) { g = { err: e.message }; }
+		if (S.data === d) S.ga = g; /* v2.9.58: közben másik időszakra váltottak → az elavult GA-választ eldobjuk */
 	}
 
 	function status(el) {
@@ -94,7 +103,7 @@
 		S.main = main;
 		if (!S.data) {
 			main.innerHTML = '<div class="cpx-empty">Statisztikák betöltése…</div>';
-			await load(false);
+			if (!(await load(false)) && !S.data) return; /* v2.9.58: közben újabb betöltés indult – az rajzol */
 		}
 		draw();
 		loadAlerts();
@@ -135,7 +144,7 @@
 			main.querySelectorAll('.st-body').forEach(x => { x.style.opacity = '.45'; });
 			if (a) main.style.minHeight = main.offsetHeight + 'px';
 		}
-		await load(force);
+		if (!(await load(force))) return; /* v2.9.58: közben újabb betöltés indult – az fog rajzolni */
 		draw();
 		anchorFix(a);
 		requestAnimationFrame(() => anchorFix(a));
@@ -278,8 +287,10 @@
 		h += '<button type="button" class="st-totop" id="st-totop" aria-label="Vissza az oldal tetejére" title="Vissza a tetejére">↑</button>';
 		main.innerHTML = h;
 
-		main.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.gran = b.dataset.g; try { localStorage.setItem('cpst_gran', S.gran); } catch (e) { /* privát mód */ } reload(false); });
-		main.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { shiftAnchor(+b.dataset.d); reload(false); });
+		/* v2.9.58: rövid várakozás (250 ms) – a gyors ‹ › / bontás-kattintások egyetlen lekérést indítanak */
+		const later = () => { main.querySelectorAll('.st-body').forEach(x => { x.style.opacity = '.45'; }); clearTimeout(S.rlT); S.rlT = setTimeout(() => reload(false), 250); };
+		main.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.gran = b.dataset.g; try { localStorage.setItem('cpst_gran', S.gran); } catch (e) { /* privát mód */ } main.querySelectorAll('[data-g]').forEach(x => x.classList.toggle('on', x === b)); later(); });
+		main.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { shiftAnchor(+b.dataset.d); later(); });
 		main.querySelector('[data-now]').onclick = () => {
 			if (S.gran === 'custom') { const n = dayDiff(S.cf, S.ct); S.ct = ymd(new Date()); S.cf = addDays(S.ct, -n); saveCustom(); }
 			else S.a = ymd(new Date());
@@ -906,7 +917,7 @@
 			'<label>Megjelenés<input name="impr" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<label>Konverzió<input name="conv" inputmode="numeric" placeholder="nem kötelező"></label>' +
 			'<button class="cpx-btn" type="submit">Mentés</button></form>';
-		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el. A kampány december 10-ig fut.' + (d.sync && d.sync.li && d.sync.li.on ? ' A Windsor.ai-ból lekért napokon a kézi tétel nem számít bele (nincs dupla költés).' : '') + '</div>';
+		b += '<div class="st-sub" style="margin:6px 0 10px">Havi összegnél add meg a hónap első és utolsó napját; az összeg a napokra arányosan oszlik el.' + (d.sync && d.sync.li && d.sync.li.on ? ' A Windsor.ai-ból lekért napokon a kézi tétel nem számít bele (nincs dupla költés).' : '') + '</div>';
 		if (list.length) b += '<div class="st-tw"><table class="st-t"><thead><tr><th>Időszak</th><th>Megnevezés</th><th class="r">Költés</th><th class="r">Katt.</th><th></th></tr></thead><tbody>' + list.map(e => '<tr><td>' + dshort(e.from) + '–' + dshort(e.to) + '</td><td>' + esc(e.name) + '</td><td class="r">' + ft(e.amount) + '</td><td class="r">' + (e.clicks || '–') + '</td><td class="r"><button class="cpx-btn ghost sm" data-li-ed="' + esc(e.id) + '" aria-label="Szerkesztés">✎</button> <button class="cpx-btn ghost sm" data-li-del="' + esc(e.id) + '" aria-label="Törlés">×</button></td></tr>').join('') + '</tbody></table></div>';
 		return card('LinkedIn – kézi költség', '', b, true);
 	}

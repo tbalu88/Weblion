@@ -1223,9 +1223,9 @@
   /* ---------- Kétszemélyes játék ---------- */
 
   const API = location.origin + '/wp-json/crazy-sudoku/v1';
-  const POLL_MS = 1500;
+  const POLL_MS = 3000; // v2.9.58: 1,5 mp helyett 3 mp, láncolt időzítővel (a szerver kímélése)
   const mp = {
-    data: null, offset: 0, poll: null, pushTimer: null, pushing: false, dirty: false, lastPush: 0,
+    data: null, offset: 0, poll: null, pollGen: 0, pushTimer: null, pushing: false, dirty: false, lastPush: 0,
     ended: false, joinId: '', oppOutShown: false,
     // az ellenfél korábbi állapota a változások (villanások, események) felismeréséhez
     prev: null, fx: {}, seenEv: new Set(), fills: [], flags: {}, ticker: '', tickerUntil: 0,
@@ -1394,20 +1394,29 @@
     }
   }
 
+  /* v2.9.58: setInterval helyett láncolt setTimeout – a következő lekérés csak az előző válasza után indul,
+     így lassú hálózaton sem torlódnak fel a kérések (a generáció-számláló miatt leállítás után nem fut tovább) */
   function mpStartPolling() {
     mpStopPolling();
-    mpTick();
-    mp.poll = setInterval(mpTick, POLL_MS);
+    const gen = mp.pollGen;
+    const loop = async () => {
+      if (gen !== mp.pollGen) return;
+      try { await mpTick(); } catch (e) { /* a következő körben újra */ }
+      if (gen === mp.pollGen) mp.poll = setTimeout(loop, POLL_MS);
+    };
+    loop();
   }
   function mpStopPolling() {
-    if (mp.poll) clearInterval(mp.poll);
+    mp.pollGen++;
+    if (mp.poll) clearTimeout(mp.poll);
     mp.poll = null;
   }
 
   async function mpTick() {
     if (!game || !game.mp || document.hidden) return;
+    if (mp.pushing) return; // v2.9.58: amíg egy mentés úton van, nem kérdezünk le (annak válasza úgyis frissít)
     // életjel / elmaradt mentés pótlása
-    if (mp.dirty || Date.now() - mp.lastPush > 6000) { mpPush(); return; }
+    if (mp.dirty || Date.now() - mp.lastPush > 6000) { await mpPush(); return; }
     try {
       mpApply(await api('GET', '/room/' + game.mp.id));
     } catch (e) {

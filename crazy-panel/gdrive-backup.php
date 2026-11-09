@@ -132,6 +132,12 @@ function cp_gdb_prune() {
 	return $del;
 }
 
+/* v2.9.58: egymást követő hibák száma alapján a következő próbálkozás ideje (legfeljebb 6 óra) */
+function cp_gdb_backoff(&$st) {
+	$st['fails'] = (int) ($st['fails'] ?? 0) + 1;
+	$st['retry_at'] = time() + min(6 * HOUR_IN_SECONDS, 15 * MINUTE_IN_SECONDS * (2 ** min(5, $st['fails'] - 1)));
+}
+
 /* ütemezés: 15 percenként megnézi, van-e új helyi mentés; egyszerre egyet tölt fel */
 add_action('init', function () { if (!wp_next_scheduled('cp_gdb_tick')) { wp_schedule_event(time() + 300, 'cp_5min', 'cp_gdb_tick'); } });
 add_action('cp_gdb_tick', 'cp_gdb_tick');
@@ -139,6 +145,8 @@ function cp_gdb_tick($force = false) {
 	$o = cp_gdb_opts();
 	if ($o['on'] !== '1' && !$force) { return 'A Google Drive mentés ki van kapcsolva.'; }
 	if (!$force && get_transient('cp_gdb_at')) { return ''; }
+	/* v2.9.58: tartós hiba után visszalépés (15 → 30 → 60 → 120 → 240 → 360 perc), hogy ne csomagoljon újra ZIP-et 14 percenként napokig */
+	if (!$force && (int) (cp_gdb_state()['retry_at'] ?? 0) > time()) { return ''; }
 	set_transient('cp_gdb_at', 1, 14 * MINUTE_IN_SECONDS);
 	if (!add_option('cp_gdb_lock', time(), '', 'no')) { if ((int) get_option('cp_gdb_lock') > time() - 900) { return 'Épp fut egy feltöltés.'; } update_option('cp_gdb_lock', time(), false); }
 	if (function_exists('set_time_limit')) { @set_time_limit(280); }
@@ -148,15 +156,16 @@ function cp_gdb_tick($force = false) {
 		if ($pend) {
 			$key = array_key_first($pend);
 			$r = cp_gdb_upload_one($key, $pend[$key]);
-			if (is_wp_error($r)) { $st['err'] = $r->get_error_message(); $st['err_at'] = time(); $msg = 'Hiba: ' . $st['err']; }
+			if (is_wp_error($r)) { $st['err'] = $r->get_error_message(); $st['err_at'] = time(); $msg = 'Hiba: ' . $st['err']; cp_gdb_backoff($st); }
 			else {
 				$st['done'][] = $key; $st['done'] = array_slice((array) $st['done'], -300);
 				$st['last'] = time(); $st['last_name'] = $r['name']; $st['last_mb'] = $r['mb']; $st['err'] = '';
+				unset($st['fails'], $st['retry_at']);
 				$msg = 'Feltöltve: ' . $r['name'] . ' (' . $r['mb'] . ' MB)' . (count($pend) > 1 ? ' – még ' . (count($pend) - 1) . ' vár.' : '.');
 			}
 		}
 		if (empty($st['pruned']) || $st['pruned'] < time() - DAY_IN_SECONDS) { $p = cp_gdb_prune(); if (!is_wp_error($p)) { $st['pruned'] = time(); $st['pruned_n'] = $p; } }
-	} catch (Throwable $e) { $st['err'] = mb_substr($e->getMessage(), 0, 200); $st['err_at'] = time(); $msg = 'Hiba: ' . $st['err']; }
+	} catch (Throwable $e) { $st['err'] = mb_substr($e->getMessage(), 0, 200); $st['err_at'] = time(); $msg = 'Hiba: ' . $st['err']; cp_gdb_backoff($st); }
 	update_option('cp_gdb_state', $st, false);
 	delete_option('cp_gdb_lock');
 	return $msg;
