@@ -50,10 +50,16 @@ function cp_portal_opts() {
 	$o = array_merge(cp_portal_defaults(), $o);
 	if ($o['webhook_key'] === '') {
 		$o['webhook_key'] = wp_generate_password(32, false, false);
-		update_option(CP_PORTAL_OPT, $o, false);
+		update_option(CP_PORTAL_OPT, $o, true);
 	}
 	return $o;
 }
+
+/* v2.9.58: a portál-beállítást szinte minden kérés olvassa → automatikusan betöltött legyen.
+ * Egyszeri átállítás; ha egy másik mentés (pl. a panel Beállítások oldala) visszaállítja, a következő kérés újra bekapcsolja. */
+add_action('init', function () {
+	if (!isset(wp_load_alloptions()[CP_PORTAL_OPT]) && function_exists('wp_set_option_autoload') && get_option(CP_PORTAL_OPT) !== false) { wp_set_option_autoload(CP_PORTAL_OPT, true); }
+}, 1);
 
 /* off | on (a v1.8-as „selected” és „all” érték is bekapcsolt állapotot jelent) */
 function cp_portal_mode() {

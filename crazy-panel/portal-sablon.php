@@ -54,7 +54,9 @@ function cp_portal_render_sablon_page($portal, $tok) {
 	$locked = cp_portal_locked($portal);
 	$sm = $portal->sm;
 	$own = array();
-	foreach (cp_sb_own_list() as $e) { if (isset($e['cat']) && in_array($e['cat'], array('wed', 'party'), true)) { $own[] = $e; } }
+	/* v2.9.58: az ügyfélnek csak a rajzoláshoz szükséges mezők mennek ki (a belső AI-prompt nem) */
+	$okk = array_flip(array('id', 'name', 'set', 'layout', 'slots', 'or', 'cat', 'font', 'color', 'wf', 'wc', 'file', 'thumb'));
+	foreach (cp_sb_own_list() as $e) { if (isset($e['cat']) && in_array($e['cat'], array('wed', 'party'), true)) { $own[] = array_intersect_key($e, $okk); } }
 	$ajax = '/wp-admin/admin-ajax.php';
 	$cfg = array(
 		'ajax' => $ajax,

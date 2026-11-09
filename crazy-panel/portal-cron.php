@@ -55,11 +55,12 @@ function cp_portal_tick() {
 		$st = cp_portal_state($p->id);
 		$created = cp_portal_db_ts($p->created_at);
 		/* v1.92: a portál saját kérdéssora szerint (v1-nél a szerződéses lépcső nem kötelező) */
-		$missing = cp_portal_missing(cp_portal_answers($p->id), null, cp_portal_flow($p), $p);
+		$ans = cp_portal_answers($p->id);  // v2.9.58: egyszer olvassuk
+		$missing = cp_portal_missing($ans, null, cp_portal_flow($p), $p);
 
 		// „Mehet a szerződés” tartalék: a szerződéses adatok kész, de a gombot nem nyomták meg (vagy módosultak a jelzés óta),
 		// és 30 perce nem változott semmi → a rendszer jelzi (Pumble)
-		if (cp_portal_flow($p) === 'v2' && !cp_portal_missing(cp_portal_answers($p->id), 'a', 'v2')) {
+		if (cp_portal_flow($p) === 'v2' && !cp_portal_missing($ans, 'a', 'v2')) {
 			$quiet = cp_portal_db_ts($wpdb->get_var($wpdb->prepare('SELECT MAX(updated_at) FROM ' . cp_portal_t('form_answers') . ' WHERE portal_id = %d', (int) $p->id))) <= $now - 30 * MINUTE_IN_SECONDS;
 			if ($quiet && (empty($st->contract_ready_at) || !empty($st->contract_changed_at))) { cp_portal_contract_submit($p, 'rendszer'); }
 		}
@@ -142,8 +143,13 @@ function cp_portal_retention($today = null) {
 	$cut30 = cp_portal_ymd_add($today, -CP_PORTAL_KEEP_FORM_DAYS);
 	$cut3y = cp_portal_ymd_add($today, -CP_PORTAL_KEEP_CONSENT_YEARS * 365 - 1);
 	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT id, event_date, deal_id FROM $P WHERE event_date < %s", $cut30));
+	/* v2.9.58: a már teljesen törölt adatlapú portálokat (pid → akkori rendezvénynap) nem dolgozzuk fel minden éjjel újra */
+	$done = get_option('cp_portal_ret_done', array());
+	if (!is_array($done)) { $done = array(); }
+	$done0 = $done;
 	foreach ($rows as $p) {
 		$pid = (int) $p->id;
+		if (isset($done[$pid]) && $done[$pid] === (string) $p->event_date) { continue; }
 		/* v1.99.2: ha a dealen közben későbbre tették a rendezvényt (a portál még a régi dátumot tudja), nem törlünk – frissítjük a portált */
 		if (function_exists('cp_crm_t') && !empty($p->deal_id)) {
 			$nd = (string) $wpdb->get_var($wpdb->prepare('SELECT event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d AND deleted_at IS NULL', (int) $p->deal_id));
@@ -175,6 +181,7 @@ function cp_portal_retention($today = null) {
 			$x = cp_portal_log_blank($pid, "field_key NOT IN ($in) AND field_key <> 'onsite_contact'", $keep, wp_json_encode('törölve'));
 			cp_portal_retention_log('adatlap törölve', $pid, $d);
 			cp_portal_retention_log('napló-értékek törölve', $pid, $x);
+			$done[$pid] = (string) $p->event_date;
 		}
 	}
 
@@ -196,7 +203,9 @@ function cp_portal_retention($today = null) {
 			$wpdb->delete(cp_portal_t($t), array('portal_id' => $pid));
 		}
 		$wpdb->delete($P, array('id' => $pid));
+		unset($done[$pid]);
 		cp_portal_retention_log('portál törölve (5 év)', $pid, 1);
 	}
+	if ($done !== $done0) { update_option('cp_portal_ret_done', $done, false); }
 	update_option('cp_portal_retention_last', time(), false);
 }

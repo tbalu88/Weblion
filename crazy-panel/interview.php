@@ -15,7 +15,11 @@ define('CP_IV_DB_VER', '1');
 function cp_iv_t($n) { global $wpdb; return $wpdb->prefix . 'crazy_iv_' . $n; }
 
 add_action('init', function () {
-	if (get_option('cp_iv_db_ver') === CP_IV_DB_VER) { return; }
+	if (get_option('cp_iv_db_ver') === CP_IV_DB_VER) {
+		/* v2.9.58: minden kérésnél olvassuk → automatikusan betöltött legyen (egyszeri átállítás, ha még nem az) */
+		if (!isset(wp_load_alloptions()['cp_iv_db_ver']) && function_exists('wp_set_option_autoload')) { wp_set_option_autoload('cp_iv_db_ver', true); }
+		return;
+	}
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	$c = $wpdb->get_charset_collate();
@@ -47,7 +51,7 @@ add_action('init', function () {
   KEY token (token),
   KEY email (email)
 ) $c;");
-	update_option('cp_iv_db_ver', CP_IV_DB_VER, false);
+	update_option('cp_iv_db_ver', CP_IV_DB_VER, true);
 	cp_iv_sync_slots();
 }, 8);
 function cp_iv_ok() { return get_option('cp_iv_db_ver') === CP_IV_DB_VER; }
@@ -74,8 +78,18 @@ function cp_iv_sync_slots() {
 		for ($m = $a; $m + $dur <= $b; $m += $dur) { $want[$d['d'] . ' ' . sprintf('%02d:%02d', intdiv($m, 60), $m % 60)] = 1; }
 	}
 	$S = cp_iv_t('slots'); $B = cp_iv_t('bookings');
+	/* v2.9.58: a foglalt időpontok megmaradnak a saját hosszukkal; új (szabad) időpont nem kerülhet átfedésbe velük
+	 * (pl. 20 → 30 perces váltásnál a 10:20-as foglalás mellé nem jön 10:30-as időpont) */
+	$busy = array();
+	foreach ((array) $wpdb->get_results("SELECT s.day, s.tm, s.dur FROM $S s JOIN $B b ON b.slot_id = s.id", ARRAY_A) as $r) {
+		$m0 = (int) substr($r['tm'], 0, 2) * 60 + (int) substr($r['tm'], 3); $busy[$r['day']][] = array($m0, $m0 + max(5, (int) $r['dur']), $r['tm']);
+	}
+	foreach (array_keys($want) as $k) {
+		$day = substr($k, 0, 10); $tm = substr($k, 11, 5); $m0 = (int) substr($tm, 0, 2) * 60 + (int) substr($tm, 3);
+		foreach ($busy[$day] ?? array() as $bi) { if ($bi[2] !== $tm && $m0 < $bi[1] && $m0 + $dur > $bi[0]) { unset($want[$k]); break; } }
+	}
 	foreach (array_keys($want) as $k) { $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $S (day, tm, dur) VALUES (%s, %s, %d)", substr($k, 0, 10), substr($k, 11, 5), $dur)); }
-	$wpdb->query($wpdb->prepare("UPDATE $S SET dur = %d", $dur));
+	$wpdb->query($wpdb->prepare("UPDATE $S s LEFT JOIN $B b ON b.slot_id = s.id SET s.dur = %d WHERE b.id IS NULL", $dur));
 	foreach ((array) $wpdb->get_results("SELECT s.id, s.day, s.tm FROM $S s LEFT JOIN $B b ON b.slot_id = s.id WHERE b.id IS NULL", ARRAY_A) as $s) {
 		if (!isset($want[$s['day'] . ' ' . $s['tm']])) { $wpdb->delete($S, array('id' => (int) $s['id'])); }
 	}
@@ -85,7 +99,7 @@ function cp_iv_sync_slots() {
 function cp_iv_ts($day, $tm) { $d = date_create($day . ' ' . $tm . ':00', wp_timezone()); return $d ? $d->getTimestamp() : 0; }
 function cp_iv_hu_day($day, $long = true) {
 	$t = cp_iv_ts($day, '12:00');
-	$m = array('január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december');
+	$m = cp_portal_hu_months();  // v2.9.58: a portál közös hónapnevei
 	$w = array('vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat');
 	$n = (int) wp_date('n', $t); $j = (int) wp_date('j', $t); $dow = $w[(int) wp_date('w', $t)];
 	return $long ? wp_date('Y', $t) . '. ' . $m[$n - 1] . ' ' . $j . '., ' . $dow : mb_substr($m[$n - 1], 0, 3) . '. ' . $j . '., ' . $dow;
@@ -122,33 +136,61 @@ function cp_iv_book($slot_id, $name, $phone, $email) {
 	$o = cp_iv_opts();
 	if (!$s || $s['blocked']) { return new WP_Error('iv', 'Ez az időpont nem foglalható. Válassz másikat.'); }
 	if (cp_iv_ts($s['day'], $s['tm']) < time() + 60 * (int) $o['close_min']) { return new WP_Error('iv', 'Erre az időpontra már lezárult a foglalás. Válassz egy későbbit.'); }
-	$dup = $wpdb->get_row($wpdb->prepare("SELECT * FROM $B WHERE email = %s AND status = 'ok' AND slot_id IS NOT NULL LIMIT 1", $email), ARRAY_A);
-	if ($dup) { $ds = cp_iv_slot($dup['slot_id']); return new WP_Error('iv_dup', 'Ezzel az e-mail-címmel már van foglalásod' . ($ds ? ' (' . cp_iv_slot_label($ds) . ')' : '') . '. A visszaigazoló levélben lévő linkkel módosíthatod vagy lemondhatod.'); }
 	$ip = cp_iv_ip();
+	$dup = $wpdb->get_row($wpdb->prepare("SELECT * FROM $B WHERE email = %s AND status = 'ok' AND slot_id IS NOT NULL LIMIT 1", $email), ARRAY_A);
+	if ($dup) {
+		/* v2.9.58: dupla beküldés (ugyanaz az eszköz, ugyanaz az időpont, pár percen belül) → a meglévő foglalás oldalára visszük */
+		if (cp_iv_same_submit($dup, (int) $s['id'], $ip)) { return $dup; }
+		/* v2.9.58 (B3): az időpontot nem áruljuk el (bárki beírhat egy e-mail-címet); a visszaigazolót újraküldjük, foglalásonként legfeljebb 10 percenként */
+		$ds = cp_iv_slot($dup['slot_id']);
+		if ($ds && !get_transient('cp_iv_resend_' . (int) $dup['id'])) { set_transient('cp_iv_resend_' . (int) $dup['id'], 1, 10 * MINUTE_IN_SECONDS); cp_iv_mail_confirm($dup, $ds, 'new'); }
+		return new WP_Error('iv_dup', 'Ezzel az e-mail-címmel már van élő foglalás. A visszaigazoló levélben találod a módosítás / lemondás linkjét – a levelet újra elküldtük erre a címre (ha nem érkezik meg, nézd meg a levélszemét mappát is).');
+	}
 	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $B WHERE ip = %s AND created_at >= %s", $ip, gmdate('Y-m-d H:i:s', time() - HOUR_IN_SECONDS))) >= 5) { return new WP_Error('iv', 'Túl sok foglalás erről az eszközről. Próbáld újra később, vagy hívj minket.'); }
 	$token = bin2hex(random_bytes(16));
 	$now = gmdate('Y-m-d H:i:s');
 	$wpdb->suppress_errors(true);
 	$ok = $wpdb->insert($B, array('slot_id' => (int) $s['id'], 'name' => $name, 'phone' => $phone, 'email' => $email, 'token' => $token, 'status' => 'ok', 'ip' => $ip, 'created_at' => $now, 'changed_at' => $now));
 	$wpdb->suppress_errors(false);
-	if (!$ok) { return new WP_Error('iv_taken', 'Ezt az időpontot közben valaki más lefoglalta. Válassz egy másikat.'); }
+	if (!$ok) {
+		/* v2.9.58: egyszerre érkezett dupla beküldés – a másik kérés már lefoglalta ugyanennek a jelentkezőnek */
+		$dup = $wpdb->get_row($wpdb->prepare("SELECT * FROM $B WHERE email = %s AND status = 'ok' AND slot_id = %d LIMIT 1", $email, (int) $s['id']), ARRAY_A);
+		if ($dup && cp_iv_same_submit($dup, (int) $s['id'], $ip)) { return $dup; }
+		return new WP_Error('iv_taken', 'Ezt az időpontot közben valaki más lefoglalta. Válassz egy másikat.');
+	}
 	$b = $wpdb->get_row($wpdb->prepare("SELECT * FROM $B WHERE id = %d", (int) $wpdb->insert_id), ARRAY_A);
+	cp_iv_burst_check();
 	$kz = cp_iv_kz_upsert($b, $s, 'foglalva');
 	if ($kz) { $wpdb->update($B, array('kz_id' => $kz), array('id' => (int) $b['id'])); $b['kz_id'] = $kz; }
 	cp_iv_mail_confirm($b, $s, 'new');
 	cp_iv_notify('Interjú-foglalás: ' . $name . ' – ' . cp_iv_slot_label($s, false));
 	return $b;
 }
+/* v2.9.58: ugyanannak a beküldésnek az ismétlése-e (ugyanaz az időpont és eszköz, 15 percen belül) – csak ekkor kaphatja meg a kezelőlinket */
+function cp_iv_same_submit($dup, $slot_id, $ip) {
+	return (int) $dup['slot_id'] === (int) $slot_id && hash_equals((string) $dup['ip'], (string) $ip) && strtotime((string) $dup['created_at'] . ' UTC') >= time() - 15 * MINUTE_IN_SECONDS;
+}
+/* v2.9.58 (B3): ha 10 percen belül 5-nél több foglalás jön, egyetlen riasztás az adminoknak (óránként legfeljebb egy) */
+function cp_iv_burst_check() {
+	global $wpdb;
+	if (get_transient('cp_iv_burst')) { return; }
+	$n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_iv_t('bookings') . ' WHERE created_at >= %s', gmdate('Y-m-d H:i:s', time() - 10 * MINUTE_IN_SECONDS)));
+	if ($n <= 5) { return; }
+	set_transient('cp_iv_burst', 1, HOUR_IN_SECONDS);
+	cp_iv_notify('Figyelem: ' . $n . ' interjú-foglalás érkezett az elmúlt 10 percben – érdemes átnézni, nem kamu foglalások-e (Kezelők → Interjú-időpontok).');
+}
 function cp_iv_move($b, $slot_id) {
 	global $wpdb;
 	$B = cp_iv_t('bookings'); $o = cp_iv_opts();
+	/* v2.9.58: lemondott foglalás linkjével nem lehet újra foglalni (a zárás és a korlátok megkerülése) */
+	if ($b['status'] !== 'ok' || !$b['slot_id']) { return new WP_Error('iv', 'Ez a foglalás le van mondva – új időpontot a foglaló oldalon választhatsz.'); }
 	$old = cp_iv_slot($b['slot_id']);
 	if ($old && cp_iv_ts($old['day'], $old['tm']) < time() + 3600 * (int) $o['cancel_h']) { return new WP_Error('iv', 'Az interjú előtti ' . (int) $o['cancel_h'] . ' órában már nem lehet módosítani – kérjük, hívj minket.'); }
 	$s = cp_iv_slot($slot_id);
 	if (!$s || $s['blocked'] || cp_iv_ts($s['day'], $s['tm']) < time() + 60 * (int) $o['close_min']) { return new WP_Error('iv', 'Ez az időpont nem foglalható. Válassz másikat.'); }
 	if ((int) $b['slot_id'] === (int) $s['id']) { return $b; }
 	$wpdb->suppress_errors(true);
-	$ok = $wpdb->query($wpdb->prepare("UPDATE $B SET last_slot = slot_id, slot_id = %d, status = 'ok', changed_at = %s, reminded_at = NULL WHERE id = %d", (int) $s['id'], gmdate('Y-m-d H:i:s'), (int) $b['id']));
+	$ok = $wpdb->query($wpdb->prepare("UPDATE $B SET last_slot = slot_id, slot_id = %d, changed_at = %s, reminded_at = NULL WHERE id = %d AND status = 'ok'", (int) $s['id'], gmdate('Y-m-d H:i:s'), (int) $b['id']));
 	$wpdb->suppress_errors(false);
 	if (!$ok) { return new WP_Error('iv_taken', 'Ezt az időpontot közben valaki más lefoglalta. Válassz egy másikat.'); }
 	$b = $wpdb->get_row($wpdb->prepare("SELECT * FROM $B WHERE id = %d", (int) $b['id']), ARRAY_A);
@@ -161,7 +203,9 @@ function cp_iv_cancel($b, $by_admin = false) {
 	global $wpdb;
 	$o = cp_iv_opts(); $s = cp_iv_slot($b['slot_id']);
 	if (!$by_admin && $s && cp_iv_ts($s['day'], $s['tm']) < time() + 3600 * (int) $o['cancel_h']) { return new WP_Error('iv', 'Az interjú előtti ' . (int) $o['cancel_h'] . ' órában már nem lehet lemondani – kérjük, hívj minket.'); }
-	$wpdb->query($wpdb->prepare('UPDATE ' . cp_iv_t('bookings') . " SET last_slot = slot_id, slot_id = NULL, status = 'cancel', changed_at = %s WHERE id = %d", gmdate('Y-m-d H:i:s'), (int) $b['id']));
+	/* v2.9.58: csak élő foglalást mondunk le, és csak az első kérés értesít (dupla kattintásnál a második nem csinál semmit) */
+	$n = $wpdb->query($wpdb->prepare('UPDATE ' . cp_iv_t('bookings') . " SET last_slot = slot_id, slot_id = NULL, status = 'cancel', changed_at = %s WHERE id = %d AND status = 'ok'", gmdate('Y-m-d H:i:s'), (int) $b['id']));
+	if ((int) $n !== 1) { return true; }
 	if ($s) { cp_iv_kz_upsert($b, $s, $by_admin ? 'lemondva (a panelből)' : 'lemondva'); }
 	if (!$by_admin) { cp_iv_notify('Interjú lemondva: ' . $b['name'] . ($s ? ' – ' . cp_iv_slot_label($s, false) : '')); }
 	return true;

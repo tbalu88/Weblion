@@ -73,7 +73,7 @@
 /* előnézet */
 .sb-stage-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .sb-cvwrap{position:relative;display:flex;justify-content:center;align-items:center;min-height:420px;background:#F4F1EC;border-radius:12px;padding:16px}
-.sb-cvwrap canvas{display:block;max-width:100%;max-height:calc(100vh - 210px);width:auto;height:auto;box-shadow:0 14px 34px -16px rgba(20,28,51,.45);cursor:grab;touch-action:none;background:#fff}
+.sb-cvwrap canvas{display:block;max-width:100%;max-height:calc(100vh - 210px);width:auto;height:auto;box-shadow:0 14px 34px -16px rgba(20,28,51,.45);cursor:grab;touch-action:pan-y pinch-zoom;background:#fff} /* v2.9.58: telefonon görgethető; a felirat/logó húzását a JS védi (touchstart) */
 .sb-cvwrap canvas.punch{background:repeating-conic-gradient(#D9D4CC 0% 25%,#fff 0% 50%) 0 0/22px 22px}
 .sb-cvwrap canvas.drag{cursor:grabbing}
 .sb-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--mu);font-weight:600;background:rgba(244,241,236,.86);border-radius:12px}

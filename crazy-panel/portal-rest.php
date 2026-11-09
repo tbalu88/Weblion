@@ -1,12 +1,12 @@
 <?php
 /* Ügyfélportál – REST végpontok
- *   GET   /wp-json/crazy/v1/portal/form                 mezők, válaszok, határidő, zárolás
  *   PATCH /wp-json/crazy/v1/portal/form/{field_key}     egy mező mentése (POST is elfogadott)
  *   POST  /wp-json/crazy/v1/portal/form/complete        „Kész” gomb
  *   POST  /wp-json/crazy/v1/portal/form/contract        „Mehet a szerződés” – a szerződéshez szükséges adatok beküldése
  *   POST  /wp-json/crazy/v1/portal/sablon               a fotósablon mentése (portal-sablon.php)
  *   POST  /wp-json/crazy/v1/portal/template-logo        logó az egyedi sablonhoz (portal-sablon.php)
  *   POST  /wp-json/crazy/v1/salesmate/deal-stage?key=…  Salesmate-webhook (szakaszváltás)
+ * v2.9.58: a hívó nélküli GET /portal/form törölve (az oldal a mezőket a HTML-ben kapja).
  * Az ügyféloldali végpontok a portál sütijével azonosítanak; írásnál X-CP-Nonce fejléc is kell. */
 
 if (!defined('ABSPATH')) { exit; }
@@ -38,11 +38,6 @@ function cp_portal_rest_routes() {
 		'permission_callback' => 'cp_portal_rest_perm_write',
 		'callback' => 'cp_portal_rest_patch',
 	));
-	register_rest_route('crazy/v1', '/portal/form', array(
-		'methods' => 'GET',
-		'permission_callback' => 'cp_portal_rest_perm_read',
-		'callback' => 'cp_portal_rest_get',
-	));
 	register_rest_route('crazy/v1', '/salesmate/deal-stage', array(
 		'methods' => 'POST',
 		'permission_callback' => 'cp_portal_rest_perm_webhook',
@@ -69,11 +64,6 @@ function cp_portal_rest_perm_write(WP_REST_Request $req) {
 		return new WP_Error('cp_portal_nonce', 'Lejárt az oldal – töltsd újra.', array('status' => 403));
 	}
 	return true;
-}
-
-function cp_portal_rest_get() {
-	$s = cp_portal_session();
-	return cp_portal_form_payload($s['portal']);
 }
 
 function cp_portal_rest_patch(WP_REST_Request $req) {

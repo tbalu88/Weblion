@@ -129,7 +129,7 @@ function cp_portal_route_newlink($raw) {
 		return;
 	}
 	cp_portal_access_log($portal->id, 'newlink');
-	$r = cp_portal_send_link_mail($portal, 'newlink');
+	$r = cp_portal_send_client_mail($portal, 'newlink');
 	if (is_wp_error($r)) {
 		cp_portal_render_message('Nem sikerült elküldeni', 'Most nem tudtunk új linket küldeni. Kérjük, keresd az irodát.', array('status' => 503));
 		return;

@@ -93,12 +93,16 @@ function cp_sb_ajax_img() {
 		exit;
 	}
 	if ($have && (time() - filemtime($path)) < CP_SB_TTL) { cp_sb_send($f, $path); }
+	/* v2.9.58: a nemrég nem talált képet 5 percig nem kérjük le újra (a hiány is gyorsítótárazva) */
+	$miss = 'cp_sb_miss_' . md5($f);
+	if (!$have && get_transient($miss)) { nocache_headers(); status_header(404); exit; }
 
-	$r = wp_remote_get(CP_SB_SRC . $f, array('timeout' => 25, 'redirection' => 2));
+	$r = wp_remote_get(CP_SB_SRC . $f, array('timeout' => 8, 'redirection' => 2));  // v2.9.58: 25 → 8 mp
 	$code = is_wp_error($r) ? 0 : (int) wp_remote_retrieve_response_code($r);
 	$body = $code === 200 ? (string) wp_remote_retrieve_body($r) : '';
 	if ($body === '' || !cp_sb_is_img($body)) {
 		if ($have) { @touch($path); cp_sb_send($f, $path); } /* a crazyphoto.hu most nem érhető el: marad a régi */
+		if ($code === 404) { set_transient($miss, 1, 5 * MINUTE_IN_SECONDS); }
 		nocache_headers();
 		status_header($code === 404 ? 404 : 502);
 		exit;

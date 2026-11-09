@@ -39,25 +39,28 @@
 			'<footer>' + (D.saved ? '<button type="button" class="cpx-btn ghost" data-reset title="Újra a deal és a portál aktuális adataiból">Újratöltés a dealből</button>' : '') + '<span class="ct-sp"></span><button type="button" class="cpx-btn ghost" data-pdf>PDF / nyomtatás</button><button type="button" class="cpx-btn" data-docx>Word letöltése</button></footer></div>';
 		document.body.appendChild(w);
 		const F = w.querySelector('[data-f]'), PV = w.querySelector('[data-p]');
-		const close = () => { if (dirty && !window.confirm('Bezárod a szerkesztőt? (Az adatok mentve vannak, a szerződés bármikor újra megnyitható.)')) return; w.remove(); };
+		const close = () => { if (dirty && !window.confirm('Bezárod a szerkesztőt? (Az adatok mentve vannak, a szerződés bármikor újra megnyitható.)')) return; document.removeEventListener('keydown', onKey); w.remove(); };
+		/* v2.9.58: Esc is bezárja */
+		const onKey = e => { if (e.key === 'Escape' && document.body.contains(w)) { e.preventDefault(); close(); } };
+		document.addEventListener('keydown', onKey);
 		w.querySelector('[data-x]').addEventListener('click', close);
 		w.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { w.querySelectorAll('[data-tab]').forEach(z => z.classList.toggle('on', z === b)); w.classList.toggle('show-p', b.dataset.tab === 'p'); }));
 		const rs = w.querySelector('[data-reset]');
-		if (rs) rs.addEventListener('click', () => { if (!window.confirm('Felülírod a mentett szerződésadatokat a deal és a portál mostani adataival?')) return; Object.assign(st, JSON.parse(JSON.stringify(D.prefill))); draw(); refresh(); });
+		if (rs) rs.addEventListener('click', () => { if (!window.confirm('Felülírod a mentett szerződésadatokat a deal és a portál mostani adataival?')) return; Object.assign(st, JSON.parse(JSON.stringify(D.prefill))); draw(); refresh(true); });
 		const inp = (k, label, val, opt) => '<label class="' + ((opt && opt.cls) || '') + '">' + label + '<input data-k="' + k + '" value="' + esc(val) + '"' + (opt && opt.type ? ' type="' + opt.type + '"' : '') + (opt && opt.ph ? ' placeholder="' + esc(opt.ph) + '"' : '') + '></label>';
 		function draw() {
 			const c = st.client, chosen = {}; st.svc.forEach(s => { chosen[s.k] = s; });
 			let h = '<fieldset><legend>Nyelv</legend><div class="ct-seg"><label><input type="radio" name="ct-lang" value="hu"' + (st.lang !== 'en' ? ' checked' : '') + '> Magyar</label><label><input type="radio" name="ct-lang" value="en"' + (st.lang === 'en' ? ' checked' : '') + '> English (angol)</label></div>' + (st.lang === 'en' ? '<p class="ct-hint">Az angol modulszövegek fordítások – az első használatnál érdemes átolvasni.</p>' : '') + '</fieldset>';
-			h += '<fieldset><legend>Kiállító (megbízott)</legend><div class="ct-seg">' + Object.keys(D.issuers).map(k => '<label><input type="radio" name="ct-iss" value="' + k + '"' + (st.issuer === k ? ' checked' : '') + '> ' + esc(D.issuers[k]) + '</label>').join('') + '</div><p class="ct-hint">' + (st.issuer === 'EV' ? 'Az árak AAM bruttó összegként szerepelnek.' : 'Az árak nettó + ÁFA összegként szerepelnek.') + '</p></fieldset>';
+			h += '<fieldset><legend>Kiállító (megbízott)</legend><div class="ct-seg">' + Object.keys(D.issuers).map(k => '<label><input type="radio" name="ct-iss" value="' + esc(k) + '"' + (st.issuer === k ? ' checked' : '') + '> ' + esc(D.issuers[k]) + '</label>').join('') + '</div><p class="ct-hint">' + (st.issuer === 'EV' ? 'Az árak AAM bruttó összegként szerepelnek.' : 'Az árak nettó + ÁFA összegként szerepelnek.') + '</p></fieldset>';
 			h += '<fieldset><legend>Megbízó</legend><div class="ct-seg"><label><input type="radio" name="ct-ct" value="ceg"' + (c.type === 'ceg' ? ' checked' : '') + '> Cég</label><label><input type="radio" name="ct-ct" value="magan"' + (c.type === 'magan' ? ' checked' : '') + '> Magánszemély</label></div><div class="ct-g">' +
 				(c.type === 'ceg' ? inp('client.company', 'Cégnév', c.company, { cls: 'w2' }) + inp('client.seat', 'Székhely', c.seat, { cls: 'w2' }) + inp('client.reg', 'Cégjegyzékszám', c.reg) + inp('client.tax', 'Adószám', c.tax) + inp('client.signer', 'Képviseli (név, beosztás)', c.signer, { cls: 'w2' })
 					: inp('client.name', 'Név', c.name, { cls: 'w2' }) + inp('client.address', 'Lakcím', c.address, { cls: 'w2' })) + '</div></fieldset>';
 			h += '<fieldset><legend>Kapcsolattartó a megbízó részéről</legend><div class="ct-g">' + inp('contact.name', 'Név', st.contact.name) + inp('contact.tel', 'Telefon', st.contact.tel) + '</div></fieldset>';
 			h += '<fieldset><legend>Rendezvény</legend><div class="ct-g">' + inp('venue', 'Helyszín', st.venue, { cls: 'w2' }) + inp('date', 'Dátum', st.date, { type: 'date' }) + '<div class="ct-g2">' + inp('start', 'Kezdés', st.start, { ph: '18:00' }) + inp('end', 'Vége', st.end, { ph: '22:00' }) + '</div></div></fieldset>';
 			h += '<fieldset><legend>Szolgáltatások</legend><p class="ct-hint">Pipáld be, ami a megrendelésben szerepel – több is lehet, ilyenkor egy közös szerződés készül.</p><div class="ct-svc">' +
-				D.services.map(s => { const on = chosen[s.k]; return '<div class="ct-si' + (on ? ' on' : '') + '"><label class="ct-sn"><input type="checkbox" data-svc="' + s.k + '"' + (on ? ' checked' : '') + '> ' + esc(s.n) + '</label>' +
-					(on ? '<div class="ct-sr"><label>Óra<input type="number" min="1" max="24" data-sv="' + s.k + '" data-f="hours" value="' + Number(on.hours) + '"></label><label>Díj (' + (st.issuer === 'EV' ? 'AAM bruttó' : 'nettó') + ', Ft)<input type="number" min="0" step="1" data-sv="' + s.k + '" data-f="price" value="' + Number(on.price) + '"></label>' +
-						(s.hatter ? '<label class="w2">Háttér<input data-sv="' + s.k + '" data-f="bg" value="' + esc(on.bg || '') + '" placeholder="a választott háttér"></label>' : '') + '</div>' + (s.review && s.review.length ? '<p class="ct-warn">⚠ ' + esc(s.review.join(' ')) + '</p>' : '') : '') + '</div>'; }).join('') + '</div></fieldset>';
+				D.services.map(s => { const on = chosen[s.k]; return '<div class="ct-si' + (on ? ' on' : '') + '"><label class="ct-sn"><input type="checkbox" data-svc="' + esc(s.k) + '"' + (on ? ' checked' : '') + '> ' + esc(s.n) + '</label>' +
+					(on ? '<div class="ct-sr"><label>Óra<input type="number" min="1" max="24" data-sv="' + esc(s.k) + '" data-f="hours" value="' + Number(on.hours) + '"></label><label>Díj (' + (st.issuer === 'EV' ? 'AAM bruttó' : 'nettó') + ', Ft)<input type="number" min="0" step="1" data-sv="' + esc(s.k) + '" data-f="price" value="' + Number(on.price) + '"></label>' +
+						(s.hatter ? '<label class="w2">Háttér<input data-sv="' + esc(s.k) + '" data-f="bg" value="' + esc(on.bg || '') + '" placeholder="a választott háttér"></label>' : '') + '</div>' + (s.review && s.review.length ? '<p class="ct-warn">⚠ ' + esc(s.review.join(' ')) + '</p>' : '') : '') + '</div>'; }).join('') + '</div></fieldset>';
 			h += '<fieldset><legend>Kiszállási díj</legend><div class="ct-g">' + inp('travel_city', 'Település', st.travel_city) + inp('travel', 'Díj (Ft, 0 = nincs)', st.travel, { type: 'number' }) + '</div></fieldset>';
 			h += '<fieldset><legend>Fizetés</legend><div class="ct-seg">' + [['pre', 'előre utalással'], ['post', 'halasztott, 8 nap'], ['cash', 'helyszínen készpénzben']].map(o => '<label><input type="radio" name="ct-pay" value="' + o[0] + '"' + (st.pay === o[0] ? ' checked' : '') + '> ' + o[1] + '</label>').join('') + '</div></fieldset>';
 			h += '<fieldset><legend>Keltezés és egyedi kikötés</legend><div class="ct-g">' + inp('place', 'Hely', st.place) + inp('cdate', 'Dátum', st.cdate, { type: 'date' }) + '<label class="w2">Egyedi kikötés (nem kötelező, az Egyéb rendelkezések végére kerül)<textarea data-k="note" rows="3">' + esc(st.note || '') + '</textarea></label></div></fieldset>';
@@ -74,10 +77,11 @@
 			}));
 			F.querySelectorAll('[data-sv]').forEach(el => el.addEventListener('input', () => { const s = st.svc.find(z => z.k === el.dataset.sv); if (!s) return; s[el.dataset.f] = el.dataset.f === 'bg' ? el.value : Number(el.value); change(); }));
 		}
-		function change() { dirty = true; clearTimeout(timer); timer = setTimeout(refresh, 450); }
-		async function refresh() {
+		function change() { dirty = true; clearTimeout(timer); timer = setTimeout(() => refresh(true), 450); }
+		/* v2.9.58: megnyitáskor csak előnézet (save: 0), menteni csak változás után kell */
+		async function refresh(save) {
 			const my = ++req;
-			try { const r = await post('cp_ct_preview', { st: JSON.stringify(st), save: 1 }); if (my !== req) return; PV.innerHTML = r.html; w.querySelector('[data-st]').textContent = 'Automatikusan mentve'; dirty = false; }
+			try { const r = await post('cp_ct_preview', { st: JSON.stringify(st), save: save ? 1 : 0 }); if (my !== req) return; PV.innerHTML = r.html; if (save) { w.querySelector('[data-st]').textContent = 'Automatikusan mentve'; dirty = false; } }
 			catch (e) { if (my === req) PV.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; }
 		}
 		const file = fmt => {
@@ -90,7 +94,7 @@
 		};
 		w.querySelector('[data-docx]').addEventListener('click', () => file('docx'));
 		w.querySelector('[data-pdf]').addEventListener('click', () => file('html'));
-		draw(); refresh();
+		draw(); refresh(false);
 	}
 	window.CPContract = { slot, mount, open };
 
@@ -107,7 +111,7 @@
 		'.ct-svc{clear:both;display:flex;flex-direction:column;gap:4px;margin-top:6px}.ct-si{border:1px solid #EEEAE4;border-radius:10px;padding:6px 8px}.ct-si.on{border-color:#F0A46A;background:#FFF8F1}.ct-sn{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}' +
 		'.ct-sr{display:grid;grid-template-columns:90px 1fr;gap:8px;margin:6px 0 2px 24px}.ct-warn{margin:6px 0 0 24px;font-size:12px;color:#8A6400}' +
 		'.ct-card footer{display:flex;gap:8px;align-items:center;padding:10px 16px;background:#fff;border-top:1px solid #E6E3DE}.ct-sp{flex:1}' +
-		'@media (max-width:860px){.ct-card{width:100vw;height:100vh;border-radius:0}.ct-tabs{display:inline-flex;border:1px solid #DDD9D2;border-radius:10px;overflow:hidden}.ct-tabs button{border:0;background:#fff;padding:6px 12px;font:600 13px Inter,sans-serif}.ct-tabs button.on{background:#141C33;color:#fff}' +
+		'@media (max-width:860px){.ct-card{width:100vw;height:100vh;height:100dvh;border-radius:0}.ct-tabs{display:inline-flex;border:1px solid #DDD9D2;border-radius:10px;overflow:hidden}.ct-tabs button{border:0;background:#fff;padding:6px 12px;font:600 13px Inter,sans-serif}.ct-tabs button.on{background:#141C33;color:#fff}' +
 		'.ct-st{display:none}.ct-body{grid-template-columns:1fr}.ct-p{display:none;padding:8px}.ct-mod.show-p .ct-p{display:block}.ct-mod.show-p .ct-f{display:none}.ct-card h3{font-size:15px}.ct-p .ct-doc{padding:16px}}';
 	document.head.appendChild(css);
 })();

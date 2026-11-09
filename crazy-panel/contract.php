@@ -15,8 +15,7 @@ function cp_ct_seed() { static $S = null; if ($S === null) { $f = __DIR__ . '/co
 function cp_ct_lib() {
 	static $L = null;
 	if ($L !== null) { return $L; }
-	$f = __DIR__ . '/contract-seed.php';
-	$L = is_readable($f) ? ((include $f) ?: array()) : array();
+	$L = cp_ct_seed();  // v2.9.58: a már beolvasott alapból (eddig kétszer include-olta a ~1100 soros fájlt)
 	/* v1.78: az admin javításai (Beállítások → Szerződésmodulok) az alap fölé kerülnek – amit nem írtak át, az az alap marad */
 	foreach (cp_ct_over() as $part => $fields) {
 		foreach ((array) $fields as $fk => $v) {
@@ -54,7 +53,6 @@ function cp_ct_art($w) { $f = mb_strtolower(mb_substr(ltrim((string) $w), 0, 1))
 function cp_ct_dev($G, $key, $dev) { return str_replace('a(z) {DEV}', cp_ct_art($dev) . ' ' . $dev, $G[$key]); }
 function cp_ct_fmt($n) { return number_format((float) $n, 0, ',', ' '); }
 function cp_ct_money($n, $vat) { return $vat === 'aam' ? 'AAM bruttó ' . cp_ct_fmt($n) . ' Ft' : 'nettó ' . cp_ct_fmt($n) . ' Ft (+ÁFA)'; }
-function cp_ct_toks($s, $vat) { return preg_replace_callback('/\{P:(\d+)\}/', function ($m) use ($vat) { return cp_ct_money((int) $m[1], $vat); }, (string) $s); }
 function cp_ct_hudate($ymd) {
 	$M = array('január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december');
 	if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $ymd, $m)) { return (string) $ymd; }

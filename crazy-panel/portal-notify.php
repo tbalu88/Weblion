@@ -95,11 +95,6 @@ function cp_portal_send_client_mail($portal, $type, $force = false) {
 	return cp_portal_mail($to, $m['subject'], $m['html']);
 }
 
-/* új link e-mailben (ügyfél kérte vagy az iroda küldte); a címzett címét adja vissza */
-function cp_portal_send_link_mail($portal, $type = 'newlink', $force = false) {
-	return cp_portal_send_client_mail($portal, $type, $force);
-}
-
 /* ------------------------------------------------------------ Pumble */
 
 function cp_portal_pumble($text) {

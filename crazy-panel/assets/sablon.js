@@ -222,8 +222,9 @@ function lazyFonts() {
 
 /* ------------------------------------------------------------ fotóablakok felismerése (átlátszó foltok a sablonképen) */
 function holes(im, order) {
-	const key = im.src + '|' + (order || '');
-	if (holeCache[key]) return holeCache[key];
+	/* v2.9.58: data: URL-t (több MB-os szöveg) nem teszünk kulcsnak – azt nem gyorsítótárazzuk */
+	const key = /^data:/.test(im.src) ? '' : im.src + '|' + (order || '');
+	if (key && holeCache[key]) return holeCache[key];
 	const W = im.naturalWidth, H = im.naturalHeight, k = Math.max(1, Math.ceil(Math.max(W, H) / 700)), w = Math.ceil(W / k), h = Math.ceil(H / k);
 	const c = document.createElement('canvas'); c.width = w; c.height = h;
 	const x = c.getContext('2d'); x.drawImage(im, 0, 0, w, h);
@@ -245,7 +246,7 @@ function holes(im, order) {
 	out = out.filter(s => !out.some(o => o !== s && o[0] <= s[0] + 2 && o[1] <= s[1] + 2 && o[0] + o[2] >= s[0] + s[2] - 2 && o[1] + o[3] >= s[1] + s[3] - 2));
 	const tol = H * 0.05, tolx = W * 0.05;
 	out.sort(order === 'col' ? (p1, p2) => (Math.abs(p1[0] - p2[0]) > tolx ? p1[0] - p2[0] : p1[1] - p2[1]) : (p1, p2) => (Math.abs(p1[1] - p2[1]) > tol ? p1[1] - p2[1] : p1[0] - p2[0]));
-	holeCache[key] = out;
+	if (key) holeCache[key] = out;
 	return out;
 }
 
@@ -829,6 +830,7 @@ function bind() {
 	cv.addEventListener('pointermove', onMove);
 	cv.addEventListener('pointerup', onUp);
 	cv.addEventListener('pointercancel', onUp);
+	cv.addEventListener('touchstart', onTouchStart, { passive: false });
 }
 function pick(i) {
 	const prev = (D[st.di] || D[0]).set;
@@ -893,8 +895,9 @@ function onChange(ev) {
 	if (t.hasAttribute('data-photo')) {
 		const f = t.files && t.files[0]; if (!f) return;
 		const u = URL.createObjectURL(f), i = new Image();
-		i.onload = () => { st.own = i; st.mode = 'photo'; syncInputs(); schedule(); };
-		i.onerror = () => msg('Ez a fájl nem kép.', 'err');
+		/* v2.9.58: az előző saját fotó blob-címét felszabadítjuk */
+		i.onload = () => { if (st.ownUrl) URL.revokeObjectURL(st.ownUrl); st.ownUrl = u; st.own = i; st.mode = 'photo'; syncInputs(); schedule(); };
+		i.onerror = () => { URL.revokeObjectURL(u); msg('Ez a fájl nem kép.', 'err'); };
 		i.src = u;
 	}
 }
@@ -902,11 +905,38 @@ function toNative(ev) {
 	const r = ev.currentTarget.getBoundingClientRect();
 	return { x: (ev.clientX - r.left) / r.width * A.L.NW, y: (ev.clientY - r.top) / r.height * A.L.NH };
 }
+/* v2.9.58: a feliratok befoglaló téglalapjai (sablon-px) – érintésnél csak ezekre / a logóra kattintva indul húzás */
+function textRects(V, L) {
+	const g = textRects.g || (textRects.g = document.createElement('canvas').getContext('2d')), out = [];
+	textGroups(V, L).forEach(T0 => adjust(T0, st.ts / 100, st.tdx, st.tdy).forEach(o => {
+		let w;
+		if (o.t === 'pair') w = pairDraw(g, o, o.s, false);
+		else { const t = prep(o); if (!t) return; g.font = o.w + ' ' + o.s + 'px ' + o.f; w = g.measureText(t).width; }
+		if (o.m && w > o.m) w = o.m;
+		const al = o.t === 'pair' ? 'center' : (o.al || 'center');
+		out.push({ x: al === 'center' ? o.x - w / 2 : (al === 'right' || al === 'end') ? o.x - w : o.x, y: o.y - o.s, w, h: o.s * 1.3 });
+	}));
+	return out;
+}
+/* mit talál el a pont: 'logo' | 'text' | '' (pad: tűrés sablon-px-ben) */
+function hitAt(p, pad) {
+	const inR = r => p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+	if (logoActive() && logoRects(A.V, A.L).some(inR)) return 'logo';
+	return textRects(A.V, A.L).some(inR) ? 'text' : '';
+}
+/* érintés: ha a felirat / logó van az ujj alatt, a lap ne görögjön (a pointer-húzás megy); máshol görgethető marad */
+function onTouchStart(ev) {
+	if (!A || ev.touches.length !== 1) return;
+	const t = ev.touches[0], p = toNative({ currentTarget: ev.currentTarget, clientX: t.clientX, clientY: t.clientY });
+	if (hitAt(p, 40)) ev.preventDefault();
+}
 function onDown(ev) {
 	if (!A || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
 	const p = toNative(ev);
-	let what = 'text';
-	if (logoActive() && logoRects(A.V, A.L).some(r => p.x >= r.x - 10 && p.x <= r.x + r.w + 10 && p.y >= r.y - 10 && p.y <= r.y + r.h + 10)) what = 'logo';
+	/* v2.9.58: egérrel bárhonnan húzható a felirat (mint eddig); érintéssel csak a feliratról / logóról – különben görgetés */
+	const hit = hitAt(p, ev.pointerType === 'mouse' ? 10 : 40);
+	if (!hit && ev.pointerType !== 'mouse') return;
+	const what = hit === 'logo' ? 'logo' : 'text';
 	drag = { what, x: p.x, y: p.y, ox: what === 'logo' ? st.ldx : st.tdx, oy: what === 'logo' ? st.ldy : st.tdy };
 	try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (e) { /* */ }
 	ev.currentTarget.classList.add('drag');
@@ -1273,5 +1303,5 @@ async function clientSave() {
 	} finally { b.disabled = false; b.textContent = label; }
 }
 
-window.CPSablon = { view: view, parseNote: parseNote, _st: st, _D: D };
+window.CPSablon = { view: view };  // v2.9.58: a hívó nélküli hibakereső exportok (parseNote, _st, _D) nélkül
 })();

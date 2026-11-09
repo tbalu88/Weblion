@@ -214,13 +214,43 @@ function cp_portal_sm_queue($deal_id, $kind, $payload) {
 	if ($kind === 'note' && empty($o['sm_notes'])) { return; }
 	if ($kind === 'venue' && cp_portal_sm_venue_field() === '') { return; }
 	if ($kind === 'bg') { $p = cp_panel_opts(); if (empty($p['bg_write']) || $p['f_bg'] === '') { return; } }
-	$q = cp_opt_fresh('cp_portal_smq');
-	if (!is_array($q)) { $q = array(); }
 	$k = $deal_id . '|' . $kind . ($kind === 'note' ? '|' . md5((string) $payload) : '');
-	$q[$k] = array('deal' => (string) $deal_id, 'kind' => $kind, 'payload' => $payload, 'tries' => 0, 'next' => time(), 'err' => '');
-	update_option('cp_portal_smq', $q, false);
+	/* v2.9.58: zár alatt olvas-módosít-ír – két párhuzamos mentés („Kész” + mezők) nem törli egymás tételét */
+	cp_portal_smq_mutate(function ($q) use ($k, $deal_id, $kind, $payload) {
+		$q[$k] = array('deal' => (string) $deal_id, 'kind' => $kind, 'payload' => $payload, 'tries' => 0, 'next' => time(), 'err' => '');
+		return $q;
+	});
 	if (!wp_next_scheduled('cp_portal_smq_run')) { wp_schedule_single_event(time() + 5, 'cp_portal_smq_run'); }
 	$GLOBALS['cp_portal_smq_dirty'] = true;
+}
+
+/* v2.9.58: rövid, atomi zár a cp_portal_smq sorhoz (INSERT IGNORE az egyedi option_name-re; 10 mp után elavultnak számít).
+ * Ha 2 mp alatt sem kapja meg, zár nélkül megy tovább (a mentés ne akadjon el). */
+function cp_portal_smq_lock() {
+	global $wpdb;
+	$n = 'cp_portal_smq_wlock';
+	for ($i = 0; $i < 20; $i++) {
+		$wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $n, (string) (time() + 10)));
+		if ((int) $wpdb->rows_affected === 1) { return true; }
+		$v = (int) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $n));
+		if ($v && $v < time()) { $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $n, (string) $v)); continue; }
+		usleep(100000);
+	}
+	return false;
+}
+function cp_portal_smq_unlock() {
+	global $wpdb;
+	$wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s", 'cp_portal_smq_wlock'));
+}
+/* a sor friss beolvasása, módosítása ($fn: tömb → tömb) és mentése zár alatt; visszatér az új sorral */
+function cp_portal_smq_mutate($fn) {
+	$got = cp_portal_smq_lock();
+	$q = cp_opt_fresh('cp_portal_smq');
+	if (!is_array($q)) { $q = array(); }
+	$q = call_user_func($fn, $q);
+	update_option('cp_portal_smq', $q, false);
+	if ($got) { cp_portal_smq_unlock(); }
+	return $q;
 }
 
 function cp_portal_sm_venue_field() {
@@ -277,26 +307,22 @@ function cp_portal_smq_run() {
 		}
 		$done++;
 		$r = cp_portal_sm_do($job);
-		// közben érkezhetett újabb érték ugyanarra a kulcsra: a friss sort olvassuk újra
-		$q2 = cp_opt_fresh('cp_portal_smq');
-		if (!is_array($q2)) { $q2 = array(); }
-		$changed = isset($q2[$k]) && wp_json_encode($q2[$k]['payload']) !== wp_json_encode($job['payload']);
-		if (!is_wp_error($r)) {
-			if (!$changed) { unset($q2[$k]); }
-		} else {
-			$tries = (int) $job['tries'];
-			if ($tries >= count($delays)) {
-				cp_portal_error_add($job['deal'], 'Salesmate ' . $job['kind'], $r->get_error_message());
-				if (!$changed) { unset($q2[$k]); }
-			} elseif (!$changed) {
+		$tries = (int) $job['tries'];
+		$final = is_wp_error($r) && $tries >= count($delays);
+		if ($final) { cp_portal_error_add($job['deal'], 'Salesmate ' . $job['kind'], $r->get_error_message()); }
+		// közben érkezhetett újabb érték ugyanarra a kulcsra: a friss sort olvassuk újra (v2.9.58: zár alatt)
+		$q = cp_portal_smq_mutate(function ($q2) use ($k, $job, $r, $tries, $delays, $final, &$next_due) {
+			$changed = isset($q2[$k]) && wp_json_encode($q2[$k]['payload']) !== wp_json_encode($job['payload']);
+			if ($changed) { return $q2; }
+			if (!is_wp_error($r) || $final) { unset($q2[$k]); return $q2; }
+			if (isset($q2[$k])) {
 				$q2[$k]['tries'] = $tries + 1;
 				$q2[$k]['next'] = time() + $delays[$tries];
 				$q2[$k]['err'] = mb_substr($r->get_error_message(), 0, 200);
 				$next_due = $next_due ? min($next_due, $q2[$k]['next']) : $q2[$k]['next'];
 			}
-		}
-		update_option('cp_portal_smq', $q2, false);
-		$q = $q2;
+			return $q2;
+		});
 	}
 	delete_transient('cp_portal_smq_lock');
 	if ($next_due && !wp_next_scheduled('cp_portal_smq_run')) { wp_schedule_single_event(max(time() + 5, $next_due), 'cp_portal_smq_run'); }
@@ -315,7 +341,8 @@ function cp_portal_shutdown() {
 	$smq = !empty($GLOBALS['cp_portal_smq_dirty']);
 	if (!$jobs && !$smq) { return; }
 	$GLOBALS['cp_portal_deferred'] = array();
-	if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); }
+	/* v2.9.58: LiteSpeed alatt is előbb a válasz megy ki (mint a webforms.php-ben) */
+	if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); } elseif (function_exists('litespeed_finish_request')) { @litespeed_finish_request(); }
 	foreach ($jobs as $cb) {
 		try { call_user_func($cb); } catch (Throwable $e) { cp_portal_error_add('', 'háttérfeladat', $e->getMessage()); }
 	}

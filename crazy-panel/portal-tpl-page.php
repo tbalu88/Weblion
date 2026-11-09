@@ -50,7 +50,7 @@ function cp_portal_render_invalid($problem, $portal) {
 /* ------------------------------------------------------------ az adatlap */
 
 function cp_portal_render_form_page($portal, $tok) {
-	$portal = cp_portal_sm_refresh($portal);
+	$portal = cp_portal_sm_refresh($portal, 300);  // v2.9.58: legfeljebb 5 percenként (eddig 60 mp)
 	$payload = cp_portal_form_payload($portal);
 	$answers = (array) $payload['answers'];
 	$prefill = (array) $payload['prefill'];

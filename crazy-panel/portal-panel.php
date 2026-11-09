@@ -4,7 +4,7 @@
  *   cp_portal_p_save    irodai szerkesztés (updated_by = iroda; határidő után „módosítva”)
  *   cp_portal_p_send    „Ügyfélportál kiküldése”: létrehozás + meghívó levél + Salesmate „Adatlap kiküldve” (újraküldés is)
  *   cp_portal_p_link    link: új másolása | újraküldése e-mailben | visszavonása
- *   cp_portal_p_errors  hibalista (Salesmate-visszaírás, értesítések), törlés */
+ * v2.9.58: a hívó nélküli cp_portal_p_create (régi név) és cp_portal_p_errors törölve (nem volt hívójuk) */
 
 if (!defined('ABSPATH')) { exit; }
 
@@ -118,8 +118,6 @@ function cp_portal_ajax_p_save() {
 
 add_action('wp_ajax_nopriv_cp_portal_p_send', 'cp_portal_ajax_p_send');
 add_action('wp_ajax_cp_portal_p_send', 'cp_portal_ajax_p_send');
-add_action('wp_ajax_nopriv_cp_portal_p_create', 'cp_portal_ajax_p_send');
-add_action('wp_ajax_cp_portal_p_create', 'cp_portal_ajax_p_send');
 function cp_portal_ajax_p_send() {
 	cp_el_auth();
 	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
@@ -146,7 +144,7 @@ function cp_portal_ajax_p_link() {
 		if (is_wp_error($url)) { cp_el_err($url->get_error_message(), 500); }
 		$extra['url'] = $url;
 	} elseif ($op === 'send') {
-		$to = cp_portal_send_link_mail($portal, 'resend', true);
+		$to = cp_portal_send_client_mail($portal, 'resend', true);
 		if (is_wp_error($to)) { cp_el_err($to->get_error_message(), 502); }
 		cp_portal_notify_log($portal, 'resend', 'email', 'ok: ' . $to);
 		$extra['msg'] = 'Új link elküldve: ' . $to;
@@ -163,14 +161,4 @@ function cp_portal_ajax_p_link() {
 function cp_portal_notify_log($portal, $type, $channel, $result) {
 	global $wpdb;
 	$wpdb->insert(cp_portal_t('notifications'), array('portal_id' => (int) $portal->id, 'type' => $type . ':' . time() . ':' . wp_rand(100, 999), 'channel' => $channel, 'sent_at' => cp_portal_db_now(), 'result' => mb_substr($result, 0, 250)));
-}
-
-add_action('wp_ajax_nopriv_cp_portal_p_errors', 'cp_portal_ajax_p_errors');
-add_action('wp_ajax_cp_portal_p_errors', 'cp_portal_ajax_p_errors');
-function cp_portal_ajax_p_errors() {
-	cp_el_auth();
-	if (function_exists('cp_tab_need')) { cp_tab_need(cp_tabs_data()); }
-	if (!empty($_POST['clear'])) { update_option('cp_portal_errors', array(), false); }
-	$q = cp_opt_fresh('cp_portal_smq');
-	wp_send_json_success(array('errors' => cp_portal_errors(), 'queue' => is_array($q) ? array_values($q) : array()));
 }

@@ -189,7 +189,7 @@
   }
 
   /* ---------------------------------------------------- részletező */
-  const M = { id: '', title: '', data: null, url: '', state: '' };
+  const M = { id: '', title: '', data: null, url: '', state: '', seq: 0 };
 
   function modal() {
     const dlg = document.getElementById('cpx-modal');
@@ -199,12 +199,14 @@
   }
 
   async function open(id, title, e) {
-    M.id = String(id); M.title = title || ('Deal #' + id); M.url = ''; M.state = e ? e.state : '';
+    /* v2.9.58: kérés-sorszám – egy korábbi deal késve érkező válasza nem rajzolódik (és nem mentődik) a mostani alá */
+    const my = ++M.seq;
+    M.id = String(id); M.title = title || ('Deal #' + id); M.url = ''; M.state = e ? e.state : ''; M.data = null;
     const dlg = modal();
     if (!dlg) return;
     dlg.innerHTML = '<div class="cpx-sheet wide pp"><div class="cpx-sheet-h"><h3>' + esc(M.title) + '</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div><p class="cpx-muted">Ügyfélportál betöltése…</p></div>';
-    try { M.data = await call('cp_portal_p_get', { id: M.id }, true); draw(); }
-    catch (x) { dlg.querySelector('.cpx-muted').textContent = x.message; }
+    try { const d = await call('cp_portal_p_get', { id: M.id }, true); if (my !== M.seq) return; M.data = d; draw(); }
+    catch (x) { if (my !== M.seq) return; const m = dlg.querySelector('.cpx-muted'); if (m) m.textContent = x.message; }
   }
 
   function sendBox(again) {
@@ -257,6 +259,7 @@
     const b = ev.target.closest('[data-act],[data-save],[data-copy],[data-copyall]');
     if (!b) return;
     const p = M.data && M.data.portal;
+    const my = M.seq;  // v2.9.58: közben másik deal nyílt meg → a választ eldobjuk
     try {
       if (b.hasAttribute('data-copy') || b.hasAttribute('data-copyall')) {
         const c = p.contract;
@@ -275,7 +278,9 @@
         const m = box.querySelector('.pp-fm');
         b.disabled = true; m.textContent = 'Mentés…'; m.className = 'pp-fm';
         try {
-          M.data = await call('cp_portal_p_save', { id: M.id, key: f.key, value: JSON.stringify(readEditor(box, f)) });
+          const d = await call('cp_portal_p_save', { id: M.id, key: f.key, value: JSON.stringify(readEditor(box, f)) });
+          if (my !== M.seq) return;
+          M.data = d;
           draw('Mentve: ' + f.qlabel);
           if (window.CPPortal.onChange) window.CPPortal.onChange(M.id, M.data);
         } catch (x) { b.disabled = false; m.textContent = x.message; m.className = 'pp-fm bad'; }
@@ -296,7 +301,9 @@
         const to = (p && p.sm && p.sm.email) || 'a deal kapcsolattartójának e-mail-címére';
         if (!confirm((p ? 'Újraküldöd az ügyfélportált (' + to + ')?\n\nÚj belépőlink megy ki e-mailben.' : 'Kiküldöd az ügyfélportált?\n\nAz ügyfél e-mailben megkapja a belépőlinket' + (M.data.sentStage ? ', a deal pedig a Salesmate-ben a „' + M.data.sentStage + '” szakaszba kerül (ha még ajánlati szakaszban van)' : '') + '.'))) return;
         b.disabled = true;
-        M.data = await call('cp_portal_p_send', { id: M.id, type: type });
+        const d = await call('cp_portal_p_send', { id: M.id, type: type });
+        if (my !== M.seq) return;
+        M.data = d;
         draw(M.data.msg || 'Kiküldve.');
         if (window.CPPortal.onChange) window.CPPortal.onChange(M.id, M.data);
         return;
@@ -304,6 +311,7 @@
       if (act === 'revoke' && !confirm('Visszavonod az összes eddigi belépőlinket?\n\nAz ügyfél a régi linkkel nem tud belépni, de a lejárt-link oldalon kérhet újat.')) return;
       b.disabled = true;
       const r = await call('cp_portal_p_link', { id: M.id, op: act });
+      if (my !== M.seq) return;
       M.data = r;
       if (act === 'new') M.url = r.url || '';
       draw(r.msg || (act === 'new' ? 'Új link készült – másold ki.' : ''));

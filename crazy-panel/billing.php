@@ -17,7 +17,12 @@ define('CP_BIL_API', 'https://api.billingo.hu/v3');
 function cp_bil_t() { global $wpdb; return $wpdb->prefix . 'crazy_billing'; }
 
 add_action('init', function () {
-	if (get_option('cp_bil_db_ver') === CP_BIL_DB_VER || wp_doing_ajax()) { return; }
+	if (get_option('cp_bil_db_ver') === CP_BIL_DB_VER) {
+		/* v2.9.58: minden kérésnél olvassuk → automatikusan betöltött legyen (egyszeri átállítás, ha még nem az) */
+		if (!isset(wp_load_alloptions()['cp_bil_db_ver']) && function_exists('wp_set_option_autoload')) { wp_set_option_autoload('cp_bil_db_ver', true); }
+		return;
+	}
+	if (wp_doing_ajax()) { return; }
 	global $wpdb;
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	dbDelta('CREATE TABLE ' . cp_bil_t() . " (
@@ -44,7 +49,7 @@ add_action('init', function () {
   KEY deal_id (deal_id),
   KEY bid (bid)
 ) " . $wpdb->get_charset_collate() . ';');
-	update_option('cp_bil_db_ver', CP_BIL_DB_VER, false);
+	update_option('cp_bil_db_ver', CP_BIL_DB_VER, true);
 }, 7);
 function cp_bil_db_ok() { return get_option('cp_bil_db_ver') === CP_BIL_DB_VER; }
 
@@ -367,7 +372,9 @@ function cp_bil_tick() {
 	foreach ((array) $wpdb->get_results("SELECT id, deal_id FROM $T WHERE send_mode = 'gallery' AND sent_at IS NULL AND (bid IS NOT NULL OR (req IS NOT NULL AND number = '')) AND (err IS NULL OR err NOT LIKE '[?]%') ORDER BY id LIMIT 20", ARRAY_A) as $r) {
 		if ((string) (get_option(CP_PANEL_TRACK . (int) $r['deal_id'], array())['gl'] ?? '') === '1') { cp_bil_send((int) $r['id']); }
 	}
-	foreach ((array) $wpdb->get_results("SELECT id, profile, bid, deal_id FROM $T WHERE bid IS NOT NULL AND profile = 'KFT' AND pay NOT IN ('paid') AND (checked_at IS NULL OR checked_at < NOW() - INTERVAL 1 HOUR) AND created_at > NOW() - INTERVAL 120 DAY ORDER BY checked_at LIMIT 15", ARRAY_A) as $r) {
+	/* v2.9.58: a checked_at / created_at UTC-ben van (gmdate) – a MySQL NOW() helyi ideje helyett PHP-ban számolt UTC-vel hasonlítunk */
+	$h1 = gmdate('Y-m-d H:i:s', time() - HOUR_IN_SECONDS); $d120 = gmdate('Y-m-d H:i:s', time() - 120 * DAY_IN_SECONDS);
+	foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT id, profile, bid, deal_id FROM $T WHERE bid IS NOT NULL AND profile = 'KFT' AND pay NOT IN ('paid') AND (checked_at IS NULL OR checked_at < %s) AND created_at > %s ORDER BY checked_at LIMIT 15", $h1, $d120), ARRAY_A) as $r) {
 		$x = cp_bil_req($r['profile'], 'GET', '/documents/' . (int) $r['bid']);
 		$u = array('checked_at' => gmdate('Y-m-d H:i:s'));
 		if (!is_wp_error($x)) { $u['pay'] = (string) ($x['payment_status'] ?? ''); if (!empty($x['invoice_number'])) { $u['number'] = (string) $x['invoice_number']; } if (!empty($x['paid_date'])) { $u['pay_at'] = substr((string) $x['paid_date'], 0, 10) . ' 12:00:00'; } }

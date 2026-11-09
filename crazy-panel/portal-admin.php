@@ -39,7 +39,7 @@ function cp_portal_admin_save() {
 		if (preg_match('#^https://api\.pumble\.com/[A-Za-z0-9/_.\-]+$#', $pu)) { $o['pumble_url'] = $pu; } else { $msg[] = 'A Pumble webhook címe nem https://api.pumble.com/… kezdetű, nem mentettem.'; }
 	}
 	if (!empty($in['webhook_regen'])) { $o['webhook_key'] = wp_generate_password(32, false, false); $msg[] = 'Új webhook-kulcs készült – a Salesmate-ben is cseréld le.'; }
-	update_option(CP_PORTAL_OPT, $o, false);
+	update_option(CP_PORTAL_OPT, $o, true);  // v2.9.58: automatikusan betöltött
 
 	if (!empty($in['test_mail'])) {
 		$to = sanitize_email($o['test_inbox'] !== '' ? $o['test_inbox'] : get_option('admin_email'));

@@ -11,29 +11,31 @@ if (!defined('ABSPATH')) { exit; }
 
 function cp_plk_ready() { return function_exists('cp_portal_db_ready') && cp_portal_db_ready() && function_exists('cp_portal_get_by_deal'); }
 
-/* rövid összefoglaló egy dealhez (Salesmate-hívás nélkül) */
-function cp_plk_summary($deal_id) {
+/* rövid összefoglaló egy dealhez (Salesmate-hívás nélkül)
+ * v2.9.58: $p / $a (portál, válaszok) átadható, ha a hívó már betöltötte – false: még nincs betöltve */
+function cp_plk_summary($deal_id, $p = false, $a = false) {
 	if (!cp_plk_ready() || !function_exists('cp_portal_panel_map')) { return null; }
 	$m = cp_portal_panel_map(array((string) $deal_id));
 	$m = is_object($m) ? (array) $m : (array) $m;
 	$s = $m[(string) $deal_id] ?? null;
 	if (!$s) { return array('none' => 1, 'mode' => cp_portal_mode()); }
 	$s = (array) $s;
-	$p = cp_portal_get_by_deal((string) $deal_id);
+	if ($p === false) { $p = cp_portal_get_by_deal((string) $deal_id); }
 	$last = 0;
 	if ($p && function_exists('cp_portal_tokens_list')) { foreach (cp_portal_tokens_list($p->id) as $t) { $u = cp_portal_db_ts($t->last_used_at); if ($u > $last) { $last = $u; } } }
 	$di = $p && function_exists('cp_portal_deadline_info') ? cp_portal_deadline_info($p) : null;
-	$miss = $p && function_exists('cp_portal_missing') && function_exists('cp_portal_answers') ? array_values(cp_portal_missing(cp_portal_answers($p->id), null, cp_portal_flow($p), $p)) : array();
+	$miss = $p && function_exists('cp_portal_missing') && function_exists('cp_portal_answers') ? array_values(cp_portal_missing($a !== false ? (array) $a : cp_portal_answers($p->id), null, cp_portal_flow($p), $p)) : array();
 	return array('none' => 0, 'mode' => cp_portal_mode(), 'st' => $s['st'], 'done' => (int) $s['done'], 'total' => (int) $s['total'], 'cd' => (int) $s['cd'], 'ct' => (int) $s['ct'],
 		'deadline' => $di ? $di['text'] : '', 'passed' => $di ? (time() >= $di['deadline']) : false, 'last_open' => $last ? wp_date('Y-m-d H:i', $last) : '', 'missing' => array_slice($miss, 0, 12),
 		'flags' => array_values(array_map(function ($f) { return array('t' => $f['text'] ?? '', 'tone' => $f['tone'] ?? ''); }, (array) ($s['flags'] ?? array()))), 'bg' => (string) ($s['bg'] ?? ''), 'sb' => !empty($s['sb']));
 }
 
 /* v1.92: a portálválaszok és a deal eltérései: [{k, l, p (portál), d (deal), f (deal-mező), v (beírandó érték)}] */
-function cp_plk_diff($deal_id, $d) {
-	$p = cp_portal_get_by_deal((string) $deal_id);
+function cp_plk_diff($deal_id, $d, $p = false, $a = false) {
+	if ($p === false) { $p = cp_portal_get_by_deal((string) $deal_id); }
 	if (!$p || !function_exists('cp_portal_answers')) { return array(); }
-	$a = cp_portal_answers($p->id); $out = array();
+	if ($a === false) { $a = cp_portal_answers($p->id); }
+	$a = (array) $a; $out = array();
 	$add = function ($k, $l, $pv, $dv, $v) use (&$out) { $out[] = array('k' => $k, 'l' => $l, 'p' => (string) $pv, 'd' => (string) $dv, 'f' => $k, 'v' => $v); };
 	$ad = isset($a['event_date']) && is_string($a['event_date']) ? $a['event_date'] : '';
 	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $ad) && $ad !== (string) ($d['event_d'] ?? '')) { $add('event_d', 'Dátum', $ad, $d['event_d'] ?? '', $ad); }
@@ -58,20 +60,22 @@ function cp_plk_diff($deal_id, $d) {
 add_filter('cp_crm_deal_data', function ($x) {
 	if (!cp_plk_ready()) { return $x; }
 	$id = (string) $x['deal']['id'];
-	$x['portal'] = cp_plk_summary($id);
-	/* v1.92: amit az ügyfél a portálon másképp adott meg, mint ami a dealen van – a deal-adatlapon „Átveszem” gombbal beírható */
-	if (is_array($x['portal']) && empty($x['portal']['none'])) { $x['portal']['diff'] = cp_plk_diff($id, (array) $x['deal']); }
-	/* v2.9.5: az ügyfél online fotósablonjai (aktuális + az előző 5) a deal Fájlok kártyájára: előnézet, lyukasztott PNG */
+	/* v2.9.58: a portált és a válaszokat egyszer olvassuk be (eddig 4× / 3×) */
 	$pp = cp_portal_get_by_deal($id);
+	$aa = $pp && function_exists('cp_portal_answers') ? cp_portal_answers($pp->id) : array();
+	$x['portal'] = cp_plk_summary($id, $pp, $aa);
+	/* v1.92: amit az ügyfél a portálon másképp adott meg, mint ami a dealen van – a deal-adatlapon „Átveszem” gombbal beírható */
+	if (is_array($x['portal']) && empty($x['portal']['none'])) { $x['portal']['diff'] = cp_plk_diff($id, (array) $x['deal'], $pp, $aa); }
+	/* v2.9.5: az ügyfél online fotósablonjai (aktuális + az előző 5) a deal Fájlok kártyájára: előnézet, lyukasztott PNG */
 	if ($pp && function_exists('cp_portal_answers') && function_exists('cp_portal_sb_file_url')) {
-		$aa = cp_portal_answers($pp->id); $sbf = array();
+		$sbf = array();
 		$one = function ($v, $cur) { if (!is_array($v) || empty($v['preview'])) { return null; } return array('name' => (string) ($v['name'] ?? ''), 'at' => !empty($v['at']) ? wp_date('Y-m-d H:i', (int) $v['at']) : '', 'ts' => (int) ($v['at'] ?? 0), 'cur' => $cur ? 1 : 0, 'prev' => cp_portal_sb_file_url($v['preview']), 'png' => !empty($v['png']) ? cp_portal_sb_file_url($v['png']) : '', 'logo' => !empty($v['logo']) ? cp_portal_sb_file_url($v['logo']) : ''); };
 		if ($o = $one($aa['photo_template'] ?? null, true)) { $sbf[] = $o; }
 		foreach ((array) ($aa['photo_template_hist'] ?? array()) as $hv) { if ($o = $one($hv, false)) { $sbf[] = $o; } }
 		if ($sbf) { $x['sbf'] = $sbf; }
 	}
 	$ev = array();
-	$p = cp_portal_get_by_deal($id);
+	$p = $pp;
 	if ($p) {
 		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve', 'mail' => 'Portál-link levélben elküldve (panel)', 'contract_ready' => 'Az ügyfél beküldte a szerződéshez szükséges adatokat', 'contract_update' => 'Az ügyfél módosította a szerződés adatait');
 		foreach ((array) cp_portal_notifications($p->id) as $n) {

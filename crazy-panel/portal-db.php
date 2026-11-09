@@ -261,7 +261,9 @@ function cp_portal_state($pid) {
 	global $wpdb;
 	$r = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_portal_t('form_state') . ' WHERE portal_id = %d', (int) $pid));
 	if (!$r) {
-		$r = (object) array('portal_id' => (int) $pid, 'required_done' => 0, 'status' => 'hianyos', 'locked_at' => null, 'completed_at' => null, 'changed_late_at' => null, 'late_notified_log' => 0);
+		$r = (object) array('portal_id' => (int) $pid, 'required_done' => 0, 'status' => 'hianyos', 'locked_at' => null, 'completed_at' => null, 'changed_late_at' => null, 'late_notified_log' => 0,
+			/* v2.9.58: a szerződés-oszlopok is (különben PHP-figyelmeztetés a még állapot nélküli portálnál) */
+			'contract_done' => 0, 'contract_ready_at' => null, 'contract_changed_at' => null);
 	}
 	return $r;
 }
