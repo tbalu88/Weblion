@@ -78,9 +78,12 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$p = $pp;
 	if ($p) {
 		$N = array('welcome' => 'Üdvözlő levél (portál)', 'invite' => 'Portál-meghívó elküldve', 'reminder_1' => 'Portál-emlékeztető (1.)', 'reminder_2' => 'Portál-emlékeztető (2.)', 'completed' => 'Az ügyfél kitöltötte a portált', 'newlink' => 'Új portál-link (az ügyfél kérte)', 'resend' => 'Portál-link újraküldve', 'mail' => 'Portál-link levélben elküldve (panel)', 'contract_ready' => 'Az ügyfél beküldte a szerződéshez szükséges adatokat', 'contract_update' => 'Az ügyfél módosította a szerződés adatait');
+		/* v2.9.67: a teszt-postafiókba terelt ügyfél-levél ne tűnjön az ügyfélnek elküldöttnek */
+		$tin = strtolower((string) (cp_portal_opts()['test_inbox'] ?? ''));
 		foreach ((array) cp_portal_notifications($p->id) as $n) {
 			$t = explode(':', (string) $n->type)[0];
-			$ev[] = array('at' => wp_date('Y-m-d H:i', cp_portal_db_ts($n->sent_at)), 'text' => $N[$t] ?? ('Portál: ' . $t), 'ch' => (string) $n->channel, 'ok' => strpos((string) $n->result, 'ok') === 0 || $n->result === '' ? 1 : 0);
+			$tst = $n->channel === 'email' && ($tin !== '' && stripos((string) $n->result, $tin) !== false);
+			$ev[] = array('at' => wp_date('Y-m-d H:i', cp_portal_db_ts($n->sent_at)), 'text' => ($N[$t] ?? ('Portál: ' . $t)) . ($tst ? ' – csak a teszt-postafiókba ment, az ügyfél nem kapta meg' : ($n->channel === 'email' && strpos((string) $n->result, 'ok') !== 0 && $n->result !== '' ? ' – nem ment ki' : '')), 'ch' => (string) $n->channel, 'ok' => strpos((string) $n->result, 'ok') === 0 || $n->result === '' ? 1 : 0);
 		}
 		/* az ügyfél / iroda kitöltései naponként és szerzőnként összevonva */
 		$days = array();
