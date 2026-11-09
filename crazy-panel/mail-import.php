@@ -124,7 +124,7 @@ function cp_mail_fname($s) {
 	if (preg_match("/^([A-Za-z0-9_-]+)'[A-Za-z-]*'(.*)$/s", $s, $m)) {
 		$v = rawurldecode($m[2]);
 		$cs = strtoupper($m[1]);
-		if ($cs !== 'UTF-8' && $cs !== 'US-ASCII' && function_exists('mb_convert_encoding')) { $c = @mb_convert_encoding($v, 'UTF-8', $cs); if ($c !== false) { $v = $c; } }
+		if ($cs !== 'UTF-8' && $cs !== 'US-ASCII') { $v = cp_imp_conv($v, $cs); } /* 2026-11-09: a biztonságos átkódoló (ismeretlen kódolásnál nem omlik össze) */
 		$s = $v;
 	} elseif (strpos($s, '=?') !== false && function_exists('cp_imp_hdr')) { $s = cp_imp_hdr($s); }
 	if (class_exists('Normalizer') && mb_check_encoding($s, 'UTF-8')) { $n = Normalizer::normalize($s, Normalizer::FORM_C); if ($n !== false) { $s = $n; } }
