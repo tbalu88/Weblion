@@ -144,7 +144,8 @@ function cp_imp_walk($mb, $uid, $part, $num, &$acc) {
 		foreach ($part->parts as $i => $p) { cp_imp_walk($mb, $uid, $p, ($num === '' ? '' : $num . '.') . ($i + 1), $acc); }
 		return;
 	}
-	if ($fname !== '' && ($disp === 'attachment' || $type !== 0)) { $acc['att'][] = array('n' => mb_substr($fname, 0, 120)) + (!empty($part->ifid) ? array('cid' => trim((string) $part->id, '<> ')) : array()); return; }
+	/* v2.9.66: a melléklet becsült (dekódolt) mérete is – a 10 KB alatti képek (aláírás-ikonok, üres képek) a deal Fájlok kártyáján rejtve */
+	if ($fname !== '' && ($disp === 'attachment' || $type !== 0)) { $acc['att'][] = array('n' => mb_substr($fname, 0, 120)) + (!empty($part->ifid) ? array('cid' => trim((string) $part->id, '<> ')) : array()) + (isset($part->bytes) ? array('s' => (int) ((int) $part->encoding === 3 ? $part->bytes * 0.74 : $part->bytes)) : array()); return; }
 	if ($type === 0 && ($sub === 'plain' || $sub === 'html') && !isset($acc[$sub])) {
 		$raw = imap_fetchbody($mb, $uid, $num === '' ? '1' : $num, FT_UID | FT_PEEK);
 		$cut = strlen((string) $raw) > 600000; /* v2.9.58: bájtméret (strlen), nem karakterszám */

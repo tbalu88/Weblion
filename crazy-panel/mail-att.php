@@ -210,7 +210,13 @@ add_action('init', function () {
  * egyszer készül (240 px, WebP, ~10 KB), a védett crazy-mail/thumbs mappában tárolva; 90 napig nem nézett bélyeg törlődik.
  * PDF-ből és más fájlból nem készül (a PDF-feldolgozás – Ghostscript – idegen feladók fájljain biztonsági kockázat). */
 function cp_thumb_dir() { $d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { wp_mkdir_p($d); @file_put_contents($d . '/index.php', '<?php // csend'); } return $d; }
-function cp_thumb_key() { return md5((int) ($_REQUEST['m'] ?? 0) . '|' . (int) ($_REQUEST['i'] ?? 0) . '|v1'); }
+function cp_thumb_key($m = null, $i = null) { return md5((int) ($m ?? ($_REQUEST['m'] ?? 0)) . '|' . (int) ($i ?? ($_REQUEST['i'] ?? 0)) . '|v1'); }
+/* v2.9.66: elrejtendő kép a deal Fájlok kártyáján: 10 KB alatti (a levél adatai vagy a bélyegkészítés szerint), vagy nem jeleníthető meg (üres / sérült) */
+function cp_thumb_tiny($m, $i, $size = null) {
+	if ($size !== null && (int) $size > 0) { return (int) $size < 10240; }
+	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i);
+	return is_file($f . '.small') || is_file($f . '.none');
+}
 function cp_thumb_none() {
 	@file_put_contents(cp_thumb_dir() . '/' . cp_thumb_key() . '.none', '1');
 	status_header(404); header('Cache-Control: private, max-age=86400'); exit;
@@ -256,6 +262,8 @@ function cp_thumb_ajax() {
 	@set_time_limit(40);
 	$GLOBALS['cp_thumb_req'] = 1; /* v2.9.58: a végleges „nincs meg” hibánál „nincs” jelölő (a zip-ellenőrzés nem ír ilyet) */
 	$GLOBALS['cp_att_capture'] = function ($name, $mime, $data) use ($f, $out) {
+		/* v2.9.66: a 10 KB alatti kép megjelölése – a deal Fájlok kártyáján az aláírásképekkel együtt rejtve */
+		if (strlen((string) $data) < 10240) { @file_put_contents($f . '.small', '1'); }
 		$b = cp_thumb_make((string) $data);
 		if ($b === null) { cp_thumb_none(); }
 		@file_put_contents($f . '.webp', $b);
@@ -268,6 +276,6 @@ add_action('cp_crm_tick', function () {
 	if (get_transient('cp_thumb_gc')) { return; }
 	set_transient('cp_thumb_gc', 1, DAY_IN_SECONDS);
 	$d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { return; }
-	foreach ((array) glob($d . '/*.{webp,jpg,none}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
+	foreach ((array) glob($d . '/*.{webp,jpg,none,small}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
 }, 60);
 
