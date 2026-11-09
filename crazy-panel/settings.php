@@ -197,7 +197,7 @@ function cp_set_ajax_admin() {
 			break;
 		case 'mail':
 			$on = (bool) $p('sync_on');
-			update_option('cp_imp_sync_on', $on ? '1' : '0', false);
+			update_option('cp_imp_sync_on', $on ? '1' : '0', true);
 			if ($on) { if (!wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 30, 'cp_5min', 'cp_imp_sync'); } } else { wp_clear_scheduled_hook('cp_imp_sync'); }
 			if (function_exists('cp_send_opts')) {
 				$o = cp_send_opts();

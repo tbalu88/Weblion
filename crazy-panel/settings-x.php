@@ -92,7 +92,7 @@ function cp_sx_save($key, $vals) {
 		if (!isset($opts[$f['opt']])) { $o = get_option($f['opt'], array()); $opts[$f['opt']] = is_array($o) ? $o : array(); }
 		$opts[$f['opt']][$f['sub']] = $v; $changed[] = $f['k'];
 	}
-	foreach ($opts as $name => $o) { update_option($name, $o, false); }
+	foreach ($opts as $name => $o) { update_option($name, $o, null); }
 	if (isset($S['after'])) { call_user_func($S['after'], $vals); }
 	return $changed;
 }
