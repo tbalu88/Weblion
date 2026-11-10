@@ -14,7 +14,9 @@ function cp_set_auth($admin = false) {
 	cp_el_auth();
 	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
 	/* a Beállítások fül láthatósága (Beállítások → Láthatóság); alapból csak adminnak */
-	if (function_exists('cp_panel_can') && !cp_panel_can('beallitasok')) { cp_el_err('A Beállítások neked nincs engedélyezve.', 403); }
+	/* v2.9.97: a saját beállításokhoz (cp_set_get, cp_set_me) elég a személyes fiók; a csapat-beállításokhoz kell a fül-jogosultság */
+	$self = !$admin && in_array((string) ($_REQUEST['action'] ?? ''), array('cp_set_get', 'cp_set_me'), true) && cp_set_me() > 0;
+	if (!$self && function_exists('cp_panel_can') && !cp_panel_can('beallitasok')) { cp_el_err('A Beállítások neked nincs engedélyezve.', 403); }
 	if ($admin && !cp_set_admin()) { cp_el_err('Ez csak az adminoknak érhető el.', 403); }
 }
 function cp_set_me() { return function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; }

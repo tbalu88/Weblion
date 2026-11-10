@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.96');
+define('CP_PANEL_VER', '2.9.97');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -785,7 +785,8 @@ function cp_panel_render_app() {
 		'kb'         => function_exists('cp_kb_cfg') && cp_panel_can_x('feladatok') ? cp_kb_cfg() : array('on' => false),
 		'fl'         => function_exists('cp_flow_cfg') && cp_panel_can_x('flows') ? cp_flow_cfg() : array('on' => false),
 		'sr'         => array('on' => true),
-		'set'        => array('on' => cp_panel_can_x('beallitasok')),
+		/* v2.9.97: a „Saját beállításaim” (aláírás, mellékletek, Pumble) minden személyes fióknak elérhető; a többi a fül-jogosultság szerint */
+		'set'        => array('on' => cp_panel_can_x('beallitasok') || (function_exists('cp_pu_current_id') && (int) cp_pu_current_id() > 0), 'full' => cp_panel_can_x('beallitasok') ? 1 : 0),
 		'dash'       => array('on' => function_exists('cp_dash_ajax_data') && cp_panel_can_x('kezdolap')),
 		'gcal'       => array('on' => function_exists('cp_gcal_ajax_ev') && cp_panel_can_x('gnaptar')),
 		'bil'        => array('on' => function_exists('cp_bil_ajax_deal') && cp_panel_can_x('szamlazas')),
