@@ -526,7 +526,10 @@
 	const HMON = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
 	const hdate = s => { const m = String(s || '').match(/^(\d{4})-(\d\d)-(\d\d)[ T](\d\d:\d\d)/); return m ? m[1] + '. ' + HMON[Number(m[2]) - 1] + ' ' + Number(m[3]) + '. ' + m[4] : String(s || ''); };
 	/* „Név <cím>” lista: a név kékkel, a cím alatta */
-	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe">&lt;' + esc(m[2]) + '&gt;</span>' : '<span class="ml-tn">' + esc(x) + '</span>'; }).join(', ');
+	/* v2.9.90: kontakt a levélből – minden külső cím mellett egy gomb (ismert kontaktnál 👤 = megnyitás, különben + = felvétel) */
+	const OURS_RE = /@(eventcrazy\.hu|crazyphoto\.hu|studioframes\.hu)$/i;
+	const cBtn = (e, n) => { e = String(e || '').trim().toLowerCase(); return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) && !OURS_RE.test(e) ? '<button type="button" class="ml-cadd" data-cadd="' + esc(e) + '" data-cn="' + esc(n || '') + '" aria-label="Kontakt hozzáadása: ' + esc(e) + '" title="Kontakt hozzáadása">+</button>' : ''; };
+	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe">&lt;' + esc(m[2]) + '&gt;</span>' + cBtn(m[2], m[1]) : '<span class="ml-tn">' + esc(x) + '</span>' + cBtn(x.replace(/^<|>$/g, ''), ''); }).join(', ');
 
 	/* a levelek és a szál eseményei időrendben */
 	/* v1.78.3: alapból a legfrissebb levél van felül (a szál fejlécében átállítható, a böngésző megjegyzi) */
@@ -836,7 +839,7 @@
 	   o.open: kinyitva; o.mk: a levél kulcsa; o.ma: a levél gombjai (HTML); o.dv: Drive-jelvény a melléklet mellé (nem kötelező) */
 	function msgHtml(m, o) {
 		const dv = o.dv || (() => '');
-		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
+		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.dir === 'out' ? '' : cBtn(m.from_email, m.from_name)) + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
 			(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma">' + o.ma + '</span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
 			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener"' + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
@@ -1027,6 +1030,7 @@
 		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); if (r && r.ce_offer && t.id > 0) ceOffer(rd, r.ce_offer, t.id); } catch (e) { toast(e.message, true); } };
 		rd.querySelector('[data-st]').addEventListener('click', () => act('cp_mail_thread_set', { f: 'status', v: t.st === 'closed' ? 'open' : 'closed' }));
 		window.CPZipScan(rd);
+		ceMark(rd, t.id);
 		rd.querySelectorAll('[data-dvm]').forEach(b => b.addEventListener('click', async e => {
 			e.preventDefault(); e.stopPropagation();
 			b.disabled = true; b.textContent = 'Mentés…';
@@ -1431,6 +1435,67 @@
 				} catch (e) { if (my === seq) { list.innerHTML = '<div class="ml-dp-n">' + esc(e.message) + '</div>'; list.hidden = false; } }
 			}, 250);
 		});
+	}
+
+	/* ------------------------------------------------------------ v2.9.90: kontakt a levélből */
+	const CE = { m: {}, sm: 1, pop: null };
+	async function ceMark(root, th) {
+		const bs = Array.from(root.querySelectorAll('[data-cadd]')); if (!bs.length) return;
+		const need = Array.from(new Set(bs.map(b => b.dataset.cadd))).filter(e => !(e in CE.m));
+		if (need.length) { try { const r = await post('cp_ce_lookup', { e: JSON.stringify(need) }); Object.assign(CE.m, r.m || {}); CE.sm = r.sm; need.forEach(e => { if (!(e in CE.m)) CE.m[e] = { cid: 0 }; }); } catch (e) { return; } }
+		bs.forEach(b => {
+			const k = CE.m[b.dataset.cadd]; if (!k) return;
+			if (k.cid) { b.textContent = '👤'; b.classList.add('k'); b.title = 'Kontakt: ' + (k.cn || b.dataset.cadd) + ' – megnyitás'; b.setAttribute('aria-label', b.title); }
+			else { b.textContent = '+'; b.classList.remove('k'); b.title = 'Kontakt hozzáadása'; b.setAttribute('aria-label', 'Kontakt hozzáadása: ' + b.dataset.cadd); }
+			if (b.dataset.cbd) return; b.dataset.cbd = '1';
+			b.addEventListener('click', e => {
+				e.preventDefault(); e.stopPropagation();
+				const kk = CE.m[b.dataset.cadd];
+				if (kk && kk.cid) { if (window.CPCrm && window.CPCrm.contact) { if (window.CPXGo) window.CPXGo('deals'); setTimeout(() => window.CPCrm.contact(kk.cid), 60); } return; }
+				cePop(b, th, root);
+			});
+		});
+	}
+	function ceClose() { if (!CE.pop) return; const p = CE.pop; CE.pop = null; p.cleanup(); p.el.remove(); if (p.btn && p.btn.isConnected) p.btn.focus(); }
+	function cePop(btn, th, root) {
+		ceClose();
+		const e = btn.dataset.cadd, n0 = btn.dataset.cn || '';
+		const el = document.createElement('div');
+		el.className = 'ml-ctp'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Kontakt hozzáadása');
+		el.innerHTML = '<div class="ml-cph"><b>Kontakt hozzáadása</b><small>' + esc(e) + '</small><button type="button" class="ml-cpx" aria-label="Bezárás">×</button></div>' +
+			'<div class="crm-seg ml-cps"><button type="button" data-ct="new" class="on">Új kontakt</button><button type="button" data-ct="old">Meglévőhöz</button></div>' +
+			'<div data-cv="new"><label>Név<input type="text" data-cnm maxlength="120" value="' + esc(n0) + '" placeholder="Vezetéknév Keresztnév"></label><label>Telefon <small>(nem kötelező)</small><input type="tel" data-cp maxlength="40" placeholder="+36 …"></label>' +
+				(CE.sm ? '<button type="button" class="cpx-btn" data-cgo>Kontakt létrehozása</button><p class="ml-cpn">A Salesmate-ben is létrejön, ugyanúgy, mint új deal felvételekor.</p>' : '<p class="ml-cpn bad">A Salesmate-be írás a panel beállításaiban ki van kapcsolva, ezért új kontakt most nem hozható létre. A cím meglévő kontakthoz felvehető.</p>') + '</div>' +
+			'<div data-cv="old" hidden><input type="search" data-cq placeholder="Kontakt keresése (név vagy e-mail)" aria-label="Kontakt keresése"><div class="ml-cpl" data-cl></div><p class="ml-cpn">A cím a kiválasztott kontakt további e-mail-címe lesz – az ezekről jövő levelek is az ő dealjeihez kapcsolódnak.</p></div>';
+		document.body.appendChild(el);
+		const place = () => { const r = btn.getBoundingClientRect(), w = Math.min(320, window.innerWidth - 16); el.style.width = w + 'px'; el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px'; const below = r.bottom + 6, h = el.offsetHeight; el.style.top = (below + h > window.innerHeight - 8 && r.top - h - 6 > 8 ? r.top - h - 6 : below) + 'px'; };
+		place();
+		const outside = ev => { if (!el.contains(ev.target) && ev.target !== btn) ceClose(); };
+		const key = ev => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); ceClose(); } };
+		const scr = ev => { if (!el.contains(ev.target)) ceClose(); };
+		document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', key, true); window.addEventListener('scroll', scr, true); window.addEventListener('resize', ceClose);
+		CE.pop = { el, btn, cleanup: () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', key, true); window.removeEventListener('scroll', scr, true); window.removeEventListener('resize', ceClose); } };
+		el.querySelector('.ml-cpx').addEventListener('click', ceClose);
+		el.querySelectorAll('[data-ct]').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('[data-ct]').forEach(x => x.classList.toggle('on', x === b)); el.querySelectorAll('[data-cv]').forEach(v => { v.hidden = v.dataset.cv !== b.dataset.ct; }); const f = el.querySelector('[data-cv="' + b.dataset.ct + '"] input'); if (f) f.focus(); place(); }));
+		const done = (cid, cn, msg) => { CE.m[e] = { cid: cid, cn: cn }; ceClose(); toast(msg); if (root.isConnected) ceMark(root, th); };
+		const go = el.querySelector('[data-cgo]');
+		if (go) go.addEventListener('click', async () => {
+			const nm = el.querySelector('[data-cnm]').value.trim(); if (!nm) { el.querySelector('[data-cnm]').focus(); toast('Add meg a kontakt nevét.', true); return; }
+			go.disabled = true; go.textContent = 'Létrehozás…';
+			try { const r = await post('cp_ce_create', { e: e, n: nm, p: el.querySelector('[data-cp]').value, th: th > 0 ? th : '' }); done(r.cid, r.cn, 'Kontakt létrehozva: ' + r.cn); }
+			catch (er) { toast(er.message, true); go.disabled = false; go.textContent = 'Kontakt létrehozása'; }
+		});
+		el.querySelector('[data-cnm]').addEventListener('keydown', ev => { if (ev.key === 'Enter' && go) { ev.preventDefault(); go.click(); } });
+		const cq = el.querySelector('[data-cq]'), cl = el.querySelector('[data-cl]'); let tm = null, seq = 0;
+		cq.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(async () => {
+			const q = cq.value.trim(), my = ++seq; if (q.length < 2) { cl.innerHTML = ''; return; }
+			try { const r = await post('cp_ce_search', { q: q }); if (my !== seq) return;
+				cl.innerHTML = r.rows.length ? r.rows.map(x => '<button type="button" data-cpick="' + x.id + '"><b>' + esc(x.n || x.e) + '</b><small>' + esc(x.e) + (x.d ? ' · ' + x.d + ' deal' : '') + '</small></button>').join('') : '<p class="ml-cpn">Nincs találat.</p>';
+				cl.querySelectorAll('[data-cpick]').forEach(b => b.addEventListener('click', async () => { const x = r.rows.find(y => String(y.id) === b.dataset.cpick); b.disabled = true; try { await post('cp_ce_add', { e: e, cid: x.id, th: th > 0 ? th : '' }); done(x.id, x.n, 'A cím felvéve: ' + (x.n || x.e)); } catch (er) { toast(er.message, true); b.disabled = false; } }));
+				place();
+			} catch (er) { if (my === seq) cl.innerHTML = '<p class="ml-cpn bad">' + esc(er.message) + '</p>'; }
+		}, 250); });
+		setTimeout(() => { const f = el.querySelector('[data-cnm]'); f.focus(); if (!f.value) { const lp = e.split('@')[0].replace(/[._-]+/g, ' ').replace(/\d+/g, '').trim(); f.value = lp.replace(/\b\p{L}/gu, c => c.toUpperCase()); f.select(); } }, 0);
 	}
 
 	async function loadTpls() {
@@ -1964,6 +2029,7 @@
 		b.querySelectorAll('[data-pkr]').forEach(x2 => x2.addEventListener('click', () => peekReply(msgs[Number(x2.dataset.pkr)], false)));
 		b.querySelectorAll('[data-pkra]').forEach(x2 => x2.addEventListener('click', () => peekReply(msgs[Number(x2.dataset.pkra)], true)));
 		window.CPZipScan(b);
+		ceMark(b, PK.th);
 		loadHtml(b);
 		setTimeout(presPing, 50);
 	}

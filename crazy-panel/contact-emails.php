@@ -139,3 +139,68 @@ function cp_ce_ajax_del() {
 	$wpdb->delete(cp_ce_t(), array('id' => $id, 'contact_id' => $cid));
 	wp_send_json_success(array('rows' => cp_ce_rows($cid)));
 }
+
+/* ------------------------------------------------------------ v2.9.90: kontakt a levélből (a címek melletti „+” / 👤 gomb) */
+/* a szál címei közül melyik ismert kontakt (fő vagy további cím) – a gomb ennek alapján „Kontakt megnyitása” vagy „+” */
+add_action('wp_ajax_nopriv_cp_ce_lookup', 'cp_ce_ajax_lookup');
+add_action('wp_ajax_cp_ce_lookup', 'cp_ce_ajax_lookup');
+function cp_ce_ajax_lookup() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if (!function_exists('cp_crm_t')) { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$out = array();
+	$in = array_slice(array_unique(array_filter(array_map('cp_ce_norm', (array) json_decode((string) wp_unslash($_POST['e'] ?? '[]'), true)))), 0, 40);
+	foreach ($in as $e) {
+		if (function_exists('cp_imp_ours') && cp_imp_ours($e)) { continue; }
+		$c = $wpdb->get_row($wpdb->prepare('SELECT id, name FROM ' . cp_crm_t('contacts') . ' WHERE email = %s AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $e), ARRAY_A);
+		if (!$c && cp_ce_db_ok()) { $c = $wpdb->get_row($wpdb->prepare('SELECT c.id, c.name FROM ' . cp_ce_t() . ' x JOIN ' . cp_crm_t('contacts') . ' c ON c.id = x.contact_id WHERE x.email = %s AND c.deleted_at IS NULL LIMIT 1', $e), ARRAY_A); }
+		$out[$e] = $c ? array('cid' => (int) $c['id'], 'cn' => (string) $c['name']) : array('cid' => 0);
+	}
+	wp_send_json_success(array('m' => $out, 'sm' => !empty(cp_panel_opts()['stage_write']) ? 1 : 0));
+}
+/* kontaktkereső a „Meglévő kontakthoz” választóhoz (név vagy e-mail) */
+add_action('wp_ajax_nopriv_cp_ce_search', 'cp_ce_ajax_search');
+add_action('wp_ajax_cp_ce_search', 'cp_ce_ajax_search');
+function cp_ce_ajax_search() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	global $wpdb;
+	$q = trim(mb_substr((string) wp_unslash($_POST['q'] ?? ''), 0, 80));
+	if (mb_strlen($q) < 2) { wp_send_json_success(array('rows' => array())); }
+	$l = '%' . $wpdb->esc_like($q) . '%';
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT c.id, c.name, c.email, (SELECT COUNT(*) FROM ' . cp_crm_t('deals') . ' d WHERE d.contact_id = c.id AND d.deleted_at IS NULL) n FROM ' . cp_crm_t('contacts') . ' c WHERE c.deleted_at IS NULL AND (c.name LIKE %s OR c.email LIKE %s) ORDER BY n DESC, c.id DESC LIMIT 8', $l, $l), ARRAY_A);
+	wp_send_json_success(array('rows' => array_map(function ($r) { return array('id' => (int) $r['id'], 'n' => (string) $r['name'], 'e' => (string) $r['email'], 'd' => (int) $r['n']); }, $rows)));
+}
+/* új kontakt a levélből: a Salesmate-ben is (ugyanúgy, mint új deal felvételekor), és a szál idővonalán jelölve */
+add_action('wp_ajax_nopriv_cp_ce_create', 'cp_ce_ajax_create');
+add_action('wp_ajax_cp_ce_create', 'cp_ce_ajax_create');
+function cp_ce_ajax_create() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !function_exists('cp_crm_contact_new')) { cp_el_err('Hibás kérés.'); }
+	if (empty(cp_panel_opts()['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
+	global $wpdb;
+	$e = cp_ce_norm(wp_unslash($_POST['e'] ?? ''));
+	$name = trim(mb_substr(sanitize_text_field(wp_unslash($_POST['n'] ?? '')), 0, 120));
+	$phone = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) wp_unslash($_POST['p'] ?? '')), 0, 40);
+	if ($e === '') { cp_el_err('Hibás e-mail-cím.'); }
+	if ($name === '') { cp_el_err('Add meg a kontakt nevét.'); }
+	if (function_exists('cp_imp_ours') && cp_imp_ours($e)) { cp_el_err('Saját címből nem lehet ügyfélkontakt.'); }
+	/* dupla kattintás / párhuzamos kérés ellen: ugyanarra a címre 20 mp-ig egy létrehozás */
+	$lk = 'cp_ce_mk_' . md5($e);
+	if (get_transient($lk)) { cp_el_err('Ennek a címnek a kontaktja épp most készül – frissítsd a levelet pár másodperc múlva.'); }
+	if (cp_ce_known($e)) { cp_el_err('Ez a cím már egy kontakthoz tartozik.'); }
+	set_transient($lk, 1, 20);
+	$cid = cp_crm_contact_new($name, $e, $phone);
+	delete_transient($lk);
+	$th = (int) ($_POST['th'] ?? 0);
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	$who = function_exists('cp_panel_who') ? mb_substr((string) cp_panel_who(), 0, 100) : '';
+	if ($th > 0 && function_exists('cp_mail_t')) {
+		$wpdb->insert(cp_mail_t('events'), array('thread_id' => $th, 'kind' => 'ce', 'text' => mb_substr('Új kontakt a levélből: ' . $name . ' (' . $e . ')', 0, 255), 'author_uid' => $me, 'author' => $who, 'created_at' => gmdate('Y-m-d H:i:s')));
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('levelezes', 'contact_new', 'Új kontakt a levélből', $th > 0 ? 'mail:' . $th : '', $name . ' (' . $e . ')'); }
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	wp_send_json_success(array('cid' => $cid, 'cn' => $name));
+}

@@ -661,6 +661,18 @@ function cp_crm_save_data($id, $f, $c) {
 
 /* új deal: kontakt (meglévő e-mail-cím alapján, vagy új), majd a deal a fő pipeline-ban */
 add_action('wp_ajax_nopriv_cp_crm_create', 'cp_crm_ajax_create');
+/* új kontakt a Salesmate-ben, és azonnal a saját táblában is (v2.9.90: közös – új deal és a levél „+” gombja is ezt használja).
+   Hibánál cp_el_err-rel kilép; siker: a kontakt azonosítója. */
+function cp_crm_contact_new($name, $email, $phone) {
+	$cr = cp_sm_request('POST', '/apis/contact/v4', array_filter(array('firstName' => '', 'lastName' => $name, 'email' => $email, 'mobile' => $phone), function ($v) { return $v !== ''; }));
+	if (is_wp_error($cr)) { cp_el_err('A kontaktot nem sikerült létrehozni: ' . $cr->get_error_message(), 502); }
+	$cid = cp_crm_new_id($cr);
+	if (!$cid) { cp_el_err('A kontakt létrejött, de a Salesmate nem adta vissza az azonosítóját: ' . mb_substr(wp_json_encode($cr), 0, 200), 502); }
+	/* v2.0.1: a kontakt azonnal a saját táblába is – ha a folytatás elakad, az újrapróbálás ne hozzon létre második kontaktot */
+	$cg0 = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
+	if (!is_wp_error($cg0)) { cp_crm_store('contact', array(isset($cg0['Data']) ? $cg0['Data'] : $cg0), 'get'); }
+	return (int) $cid;
+}
 add_action('wp_ajax_cp_crm_create', 'cp_crm_ajax_create');
 function cp_crm_ajax_create() {
 	cp_crm_ajax_guard();
@@ -689,15 +701,7 @@ function cp_crm_ajax_create() {
 			if ($name === '' || $nn($c['name']) === $nn($name) || $nn($c['name']) === '') { $cid = (int) $c['id']; break; }
 		}
 	}
-	if (!$cid) {
-		$cr = cp_sm_request('POST', '/apis/contact/v4', array_filter(array('firstName' => '', 'lastName' => $name, 'email' => $email, 'mobile' => $phone), function ($v) { return $v !== ''; }));
-		if (is_wp_error($cr)) { cp_el_err('A kontaktot nem sikerült létrehozni: ' . $cr->get_error_message(), 502); }
-		$cid = cp_crm_new_id($cr);
-		if (!$cid) { cp_el_err('A kontakt létrejött, de a Salesmate nem adta vissza az azonosítóját: ' . mb_substr(wp_json_encode($cr), 0, 200), 502); }
-		/* v2.0.1: a kontakt azonnal a saját táblába is – ha a deal létrehozása most elakad, az újrapróbálás ne hozzon létre második kontaktot */
-		$cg0 = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
-		if (!is_wp_error($cg0)) { cp_crm_store('contact', array(isset($cg0['Data']) ? $cg0['Data'] : $cg0), 'get'); }
-	}
+	if (!$cid) { $cid = cp_crm_contact_new($name, $email, $phone); }
 	$F = cp_crm_edit_fields();
 	$date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $g('event_d')) ? $g('event_d') : '';
 	$body = array('title' => $title, 'pipeline' => $o['pipeline'], 'stage' => $stage, 'primaryContact' => $cid, 'currency' => 'HUF');

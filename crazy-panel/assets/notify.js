@@ -61,7 +61,8 @@
 		if (fresh === true) p.fresh = 1; /* v2.9.58: a levél-számláló 30 mp-ig gyorsítótárazott; kattintás után friss */
 		if (document.querySelector('.ml-items')) p.ms = 1;
 		/* v2.9.88: panelhasználat – látható ablak = nyitott perc; volt-e egér/billentyű/görgetés/érintés az előző jel óta */
-		if (!document.hidden) { p.vis = 1; if (S.actAt && S.actAt > (S.lastPing || 0) - 5000) p.act = 1; if (S.lastPing) p.g = Math.round((Date.now() - S.lastPing) / 1000); }
+		p.vis = document.hidden ? 0 : 1;
+		if (!document.hidden) { if (S.actAt && S.actAt > (S.lastPing || 0) - 5000) p.act = 1; if (S.lastPing) p.g = Math.round((Date.now() - S.lastPing) / 1000); }
 		let r;
 		try { r = await post('cp_ping', p); } catch (e) {
 			try { const x = await post('cp_nt_list', fresh === true ? { count: 1, fresh: 1 } : { count: 1 }); S.n = x.unread || 0; badge(); if (x.mail != null) { S.mail = x.mail; mailBadge(); } } catch (e2) { /* csendben újra */ }

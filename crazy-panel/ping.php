@@ -154,7 +154,9 @@ if (!function_exists('cp_ping_salt')) {
 		$a = cp_ping_auth();
 		if (!$a) { cp_ping_send(403, array('success' => false, 'data' => array('msg' => 'auth'))); }
 		$d = cp_ping_data($a[0], !empty($_REQUEST['fresh']), !empty($_REQUEST['ms']));
-		if (!empty($_REQUEST['vis'])) { $se = $GLOBALS['wpdb']->suppress_errors(true); cp_ping_track($a[0]); $GLOBALS['wpdb']->suppress_errors($se); }
+		/* vis=0: rejtett ablak. A 2.9.88 előtti (még nem frissített) felület nem küld vis-t, de ő is csak látható ablakból kérdez percenként
+		   – azt nyitott percként számoljuk (aktivitás nélkül), így a frissítésig sem marad ki senki */
+		if ((string) ($_REQUEST['vis'] ?? '1') !== '0') { $se = $GLOBALS['wpdb']->suppress_errors(true); cp_ping_track($a[0]); $GLOBALS['wpdb']->suppress_errors($se); }
 		$d['lite'] = $lite ? 1 : 0;
 		cp_ping_send(200, array('success' => true, 'data' => $d));
 	}
