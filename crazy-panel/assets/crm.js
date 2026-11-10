@@ -2020,7 +2020,7 @@
 			const set = (k, v) => { const el = q(k); if (!el || v === '' || v == null || v === 0 || touched.has(k)) return; if (el.dataset.multi !== undefined) { const L = [].concat(v); el.querySelectorAll('input').forEach(i => { if (L.includes(i.value)) i.checked = true; }); } else if (!el.value) el.value = String(v); };
 			const st = form.querySelector('[data-aist]');
 			const load1 = async ai => {
-				const r = await post('cp_ai_deal', { thread: X.thread, msg: X.msg || 0, ai: ai ? 1 : '', svc: (vals.services_ec || []).join('|') });
+				const r = await post('cp_ai_deal', { thread: X.thread, msg: X.msg || 0, all: X.all ? 1 : '', ai: ai ? 1 : '', svc: (vals.services_ec || []).join('|') });
 				const k = r.known;
 				if (!ai) {
 					if (k.brand) brand = k.brand;

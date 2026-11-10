@@ -309,18 +309,39 @@ function cp_ai_deal_known($tid, $mid) {
 		if ($d) { $k['old_deal'] = (int) $d['id']; $k['old_title'] = (string) $d['title']; $k['owner_id'] = $d['owner_id'] ? (string) (int) $d['owner_id'] : ''; if (preg_match('/^\[[^\]]{2,40}\]/u', (string) $d['title'], $bm)) { $k['brand'] = $bm[0]; } }
 	}
 	if ($k['brand'] === '') { $k['brand'] = stripos((string) $t['box'], 'photo') !== false ? '[Crazyphoto]' : '[EventCrazy]'; }
-	return array($k, $m, $t);
+	/* v2.9.102: telefonszám a szál bejövő leveleiből (aláírás), ha a kontaktnál nincs – a legutóbbi levéltől visszafelé */
+	if ($k['c_mobile'] === '') {
+		foreach (array_reverse((array) $x['msgs']) as $mm) {
+			if ($mm['dir'] !== 'in') { continue; }
+			$tx = cp_ai_text((string) $mm['body'], 6000);
+			if (preg_match('/(?<![\d\/])(?:\+36|06)[\s\-\/()]*(?:20|30|31|50|70|1|[2-9]\d)[\s\-\/()]*\d{3}[\s\-]?\d{3,4}(?!\d)/u', $tx, $pm)) { $k['c_mobile'] = trim($pm[0]); break; }
+		}
+	}
+	return array($k, $m, $t, (array) $x['msgs']);
 }
 
-function cp_ai_deal_extract($m, $t, $services) {
+function cp_ai_deal_extract($m, $t, $services, $all = null) {
 	if (!cp_ai_ready()) { return null; }
 	$P = new CP_AI_Pseudo();
 	$P->add_name((string) $t['cn'], 'ÜGYFÉL');
 	if ($m) { $P->add_name((string) $m['from_name'], 'ÜGYFÉL'); }
 	foreach (cp_mail_people() as $pp) { $P->add_name($pp['n'], 'KOLLÉGA'); }
 	$text = $m ? cp_ai_text((string) $m['body'], 5000) : '';
+	/* v2.9.102: a teljes szál időrendben (levelenként legfeljebb 2500, összesen 14 000 karakter; a legújabbak elsőbbséggel) */
+	if (is_array($all) && $all) {
+		$parts = array(); $tot = 0;
+		foreach (array_reverse($all) as $mm) {
+			$P->add_name((string) $mm['from_name'], $mm['dir'] === 'in' ? 'ÜGYFÉL' : 'KOLLÉGA');
+			$bt = cp_ai_text((string) $mm['body'], 2500);
+			if ($bt === '') { continue; }
+			$chunk = '--- ' . (string) $mm['sent_at'] . ' · ' . ($mm['dir'] === 'in' ? 'az ügyfél írta' : 'mi írtuk') . " ---\n" . $bt;
+			if ($tot + mb_strlen($chunk) > 14000) { break; }
+			$parts[] = $chunk; $tot += mb_strlen($chunk);
+		}
+		$text = implode("\n\n", array_reverse($parts));
+	}
 	$sys = "Egy rendezvényszolgáltató (fotóautomaták, 360 spinner, szelfigép, fotófalak) ügyfélleveléből kell kiolvasnod egy ÚJ ajánlatkérés adatait. Csak azt írd be, ami a levélben (vagy a tárgyában) egyértelműen szerepel; ami nincs benne, az maradjon üres (szöveg: \"\", szám: 0). Ne találj ki semmit, és ne írj neveket, e-mail-címet, telefonszámot.";
-	$user = 'Mai dátum: ' . wp_date('Y-m-d') . "\nTárgy: " . $P->hide((string) $t['subj']) . "\n\nA levél:\n" . $P->hide($text) . "\n\nA választható szolgáltatások (csak ezek közül, pontosan így írva): " . implode(' | ', $services);
+	$user = 'Mai dátum: ' . wp_date('Y-m-d') . "\nTárgy: " . $P->hide((string) $t['subj']) . (is_array($all) && $all ? "\n\nA teljes levélszál időrendben (ha az adatok változtak, a legutóbbi megállapodás számít):\n" : "\n\nA levél:\n") . $P->hide($text) . "\n\nA választható szolgáltatások (csak ezek közül, pontosan így írva): " . implode(' | ', $services);
 	$schema = array('type' => 'object', 'additionalProperties' => false, 'required' => array('event_date', 'year', 'month', 'start_time', 'venue', 'guests', 'hours', 'services', 'service_text', 'event_type', 'summary'), 'properties' => array(
 		'event_date' => array('type' => 'string', 'description' => 'A rendezvény pontos dátuma ÉÉÉÉ-HH-NN alakban, ha egyértelmű; különben ""'),
 		'year' => array('type' => 'string', 'description' => 'A rendezvény éve (ÉÉÉÉ), ha a pontos dátum nem ismert, de az év igen; különben ""'),
@@ -361,6 +382,8 @@ function cp_ai_deal_ajax() {
 	$kx = cp_ai_deal_known((int) ($_POST['thread'] ?? 0), (int) ($_POST['msg'] ?? 0));
 	if (!$kx) { cp_el_err('Nincs ilyen levélszál.', 404); }
 	list($k, $m, $t) = $kx;
+	/* v2.9.102: „Új deal ebből a levélszálból” – az AI a teljes szálat olvassa (nem csak egy levelet) */
+	$all = !empty($_POST['all']) && isset($kx[3]) ? $kx[3] : null;
 	$ai = null; $aierr = '';
 	if (!empty($_POST['ai']) && cp_ai_ready()) {
 		$who = 'cp_ai_rl_' . md5((string) (function_exists('cp_pu_current_id') ? cp_pu_current_id() : 0) . '|' . (function_exists('cp_panel_role') ? cp_panel_role() : ''));
@@ -368,7 +391,7 @@ function cp_ai_deal_ajax() {
 		if ($n < 6) {
 			set_transient($who, $n + 1, 60);
 			$svc = array_values(array_filter(array_map('trim', explode('|', (string) wp_unslash($_POST['svc'] ?? '')))));
-			$ai = cp_ai_deal_extract($m, $t, array_slice($svc, 0, 60));
+			$ai = cp_ai_deal_extract($m, $t, array_slice($svc, 0, 60), $all);
 			if (is_wp_error($ai)) { $aierr = $ai->get_error_message(); $ai = null; }
 		} else { $aierr = 'Túl sok AI-kérés egymás után – várj egy percet.'; }
 	}

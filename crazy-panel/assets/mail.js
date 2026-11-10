@@ -1235,7 +1235,11 @@
 		const att = rd.querySelector('[data-attach]');
 		if (att) att.addEventListener('click', () => {
 			const h = rd.querySelector('[data-dpat]'); h.hidden = !h.hidden;
-			if (!h.hidden) { dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }), t.id, () => { h.hidden = true; h.innerHTML = ''; }, att); const fi = h.querySelector('input'); if (fi) fi.focus(); }
+			const onNew = window.CPCrm && window.CPCrm.newDeal && C.crm && C.crm.on ? () => window.CPCrm.newDeal({ thread: t.id, msg: 0, all: 1, onCreated: async (id, row, move) => {
+				if (move) await act('cp_mail_thread_set', { f: 'deal', v: String(id), _deal: { id: id, title: (row && row.title) || ('Deal #' + id), value: null, cn: (row && row.cn) || '', co: '', stage: (row && row.stage) || '' } });
+				post('cp_crm_note_add', { deal: id, body: 'Levélszálból létrehozva: „' + (t.subj || '') + '”. A levelezés a panel Levelezés fülén' + (move ? ' ennél a dealnél' : '') + ' látható.' }).catch(() => {});
+			} }) : null;
+			if (!h.hidden) { dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }), t.id, () => { h.hidden = true; h.innerHTML = ''; }, att, onNew); const fi = h.querySelector('input'); if (fi) fi.focus(); }
 		});
 		/* v1.38: AI válaszvarázsló – piszkozat, amit a levélíróban nézel át */
 		const aib = rd.querySelector('[data-ai]');
@@ -1453,7 +1457,7 @@
 	}
 
 	/* onClose: Esc-re vagy mellé kattintásra az egész választó bezárul (v2.9.87); nélküle csak a lista csukódik be */
-	function dealPicker(host, onPick, sugTh, onClose, opener) {
+	function dealPicker(host, onPick, sugTh, onClose, opener, onNew) {
 		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
 		const inp = host.querySelector('input'), list = host.querySelector('.ml-dp-l');
 		let t = null, sug = null, seq = 0;
@@ -1463,14 +1467,17 @@
 		host.addEventListener('keydown', ev => { if (ev.key !== 'Escape') return; ev.preventDefault(); ev.stopPropagation(); if (onClose) { close(); if (opener) opener.focus(); } else if (!list.hidden) list.hidden = true; else inp.blur(); });
 		inp.addEventListener('focus', () => { if (list.hidden && inp.value.trim().length < 2 && sug) showSug(); });
 		const row = x => '<button type="button" data-id="' + x.id + '"><b>' + esc(x.title) + (x.st && x.st !== 'Open' ? ' <span class="ml-dp-st">' + esc(x.st === 'Won' ? 'megnyert' : x.st === 'Lost' ? 'elvesztett' : x.st) + '</span>' : '') + '</b><small>' + esc([x.cn, x.ce, x.ev].filter(Boolean).join(' · ')) + '</small>' + (x.why ? '<small class="ml-dp-why">' + esc(x.why) + '</small>' : '') + '</button>';
+		/* v2.9.102: új deal a levélszálból – a lista alján mindig ott */
+		const newBtn = () => onNew ? '<button type="button" class="ml-dp-new" data-dpnew><b>＋ Új deal létrehozása ebből a levélszálból</b><small>Az adatlapot a szál alapján előre kitöltöm (kontakt, dátum, helyszín, szolgáltatás) – küldés előtt átnézheted.</small></button>' : '';
+		const bindNew = () => { const nb = list.querySelector('[data-dpnew]'); if (nb) nb.addEventListener('click', () => { list.hidden = true; if (onClose) close(); onNew(); }); };
 		const show = (rows, head, empty) => {
-			list.innerHTML = (head && rows.length ? '<div class="ml-dp-h">' + esc(head) + '</div>' : '') + (rows.length ? rows.map(row).join('') : '<div class="ml-dp-n">' + esc(empty) + '</div>');
-			list.hidden = false;
+			list.innerHTML = (head && rows.length ? '<div class="ml-dp-h">' + esc(head) + '</div>' : '') + (rows.length ? rows.map(row).join('') : '<div class="ml-dp-n">' + esc(empty) + '</div>') + newBtn();
+			list.hidden = false; bindNew();
 			list.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => { const x = rows.find(y => String(y.id) === b.dataset.id); inp.value = x.title; list.hidden = true; onPick(x); }));
 		};
 		const showSug = () => { if (sug && sug.length) show(sug, 'Javaslatok ehhez a levelezéshez', ''); else if (sug) show([], '', 'Nincs javaslat – keress név, e-mail vagy #szám alapján.'); };
 		if (sugTh) {
-			list.innerHTML = '<div class="ml-dp-n">Javaslatok keresése…</div>'; list.hidden = false;
+			list.innerHTML = '<div class="ml-dp-n">Javaslatok keresése…</div>' + newBtn(); list.hidden = false; bindNew();
 			const my = ++seq;
 			post('cp_mail_deal_suggest', { th: sugTh }).then(r => { sug = r.rows || []; if (my === seq && inp.value.trim().length < 2) showSug(); }).catch(() => { sug = []; if (my === seq && inp.value.trim().length < 2) list.hidden = true; });
 		}
