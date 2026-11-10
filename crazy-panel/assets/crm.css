@@ -740,3 +740,20 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-ce-i button{flex:0 0 auto;width:28px;height:28px;border:0;border-radius:999px;background:transparent;color:#5A6070;font-size:16px;line-height:1;cursor:pointer}
 .crm-ce-i button:hover{background:#E6E0D6;color:#1A1F2B}
 .crm-ce-i button:focus-visible{outline:2px solid var(--o);outline-offset:1px}
+/* v2.9.111: telefonon egy sor – nézetváltó (ikon) · keresés · szűrő (ikon) · rendezés (ikon); a kártyasűrűség és az info itt nem kell */
+@media (max-width:760px){
+	.crm-mbar{flex-wrap:nowrap;gap:6px;align-items:center}
+	.crm-mbar .crm-mseg{flex:none;padding:2px}
+	.crm-mbar .crm-mseg button{padding:0;width:36px;height:34px;display:inline-flex;align-items:center;justify-content:center}
+	.crm-mseg svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+	.crm-mbar .crm-srch{flex:1 1 auto;min-width:0}
+	.crm-mbar .crm-srch input{height:40px}
+	.crm-mbar .crm-fbtn{width:40px;height:40px;padding:0;justify-content:center;position:relative;max-width:none}
+	.crm-mbar .crm-flab{display:none}
+	.crm-mbar .crm-fcnt{position:absolute;top:-4px;right:-4px}
+	.crm-mbar .crm-sortc{position:relative;width:40px;height:40px;padding:0;justify-content:center}
+	.crm-mbar .crm-sortc select{position:absolute;inset:0;opacity:0;width:100%;height:100%;max-width:none}
+	.crm-mbar .crm-dens,.crm-mbar .crm-qfb,.crm-mbar .crm-cbtn span,.crm-mbar .crm-bgap,.crm-mbar .crm-fclr{display:none}
+	.crm-mbar .crm-cbtn{width:40px;height:40px;padding:0;justify-content:center}
+	.crm-mbar .crm-fwrap{flex:none}
+}

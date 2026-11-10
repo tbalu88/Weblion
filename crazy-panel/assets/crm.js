@@ -168,14 +168,17 @@
 		trash: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4.5h4V6M6 6l.8 10h6.4L14 6"/></svg>'
 	};
 	function head() {
-		const seg = '<div class="crm-seg">' + [['list', 'Lista'], ['board', 'Pipeline']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+		/* v2.9.111: telefonon a nézetváltó, a keresés, a szűrő és a rendezés egy sorban, piktogramokkal (a felirat rámutatva / felolvasva) */
+		const MOBH = window.matchMedia && window.matchMedia('(max-width:760px)').matches;
+		const MI = { list: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5.5h12M4 10h12M4 14.5h12"/></svg>', board: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="4" height="12" rx="1"/><rect x="8" y="4" width="4" height="8" rx="1"/><rect x="13" y="4" width="4" height="10" rx="1"/></svg>' };
+		const seg = '<div class="crm-seg' + (MOBH ? ' crm-mseg' : '') + '">' + [['list', 'Lista'], ['board', 'Pipeline']].map(x => '<button type="button" data-mode="' + x[0] + '" class="' + (S.mode === x[0] ? 'on' : '') + '" title="' + x[1] + '" aria-label="' + x[1] + '">' + (MOBH ? MI[x[0]] : x[1]) + '</button>').join('') + '</div>';
 		const info = S.mode === 'leads' ? 'A weboldal ajánlatkérő űrlapjairól beérkező megkeresések – azonnal, a beküldés pillanatában.' : (W ? 'Minden módosítás a Salesmate-be is beíródik; a Salesmate-ben végzett változás 10 percen belül (vagy a Frissítés gombbal) itt is megjelenik.' : 'Csak olvasás – a deal-eket egyelőre a Salesmate-ben módosítsd.');
 		const srch = ph => '<label class="crm-srch">' + IC.search + '<input type="search" data-f="q" placeholder="' + ph + '" value="' + esc(S.q) + '" aria-label="Keresés"></label>';
 		let f = '';
 		if (S.mode === 'leads') {
 			f = srch('Keresés: név, e-mail, telefon') + '<select data-f="lst" class="crm-mini" aria-label="Szűrés">' + opts([['', 'Minden megkeresés'], ['spam', 'Spamnek jelöltek']], S.lst || '') + '</select>';
 		} else {
-			f = srch('Keresés: név, e-mail, telefon, helyszín, #szám') + cfBtn();
+			f = srch(MOBH ? 'Keresés…' : 'Keresés: név, e-mail, telefon, helyszín, #szám') + cfBtn();
 			if (S.mode === 'list') {
 				f += S.who ? '<span class="d3-chip">' + (S.who.k === 'co' ? '🏢 ' : '👤 ') + esc(S.who.n) + '<button type="button" data-whox aria-label="Szűrés törlése" title="Szűrés törlése">×</button></span>' : '<button type="button" class="crm-qfb" data-who>+ Cég / kontakt</button>';
 			}
@@ -188,6 +191,7 @@
 			if (S.mode === 'board') f += '<span class="crm-seg crm-dens" role="group" aria-label="Kártyák"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '" aria-pressed="' + !S.dense + '" title="Részletes kártyák" aria-label="Részletes kártyák">' + IC.cards + '</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '" aria-pressed="' + S.dense + '" title="Kompakt kártyák" aria-label="Kompakt kártyák">' + IC.dense + '</button></span>';
 		}
 		const inf = '<span class="crm-info" tabindex="0" role="note" aria-label="' + esc(info) + '" data-tip="' + esc(info) + '">' + IC.info + '</span>';
+		if (MOBH && S.mode !== 'leads') return '<div class="crm-bar crm-mbar">' + seg + f + '</div>';
 		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div>' + inf + '</div><div class="crm-bar">' + f + '</div>';
 	}
 
@@ -211,7 +215,7 @@
 	function cfBtn() {
 		const n = cfCount(), v = cfView();
 		const lab = v ? esc(v.n) + (S.vdirty ? ' <i class="crm-fdirty" title="Módosítva a mentett nézethez képest">•</i>' : '') : 'Szűrő';
-		return '<span class="crm-fwrap"><button type="button" class="crm-fbtn' + (n ? ' on' : '') + '" data-cf aria-haspopup="dialog" aria-expanded="' + (!!document.querySelector('.crm-fp')) + '">' + IC.filter + '<span class="crm-flab">' + lab + '</span>' + (n ? '<b class="crm-fcnt">' + n + '</b>' : '') + '</button>' +
+		return '<span class="crm-fwrap"><button type="button" class="crm-fbtn' + (n ? ' on' : '') + '" data-cf title="Szűrő" aria-haspopup="dialog" aria-expanded="' + (!!document.querySelector('.crm-fp')) + '">' + IC.filter + '<span class="crm-flab">' + lab + '</span>' + (n ? '<b class="crm-fcnt">' + n + '</b>' : '') + '</button>' +
 			(n ? '<button type="button" class="crm-fclr" data-cfclr title="Szűrő törlése" aria-label="Szűrő törlése">' + IC.x + '</button>' : '') + '</span>';
 	}
 	function cfRefreshBtn() { const w = S.main && S.main.querySelector('.crm-fwrap'); if (w) { w.outerHTML = cfBtn(); bindCfBtn(S.main); } }
