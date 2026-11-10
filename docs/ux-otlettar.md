@@ -54,3 +54,9 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 ## Teljesítmény (2026-11-09, a felhasználó jónak tartja, későbbre félretéve)
 | # | Javaslat | Becslés |
 |---|---|---|
+
+## Jegelt funkciók
+
+| # | Funkció | Mi lenne | Állapot |
+|---|---|---|---|
+| J1 | Éves visszahívó (loyal.php, `cp_rcl`) | Naponta: akinek ~1 éve volt megnyert rendezvénye és azóta nem jelentkezett, 60 nappal az évforduló előtt „🔁 Visszahívás” kártya a felelősnek a Feladatokba + értesítés | 2026-11-10: a felhasználó kérésére kikapcsolva (`cp_rcl.on = 0`); a meglévő 2 kártya megmaradt. Visszakapcsolás: a beállítás `on = 1`. |
