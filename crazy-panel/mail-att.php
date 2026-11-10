@@ -212,6 +212,10 @@ add_action('init', function () {
 function cp_thumb_dir() { $d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { wp_mkdir_p($d); @file_put_contents($d . '/index.php', '<?php // csend'); } return $d; }
 function cp_thumb_key($m = null, $i = null) { return md5((int) ($m ?? ($_REQUEST['m'] ?? 0)) . '|' . (int) ($i ?? ($_REQUEST['i'] ?? 0)) . '|v1'); }
 /* v2.9.66: elrejtendő kép a deal Fájlok kártyáján: 10 KB alatti (a levél adatai vagy a bélyegkészítés szerint), vagy nem jeleníthető meg (üres / sérült) */
+function cp_thumb_hash($m, $i) {
+	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i) . '.h';
+	return is_file($f) ? (string) @file_get_contents($f) : '';
+}
 function cp_thumb_tiny($m, $i, $size = null) {
 	if ($size !== null && (int) $size > 0) { return (int) $size < 10240; }
 	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i);
@@ -264,6 +268,8 @@ function cp_thumb_ajax() {
 	$GLOBALS['cp_att_capture'] = function ($name, $mime, $data) use ($f, $out) {
 		/* v2.9.66: a 10 KB alatti kép megjelölése – a deal Fájlok kártyáján az aláírásképekkel együtt rejtve */
 		if (strlen((string) $data) < 10240) { @file_put_contents($f . '.small', '1'); }
+		/* v2.9.71: a kép tartalmának ujjlenyomata – az azonos (más néven, más levélben érkezett) kép a deal Fájlok kártyáján egy példányban */
+		@file_put_contents($f . '.h', substr(md5((string) $data), 0, 16));
 		$b = cp_thumb_make((string) $data);
 		if ($b === null) { cp_thumb_none(); }
 		@file_put_contents($f . '.webp', $b);
@@ -276,6 +282,6 @@ add_action('cp_crm_tick', function () {
 	if (get_transient('cp_thumb_gc')) { return; }
 	set_transient('cp_thumb_gc', 1, DAY_IN_SECONDS);
 	$d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { return; }
-	foreach ((array) glob($d . '/*.{webp,jpg,none,small}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
+	foreach ((array) glob($d . '/*.{webp,jpg,none,small,h}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
 }, 60);
 
