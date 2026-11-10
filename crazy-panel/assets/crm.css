@@ -721,7 +721,10 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-dayf input,.d3-dayform input{height:30px;border:1px solid #DDD8D0;border-radius:8px;padding:0 8px;font:500 13px Inter,sans-serif;background:#fff;color:var(--ink);min-width:0;width:100%;box-sizing:border-box}
 .d3-dayf input::placeholder{color:#8A8F99}
 .d3-dayf input:focus,.d3-dayform input:focus{outline:2px solid var(--o);outline-offset:0;border-color:transparent}
-.d3-dayform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;padding-top:6px;border-top:1px dashed #E6E3DE}
+.d3-dayform{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 8px;padding-top:6px;border-top:1px dashed #E6E3DE;align-items:end} /* v2.9.75: a két dátummező alul egy vonalban; ha nem fér el, egymás alá */
+.d3-dayform label{justify-content:flex-end}
+.d3-dayform input[type=date]{padding:0 6px 0 8px;font-variant-numeric:tabular-nums;min-width:140px}
+.d3-dayform .d3-dayb{grid-column:1/-1}
 .d3-dayform small{font-size:11px}
 .d3-dayb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1}
 .d3-days .cpx-btn.sm{height:30px;font-size:12.5px;padding:0 12px}

@@ -1510,7 +1510,7 @@
 								MD_F.map(f => '<label' + (f[0] === 'venue' || f[0] === 'note' ? ' class="w"' : '') + '>' + f[1] + '<input data-dk="' + f[0] + '" ' + (f[2] === 'time' ? 'type="time"' : f[2] === 'text' ? 'type="text" maxlength="' + (f[0] === 'bg' ? 80 : f[0] === 'venue' ? 255 : 1000) + '"' : 'type="number" inputmode="' + (f[2] === 'num' ? 'decimal' : 'numeric') + '" min="' + (f[2] === 'num' ? '0.5' : '1') + '" step="' + (f[2] === 'num' ? '0.5' : '1') + '"') + ' value="' + esc(x[f[0]]) + '" placeholder="' + esc(base[f[0]] ? String(base[f[0]]).slice(0, 60) : '–') + '"></label>').join('') + '<small class="d3-dayhint">Üres mező = a deal értéke (halványan látszik).</small></div>' : '') + '</li>';
 					}).join('') + '</ol>';
 			}
-			if (adding) h += '<form class="d3-dayform" data-dform novalidate><label>Nap<input type="date" data-a1 required min="' + esc(d.event_d) + '"></label><label>Utolsó nap <small>(tartományhoz)</small><input type="date" data-a2 min="' + esc(d.event_d) + '"></label><div class="d3-dayb"><button type="submit" class="cpx-btn sm">Hozzáadás</button><button type="button" class="cpx-btn sm ghost" data-dcan>Mégse</button></div></form>';
+			if (adding) h += '<form class="d3-dayform" data-dform novalidate><label>Nap<input type="date" data-a1 required min="' + esc(d.event_d) + '"></label><label><span>Utolsó nap <small>(tartományhoz)</small></span><input type="date" data-a2 min="' + esc(d.event_d) + '"></label><div class="d3-dayb"><button type="submit" class="cpx-btn sm">Hozzáadás</button><button type="button" class="cpx-btn sm ghost" data-dcan>Mégse</button></div></form>';
 			box.innerHTML = h + '<div data-dfoot>' + foot() + '</div>';
 			const a1 = box.querySelector('[data-a1]');
 			if (a1) a1.focus();
