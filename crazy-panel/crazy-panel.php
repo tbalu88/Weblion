@@ -3757,6 +3757,7 @@ require_once __DIR__ . '/search.php';
 require_once __DIR__ . '/merge.php';
 require_once __DIR__ . '/loyal.php';
 require_once __DIR__ . '/sm-hist.php';
+require_once __DIR__ . '/sm-inbox-notes.php'; /* v2.9.84: Salesmate levélszál-jegyzetek átvétele (csak olvas az SM-ből) */
 require_once __DIR__ . '/kezelok.php';
 require_once __DIR__ . '/dealact.php';
 require_once __DIR__ . '/mail-send.php';
