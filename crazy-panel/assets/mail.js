@@ -896,7 +896,8 @@
 			'</div>' +
 			/* v1.85: mobilon a szál alján válasz-gombok (a lebegő „+” helyett) */
 			'<div class="ml-ncomp"><textarea rows="1" data-note placeholder="Jegyzetek – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: mentés)"></textarea><div class="ml-mpop" hidden></div><button type="button" class="cpx-btn" data-nsave>Jegyzet</button></div>';
-		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); } catch (e) { toast(e.message, true); } };
+		/* v2.9.73: kézi deal-csatolás után a szerver egyszer felajánlhatja a partnercím felvételét a deal kontaktjához (ce_offer) */
+		const act = async (a, p) => { try { const r = await thAct(t.id, a, p); drawThread(box, rd, r); refreshItem(box, r.t); if (r && r.ce_offer && t.id > 0) ceOffer(rd, r.ce_offer, t.id); } catch (e) { toast(e.message, true); } };
 		rd.querySelector('[data-st]').addEventListener('click', () => act('cp_mail_thread_set', { f: 'status', v: t.st === 'closed' ? 'open' : 'closed' }));
 		window.CPZipScan(rd);
 		rd.querySelectorAll('[data-dvm]').forEach(b => b.addEventListener('click', async e => {
@@ -1243,6 +1244,26 @@
 	/* ------------------------------------------------------------ deal-választó (címzett és változók) */
 	/* v2.9.62: sugTh = levélszál azonosítója → a mező alatt azonnal javaslatok (a levelezés résztvevői, azonos cég, azonos név) indoklással;
 	   gépeléskor a szokásos keresés, a mező kiürítésekor újra a javaslatok */
+	/* v2.9.73: „Felvegyem a(z) X címet Y kontakthoz?” – a szál fejlécében, egyszer; Igen: további cím a kontakthoz, Nem: többé nem kérdezi */
+	function ceOffer(rd, o, th) {
+		const old = rd.querySelector('.ml-ceo'); if (old) old.remove();
+		const host = rd.querySelector('[data-pres]'); if (!host || !o || !o.e) return;
+		const el = document.createElement('div');
+		el.className = 'ml-ceo'; el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'Cím felvétele a kontakthoz');
+		el.innerHTML = '<p>Felvegyem a(z) <b>' + esc(o.e) + '</b> címet <b>' + esc(o.cn || o.ce || '') + '</b> kontakthoz? <span>A jövőbeli levelei így automatikusan a helyükre kerülnek.</span></p><div class="ml-ceo-b"><button type="button" class="cpx-btn sm" data-ceo="1">Igen</button><button type="button" class="cpx-btn sm ghost" data-ceo="0">Nem</button></div>';
+		host.before(el);
+		el.querySelectorAll('[data-ceo]').forEach(b => b.addEventListener('click', async () => {
+			const yes = b.dataset.ceo === '1';
+			el.querySelectorAll('button').forEach(x => { x.disabled = true; });
+			try {
+				await post(yes ? 'cp_ce_add' : 'cp_ce_decline', { e: o.e, cid: o.cid, th: th });
+				el.remove();
+				if (yes) toast('Felvéve: ' + o.e + ' → ' + (o.cn || o.ce || 'kontakt') + '.');
+			} catch (e) { el.querySelectorAll('button').forEach(x => { x.disabled = false; }); toast(e.message, true); }
+		}));
+		const f = el.querySelector('[data-ceo="1"]'); if (f) f.focus({ preventScroll: true });
+	}
+
 	function dealPicker(host, onPick, sugTh) {
 		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
 		const inp = host.querySelector('input'), list = host.querySelector('.ml-dp-l');

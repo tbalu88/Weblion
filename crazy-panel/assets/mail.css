@@ -837,3 +837,9 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 }
 .mlp-b>.ml-pres{margin:0}
 @media (max-width:380px){.mlp-f .mlp-sm{display:none}}
+
+/* v2.9.73: további cím ajánlata kézi deal-csatolás után */
+.ml-ceo{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin:4px 12px 8px;padding:10px 12px;border-radius:12px;background:#EEF3FD;border:1px solid #CBD8F6;color:#1F2E55;font:13.5px/1.45 Inter,sans-serif}
+.ml-ceo p{flex:1 1 260px;margin:0;min-width:0;overflow-wrap:anywhere}
+.ml-ceo p span{display:block;color:#3D4C74;font-size:12.5px}
+.ml-ceo-b{display:flex;gap:8px;flex:0 0 auto}

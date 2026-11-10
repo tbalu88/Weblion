@@ -11,6 +11,8 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/deal-link.php'; /* v2.9.73: levélszál ↔ deal kötés szabályai */
+
 function cp_imp_opts() {
 	$o = get_option('cp_imp_opts', array());
 	return wp_parse_args(is_array($o) ? $o : array(), array('host' => 'mail.eventcrazy.hu', 'port' => 993, 'user' => 'info@eventcrazy.hu', 'box' => 'eventcrazy', 'years' => 2, 'folders' => array()));
@@ -259,6 +261,7 @@ function cp_imp_clean_text($plain, $html) {
 function cp_imp_norm_subj($s) {
 	$s = preg_replace('/^\s*((re|fw|fwd|vá|vs|aw|wg|válasz|továbbítás|tov)\s*(\[\d+\])?\s*:\s*)+/iu', '', (string) $s);
 	$s = preg_replace('/^\s*\[\d+\]\s*/u', '', $s);
+	$s = preg_replace('/\s*\[#\d{1,12}\]/u', '', $s); /* v2.9.73: a panel deal-jele nem számít a szál azonosításánál (a régi szálba fűzött válasz is a helyére kerül) */
 	return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $s)));
 }
 function cp_imp_addr($list) {
@@ -316,36 +319,16 @@ function cp_imp_deal_manual($tid) {
 	return (bool) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'deal'", $tid))
 		|| (string) $wpdb->get_var($wpdb->prepare('SELECT src FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid)) === 'panel';
 }
-function cp_imp_relink($tid, $email, $at) {
+/* v2.9.73: a deal-link.php szabályaival (deal-jel, dátum, további cím, SM-azonosító, céges domain); a döntés az okot
+   is megadja, az esemény ezzel íródik. $subj: az új levél tárgya (a szál tárgya mellett). Kézi csatolást nem ír felül. */
+function cp_imp_relink($tid, $email, $at, $subj = '') {
 	if (!function_exists('cp_crm_t')) { return; }
 	global $wpdb;
-	$cur = (int) $wpdb->get_var($wpdb->prepare('SELECT deal_id FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid));
-	if ($cur) {
-		/* v2.9.34: mint a Salesmate-ben – a dealen lévő szál a dealen marad (lezárt dealről sem visszük át másikra);
-		   csak a törölt dealen ülő vagy deal nélküli szálhoz keresünk dealt */
-		$d = $wpdb->get_row($wpdb->prepare('SELECT status, deleted_at, closed_at, event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $cur), ARRAY_A);
-		/* v2.9.52 kivétel: visszatérő ügyfél új megkeresése – a szál a régi, lezárt dealhez került, mert az új deal még nem
-		   létezett; ha a szál a régi deal lezárása (rendezvénye) UTÁN indult, és azóta jött egy nyitott deal, oda kerül */
-		$late = false;
-		if ($d && empty($d['deleted_at']) && $d['status'] !== 'Open') {
-			$tc = (string) $wpdb->get_var($wpdb->prepare('SELECT created_at FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid));
-			$end = !empty($d['closed_at']) ? (string) $d['closed_at'] : (!empty($d['event_d']) ? $d['event_d'] . ' 23:59:59' : '');
-			$sm = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mail_t('events') . " WHERE thread_id = %d AND kind = 'autodeal' AND text LIKE %s", $tid, 'Deal a Salesmate szerint:%'));
-			$late = $tc !== '' && $end !== '' && $tc > $end && !$sm;
-		}
-		if ($d && empty($d['deleted_at']) && !$late) { return; }
-	}
-	if (cp_imp_deal_manual($tid)) { return; }
-	$best = cp_imp_pick_deal($email, $at);
-	/* v2.9.62: ha a szál kontaktjához nincs deal, a többi résztvevőhöz keresünk (mint a Salesmate, amely a teljes levelezést nézi) */
-	if (!$best) { foreach (cp_imp_thread_parts($tid) as $pe) { if ($pe !== strtolower($email)) { $best = cp_imp_pick_deal($pe, $at); if ($best) { break; } } } }
-	if (!$best || $best === $cur) { return; }
-	$st = (string) $wpdb->get_var($wpdb->prepare('SELECT status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
-	if (!empty($late) && $st !== 'Open') { return; } /* lezártról csak nyitottra */
-
-	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $best), array('id' => $tid));
-	$title = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $best));
-	$wpdb->insert(cp_mail_t('events'), array('thread_id' => $tid, 'kind' => 'autodeal', 'text' => mb_substr(($cur ? 'Deal automatikusan áthelyezve' . ($st === 'Open' ? ' (az ügyfél nyitott dealje)' : '') . ': ' : 'Deal automatikusan csatolva: ') . ($title !== '' ? $title : '#' . $best), 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+	$t = $wpdb->get_row($wpdb->prepare('SELECT ' . cp_dl_thread_cols() . ' FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid), ARRAY_A);
+	if (!$t) { return; }
+	$t['first'] = (string) $email; $t['at'] = (string) $at; $t['subj2'] = (string) $subj;
+	$ctx = cp_dl_ctx(array($t));
+	cp_dl_apply((int) $tid, cp_dl_decide($ctx['ths'][0], $ctx), $ctx);
 }
 /* az utolsó 60 nap (v2.9.63: 30 helyett – a 60 napos szál-szabállyal összhangban) automatikusan kötött szálai: deal nélküli vagy lezárt/törölt dealen ülő → újrakötés (15 percenként) */
 function cp_imp_relink_recent() {
@@ -353,8 +336,11 @@ function cp_imp_relink_recent() {
 	set_transient('cp_imp_relink_at', 1, 15 * MINUTE_IN_SECONDS);
 	global $wpdb;
 	$T = cp_mail_t('threads'); $E = cp_mail_t('events'); $D = cp_crm_t('deals');
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.contact_email, t.last_at FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.deleted_at IS NOT NULL OR (d.status <> 'Open' AND t.created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 DAY))) AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 300", gmdate('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS)), ARRAY_A);
-	foreach ($rows as $r) { cp_imp_relink((int) $r['id'], $r['contact_email'], $r['last_at']); }
+	/* v2.9.73: + a deal-jeles tárgyú szálak; a döntés kötegben (egy kontextus az összes szálra) */
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT t.id, t.deal_id, t.src, t.created_at, t.last_at, t.contact_email, t.subject FROM $T t LEFT JOIN $D d ON d.id = t.deal_id WHERE t.last_at > %s AND t.src <> 'panel' AND t.folder NOT IN ('spam', 'promo') AND t.contact_email <> '' AND (t.deal_id IS NULL OR d.id IS NULL OR d.deleted_at IS NOT NULL OR (d.status <> 'Open' AND t.created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 DAY)) OR t.subject LIKE '%%[#%%') AND NOT EXISTS (SELECT 1 FROM $E e WHERE e.thread_id = t.id AND e.kind = 'deal') ORDER BY t.last_at DESC LIMIT 300", gmdate('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS)), ARRAY_A);
+	if (!$rows) { return; }
+	$ctx = cp_dl_ctx($rows);
+	foreach ($ctx['ths'] as $t) { cp_dl_apply((int) $t['id'], cp_dl_decide($t, $ctx), $ctx); }
 }
 
 /* v2.9.68: döntés – az idézetből visszaállítandó saját levelünk megvan-e már eredetiben a jelöltek között.
@@ -441,15 +427,19 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	/* v2.9.58: a feldolgozás (IMAP-letöltés) közben nem került-e be mégis – még minden írás előtt (a zár mellett is ellenőrizve) */
 	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $mid))) { return 'dup'; }
-	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at); }
+	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at, $subj); }
+	$dlx = null; $dld = null;
 	if (!$t) {
-		$deal = cp_imp_pick_deal($other['e'], $at);
-		if (!$deal) { foreach ($parts as $pe) { $deal = cp_imp_pick_deal($pe, $at); if ($deal) { break; } } }
+		/* v2.9.73: új szál – a deal-link.php szabályai (deal-jel, dátum, további cím, SM-azonosító, céges domain) */
+		$dlx = cp_dl_ctx(array(array('id' => 0, 'deal_id' => 0, 'src' => 'imap', 'created_at' => $at, 'last_at' => $at, 'at' => $at, 'contact_email' => $other['e'], 'subject' => $subj, 'parts' => $parts)));
+		$dld = cp_dl_decide($dlx['ths'][0], $dlx);
+		$deal = $dld['act'] === 'link' ? (int) $dld['deal'] : 0;
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
 			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
 		if (!$wpdb->insert_id) { throw new \Exception('A levélszál mentése nem sikerült: ' . $wpdb->last_error); }
 		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $promo ? 'promo' : ($live ? 'inbox' : 'archive'), 'deal_id' => $deal ?: 0);
+		if ($deal) { cp_dl_event((int) $t['id'], $dld, $dlx); } /* v2.9.73: az automatikus kötés oka a szál idővonalán */
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),

@@ -1801,7 +1801,28 @@
 			(c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '<dt>Felvéve</dt><dd>' + esc(huDT(c.created_at)) + '</dd></dl>' +
 			(c.description ? '<div class="crm-desc">' + nl(c.description) + '</div>' : '') + EDB;
 		entityView(sh, esc(c.name || c.email), back, info, x, 'ct', id, c.name || c.email, '');
+		ceList(sh, id); /* v2.9.73: a kontakt további e-mail-címei */
 		bindEntityEdit(sh, () => editEntity(sh, 'ct', id, back, { name: c.name || '', email: c.email || '', mobile: c.mobile || '', phone: c.phone || '', city: c.city || '', company_id: co ? String(co.id) : '', description: c.description || '' }, co ? co.name : ''));
+	}
+	/* v2.9.73: további e-mail-címek (a levelezés ajánlatából felvett, csak a panelé) – az E-mail sor után, törlés gombbal */
+	async function ceList(sh, cid) {
+		const dl = sh.querySelector('.crm-dl'); if (!dl) return;
+		let r; try { r = await post('cp_ce_list', { cid: cid }); } catch (e) { return; }
+		if (!dl.isConnected) return;
+		dl.querySelectorAll('[data-ce]').forEach(x => x.remove());
+		const rows = (r && r.rows) || [];
+		if (!rows.length) return;
+		const dt = document.createElement('dt'); dt.dataset.ce = '1'; dt.textContent = 'További címek';
+		const dd = document.createElement('dd'); dd.dataset.ce = '1'; dd.className = 'crm-ce';
+		dd.innerHTML = rows.map(a => '<span class="crm-ce-i"><a href="mailto:' + esc(a.e) + '">' + esc(a.e) + '</a><button type="button" data-cedel="' + a.id + '" aria-label="' + esc(a.e) + ' eltávolítása" title="Eltávolítás">×</button></span>').join('');
+		const after = [...dl.querySelectorAll('dt')].find(x => x.textContent === 'E-mail');
+		if (after && after.nextElementSibling) after.nextElementSibling.after(dt, dd); else dl.prepend(dt, dd);
+		dd.querySelectorAll('[data-cedel]').forEach(b => b.addEventListener('click', async () => {
+			const a = rows.find(x => String(x.id) === b.dataset.cedel);
+			if (!a || !window.confirm('Eltávolítod a(z) ' + a.e + ' címet ettől a kontakttól? Az innen érkező levelek ezután nem kerülnek automatikusan a dealjéhez.')) return;
+			b.disabled = true;
+			try { await post('cp_ce_del', { id: a.id, cid: cid }); toast('Cím eltávolítva.'); ceList(sh, cid); } catch (e) { b.disabled = false; toast(e.message, true); }
+		}));
 	}
 	async function openCompany(id, back) {
 		const sh = sheet360(head360('Cég', back) + '<div class="cpx-empty">Betöltés…</div>');

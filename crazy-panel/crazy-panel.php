@@ -3743,6 +3743,7 @@ require_once __DIR__ . '/crm-source.php';
 require_once __DIR__ . '/mday.php'; /* v2.9.70: többnapos rendezvény (napok listája) */
 require_once __DIR__ . '/panel-users.php';
 require_once __DIR__ . '/mail.php';
+require_once __DIR__ . '/contact-emails.php'; /* v2.9.73: kontakt további e-mail-címei (deal-kötés) */
 require_once __DIR__ . '/kanban.php';
 require_once __DIR__ . '/notify.php';
 require_once __DIR__ . '/ping.php'; /* v2.9.59: könnyített változásjelző (P1) – a gyors út a mu-plugins/cp-ping.php */

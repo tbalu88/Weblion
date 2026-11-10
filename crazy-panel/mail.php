@@ -412,25 +412,36 @@ function cp_mail_ajax_deal_suggest() {
 	cp_tab_need(array('mail'));
 	if (!function_exists('cp_crm_t') || !function_exists('cp_imp_thread_parts') || !function_exists('cp_crm_panel_on') || !cp_crm_panel_on()) { wp_send_json_success(array('rows' => array())); }
 	global $wpdb;
-	$t = $wpdb->get_row($wpdb->prepare('SELECT id, contact_email, contact_name, last_at FROM ' . cp_mail_t('threads') . ' WHERE id = %d', (int) ($_POST['th'] ?? 0)), ARRAY_A);
+	$t = $wpdb->get_row($wpdb->prepare('SELECT id, contact_email, contact_name, last_at, subject FROM ' . cp_mail_t('threads') . ' WHERE id = %d', (int) ($_POST['th'] ?? 0)), ARRAY_A);
 	if (!$t) { wp_send_json_success(array('rows' => array())); }
 	$D = cp_crm_t('deals'); $C = cp_crm_t('contacts');
 	$at = (string) ($t['last_at'] ?: gmdate('Y-m-d H:i:s'));
 	$sel = "SELECT d.id, d.title, d.status, d.event_d, c.name cn, c.email ce FROM $D d JOIN $C c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND c.deleted_at IS NULL AND ";
 	$ord = $wpdb->prepare(" ORDER BY (d.status = 'Open') DESC, ABS(DATEDIFF(COALESCE(d.event_d, DATE(d.created_at)), %s)) LIMIT 8", $at);
 	$out = array(); $seen = array();
+	/* v2.9.73: a rangsoroláshoz bővebb jelöltlista (a dátum-egyezők előre kerülnek), a végén 8 */
 	$add = function ($rows, $why) use (&$out, &$seen) {
 		foreach ((array) $rows as $r) {
-			if (isset($seen[$r['id']]) || count($out) >= 8) { continue; }
+			if (isset($seen[$r['id']]) || count($out) >= 20) { continue; }
 			$seen[$r['id']] = 1;
 			$out[] = array('id' => (int) $r['id'], 'title' => (string) $r['title'], 'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'ev' => (string) $r['event_d'], 'st' => (string) $r['status'], 'why' => is_callable($why) ? $why($r) : $why);
 		}
 	};
 	$parts = cp_imp_thread_parts((int) $t['id'], (string) $t['contact_email']);
+	/* v2.9.73: deal-jel a tárgyban */
+	$tok = function_exists('cp_dl_token') ? cp_dl_token((string) $t['subject']) : 0;
+	if ($tok) { $add($wpdb->get_results($wpdb->prepare($sel . 'd.id = %d', $tok) . $ord, ARRAY_A), 'Deal-jel a tárgyban: #' . $tok); }
 	if ($parts) {
 		$in = implode(',', array_fill(0, count($parts), '%s'));
-		$add($wpdb->get_results($wpdb->prepare($sel . "c.email IN ($in)", $parts) . $ord, ARRAY_A), function ($r) { return 'A levelezésben szerepel: ' . $r['ce']; });
+		$add($wpdb->get_results($wpdb->prepare($sel . "c.email IN ($in)", $parts) . str_replace('LIMIT 8', 'LIMIT 20', $ord), ARRAY_A), function ($r) { return 'A levelezésben szerepel: ' . $r['ce']; });
+		/* v2.9.73: a kontaktok további címei (contact-emails.php) */
+		if (function_exists('cp_ce_db_ok') && cp_ce_db_ok()) {
+			$add($wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.status, d.event_d, c.name cn, c.email ce, a.email ae FROM $D d JOIN $C c ON c.id = d.contact_id JOIN " . cp_ce_t() . " a ON a.contact_id = c.id WHERE d.deleted_at IS NULL AND c.deleted_at IS NULL AND a.email IN ($in)", $parts) . str_replace('LIMIT 8', 'LIMIT 20', $ord), ARRAY_A), function ($r) { return 'A kontakt további címe: ' . $r['ae']; });
+		}
 	}
+	/* v2.9.73: régi Salesmate-sablon „|| ID: <kontakt>” */
+	$smid = function_exists('cp_dl_smid') ? cp_dl_smid((string) $t['subject']) : 0;
+	if ($smid) { $add($wpdb->get_results($wpdb->prepare($sel . 'c.id = %d', $smid) . $ord, ARRAY_A), 'Salesmate-azonosító a tárgyban'); }
 	$doms = array();
 	foreach ($parts as $e) { $d = substr(strrchr($e, '@'), 1); if ($d !== '' && !cp_imp_ours($e) && !(function_exists('cp_cos_free') && cp_cos_free($d)) && !in_array($d, $doms, true)) { $doms[] = $d; } }
 	foreach (array_slice($doms, 0, 3) as $d) {
@@ -440,7 +451,23 @@ function cp_mail_ajax_deal_suggest() {
 	if (mb_strlen($nm) >= 5 && strpos($nm, '@') === false && strpos($nm, ' ') !== false) {
 		$add($wpdb->get_results($wpdb->prepare($sel . 'c.name = %s', $nm) . $ord, ARRAY_A), 'Azonos név: ' . $nm);
 	}
-	wp_send_json_success(array('rows' => $out));
+	/* v2.9.73: a tárgyban lévő dátummal (rendezvénynap: event_d vagy a többnapos rendezvény bármelyik napja) egyező deal elöl */
+	$dates = function_exists('cp_dl_dates') ? cp_dl_dates((string) $t['subject'], $at) : array();
+	if ($dates && $out) {
+		$days = array();
+		foreach ($out as $r) { if ($r['ev'] !== '') { $days[$r['id']][] = substr($r['ev'], 0, 10); } }
+		if (function_exists('cp_mday_db_ok') && function_exists('cp_mday_t') && cp_mday_db_ok()) {
+			foreach ((array) $wpdb->get_results('SELECT deal_id, day FROM ' . cp_mday_t() . ' WHERE deal_id IN (' . implode(',', array_map('intval', array_column($out, 'id'))) . ')', ARRAY_A) as $x) { $days[(int) $x['deal_id']][] = substr((string) $x['day'], 0, 10); }
+		}
+		$hit = array(); $rest = array();
+		foreach ($out as $r) {
+			$m = array_values(array_intersect($days[$r['id']] ?? array(), $dates));
+			if ($m) { $r['why'] = 'A tárgyban lévő dátum: ' . cp_dl_hu_day($m[0]) . ($r['why'] !== '' ? ' · ' . $r['why'] : ''); $r['dm'] = 1; $hit[] = $r; } else { $rest[] = $r; }
+		}
+		usort($hit, function ($a, $b) { return ($b['st'] === 'Open') <=> ($a['st'] === 'Open'); });
+		$out = array_merge($hit, $rest);
+	}
+	wp_send_json_success(array('rows' => array_slice($out, 0, 8)));
 }
 
 /* ------------------------------------------------------------ levélszálak és jegyzetek (v1.34) */
@@ -671,7 +698,10 @@ function cp_mail_ajax_thread_set() {
 	$ev = cp_mail_event_text($f, $set, $t);
 	if ($f === 'assignee' && !empty($set['assignee_uid']) && (int) $set['assignee_uid'] !== (int) $t['assignee_uid'] && function_exists('cp_notify')) { cp_notify((int) $set['assignee_uid'], 'mail_assign', 'rád osztotta a levelet: „' . mb_substr($t['subject'], 0, 100) . '”', 'mail:' . $id); }
 	if ($ev !== '') { $wpdb->insert(cp_mail_t('events'), array('thread_id' => $id, 'kind' => $f, 'text' => $ev, 'author_uid' => $me, 'author' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'created_at' => gmdate('Y-m-d H:i:s'))); }
-	wp_send_json_success(cp_mail_thread_full($id));
+	$full = cp_mail_thread_full($id);
+	/* v2.9.73: kézi csatolás után: a szál partnercíme egyik kontaktnál sincs meg → egyszeri ajánlat a deal kontaktjához */
+	if ($f === 'deal' && !empty($set['deal_id']) && $ev !== '' && function_exists('cp_ce_offer') && is_array($full)) { $o = cp_ce_offer($t, (int) $set['deal_id']); if ($o) { $full['ce_offer'] = $o; } }
+	wp_send_json_success($full);
 }
 
 /* az esemény szövege a szál idővonalán (követés nem kerül bele; változatlan értéknél üres) */

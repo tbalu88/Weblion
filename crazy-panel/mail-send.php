@@ -164,6 +164,8 @@ function cp_send_ajax() {
 	}
 	$subj = trim(cp_mail_render(sanitize_text_field(wp_unslash($_POST['subject'] ?? '')), $vals, false));
 	if ($subj === '') { cp_el_err('Add meg a tárgyat.'); }
+	/* v2.9.73: deal-jel a tárgy végén („… [#123]”) – a válaszok így biztosan a dealhez kerülnek; egyszer szerepel, válaszláncban sem ismétlődik */
+	if ($deal && function_exists('cp_dl_subj_token')) { $subj = cp_dl_subj_token($subj, $deal); }
 	$html = cp_mail_render(cp_mail_clean(wp_unslash($_POST['body'] ?? '')), $vals, true);
 	if (trim(wp_strip_all_tags($html)) === '') { cp_el_err('Üres a levél.'); }
 	if (preg_match('/\[KITÖLTENDŐ/u', $html . $subj)) { cp_el_err('A levélben még van kitöltendő rész ([KITÖLTENDŐ: …]).'); }
