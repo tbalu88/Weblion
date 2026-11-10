@@ -65,7 +65,10 @@ function cp_logi_geo($q, &$budget) {
 	$wait = 1100000 - (int) ((microtime(true) - $last) * 1000000); if ($last && $wait > 0) { usleep($wait); }
 	$try = array($qq);
 	if (!preg_match('/budapest|\b\d{4}\b/iu', $qq)) { $try[] = $qq . ', Budapest'; }
+	/* tartalék: csak az irányítószám + település (legalább a város / kerület a térképre kerül) */
+	if (preg_match('/\b(\d{4})\s+([\p{Lu}][\p{L}-]+)/u', $q, $pm)) { $try[] = $pm[1] . ' ' . $pm[2]; }
 	$res = null;
+	$try = array_slice(array_values(array_unique($try)), 0, 3);
 	foreach ($try as $t) {
 		$resp = wp_remote_get('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=hu&q=' . rawurlencode($t), array('timeout' => 10, 'user-agent' => 'CrazyPanel/1.0 (+https://eventcrazy.hu)'));
 		$last = microtime(true);
