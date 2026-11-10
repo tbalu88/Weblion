@@ -146,7 +146,14 @@ function cp_kz_ajax_save() {
 	if (array_key_exists('email', $f)) { $e = strtolower($s('email', 190)); if ($e !== '' && !is_email($e)) { cp_el_err('Érvénytelen e-mail-cím.'); } $set['email'] = $e; }
 	if (array_key_exists('phone', $f)) { $set['phone'] = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) $f['phone']), 0, 40); }
 	if (array_key_exists('plate', $f)) { $set['plate'] = mb_strtoupper($s('plate', 40)); }
-	if (array_key_exists('note', $f)) { $set['note'] = mb_substr(sanitize_textarea_field((string) $f['note']), 0, 2000); }
+	if (array_key_exists('note', $f)) {
+		$set['note'] = mb_substr(sanitize_textarea_field((string) $f['note']), 0, 2000);
+		/* v2.9.87: egyszerre szerkesztők – ha a kiinduló szöveg óta más is módosította, összefésüljük (egyik sem vész el) */
+		if ($row && array_key_exists('note_base', $f) && function_exists('cp_iv_note_merge')) {
+			$base = sanitize_textarea_field((string) $f['note_base']); $cur = (string) $row['note'];
+			if ($cur !== $base && $cur !== $set['note'] && sanitize_textarea_field($cur) !== $base) { $set['note'] = mb_substr(cp_iv_note_merge($base, $cur, $set['note']), 0, 4000); }
+		}
+	}
 	if (array_key_exists('flag', $f)) { $set['flag'] = in_array($f['flag'], array('', 'red', 'yellow', 'green'), true) ? $f['flag'] : ''; }
 	if (array_key_exists('active', $f)) { $set['active'] = empty($f['active']) ? 0 : 1; }
 	if (array_key_exists('el_id', $f)) { $set['el_id'] = sanitize_key((string) $f['el_id']); }
@@ -174,7 +181,7 @@ function cp_kz_ajax_save() {
 		$wpdb->insert($T, $set + array('created_at' => gmdate('Y-m-d H:i:s'), 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T")));
 		$id = (int) $wpdb->insert_id;
 	}
-	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys($f)))); }
+	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys(array_diff_key($f, array('note_base' => 1)))))); }
 	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
 	wp_send_json_success(array('row' => cp_kz_out($r, cp_panel_is_admin() && !empty($_POST['reveal']))));
 }

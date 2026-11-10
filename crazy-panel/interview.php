@@ -523,9 +523,47 @@ function cp_iv_ajax_note() {
 	$rate = (int) ($_POST['rate'] ?? 0);
 	if (!isset(cp_iv_rates()[$rate])) { $rate = 0; }
 	$who = function_exists('cp_panel_who') ? mb_substr((string) cp_panel_who(), 0, 100) : '';
-	$wpdb->update($B, array('note' => $note, 'rate' => $rate, 'note_by' => $who, 'note_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
+	/* v2.9.87: egyszerre jegyzetelők – a kliens elküldi, melyik szerveri változatból indult (base, brate). Ha közben
+	   más is írt bele, nem írjuk felül: összefésüljük (az ő szövege marad, a mi új soraink hozzáadódnak). A mentés
+	   feltételes (csak ha azóta sem változott), ütközésnél újraolvas és újra fésül – így egyik szöveg sem vész el. */
+	$hasBase = isset($_POST['base']);
+	$base = $hasBase ? cp_iv_note_clean(wp_unslash($_POST['base'])) : '';
+	$brate = (int) ($_POST['brate'] ?? -1);
+	$merged = false; $by = '';
+	for ($try = 0; $try < 5; $try++) {
+		$cur = $wpdb->get_row($wpdb->prepare("SELECT note, rate, note_by, note_at FROM $B WHERE id = %d", $id), ARRAY_A);
+		$cn = (string) ($cur['note'] ?? ''); $cr = (int) ($cur['rate'] ?? 0);
+		$nn = $note; $nr = $rate; $mg = false;
+		if ($hasBase && $cn !== $base && $cn !== $note) { $nn = cp_iv_note_merge($base, $cn, $note); $mg = $nn !== $note; }
+		if ($hasBase && $brate >= 0 && $rate === $brate) { $nr = $cr; } /* az értékelésen nem változtattunk → a másikét hagyjuk */
+		if (mb_strlen($nn) > CP_IV_NOTE_MAX * 2) { $nn = mb_substr($nn, 0, CP_IV_NOTE_MAX * 2); }
+		$sql = $cur['note'] === null
+			? $wpdb->prepare("UPDATE $B SET note = %s, rate = %d, note_by = %s, note_at = %s WHERE id = %d AND note IS NULL AND rate <=> %d", $nn, $nr, $who, gmdate('Y-m-d H:i:s'), $id, $cur['rate'])
+			: $wpdb->prepare("UPDATE $B SET note = %s, rate = %d, note_by = %s, note_at = %s WHERE id = %d AND BINARY note = BINARY %s AND rate <=> %d", $nn, $nr, $who, gmdate('Y-m-d H:i:s'), $id, $cn, $cur['rate']);
+		$n = $wpdb->query($sql);
+		if ($n === false) { cp_el_err('Nem sikerült menteni.', 500); }
+		if ($n > 0 || ($nn === $cn && $nr === $cr)) { $merged = $mg; $by = $mg ? (string) $cur['note_by'] : ''; break; }
+		usleep(60000);
+	}
 	$r = $wpdb->get_row($wpdb->prepare("SELECT note, rate, note_by, note_at FROM $B WHERE id = %d", $id), ARRAY_A);
-	wp_send_json_success(array('id' => $id) + cp_iv_note_out((array) $r));
+	wp_send_json_success(array('id' => $id, 'merged' => $merged ? 1 : 0, 'mby' => $by) + cp_iv_note_out((array) $r));
+}
+/* háromutas, soronkénti összefésülés veszteség nélkül: a szerveren lévő szöveg ($cur) marad, és hozzáadódik minden
+   olyan sor, amelyet mi írtunk ($mine) és sem a kiinduló ($base), sem a mostani szerveri szövegben nincs */
+function cp_iv_note_merge($base, $cur, $mine) {
+	if ($mine === $base || $mine === '') { return $cur; }
+	if ($cur === $base || $cur === '') { return $mine; }
+	/* gyakori eset: mindketten a végére írtak */
+	if ($base !== '' && strpos($cur, $base) === 0 && strpos($mine, $base) === 0) {
+		$add = ltrim(substr($mine, strlen($base)), "\n");
+		return $add === '' ? $cur : rtrim($cur) . "\n" . $add;
+	}
+	$k = function ($l) { return trim(preg_replace('/\s+/u', ' ', $l)); };
+	$have = array();
+	foreach (array_merge(explode("\n", $base), explode("\n", $cur)) as $l) { $have[$k($l)] = 1; }
+	$add = array();
+	foreach (explode("\n", $mine) as $l) { $t = $k($l); if ($t !== '' && !isset($have[$t])) { $add[] = $l; $have[$t] = 1; } }
+	return $add ? rtrim($cur) . "\n" . implode("\n", $add) : $cur;
 }
 /* a Kezelők-adatlaphoz: a jelentkező foglalásai (jegyzettel, értékeléssel) – kérésenként egyetlen lekérdezés */
 function cp_iv_kz_notes($kz_id) {

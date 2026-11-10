@@ -1179,7 +1179,7 @@
 		const att = rd.querySelector('[data-attach]');
 		if (att) att.addEventListener('click', () => {
 			const h = rd.querySelector('[data-dpat]'); h.hidden = !h.hidden;
-			if (!h.hidden) dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }), t.id);
+			if (!h.hidden) { dealPicker(h, dd => act('cp_mail_thread_set', { f: 'deal', v: String(dd.id), _deal: { id: dd.id, title: dd.title, value: null, cn: dd.cn, co: '', stage: '' } }), t.id, () => { h.hidden = true; h.innerHTML = ''; }, att); const fi = h.querySelector('input'); if (fi) fi.focus(); }
 		});
 		/* v1.38: AI válaszvarázsló – piszkozat, amit a levélíróban nézel át */
 		const aib = rd.querySelector('[data-ai]');
@@ -1396,10 +1396,16 @@
 		const f = el.querySelector('[data-ceo="1"]'); if (f) f.focus({ preventScroll: true });
 	}
 
-	function dealPicker(host, onPick, sugTh) {
+	/* onClose: Esc-re vagy mellé kattintásra az egész választó bezárul (v2.9.87); nélküle csak a lista csukódik be */
+	function dealPicker(host, onPick, sugTh, onClose, opener) {
 		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
 		const inp = host.querySelector('input'), list = host.querySelector('.ml-dp-l');
 		let t = null, sug = null, seq = 0;
+		const close = () => { clearTimeout(t); seq++; list.hidden = true; document.removeEventListener('pointerdown', outside, true); if (onClose) onClose(); };
+		const outside = ev => { if (!host.isConnected) { document.removeEventListener('pointerdown', outside, true); return; } if (host.contains(ev.target) || (opener && opener.contains(ev.target))) return; if (onClose) close(); else list.hidden = true; };
+		document.addEventListener('pointerdown', outside, true);
+		host.addEventListener('keydown', ev => { if (ev.key !== 'Escape') return; ev.preventDefault(); ev.stopPropagation(); if (onClose) { close(); if (opener) opener.focus(); } else if (!list.hidden) list.hidden = true; else inp.blur(); });
+		inp.addEventListener('focus', () => { if (list.hidden && inp.value.trim().length < 2 && sug) showSug(); });
 		const row = x => '<button type="button" data-id="' + x.id + '"><b>' + esc(x.title) + (x.st && x.st !== 'Open' ? ' <span class="ml-dp-st">' + esc(x.st === 'Won' ? 'megnyert' : x.st === 'Lost' ? 'elvesztett' : x.st) + '</span>' : '') + '</b><small>' + esc([x.cn, x.ce, x.ev].filter(Boolean).join(' · ')) + '</small>' + (x.why ? '<small class="ml-dp-why">' + esc(x.why) + '</small>' : '') + '</button>';
 		const show = (rows, head, empty) => {
 			list.innerHTML = (head && rows.length ? '<div class="ml-dp-h">' + esc(head) + '</div>' : '') + (rows.length ? rows.map(row).join('') : '<div class="ml-dp-n">' + esc(empty) + '</div>');

@@ -171,7 +171,9 @@
 				inp.addEventListener('change', async () => {
 					const k = inp.dataset.f, v = inp.type === 'checkbox' ? (inp.checked ? 1 : 0) : inp.value.trim();
 					if (k === 'name' && !v) { toast('A név nem lehet üres.', true); inp.value = x.name; return; }
-					const r = await save(id, { [k]: v }, inp);
+					/* v2.9.87: a megjegyzésnél a kiinduló szöveg is megy – ha közben más is módosította, a szerver összefésüli */
+					const r = await save(id, k === 'note' ? { note: v, note_base: x.note || '' } : { [k]: v }, inp);
+					if (r && k === 'note') { const nx = S.rows.find(z => z.id === id); if (nx && nx.note !== v) { inp.value = nx.note; toast('Közben más is írt a megjegyzésbe – a kettőt összefésültem.'); } x.note = nx ? nx.note : v; }
 					if (r && (k === 'el_id' || k === 'active' || k === 'name' || k === 'kind' || k === 'flag')) draw();
 					if (r && k === 'car') inp.className = 'kz-car ' + r.car;
 				});
@@ -245,7 +247,7 @@
 	const ivBox = () => S.main && S.main.isConnected ? S.main.querySelector('.kz-ivv .iv-b') : null;
 	function ivFind(bid) { const days = (IV.d && IV.d.days) || {}; for (const k of Object.keys(days)) for (const s of days[k].slots) if (s.b && s.b.id === bid) return s.b; return null; }
 	/* ---- jegyzet: helyi szerkesztési állapot foglalásonként (a szöveg újrarajzoláskor és mentési hibánál sem vész el) */
-	const edOf = b => IV.ed[b.id] || (IV.ed[b.id] = { text: b.note || '', rate: b.rate || 0, timer: 0, inflight: false, dirty: false, err: '', saved: '' });
+	const edOf = b => IV.ed[b.id] || (IV.ed[b.id] = { text: b.note || '', rate: b.rate || 0, base: b.note || '', brate: b.rate || 0, timer: 0, inflight: false, dirty: false, err: '', saved: '', mby: '' });
 	function ivQueue(bid, now) {
 		const e = IV.ed[bid]; if (!e) return;
 		e.dirty = true; e.err = ''; clearTimeout(e.timer);
@@ -258,8 +260,15 @@
 		if (e.inflight || !e.dirty) return;
 		e.dirty = false; e.inflight = true; ivStat(bid);
 		try {
-			const r = await post('cp_iv_note', { id: bid, note: e.text, rate: e.rate });
+			/* v2.9.87: a kiinduló szerveri változat is megy – ha közben más is írt bele, a szerver összefésüli (semmi nem vész el) */
+			const sent = e.text, srate = e.rate;
+			const r = await post('cp_iv_note', { id: bid, note: sent, rate: srate, base: e.base, brate: e.brate });
 			const b = ivFind(bid); if (b) { b.note = r.note; b.rate = r.rate; b.nby = r.nby; b.nat = r.nat; }
+			e.base = r.note; e.brate = r.rate;
+			if (r.merged) e.mby = r.mby || 'egy kolléga';
+			/* a mentett szöveg eltér a beküldöttől (összefésült): ha közben nem gépelt tovább, a mező a közös szöveget mutatja */
+			if (r.note !== sent && e.text === sent) { e.text = r.note; ivSetTa(bid, r.note); }
+			if (r.rate !== srate && e.rate === srate) { e.rate = r.rate; const box = ivBox(); if (box) box.querySelectorAll('[data-ivrate="' + bid + '"]').forEach(x => x.setAttribute('aria-pressed', String(Number(x.dataset.v) === e.rate))); }
 			e.saved = hhmm(); e.err = ''; IV.changed = true;
 		} catch (er) { e.dirty = true; e.err = er.message; }
 		e.inflight = false;
@@ -274,6 +283,7 @@
 		const e = IV.ed[bid], b = ivFind(bid) || {};
 		if (e && e.err) return ['bad', 'Nem sikerült menteni (' + e.err + ') – újrapróbálom, a szöveg megmarad.'];
 		if (e && (e.dirty || e.inflight)) return ['', 'Mentés…'];
+		if (e && e.saved && e.mby) return ['ok', 'Mentve ' + e.saved + ' – közben ' + e.mby + ' is írt bele, a kettőt összefésültem.'];
 		if (e && e.saved) return ['ok', 'Mentve ' + e.saved];
 		return ['', b.nat ? 'Utoljára: ' + b.nat + (b.nby ? ' · ' + b.nby : '') : 'Gépelés közben magától mentődik.'];
 	}
@@ -281,6 +291,22 @@
 		const box = ivBox(); const el = box && box.querySelector('[data-ivst="' + bid + '"]'); if (!el) return;
 		const [c, t] = ivStatTxt(bid); el.className = 'iv-ns' + (c ? ' ' + c : ''); el.textContent = t;
 	}
+	/* a mező tartalmának cseréje a kurzor megtartásával (a hozzáfűzött rész a végére kerül) */
+	function ivSetTa(bid, v) {
+		const box = ivBox(), t = box && box.querySelector('[data-ivta="' + bid + '"]'); if (!t || t.value === v) return;
+		const f = document.activeElement === t, a = t.selectionStart, z = t.selectionEnd;
+		t.value = v; autosz(t); if (f) { try { t.setSelectionRange(a, z); } catch (er) { /* nem baj */ } }
+	}
+	/* a nyitott interjú-nézet 20 mp-enként csendben frissül – a kollégák jegyzetei gépelés nélküli állapotban megjelennek */
+	setInterval(async () => {
+		if (!ivBox() || !IV.d || IV.busy || IV.setOpen || document.hidden || ivPending()) return;
+		try {
+			const d = await post('cp_iv_admin', {});
+			if (!ivBox() || IV.busy || ivPending()) return;
+			if (JSON.stringify(d) === JSON.stringify(IV.d)) return;
+			IV.d = d; ivSync(); ivDraw();
+		} catch (er) { /* a következő kör újrapróbálja */ }
+	}, 20000);
 	const autosz = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 480) + 'px'; };
 	function ivNoteBox(b) {
 		const e = edOf(b), [c, t] = ivStatTxt(b.id);
