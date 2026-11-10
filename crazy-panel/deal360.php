@@ -150,7 +150,7 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		if (++$k > $msg_limit) { break; }
 		$att = json_decode((string) $m['attachments'], true) ?: array();
 		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
-		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + (preg_match('/\.(jpe?g|png|gif|webp|bmp|heic)$/i', (string) $a['n']) && function_exists('cp_thumb_hash') && ($fh = cp_thumb_hash((int) $m['id'], (int) $ai)) !== '' ? array('h' => $fh) : array()) /* v2.9.71: tartalom-ujjlenyomat (ismétlődés-szűrés) */ + ((!empty($a['cid']) && cp_d360_is_emb((string) $a['n'])) || (preg_match('/\.(jpe?g|png|gif|webp|bmp|heic)$/i', (string) $a['n']) && function_exists('cp_thumb_tiny') && cp_thumb_tiny((int) $m['id'], (int) $ai, $a['s'] ?? null)) ? array('emb' => 1) : array()); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
+		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + cp_d360_file_extra((int) $m['id'], (int) $ai, $a); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
 	}
 	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);
 	foreach ($notes as $n) { $out['notes'][] = array('id' => (int) $n['id'], 'th' => (int) $n['thread_id'], 'b' => mb_substr((string) $n['body'], 0, 1200), 'by' => $n['author'], 'at' => cp_crm_local($n['created_at'])); }
@@ -306,6 +306,21 @@ function cp_d360_ajax_who() {
 
 /* v2.9.23: aláírás- / beágyazott kép-e – csak kép, és csak tipikus név (image001.png, ~WRD0000.jpg, Outlook-…, logo…, ikonok).
    Egyes levelezők (pl. Apple Mail) a valódi mellékletnek (PDF, sablon-PNG) is adnak Content-ID-t, azokat nem rejtjük. */
+/* v2.9.71–72: egy melléklet kiegészítő adatai a Fájlok kártyához – tartalom-ujjlenyomat (h), méret (s), képméret (w, h2), és hogy rejtett-e (emb):
+ * aláírás-nevű beágyazott kép; 10 KB alatti vagy meg nem jeleníthető kép; kicsi kép (a hosszabb oldala legfeljebb 160 px – közösségi ikon, aláírás-logó) */
+function cp_d360_file_extra($mid, $ai, $a) {
+	$x = array();
+	$img = (bool) preg_match('/\.(jpe?g|png|gif|webp|bmp|heic)$/i', (string) $a['n']);
+	if (!empty($a['s'])) { $x['s'] = (int) $a['s']; }
+	if ($img && function_exists('cp_thumb_hash') && ($fh = cp_thumb_hash($mid, $ai)) !== '') { $x['h'] = $fh; }
+	$mt = $img && function_exists('cp_thumb_meta') ? cp_thumb_meta($mid, $ai) : array();
+	if (!empty($mt['s'])) { $x['s'] = (int) $mt['s']; }
+	if (!empty($mt['w']) && !empty($mt['h'])) { $x['w'] = (int) $mt['w']; $x['h2'] = (int) $mt['h']; }
+	if ((!empty($a['cid']) && cp_d360_is_emb((string) $a['n']))
+		|| ($img && function_exists('cp_thumb_tiny') && cp_thumb_tiny($mid, $ai, $a['s'] ?? null))
+		|| (!empty($x['w']) && max($x['w'], $x['h2']) <= 160)) { $x['emb'] = 1; }
+	return $x;
+}
 function cp_d360_is_emb($n) {
 	if (!preg_match('/\.(jpe?g|png|gif|webp|bmp|svg)$/i', $n)) { return false; }
 	return (bool) preg_match('/^(image\d*|img\d*|~wrd\d*|outlook-[\w-]*|unnamed[\w-]*|signature[\w-]*|alairas[\w-]*|icon[\w-]*|banner[\w-]*|facebook[\w-]*|instagram[\w-]*|linkedin[\w-]*|youtube[\w-]*|tiktok[\w-]*|twitter[\w-]*|x-logo[\w-]*|spacer|pixel|blank)(\(\d+\))?\.\w+$/i', $n);

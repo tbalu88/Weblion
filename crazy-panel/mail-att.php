@@ -216,6 +216,11 @@ function cp_thumb_hash($m, $i) {
 	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i) . '.h';
 	return is_file($f) ? (string) @file_get_contents($f) : '';
 }
+function cp_thumb_meta($m, $i) {
+	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i) . '.m';
+	$j = is_file($f) ? json_decode((string) @file_get_contents($f), true) : null;
+	return is_array($j) ? $j : array();
+}
 function cp_thumb_tiny($m, $i, $size = null) {
 	if ($size !== null && (int) $size > 0) { return (int) $size < 10240; }
 	$f = cp_att_dir() . '/thumbs/' . cp_thumb_key($m, $i);
@@ -270,6 +275,9 @@ function cp_thumb_ajax() {
 		if (strlen((string) $data) < 10240) { @file_put_contents($f . '.small', '1'); }
 		/* v2.9.71: a kép tartalmának ujjlenyomata – az azonos (más néven, más levélben érkezett) kép a deal Fájlok kártyáján egy példányban */
 		@file_put_contents($f . '.h', substr(md5((string) $data), 0, 16));
+		/* v2.9.72: eredeti fájlméret és képméret (a Fájlok kártyán a kép alatt; a kicsi kép – max. 160 px – aláírás-ikonként rejtve) */
+		$gi = @getimagesizefromstring((string) $data);
+		@file_put_contents($f . '.m', wp_json_encode(array('s' => strlen((string) $data), 'w' => $gi ? (int) $gi[0] : 0, 'h' => $gi ? (int) $gi[1] : 0)));
 		$b = cp_thumb_make((string) $data);
 		if ($b === null) { cp_thumb_none(); }
 		@file_put_contents($f . '.webp', $b);
@@ -282,6 +290,6 @@ add_action('cp_crm_tick', function () {
 	if (get_transient('cp_thumb_gc')) { return; }
 	set_transient('cp_thumb_gc', 1, DAY_IN_SECONDS);
 	$d = cp_att_dir() . '/thumbs'; if (!is_dir($d)) { return; }
-	foreach ((array) glob($d . '/*.{webp,jpg,none,small,h}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
+	foreach ((array) glob($d . '/*.{webp,jpg,none,small,h,m}', GLOB_BRACE) as $x) { if (@filemtime($x) < time() - 90 * DAY_IN_SECONDS) { @unlink($x); } }
 }, 60);
 
