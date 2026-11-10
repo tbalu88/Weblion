@@ -205,6 +205,8 @@ function cp_slot_ajax_act() {
 	$log = '';
 	if ($op === 'invite') {
 		if (!$slot) { cp_el_err('Ez a slot már nincs meg (a deal változott) – frissítsd a napot.'); }
+		/* v2.9.121: véglegesített slotra nem lehet újabb embert meghívni (előbb a véglegesítést kell visszavonni) */
+		foreach ($slot['asg'] as $a0) { if ($a0['st'] === 'final') { cp_el_err('Ez a slot már véglegesítve van (' . $a0['n'] . '). Új embert csak a véglegesítés visszavonása (×) után lehet meghívni.'); } }
 		if (!$slot['can_inv'] && empty($_POST['force'])) { cp_el_err('Erre a rendezvényre még nem lehet meghívni (nincs kiküldött szerződés, és nem karácsonyi időszak).'); }
 		$ids = array_slice(array_unique(array_filter(array_map('intval', explode(',', (string) ($_POST['kz'] ?? ''))))), 0, 10);
 		if (!$ids) { cp_el_err('Válassz legalább egy kezelőt.'); }
@@ -227,6 +229,10 @@ function cp_slot_ajax_act() {
 			if (!cp_slot_can_final()) { cp_el_err('Véglegesíteni Ákos vagy admin tud.', 403); }
 			$busy = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T WHERE kz_id = %d AND day = %s AND status = 'final' AND id <> %d", (int) $r['kz_id'], $day, $id));
 			if ($busy && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Ő erre a napra már be van osztva egy másik rendezvényre. Így is véglegesíted?')); }
+			/* v2.9.121: egy slotra egy véglegesített ember – a korábbit leváltja (rákérdezés után) */
+			$prev = $wpdb->get_var($wpdb->prepare("SELECT k.name FROM $T a LEFT JOIN " . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.day = %s AND a.skey = %s AND a.status = 'final' AND a.id <> %d LIMIT 1", (int) $r['deal_id'], $day, $r['skey'], $id));
+			if ($prev !== null && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Erre a slotra már ' . ($prev ?: 'valaki') . ' van véglegesítve. Leváltod?')); }
+			if ($prev !== null) { $wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", $now, (int) $r['deal_id'], $day, $r['skey'], $id)); }
 			$wpdb->update($T, array('status' => 'final', 'by_name' => $who, 'updated_at' => $now), array('id' => $id));
 			/* v2.9.117: megerősítő levél a kezelőnek (ha van e-mail-címe) */
 			$fm = cp_slot_mail((int) $id, 'final');
