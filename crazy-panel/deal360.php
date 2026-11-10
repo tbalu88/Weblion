@@ -318,7 +318,7 @@ function cp_d360_file_extra($mid, $ai, $a) {
 	if (!empty($mt['w']) && !empty($mt['h'])) { $x['w'] = (int) $mt['w']; $x['h2'] = (int) $mt['h']; }
 	if ((!empty($a['cid']) && cp_d360_is_emb((string) $a['n']))
 		|| ($img && function_exists('cp_thumb_tiny') && cp_thumb_tiny($mid, $ai, $a['s'] ?? null))
-		|| (!empty($x['w']) && max($x['w'], $x['h2']) <= 160)) { $x['emb'] = 1; }
+		|| (!empty($x['w']) && (max($x['w'], $x['h2']) <= 160 || ($x['h2'] <= 100 && $x['w'] <= 600)))) { $x['emb'] = 1; } /* v2.9.73: alacsony, széles aláírás-banner (max. 100 px magas) is */
 	return $x;
 }
 function cp_d360_is_emb($n) {
