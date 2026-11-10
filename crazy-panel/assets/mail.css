@@ -928,3 +928,7 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
     .ml-read .ml-rtool .ml-sw{font-size:0;gap:0}
   }
 }
+/* v2.9.108: Sablonok a bal oszlop alján (a felső menüsor helyett) */
+.ml-tplb{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;border-radius:8px;padding:7px 10px;margin-top:8px;font:600 13px Inter,sans-serif;color:var(--mu);cursor:pointer;text-align:left}
+.ml-tplb:hover{background:#F6F3EE;color:var(--ink)}.ml-tplb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ml-inbox.fold .ml-tplb span{display:none}.ml-inbox.fold .ml-tplb{justify-content:center;padding:7px 0}
