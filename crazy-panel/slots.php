@@ -122,22 +122,46 @@ function cp_slot_day($day) {
 	return array('day' => $day, 'slots' => $slots, 'cands' => $cands, 'xmas' => cp_slot_xmas($day) ? 1 : 0, 'can_final' => cp_slot_can_final() ? 1 : 0, 'states' => cp_slot_states(), 'skills' => function_exists('cp_kz_skills') ? cp_kz_skills() : array());
 }
 
-/* havi összesítő a naptár celláihoz: nap => [slot, véglegesített, meghívott (még nem végleges)] */
-function cp_slot_month($m) {
+/* havi összesítő a naptár celláihoz: nap => [slot, véglegesített, meghívott (még nem végleges)] (2.9.115-ös forma)
+   v2.9.116: + 'x' (részletes): k/h = Kezelő- / Host-igényű slot, u = ismeretlen helyszín, fk/fh = véglegesített, ik/ih = meghívás folyamatban,
+   sp = szerződött (biztos) slotok, b = aznap már véglegesített emberek száma; a fejlécben az aktív kezelők és hostok száma */
+function cp_slot_month($m, $full = false) {
 	global $wpdb;
-	$out = array();
+	$out = array(); $x = array();
+	$need_o = get_option('cp_slot_need', array()); if (!is_array($need_o)) { $need_o = array(); }
+	$slotNeed = array();
 	foreach ((array) (function_exists('cp_cap_month') ? cp_cap_month($m) : array()) as $e) {
 		$d = (string) ($e['date'] ?? ''); if ($d === '') { continue; }
-		if (!isset($out[$d])) { $out[$d] = array(0, 0, 0); }
-		$out[$d][0] += ($e['kind'] ?? '') === 'both' ? 2 : 1;
+		if (!isset($out[$d])) { $out[$d] = array(0, 0, 0); $x[$d] = array('k' => 0, 'h' => 0, 'u' => 0, 'fk' => 0, 'fh' => 0, 'ik' => 0, 'ih' => 0, 'sp' => 0, 'b' => 0); }
+		$deal = (int) ($e['deal'] ?? $e['id']);
+		$kinds = ($e['kind'] ?? 'selfie') === 'both' ? array('selfie', 'spin') : array((string) ($e['kind'] ?? 'selfie'));
+		$bp = cp_slot_bp($e['loc'] ?? '');
+		foreach ($kinds as $i => $k) {
+			$skey = ($k === 'spin' ? 'p' : 's') . ($i + 1);
+			$need = $k === 'spin' || $bp === false ? 'kezelo' : 'host';
+			$nk = $deal . '|' . $d . '|' . $skey;
+			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
+			$out[$d][0]++;
+			$x[$d][$need === 'kezelo' ? 'k' : 'h']++;
+			if ($bp === null && !isset($need_o[$nk])) { $x[$d]['u']++; }
+			if (($e['state'] ?? '') === 'booked') { $x[$d]['sp']++; }
+			$slotNeed[$deal . '|' . $d . '|' . $skey] = $need;
+		}
 	}
 	if (cp_slot_db_ok()) {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, deal_id, skey, MAX(status = %s) f, MAX(status IN (%s, %s)) i FROM ' . cp_slot_t() . ' WHERE day BETWEEN %s AND %s GROUP BY day, deal_id, skey', 'final', 'invited', 'accepted', $m . '-01', $m . '-31'), ARRAY_A) as $r) {
 			if (!isset($out[$r['day']])) { continue; }
-			if ((int) $r['f']) { $out[$r['day']][1]++; } elseif ((int) $r['i']) { $out[$r['day']][2]++; }
+			$nd = $slotNeed[$r['deal_id'] . '|' . $r['day'] . '|' . $r['skey']] ?? null;
+			if ($nd === null) { continue; }
+			if ((int) $r['f']) { $out[$r['day']][1]++; $x[$r['day']][$nd === 'kezelo' ? 'fk' : 'fh']++; }
+			elseif ((int) $r['i']) { $out[$r['day']][2]++; $x[$r['day']][$nd === 'kezelo' ? 'ik' : 'ih']++; }
 		}
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, COUNT(DISTINCT kz_id) n FROM ' . cp_slot_t() . " WHERE status = 'final' AND day BETWEEN %s AND %s GROUP BY day", $m . '-01', $m . '-31'), ARRAY_A) as $r) { if (isset($x[$r['day']])) { $x[$r['day']]['b'] = (int) $r['n']; } }
 	}
-	return $out;
+	if (!$full) { return $out; }
+	$tk = 0; $th = 0;
+	if (function_exists('cp_kz_t')) { foreach ((array) $wpdb->get_results('SELECT kind, COUNT(*) n FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host') GROUP BY kind", ARRAY_A) as $r) { if ($r['kind'] === 'kezelo') { $tk = (int) $r['n']; } else { $th = (int) $r['n']; } } }
+	return array('d' => $out, 'x' => $x, 'tk' => $tk, 'th' => $th);
 }
 
 function cp_slot_auth() {
@@ -157,7 +181,7 @@ function cp_slot_ajax_month() {
 	cp_slot_auth();
 	$m = (string) ($_REQUEST['m'] ?? '');
 	if (!preg_match('/^\d{4}-\d{2}$/', $m)) { cp_el_err('Hibás hónap.'); }
-	wp_send_json_success(array('m' => $m, 'd' => cp_slot_month($m)));
+	wp_send_json_success(array('m' => $m) + cp_slot_month($m, true));
 }
 /* műveletek: invite (több kezelő egyszerre), st (elfogadta / nem ér rá – telefonos rögzítés), final, del, need (Kezelő / Host felülírása) */
 add_action('wp_ajax_nopriv_cp_slot_act', 'cp_slot_ajax_act'); add_action('wp_ajax_cp_slot_act', 'cp_slot_ajax_act');

@@ -432,12 +432,16 @@
     /* v1.81: nézet (hónap / év) és szűrő (mind / kockázatos / van szabad gép) – a böngésző megjegyzi */
     const ls = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
     S.calView = S.calView || ls('cpx_calv', 'month'); S.calFilter = S.calFilter || ls('cpx_calf', 'all');
-    const tb = el('div', { class: 'cpx-caltb' }, '<div class="seg" role="group" aria-label="Nézet">' + [['month', 'Hónap'], ['year', 'Év']].map(x => '<button type="button" data-cv="' + x[0] + '" class="' + (S.calView === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
-      '<div class="seg" role="group" aria-label="Szűrő">' + [['all', 'Minden nap'], ['risk', 'Kockázatos'], ['free', 'Van szabad gép']].map(x => '<button type="button" data-cf="' + x[0] + '" class="' + (S.calFilter === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>');
+    /* v2.9.116: Gépek | Beosztás – a beosztás nézetben a csempék a kezelő- és host-igényt mutatják */
+    S.calMode = C.slot ? (S.calMode || ls('cpx_calm', 'gep')) : 'gep';
+    const tb = el('div', { class: 'cpx-caltb' }, (C.slot ? '<div class="seg cm" role="group" aria-label="Mit mutasson">' + [['gep', 'Gépek'], ['slot', 'Beosztás']].map(x => '<button type="button" data-cm="' + x[0] + '" class="' + (S.calMode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' : '') + (S.calMode === 'slot' ? '' : '<div class="seg" role="group" aria-label="Nézet">' + [['month', 'Hónap'], ['year', 'Év']].map(x => '<button type="button" data-cv="' + x[0] + '" class="' + (S.calView === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<div class="seg" role="group" aria-label="Szűrő">' + [['all', 'Minden nap'], ['risk', 'Kockázatos'], ['free', 'Van szabad gép']].map(x => '<button type="button" data-cf="' + x[0] + '" class="' + (S.calFilter === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>'));
+    tb.querySelectorAll('[data-cm]').forEach(b => b.addEventListener('click', () => { S.calMode = b.dataset.cm; try { localStorage.setItem('cpx_calm', S.calMode); } catch (e) { /* privát mód */ } render(); }));
     tb.querySelectorAll('[data-cv]').forEach(b => b.addEventListener('click', () => { S.calView = b.dataset.cv; try { localStorage.setItem('cpx_calv', S.calView); } catch (e) { /* privát mód */ } render(); }));
     tb.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => { S.calFilter = b.dataset.cf; try { localStorage.setItem('cpx_calf', S.calFilter); } catch (e) { /* privát mód */ } render(); }));
     main.appendChild(tb);
     if (!document.getElementById('cpx-cal2-css')) document.head.appendChild(el('style', { id: 'cpx-cal2-css' }, CAL2_CSS));
+    if (S.calMode === 'slot') { head.querySelector('.cpx-legend').innerHTML = '<span class="lg ok"></span>mindenki beosztva<span class="lg mid"></span>folyamatban<span class="lg full"></span>hiányzik beosztás'; viewSlotMonth(main); return; }
     if (S.calView === 'year') { viewYear(main); return; }
     /* v1.80: átláthatóbb havi nézet – az egész csempe színes, nagy szám a szabad gépeknek, kétszínű sáv (foglalt + függő), kockázatjelzés */
     const c = S.cache[S.month];
@@ -509,6 +513,10 @@
   }
   const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
     /* v2.9.115: beosztás */
+    '.cpx-cal.slv .cpx-day.none{background:#FAF8F5;border-color:#EEE9E2}.cpx-cal.slv .cpx-day.ok{background:#E3F4E9;border-color:#BFE3CB}.cpx-cal.slv .cpx-day.mid{background:#FCEBCB;border-color:#F0C982}.cpx-cal.slv .cpx-day.full{background:#F9D5D0;border-color:#EBA59B}.cpx-cal.slv .cpx-day.past{opacity:.55}' +
+    '.cpx-cal.slv .sll{display:flex;align-items:baseline;gap:6px;font-size:12px;color:#3D4250}.cpx-cal.slv .sll span{min-width:46px}.cpx-cal.slv .sll b{color:#141C33}.cpx-cal.slv .sll i{font-style:normal;font-weight:700;color:#8A5300;font-size:11px}.cpx-cal.slv .slu{font:700 11px Inter,sans-serif;color:#8A5300}.cpx-cal.slv .slz{color:#B0ACA5;margin-top:auto}' +
+    '.cpx-caltb .seg.cm button.on{background:#141C33;color:#fff}' +
+    '@media (max-width:760px){.cpx-cal.slv .sll span{display:none}.cpx-cal.slv .sll{font-size:11px}.cpx-cal.slv .slu{display:none}}' +
     '.sl-mk{font:700 11px Inter,sans-serif;border-radius:6px;padding:1px 6px;white-space:nowrap}.sl-mk.ok{background:#DDF3E6;color:#17663A}.sl-mk.mid{background:#FFF0D6;color:#8A5300}.sl-mk.no{background:#FDECEA;color:#B42318}' +
     '.sl-box{margin:4px 0 10px}.sl-x{font:600 11.5px Inter,sans-serif;background:#E7F4EA;color:#17663A;border-radius:999px;padding:2px 8px}' +
     '.sl-row{border:1px solid #E6E2DC;border-radius:10px;padding:9px 11px;margin:6px 0;background:#fff}.sl-row.done{border-color:#BFE3CB;background:#F6FBF8}.sl-row.soft{border-style:dashed}' +
@@ -589,6 +597,46 @@
     }));
     dlg.querySelector('#cpx-goSheet').onclick = () => { S.day = date; closeModal(); go('munkalap'); };
     dlg.querySelector('#cpx-goCheck').onclick = () => { S.day = date; closeModal(); go('ellenorzes'); };
+  }
+  /* ------------------------------------------------------------ v2.9.116: Beosztás nézet – a hónap napjai kezelő- és host-igény szerint */
+  async function viewSlotMonth(main) {
+    const wrap = el('div', {}, '<div class="cpx-empty">Beosztás betöltése…</div>');
+    main.appendChild(wrap);
+    let r;
+    try { r = await slotPost('cp_slot_month', { m: S.month }); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+    if (!wrap.isConnected) return;
+    const [from, to] = monthRange(S.month), tdy = today();
+    let tot = 0, fin = 0, inv = 0, miss = 0, unk = 0;
+    const grid = el('div', { class: 'cpx-cal v2 slv' });
+    HU_DAYS.forEach((d, i) => grid.appendChild(el('div', { class: 'cpx-dow' + (i >= 5 ? ' we' : '') }, d)));
+    const lead = (parseYmd(from).getDay() + 6) % 7;
+    for (let i = 0; i < lead; i++) grid.appendChild(el('div', { class: 'cpx-day blank' }));
+    const last = parseYmd(to).getDate();
+    for (let d = 1; d <= last; d++) {
+      const date = S.month + '-' + pad(d), x = (r.x || {})[date], past = date < tdy;
+      const wd = parseYmd(date).getDay(), we = wd === 0 || wd === 6;
+      const n = x ? x.k + x.h : 0, f = x ? x.fk + x.fh : 0, iv = x ? x.ik + x.ih : 0, open = n - f;
+      if (!past) { tot += n; fin += f; inv += iv; miss += Math.max(0, open - iv); unk += x ? x.u : 0; }
+      const lvl = !n ? 'none' : open <= 0 ? 'ok' : (f + iv) > 0 ? 'mid' : 'full';
+      const cell = el('button', { class: 'cpx-day sl ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (we ? ' we' : ''), 'data-date': date, title: n ? huDate(date) + ': ' + n + ' slot, ' + f + ' véglegesítve, ' + iv + ' meghívás folyamatban' : huDate(date) + ': nincs rendezvény' });
+      const ln = (lab, need, done, pend) => need ? '<div class="sll"><span>' + lab + '</span><b>' + done + '/' + need + '</b>' + (pend ? '<i title="Meghívás folyamatban">+' + pend + '</i>' : '') + '</div>' : '';
+      cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + '</div>' +
+        (n ? '<div class="big"><b>' + Math.max(0, open) + '</b><span>' + (open > 0 ? 'hiányzik' : 'kész') + '<small> / ' + n + ' slot</small></span></div>' + ln('Kezelő', x.k, x.fk, x.ik) + ln('Host', x.h, x.fh, x.ih) + (x.u ? '<div class="slu" title="Ismeretlen helyszín – a Kezelő/Host igényt nézd át">? ' + x.u + ' helyszín</div>' : '') : '<div class="slz">—</div>');
+      cell.addEventListener('click', () => openSlotDay(date));
+      grid.appendChild(cell);
+    }
+    wrap.innerHTML = '';
+    wrap.appendChild(el('div', { class: 'cpx-kpis' }, kpi('Slot a hónapban (mától)', tot) + kpi('Véglegesítve', fin) + kpi('Meghívás folyamatban', inv) + kpi('Még senki', miss) + kpi('Aktív kezelő / host', r.tk + ' / ' + r.th)));
+    if (unk) wrap.appendChild(el('p', { class: 'cpx-help' }, '<b>' + unk + ' slotnál</b> a helyszínből nem derül ki, Budapest-e vagy vidék – a napra kattintva a „Kezelő kell / Host is mehet” címkével állítható.'));
+    wrap.appendChild(grid);
+  }
+  function openSlotDay(date) {
+    const dlg = document.getElementById('cpx-modal');
+    dlg.innerHTML = '<div class="cpx-sheet"><div class="cpx-sheet-h"><h3>' + esc(huDate(date)) + ' – beosztás</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div><div class="sl-box" data-slots><p class="cpx-muted">Betöltés…</p></div>' +
+      '<div class="cpx-sheet-f"><button class="cpx-btn ghost" id="cpx-goDay">A nap gépei és foglalásai</button></div></div>';
+    dlg.hidden = false;
+    slotLoad(dlg.querySelector('[data-slots]'), date);
+    dlg.querySelector('#cpx-goDay').onclick = () => openDay(date);
   }
   /* ------------------------------------------------------------ v2.9.115: slotok és beosztás (Kapacitás → nap) */
   async function slotPost(action, p) {
@@ -671,6 +719,7 @@
     box.querySelectorAll('[data-need]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.need); const v = s.need === 'kezelo' ? 'host' : 'kezelo'; act({ op: 'need', deal: s.deal, skey: s.skey, v: v }, b); }));
   }
   function slotMonthRefresh(date) {
+    if (S.calMode === 'slot') { if (S.tab === 'naptar' && monthKey(date) === S.month && document.querySelector('.cpx-cal.slv')) render(); return; }
     const g = document.querySelector('.cpx-cal.v2'); if (!g || monthKey(date) !== S.month) return;
     g.querySelectorAll('.sl-mk').forEach(x => x.remove()); slotMonthMarks(g, S.month);
   }
