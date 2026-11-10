@@ -45,11 +45,28 @@
 	function when(s) { return s ? String(s).slice(0, 16).replace(/-/g, '.').replace(' ', '. ') : ''; }
 
 	/* v2.9.88: nézetváltó – Műveletek (a napló) | Panelhasználat (ki mennyi időt töltött a panelben, mikor) */
-	const segH = () => '<div class="crm-seg au-seg" role="tablist"><button type="button" role="tab" data-mode="log" aria-selected="' + (S.mode !== 'use') + '" class="' + (S.mode !== 'use' ? 'on' : '') + '">Műveletek</button><button type="button" role="tab" data-mode="use" aria-selected="' + (S.mode === 'use') + '" class="' + (S.mode === 'use' ? 'on' : '') + '">Panelhasználat</button></div>';
-	function bindSeg(main) { main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { if (S.mode === b.dataset.mode) return; S.mode = b.dataset.mode; try { localStorage.setItem('cpx_au_mode', S.mode); } catch (e) { /* privát mód */ } view(main); })); }
+	/* v2.9.89: saját címek – #naplo = Műveletek, #naplo:hasznalat = Panelhasználat (könyvjelzőzhető, küldhető) */
+	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : '#naplo';
+	function auHash() { const m = /^#naplo(?::(hasznalat))?$/.exec(location.hash); return m ? (m[1] ? 'use' : 'log') : null; }
+	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a></nav>';
+	function nav(mode) {
+		S.mode = mode;
+		try { localStorage.setItem('cpx_au_mode', mode); } catch (e) { /* privát mód */ }
+		if (location.hash !== auUrl(mode)) history.pushState({ cpAu: mode }, '', auUrl(mode));
+		if (S.main && S.main.isConnected) view(S.main);
+	}
+	function bindSeg(main) { main.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); if (S.mode !== b.dataset.mode) nav(b.dataset.mode); })); }
+	window.addEventListener('popstate', () => {
+		const h = auHash(); if (!h) return;
+		if (!(S.main && S.main.isConnected && S.main.querySelector('.au'))) { if (window.CPXGo) { S.force = h; window.CPXGo('naplo'); } return; }
+		if (h !== S.mode) { S.mode = h; view(S.main); }
+	});
 	async function view(main) {
 		S.main = main;
+		const h = S.force || auHash(); S.force = null;
+		if (h) S.mode = h;
 		if (!S.mode) { try { S.mode = localStorage.getItem('cpx_au_mode') || 'log'; } catch (e) { S.mode = 'log'; } }
+		if (location.hash !== auUrl(S.mode) && /^#naplo(:|$)/.test(location.hash || '#naplo')) history.replaceState(history.state, '', auUrl(S.mode));
 		if (S.mode === 'use') { useView(main); return; }
 		main.innerHTML = '<div class="au"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Ki, mikor, mit csinált a panelben: deal-ek, levelezés, feladatok, elszámolás, tárca, be- és kilépés. Csak az adminok látják; a bejegyzéseket nem lehet módosítani, 2 év után törlődnek.</p></div>' +
 			'<div class="au-f"><select data-f="who"><option value="">Mindenki</option></select><select data-f="area">' + AREAS.map(a => '<option value="' + a[0] + '">' + a[1] + '</option>').join('') + '</select>' +
@@ -143,7 +160,9 @@
 	}
 	function status(s) { if (S.mode === 'use') { s.textContent = U.err || ''; s.className = 'cpx-status' + (U.err ? ' err' : ''); return; } s.textContent = S.err || (S.data ? S.data.total + ' naplóbejegyzés' : ''); s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function refresh() { if (S.main && S.main.isConnected) { if (S.mode === 'use') await useLoad(); else await load(); } }
-	window.CPAudit = { view, status, refresh };
+	/* értesítésből vagy linkből: „naplo:hasznalat” */
+	function deep(arg) { if (String(arg || '') === 'hasznalat') nav('use'); }
+	window.CPAudit = { view, status, refresh, deep };
 
 	const css = document.createElement('style');
 	css.textContent = '.au{max-width:1100px}.au-head h2{margin:0 0 4px;font:800 20px "Plus Jakarta Sans",sans-serif}.au-head p{margin:0 0 10px;font-size:13.5px;color:var(--ink)}' +
@@ -152,7 +171,7 @@
 		'.au-tw{background:#fff;border:1px solid var(--li);border-radius:12px;overflow:auto}.au-t{width:100%;border-collapse:collapse;font-size:13px}.au-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);padding:8px 10px;border-bottom:1px solid var(--li);background:#FAF8F5}' +
 		'.au-t td{padding:7px 10px;border-bottom:1px solid #F0ECE6;vertical-align:top}.au-at{white-space:nowrap;color:var(--mu);font-variant-numeric:tabular-nums}.au-who{white-space:nowrap;font-weight:600}.au-who small{display:block;font-weight:400;color:var(--mu);font-size:11.5px}.au-ar{white-space:nowrap;color:var(--mu)}' +
 		'.au-s{color:var(--ink);opacity:.85;word-break:break-word;margin-top:1px}.au-go{color:#2F5BD8;font-weight:600;text-decoration:none;font-size:12.5px}.a-login_fail td{background:#FDECEA}.au-pg{display:flex;gap:8px;justify-content:center;margin-top:10px}' +
-		'.au-ht{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}.au-ht h2{margin:0}.au-pre button{white-space:nowrap}.au-t .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
+		'.au-seg a{border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;color:var(--mu);text-decoration:none;white-space:nowrap}.au-seg a.on{background:var(--n);color:#fff}.au-seg a:not(.on):hover{color:var(--n)}.au-seg a:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}.au-ht{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}.au-ht h2{margin:0}.au-pre button{white-space:nowrap}.au-t .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
 		'.au-ut tbody tr{cursor:pointer}.au-ut tbody tr:hover td{background:#FAF8F5}.au-ut tr.on td{background:#EEF3FD}.au-ut tr.nil td{color:var(--mu)}.au-ut tr:focus-visible{outline:2px solid #2F5BD8;outline-offset:-2px}' +
 		'.au-live{display:inline-block;width:8px;height:8px;border-radius:50%;background:#17A34A;margin-right:6px;box-shadow:0 0 0 3px #DDF3E6;vertical-align:1px}.au-h3{font:700 15px "Plus Jakarta Sans",sans-serif;margin:18px 0 8px}.au-h3 small{font:400 12px Inter,sans-serif;color:var(--mu)}' +
 		'.au-tl{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.au-tlh,.au-tlr{display:grid;grid-template-columns:96px minmax(0,1fr) 104px;gap:10px;align-items:center}.au-tlr{padding:5px 0;border-top:1px solid #F0ECE6}.au-ax{position:relative;height:16px;font-size:10.5px;color:var(--mu)}.au-ax i{position:absolute;transform:translateX(-50%);font-style:normal}.au-ax i:first-child{transform:none}.au-ax i:last-child{transform:translateX(-100%)}' +
