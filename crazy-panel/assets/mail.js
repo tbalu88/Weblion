@@ -302,11 +302,19 @@
 			if (!box.isConnected) return;
 			const ae = document.activeElement, typing = !!ae && box.contains(ae) && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
 			if (!S.th && !S.sel.size && !typing) { drawInbox(box); return; }
+			/* v2.9.103: a sáv csak valóban új levélnél jelenik meg (újabb utolsó levél vagy több levél egy szálban) – a kollégák
+			   kiosztása, olvasása, lezárása csendben frissül a következő újrarajzoláskor (a lista adata már friss) */
+			const om = {}; ((old && old.rows) || []).forEach(t => { om[t.id] = t; });
+			const oMax = ((old && old.rows) || []).reduce((a2, t) => String(t.at || '') > a2 ? String(t.at || '') : a2, '');
+			const nw = old ? (n.rows || []).filter(t => { const o = om[t.id]; return o ? (Number(t.cnt) > Number(o.cnt) || String(t.at || '') > String(o.at || '')) : String(t.at || '') > oMax; }).length : 0;
+			if (!nw) return;
 			const it = box.querySelector('.ml-items');
-			if (it && !it.querySelector('[data-newp]')) {
-				it.insertAdjacentHTML('afterbegin', '<button type="button" class="ml-newp" data-newp>↑ Új levél érkezett – frissítés</button>');
-				it.querySelector('[data-newp]').addEventListener('click', () => drawInbox(box));
-			}
+			if (!it) return;
+			const lab = '↑ ' + (nw > 1 ? nw + ' új levél érkezett' : 'Új levél érkezett') + ' – frissítés';
+			const ex = it.querySelector('[data-newp]');
+			if (ex) { ex.textContent = lab; return; }
+			it.insertAdjacentHTML('afterbegin', '<button type="button" class="ml-newp" data-newp>' + lab + '</button>');
+			it.querySelector('[data-newp]').addEventListener('click', () => { drawInbox(box); const L = box.querySelector('.ml-items'); if (L) L.scrollTop = 0; });
 		}).catch(() => {});
 	}
 	/* v2.9.59 (P1): a levéllista csak akkor töltődik újra, ha a csengő percenkénti könnyített kérése (cp_ping) szerint a levélszálak
