@@ -36,7 +36,7 @@
 		S.main = main;
 		if (!S.day) { try { S.day = sessionStorage.getItem('cpx_logi_day') || ''; } catch (e) { S.day = ''; } }
 		if (!/^\d{4}-\d{2}-\d{2}$/.test(S.day || '')) { const d = new Date(); S.day = ymd(d); }
-		main.innerHTML = '<div class="lg"><div class="lg-h"><h2>Logisztika</h2><div class="lg-nav"><button type="button" class="cpx-btn ghost" data-dd="-1" aria-label="Előző nap">‹</button><input type="date" data-day value="' + S.day + '"><button type="button" class="cpx-btn ghost" data-dd="1" aria-label="Következő nap">›</button><button type="button" class="cpx-btn ghost" data-today>Ma</button><button type="button" class="cpx-btn ghost" data-print>🖨 Napi terv</button></div></div>' +
+		main.innerHTML = '<div class="lgx"><div class="lg-h"><h2>Logisztika</h2><div class="lg-nav"><button type="button" class="cpx-btn ghost" data-dd="-1" aria-label="Előző nap">‹</button><input type="date" data-day value="' + S.day + '"><button type="button" class="cpx-btn ghost" data-dd="1" aria-label="Következő nap">›</button><button type="button" class="cpx-btn ghost" data-today>Ma</button><button type="button" class="cpx-btn ghost" data-print>🖨 Napi terv</button></div></div>' +
 			'<p class="lg-help">A nap rendezvényei a térképen, a kiszállítás és a bontás javasolt sorrendje a raktárból. A <b>„telepítő viszi”</b> helyszínekre (ahol nincs Kezelő beosztva) az útvonal-javaslat számol; az időpontok a dealből becsültek (dőlt), kattintva átírhatók – csak a panelben, a Salesmate-be nem ír.</p>' +
 			'<div class="lg-b"><div class="cpx-empty">Betöltés…</div></div></div>';
 		main.querySelectorAll('[data-dd]').forEach(b => b.addEventListener('click', () => go(addD(S.day, Number(b.dataset.dd)))));
