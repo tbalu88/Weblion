@@ -144,6 +144,12 @@ function cp_bil_items($d, $p) {
 	$more = trim(str_replace(' | ', ', ', implode(', ', array_filter(array((string) ($d['services_ec'] ?? ''), (string) ($d['services_cp'] ?? ''))))), ', ');
 	$name = $svc !== '' ? $svc : ($more !== '' ? $more : 'Rendezvényszolgáltatás');
 	$cm = trim(($d['event_d'] ? 'Rendezvény: ' . str_replace('-', '.', $d['event_d']) . '.' : '') . ($d['venue'] ? ', ' . $d['venue'] : '') . ((int) $d['hours'] > 0 ? ', ' . (int) $d['hours'] . ' óra' : ''), ', ');
+	/* v2.9.71: többnapos rendezvény – minden nap (vagy a tartomány) a megjegyzésben; az óraszám csak ha minden nap azonos */
+	$md = !empty($d['id']) && !empty($d['event_d']) && function_exists('cp_mday_get') ? cp_mday_align(cp_mday_get((int) $d['id']), (string) $d['event_d']) : array();
+	if ($md) {
+		$hs = array_values(array_unique(array_map(function ($x) use ($d) { return $x['hours'] !== null ? (float) $x['hours'] : (float) $d['hours']; }, $md)));
+		$cm = trim('Rendezvény: ' . cp_mday_label_y(wp_list_pluck($md, 'day')) . ($d['venue'] ? ', ' . $d['venue'] : '') . (count($hs) === 1 && $hs[0] > 0 ? ', naponta ' . str_replace('.', ',', (string) $hs[0]) . ' óra' : ''), ', ');
+	}
 	$it = array(array('name' => $name, 'qty' => 1, 'unit' => 'alkalom', 'price' => (float) $d['value'], 'vat' => $o['vat'], 'comment' => $cm));
 	if ((int) $d['km_fee'] > 0) { $it[] = array('name' => 'Kiszállási díj', 'qty' => 1, 'unit' => 'alkalom', 'price' => (float) $d['km_fee'], 'vat' => $o['vat'], 'comment' => ''); }
 	if ((float) $d['extension'] > 0) { $it[] = array('name' => 'Hosszabbítás', 'qty' => (float) $d['extension'], 'unit' => 'óra', 'price' => 30000, 'vat' => $o['vat'], 'comment' => ''); }
@@ -184,7 +190,8 @@ function cp_bil_ajax_deal() {
 	foreach (cp_bil_profiles() as $k => $n) { $o = cp_bil_opts($k); $prof[$k] = array('n' => $n, 'ok' => cp_bil_ok($k), 'vat' => $o['vat'], 'due' => (int) $o['due'], 'prov' => cp_bil_prov($k), 'manual' => $o['mode'] === 'manual'); }
 	$docs = array_map(function ($r) { $r['id'] = (int) $r['id']; $r['bid'] = (int) $r['bid']; $r['gross'] = (float) $r['gross']; $r['at'] = function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at']; return $r; }, cp_bil_docs((int) $d['id']));
 	wp_send_json_success(array('profile' => $p, 'ctype' => (string) $d['ctype'], 'profiles' => $prof, 'buyer' => cp_bil_buyer($d), 'items' => cp_bil_items($d, $p),
-		'photo' => cp_bil_photo($d), 'event_d' => (string) $d['event_d'], 'today' => wp_date('Y-m-d'), 'docs' => $docs, 'gallery' => (string) (get_option(CP_PANEL_TRACK . (int) $d['id'], array())['gl'] ?? '') === '1'));
+		'photo' => cp_bil_photo($d), 'event_d' => (string) $d['event_d'], 'today' => wp_date('Y-m-d'), 'docs' => $docs, 'gallery' => cp_bil_gallery_done((int) $d['id']), /* v2.9.71: többnapos: az utolsó nap galériája */
+		'galDay' => function_exists('cp_mday_gallery_key') && strpos(cp_mday_gallery_key((int) $d['id']), ':') !== false ? str_replace('-', '.', substr(cp_mday_gallery_key((int) $d['id']), strpos(cp_mday_gallery_key((int) $d['id']), ':') + 1)) . '.' : ''));
 }
 
 /* vevő a Billingóban: adószám (vagy név + város) szerint megkeresi, különben létrehozza */
@@ -275,7 +282,7 @@ function cp_bil_ajax_issue() {
 		$lk = 'iss_' . (int) $d['id'] . '_' . $type;
 		cp_bil_doubt_guard((int) $d['id'], $type);
 		if (!cp_bil_lock($lk, 120)) { cp_el_err('Ez a bizonylat épp most készül – frissítsd az adatlapot.'); }
-		$galDone = (string) (get_option(CP_PANEL_TRACK . (int) $d['id'], array())['gl'] ?? '') === '1';
+		$galDone = cp_bil_gallery_done((int) $d['id']); /* v2.9.71 */
 		$wpdb->insert(cp_bil_t(), array('deal_id' => (int) $d['id'], 'profile' => $p, 'type' => $type, 'number' => '', 'currency' => 'HUF', 'send_mode' => $mode, 'emails' => implode(', ', $emails), 'req' => wp_json_encode($req, JSON_UNESCAPED_UNICODE), 'created_by' => $who, 'created_at' => gmdate('Y-m-d H:i:s')));
 		$row = (int) $wpdb->insert_id;
 		if ($mode === 'gallery' && !$galDone) { wp_send_json_success(array('msg' => 'Előkészítve: a Számlázz.hu a galéria kiküldésekor (Követés fül, „Galéria” pipa) állítja ki és küldi el.', 'docs' => cp_bil_docs((int) $d['id']))); }
@@ -310,7 +317,7 @@ function cp_bil_ajax_issue() {
 	$row = (int) $wpdb->insert_id;
 	$msg = 'Kiállítva a Billingóban' . (!empty($r['invoice_number']) ? ': ' . $r['invoice_number'] : '') . '.';
 	if ($mode === 'now') { $s = cp_bil_send($row); $msg .= is_wp_error($s) ? ' A kiküldés nem sikerült: ' . $s->get_error_message() : ' Elküldve: ' . implode(', ', $emails) . '.'; }
-	elseif ($mode === 'gallery') { $msg .= ' A galériával együtt megy ki (a Követés fül „Galéria” pipájára).'; if ((string) (get_option(CP_PANEL_TRACK . (int) $d['id'], array())['gl'] ?? '') === '1') { $s = cp_bil_send($row); $msg .= is_wp_error($s) ? '' : ' A galéria már ki van küldve, ezért most elküldtem.'; } }
+	elseif ($mode === 'gallery') { $msg .= ' A galériával együtt megy ki (a Követés fül „Galéria” pipájára).'; if (cp_bil_gallery_done((int) $d['id'])) { $s = cp_bil_send($row); $msg .= is_wp_error($s) ? '' : ' A galéria már ki van küldve, ezért most elküldtem.'; } }
 	wp_send_json_success(array('msg' => $msg, 'docs' => cp_bil_docs((int) $d['id'])));
 }
 
@@ -363,6 +370,12 @@ function cp_bil_ajax_act() {
 	cp_el_err('Ismeretlen művelet.');
 }
 
+/* v2.9.71: ki van-e küldve a galéria – többnapos dealnél az utolsó nap (napi kulcs) „Galéria” pipája számít */
+function cp_bil_gallery_done($deal_id) {
+	if (function_exists('cp_mday_gallery_done')) { return cp_mday_gallery_done((int) $deal_id); }
+	return (string) (get_option(CP_PANEL_TRACK . (int) $deal_id, array())['gl'] ?? '') === '1';
+}
+
 /* ------------------------------------------------------------ háttér: galériával küldés + fizetési állapot */
 add_action('cp_crm_tick', 'cp_bil_tick', 33);
 function cp_bil_tick() {
@@ -370,7 +383,7 @@ function cp_bil_tick() {
 	global $wpdb;
 	$T = cp_bil_t();
 	foreach ((array) $wpdb->get_results("SELECT id, deal_id FROM $T WHERE send_mode = 'gallery' AND sent_at IS NULL AND (bid IS NOT NULL OR (req IS NOT NULL AND number = '')) AND (err IS NULL OR err NOT LIKE '[?]%') ORDER BY id LIMIT 20", ARRAY_A) as $r) {
-		if ((string) (get_option(CP_PANEL_TRACK . (int) $r['deal_id'], array())['gl'] ?? '') === '1') { cp_bil_send((int) $r['id']); }
+		if (cp_bil_gallery_done((int) $r['deal_id'])) { cp_bil_send((int) $r['id']); } /* v2.9.71: többnapos dealnél az utolsó nap „Galéria” pipájára */
 	}
 	/* v2.9.58: a checked_at / created_at UTC-ben van (gmdate) – a MySQL NOW() helyi ideje helyett PHP-ban számolt UTC-vel hasonlítunk */
 	$h1 = gmdate('Y-m-d H:i:s', time() - HOUR_IN_SECONDS); $d120 = gmdate('Y-m-d H:i:s', time() - 120 * DAY_IN_SECONDS);

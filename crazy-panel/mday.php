@@ -297,6 +297,29 @@ function cp_mday_or_ids($from, $to, $alias = 'd') {
 	return $ids ? ' OR ' . $alias . '.id IN (' . implode(',', array_map('intval', $ids)) . ')' : '';
 }
 
+/* ------------------------------------------------------------ v2.9.71: számlázás – a galéria az UTOLSÓ nap után megy ki */
+/* a „Galéria” pipa kulcsa: többnapos dealnél az utolsó nap napi kulcsa, különben a deal azonosítója */
+function cp_mday_gallery_key($deal) {
+	global $wpdb;
+	$deal = (int) $deal;
+	$days = cp_mday_get($deal);
+	if (!$days) { return (string) $deal; }
+	$ev = function_exists('cp_crm_t') ? (string) $wpdb->get_var($wpdb->prepare('SELECT event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $deal)) : '';
+	$days = cp_mday_align($days, $ev !== '' ? $ev : $days[0]['day']);
+	return cp_mday_key($deal, $days[count($days) - 1]['day'], count($days));
+}
+function cp_mday_gallery_done($deal) {
+	$v = get_option((defined('CP_PANEL_TRACK') ? CP_PANEL_TRACK : 'cp_pt_') . cp_mday_gallery_key($deal), array());
+	return is_array($v) && (string) ($v['gl'] ?? '') === '1';
+}
+/* a számla megjegyzésébe: évvel („2026. dec. 3., 5., 12. (3 nap)”; több évnél a címke már tartalmazza) */
+function cp_mday_label_y($days) {
+	$l = cp_mday_label($days);
+	if ($l === '' || preg_match('/^\d{4}\. /', $l)) { return $l; }
+	$d = array_values(array_filter(array_map('strval', (array) $days), 'cp_mday_ymd_ok')); sort($d);
+	return substr($d[0], 0, 4) . '. ' . $l;
+}
+
 /* ------------------------------------------------------------ kapacitás: a deal legrosszabb napja */
 
 function cp_mday_cap_worst($days, $cached_only = false) {
