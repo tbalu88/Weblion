@@ -354,7 +354,10 @@
 	 * jelölései ([kép-cím], szöveg<link>, <tel:…>, <mailto:…>) helyett kattintható link, a régebbi idézett levelek lenyithatók */
 	/* v2.9.58: a keret nélkül megjelenített levéltörzsben (pl. Salesmate-ből átvett HTML) a külső képek nem töltődnek be maguktól –
 	 * mint az eredeti nézetnél: a src / srcset félretéve (data-xsrc), a „Képek megjelenítése” gomb teszi vissza */
-	const noExtImg = h => String(h || '').replace(/<img\b[^>]*>/gi, t => /\ssrc(?:set)?\s*=\s*["']?\s*(?:https?:)?\/\//i.test(t) ? t.replace(/\s(src|srcset)\s*=/gi, ' data-x$1=') : t);
+	/* v2.9.98: a külső képek alapból betöltődnek (a felhasználó döntése: nem baj, ha a feladó látja a megnyitást) – csak a Spam mappában maradnak tiltva */
+	const EXT = { spam: false };
+	const extOk = () => !EXT.spam;
+	const noExtImg = h => extOk() ? String(h || '') : String(h || '').replace(/<img\b[^>]*>/gi, t => /\ssrc(?:set)?\s*=\s*["']?\s*(?:https?:)?\/\//i.test(t) ? t.replace(/\s(src|srcset)\s*=/gi, ' data-x$1=') : t);
 	document.addEventListener('click', e => {
 		const b = e.target.closest && e.target.closest('[data-ximgs]'); if (!b) return;
 		const mb = b.closest('.ml-mb'); if (!mb) return;
@@ -392,11 +395,12 @@
 	}
 	function mountHtml(el, mid, imgs) {
 		const x = HC[mid];
+		if (extOk()) imgs = true;
 		if (el._txt === undefined) el._txt = el.innerHTML;
 		const bar = '<div class="ml-hv"><button type="button" data-hv="html" class="' + (HV === 'html' ? 'on' : '') + '">Eredeti</button><button type="button" data-hv="txt" class="' + (HV === 'txt' ? 'on' : '') + '">Szöveg</button></div>';
 		if (HV === 'txt') { el.innerHTML = bar + el._txt; }
 		else {
-			el.innerHTML = bar + (x.ext && !imgs ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-imgs>Képek megjelenítése</button></div>' : '') +
+			el.innerHTML = bar + (x.ext && !imgs ? '<div class="ml-extbar">🖼 A külső képek nincsenek betöltve (a Spam mappában a biztonság kedvéért). <button type="button" data-imgs>Képek megjelenítése</button></div>' : '') +
 				'<iframe class="ml-hf" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="A levél eredeti formájában"></iframe>';
 			const f = el.querySelector('iframe');
 			f.addEventListener('load', () => {
@@ -873,7 +877,7 @@
 		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.dir === 'out' ? '' : cBtn(m.from_email, m.from_name)) + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
 			(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma">' + o.ma + '</span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
-			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attHref(m.id, ai, a.n)) + '"' + attTgt() + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
+			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek nincsenek betöltve (a Spam mappában a biztonság kedvéért). <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attHref(m.id, ai, a.n)) + '"' + attTgt() + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
 	}
 	/* v2.9.64: a válasz előtöltése (címzettek, tárgy, idézet) – az olvasó és a gyorsnézet „Válasz” gombja is ezt használja */
 	function replyDraft(t, d, m, all) {
@@ -1000,6 +1004,7 @@
 
 	function drawThread(box, rd, x) {
 		const t = x.t, d = x.deal;
+		EXT.spam = t.folder === 'spam';
 		/* v2.7.8: összecsukható levelek – alapból csak a legutóbbi nyitott; kattintásra nyílik / csukódik, „Összes kinyitása” gomb */
 		const MX = (S.mx = S.mx || {}), mk = m => String(m.id || m.sent_at || ''), msgs0 = (x.msgs || []).slice();
 		const newest = msgs0.reduce((a, b) => (!a || String(b.sent_at || '') >= String(a.sent_at || '') ? b : a), null);
@@ -2041,6 +2046,7 @@
 		const x = PK.x, el = PK.el;
 		if (!x || !el) return;
 		const t = x.t || {}, msgs = pkMsgs(x), newest = pkNewest(msgs), SON = !!(M.send && M.send.on);
+		EXT.spam = t.folder === 'spam';
 		PR.known[t.id] = msgs.reduce((a, m) => Math.max(a, Number(m.id) || 0), 0);
 		const mk = m => String(m.id || m.sent_at || '');
 		const isOpen = m => msgs.length <= 1 || (Object.prototype.hasOwnProperty.call(PK.xs, mk(m)) ? PK.xs[mk(m)] : (PK.def !== null ? PK.def : m === newest));
