@@ -9,7 +9,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_US_DB_VER', '1');
+define('CP_US_DB_VER', '2'); /* 2: tab, obj, st – melyik fülön, min dolgozott (v2.9.93) */
 function cp_us_t($n) { global $wpdb; return $wpdb->prefix . ($n === 'day' ? 'crazy_usage_day' : 'crazy_usage'); }
 function cp_us_db_ok() { return get_option('cp_us_db_ver') === CP_US_DB_VER; }
 
@@ -23,6 +23,9 @@ add_action('init', function () {
   d date NOT NULL,
   m smallint(5) unsigned NOT NULL,
   act tinyint(1) unsigned NOT NULL DEFAULT 0,
+  tab varchar(20) NOT NULL DEFAULT '',
+  obj varchar(32) NOT NULL DEFAULT '',
+  st varchar(8) NOT NULL DEFAULT '',
   PRIMARY KEY  (uid,d,m),
   KEY d (d)
 ) $c;");
@@ -80,6 +83,12 @@ function cp_us_ajax_stats() {
 		$users[$id]['last'] = $r['d'] . ' ' . sprintf('%02d:%02d', intdiv($lm, 60), $lm % 60);
 		$users[$id]['now'] = $r['d'] === $today && $nm - $lm <= 3 ? 1 : 0;
 	}
+	/* v2.9.93: mit csinál most – a mai utolsó perc fülje és tárgya (levélszál / deal), ha 3 percen belüli */
+	$live = (array) $wpdb->get_results($wpdb->prepare('SELECT t.uid, t.m, t.tab, t.obj, t.st FROM ' . cp_us_t('min') . ' t JOIN (SELECT uid, MAX(m) mm FROM ' . cp_us_t('min') . ' WHERE d = %s GROUP BY uid) x ON x.uid = t.uid AND x.mm = t.m WHERE t.d = %s', $today, $today), ARRAY_A);
+	foreach ($live as $r) {
+		$id = (int) $r['uid']; if (!isset($users[$id]) || $nm - (int) $r['m'] > 3) { continue; }
+		$users[$id]['doing'] = array('tab' => (string) $r['tab'], 'st' => (string) $r['st']) + cp_us_obj((string) $r['obj']);
+	}
 	$users = array_values($users);
 	usort($users, function ($a, $b) { return $b['act'] - $a['act'] ?: $b['open'] - $a['open'] ?: strcmp($a['n'], $b['n']); });
 	/* napi idővonal egy kiválasztott fióknak: 5 perces sávok (0 = nem volt, 1 = nyitva, 2 = aktív); a percek 90 napig vannak meg */
@@ -98,5 +107,23 @@ function cp_us_ajax_stats() {
 			unset($x);
 		}
 	}
-	wp_send_json_success(array('from' => $from, 'to' => $to, 'users' => $users, 'uid' => $uid, 'days' => array_values($days), 'detail_from' => wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS)));
+	/* v2.9.93: mire ment az idő (fülenként, a percek 90 napig vannak meg) + a leggyakoribb tárgyak */
+	$tabs = array(); $objs = array();
+	if ($uid) {
+		$tabs = array_map(function ($r) { return array('tab' => (string) $r['tab'], 'n' => (int) $r['n'], 'a' => (int) $r['a']); }, (array) $wpdb->get_results($wpdb->prepare('SELECT tab, COUNT(*) n, SUM(act) a FROM ' . cp_us_t('min') . " WHERE uid = %d AND d BETWEEN %s AND %s GROUP BY tab ORDER BY n DESC", $uid, $from, $to), ARRAY_A));
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT obj, COUNT(*) n, SUM(act) a FROM ' . cp_us_t('min') . " WHERE uid = %d AND d BETWEEN %s AND %s AND obj <> '' GROUP BY obj ORDER BY n DESC LIMIT 8", $uid, $from, $to), ARRAY_A) as $r) {
+			$objs[] = array('n' => (int) $r['n'], 'a' => (int) $r['a']) + cp_us_obj((string) $r['obj']);
+		}
+	}
+	wp_send_json_success(array('from' => $from, 'to' => $to, 'users' => $users, 'uid' => $uid, 'days' => array_values($days), 'tabs' => $tabs, 'objs' => $objs, 'detail_from' => wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS)));
+}
+/* a tárgy (mail:12 / deal:345) olvasható neve és linkje */
+function cp_us_obj($o) {
+	static $c = array();
+	if ($o === '' || !preg_match('/^(mail|deal):(\d+)$/', $o, $m)) { return array('o' => '', 'ol' => ''); }
+	if (isset($c[$o])) { return $c[$o]; }
+	global $wpdb; $id = (int) $m[2]; $t = '';
+	if ($m[1] === 'mail' && function_exists('cp_mail_t')) { $t = (string) $wpdb->get_var($wpdb->prepare('SELECT subject FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $id)); }
+	if ($m[1] === 'deal' && function_exists('cp_crm_t')) { $t = (string) $wpdb->get_var($wpdb->prepare('SELECT title FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id)); }
+	return $c[$o] = array('o' => $o, 'ol' => mb_substr($t !== '' ? $t : ($m[1] === 'deal' ? 'Deal #' . $id : 'Levélszál #' . $id), 0, 90));
 }

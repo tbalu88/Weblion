@@ -114,7 +114,16 @@ if (!function_exists('cp_ping_salt')) {
 	   számít duplán. g = az előző jel óta eltelt mp: ha a böngésző időzítője átugrott egy percet, a kimaradt perc is bekerül.
 	   Lásd usage.php. */
 	function cp_ping_track($uid) {
-		if ($uid <= 0 || get_option('cp_us_db_ver') !== '1') { return; }
+		$ver = (string) get_option('cp_us_db_ver');
+		if ($uid <= 0 || ($ver !== '1' && $ver !== '2')) { return; }
+		/* v2.9.93 (DB 2): melyik fülön (tab), min (obj: mail:12 / deal:345), és hogyan (st: reply = épp levelet ír) */
+		$ctx = array();
+		if ($ver === '2') {
+			$tab = isset($_REQUEST['tab']) ? strtolower(preg_replace('/[^a-z0-9_-]/i', '', (string) $_REQUEST['tab'])) : '';
+			$obj = isset($_REQUEST['obj']) && preg_match('/^(mail|deal):\d{1,10}$/', (string) $_REQUEST['obj']) ? (string) $_REQUEST['obj'] : '';
+			$st = isset($_REQUEST['ost']) && $_REQUEST['ost'] === 'reply' ? 'reply' : '';
+			$ctx = array('tab' => substr($tab, 0, 20), 'obj' => $obj, 'st' => $st);
+		}
 		global $wpdb;
 		$T = $wpdb->prefix . 'crazy_usage'; $TD = $wpdb->prefix . 'crazy_usage_day';
 		$dt = new DateTime('now', wp_timezone());
@@ -127,7 +136,11 @@ if (!function_exists('cp_ping_salt')) {
 			if ($last !== null && (int) $last === $m - 2) { $mins[] = $m - 1; }
 		}
 		foreach ($mins as $x) {
-			$n = $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $T (uid, d, m, act) VALUES (%d, %s, %d, %d)", $uid, $d, $x, $act));
+			$n = $ctx
+				? $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $T (uid, d, m, act, tab, obj, st) VALUES (%d, %s, %d, %d, %s, %s, %s)", $uid, $d, $x, $act, $ctx['tab'], $ctx['obj'], $ctx['st']))
+				: $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $T (uid, d, m, act) VALUES (%d, %s, %d, %d)", $uid, $d, $x, $act));
+			/* ugyanabban a percben újabb jel (másik ablak / fül): a legutóbbi helyzet számít */
+			if ($n === 0 && $ctx && $x === $m && $ctx['tab'] !== '') { $wpdb->query($wpdb->prepare("UPDATE $T SET tab = %s, obj = %s, st = %s WHERE uid = %d AND d = %s AND m = %d", $ctx['tab'], $ctx['obj'], $ctx['st'], $uid, $d, $x)); }
 			if ($n === 1) {
 				$wpdb->query($wpdb->prepare("INSERT INTO $TD (uid, d, open_m, act_m, first_m, last_m) VALUES (%d, %s, 1, %d, %d, %d) ON DUPLICATE KEY UPDATE open_m = open_m + 1, act_m = act_m + VALUES(act_m), first_m = LEAST(first_m, VALUES(first_m)), last_m = GREATEST(last_m, VALUES(last_m))", $uid, $d, $act, $x, $x));
 			} elseif ($act && $n === 0) {

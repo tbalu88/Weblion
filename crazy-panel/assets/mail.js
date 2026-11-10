@@ -2143,5 +2143,5 @@
 	function compose(o) { S.reply = { to: o.to || [], cc: [], subject: o.subject || '', body: o.body || '', quote: '', thread: 0, tsubj: '', deal: o.deal || 0, dealTitle: o.dealTitle || '' }; S.onSent = o.onSent || null; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
 	/* v2.9: másik fülről visszatérve a Levelezés a postafiókkal nyílik (a félbehagyott levél a Piszkozatok között van) */
 	const tabView = main => { if (S.view === 'compose' && !S.reply && !S.draftId && !(main && main.querySelector('.ml-compose'))) S.view = 'inbox'; view(main); };
-	window.CPMail = { view: tabView, status, open, compose, peek, peekPop, canSend: () => !!(M.send && M.send.on), refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
+	window.CPMail = { ctx: () => { const c = presCtx(); return c ? c : (S.view === 'compose' && S.main && S.main.isConnected ? { th: 0, st: 'reply' } : null); }, view: tabView, status, open, compose, peek, peekPop, canSend: () => !!(M.send && M.send.on), refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
 })();

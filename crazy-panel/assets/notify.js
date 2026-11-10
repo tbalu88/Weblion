@@ -62,6 +62,14 @@
 		if (document.querySelector('.ml-items')) p.ms = 1;
 		/* v2.9.88: panelhasználat – látható ablak = nyitott perc; volt-e egér/billentyű/görgetés/érintés az előző jel óta */
 		p.vis = document.hidden ? 0 : 1;
+		/* v2.9.93: hol tart – a fül, és ha van, a nyitott levélszál (épp ír-e) vagy deal-adatlap */
+		try {
+			const tb = document.querySelector('.cpx-tabs [data-tab].on'); p.tab = tb ? tb.dataset.tab : (location.hash.slice(1).split(':')[0] || '');
+			const mc = window.CPMail && window.CPMail.ctx ? window.CPMail.ctx() : null;
+			const dl = document.querySelector('#cpx-main > .crm-page [data-dlink]');
+			if (mc) { if (mc.th > 0) p.obj = 'mail:' + mc.th; if (mc.st === 'reply') p.ost = 'reply'; }
+			else if (dl) p.obj = 'deal:' + dl.dataset.dlink;
+		} catch (e) { /* nem baj */ }
 		if (!document.hidden) { if (S.actAt && S.actAt > (S.lastPing || 0) - 5000) p.act = 1; if (S.lastPing) p.g = Math.round((Date.now() - S.lastPing) / 1000); }
 		let r;
 		try { r = await post('cp_ping', p); } catch (e) {
