@@ -136,8 +136,22 @@ function cp_mail_inv_subj($s) {
 }
 function cp_mail_inv_private($e) { return (bool) preg_match('/@(gmail\.com|googlemail\.com|freemail\.hu|citromail\.hu|yahoo\.[a-z.]+|hotmail\.[a-z.]+|outlook\.[a-z.]+|live\.[a-z.]+|icloud\.com|me\.com|t-online\.hu|vipmail\.hu|indamail\.hu)$/i', (string) $e); }
 function cp_mail_inv_sender($e) { return (bool) preg_match('/@([\w.-]+\.)?(szamlazz\.hu|billingo\.(hu|io)|szamlazo\.hu|kulcs-soft\.hu|nav\.gov\.hu)$/i', (string) $e); }
-function cp_mail_inv_match($subj, $from, $atts) {
+/* v2.9.89: a levél saját (idézet nélküli) szövege: a feladó jelzi, hogy számlát csatolt („Csatoltam a számlát”, „mellékelem a
+   számlát”, „küldöm a díjbekérőt”, „itt a számla”). Csak első személyű / szenvedő igealak – a „küldjék a számlát” kérés nem. */
+function cp_mail_inv_body($text) {
+	$t = mb_substr((string) $text, 0, 3000);
+	$t = preg_replace('/sz[aá]ml[aá]l[oó]\w*|sz[aá]ml[aá]z[aá]s\w*|sz[aá]mlasz[aá]m\w*|banksz[aá]ml\w*|foly[oó]sz[aá]ml\w*/iu', '', $t);
+	$doc = '(sz[aá]ml[aá]\w*|sz[aá]mlakép\w*|d[ií]jbek[eé]r\w*|proform\w*|invoice\w*)';
+	$verb = '(csatol(tam|om|va|juk|tuk|tam is|ok)|mell[eé]kel(tem|em|ve|jük|tük)|k[uü]ld(öm|tem|jük|tük|ve)|továbbít(om|ottam)|attach(ed)?)';
+	if (!preg_match_all('/' . $verb . '\b[^.!?,;\n]{0,40}?' . $doc . '|' . $doc . '[^.!?,;\n]{0,25}?\b' . $verb . '|\bitt\s+(van\s+)?(a|az)\s+' . $doc . '/iu', $t, $mm)) { return false; }
+	/* tagadás vagy későbbre ígérés a találaton belül („még nem küldtem”, „majd küldöm”) nem számít */
+	foreach ($mm[0] as $x) { if (!preg_match('/(^|[^\p{L}])(nem|ne|majd|később|még)([^\p{L}]|$)/iu', $x)) { return true; } }
+	return false;
+}
+function cp_mail_inv_match($subj, $from, $atts, $text = '') {
 	$names = array_map(function ($a) { return (string) (is_array($a) ? ($a['n'] ?? '') : $a); }, (array) $atts);
+	/* v2.9.89: a szövegben jelzett számla PDF/XML melléklettel – válaszban és magánszemély (pl. alvállalkozó) levelében is */
+	if ($text !== '' && cp_mail_inv_body($text)) { foreach ($names as $n) { if (preg_match('/\.(pdf|xml)$/i', $n)) { return true; } } }
 	/* a melléklet neve: „számla…”, „szamlakep”, „SZLA_…” (Számlázz.hu, könyvelők), „invoice”, „díjbekérő” stb. */
 	foreach ($names as $n) { $nn = str_replace(array('_', '-', '.'), ' ', $n); if (preg_match('/\.(pdf|xml)$/i', $n) && (cp_mail_inv_subj($nn) || preg_match('/(^|[^a-z])(szla|e ?szla|eszamla)([^a-z]|$)/i', $nn))) { return true; } }
 	/* a tárgy alapján csak új levél (nem válasz/továbbítás), és cégtől PDF/XML-lel vagy számlázótól – a magánszemély „számla” tárgyú levele többnyire az ügyfél kérdése */

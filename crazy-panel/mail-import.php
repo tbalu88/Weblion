@@ -480,7 +480,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	/* v2.9.52: csak a valódi Salesmate-másolatnál (a saját címről érkező, de nem a Salesmate-ből jött levél feladója hamisítható) */
 	if ($live && $out && !$sent && function_exists('cp_claim_from_sm_mail') && cp_imp_sm_copy($hraw, $me)) { cp_claim_from_sm_mail((int) $t['id'], (string) ($acc['plain'] ?? '') !== '' ? (string) $acc['plain'] : $text); }
 	/* v2.9.37: bejövő számla → „Számla” címke */
-	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'])) {
+	if (!$out && function_exists('cp_mail_inv_match') && cp_mail_inv_match($subj, $f['e'], $acc['att'], $text)) {
 		cp_mail_tag_add((int) $t['id'], CP_MAIL_INV_TAG);
 		/* v2.9.38: az új számla PDF-je a Drive számlamappájába (a levélszinkron végén, háttérben) */
 		if ($live && function_exists('cp_mdr_enqueue')) { foreach ($acc['att'] as $a) { if (preg_match('/\.pdf$/i', (string) ($a['n'] ?? ''))) { cp_mdr_enqueue($msg_id); break; } } }
