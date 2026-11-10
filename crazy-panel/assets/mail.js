@@ -294,7 +294,9 @@
 		if (d < 172800) return 'tegnap';
 		return s.slice(0, 10).replace(/-/g, '.') + '.';
 	}
-	const nl2br = s => esc(s).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="ml-men">@$1</b>');
+	/* v2.9.81: a jegyzetben lévő webcím kattintható (új lapon nyílik) */
+	const linkify = h => h.replace(/\bhttps?:\/\/[^\s<]+/g, u => { const m = /[.,;:!?)\]]+$/.exec(u), t = m ? m[0] : '', v = t ? u.slice(0, -t.length) : u; return '<a href="' + v + '" target="_blank" rel="noopener noreferrer" class="note-link">' + v + '</a>' + t; });
+	const nl2br = s => linkify(esc(s)).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="ml-men">@$1</b>');
 	const NOTE_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg>';
 	/* v1.54: a melléklet letöltése a postafiókból (képnél / PDF-nél megnyitás a böngészőben) */
 	/* v1.67.1: sima szöveges (importált / idézetből kinyert) levél olvashatóbban: a levelezőprogramok szöveges

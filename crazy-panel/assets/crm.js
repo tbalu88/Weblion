@@ -1077,7 +1077,9 @@
 	const HU_MF = ['január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december'];
 	const daysAgo = s => { if (!s) return null; return Math.floor((Date.now() - new Date(String(s).replace(' ', 'T')).getTime()) / 864e5); };
 	const agoTxt = s => { const n = daysAgo(s); if (n == null) return ''; return n <= 0 ? 'ma' : n === 1 ? 'tegnap' : n + ' napja'; };
-	const nl = s => esc(s).replace(/\n/g, '<br>');
+	/* v2.9.81: a jegyzetben lévő webcím kattintható (új lapon nyílik) */
+	const linkify = h => h.replace(/\bhttps?:\/\/[^\s<]+/g, u => { const m = /[.,;:!?)\]]+$/.exec(u), t = m ? m[0] : '', v = t ? u.slice(0, -t.length) : u; return '<a href="' + v + '" target="_blank" rel="noopener noreferrer" class="note-link">' + v + '</a>' + t; });
+	const nl = s => linkify(esc(s)).replace(/\n/g, '<br>');
 	/* v2.9.68: az idővonal szűrője (Mind · Levelek · Jegyzetek · Portál · Változások) felhasználónként megjegyezve */
 	const TL_KEY = 'cpd3tl' + (C.user ? ':' + C.user : '');
 	const TL_TABS = [['all', 'Mind'], ['mail', 'Levelek'], ['note', 'Jegyzetek'], ['portal', 'Portál'], ['hist', 'Változások']];
@@ -1278,7 +1280,7 @@
 		box.querySelectorAll('[data-aundo]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.aundo, done: '' }, 'Visszanyitva – a Salesmate-ben is.'); }));
 		box.querySelectorAll('[data-aedit]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const a = (x.acts || []).find(z => String(z.id) === b.dataset.aedit); const c = document.querySelector('.crm-360 [data-comp]'); if (a && c) compose(c, x, 'act', a); }));
 		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
-		box.querySelectorAll('.d3-ti[data-th]:not(.d3-tm)').forEach(b => { const go = () => openTh(Number(b.dataset.th), b); b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+		box.querySelectorAll('.d3-ti[data-th]:not(.d3-tm)').forEach(b => { const go = () => openTh(Number(b.dataset.th), b); b.addEventListener('click', e => { if (e.target.closest('a')) return; go(); }); /* v2.9.81: a jegyzetben lévő linkre kattintva a link nyílik, nem a szál */ b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 		bindTc(box);
 		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { hideModal(); closePage(); if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 	}

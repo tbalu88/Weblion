@@ -53,7 +53,9 @@
 		if (d < 172800) return 'tegnap';
 		return String(s).slice(0, 10).replace(/-/g, '.') + '.';
 	}
-	const nl2br = s => esc(s).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="kb-men">@$1</b>');
+	/* v2.9.81: a jegyzetben lévő webcím kattintható (új lapon nyílik) */
+	const linkify = h => h.replace(/\bhttps?:\/\/[^\s<]+/g, u => { const m = /[.,;:!?)\]]+$/.exec(u), t = m ? m[0] : '', v = t ? u.slice(0, -t.length) : u; return '<a href="' + v + '" target="_blank" rel="noopener noreferrer" class="note-link">' + v + '</a>' + t; });
+	const nl2br = s => linkify(esc(s)).replace(/\n/g, '<br>').replace(/@([A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+(?: [A-ZÁÉÍÓÖŐÚÜŰ][\wáéíóöőúüű]+)?)/g, '<b class="kb-men">@$1</b>');
 	const svg = (d, c) => '<svg class="' + (c || 'kb-ic') + '" viewBox="0 0 24 24" aria-hidden="true">' + d + '</svg>';
 	const I = {
 		clock: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),

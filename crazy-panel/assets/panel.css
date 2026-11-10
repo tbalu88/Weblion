@@ -775,3 +775,4 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 /* v2.9.70: többnapos rendezvény – „2/3. nap” címke (Naptár, Követés, Munkalap, Hátterek, Elszámolás) */
 .dtag{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:#EFEAF8;color:#4B3A7A;font:600 11.5px/18px Inter,sans-serif;white-space:nowrap;vertical-align:1px;font-variant-numeric:tabular-nums}
 @media print{.dtag{background:none;border:1px solid #999;color:#000}}
+.note-link{color:#2F5BD8;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;word-break:break-word} /* v2.9.81: jegyzetben lévő link */
