@@ -11,7 +11,7 @@
 	const SENS = K.sens || {};
 	const SK = Object.keys(SENS);
 	const SKL = K.skills || {}, PRC = K.procs || {}, KINDS = K.kinds || { kezelo: 'Kezelők' };
-	const S = { rows: [], el: [], reveal: false, q: '', inact: false, main: null, err: '', open: 0, kind: 'kezelo', edit: false, loaded: false };
+	const S = { rows: [], el: [], reveal: false, q: '', inact: false, main: null, err: '', open: 0, kind: 'kezelo', edit: false, loaded: false, sub: 'list', force: null }; /* v2.9.85: sub = lista / interjú nézet */
 	try { const k = localStorage.getItem('cpx_kz_kind'); if (KINDS[k]) S.kind = k; } catch (e) { /* privát mód */ }
 	async function post(action, params) {
 		const fd = new FormData(); fd.append('action', action); fd.append('t', C.t);
@@ -67,6 +67,7 @@
 				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (COLS.length + 3) + '">' + detail(x) + '</td></tr>' : '')).join('') +
 			'</tbody></table></div>';
 		bind();
+		bindIvGo(main);
 		dnd(main);
 		if (window.CPXStatus) window.CPXStatus();
 	}
@@ -99,6 +100,8 @@
 		});
 	}
 
+	/* v2.9.85: az adatlap „Jegyzet a foglalásnál” linkje az Interjú-időpontok oldalra visz, a jegyzet nyitva */
+	const bindIvGo = main => main.querySelectorAll('[data-ivgo]').forEach(a => a.addEventListener('click', e => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); nav('iv', Number(a.dataset.ivgo)); }));
 	/* ------------------------------------------------------------ v2.6.2: olvasó nézet – tömör, semmi nem kattintható át véletlenül */
 	const chips = (keys, lab, all) => keys.length ? keys.map(k => '<span class="kz-chip">' + esc(lab[k] || k) + '</span>').join('') : '<span class="cpx-muted">–</span>';
 	const tel = p => p ? '<a href="tel:' + esc(String(p).replace(/[^\d+]/g, '')) + '">' + esc(p) + '</a>' : '<span class="cpx-muted">–</span>';
@@ -128,13 +131,14 @@
 			'</tbody></table></div>';
 		main.querySelectorAll('tr[data-id] [data-more]').forEach(b => b.addEventListener('click', () => { const id = Number(b.closest('tr').dataset.id); S.open = S.open === id ? 0 : id; draw(); }));
 		main.querySelectorAll('[data-deal]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); if (window.CPCrm) window.CPCrm.open(Number(a.dataset.deal)); }));
+		bindIvGo(main);
 		if (window.CPXStatus) window.CPXStatus();
 	}
 	function detailRead(x) {
 		const n = SK.length - x.miss.length;
 		const sens = x.kind === 'jelentkezo' ? '' : S.reveal ? '<div class="kz-sr">' + SK.map(k => '<div><small>' + esc(SENS[k]) + ':</small> ' + ((x.sens || {})[k] ? esc(x.sens[k]) : '<span class="kz-warn">hiányzik</span>') + '</div>').join('') + '</div>'
 			: '<p class="' + (x.miss.length ? 'kz-warn' : 'kz-open') + '">Személyes adatok: ' + n + '/' + SK.length + ' megvan' + (x.miss.length ? ' – hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) : '') + (K.admin ? ' <small class="cpx-muted">(megtekintés: „Személyes adatok megjelenítése”)</small>' : '') + '</p>';
-		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') +
+		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') + ivRec(x) /* v2.9.85 */ +
 			'<p class="cpx-muted">' + (x.active ? 'Aktív' : 'Inaktív') + ' · ' + esc(KINDS[x.kind] || '') + (x.el ? ' · elszámolás: ' + esc(x.el.name) + ' (' + x.el.rate + ' Ft/óra)' : '') + (x.updated ? ' · módosítva: ' + esc(x.updated) + (x.by ? ' (' + esc(x.by) + ')' : '') : '') + '</p></div>' +
 			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
@@ -145,7 +149,7 @@
 			'<label class="kz-chk">Csoport: <select data-f="kind">' + Object.keys(KINDS).map(k => '<option value="' + k + '"' + (x.kind === k ? ' selected' : '') + '>' + esc(KINDS[k]) + '</option>').join('') + '</select></label>' +
 			(x.miss.length ? '<p class="kz-warn">Hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) + '</p>' : '') +
 			'<p class="cpx-muted">' + (x.phone ? '<a href="tel:' + esc(x.phone.replace(/[^\d+]/g, '')) + '">📞 Hívás</a> · ' : '') + (x.email ? '<a href="mailto:' + esc(x.email) + '">✉ E-mail</a> · ' : '') + (x.el ? 'Elszámolás: ' + esc(x.el.name) + ' (' + esc(x.el.role) + ', ' + x.el.rate + ' Ft/óra) · ' : '') + 'Módosítva: ' + esc(x.updated || '') + (x.by ? ' (' + esc(x.by) + ')' : '') + '</p>' +
-			(K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
+			ivRec(x) /* v2.9.85 */ + (K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
 			'<div><b>Közelgő rendezvényei</b> <small class="cpx-muted">(a deal „Gépkezelő” mezője alapján)</small>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '' + (u.venue ? ' <small>' + esc(u.venue) + '</small>' : '') + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
 	async function save(id, f, el) {
@@ -187,40 +191,136 @@
 			tr.querySelectorAll('[data-deal]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); if (window.CPCrm) window.CPCrm.open(Number(a.dataset.deal)); }));
 		});
 	}
-	/* ------------------------------------------------------------ v2.9.57: Interjú-időpontok (kezelő-jelentkezők foglalója) */
-	const IV = { d: null, busy: false };
-	async function ivOpen() {
-		const m = document.getElementById('cpx-modal'); if (!m) return;
-		if (window.cpxSheetMo) window.cpxSheetMo.watch();
-		m.innerHTML = '<div class="cpx-sheet wide iv-sheet" role="dialog" aria-modal="true" aria-label="Interjú-időpontok"><div class="cpx-sheet-h"><h3>Interjú-időpontok</h3><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div><div class="iv-b"><div class="cpx-empty">Betöltés…</div></div></div>';
-		m.hidden = false;
-		try { IV.d = await post('cp_iv_admin', {}); ivDraw(); } catch (e) { m.querySelector('.iv-b').innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; }
+	/* ------------------------------------------------------------ v2.9.57: Interjú-időpontok (kezelő-jelentkezők foglalója)
+	   v2.9.85: nem felugró ablak, hanem a Kezelők fül saját oldala – saját címe: #kezelok:interju (#kezelok:interju:<foglalás> = a jegyzete nyitva);
+	   a fejléc kapcsolója („Kezelők” | „Interjú-időpontok”) előzménylépést ad, így a böngésző Vissza / Előre gombja a két nézet között lép.
+	   Foglalásonként jegyzet (automatikus mentés gépelés közben) és gyors értékelés (Alkalmas / Talán / Nem). */
+	const IV = { d: null, busy: false, err: '', open: new Set(), ed: {}, focus: 0, setOpen: false, changed: false };
+	const RATES = [[3, 'Alkalmas', 'ok'], [2, 'Talán', 'mid'], [1, 'Nem', 'no']];
+	const rateOf = n => RATES.find(r => r[0] === Number(n));
+	const rateChip = n => { const r = rateOf(n); return r ? '<span class="iv-rt ' + r[2] + '">' + r[1] + '</span>' : ''; };
+	const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+	/* a cím → nézet: #kezelok = lista, #kezelok:interju (vagy a régi értesítésekből #kezelok:iv), opcionálisan :<foglalás> */
+	function ivHash() { const m = /^#kezelok(?::(interju|iv)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
+	function nav(v, bid) {
+		ivFlushAll();
+		const url = v === 'iv' ? '#kezelok:interju' : '#kezelok';
+		if (location.hash !== url) history.pushState({ cpKz: v }, '', url);
+		S.sub = v; if (bid) IV.focus = bid;
+		if (S.main && S.main.isConnected) view(S.main, true);
+	}
+	window.addEventListener('popstate', () => {
+		const h = ivHash(); if (!h) return;
+		/* másik fülről lépett vissza egy Kezelők-címre: vissza a fülre, a megfelelő nézettel */
+		if (!(S.main && S.main.isConnected && S.main.querySelector('.kz'))) { if (window.CPXGo) { S.force = h; window.CPXGo('kezelok'); } return; }
+		if (h.v !== S.sub || h.b) { ivFlushAll(); S.sub = h.v; if (h.b) IV.focus = h.b; view(S.main, true); }
+	});
+	/* értesítésből: „kezelok:interju”, „kezelok:iv”, „kezelok:interju:12” */
+	function deep(arg) { const m = /^(?:interju|iv)(?::(\d+))?$/.exec(String(arg || '')); if (m && K.iv) nav('iv', Number(m[1]) || 0); }
+	const ivOpen = () => nav('iv'); /* v2.9.85: a régi felugró ablak helyett az oldalra visz */
+	const vsw = () => K.iv ? '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'iv' ? '' : ' class="on" aria-current="page"') + '>Kezelők</a><a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a></nav>' : '';
+	function bindVsw(main) {
+		main.querySelectorAll('.kz-vs [data-view]').forEach(a => a.addEventListener('click', e => {
+			if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; /* új lapon / ablakban: a böngészőé */
+			e.preventDefault(); if (a.dataset.view !== S.sub) nav(a.dataset.view);
+		}));
+	}
+	function ivView(main) {
+		main.innerHTML = '<div class="kz kz-ivv">' + vsw() + '<div class="iv-pg"><div class="iv-b"><div class="cpx-empty">Betöltés…</div></div></div></div>';
+		bindVsw(main);
+		if (IV.d) ivDraw();
+		ivLoad();
+		if (window.CPXStatus) window.CPXStatus();
+	}
+	async function ivLoad() {
+		try { IV.d = await post('cp_iv_admin', {}); IV.err = ''; ivSync(); } catch (e) { IV.err = e.message; if (IV.d) toast(e.message, true); }
+		ivDraw();
 	}
 	async function ivDo(params) {
 		if (IV.busy) return; IV.busy = true;
-		try { IV.d = await post('cp_iv_admin', params); ivDraw(); return true; } catch (e) { toast(e.message, true); return false; } finally { IV.busy = false; }
+		try { IV.d = await post('cp_iv_admin', params); ivSync(); ivDraw(); return true; } catch (e) { toast(e.message, true); return false; } finally { IV.busy = false; }
+	}
+	/* friss adat után a mentett (nem függő) helyi szövegek helyett a szerveré látszik – így más kolléga jegyzete is megjelenik */
+	function ivSync() { Object.keys(IV.ed).forEach(k => { const e = IV.ed[k]; if (!e.dirty && !e.inflight && !e.err) { const b = ivFind(Number(k)); if (!b || b.note !== e.text || (b.rate || 0) !== e.rate || !e.saved) delete IV.ed[k]; } }); }
+	const ivBox = () => S.main && S.main.isConnected ? S.main.querySelector('.kz-ivv .iv-b') : null;
+	function ivFind(bid) { const days = (IV.d && IV.d.days) || {}; for (const k of Object.keys(days)) for (const s of days[k].slots) if (s.b && s.b.id === bid) return s.b; return null; }
+	/* ---- jegyzet: helyi szerkesztési állapot foglalásonként (a szöveg újrarajzoláskor és mentési hibánál sem vész el) */
+	const edOf = b => IV.ed[b.id] || (IV.ed[b.id] = { text: b.note || '', rate: b.rate || 0, timer: 0, inflight: false, dirty: false, err: '', saved: '' });
+	function ivQueue(bid, now) {
+		const e = IV.ed[bid]; if (!e) return;
+		e.dirty = true; e.err = ''; clearTimeout(e.timer);
+		e.timer = setTimeout(() => ivSave(bid), now ? 0 : 800);
+		ivStat(bid);
+	}
+	async function ivSave(bid) {
+		const e = IV.ed[bid]; if (!e) return;
+		clearTimeout(e.timer); e.timer = 0;
+		if (e.inflight || !e.dirty) return;
+		e.dirty = false; e.inflight = true; ivStat(bid);
+		try {
+			const r = await post('cp_iv_note', { id: bid, note: e.text, rate: e.rate });
+			const b = ivFind(bid); if (b) { b.note = r.note; b.rate = r.rate; b.nby = r.nby; b.nat = r.nat; }
+			e.saved = hhmm(); e.err = ''; IV.changed = true;
+		} catch (er) { e.dirty = true; e.err = er.message; }
+		e.inflight = false;
+		/* közben tovább gépelt: újra mentjük; hibánál 8 mp múlva újrapróbálja (a szöveg addig is megmarad) */
+		if (e.dirty) e.timer = setTimeout(() => ivSave(bid), e.err ? 8000 : 0);
+		ivStat(bid);
+	}
+	function ivFlushAll() { Object.keys(IV.ed).forEach(k => { const e = IV.ed[k]; if (e.dirty && !e.inflight) ivSave(Number(k)); }); }
+	const ivPending = () => Object.keys(IV.ed).some(k => IV.ed[k].dirty || IV.ed[k].inflight);
+	window.addEventListener('beforeunload', e => { if (ivPending()) { ivFlushAll(); e.preventDefault(); e.returnValue = ''; } });
+	function ivStatTxt(bid) {
+		const e = IV.ed[bid], b = ivFind(bid) || {};
+		if (e && e.err) return ['bad', 'Nem sikerült menteni (' + e.err + ') – újrapróbálom, a szöveg megmarad.'];
+		if (e && (e.dirty || e.inflight)) return ['', 'Mentés…'];
+		if (e && e.saved) return ['ok', 'Mentve ' + e.saved];
+		return ['', b.nat ? 'Utoljára: ' + b.nat + (b.nby ? ' · ' + b.nby : '') : 'Gépelés közben magától mentődik.'];
+	}
+	function ivStat(bid) {
+		const box = ivBox(); const el = box && box.querySelector('[data-ivst="' + bid + '"]'); if (!el) return;
+		const [c, t] = ivStatTxt(bid); el.className = 'iv-ns' + (c ? ' ' + c : ''); el.textContent = t;
+	}
+	const autosz = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 480) + 'px'; };
+	function ivNoteBox(b) {
+		const e = edOf(b), [c, t] = ivStatTxt(b.id);
+		return '<div class="iv-nb" id="ivn-' + b.id + '"><div class="iv-rates" role="group" aria-label="Értékelés">' +
+			RATES.map(r => '<button type="button" class="iv-rb ' + r[2] + '" data-ivrate="' + b.id + '" data-v="' + r[0] + '" aria-pressed="' + (e.rate === r[0]) + '">' + r[1] + '</button>').join('') + '</div>' +
+			'<textarea data-ivta="' + b.id + '" rows="3" maxlength="5000" aria-label="Interjú-jegyzet: ' + esc(b.name) + '" placeholder="Jegyzet az interjúhoz – benyomás, tapasztalat, mikor ér rá…">' + esc(e.text) + '</textarea>' +
+			'<div class="iv-ns' + (c ? ' ' + c : '') + '" data-ivst="' + b.id + '" aria-live="polite">' + esc(t) + '</div></div>';
 	}
 	function ivDraw() {
-		const box = document.querySelector('.iv-sheet .iv-b'); if (!box || !IV.d) return;
-		const d = IV.d, o = d.opts, days = d.days || {};
+		const box = ivBox(); if (!box) return;
+		if (!IV.d) { box.innerHTML = IV.err ? '<div class="cpx-empty err">' + esc(IV.err) + '<br><button type="button" class="cpx-btn" data-ivretry>Újra</button></div>' : '<div class="cpx-empty">Betöltés…</div>'; const rb = box.querySelector('[data-ivretry]'); if (rb) rb.addEventListener('click', () => { IV.err = ''; ivDraw(); ivLoad(); }); return; }
+		/* a fókuszban lévő jegyzetmező (és a kurzor) újrarajzolás után is marad */
+		const ae = document.activeElement, act = ae && box.contains(ae) && ae.dataset && ae.dataset.ivta ? { b: ae.dataset.ivta, s: ae.selectionStart, e: ae.selectionEnd } : null;
+		const d = IV.d, o = d.opts, days = d.days || {}, NT = !!d.notes;
 		let tot = 0, bk = 0;
 		Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (!s.blocked) tot++; if (s.b) bk++; }));
+		if (IV.focus && NT) { if (ivFind(IV.focus)) IV.open.add(IV.focus); else toast('Ez a foglalás már nincs a listában (lemondták vagy áthelyezték).', true); }
 		let h = '<div class="iv-top"><label class="iv-sw"><input type="checkbox" data-ivon' + (o.on ? ' checked' : '') + (K.admin ? '' : ' disabled') + '> <b>' + (o.on ? 'A foglalás nyitva' : 'A foglalás zárva') + '</b></label>' +
 			'<span class="iv-sum">' + bk + ' / ' + tot + ' időpont foglalt' + (d.cancelled ? ' · ' + d.cancelled + ' lemondás' : '') + '</span></div>' +
 			'<div class="iv-link"><input type="text" readonly value="' + esc(d.url) + '" aria-label="A jelentkezőknek küldendő link"><button type="button" class="cpx-btn" data-ivcopy>Link másolása</button><a class="cpx-btn ghost" href="' + esc(d.url) + '" target="_blank" rel="noopener">Megnyitás</a></div>' +
-			(!o.location ? '<p class="iv-warn">Még nincs megadva az interjú helyszíne – a levelekbe és az oldalra ez kerül. Add meg lent, a Beállításokban.</p>' : '');
+			(!o.location ? '<p class="iv-warn">Még nincs megadva az interjú helyszíne – a levelekbe és az oldalra ez kerül.' + (K.admin ? ' Add meg lent, a Beállításokban.' : '') + '</p>' : '') +
+			(NT ? '' : '<p class="iv-warn">A jegyzetek az első oldalbetöltés után lesznek elérhetők (az adatbázis frissül).</p>');
 		Object.keys(days).forEach(k => {
 			const D = days[k], n = D.slots.filter(s => s.b).length;
-			h += '<section class="iv-day"><h4>' + esc(D.label) + ' <small>' + n + ' / ' + D.slots.filter(s => !s.blocked).length + ' foglalt</small></h4><table class="iv-t"><tbody>' + D.slots.map(s => {
+			h += '<section class="iv-day"><h4>' + esc(D.label) + ' <small>' + n + ' / ' + D.slots.filter(s => !s.blocked).length + ' foglalt</small></h4><div class="iv-list">' + D.slots.map(s => {
 				const b = s.b;
-				return '<tr class="' + (b ? 'bk' : s.blocked ? 'bl' : '') + '"><td class="iv-tm">' + esc(s.tm) + '</td><td>' + (b ? '<b>' + esc(b.name) + '</b><span class="iv-c"><a href="tel:' + esc(b.phone.replace(/[^0-9+]/g, '')) + '">' + esc(b.phone) + '</a> · <a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a></span>' : s.blocked ? '<span class="iv-mu">letiltva</span>' : '<span class="iv-mu">szabad</span>') + '</td>' +
-					'<td class="iv-a">' + (b ? '<button type="button" class="kz-link" data-ivcancel="' + b.id + '" data-n="' + esc(b.name) + '">Lemondás</button>' : '<button type="button" class="kz-link" data-ivblock="' + s.id + '" data-on="' + (s.blocked ? 0 : 1) + '">' + (s.blocked ? 'Feloldás' : 'Letiltás') + '</button>') + '</td></tr>';
-			}).join('') + '</tbody></table></section>';
+				if (!b) return '<div class="iv-r' + (s.blocked ? ' bl' : '') + '"><div class="iv-tm">' + esc(s.tm) + '</div><div class="iv-who"><span class="iv-mu">' + (s.blocked ? 'letiltva' : 'szabad') + '</span></div><div class="iv-a"><button type="button" class="kz-link" data-ivblock="' + s.id + '" data-on="' + (s.blocked ? 0 : 1) + '">' + (s.blocked ? 'Feloldás' : 'Letiltás') + '</button></div></div>';
+				const op = NT && IV.open.has(b.id), e = IV.ed[b.id], nt = e ? e.text : (b.note || ''), rt = e ? e.rate : (b.rate || 0);
+				const first = String(nt).split('\n').map(x => x.trim()).filter(Boolean)[0] || '';
+				return '<div class="iv-r bk' + (op ? ' op' : '') + '" data-bid="' + b.id + '"><div class="iv-tm">' + esc(s.tm) + '</div>' +
+					'<div class="iv-who"><b>' + esc(b.name) + '</b><span class="iv-c"><a href="tel:' + esc(String(b.phone).replace(/[^0-9+]/g, '')) + '">' + esc(b.phone) + '</a> · <a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a></span>' +
+					(!op && (first || rt) ? '<button type="button" class="iv-np" data-ivnote="' + b.id + '" title="A jegyzet megnyitása">' + rateChip(rt) + (first ? '<span>' + esc(first) + '</span>' : '') + '</button>' : '') + '</div>' +
+					'<div class="iv-a">' + (NT ? '<button type="button" class="kz-link" data-ivnote="' + b.id + '" aria-expanded="' + op + '" aria-controls="ivn-' + b.id + '">' + (op ? 'Becsuk' : 'Jegyzet') + '</button>' : '') + '<button type="button" class="kz-link iv-del" data-ivcancel="' + b.id + '" data-n="' + esc(b.name) + '">Lemondás</button></div>' +
+					(op ? ivNoteBox(b) : '') + '</div>';
+			}).join('') + '</div></section>';
 		});
-		if (!Object.keys(days).length) h += '<div class="cpx-empty">Nincs beállított nap – add meg lent.</div>';
+		if (!Object.keys(days).length) h += '<div class="cpx-empty">Nincs beállított nap' + (K.admin ? ' – add meg lent, a Beállításokban.' : '.') + '</div>';
 		h += '<div class="iv-tools"><button type="button" class="cpx-btn ghost" data-ivcsv>⬇ Lista (CSV)</button><button type="button" class="cpx-btn ghost" data-ivprint>Nyomtatás</button></div>';
 		if (K.admin) {
-			h += '<details class="iv-set"><summary>Beállítások</summary><div class="iv-g">' +
+			h += '<details class="iv-set"' + (IV.setOpen ? ' open' : '') + '><summary>Beállítások</summary><div class="iv-g">' +
 				'<label>Cím (a lap és a levelek fejléce)<input type="text" data-o="title" value="' + esc(o.title) + '"></label>' +
 				'<label>Helyszín (a levelekben és az oldalon)<textarea data-o="location" rows="2" placeholder="pl. 1095 Budapest, Példa utca 1., 2. emelet – csengő: EventCrazy">' + esc(o.location) + '</textarea></label>' +
 				'<label>Megjegyzés a jelentkezőknek (nem kötelező)<textarea data-o="note" rows="2" placeholder="pl. Hozz magaddal fényképes igazolványt.">' + esc(o.note) + '</textarea></label>' +
@@ -235,20 +335,31 @@
 		q('[data-ivcopy]', async () => { const v = d.url; try { await navigator.clipboard.writeText(v); toast('Link a vágólapon.'); } catch (e) { const i = box.querySelector('.iv-link input'); i.select(); document.execCommand('copy'); toast('Link a vágólapon.'); } });
 		q('[data-ivon]', el => { const oo = ivCollect(box); oo.on = el.checked ? 1 : 0; ivDo({ do: 'save', o: JSON.stringify(oo) }).then(ok => ok && toast(oo.on ? 'A foglalás megnyitva.' : 'A foglalás lezárva.')); }, 'change');
 		q('[data-ivblock]', el => ivDo({ do: el.dataset.on === '1' ? 'block' : 'unblock', id: el.dataset.ivblock }));
-		q('[data-ivcancel]', el => { if (window.confirm('Lemondod ' + el.dataset.n + ' interjúját? Az időpont felszabadul. (A jelentkező nem kap erről levelet – szólj neki.)')) ivDo({ do: 'cancel', id: el.dataset.ivcancel }); });
+		q('[data-ivcancel]', el => { const b = ivFind(Number(el.dataset.ivcancel)) || {}; if (window.confirm('Lemondod ' + el.dataset.n + ' interjúját? Az időpont felszabadul. (A jelentkező nem kap erről levelet – szólj neki.)' + (b.note ? ' A jegyzet megmarad a jelentkező adatlapján.' : ''))) { ivFlushAll(); ivDo({ do: 'cancel', id: el.dataset.ivcancel }); } });
 		q('[data-ivsave]', () => ivDo({ do: 'save', o: JSON.stringify(ivCollect(box)) }).then(ok => ok && toast('Elmentve.')));
 		q('[data-ivaddday]', () => { const w = box.querySelector('.iv-days'); w.insertAdjacentHTML('beforeend', ivDayRow({ d: '', from: '10:00', to: '14:00' }, w.children.length)); w.lastElementChild.querySelector('[data-ivdel]').addEventListener('click', e => e.target.closest('.iv-dr').remove()); });
 		q('[data-ivdel]', el => el.closest('.iv-dr').remove());
+		q('.iv-set', el => { IV.setOpen = el.open; }, 'toggle');
+		/* jegyzet: lenyitás / becsukás, értékelés, gépelés */
+		q('[data-ivnote]', el => { const id = Number(el.dataset.ivnote), was = IV.open.has(id); if (was) { IV.open.delete(id); ivSave(id); } else IV.open.add(id); ivDraw(); if (!was) { const t = box.querySelector('[data-ivta="' + id + '"]'); if (t) t.focus(); } });
+		q('[data-ivrate]', el => { const id = Number(el.dataset.ivrate), e = IV.ed[id]; if (!e) return; const v = Number(el.dataset.v); e.rate = e.rate === v ? 0 : v; el.parentNode.querySelectorAll('[data-ivrate]').forEach(x => x.setAttribute('aria-pressed', String(Number(x.dataset.v) === e.rate))); ivQueue(id, true); });
+		q('[data-ivta]', el => { const id = Number(el.dataset.ivta), e = IV.ed[id]; if (!e) return; e.text = el.value; autosz(el); ivQueue(id); }, 'input');
+		q('[data-ivta]', el => ivSave(Number(el.dataset.ivta)), 'blur');
+		box.querySelectorAll('[data-ivta]').forEach(autosz);
+		if (act) { const t = box.querySelector('[data-ivta="' + act.b + '"]'); if (t) { t.focus({ preventScroll: true }); try { t.setSelectionRange(act.s, act.e); } catch (e) { /* nem baj */ } } }
+		if (IV.focus) { const r = box.querySelector('.iv-r[data-bid="' + IV.focus + '"]'); IV.focus = 0; if (r) { r.scrollIntoView({ block: 'center' }); const t = r.querySelector('[data-ivta]'); if (t) t.focus({ preventScroll: true }); } }
 		q('[data-ivcsv]', () => {
-			const L = [['Nap', 'Időpont', 'Név', 'Telefon', 'E-mail']];
-			Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (s.b) L.push([days[k].label, s.tm, s.b.name, s.b.phone, s.b.email]); }));
-			const csv = '﻿' + L.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+			const L = [['Nap', 'Időpont', 'Név', 'Telefon', 'E-mail'].concat(NT ? ['Értékelés', 'Jegyzet'] : [])];
+			Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (!s.b) return; const e = IV.ed[s.b.id], r = rateOf(e ? e.rate : s.b.rate); L.push([days[k].label, s.tm, s.b.name, s.b.phone, s.b.email].concat(NT ? [r ? r[1] : '', e ? e.text : (s.b.note || '')] : [])); }));
+			/* képletként értelmezhető cellák (=, +, -, @ az elején) elé aposztróf – a táblázatkezelő ne futtassa */
+			const cel = c => { let v = String(c == null ? '' : c); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+			const csv = '﻿' + L.map(r => r.map(cel).join(';')).join('\r\n');
 			const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'interju-idopontok.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 		});
 		q('[data-ivprint]', () => {
 			const w = window.open('', '_blank'); if (!w) return;
-			let p = '<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Interjú-időpontok</title><style>body{font:13px Arial,sans-serif;margin:24px}h2{font-size:16px;margin:18px 0 6px}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ccc;padding:6px 4px;vertical-align:top}td:first-child{width:60px;font-weight:bold}</style></head><body><h1 style="font-size:18px">' + esc(o.title) + '</h1>';
-			Object.keys(days).forEach(k => { p += '<h2>' + esc(days[k].label) + '</h2><table>' + days[k].slots.map(s => '<tr><td>' + esc(s.tm) + '</td><td>' + (s.b ? esc(s.b.name) + '<br>' + esc(s.b.phone) + ' · ' + esc(s.b.email) : (s.blocked ? '— letiltva —' : '')) + '</td></tr>').join('') + '</table>'; });
+			let p = '<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Interjú-időpontok</title><style>body{font:13px Arial,sans-serif;margin:24px}h2{font-size:16px;margin:18px 0 6px}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ccc;padding:6px 4px;vertical-align:top}td:first-child{width:60px;font-weight:bold}.n{white-space:pre-wrap;margin-top:4px;color:#333}.r{font-weight:bold}tr{break-inside:avoid}</style></head><body><h1 style="font-size:18px">' + esc(o.title) + '</h1>';
+			Object.keys(days).forEach(k => { p += '<h2>' + esc(days[k].label) + '</h2><table>' + days[k].slots.map(s => { const b = s.b, e = b && IV.ed[b.id], nt = b ? (e ? e.text : (b.note || '')) : '', r = b && rateOf(e ? e.rate : b.rate); return '<tr><td>' + esc(s.tm) + '</td><td>' + (b ? esc(b.name) + '<br>' + esc(b.phone) + ' · ' + esc(b.email) + (r ? '<div class="r">Értékelés: ' + r[1] + '</div>' : '') + (nt ? '<div class="n">' + esc(nt) + '</div>' : '') : (s.blocked ? '— letiltva —' : '')) + '</td></tr>'; }).join('') + '</table>'; });
 			w.document.write(p + '</body></html>'); w.document.close(); w.focus(); w.print();
 		});
 	}
@@ -260,13 +371,27 @@
 		if (box.querySelector('.iv-days')) o.days = ds;
 		return o;
 	}
+	/* v2.9.85: a jelentkező adatlapján az interjú-jegyzete – csak olvasható, link a foglaláshoz */
+	function ivRec(x) {
+		const L = (x.iv || []).filter(v => v.live || v.note || v.rate); if (!L.length) return '';
+		return '<div class="kz-iv"><b>Interjú</b>' + L.map(v => '<div class="kz-ivi"><div class="kz-ivh"><span>' + esc(v.when || 'időpont nélkül') + (v.live ? '' : ' <span class="cpx-muted">(lemondva)</span>') + '</span>' + rateChip(v.rate) +
+			(v.live && K.iv ? '<a class="kz-link" href="#kezelok:interju:' + v.bid + '" data-ivgo="' + v.bid + '">Jegyzet a foglalásnál →</a>' : '') + '</div>' +
+			(v.note ? '<p class="kz-note">' + esc(v.note) + '</p>' : '<p class="cpx-muted">Még nincs jegyzet.</p>') + (v.nat ? '<small class="cpx-muted">' + esc(v.nat) + (v.nby ? ' · ' + esc(v.nby) : '') + '</small>' : '') + '</div>').join('') + '</div>';
+	}
 	function view(main, keep) {
 		S.main = main;
-		main.innerHTML = '<div class="kz"><div class="kz-h"><div class="crm-seg kz-seg"></div><input type="search" data-q placeholder="Keresés: név, e-mail, telefon, rendszám" value="' + esc(S.q) + '" aria-label="Keresés">' +
+		const h = S.force || ivHash(); S.force = null;
+		if (h) { S.sub = h.v; if (h.b) IV.focus = h.b; }
+		if (!K.iv) S.sub = 'list';
+		if (S.sub === 'iv') { if (location.hash !== '#kezelok:interju') history.replaceState(history.state, '', '#kezelok:interju'); return ivView(main); }
+		/* a jegyzetek változtak: a jelentkezők adatlapja frissen töltődik */
+		if (IV.changed) { IV.changed = false; keep = false; }
+		main.innerHTML = '<div class="kz">' + vsw() + '<div class="kz-h"><div class="crm-seg kz-seg"></div><input type="search" data-q placeholder="Keresés: név, e-mail, telefon, rendszám" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<label class="crm-chk"><input type="checkbox" data-inact' + (S.inact ? ' checked' : '') + '> Inaktívak is</label>' +
 			(K.admin ? '<button type="button" class="cpx-btn ghost" data-rev>' + (S.reveal ? '🔒 Személyes adatok elrejtése' : '🔓 Személyes adatok megjelenítése') + '</button>' + (K.csv ? '<a class="cpx-btn ghost" href="' + esc(K.csv + '&t=' + encodeURIComponent(C.t || '')) + '" title="Minden adat letöltése (CSV) – naplózva">⬇ CSV</a>' : '') : '') +
-			(K.iv ? '<button type="button" class="cpx-btn ghost" data-iv>📅 Interjú-időpontok</button>' : '') + (S.edit ? '<button type="button" class="cpx-btn ghost" data-new>+ Új</button>' : '') + '<button type="button" class="cpx-btn' + (S.edit ? ' kz-on' : '') + '" data-edit>' + (S.edit ? '✓ Kész' : '✎ Szerkesztés') + '</button></div>' +
+			(S.edit ? '<button type="button" class="cpx-btn ghost" data-new>+ Új</button>' : '') + '<button type="button" class="cpx-btn' + (S.edit ? ' kz-on' : '') + '" data-edit>' + (S.edit ? '✓ Kész' : '✎ Szerkesztés') + '</button></div>' +
 			'<p class="kz-help">' + (S.edit ? '<b>Szerkesztés:</b> kattints a mezőbe, írd át – Enterre vagy máshova kattintva mentődik. A pipák is itt állíthatók. Ha végeztél: <b>✓ Kész</b>.' : 'A lista csak olvasható. Módosításhoz: <b>✎ Szerkesztés</b>.') + '</p><div class="kz-body"><div class="cpx-empty">Betöltés…</div></div></div>';
+		bindVsw(main);
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); draw(); }, 200); });
 		main.querySelector('[data-inact]').addEventListener('change', e => { S.inact = e.target.checked; draw(); });
@@ -274,8 +399,6 @@
 		main.querySelector('[data-edit]').addEventListener('click', () => { S.edit = !S.edit; S.open = 0; view(main, true); });
 		const rv = main.querySelector('[data-rev]');
 		if (rv) rv.addEventListener('click', () => { S.reveal = !S.reveal; view(main); });
-		const ivb = main.querySelector('[data-iv]');
-		if (ivb) ivb.addEventListener('click', ivOpen);
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', async () => {
 			const n = (window.prompt('Az új kezelő neve:', '') || '').trim(); if (!n) return;
@@ -284,7 +407,7 @@
 		if (keep && S.loaded) draw(); else load();
 	}
 	function status(s) { s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
-	window.CPKezelok = { view, status };
+	window.CPKezelok = { view, status, deep, ivOpen }; /* v2.9.85: deep = értesítésből / mélylinkből a nézet */
 
 	const css = document.createElement('style');
 	css.id = 'kz-css';
@@ -299,12 +422,23 @@
 		'.kz-fl{width:28px;text-align:center}.kz-flw{width:46px;white-space:nowrap}.kz-drag{cursor:grab;color:#B5B0A8;font-size:14px;padding:0 3px;user-select:none}.kz-drag:hover{color:#141C33}tr.kz-dragging td{opacity:.45;background:#EEF3FD!important}.kz-tog{border:0;background:none;cursor:pointer;color:#656973;font-size:13px;width:24px;height:24px;border-radius:6px}.kz-tog:hover{background:#F0ECE6;color:#141C33}.kz-fl button{border:0;background:none;cursor:pointer;font-size:15px;color:#D0CCC5}tr.fl-red td{background:#FBE9E7}tr.fl-red .kz-fl button{color:#D84315}tr.fl-yellow td{background:#FFF8E1}tr.fl-yellow .kz-fl button{color:#F9A825}tr.fl-green td{background:#EAF6EC}tr.fl-green .kz-fl button{color:#2E7D32}tr.off td{opacity:.55}' +
 		'.kz-link{border:0;background:none;color:#2F5BD8;cursor:pointer;font:600 12.5px Inter,sans-serif;text-align:left;white-space:nowrap}.kz-link small{display:block;color:#656973;font-weight:500}' +
 		'.kz-det td{background:#FAF8F5!important}.kz-d{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:8px 6px}.kz-d label{display:block;font-size:12px;color:#656973}.kz-d textarea{width:100%;border:1px solid #E6E3DE;border-radius:8px;padding:6px;font:13px Inter,sans-serif}.kz-d ul{margin:6px 0;padding-left:18px}.kz-d li{margin:3px 0}.kz-chk{display:flex!important;gap:6px;align-items:center;margin:6px 0;color:#141C33!important;font-size:13px!important}.kz-d input[type=checkbox]{width:auto;min-width:0;accent-color:#2F5BD8}.kz-d select{width:auto!important;min-width:150px!important;border:1px solid #E6E3DE!important;background:#fff!important}' +
-		'.iv-sheet{max-width:760px}.iv-b{padding:4px 2px 12px}.iv-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.iv-sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}.iv-sw input{width:18px;height:18px;accent-color:#2E7D32}.iv-sum{font-size:13px;color:#656973}' +
+		/* v2.9.85: Interjú-időpontok oldal (a fül fő területén), nézetkapcsoló, jegyzet */
+		'.kz-vs{margin:0 0 10px}.kz-vs a{border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;color:var(--mu);text-decoration:none;white-space:nowrap}.kz-vs a.on{background:var(--n);color:#fff}.kz-vs a:not(.on):hover{color:var(--n)}.kz-vs a:focus-visible,.iv-rb:focus-visible,.iv-np:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}' +
+		'.iv-pg{max-width:900px}.iv-b{padding:2px 0 12px}.iv-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.iv-sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}.iv-sw input{width:18px;height:18px;accent-color:#2E7D32}.iv-sum{font-size:13px;color:#656973}' +
 		'.iv-link{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.iv-link input{flex:1;min-width:200px;border:1px solid #E6E3DE;border-radius:8px;padding:8px 10px;font:13px Inter,sans-serif;background:#FAF8F5}.iv-warn{background:#FFF4E5;color:#8A4B08;border-radius:10px;padding:8px 10px;font-size:13px;margin:0 0 10px}' +
-		'.iv-day h4{margin:14px 0 6px;font:700 14px "Plus Jakarta Sans",sans-serif}.iv-day h4 small{font:500 12px Inter,sans-serif;color:#656973;margin-left:6px}.iv-t{width:100%;border-collapse:collapse;font-size:13px}.iv-t td{border-bottom:1px solid #F0ECE6;padding:6px 6px;vertical-align:top}' +
-		'.iv-tm{width:52px;font-weight:700;font-variant-numeric:tabular-nums}.iv-t tr.bk td{background:#F3F9F4}.iv-t tr.bl td{background:#F7F5F2;color:#8C8880}.iv-c{display:block;font-size:12px;color:#656973;overflow-wrap:anywhere}.iv-c a{color:#2F5BD8;text-decoration:none}.iv-mu{color:#8C8880}.iv-a{width:80px;text-align:right}' +
+		'.iv-day h4{margin:16px 0 6px;font:700 14px "Plus Jakarta Sans",sans-serif}.iv-day h4 small{font:500 12px Inter,sans-serif;color:#656973;margin-left:6px}' +
+		'.iv-list{background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:hidden;font-size:13px}.iv-r{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 12px;padding:8px 12px;border-bottom:1px solid #F0ECE6;align-items:start}.iv-r:last-child{border-bottom:0}.iv-r.bk{background:#F3F9F4}.iv-r.bl{background:#F7F5F2;color:#8C8880}' +
+		'.iv-who{min-width:0}.iv-who b{display:block;overflow-wrap:anywhere}.iv-a{display:flex;gap:14px;justify-content:flex-end;align-items:center;white-space:nowrap}.iv-a .kz-link{padding:2px 0}.iv-a .iv-del{color:#9A3A12}' +
+		'.iv-np{display:flex;gap:6px;align-items:center;max-width:100%;margin-top:4px;padding:0;border:0;background:none;cursor:pointer;font:12.5px/1.4 Inter,sans-serif;color:#3C4252;text-align:left}.iv-np span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iv-np:hover span:last-child{text-decoration:underline;text-underline-offset:2px}' +
+		'.iv-rt{flex:none;font:600 10.5px Inter,sans-serif;border-radius:5px;padding:1px 6px;white-space:nowrap}.iv-rt.ok{background:#DDF3E6;color:#17663A}.iv-rt.mid{background:#FFF1D6;color:#8A4B08}.iv-rt.no{background:#FBE3DC;color:#9A3A12}' +
+		'.iv-nb{grid-column:2/-1;display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}.iv-rates{display:flex;gap:6px;flex-wrap:wrap}.iv-rb{min-height:30px;padding:0 12px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;color:#3C4252;font:600 12.5px Inter,sans-serif;cursor:pointer}.iv-rb:hover{border-color:#B9B2A7}' +
+		'.iv-rb.ok[aria-pressed=true]{background:#DDF3E6;border-color:#9FD3B4;color:#17663A}.iv-rb.mid[aria-pressed=true]{background:#FFF1D6;border-color:#EBC27E;color:#8A4B08}.iv-rb.no[aria-pressed=true]{background:#FBE3DC;border-color:#E9A991;color:#9A3A12}' +
+		'.iv-nb textarea{width:100%;min-height:76px;max-height:480px;border:1px solid #DCD6CC;border-radius:8px;padding:8px 10px;font:13.5px/1.45 Inter,sans-serif;color:#141C33;background:#fff;resize:vertical;box-sizing:border-box}.iv-nb textarea:focus{border-color:#2F5BD8;outline:none;box-shadow:0 0 0 3px rgba(47,91,216,.15)}.iv-ns{font-size:12px;color:#656973}.iv-ns.ok{color:#17663A}.iv-ns.bad{color:#B4400E}' +
+		'.kz-iv{margin-top:10px;padding-top:8px;border-top:1px solid #EDE8E1}.kz-ivi{margin:6px 0 10px}.kz-ivh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12.5px;margin-bottom:3px}.kz-ivh .kz-link{margin-left:auto;text-decoration:none}' +
+		'.iv-tm{font-weight:700;font-variant-numeric:tabular-nums}.iv-c{display:block;font-size:12px;color:#656973;overflow-wrap:anywhere}.iv-c a{color:#2F5BD8;text-decoration:none}.iv-mu{color:#8C8880}' +
 		'.iv-tools{display:flex;gap:6px;margin:14px 0}.iv-set{border-top:1px solid #F0ECE6;padding-top:10px;margin-top:6px}.iv-set summary{cursor:pointer;font-weight:700}.iv-g{display:flex;flex-direction:column;gap:10px;margin-top:10px}.iv-g label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:#656973}' +
 		'.iv-g input[type=text],.iv-g input[type=number],.iv-g textarea,.iv-dr input{border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13px Inter,sans-serif;color:#141C33}.iv-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.iv-lab{margin:6px 0 0;font-weight:700;font-size:13px}.iv-dr{display:flex;gap:6px;align-items:center;margin-bottom:6px}.iv-help{font-size:12px;color:#656973;margin:0}' +
-		'@media (max-width:760px){.kz-d{grid-template-columns:1fr}.iv-row{grid-template-columns:1fr}}';
+		'@media (max-width:760px){.kz-d{grid-template-columns:1fr}.iv-row{grid-template-columns:1fr}}' +
+		'@media (max-width:560px){.iv-r{grid-template-columns:44px minmax(0,1fr);padding:9px 10px}.iv-a{grid-column:2;justify-content:flex-start;gap:18px}.iv-a .kz-link{padding:6px 0}.iv-nb{grid-column:1/-1}.iv-rb{min-height:36px;padding:0 14px}.iv-nb textarea{font-size:16px}.kz-vs{display:flex}.kz-vs a{flex:1;text-align:center}}';
 	document.head.appendChild(css);
 })();

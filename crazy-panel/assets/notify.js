@@ -78,6 +78,12 @@
 		if (tab === 'mail' && window.CPMail && window.CPMail.open) { window.CPMail.open(Number(arg)); return; }
 		if (tab === 'munkanaplo' && window.CPWorklog) { window.CPWorklog.open(arg); return; }
 		if (tab === 'deals' && window.CPCrm) { if (window.CPXGo) window.CPXGo('deals'); setTimeout(() => window.CPCrm.deep && window.CPCrm.deep(arg), 60); return; }
+		/* v2.9.85: „kezelok:interju” (régi: „kezelok:iv”) → a Kezelők fül Interjú-időpontok oldala (a modul igény szerint töltődik) */
+		if (tab === 'kezelok' && arg && window.CPXGo) {
+			window.CPXGo('kezelok');
+			(window.CPXNeed ? window.CPXNeed('kezelok') : Promise.resolve()).then(() => { if (window.CPKezelok && window.CPKezelok.deep) window.CPKezelok.deep(arg); }, () => { /* a fül maga mutatja a hibát */ });
+			return;
+		}
 		if (tab === 'ertesitesek' || (tab && !arg && window.CPXGo && !['mail', 'deals', 'feladatok', 'munkanaplo'].includes(tab))) { if (window.CPXGo) window.CPXGo(tab); return; }
 		/* v2.9.60 (P3): a Feladatok modul igény szerint töltődik – a kártya a betöltés után nyílik */
 		if (tab === 'feladatok' && (window.CPKanban || (window.CPXHas && window.CPXHas('kanban')))) {

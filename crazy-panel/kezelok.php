@@ -112,6 +112,8 @@ function cp_kz_out($r, $reveal) {
 		'have' => $have, 'miss' => array_values(array_diff(array_keys(cp_kz_sens_keys()), $have)), 'updated' => function_exists('cp_crm_local') ? cp_crm_local($r['updated_at']) : $r['updated_at'], 'by' => $r['updated_by']);
 	$x['up'] = cp_kz_upcoming(array($r['name'], $el ? $el['name'] : '', $el ? ($el['sm'] ?? '') : ''), 6);
 	if ($reveal) { $x['sens'] = cp_kz_sens_get($r); }
+	/* v2.9.85: az interjú-foglalásai jegyzettel / értékeléssel (csak olvasható; szerkeszteni a Kezelők → Interjú-időpontok oldalon lehet) */
+	$x['iv'] = function_exists('cp_iv_kz_notes') ? cp_iv_kz_notes((int) $r['id']) : array();
 	return $x;
 }
 
