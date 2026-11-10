@@ -1597,10 +1597,15 @@
 		/* összkép */
 		const lastIn = (m.msgs || []).find(g => g.dir === 'in'), lastOut = (m.msgs || []).find(g => g.dir === 'out');
 		const toEv = d.event_d ? dayDiff(today(), d.event_d) : null;
-		const team = new Map();
-		if (d.owner) team.set(d.owner, 'Felelős');
-		(m.threads || []).forEach(t => { if (t.as && pn(t.as) && !team.has(pn(t.as))) team.set(pn(t.as), 'Levelezés'); });
-		(x.cards || []).forEach(k => k.as.forEach(n => { if (!team.has(n)) team.set(n, 'Feladat'); }));
+		/* v2.9.88: ugyanaz az ember egyszer szerepel – a név-sorrend („Andrea Gyarmati” / „Gyarmati Andrea”), kis- és nagybetű
+		   meg ékezet nem számít; a szerepei egy sorba kerülnek (Felelős · Levelezés · Feladat) */
+		const tKey = n => String(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').trim().split(/\s+/).sort().join(' ');
+		const teamM = new Map();
+		const tAdd = (n, role) => { n = String(n || '').trim(); if (!n) return; const k = tKey(n); const e = teamM.get(k); if (!e) teamM.set(k, [n, [role]]); else if (!e[1].includes(role)) e[1].push(role); };
+		if (d.owner) tAdd(d.owner, 'Felelős');
+		(m.threads || []).forEach(t => { if (t.as && pn(t.as)) tAdd(pn(t.as), 'Levelezés'); });
+		(x.cards || []).forEach(k => k.as.forEach(n => tAdd(n, 'Feladat')));
+		const team = new Map(Array.from(teamM.values()).map(e => [e[0], e[1].join(' · ')]));
 		const otherCt = (x.ct_deals || []).filter(o => o.id !== d.id);
 		const otherCo = (x.co_deals || []).filter(o => o.id !== d.id && !otherCt.some(z => z.id === o.id));
 		const ph = c ? (c.mobile || c.phone) : '';

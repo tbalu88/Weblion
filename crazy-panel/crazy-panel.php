@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.87');
+define('CP_PANEL_VER', '2.9.88');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3752,6 +3752,7 @@ require_once __DIR__ . '/mail-import.php';
 require_once __DIR__ . '/leads.php';
 require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/audit.php';
+require_once __DIR__ . '/usage.php'; /* v2.9.88: panelhasználat */
 require_once __DIR__ . '/deal360.php';
 require_once __DIR__ . '/search.php';
 require_once __DIR__ . '/merge.php';

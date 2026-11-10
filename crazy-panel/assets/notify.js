@@ -60,6 +60,8 @@
 		const p = {};
 		if (fresh === true) p.fresh = 1; /* v2.9.58: a levél-számláló 30 mp-ig gyorsítótárazott; kattintás után friss */
 		if (document.querySelector('.ml-items')) p.ms = 1;
+		/* v2.9.88: panelhasználat – látható ablak = nyitott perc; volt-e egér/billentyű/görgetés/érintés az előző jel óta */
+		if (!document.hidden) { p.vis = 1; if (S.actAt && S.actAt > (S.lastPing || 0) - 5000) p.act = 1; if (S.lastPing) p.g = Math.round((Date.now() - S.lastPing) / 1000); }
 		let r;
 		try { r = await post('cp_ping', p); } catch (e) {
 			try { const x = await post('cp_nt_list', fresh === true ? { count: 1, fresh: 1 } : { count: 1 }); S.n = x.unread || 0; badge(); if (x.mail != null) { S.mail = x.mail; mailBadge(); } } catch (e2) { /* csendben újra */ }
@@ -205,6 +207,8 @@
 	let tries = 0;
 	const t = setInterval(() => { if (mount() || ++tries > 50) { clearInterval(t); poll(); setInterval(() => { if (!document.hidden) poll(); }, 60000); } }, 200);
 	/* v2.9.59: az ablakba visszatérve azonnal (ha az utolsó jelzés 20 mp-nél régebbi) – a Deal-ek és a Levelezés is ebből frissül */
+	S.actAt = Date.now();
+	['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(ev => document.addEventListener(ev, () => { S.actAt = Date.now(); }, { passive: true, capture: true }));
 	document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - (S.lastPing || 0) > 20000) poll(); });
 	window.CPNotify = { go, poll, view: m => view(m), refresh: () => view() };
 	/* a levél megnyitása / olvasottnak jelölése után hamarabb frissüljön a szám */

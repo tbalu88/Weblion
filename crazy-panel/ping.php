@@ -109,6 +109,35 @@ if (!function_exists('cp_ping_salt')) {
 		return $out;
 	}
 
+	/* v2.9.88: panelhasználat – a kérés egy „nyitott” perc (a felület csak látható ablakból küldi vis=1-gyel), act=1 esetén
+	   „aktív” is (volt egér/billentyű/görgetés/érintés az előző jel óta). Percenként egy sor (uid, nap, perc) – több ablak sem
+	   számít duplán. g = az előző jel óta eltelt mp: ha a böngésző időzítője átugrott egy percet, a kimaradt perc is bekerül.
+	   Lásd usage.php. */
+	function cp_ping_track($uid) {
+		if ($uid <= 0 || get_option('cp_us_db_ver') !== '1') { return; }
+		global $wpdb;
+		$T = $wpdb->prefix . 'crazy_usage'; $TD = $wpdb->prefix . 'crazy_usage_day';
+		$dt = new DateTime('now', wp_timezone());
+		$d = $dt->format('Y-m-d'); $m = (int) $dt->format('G') * 60 + (int) $dt->format('i');
+		$act = !empty($_REQUEST['act']) ? 1 : 0;
+		$mins = array($m);
+		$g = (int) ($_REQUEST['g'] ?? 0);
+		if ($g > 0 && $g <= 130 && $m >= 2) {
+			$last = $wpdb->get_var($wpdb->prepare("SELECT MAX(m) FROM $T WHERE uid = %d AND d = %s AND m < %d", $uid, $d, $m));
+			if ($last !== null && (int) $last === $m - 2) { $mins[] = $m - 1; }
+		}
+		foreach ($mins as $x) {
+			$n = $wpdb->query($wpdb->prepare("INSERT IGNORE INTO $T (uid, d, m, act) VALUES (%d, %s, %d, %d)", $uid, $d, $x, $act));
+			if ($n === 1) {
+				$wpdb->query($wpdb->prepare("INSERT INTO $TD (uid, d, open_m, act_m, first_m, last_m) VALUES (%d, %s, 1, %d, %d, %d) ON DUPLICATE KEY UPDATE open_m = open_m + 1, act_m = act_m + VALUES(act_m), first_m = LEAST(first_m, VALUES(first_m)), last_m = GREATEST(last_m, VALUES(last_m))", $uid, $d, $act, $x, $x));
+			} elseif ($act && $n === 0) {
+				if ($wpdb->query($wpdb->prepare("UPDATE $T SET act = 1 WHERE uid = %d AND d = %s AND m = %d AND act = 0", $uid, $d, $x)) === 1) {
+					$wpdb->query($wpdb->prepare("UPDATE $TD SET act_m = act_m + 1 WHERE uid = %d AND d = %s", $uid, $d));
+				}
+			}
+		}
+	}
+
 	function cp_ping_send($code, $body) {
 		if (!headers_sent()) {
 			status_header($code);
@@ -125,6 +154,7 @@ if (!function_exists('cp_ping_salt')) {
 		$a = cp_ping_auth();
 		if (!$a) { cp_ping_send(403, array('success' => false, 'data' => array('msg' => 'auth'))); }
 		$d = cp_ping_data($a[0], !empty($_REQUEST['fresh']), !empty($_REQUEST['ms']));
+		if (!empty($_REQUEST['vis'])) { $se = $GLOBALS['wpdb']->suppress_errors(true); cp_ping_track($a[0]); $GLOBALS['wpdb']->suppress_errors($se); }
 		$d['lite'] = $lite ? 1 : 0;
 		cp_ping_send(200, array('success' => true, 'data' => $d));
 	}
