@@ -19,10 +19,11 @@
 	/* v2.8.8: deal Fájlok kártya – bélyegképek */
 	const D3IMG = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
 	const d3Ext = n => (((/\.([a-z0-9]{1,5})$/i.exec(n || '') || [])[1]) || '').toUpperCase();
-	const d3Generic = n => /^(image|img|photo|foto|unnamed|attachment|kep|scan|document)[\d _()-]*\.\w+$/i.test(n || '');
 	function d3Files(list) {
 		const seen = {}, out = [];
-		(list || []).forEach(f => { const k = f.m && d3Generic(f.n) ? f.m + '|' + f.i : String(f.n || '').toLowerCase(); if (seen[k]) { seen[k].x++; return; } const g = Object.assign({}, f, { x: 1 }); seen[k] = g; out.push(g); });
+		/* v2.9.71: az ismétlődő fájl (ugyanaz a név ugyanattól a feladótól – jellemzően aláírás-kép) egy példányban látszik (×N),
+		   a többi példány az elrejtettek közé kerül (a „Mutasd” alatt elérhető) */
+		(list || []).forEach(f => { const k = String(f.n || '').toLowerCase() + '|' + String(f.from || '').toLowerCase(); if (seen[k]) { seen[k].x++; out.push(Object.assign({}, f, { x: 1, emb: 1, dup: 1 })); return; } const g = Object.assign({}, f, { x: 1 }); seen[k] = g; out.push(g); });
 		/* v2.9.20: a levélbe ágyazott képek (aláírás-logók, ikonok) a lista végére, alapból rejtve */
 		return out.filter(f => !f.emb).concat(out.filter(f => f.emb));
 	}
@@ -1522,7 +1523,17 @@
 					const r = await post('cp_crm_days_save', { id: d.id, days: JSON.stringify(payload) });
 					toast(r.label ? 'Napok mentve: ' + r.label : 'A deal újra egynapos.');
 					reload();
-				} catch (e) { busy = false; msg = e.message; draw(); }
+				} catch (e) {
+					/* v2.9.70: elszámolással rendelkező nap nem törölhető / nem kap új dátumot – a sor visszakerül a helyére */
+					const huDi = x => { const m = +x.slice(5, 7), n = +x.slice(8, 10); return HU_MS[m - 1] + ' ' + n + (n % 10 === 1 && n !== 11 ? '-jei' : '-i'); };
+					orig.slice(1).forEach(o => {
+						if (L.some(x => x.day === o.day) || e.message.indexOf(huDi(o.day) + ' nap') < 0) return;
+						const cur = o.id ? L.find(x => x.id === o.id) : null;
+						if (cur) cur.day = o.day; else L.push(Object.assign({}, o));
+					});
+					L.sort((x, y) => x.day < y.day ? -1 : 1);
+					busy = false; msg = e.message; open = new Set(); draw();
+				}
 			}
 		});
 		box.addEventListener('submit', ev => { const f = ev.target.closest('[data-dform]'); if (!f) return; ev.preventDefault(); if (addDays(f.querySelector('[data-a1]').value, f.querySelector('[data-a2]').value)) adding = false; draw(); });
@@ -1607,7 +1618,7 @@
 			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length) + '</small></h4>' +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */
 				(sbf.length ? '<div class="d3-sbf"><b class="d3-sbh">Online fotósablon</b><ul class="d3-fg">' + sbf.map(t => { const fn = 'fotosablon-' + d.id + '-' + String(t.at || '').slice(0, 10) + '.png'; return '<li><a class="d3-ft" href="' + esc(t.png ? t.png + '&dl=' + encodeURIComponent(fn) : t.prev) + '" target="_blank" rel="noopener"' + (!t.png && t.cur ? ' data-sbopen="' + esc(d.id) + '" data-sbts="' + esc(t.ts || '') + '"' : '') + ' title="' + esc(t.png ? 'Lyukasztott PNG letöltése (4×6")' : t.cur ? 'Kattints: a Sablonkészítő az ügyfél beállításaiból elkészíti a lyukasztott PNG-t, és ide teszi' : 'Előnézet (ehhez a régebbi változathoz nem készült PNG)') + '"><span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(t.prev) + '"><i>' + (t.png ? 'PNG' : 'JPG') + '</i></span><b>' + (t.cur ? 'Aktuális' : 'Korábbi') + (t.name ? ' – ' + esc(t.name) : '') + '</b><small>' + esc(huDT(t.at)) + (t.png ? ' · ⬇ lyukasztott PNG' : t.cur ? ' · PNG készítése ›' : ' · csak előnézet') + '</small></a></li>'; }).join('') + '</ul></div>' : '') +
-				(fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li' + (f.emb ? ' class="d3-emb"' : '') + '>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '"' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? ' data-risk="' + window.CPAttRisk(f.n).lvl + '" data-rn="' + esc(f.n) + '" title="' + esc((window.CPAttRisk(f.n).lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + window.CPAttRisk(f.n).why) + '"' : ' title="' + esc(f.n) + '"') + '>' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? '<span class="ml-ariskb ' + window.CPAttRisk(f.n).lvl + '" aria-label="Kockázatos fájl">⚠</span> ' : '') + esc(f.n) + '</b><small>' + esc([f.from, huDT(f.at)].filter(Boolean).join(' · ')) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul>' + '<button type="button" class="d3-embt" data-embt' + (embN ? '' : ' hidden') + '><span data-embn>' + embN + '</span> aláírás-, apró és üres kép elrejtve · <span data-embl>Mutasd</span></button>' + (fl.length > embN ? '<p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) + '</section>'; })() +
+				(fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li' + (f.emb ? ' class="d3-emb"' : '') + '>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '"' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? ' data-risk="' + window.CPAttRisk(f.n).lvl + '" data-rn="' + esc(f.n) + '" title="' + esc((window.CPAttRisk(f.n).lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + window.CPAttRisk(f.n).why) + '"' : ' title="' + esc(f.n) + '"') + '>' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? '<span class="ml-ariskb ' + window.CPAttRisk(f.n).lvl + '" aria-label="Kockázatos fájl">⚠</span> ' : '') + esc(f.n) + '</b><small>' + esc([f.from, huDT(f.at)].filter(Boolean).join(' · ')) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul>' + '<button type="button" class="d3-embt" data-embt' + (embN ? '' : ' hidden') + '><span data-embn>' + embN + '</span> elrejtett fájl (aláírás, apró, üres vagy ismétlődő) · <span data-embl>Mutasd</span></button>' + (fl.length > embN ? '<p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) + '</section>'; })() +
 			'</aside></div>';
 		sh.innerHTML = h;
 		d3FilesBind(sh, d3Files(m.files || []));

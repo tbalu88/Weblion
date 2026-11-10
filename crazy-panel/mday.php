@@ -317,6 +317,30 @@ function cp_mday_after_change() {
 	if (function_exists('cp_crm_rev_bump')) { cp_crm_rev_bump(); }
 }
 
+/* v2.9.70: van-e rögzített elszámolás a napi kulcson: '' = nincs, különben az ok (kifizetve / óraszám vagy díj / fotó).
+   A kifizetés a kezelő-soron 'pd' (dátum); óraszám: h, hc, rhx; díjak: p, kx, c, pk, jt; a nap km-e: km */
+function cp_mday_billing($key) {
+	$st = get_option((defined('CP_EL_ST') ? CP_EL_ST : 'cp_eld_') . $key, array());
+	if (!is_array($st)) { return ''; }
+	$rows = isset($st['r']) && is_array($st['r']) ? $st['r'] : array();
+	foreach ($rows as $r) { if (is_array($r) && !empty($r['pd'])) { return 'kifizetve'; } }
+	$has = function ($v) { return $v !== null && $v !== '' && $v !== false; };
+	if (isset($st['km']) && $has($st['km'])) { return 'óraszám vagy díj'; }
+	foreach ($rows as $r) {
+		if (!is_array($r)) { continue; }
+		foreach (array('h', 'hc', 'rhx', 'p', 'kx', 'c', 'pk', 'jt') as $f) { if (isset($r[$f]) && $has($r[$f])) { return 'óraszám vagy díj'; } }
+		foreach (array('ph', 'pha', 'phs') as $f) { if (!empty($r[$f])) { return 'feltöltött fotó'; } }
+	}
+	return '';
+}
+
+/* a hibaüzenethez névelővel és raggal: „A dec. 15-i”, „Az okt. 1-jei”, „A jan. 21-jei” */
+function cp_mday_hu_day($d) {
+	$ms = array('jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.');
+	$m = $ms[(int) substr($d, 5, 2) - 1]; $n = (int) substr($d, 8, 2);
+	return (in_array($m, array('ápr.', 'aug.', 'okt.'), true) ? 'Az ' : 'A ') . $m . ' ' . $n . ($n % 10 === 1 && $n !== 11 ? '-jei' : '-i');
+}
+
 /* egy nap mezőinek tisztítása; hibánál WP_Error */
 function cp_mday_clean_in($x) {
 	$g = function ($k) use ($x) { return isset($x[$k]) && is_scalar($x[$k]) ? trim((string) $x[$k]) : ''; };
@@ -375,6 +399,22 @@ function cp_mday_save($deal, $list) {
 			}
 		}
 	}
+	/* v2.9.70: a 2..n. napok sorsa – megmarad, új dátumot kap, vagy törlődik. Rögzített elszámolású nap nem törölhető és nem
+	   kap új dátumot (a kifizetés / a kezelői díj a napi kulcson van, a hónapzárás és a kifizetés-lista arra hivatkozik) */
+	$newDay = array(); $newId = array();
+	foreach ($new as $c) { $newDay[$c['day']] = 1; if ($c['id']) { $newId[$c['id']] = $c['day']; } }
+	$gone = array();
+	foreach ((array) $old as $k => $r) {
+		$d = (string) $r['day'];
+		if ($k === 0 || $d === (string) $oldDays[0]) { continue; }
+		$to = count($new) >= 2 && isset($newId[(int) $r['id']]) ? $newId[(int) $r['id']] : (count($new) >= 2 && isset($newDay[$d]) ? $d : '');
+		if ($to === $d) { continue; }
+		$why = cp_mday_billing((int) $deal . ':' . $d);
+		if ($why !== '') {
+			return new WP_Error('cp_mday', cp_mday_hu_day($d) . ' nap ' . ($to === '' ? 'nem törölhető' : 'dátuma nem módosítható') . ': van hozzá rögzített elszámolás (' . $why . '). Előbb az Elszámolásban vedd ki.', 409);
+		}
+		if ($to === '') { $gone[] = (int) $deal . ':' . $d; }
+	}
 	$now = gmdate('Y-m-d H:i:s');
 	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_mday_t() . ' WHERE deal_id = %d', $deal));
 	if (count($new) >= 2) {
@@ -387,6 +427,11 @@ function cp_mday_save($deal, $list) {
 		}
 	}
 	cp_mday_rekey($rk);
+	/* v2.9.70: a törölt (elszámolás nélküli) nap napi kulcsú pipái és üres kezelő-sorai ne maradjanak árván */
+	foreach ($gone as $gk) {
+		delete_option((defined('CP_PANEL_TRACK') ? CP_PANEL_TRACK : 'cp_pt_') . $gk);
+		delete_option((defined('CP_EL_ST') ? CP_EL_ST : 'cp_eld_') . $gk);
+	}
 	$days = array_map(function ($c) { return $c['day']; }, $new);
 	cp_mday_set_end($deal, $days);
 	$newLbl = count($days) >= 2 ? cp_mday_label($days) : '';
