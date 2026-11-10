@@ -79,14 +79,19 @@ function cp_dash_ajax_data() {
 
 	/* 4. közelgő rendezvények (14 nap) – az ügyfélportál kitöltöttségével; 5. elakadt dealek; 6. a hónap számai */
 	if ($crm) {
-		$ev = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.event_d, d.start_at, d.venue, d.service, d.package, d.status, d.stage, d.paid, d.operator FROM $D d WHERE d.deleted_at IS NULL AND d.status IN ('Open', 'Won') AND d.event_d BETWEEN %s AND %s ORDER BY d.event_d, d.start_at LIMIT 40", $today, wp_date('Y-m-d', time() + 14 * DAY_IN_SECONDS)), ARRAY_A);
+		/* v2.9.71: többnapos rendezvény: minden közelgő napja külön sor, a nap saját kezdésével és helyszínével („2/3. nap”) */
+		$to14 = wp_date('Y-m-d', time() + 14 * DAY_IN_SECONDS);
+		$mor = function_exists('cp_mday_or_ids') ? cp_mday_or_ids($today, $to14) : '';
+		$ev = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.event_d, d.start_at, d.venue, d.service, d.package, d.status, d.stage, d.paid, d.operator FROM $D d WHERE d.deleted_at IS NULL AND d.status IN ('Open', 'Won') AND (d.event_d BETWEEN %s AND %s", $today, $to14) . $mor . ') ORDER BY d.event_d, d.start_at LIMIT 60', ARRAY_A);
+		if (function_exists('cp_mday_rows_days')) { $ev = array_slice(cp_mday_rows_days($ev, $today, $to14), 0, 40); }
 		$pm = array();
 		if ($ev && function_exists('cp_portal_panel_map') && function_exists('cp_portal_db_ready') && cp_portal_db_ready()) {
 			$pm = (array) cp_portal_panel_map(array_map(function ($r) { return (string) $r['id']; }, $ev));
 		}
 		$out['events'] = array_map(function ($r) use ($pm, $loc) {
 			$p = isset($pm[(string) $r['id']]) ? (array) $pm[(string) $r['id']] : null;
-			return array('id' => (int) $r['id'], 't' => (string) $r['title'], 'd' => (string) $r['event_d'], 'tm' => $r['start_at'] ? substr($loc($r['start_at']), 11, 5) : '', 'v' => (string) $r['venue'],
+			return array('id' => (int) $r['id'], 't' => (string) $r['title'], 'd' => (string) ($r['day'] ?? $r['event_d']), 'tm' => isset($r['tm']) ? (string) $r['tm'] : ($r['start_at'] ? substr($loc($r['start_at']), 11, 5) : ''), 'v' => (string) $r['venue'],
+				'dn' => (int) ($r['dn'] ?? 0), 'dof' => (int) ($r['dof'] ?? 0), /* v2.9.71 */
 				'svc' => (string) ($r['package'] !== '' ? $r['package'] : $r['service']), 'st' => (string) $r['status'], 'stage' => (string) $r['stage'], 'paid' => (string) $r['paid'], 'op' => (string) $r['operator'],
 				'p' => $p ? array('done' => (int) ($p['done'] ?? 0), 'total' => (int) ($p['total'] ?? 0), 'st' => (string) ($p['st'] ?? '')) : null);
 		}, $ev);
@@ -98,8 +103,14 @@ function cp_dash_ajax_data() {
 			SUM(status = 'Open') o_n, SUM(IF(status = 'Open', value, 0)) o_v,
 			SUM(status = 'Won' AND closed_at >= %s) w_n, SUM(IF(status = 'Won' AND closed_at >= %s, value, 0)) w_v,
 			SUM(created_at >= %s) c_n, SUM(status = 'Lost' AND closed_at >= %s) l_n,
-			SUM(status IN ('Open', 'Won') AND event_d BETWEEN %s AND %s) e_n
+			SUM(status IN ('Open', 'Won') AND event_d BETWEEN %s AND %s AND event_end_d IS NULL) e_n
 			FROM $D WHERE deleted_at IS NULL", cp_dash_utc($m0), cp_dash_utc($m0), cp_dash_utc($m0), cp_dash_utc($m0), wp_date('Y-m-01'), wp_date('Y-m-t')), ARRAY_A);
+		/* v2.9.71: a hónap rendezvényei napra számolva – a többnapos deal minden hónapbeli napja egy (a napok táblájából, day index) */
+		if (function_exists('cp_mday_db_ok') && cp_mday_db_ok()) {
+			$k['e_n'] = (int) $k['e_n'] + (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_mday_t() . " x JOIN $D d ON d.id = x.deal_id WHERE x.day BETWEEN %s AND %s AND d.deleted_at IS NULL AND d.status IN ('Open', 'Won') AND d.event_end_d IS NOT NULL", wp_date('Y-m-01'), wp_date('Y-m-t')));
+		} else {
+			$k['e_n'] = (int) $k['e_n'] + (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND status IN ('Open', 'Won') AND event_end_d IS NOT NULL AND event_d BETWEEN %s AND %s", wp_date('Y-m-01'), wp_date('Y-m-t')));
+		}
 		$out['kpi'] = array('open_n' => (int) $k['o_n'], 'open_v' => (float) $k['o_v'], 'won_n' => (int) $k['w_n'], 'won_v' => (float) $k['w_v'], 'new_n' => (int) $k['c_n'], 'lost_n' => (int) $k['l_n'], 'ev_n' => (int) $k['e_n']);
 	}
 	$out['can'] = array('deals' => cp_panel_can_x('deals'), 'mail' => cp_panel_can_x('mail'), 'feladatok' => cp_panel_can_x('feladatok'), 'naptar' => cp_panel_can_x('naptar'), 'gnaptar' => function_exists('cp_gcal_ok') && cp_panel_can_x('gnaptar'));

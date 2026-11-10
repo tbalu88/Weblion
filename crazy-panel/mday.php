@@ -260,6 +260,43 @@ function cp_mday_base_ids($list) {
 	return array_keys($out);
 }
 
+/* ------------------------------------------------------------ v2.9.71: listák napokra bontva (Kezdőlap, Kezelők)
+ * $rows: deal-táblás sorok (legalább id, event_d; ha van: start_at UTC, venue, hours). Vissza: a [from, to] közé eső napok sorai,
+ * mindegyikben 'day', 'key' (napi kulcs), 'tm' (helyi kezdés, a nap saját időpontja vagy a dealé), a nap helyszíne / óraszáma,
+ * többnaposnál 'dn' és 'dof' („2/3. nap”). Nap és kezdés szerint rendezve. */
+function cp_mday_rows_days($rows, $from, $to) {
+	$map = cp_mday_many(array_map(function ($r) { return (int) $r['id']; }, (array) $rows));
+	$loc = function ($dt) { return $dt && function_exists('cp_crm_local') ? substr((string) cp_crm_local($dt), 11, 5) : ''; };
+	$out = array();
+	foreach ((array) $rows as $r) {
+		$tm = $loc($r['start_at'] ?? '');
+		$id = (int) $r['id'];
+		if (!isset($map[$id]) || empty($r['event_d'])) {
+			if (!empty($r['event_d']) && $r['event_d'] >= $from && $r['event_d'] <= $to) { $out[] = $r + array('day' => (string) $r['event_d'], 'key' => (string) $id, 'tm' => $tm); }
+			continue;
+		}
+		$days = cp_mday_align($map[$id], (string) $r['event_d']);
+		$n = count($days);
+		foreach ($days as $k => $dr) {
+			if ($dr['day'] < $from || $dr['day'] > $to) { continue; }
+			$x = $r;
+			$x['day'] = $dr['day']; $x['key'] = cp_mday_key($id, $dr['day'], $k + 1); $x['dn'] = $k + 1; $x['dof'] = $n;
+			$x['tm'] = $dr['start_t'] !== '' ? $dr['start_t'] : $tm;
+			if ($dr['venue'] !== '' && array_key_exists('venue', $r)) { $x['venue'] = $dr['venue']; }
+			if ($dr['hours'] !== null && array_key_exists('hours', $r)) { $x['hours'] = $dr['hours']; }
+			$out[] = $x;
+		}
+	}
+	usort($out, function ($a, $b) { return strcmp($a['day'] . ($a['tm'] !== '' ? $a['tm'] : '99'), $b['day'] . ($b['tm'] !== '' ? $b['tm'] : '99')) ?: ((int) $a['id'] - (int) $b['id']); });
+	return $out;
+}
+
+/* a többnapos dealek kiegészítő feltétele egy event_d-s lekérdezéshez: „ OR d.id IN (…)” (üres, ha nincs) */
+function cp_mday_or_ids($from, $to, $alias = 'd') {
+	$ids = array_slice(cp_mday_ids_in_range($from, $to), 0, 500);
+	return $ids ? ' OR ' . $alias . '.id IN (' . implode(',', array_map('intval', $ids)) . ')' : '';
+}
+
 /* ------------------------------------------------------------ kapacitás: a deal legrosszabb napja */
 
 function cp_mday_cap_worst($days, $cached_only = false) {
