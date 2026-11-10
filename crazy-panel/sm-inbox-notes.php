@@ -333,7 +333,7 @@ function cp_smn_backfill($budget = 35) {
 	if (!empty($bf['done'])) { cp_smn_unlock(); return; }
 	if (empty($bf['start'])) { $bf['start'] = time(); }
 	$last = isset($bf['last']) ? (int) $bf['last'] : 2147483647;
-	$ids = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . ' WHERE deleted_at IS NULL AND id < %d ORDER BY id DESC LIMIT 10', $last)));
+	$ids = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . ' WHERE deleted_at IS NULL AND id < %d ORDER BY id DESC LIMIT 40' /* v2.9.85: 10 helyett 40 – a külső cron 5 percenként fut, a 35 mp-es keret úgyis megállítja */, $last)));
 	$ctx = array();
 	foreach ($ids as $id) {
 		if (microtime(true) - $t0 > $budget) { break; }
