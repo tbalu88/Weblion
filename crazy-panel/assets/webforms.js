@@ -55,6 +55,31 @@
 			'.cpwf.ec{--bg:linear-gradient(160deg,rgba(20,16,90,.85) 0%,rgba(10,10,60,.92) 100%);--bd:rgba(120,150,255,.35);--lb:#fff;--tx:#fff;--ph:rgba(255,255,255,.45);--in:rgba(255,255,255,.06);--ac:#FFC83D;--bt:#0a0a3c;--br:12px;--rq:#FFC83D;--ln:#FFC83D;border:1px solid rgba(120,150,255,.45);box-shadow:0 0 30px rgba(80,110,255,.2);padding:32px;font-family:Poppins,sans-serif;border-radius:20px}' +
 			'.cpwf.ec .cpwf-b{background:linear-gradient(135deg,#FFC83D 0%,#FFB915 100%);box-shadow:0 6px 20px rgba(255,185,21,.35)}.cpwf.ec .cpwf-e,.cpwf.ec .cpwf-m{color:#ffb4b4}.cpwf.ec .cpwf-f.bad input,.cpwf.ec .cpwf-f.bad select,.cpwf.ec .cpwf-f.bad textarea{border-color:#ff8a8a}.cpwf.ec select option{color:#222}.cpwf.ec input[type=date]{color-scheme:dark}.cpwf.ec .cpwf-pp{color:rgba(255,255,255,.75)}' +
 			'.cpwf.spin{--ac:#1F62FF;--br:6px;--ln:#1F62FF}' +
+			/* v2.9.75: dátumválasztó – mező-gomb a többi mezővel azonos kinézettel; az ablak a téma változóiból (--pop = átlátszatlan ablakháttér); a dátumot nem vágjuk le (keskeny kijelzőn két sorba tördel); a táblázat-nullázás !important, mert a WordPress-témák csíkozzák és keretezik a táblázatokat */
+			'.cpwf{--pop:#fff}.cpwf.ec{--pop:#14115a}' +
+			'.cpwf .cpwf-dp.cpwf-dp{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;margin:0;padding:10px 14px;font-family:inherit;font-size:16px;font-weight:400;line-height:1.3;letter-spacing:normal;text-transform:none;text-align:left;color:var(--tx);background:var(--in);border:1px solid var(--bd);border-radius:10px;box-shadow:none;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none}' +
+			'.cpwf .cpwf-dp.cpwf-dp:hover{color:var(--tx);background:var(--in);border-color:color-mix(in srgb,var(--ac) 55%,var(--bd))}.cpwf .cpwf-dp.cpwf-dp:focus-visible,.cpwf .cpwf-dp.cpwf-dp[aria-expanded=true]{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 25%,transparent)}' +
+			'.cpwf .cpwf-dp.ph span{color:var(--ph)}.cpwf .cpwf-dp span{min-width:0;white-space:normal;overflow-wrap:anywhere}.cpwf .cpwf-dp svg{flex:none;width:20px;height:20px;color:var(--ac)}' +
+			'.cpwf .cpwf-f.bad .cpwf-dp.cpwf-dp{border-color:var(--rq)}.cpwf.ec .cpwf-f.bad .cpwf-dp.cpwf-dp{border-color:#ff8a8a}' +
+			'.cpwf-cal{--mu:color-mix(in srgb,var(--tx) 66%,var(--pop));position:absolute;z-index:2147483000;box-sizing:border-box;width:372px;max-width:calc(100vw - 16px);padding:12px 14px 10px;background:var(--pop);color:var(--tx);border:1px solid var(--bd);border-radius:16px;box-shadow:0 18px 40px -10px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.12);font-size:15px;line-height:1.3;text-align:left;transform-origin:top left;transition:opacity .16s cubic-bezier(.23,1,.32,1),transform .16s cubic-bezier(.23,1,.32,1)}' +
+			'.cpwf-cal.up{transform-origin:bottom left}.cpwf-cal *{box-sizing:border-box}@starting-style{.cpwf-cal{opacity:0;transform:scale(.97)}.cpwf-cal.sheet{opacity:1;transform:translateY(100%)}.cpwf-cal-bg.on{opacity:0}}' +
+			'.cpwf-cal.sheet{position:fixed;left:0;right:0;bottom:0;top:auto!important;width:auto;max-width:520px;margin:0 auto;max-height:100vh;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain;border-width:1px 0 0;border-radius:20px 20px 0 0;padding:10px 12px calc(12px + env(safe-area-inset-bottom));transition-duration:.24s;transition-timing-function:cubic-bezier(.32,.72,0,1)}' +
+			'.cpwf-cal-bg{display:none;position:fixed;inset:0;z-index:2147482999;background:rgba(4,4,20,.5);transition:opacity .24s ease}.cpwf-cal-bg.on{display:block}' +
+			'.cpwf-cal-k{display:none}.cpwf-cal.sheet .cpwf-cal-k{display:block;text-align:center;font-size:13px;font-weight:600;color:var(--mu);margin:2px 0 6px}' +
+			'.cpwf-cal-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}.cpwf-cal-t{flex:1;text-align:center;font-size:17px;font-weight:600;letter-spacing:-.01em}' +
+			'.cpwf-cal.cpwf-cal button{display:inline-flex;align-items:center;justify-content:center;margin:0;padding:0;border:0;border-radius:12px;background:transparent;color:var(--tx);font:inherit;letter-spacing:normal;text-transform:none;box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .12s ease,transform .12s cubic-bezier(.23,1,.32,1)}' +
+			'.cpwf-cal.cpwf-cal button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}.cpwf-cal.cpwf-cal button:active:not(:disabled){transform:scale(.95)}.cpwf-cal.cpwf-cal button:disabled{cursor:default}' +
+			'.cpwf-cal.cpwf-cal .cpwf-cn{flex:none;width:44px;height:44px}.cpwf-cal .cpwf-cn svg{width:20px;height:20px}.cpwf-cal.cpwf-cal .cpwf-cn:disabled{opacity:.3}' +
+			'.cpwf-cal.cpwf-cal table,.cpwf-cal.cpwf-cal thead,.cpwf-cal.cpwf-cal tbody,.cpwf-cal.cpwf-cal tr,.cpwf-cal.cpwf-cal tr>th,.cpwf-cal.cpwf-cal tr>td{border:0!important;padding:0!important;margin:0;background:none!important;font-size:inherit;line-height:1.3;text-align:center;vertical-align:middle}.cpwf-cal.cpwf-cal table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:2px}' +
+			'.cpwf-cal.cpwf-cal tr>th{height:30px;font-size:12.5px;font-weight:600;color:var(--mu);text-transform:none}' +
+			'.cpwf-cal.cpwf-cal tbody td{height:46px}.cpwf-cal.cpwf-cal .cpwf-cd{width:100%;height:46px;font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}' +
+			'.cpwf-cal.cpwf-cal .cpwf-cd.td{box-shadow:inset 0 0 0 1.5px var(--ac);font-weight:700}.cpwf-cal.cpwf-cal .cpwf-cd.sel{background:var(--ac);color:var(--bt);font-weight:700;box-shadow:none}' +
+			'.cpwf-cal.cpwf-cal .cpwf-cd:disabled{color:var(--mu);opacity:.45}' +
+			'.cpwf-cal-ft{display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--bd) 60%,transparent)}' +
+			'.cpwf-cal.cpwf-cal .cpwf-ca{min-height:44px;padding:0 14px;font-size:15px;font-weight:600;color:color-mix(in srgb,var(--ac) 70%,var(--tx))}.cpwf-cal.cpwf-cal .cpwf-cx{color:var(--mu)}' +
+			'@media (hover:hover) and (pointer:fine){.cpwf-cal.cpwf-cal button:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 16%,transparent);color:var(--tx)}.cpwf-cal.cpwf-cal .cpwf-cd.sel:hover{background:var(--ac);color:var(--bt)}}' +
+			'@media (max-width:600px){.cpwf-cal.cpwf-cal tbody td,.cpwf-cal.cpwf-cal .cpwf-cd{height:48px}.cpwf-cal.cpwf-cal .cpwf-cd{font-size:16px}}' +
+			'@media (prefers-reduced-motion:reduce){.cpwf-cal.cpwf-cal{transition-property:opacity}.cpwf-cal.cpwf-cal button{transition:none}.cpwf-cal.cpwf-cal button:active:not(:disabled){transform:none}}' +
 			'@media (max-width:520px){.cpwf{padding:18px}.cpwf.ec{padding:22px 16px}.cpwf-b{width:100%}}';
 		(document.head || document.documentElement).appendChild(st);
 	}
@@ -62,13 +87,127 @@
 	/* v2.9.58: a mai nap helyi idő szerint (a toISOString UTC-t ad – éjfél és 1–2 óra között még a tegnapot) */
 	function today() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 
+	/* v2.9.75: saját dátumválasztó a natív (kicsi, szürke) böngészőnaptár helyett. A színek az űrlap CSS-változóiból jönnek
+	 * (megnyitáskor a kiszámolt értékeket átmásoljuk a body-ba tett ablakra), így minden téma (cp, ec, spin) a sajátját kapja.
+	 * A legkorábbi nap a helyi mai nap (today()), a „ne legyen múltbeli” ellenőrzés beküldéskor változatlan. */
+	var DPL = {
+		hu: { m: 'január február március április május június július augusztus szeptember október november december'.split(' '), w: 'vasárnap hétfő kedd szerda csütörtök péntek szombat'.split(' '), s: 'H K Sze Cs P Szo V'.split(' '), ph: 'Válassz dátumot', t: 'Ma', c: 'Törlés', p: 'Előző hónap', n: 'Következő hónap', d: 'dátumválasztó' },
+		en: { m: 'January February March April May June July August September October November December'.split(' '), w: 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split(' '), s: 'Mo Tu We Th Fr Sa Su'.split(' '), ph: 'Choose a date', t: 'Today', c: 'Clear', p: 'Previous month', n: 'Next month', d: 'date picker' }
+	};
+	var SV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
+	var DPI = SV + '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+	function pd2(n) { return (n < 10 ? '0' : '') + n; }
+	function iso(d) { return d.getFullYear() + '-' + pd2(d.getMonth() + 1) + '-' + pd2(d.getDate()); }
+	function pdate(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], m[2] - 1, +m[3]) : null; }
+	/* mező szövege: „2026. december 14. (hétfő)” / „Monday, 14 December 2026”; képernyőolvasónak: „2026. december 14., hétfő” */
+	function dfmt(d, L, en, fld) { var w = L.w[d.getDay()], mo = L.m[d.getMonth()]; return en ? w + ', ' + d.getDate() + ' ' + mo + ' ' + d.getFullYear() : d.getFullYear() + '. ' + mo + ' ' + d.getDate() + '.' + (fld ? ' (' + w + ')' : ', ' + w); }
+	function picker(form, inp, btn, en) {
+		var L = en ? DPL.en : DPL.hu, txt = btn.firstChild, pop = null, bg, tb, ttl, prv, nxt, view, foc;
+		var mq = window.matchMedia ? window.matchMedia('(max-width:600px)') : null;
+		function show() { var d = pdate(inp.value); txt.textContent = d ? dfmt(d, L, en, 1) : (inp.value || L.ph); btn.classList.toggle('ph', !inp.value); }
+		/* a kitöltés (setFieldValue) „input” eseményt küld a rejtett mezőre – a kijelzett szöveg ezt követi */
+		inp.addEventListener('input', show); show();
+		btn.addEventListener('click', function () { if (pop) { close(1); } else { open(); } });
+		btn.addEventListener('keydown', function (e) { if (e.key === 'ArrowDown' && !pop) { e.preventDefault(); open(); } });
+		function fire(v) { inp.value = v; ['input', 'change'].forEach(function (t) { try { inp.dispatchEvent(new Event(t, { bubbles: true })); } catch (x) {} }); }
+		function open() {
+			var min = pdate(today()), sel = pdate(inp.value), cs = getComputedStyle(form), sh = sheet(460);
+			foc = sel && sel >= min ? sel : min; view = new Date(foc.getFullYear(), foc.getMonth(), 1);
+			pop = document.createElement('div'); bg = document.createElement('div');
+			pop.className = 'cpwf-cal' + (sh ? ' sheet' : ''); bg.className = 'cpwf-cal-bg' + (sh ? ' on' : '');
+			pop.id = btn.id + '-c'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true');
+			pop.setAttribute('aria-label', inp.getAttribute('data-cpdp') + ' – ' + L.d);
+			/* v2.9.75: a téma színei az űrlap kiszámolt változóiból (háttér, keret, szöveg, kiemelő, gombszöveg) */
+			['--pop', '--bd', '--tx', '--ph', '--ac', '--bt', '--in'].forEach(function (v) { var x = cs.getPropertyValue(v).trim(); if (x) { pop.style.setProperty(v, x); } });
+			pop.style.fontFamily = cs.fontFamily;
+			pop.innerHTML = '<div class="cpwf-cal-k" aria-hidden="true">' + esc(inp.getAttribute('data-cpdp')) + '</div><div class="cpwf-cal-hd"><button type="button" class="cpwf-cn" aria-label="' + L.p + '">' + SV + '<path d="M15 6l-6 6 6 6"/></svg></button><div class="cpwf-cal-t" id="' + pop.id + '-t" aria-live="polite"></div><button type="button" class="cpwf-cn" aria-label="' + L.n + '">' + SV + '<path d="M9 6l6 6-6 6"/></svg></button></div>' +
+				'<table role="grid" aria-labelledby="' + pop.id + '-t"><thead><tr>' + L.s.map(function (s, i) { return '<th scope="col" abbr="' + L.w[(i + 1) % 7] + '">' + s + '</th>'; }).join('') + '</tr></thead><tbody></tbody></table>' +
+				'<div class="cpwf-cal-ft"><button type="button" class="cpwf-ca" data-a="t">' + L.t + '</button><button type="button" class="cpwf-ca cpwf-cx" data-a="c">' + L.c + '</button></div>';
+			tb = pop.querySelector('tbody'); ttl = pop.querySelector('.cpwf-cal-t'); prv = pop.querySelectorAll('.cpwf-cn')[0]; nxt = pop.querySelectorAll('.cpwf-cn')[1];
+			document.body.appendChild(bg); document.body.appendChild(pop);
+			draw(); place(); day();
+			btn.setAttribute('aria-expanded', 'true'); btn.setAttribute('aria-controls', pop.id);
+			prv.addEventListener('click', function () { mon(-1); }); nxt.addEventListener('click', function () { mon(1); });
+			tb.addEventListener('click', function (e) { var b = e.target.closest('[data-d]'); if (b && !b.disabled) { fire(b.getAttribute('data-d')); close(1); } });
+			pop.querySelector('.cpwf-cal-ft').addEventListener('click', function (e) { var a = e.target.closest('[data-a]'); if (a) { fire(a.getAttribute('data-a') === 't' ? today() : ''); close(1); } });
+			tb.addEventListener('keydown', grid); pop.addEventListener('keydown', keys);
+			bg.addEventListener('click', function () { close(1); });
+			document.addEventListener('pointerdown', out, true); window.addEventListener('resize', place);
+		}
+		function close(ret) {
+			if (!pop) { return; }
+			document.removeEventListener('pointerdown', out, true); window.removeEventListener('resize', place);
+			pop.remove(); bg.remove(); pop = null;
+			btn.setAttribute('aria-expanded', 'false'); btn.removeAttribute('aria-controls');
+			if (ret) { try { btn.focus({ preventScroll: true }); } catch (x) { btn.focus(); } }
+		}
+		/* kívülre kattintás: bezár, de a fókuszt nem veszi el attól, amire kattintottak; a mező saját kattintása váltja a nyitást */
+		function out(e) { if (pop && !pop.contains(e.target) && !btn.contains(e.target) && e.target !== bg) { close(0); } }
+		function draw() {
+			var y = view.getFullYear(), m = view.getMonth(), tk = today(), sv = inp.value, min = pdate(tk);
+			var f = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), h = '';
+			ttl.textContent = en ? L.m[m] + ' ' + y : y + '. ' + L.m[m];
+			prv.disabled = y * 12 + m <= min.getFullYear() * 12 + min.getMonth();
+			for (var r = 0; r < 6; r++) {
+				h += '<tr>';
+				for (var c = 0; c < 7; c++) {
+					var dn = r * 7 + c - f + 1;
+					if (dn < 1 || dn > n) { h += '<td></td>'; continue; }
+					var d = new Date(y, m, dn), s = iso(d);
+					h += '<td role="gridcell"' + (s === sv ? ' aria-selected="true"' : '') + '><button type="button" tabindex="-1" class="cpwf-cd' + (s === tk ? ' td' : '') + (s === sv ? ' sel' : '') + '" data-d="' + s + '" aria-label="' + dfmt(d, L, en) + '"' + (s === tk ? ' aria-current="date"' : '') + (s < tk ? ' disabled' : '') + '>' + dn + '</button></td>';
+				}
+				h += '</tr>';
+			}
+			tb.innerHTML = h;
+		}
+		function day(nf) { var b = tb.querySelector('[data-d="' + iso(foc) + '"]'); if (b) { b.tabIndex = 0; if (!nf) { try { b.focus({ preventScroll: true }); } catch (x) { b.focus(); } } } }
+		function go(d, nf) {
+			var min = pdate(today()); foc = d < min ? min : d;
+			if (foc.getMonth() !== view.getMonth() || foc.getFullYear() !== view.getFullYear()) { view = new Date(foc.getFullYear(), foc.getMonth(), 1); draw(); }
+			else { var o = tb.querySelector('[tabindex="0"]'); if (o) { o.tabIndex = -1; } }
+			day(nf);
+		}
+		function addM(k) { var y = foc.getFullYear(), m = foc.getMonth() + k; return new Date(y, m, Math.min(foc.getDate(), new Date(y, m + 1, 0).getDate())); }
+		/* előző/következő hónap gomb: a fókusz a gombon marad (ha a gomb letiltódik, a napra kerül) */
+		function mon(k) { go(addM(k), 1); if (prv.disabled && document.activeElement !== nxt) { day(); } }
+		function grid(e) {
+			var k = e.key, y = foc.getFullYear(), m = foc.getMonth(), d = foc.getDate(), w = (foc.getDay() + 6) % 7, t = null;
+			if (k === 'ArrowLeft') { t = new Date(y, m, d - 1); } else if (k === 'ArrowRight') { t = new Date(y, m, d + 1); }
+			else if (k === 'ArrowUp') { t = new Date(y, m, d - 7); } else if (k === 'ArrowDown') { t = new Date(y, m, d + 7); }
+			else if (k === 'Home') { t = new Date(y, m, d - w); } else if (k === 'End') { t = new Date(y, m, d + 6 - w); }
+			else if (k === 'PageUp') { t = addM(e.shiftKey ? -12 : -1); } else if (k === 'PageDown') { t = addM(e.shiftKey ? 12 : 1); }
+			if (t) { e.preventDefault(); go(t); }
+		}
+		function keys(e) {
+			if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(1); return; }
+			if (e.key !== 'Tab') { return; }
+			/* fókuszcsapda: Tab / Shift+Tab az ablakon belül körbejár */
+			var l = Array.prototype.filter.call(pop.querySelectorAll('button'), function (b) { return !b.disabled && b.tabIndex >= 0; }), i = l.indexOf(document.activeElement);
+			e.preventDefault(); l[(i + (e.shiftKey ? -1 : 1) + l.length) % l.length].focus();
+		}
+		/* v2.9.75: alsó lap telefonon (≤600 px), és ha az ablak magasabb lenne a látható területnél (pl. 200%-os nagyítás, fekvő telefon) */
+		function sheet(h) { return !!(mq && mq.matches) || h + 16 > window.innerHeight; }
+		function place() {
+			if (!pop) { return; }
+			pop.classList.remove('sheet'); pop.style.left = pop.style.top = '0px';
+			var h = pop.offsetHeight, sh = sheet(h); pop.classList.toggle('sheet', sh); bg.classList.toggle('on', sh);
+			if (sh) { pop.style.left = pop.style.top = ''; return; }
+			var r = btn.getBoundingClientRect(), w = pop.offsetWidth, vw = document.documentElement.clientWidth;
+			/* alá, ha elfér; különben fölé; ha egyik sem, a látható területen belül tartjuk (a mezőre csúszhat) – görgetés nélkül */
+			var up = r.bottom + 6 + h > window.innerHeight && r.top - 6 - h > 0, t = up ? r.top - 6 - h : Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8));
+			pop.classList.toggle('up', up);
+			pop.style.left = (Math.max(8, Math.min(r.left, vw - w - 8)) + window.pageXOffset) + 'px';
+			pop.style.top = (t + window.pageYOffset) + 'px';
+		}
+	}
+
 	function render(W, el, d) {
 		var f = d.form, en = f.lang === 'en', id = 'cpwf' + (++seq), inst = 'cpwf-' + seq;
 		var h = '<form class="cpwf ' + esc(f.theme || 'cp') + '" novalidate autocomplete="on" id="' + id + '">';
 		f.fields.forEach(function (x, i) {
 			if (x.hid) { return; }
 			var fid = id + '-' + i, req = x.req ? '<i>*</i>' : '';
-			h += '<div class="cpwf-f" data-n="' + esc(x.n) + '"><label class="cpwf-l" for="' + fid + '">' + req + esc(x.l) + '</label>';
+			h += '<div class="cpwf-f" data-n="' + esc(x.n) + '"><label class="cpwf-l" id="' + fid + '-l" for="' + fid + '">' + req + esc(x.l) + '</label>';
 			if (x.t === 'multi') {
 				h += '<div class="cpwf-ch" role="group" aria-label="' + esc(x.l) + '">' + (x.o || []).map(function (o, j) { return '<label><input type="checkbox" name="' + esc(x.n) + '" value="' + esc(o) + '"' + (j === 0 ? ' id="' + fid + '"' : '') + '>' + esc(o) + '</label>'; }).join('') + '</div>';
 			} else if (x.t === 'select') {
@@ -76,6 +215,9 @@
 			} else if ((x.t === 'textarea' && x.ui !== 'line') || x.ui === 'area') {
 				/* v2.9.49: a megjelenés („ui”) független a mező típusától – a Megjegyzés nagy szövegdoboz, a Kuponkód egysoros */
 				h += '<textarea id="' + fid + '" name="' + esc(x.n) + '" rows="' + (x.ui === 'area' ? 5 : 2) + '"' + (x.ui === 'area' ? ' class="cpwf-big"' : '') + (x.t !== 'textarea' ? ' maxlength="500"' : '') + ' placeholder="' + esc(x.ph) + '"' + (x.req ? ' required' : '') + '></textarea>';
+			} else if (x.t === 'date') {
+				/* v2.9.75: saját dátumválasztó – a beküldött érték a rejtett mezőben marad ISO (ÉÉÉÉ-HH-NN) ugyanazzal a névvel, a gomb csak a barátságos szöveget mutatja */
+				h += '<input type="hidden" name="' + esc(x.n) + '" data-cpdp="' + esc(x.l) + '"><button type="button" class="cpwf-dp ph" id="' + fid + '" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="' + fid + '-l ' + fid + '-t"><span id="' + fid + '-t"></span>' + DPI + '</button>';
 			} else {
 				var ty = x.t === 'int' ? 'number' : (x.t === 'email' ? 'email' : (x.t === 'tel' ? 'tel' : (x.t === 'date' ? 'date' : 'text')));
 				var ac = x.n === 'Contact.name' ? ' autocomplete="name"' : (x.n === 'Contact.email' ? ' autocomplete="email"' : (x.n === 'Contact.mobile' ? ' autocomplete="tel"' : ''));
@@ -90,6 +232,7 @@
 		h += '<button type="submit" class="cpwf-b">' + esc(f.btn || T(en, ['Elküld', 'Submit'])) + '</button><p class="cpwf-m" hidden></p></form>';
 		el.innerHTML = h;
 		var form = el.querySelector('form');
+		form.querySelectorAll('[data-cpdp]').forEach(function (i) { picker(form, i, i.nextElementSibling, en); });
 		var obj = {
 			formId: W.formId,
 			getFormId: function () { return W.formId; },
