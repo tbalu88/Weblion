@@ -27,6 +27,13 @@ add_action('wp_head', function () {
 body .ec-add{transition:background-color .2s ease,border-color .2s ease,color .2s ease,box-shadow .2s ease,transform 120ms cubic-bezier(0.23,1,0.32,1)}
 body .ec-add:active{transform:scale(.95)}
 /* csökkentett mozgás: a csempe hátoldala és az ajánlatsáv csak elhalványul, nem csúszik */
+/* 7) Ajánlatlista-sáv: a ✕ gomb saját stílust kap (a téma gombmargója és fókuszgyűrűje nélkül) – kerek, középre igazított jel, billentyűzetnél arany gyűrű */
+body .ec-bar .ec-x{padding:0!important;border:0!important;border-radius:50%!important;display:inline-grid!important;place-items:center;line-height:1!important;box-shadow:none!important;outline:none!important;cursor:pointer}
+body .ec-bar .ec-x:hover{background:rgba(255,255,255,.16)!important}
+body .ec-bar .ec-x:focus{outline:none!important;box-shadow:none!important}
+body .ec-bar .ec-x:focus-visible{outline:2px solid #F3C25A!important;outline-offset:2px!important}
+body .ec-bar .ec-go:focus{outline:none}
+body .ec-bar .ec-go:focus-visible{outline:2px solid #fff;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){
 	body .ec-add:active{transform:none}
 	.elementor-flip-box .elementor-flip-box__back{transform:none!important;opacity:0;transition:opacity .2s ease!important}
