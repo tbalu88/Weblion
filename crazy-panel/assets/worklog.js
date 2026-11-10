@@ -88,7 +88,7 @@
 
 	/* ------------------------------------------------------------ nap */
 	function drawDay(b) {
-		const e = S.e || { t_start: '', t_end: '', break_min: 0, kinds: [], place: '', deal_list: [], tasks: [], notes: '', vehicle: '', km_start: null, km_end: null, km: null, costs: [], issue: '', issue_flag: 0, tomorrow: '', status: 'draft', files: [], comments: [], hours: 0 };
+		const e = S.e || { t_start: '', t_end: '', shifts: [], break_min: 0, kinds: [], place: '', deal_list: [], tasks: [], notes: '', vehicle: '', km_start: null, km_end: null, km: null, costs: [], issue: '', issue_flag: 0, tomorrow: '', status: 'draft', files: [], comments: [], hours: 0 };
 		const ed = editable(), ro = ed ? '' : ' disabled';
 		const st = ST[e.status] || ST.draft;
 		const photos = e.files.filter(f => f.kind === 'photo'), rcpt = e.files.filter(f => f.kind === 'receipt');
@@ -100,7 +100,8 @@
 			'<div class="wl-grid">' +
 			/* munkaidő */
 			'<section class="wl-c"><h4>⏱ Munkaidő</h4><div class="wl-time"><label>Kezdés<input type="time" data-f="t_start" value="' + esc(e.t_start) + '"' + ro + '></label><label>Befejezés<input type="time" data-f="t_end" value="' + esc(e.t_end) + '"' + ro + '></label><label>Szünet (perc)<input type="number" min="0" max="600" step="5" data-f="break_min" value="' + (e.break_min || 0) + '"' + ro + '></label></div>' +
-				(ed ? '<div class="wl-qb"><button type="button" class="cpx-btn ghost" data-now="t_start">▶ Most kezdem</button><button type="button" class="cpx-btn ghost" data-now="t_end">■ Most végeztem</button></div>' : '') +
+				(e.shifts || []).map((g, i) => '<div class="wl-time wl-seg" data-sg="' + i + '"><label>' + (i + 2) + '. kezdés<input type="time" data-sf="s" value="' + esc(g.s || '') + '"' + ro + '></label><label>' + (i + 2) + '. befejezés<input type="time" data-sf="e" value="' + esc(g.e || '') + '"' + ro + '></label>' + (ed ? '<button type="button" class="wl-sgx" data-sgx="' + i + '" aria-label="Szakasz törlése" title="Szakasz törlése">×</button>' : '<span></span>') + '</div>').join('') +
+				(ed ? '<div class="wl-qb"><button type="button" class="cpx-btn ghost" data-now="s">▶ Most kezdem</button><button type="button" class="cpx-btn ghost" data-now="e">■ Most végeztem</button><button type="button" class="cpx-btn ghost" data-sgadd>＋ Újabb szakasz</button></div>' : '') +
 				'<div class="wl-sum" data-hours>' + (e.hours ? 'Ledolgozott idő: <b>' + hfmt(e.hours) + '</b>' : '') + '</div></section>' +
 			/* típus + helyszín + rendezvények */
 			'<section class="wl-c"><h4>🧰 Mit csináltál ma?</h4><div class="wl-chips">' + (W.kinds || []).map(k => '<button type="button" class="wl-chip' + (e.kinds.includes(k) ? ' on' : '') + '" data-kind="' + esc(k) + '"' + ro + '>' + esc(k) + '</button>').join('') + '</div>' +
@@ -160,7 +161,7 @@
 		if (f.costs) f.costs = f.costs.map(c => ({ what: c.what, amount: c.amount, pay: c.pay, file: c.file || 0 }));
 		S.dirty = {}; S.saving++; setStatus();
 		const day = S.day;
-		try { const r = await post('cp_wl_save', { day: day, f: JSON.stringify(f) }); if (day === S.day && S.uid === W.me) { S.e = r.e; const h = S.main && S.main.querySelector('[data-hours]'); if (h) h.innerHTML = S.e.hours ? 'Ledolgozott idő: <b>' + hfmt(S.e.hours) + '</b>' : ''; if ('km_start' in f || 'km_end' in f) { const k = S.main.querySelector('[data-f="km"]'); if (k && S.e.km != null) k.value = S.e.km; } } }
+		try { const r = await post('cp_wl_save', { day: day, f: JSON.stringify(f) }); if (day === S.day && S.uid === W.me) { const ks = S.e && S.e.shifts; S.e = r.e; if (S.dirty.shifts && ks) S.e.shifts = ks; const h = S.main && S.main.querySelector('[data-hours]'); if (h) h.innerHTML = S.e.hours ? 'Ledolgozott idő: <b>' + hfmt(S.e.hours) + '</b>' : ''; if ('km_start' in f || 'km_end' in f) { const k = S.main.querySelector('[data-f="km"]'); if (k && S.e.km != null) k.value = S.e.km; } } }
 		catch (e) { toast('Nem sikerült menteni: ' + e.message, true); Object.assign(S.dirty, f); }
 		S.saving--; setStatus();
 	}
@@ -174,7 +175,7 @@
 		b.querySelectorAll('[data-st]').forEach(x => x.addEventListener('click', async () => {
 			const to = x.dataset.st;
 			if (to === 'submitted' && !(S.e && (S.e.t_start || (S.e.notes || '').trim() || S.e.tasks.length)) && !window.confirm('Még szinte üres a nap. Biztosan lezárod?')) return;
-			if (to === 'submitted' && S.e && S.e.t_start && !S.e.t_end && !window.confirm('Nincs megadva a befejezés ideje. Így zárod le?')) return;
+			if (to === 'submitted' && S.e && ((S.e.t_start && !S.e.t_end) || (S.e.shifts || []).some(g => g.s && !g.e)) && !window.confirm('Nincs megadva a befejezés ideje. Így zárod le?')) return;
 			x.disabled = true; try { await flush(); const r = await post('cp_wl_status', { uid: S.uid, day: S.day, to: to }); S.e = r.e; toast({ submitted: 'Lezárva – a jóváhagyók értesítést kaptak.', approved: 'Jóváhagyva.', draft: 'Visszanyitva.' }[to]); drawDay(b); } catch (e) { toast(e.message, true); x.disabled = false; }
 		}));
 		if (!ed) return;
@@ -184,7 +185,29 @@
 			i.addEventListener(i.type === 'checkbox' || i.type === 'time' || i.type === 'date' ? 'change' : 'input', () => queue(k, val()));
 			i.addEventListener('blur', () => { if (S.dirty[k] !== undefined) flush(); });
 		});
-		b.querySelectorAll('[data-now]').forEach(x => x.addEventListener('click', () => { const i = b.querySelector('[data-f="' + x.dataset.now + '"]'); i.value = nowHM(); queue(x.dataset.now, i.value); flush(); }));
+		/* munkaidő-szakaszok: az első a t_start/t_end, a további szakaszok a shifts listában */
+		const shifts = () => (S.e && S.e.shifts ? S.e.shifts.map(g => ({ s: g.s || '', e: g.e || '' })) : []);
+		const setShifts = async (l, redraw) => { if (!S.e) S.e = { tasks: [], shifts: [] }; S.e.shifts = l; queue('shifts', l); await flush(); if (redraw) { drawDay(b); } };
+		b.querySelectorAll('[data-sg] [data-sf]').forEach(i => i.addEventListener('change', () => { const l = shifts(), k = Number(i.closest('[data-sg]').dataset.sg); if (!l[k]) return; l[k][i.dataset.sf] = i.value; setShifts(l, false); }));
+		b.querySelectorAll('[data-sgx]').forEach(x => x.addEventListener('click', () => { const l = shifts(); l.splice(Number(x.dataset.sgx), 1); setShifts(l, true); }));
+		const sga = b.querySelector('[data-sgadd]');
+		if (sga) sga.addEventListener('click', async () => { const l = shifts(); l.push({ s: '', e: '' }); await setShifts(l, true); const n = S.main && S.main.querySelectorAll('[data-sg] [data-sf="s"]'); if (n && n.length) n[n.length - 1].focus(); });
+		/* „Most kezdem”: ha az utolsó szakasz már lezárult, új szakaszt nyit; „Most végeztem”: a nyitott szakaszt zárja */
+		b.querySelectorAll('[data-now]').forEach(x => x.addEventListener('click', async () => {
+			const t = nowHM(), l = shifts(), w = x.dataset.now;
+			const f0 = b.querySelector('[data-f="t_start"]'), f1 = b.querySelector('[data-f="t_end"]');
+			const last = l.length ? l[l.length - 1] : null;
+			if (w === 's') {
+				if (!f0.value) { f0.value = t; queue('t_start', t); flush(); return; }
+				if (last && !last.s) { last.s = t; return setShifts(l, true); }
+				if (!last && !f1.value) { toast('Már elkezdted (' + f0.value + ') – előbb a „Most végeztem”.', true); return; }
+				if (last && !last.e) { toast('Már elkezdted (' + last.s + ') – előbb a „Most végeztem”.', true); return; }
+				l.push({ s: t, e: '' }); return setShifts(l, true);
+			}
+			for (let k = l.length - 1; k >= 0; k--) { if (l[k].s && !l[k].e) { l[k].e = t; return setShifts(l, true); } }
+			if (f0.value && !f1.value) { f1.value = t; queue('t_end', t); flush(); return; }
+			toast(f0.value ? 'Nincs nyitott szakasz – a „Most kezdem” újat nyit.' : 'Előbb a „Most kezdem”.', true);
+		}));
 		b.querySelectorAll('[data-kind]').forEach(x => x.addEventListener('click', () => { x.classList.toggle('on'); queue('kinds', Array.from(b.querySelectorAll('[data-kind].on')).map(y => y.dataset.kind)); }));
 		const dealIds = () => (S.e ? S.e.deal_list.map(d => d.id) : []);
 		const setDeals = async ids => { queue('deals', ids); await flush(); drawDay(b); };
@@ -247,7 +270,7 @@
 		const ph = e.files.filter(f => f.kind === 'photo');
 		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Munkanapló ' + esc(S.day) + '</title><style>body{font:13px/1.45 Arial,sans-serif;margin:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:16px 0 4px;border-bottom:1px solid #ccc}table{border-collapse:collapse}td{padding:2px 10px 2px 0}.ph img{width:160px;height:120px;object-fit:cover;margin:0 6px 6px 0}</style></head><body>' +
 			'<h1>Munkanapló – ' + esc(uname(S.uid)) + '</h1><div>' + esc(huDay(S.day)) + ' · ' + esc((ST[e.status] || ST.draft)[0]) + (e.approved_by ? ' (' + esc(e.approved_by) + ')' : '') + '</div>' +
-			'<h2>Munkaidő</h2><table><tr><td>Kezdés</td><td>' + esc(e.t_start || '–') + '</td><td>Befejezés</td><td>' + esc(e.t_end || '–') + '</td><td>Szünet</td><td>' + (e.break_min || 0) + ' perc</td><td><b>' + hfmt(e.hours) + '</b></td></tr></table>' +
+			'<h2>Munkaidő</h2><table>' + [{ s: e.t_start, e: e.t_end }].concat(e.shifts || []).filter((g, i) => i === 0 || g.s || g.e).map((g, i) => '<tr><td>' + (i ? (i + 1) + '. kezdés' : 'Kezdés') + '</td><td>' + esc(g.s || '–') + '</td><td>Befejezés</td><td>' + esc(g.e || '–') + '</td>' + (i ? '' : '<td>Szünet</td><td>' + (e.break_min || 0) + ' perc</td><td><b>' + hfmt(e.hours) + '</b></td>') + '</tr>').join('') + '</table>' +
 			'<h2>Munka</h2><div>' + esc(e.kinds.join(', ')) + (e.place ? ' · ' + esc(e.place) : '') + '</div>' + (e.deal_list.length ? '<div>Rendezvények: ' + e.deal_list.map(d => esc(d.title)).join('; ') + '</div>' : '') +
 			(e.tasks.length ? '<h2>Feladatok</h2><ul>' + e.tasks.map(t => '<li>' + (t.done ? '☑ ' : '☐ ') + esc(t.t) + '</li>').join('') + '</ul>' : '') + (e.notes ? '<h2>Leírás</h2><div>' + esc(e.notes).replace(/\n/g, '<br>') + '</div>' : '') +
 			((e.km || e.vehicle) ? '<h2>Útnyilvántartás</h2><div>' + esc(e.vehicle || '') + ' · ' + (e.km_start != null ? e.km_start + ' → ' + (e.km_end != null ? e.km_end : '?') + ' · ' : '') + (e.km != null ? e.km + ' km' : '') + '</div>' : '') +
@@ -263,7 +286,7 @@
 		const t = r.tot;
 		b.innerHTML = '<div class="wl-mt"><div class="wl-k"><b>' + hfmt(t.hours) + '</b><small>ledolgozott idő</small></div><div class="wl-k"><b>' + t.days + '</b><small>munkanap</small></div><div class="wl-k"><b>' + (t.km || 0).toLocaleString('hu-HU') + ' km</b><small>megtett út</small></div><div class="wl-k"><b>' + ft(t.cost) + '</b><small>költség</small></div></div>' +
 			(r.rows.length ? '<div class="wl-tw"><table class="wl-t"><thead><tr><th>Nap</th><th>Idő</th><th class="r">Óra</th><th>Munka</th><th class="r">Km</th><th class="r">Költség</th><th class="r">Fotó</th><th>Állapot</th></tr></thead><tbody>' +
-				r.rows.map(x => '<tr data-go="' + x.day + '"><td><b>' + esc(x.day.slice(8)) + '.</b> <small>' + DOW[new Date(x.day + 'T12:00:00').getDay()].slice(0, 3) + '</small>' + (x.issue ? ' <span title="Hibát jelzett">⚠</span>' : '') + '</td><td>' + esc(x.t_start || '') + (x.t_end ? '–' + esc(x.t_end) : '') + '</td><td class="r">' + (x.hours ? String(x.hours).replace('.', ',') : '') + '</td><td><span class="wl-ell">' + esc(x.kinds.join(', ') + (x.place ? ' · ' + x.place : '')) + '</span></td><td class="r">' + (x.km == null ? '' : x.km) + '</td><td class="r">' + (x.cost ? ft(x.cost) : '') + '</td><td class="r">' + (x.photos || '') + '</td><td><span class="wl-st ' + (ST[x.status] || ST.draft)[1] + '">' + (ST[x.status] || ST.draft)[0].split(' – ')[0] + '</span></td></tr>').join('') + '</tbody></table></div>' : '<div class="cpx-empty">Ebben a hónapban még nincs bejegyzés.</div>') +
+				r.rows.map(x => '<tr data-go="' + x.day + '"><td><b>' + esc(x.day.slice(8)) + '.</b> <small>' + DOW[new Date(x.day + 'T12:00:00').getDay()].slice(0, 3) + '</small>' + (x.issue ? ' <span title="Hibát jelzett">⚠</span>' : '') + '</td><td>' + (x.span ? '<span title="' + esc(x.span) + '">' + esc(x.span) + '</span>' : esc(x.t_start || '') + (x.t_end ? '–' + esc(x.t_end) : '')) + '</td><td class="r">' + (x.hours ? String(x.hours).replace('.', ',') : '') + '</td><td><span class="wl-ell">' + esc(x.kinds.join(', ') + (x.place ? ' · ' + x.place : '')) + '</span></td><td class="r">' + (x.km == null ? '' : x.km) + '</td><td class="r">' + (x.cost ? ft(x.cost) : '') + '</td><td class="r">' + (x.photos || '') + '</td><td><span class="wl-st ' + (ST[x.status] || ST.draft)[1] + '">' + (ST[x.status] || ST.draft)[0].split(' – ')[0] + '</span></td></tr>').join('') + '</tbody></table></div>' : '<div class="cpx-empty">Ebben a hónapban még nincs bejegyzés.</div>') +
 			'<div class="wl-foot"><a class="cpx-btn ghost" href="' + C.ajax + '?action=cp_wl_month&csv=1&uid=' + S.uid + '&m=' + r.m + '&t=' + encodeURIComponent(C.t) + '">⬇ Letöltés (CSV / Excel)</a></div>';
 		b.querySelectorAll('[data-go]').forEach(tr => tr.addEventListener('click', () => { S.day = tr.dataset.go; S.mode = 'day'; draw(); }));
 	}
@@ -276,7 +299,7 @@
 	css.textContent = '.wl{max-width:1180px}.wl-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}.wl-h select,.wl-nav input[type=date]{border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13.5px Inter,sans-serif;background:#fff;color:#141C33}.wl-nav{display:flex;gap:6px;align-items:center}.wl-nav b{min-width:140px;text-align:center}.wl-nav .cpx-btn{height:34px;min-width:34px;padding:0 10px}' +
 		'.wl-title{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 12px}.wl-title h2{font:700 19px Inter,sans-serif;margin:0}.wl-st{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:#F1EEE9;color:#5A5F6B}.wl-st.s{background:#FFF4E5;color:#8A5300}.wl-st.a{background:#E6F6EC;color:#1E7A43}.wl-who{font-size:12.5px;color:#656973}' +
 		'.wl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wl-c{background:#fff;border:1px solid #E6E3DE;border-radius:14px;padding:14px}.wl-c.wl-w{grid-column:1/-1}.wl-c h4{margin:0 0 10px;font:700 14px Inter,sans-serif;display:flex;gap:8px;align-items:baseline}.wl-c h4 small{font-weight:500;color:#656973}' +
-		'.wl-time{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.wl-time label,.wl-l{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#656973;margin-top:6px}.wl-c input[type=text],.wl-c input[type=time],.wl-c input[type=number],.wl-c textarea,.wl-c select{border:1px solid #E6E3DE;border-radius:9px;padding:8px 10px;font:14px Inter,sans-serif;color:#141C33;background:#fff;width:100%;box-sizing:border-box}.wl-c textarea{resize:vertical}.wl-c :disabled{background:#FAF8F5;color:#3A3F4B}' +
+		'.wl-time{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.wl-seg{align-items:end}.wl-sgx{justify-self:start;width:36px;height:36px;border:1px solid #E6E3DE;border-radius:9px;background:#fff;color:#656973;font-size:18px;cursor:pointer}.wl-sgx:hover{color:#B42318;border-color:#F0C8C3}.wl-time label,.wl-l{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#656973;margin-top:6px}.wl-c input[type=text],.wl-c input[type=time],.wl-c input[type=number],.wl-c textarea,.wl-c select{border:1px solid #E6E3DE;border-radius:9px;padding:8px 10px;font:14px Inter,sans-serif;color:#141C33;background:#fff;width:100%;box-sizing:border-box}.wl-c textarea{resize:vertical}.wl-c :disabled{background:#FAF8F5;color:#3A3F4B}' +
 		'.wl-qb{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.wl-sum{margin-top:10px;font-size:14px}.wl-chips{display:flex;flex-wrap:wrap;gap:6px}.wl-chip{border:1px solid #E6E3DE;background:#fff;border-radius:999px;padding:6px 12px;font:600 12.5px Inter,sans-serif;color:#3A3F4B;cursor:pointer}.wl-chip.on{background:#2F5BD8;border-color:#2F5BD8;color:#fff}.wl-chip:disabled{cursor:default}' +
 		'.wl-deals{display:flex;flex-wrap:wrap;gap:6px}.wl-dl{display:inline-flex;align-items:center;gap:4px;background:#EEF3FD;border-radius:999px;padding:4px 6px 4px 10px;font-size:12.5px}.wl-dl a{color:#2F5BD8;text-decoration:none;font-weight:600}.wl-dl button,.wl-tasks button,.wl-cx{border:0;background:none;color:#656973;font-size:18px;line-height:1;cursor:pointer;padding:0 4px}.wl-sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.wl-sug small{width:100%;color:#656973}' +
 		'.wl-tasks{list-style:none;margin:0 0 8px;padding:0}.wl-tasks li{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #F0ECE6;padding:6px 0}.wl-tasks label{display:flex;gap:8px;align-items:center;font-size:14px;flex:1}.wl-tasks input{width:18px;height:18px;accent-color:#2F5BD8}.wl-add{display:flex;gap:8px;margin:6px 0}.wl-add input,.wl-add textarea{flex:1}' +

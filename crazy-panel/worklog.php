@@ -7,7 +7,7 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_WL_DB_VER', '1');
+define('CP_WL_DB_VER', '2'); /* 2: shifts – további munkaidő-szakaszok egy napon */
 function cp_wl_t($n) { global $wpdb; return $wpdb->prefix . 'crazy_wl_' . $n; }
 add_action('init', function () {
 	if (get_option('cp_wl_db_ver') === CP_WL_DB_VER || wp_doing_ajax()) { return; }
@@ -21,6 +21,7 @@ add_action('init', function () {
   t_start varchar(5) NOT NULL DEFAULT '',
   t_end varchar(5) NOT NULL DEFAULT '',
   break_min int(11) NOT NULL DEFAULT 0,
+  shifts text NULL,
   kinds varchar(255) NOT NULL DEFAULT '',
   place varchar(255) NOT NULL DEFAULT '',
   deals varchar(255) NOT NULL DEFAULT '',
@@ -112,11 +113,27 @@ function cp_wl_auth() {
 }
 function cp_wl_day($v) { $v = (string) $v; return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : ''; }
 function cp_wl_hm($v) { $v = trim((string) $v); return preg_match('/^([01]?\d|2[0-3]):[0-5]\d$/', $v) ? str_pad($v, 5, '0', STR_PAD_LEFT) : ''; }
+/* a nap munkaidő-szakaszai: az első a t_start/t_end, a többi a shifts oszlopban (v2.9.86) – array(array(s, e), …) */
+function cp_wl_segs($e) {
+	$o = array();
+	if ((string) $e['t_start'] !== '' || (string) $e['t_end'] !== '') { $o[] = array((string) $e['t_start'], (string) $e['t_end']); }
+	$x = is_array($e['shifts'] ?? null) ? $e['shifts'] : (json_decode((string) ($e['shifts'] ?? ''), true) ?: array());
+	foreach ((array) $x as $g) { if (is_array($g) && (($g['s'] ?? '') !== '' || ($g['e'] ?? '') !== '')) { $o[] = array((string) ($g['s'] ?? ''), (string) ($g['e'] ?? '')); } }
+	return $o;
+}
+function cp_wl_span($e) {
+	return implode(', ', array_map(function ($g) { return ($g[0] ?: '?') . '–' . ($g[1] ?: '?'); }, cp_wl_segs($e)));
+}
 function cp_wl_hours($e) {
-	if ($e['t_start'] === '' || $e['t_end'] === '') { return 0; }
-	list($a, $b) = explode(':', $e['t_start']); list($c, $d) = explode(':', $e['t_end']);
-	$m = ((int) $c * 60 + (int) $d) - ((int) $a * 60 + (int) $b);
-	if ($m < 0) { $m += 24 * 60; } /* éjfélen átnyúló műszak */
+	$m = 0; $any = false;
+	foreach (cp_wl_segs($e) as $g) {
+		if ($g[0] === '' || $g[1] === '') { continue; }
+		list($a, $b) = explode(':', $g[0]); list($c, $d) = explode(':', $g[1]);
+		$x = ((int) $c * 60 + (int) $d) - ((int) $a * 60 + (int) $b);
+		if ($x < 0) { $x += 24 * 60; } /* éjfélen átnyúló műszak */
+		$m += $x; $any = true;
+	}
+	if (!$any) { return 0; }
 	return max(0, round(($m - (int) $e['break_min']) / 60, 2));
 }
 function cp_wl_files_dir() {
@@ -132,6 +149,7 @@ function cp_wl_out($e) {
 	$e['tasks'] = json_decode((string) $e['tasks'], true) ?: array();
 	$e['costs'] = json_decode((string) $e['costs'], true) ?: array();
 	$e['kinds'] = $e['kinds'] === '' ? array() : explode('|', $e['kinds']);
+	$e['shifts'] = array_values(array_filter((array) (json_decode((string) ($e['shifts'] ?? ''), true) ?: array()), 'is_array'));
 	$e['hours'] = cp_wl_hours($e);
 	$e['files'] = array_map(function ($f) { return array('id' => (int) $f['id'], 'kind' => $f['kind'], 'name' => $f['name'], 'caption' => $f['caption'], 'size' => (int) $f['size']); }, (array) $wpdb->get_results($wpdb->prepare('SELECT id, kind, name, caption, size FROM ' . cp_wl_t('files') . ' WHERE entry_id = %d ORDER BY id', $e['id']), ARRAY_A));
 	$e['comments'] = array_map(function ($c) { return array('id' => (int) $c['id'], 'uid' => (int) $c['uid'], 'author' => $c['author'], 'body' => $c['body'], 'at' => function_exists('cp_crm_local') ? cp_crm_local($c['created_at']) : $c['created_at']); }, (array) $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cp_wl_t('comments') . ' WHERE entry_id = %d ORDER BY id', $e['id']), ARRAY_A));
@@ -194,6 +212,7 @@ function cp_wl_ajax_save() {
 	$set = array();
 	if (array_key_exists('t_start', $f)) { $set['t_start'] = cp_wl_hm($f['t_start']); }
 	if (array_key_exists('t_end', $f)) { $set['t_end'] = cp_wl_hm($f['t_end']); }
+	if (array_key_exists('shifts', $f)) { $set['shifts'] = wp_json_encode(array_values(array_slice(array_map(function ($g) { return array('s' => cp_wl_hm(is_array($g) ? ($g['s'] ?? '') : ''), 'e' => cp_wl_hm(is_array($g) ? ($g['e'] ?? '') : '')); }, (array) $f['shifts']), 0, 10))); }
 	if (array_key_exists('break_min', $f)) { $set['break_min'] = max(0, min(600, (int) $f['break_min'])); }
 	if (array_key_exists('kinds', $f)) { $set['kinds'] = mb_substr(implode('|', array_map(function ($x) use ($s) { return str_replace('|', '/', $s($x, 40)); }, array_slice((array) $f['kinds'], 0, 10))), 0, 255); }
 	if (array_key_exists('place', $f)) { $set['place'] = $s($f['place'], 255); }
@@ -352,7 +371,8 @@ function cp_wl_ajax_month() {
 		$costs = json_decode((string) $r['costs'], true) ?: array(); $c = 0; foreach ($costs as $x) { $c += (float) ($x['amount'] ?? 0); }
 		$tasks = json_decode((string) $r['tasks'], true) ?: array();
 		$h = cp_wl_hours($r);
-		$out[] = array('day' => $r['day'], 't_start' => $r['t_start'], 't_end' => $r['t_end'], 'hours' => $h, 'km' => $r['km'] === null ? null : (int) $r['km'], 'cost' => $c, 'status' => $r['status'], 'kinds' => $r['kinds'] === '' ? array() : explode('|', $r['kinds']), 'place' => $r['place'], 'photos' => (int) $r['ph'], 'tasks' => count($tasks), 'done' => count(array_filter($tasks, function ($t) { return !empty($t['done']); })), 'issue' => (int) $r['issue_flag'], 'notes' => mb_substr((string) $r['notes'], 0, 140));
+		$sg = cp_wl_segs($r);
+		$out[] = array('day' => $r['day'], 't_start' => $sg ? $sg[0][0] : '', 't_end' => $sg ? $sg[count($sg) - 1][1] : '', 'span' => count($sg) > 1 ? cp_wl_span($r) : '', 'hours' => $h, 'km' => $r['km'] === null ? null : (int) $r['km'], 'cost' => $c, 'status' => $r['status'], 'kinds' => $r['kinds'] === '' ? array() : explode('|', $r['kinds']), 'place' => $r['place'], 'photos' => (int) $r['ph'], 'tasks' => count($tasks), 'done' => count(array_filter($tasks, function ($t) { return !empty($t['done']); })), 'issue' => (int) $r['issue_flag'], 'notes' => mb_substr((string) $r['notes'], 0, 140));
 		$tot['hours'] += $h; $tot['km'] += (int) $r['km']; $tot['cost'] += $c; if ($h > 0 || $r['notes'] !== '' || $tasks) { $tot['days']++; }
 	}
 	$tot['hours'] = round($tot['hours'], 2);
@@ -363,12 +383,12 @@ function cp_wl_ajax_month() {
 		header('Content-Disposition: attachment; filename="munkanaplo-' . sanitize_file_name(remove_accents($name)) . '-' . $m . '.csv"');
 		echo "\xEF\xBB\xBF";
 		$fh = fopen('php://output', 'w');
-		fputcsv($fh, array('Dátum', 'Kezdés', 'Befejezés', 'Óra', 'Munka típusa', 'Helyszín', 'Km', 'Költség (Ft)', 'Fotók', 'Feladatok (kész/összes)', 'Állapot', 'Megjegyzés'), ';');
+		fputcsv($fh, array('Dátum', 'Kezdés', 'Befejezés', 'Szakaszok', 'Óra', 'Munka típusa', 'Helyszín', 'Km', 'Költség (Ft)', 'Fotók', 'Feladatok (kész/összes)', 'Állapot', 'Megjegyzés'), ';');
 		$st = array('draft' => 'folyamatban', 'submitted' => 'lezárva', 'approved' => 'jóváhagyva');
 		/* v2.9.58: CSV-képletbefecskendezés ellen – a szöveges (felhasználói) cellák elé ' kerül, ha =, +, -, @ jellel kezdődnek */
 		$cs = function ($v) { $v = (string) $v; return $v !== '' && strpos("=+-@\t\r", $v[0]) !== false ? "'" . $v : $v; };
-		foreach ($out as $r) { fputcsv($fh, array($r['day'], $r['t_start'], $r['t_end'], str_replace('.', ',', (string) $r['hours']), $cs(implode(', ', $r['kinds'])), $cs($r['place']), $r['km'], $r['cost'], $r['photos'], $r['done'] . '/' . $r['tasks'], $st[$r['status']] ?? $r['status'], $cs($r['notes'])), ';'); }
-		fputcsv($fh, array('Összesen', '', '', str_replace('.', ',', (string) $tot['hours']), '', '', $tot['km'], $tot['cost'], '', '', '', $tot['days'] . ' munkanap'), ';');
+		foreach ($out as $r) { fputcsv($fh, array($r['day'], $r['t_start'], $r['t_end'], $r['span'], str_replace('.', ',', (string) $r['hours']), $cs(implode(', ', $r['kinds'])), $cs($r['place']), $r['km'], $r['cost'], $r['photos'], $r['done'] . '/' . $r['tasks'], $st[$r['status']] ?? $r['status'], $cs($r['notes'])), ';'); }
+		fputcsv($fh, array('Összesen', '', '', '', str_replace('.', ',', (string) $tot['hours']), '', '', $tot['km'], $tot['cost'], '', '', '', $tot['days'] . ' munkanap'), ';');
 		fclose($fh); exit;
 	}
 	wp_send_json_success(array('m' => $m, 'rows' => $out, 'tot' => $tot));
@@ -413,7 +433,7 @@ function cp_wl_report_text($uid, $day) {
 	$num = function ($n) { return str_replace('.', ',', (string) $n); };
 	$ft = function ($n) { return number_format((float) $n, 0, ',', ' ') . ' Ft'; };
 	$L = array('📋 **Munkanapló – ' . ($u ? $u['n'] : '#' . $uid) . ', ' . $dl . '**');
-	if ($e['t_start'] !== '') { $L[] = '🕘 Munkaidő: ' . $e['t_start'] . '–' . ($e['t_end'] ?: '?') . ($e['break_min'] ? ' (szünet ' . $e['break_min'] . ' perc)' : '') . ' · **' . $num($e['hours']) . ' óra**'; }
+	if (cp_wl_segs($e)) { $L[] = '🕘 Munkaidő: ' . cp_wl_span($e) . ($e['break_min'] ? ' (szünet ' . $e['break_min'] . ' perc)' : '') . ' · **' . $num($e['hours']) . ' óra**'; }
 	if ($e['kinds'] || trim((string) $e['place']) !== '') { $L[] = '🏷 ' . trim(implode(', ', $e['kinds']) . ($e['place'] ? ' · ' . $e['place'] : ''), ' ·'); }
 	if ($e['deal_list']) { $L[] = '🎉 Rendezvények: ' . implode('; ', array_map(function ($d) { return $d['title']; }, $e['deal_list'])); }
 	if ($e['tasks']) {
