@@ -890,7 +890,7 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 }
 /* v2.9.90: kontakt a levélből – a cím melletti gomb és a kis ablak */
 .ml-cadd{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;vertical-align:-3px;border:0;border-radius:6px;background:#141C33;color:#fff;font:700 14px/1 Inter,sans-serif;cursor:pointer;flex-shrink:0;opacity:.85}
-.ml-cadd:hover{opacity:1}.ml-cadd:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
+.ml-cadd:hover{opacity:1}.ml-fe .ml-cadd{vertical-align:-4px}.ml-cadd:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
 .ml-cadd.k{background:#EEF3FD;color:#2F4FA8;font-size:11px;opacity:1}
 .ml-ctp{position:fixed;z-index:10050;background:#fff;border:1px solid #E6E3DE;border-radius:12px;box-shadow:0 12px 32px rgba(20,28,51,.18);padding:12px;font:13px Inter,sans-serif;color:#141C33;box-sizing:border-box}
 .ml-cph{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin-bottom:8px;padding-right:24px;position:relative}.ml-cph small{color:#656973;overflow-wrap:anywhere;flex-basis:100%}
@@ -910,3 +910,5 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 /* v2.9.102: új deal a levélszálból – a deal-választó alján */
 .ml-dp-new{display:block;width:100%;text-align:left;border:0;border-top:1px solid #E6E3DE;background:#F7F9FE;padding:10px 14px;cursor:pointer;font:13px Inter,sans-serif;color:#141C33}
 .ml-dp-new b{display:block;color:#2F5BD8;font-weight:700}.ml-dp-new small{display:block;color:#656973;margin-top:2px}.ml-dp-new:hover{background:#EEF3FD}
+/* v2.9.105: telefonon a kontakt-gomb az e-mail-cím mellett marad (a hosszú cím rövidül, a gomb nem csúszik új sorba) */
+@media (max-width:760px){.ml-read .ml-from .ml-fe{display:flex;align-items:center;gap:6px;overflow:visible}.ml-read .ml-from .ml-fet{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ml-read .ml-from .ml-fe .ml-cadd{margin-left:0;flex-shrink:0;vertical-align:0}}
