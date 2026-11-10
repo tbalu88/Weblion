@@ -141,7 +141,7 @@
 
 	/* ------------------------------------------------------------ szövegszerkesztő (közös a levélíróhoz és a sablonokhoz) */
 	const ICON = {
-		bold: '<b>B</b>', italic: '<i>I</i>', underline: '<u>U</u>', strike: '<s>S</s>',
+		bold: '<b>B</b>', italic: '<i>I</i>', underline: '<u>U</u>', strike: '<s>S</s>', color: '<span class="ml-cico">A</span>',
 		h2: 'H', p: '¶', ul: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>',
 		ol: '<svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 5h1v4M4 9h2M4 14h2l-2 3h2"/></svg>',
 		quote: '❝', link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
@@ -155,14 +155,20 @@
 		undo: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
 		redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>'
 	};
-	const TOOLS = [['bold', 'Félkövér'], ['italic', 'Dőlt'], ['underline', 'Aláhúzott'], ['strike', 'Áthúzott'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['ul', 'Felsorolás'], ['ol', 'Számozott lista'], ['quote', 'Idézet'], ['|'],
+	const TOOLS = [['bold', 'Félkövér'], ['italic', 'Dőlt'], ['underline', 'Aláhúzott'], ['strike', 'Áthúzott'], ['color', 'Betűszín és kiemelés'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['ul', 'Felsorolás'], ['ol', 'Számozott lista'], ['quote', 'Idézet'], ['|'],
 		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['portal', 'Ügyfélportál-link beszúrása (a dealhez)'], ['sign', 'Aláírás beszúrása'], ['clear', 'Formázás törlése'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
+	const FC = [['#141C33', 'Sötétkék'], ['#000000', 'Fekete'], ['#6B6F78', 'Szürke'], ['#C53A24', 'Piros'], ['#E07A1F', 'Narancs'], ['#B8860B', 'Arany'], ['#1F7A50', 'Zöld'], ['#2F5BD8', 'Kék'], ['#7B3FBF', 'Lila']];
+	const BC = [['#FFF1A8', 'Sárga'], ['#D9F2E3', 'Zöld'], ['#FDE2E1', 'Piros'], ['#E3ECFD', 'Kék'], ['#EFE6FB', 'Lila']];
 	function editor(host, html) {
 		const vopts = Object.keys(VARS).map(k => '<button type="button" data-vk="' + esc(k) + '"><b>{{' + esc(k) + '}}</b><small>' + esc(VARS[k][0]) + '</small></button>').join('');
 		host.innerHTML = '<div class="ml-ed"><div class="ml-area" contenteditable="true" spellcheck="true" data-ph="Kezdj el gépelni…"></div><textarea class="ml-code" hidden spellcheck="false"></textarea>' +
 			'<div class="ml-tb">' + TOOLS.map(t => t[0] === '|' ? '<span class="ml-sep"></span>' : t[0] === '|R' ? '<span class="ml-gap"></span>' : '<button type="button" data-cmd="' + t[0] + '" title="' + esc(t[1]) + '" aria-label="' + esc(t[1]) + '"' + (t[0] === 'attach' ? ' disabled' : '') + '>' + (t[0] === 'var' ? '#' : ICON[t[0]]) + '</button>').join('') + '</div>' +
-			'<div class="ml-pop ml-vpop" hidden>' + vopts + '</div></div>';
-		const area = host.querySelector('.ml-area'), code = host.querySelector('.ml-code'), vpop = host.querySelector('.ml-vpop');
+			'<div class="ml-pop ml-vpop" hidden>' + vopts + '</div>' +
+			/* v2.9.82: betűszín és kiemelés (a levélben inline stílusként marad meg) */
+			'<div class="ml-pop ml-cpop" hidden role="dialog" aria-label="Betűszín és kiemelés"><b>Betűszín</b><div class="ml-cpal">' + FC.map(c => '<button type="button" data-fc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Betűszín: ' + esc(c[1]) + '"></button>').join('') + '</div>' +
+			'<b>Kiemelés</b><div class="ml-cpal">' + BC.map(c => '<button type="button" data-bc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Kiemelés: ' + esc(c[1]) + '"></button>').join('') + '</div>' +
+			'<button type="button" class="ml-creset" data-creset>Alapszín, kiemelés nélkül</button></div></div>';
+		const area = host.querySelector('.ml-area'), code = host.querySelector('.ml-code'), vpop = host.querySelector('.ml-vpop'), cpop = host.querySelector('.ml-cpop');
 		area.innerHTML = html || '';
 		let range = null;
 		const keep = () => { const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode)) range = s.getRangeAt(0).cloneRange(); };
@@ -175,7 +181,8 @@
 			if (c === 'attach' || c === 'portal') return; /* a levélíró kezeli (v1.54, v1.59) */
 			if (c === 'code') { const on = code.hidden; if (on) { code.value = area.innerHTML; } else { area.innerHTML = code.value; } code.hidden = !on; area.hidden = on; b.classList.toggle('on', on); return; }
 			if (!code.hidden) return;
-			if (c === 'var') { vpop.hidden = !vpop.hidden; return; }
+			if (c === 'var') { vpop.hidden = !vpop.hidden; cpop.hidden = true; return; }
+			if (c === 'color') { cpop.hidden = !cpop.hidden; vpop.hidden = true; return; }
 			const M2 = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList', clear: 'removeFormat', undo: 'undo', redo: 'redo' };
 			if (M2[c]) return exec(M2[c]);
 			if (c === 'h2' || c === 'p') return exec('formatBlock', c);
@@ -192,6 +199,14 @@
 				return exec('insertHTML', '<p>' + esc(sig).replace(/\n/g, '<br>') + '</p>');
 			}
 		}));
+		/* v2.9.82: színezés – inline stílussal (styleWithCSS), hogy a levelezőprogramokban is megmaradjon */
+		const css = () => { try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* régi böngésző */ } };
+		cpop.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+		cpop.querySelectorAll('[data-fc]').forEach(b => b.addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, b.dataset.fc); keep(); cpop.hidden = true; }));
+		cpop.querySelectorAll('[data-bc]').forEach(b => b.addEventListener('click', () => { restore(); css(); if (!document.execCommand('hiliteColor', false, b.dataset.bc)) document.execCommand('backColor', false, b.dataset.bc); keep(); cpop.hidden = true; }));
+		cpop.querySelector('[data-creset]').addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, '#141C33'); if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent'); keep(); cpop.hidden = true; });
+		document.addEventListener('click', e => { if (!cpop.hidden && e.target.isConnected && !e.target.closest('.ml-cpop') && !e.target.closest('[data-cmd="color"]')) cpop.hidden = true; });
+		cpop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cpop.hidden = true; area.focus(); } });
 		vpop.querySelectorAll('[data-vk]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		vpop.querySelectorAll('[data-vk]').forEach(b => b.addEventListener('click', () => { exec('insertText', '{{' + b.dataset.vk + '}}'); vpop.hidden = true; }));
 		document.addEventListener('click', e => { if (!vpop.hidden && e.target.isConnected && !e.target.closest('.ml-vpop') && !e.target.closest('[data-cmd="var"]')) vpop.hidden = true; });

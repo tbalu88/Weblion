@@ -843,3 +843,16 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-ceo p{flex:1 1 260px;margin:0;min-width:0;overflow-wrap:anywhere}
 .ml-ceo p span{display:block;color:#3D4C74;font-size:12.5px}
 .ml-ceo-b{display:flex;gap:8px;flex:0 0 auto}
+
+/* v2.9.82: betűszín és kiemelés */
+.ml-cico{font-weight:800;border-bottom:3px solid #C53A24;line-height:1;padding:0 1px}
+.ml-cpop{bottom:46px;left:0;width:248px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.ml-cpop[hidden]{display:none}
+.ml-cpop>b{font:600 11.5px Inter,sans-serif;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.ml-cpal{display:flex;flex-wrap:wrap;gap:6px}
+.ml-cpal button{width:24px;height:24px;border-radius:50%;border:1px solid rgba(20,28,51,.18);background:var(--c);cursor:pointer;padding:0}
+.ml-cpal button:hover{transform:scale(1.08)}
+.ml-cpal button:focus-visible,.ml-creset:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
+.ml-creset{margin-top:2px;border:1px solid var(--li);background:#fff;border-radius:8px;padding:6px 10px;font:500 12.5px Inter,sans-serif;color:var(--ink,#141C33);cursor:pointer;text-align:left}
+.ml-creset:hover{background:#F6F3EE}
+@media (hover:none){.ml-cpal button{width:32px;height:32px}.ml-cpal button:hover{transform:none}}

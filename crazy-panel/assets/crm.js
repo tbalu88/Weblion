@@ -862,11 +862,8 @@
 		box.querySelectorAll('[data-fold]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const s = b.dataset.fold; S.fold = S.fold.includes(s) ? S.fold.filter(x => x !== s) : S.fold.concat([s]); save(); redrawBoard(); }));
 		box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); newDeal(b.dataset.add); }));
 		const fab = box.querySelector('[data-fab]');
-		if (fab) fab.addEventListener('click', () => {
-			const b = box.querySelector('.crm-board'), cs = Array.from(box.querySelectorAll('.crm-col[data-stage]'));
-			const c = cs.reduce((best, x) => Math.abs(x.offsetLeft - b.scrollLeft) < Math.abs(best.offsetLeft - b.scrollLeft) ? x : best, cs[0]);
-			newDeal(c ? c.dataset.stage : undefined);
-		});
+		/* v2.9.82: a közös „+ Új deal” mindig az első szakaszba (Érdeklődő) tesz – eddig a látható oszlopét vette, görgetett táblán az „Ajánlat kiküldve”-t; az oszlopok saját „+” gombja továbbra is a saját oszlopába */
+		if (fab) fab.addEventListener('click', () => newDeal());
 		box.querySelectorAll('[data-lead]').forEach(c => {
 			c.addEventListener('click', e => { if (e.target.closest('[data-pdel]')) return; openLead(Number(c.dataset.lead)); });
 			c.addEventListener('keydown', e => { if (e.key === 'Enter') openLead(Number(c.dataset.lead)); });
@@ -1972,7 +1969,7 @@
 			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), pre) + '</select></label>' +
 			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +
 			inp('value', 'Érték (Ft)', 'number') + inp('note', 'Megjegyzés', 'area') + '</div>' +
-			'<p class="crm-ro">A deal a Salesmate-ben is létrejön, és a Salesmate automatizmusai lefutnak (pl. Pumble-értesítés, átnevezés).</p>' +
+			'<p class="crm-ro">A deal a Salesmate-ben is létrejön; az átnevezést és a Pumble-értesítést a panel végzi.</p>' +
 			'<div class="crm-ebar"><button class="cpx-btn" type="submit">Deal létrehozása</button><button class="cpx-btn ghost" type="button" data-close>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
 		sh0.innerHTML = h;
 		const form = sh0.querySelector('form');

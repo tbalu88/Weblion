@@ -63,6 +63,8 @@ function cp_notify($uid, $kind, $text, $hash, $by_name = null) {
 	if ($on_p && function_exists('cp_push_queue')) { cp_push_queue($uid, $by !== '' ? $by : 'Crazy panel', $text, $hash); }
 	/* v2.9.32 → v2.9.50: a Pumble is a beállítás szerint (az új ajánlatkérésnél alapból ki) */
 	if (!$on_u || (!function_exists('cp_nt_on') && $kind === 'lead')) { return; }
+	/* v2.9.82: a személyes Pumble-üzenetek közös kikapcsolója (cp_nt_pumble_off = '1'): a csengő és a telefonos értesítés marad */
+	if (get_option('cp_nt_pumble_off') === '1') { return; }
 	$hook = cp_nt_hook_get('notif_hook_u' . $uid);
 	if ($hook === '') { $hook = cp_nt_hook_get('notif_hook'); }
 	if ($hook === '' || !cp_nt_hook_ok($hook) || !function_exists('cp_pu_panel_url')) { return; }
