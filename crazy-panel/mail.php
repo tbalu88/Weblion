@@ -308,6 +308,7 @@ function cp_mail_cfg() {
 		'send'    => function_exists('cp_send_cfg') ? cp_send_cfg() : array('on' => false),
 		'sig'     => function_exists('cp_send_sig_html') ? cp_send_sig_html() : '',
 		/* v2.9.96: mellékletre kattintva azonnali letöltés (személyes beállítás) */
+		'px'      => function_exists('cp_px_on') && cp_px_on() ? 1 : 0, /* v2.9.112 */
 		'attdl'   => (function () { $me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0; $d = $me && function_exists('cp_pu_data') ? cp_pu_data() : array(); return $me && !empty($d['list'][$me]['attdl']) ? 1 : 0; })(),
 	);
 }

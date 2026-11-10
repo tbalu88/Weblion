@@ -186,7 +186,7 @@ function cp_send_ajax() {
 	$dom = substr(strrchr($i['user'], '@'), 1) ?: 'eventcrazy.hu';
 	$msgid = '<' . wp_generate_uuid4() . '@' . $dom . '>';
 	/* v2.9.109: megnyitás-követő kép (csak a kimenő példányba; az Elküldött mappába és a panelbe a kép nélküli megy) */
-	$px = !$test && function_exists('cp_px_new') ? cp_px_new($t ? (int) $t['id'] : 0, $deal) : null;
+	$px = !$test && (string) ($_POST['px'] ?? '1') !== '0' && function_exists('cp_px_new') ? cp_px_new($t ? (int) $t['id'] : 0, $deal) : null;
 	try {
 		$m = cp_send_mailer();
 		foreach ($to as $e) { $m->addAddress($e); }

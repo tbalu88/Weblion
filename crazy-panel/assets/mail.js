@@ -1634,7 +1634,8 @@
 			'<div data-ed></div>' +
 			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
 			'<button type="button" class="cpx-btn ghost" data-prev>Előnézet</button><button type="button" class="cpx-btn ghost" data-save>Piszkozat mentése</button><button type="button" class="ml-link" data-clear>Elvetés</button><small class="ml-dst" data-dst></small>' +
-			'<label class="ml-track" title="A megnyitás követése később jön"><input type="checkbox" disabled> Megnyitás követése (később)</label></div>' +
+			/* v2.9.112: megnyitás-követés levelenként (alapból a Beállítások szerint; ha ott ki van kapcsolva, nem látszik) */
+			(M.px ? '<label class="ml-track" title="A levélbe egy láthatatlan kép kerül; a megnyitás ideje a levél alatt és a deal idővonalán látszik"><input type="checkbox" data-px checked> Megnyitás követése</label>' : '') + '</div>' +
 			'<div class="ml-prev" hidden></div></div>';
 		const q = sel => box.querySelector(sel);
 		/* v2.7.13: ütközésjelzés a válaszíróban is */
@@ -1807,7 +1808,7 @@
 				}
 			}
 			try {
-				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '', draft: test ? '' : draftId });
+				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '', draft: test ? '' : draftId, px: (q('[data-px]') || {}).checked === false ? '0' : '1' });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
 				if (!r.test) { dsent = true; clearInterval(dtimer); }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : '') + (r.pst ? ' ' + r.pst : ''), !!r.warn);
