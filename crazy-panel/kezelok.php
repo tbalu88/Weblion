@@ -79,8 +79,15 @@ function cp_kz_up_deals() {
 	if ($c !== null) { return $c; }
 	global $wpdb;
 	$c = array();
-	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.event_d, d.venue, d.operator FROM ' . cp_crm_t('deals') . " d WHERE d.deleted_at IS NULL AND d.status <> 'Lost' AND d.event_d >= %s AND d.operator <> '' ORDER BY d.event_d", wp_date('Y-m-d')), ARRAY_A) as $d) {
-		$d['_op'] = cp_kz_up_norm($d['operator']); unset($d['operator']); $c[] = $d;
+	/* v2.9.71: többnapos rendezvény: minden közelgő napja külön sor (a nap kezdésével, helyszínével; event_d = az adott nap) */
+	$t = wp_date('Y-m-d');
+	$mor = function_exists('cp_mday_or_ids') ? cp_mday_or_ids($t, '9999-12-31') : '';
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.event_d, d.start_at, d.venue, d.operator FROM ' . cp_crm_t('deals') . " d WHERE d.deleted_at IS NULL AND d.status <> 'Lost' AND d.operator <> '' AND (d.event_d >= %s", $t) . $mor . ') ORDER BY d.event_d', ARRAY_A);
+	if (function_exists('cp_mday_rows_days')) { $rows = cp_mday_rows_days($rows, $t, '9999-12-31'); }
+	foreach ($rows as $d) {
+		$x = array('id' => $d['id'], 'title' => $d['title'], 'event_d' => (string) ($d['day'] ?? $d['event_d']), 'venue' => $d['venue'], 'tm' => (string) ($d['tm'] ?? ''));
+		if (!empty($d['dof'])) { $x['dn'] = (int) $d['dn']; $x['dof'] = (int) $d['dof']; }
+		$x['_op'] = cp_kz_up_norm($d['operator']); $c[] = $x;
 	}
 	return $c;
 }

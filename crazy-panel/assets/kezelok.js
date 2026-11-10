@@ -136,7 +136,7 @@
 			: '<p class="' + (x.miss.length ? 'kz-warn' : 'kz-open') + '">Személyes adatok: ' + n + '/' + SK.length + ' megvan' + (x.miss.length ? ' – hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) : '') + (K.admin ? ' <small class="cpx-muted">(megtekintés: „Személyes adatok megjelenítése”)</small>' : '') + '</p>';
 		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') +
 			'<p class="cpx-muted">' + (x.active ? 'Aktív' : 'Inaktív') + ' · ' + esc(KINDS[x.kind] || '') + (x.el ? ' · elszámolás: ' + esc(x.el.name) + ' (' + x.el.rate + ' Ft/óra)' : '') + (x.updated ? ' · módosítva: ' + esc(x.updated) + (x.by ? ' (' + esc(x.by) + ')' : '') : '') + '</p></div>' +
-			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + ' – ' + esc(u.title) + '</a></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
+			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
 	function detail(x) {
 		return '<div class="kz-d"><div><label>Megjegyzés<textarea data-f="note" rows="2">' + esc(x.note) + '</textarea></label>' +
@@ -146,7 +146,7 @@
 			(x.miss.length ? '<p class="kz-warn">Hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) + '</p>' : '') +
 			'<p class="cpx-muted">' + (x.phone ? '<a href="tel:' + esc(x.phone.replace(/[^\d+]/g, '')) + '">📞 Hívás</a> · ' : '') + (x.email ? '<a href="mailto:' + esc(x.email) + '">✉ E-mail</a> · ' : '') + (x.el ? 'Elszámolás: ' + esc(x.el.name) + ' (' + esc(x.el.role) + ', ' + x.el.rate + ' Ft/óra) · ' : '') + 'Módosítva: ' + esc(x.updated || '') + (x.by ? ' (' + esc(x.by) + ')' : '') + '</p>' +
 			(K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
-			'<div><b>Közelgő rendezvényei</b> <small class="cpx-muted">(a deal „Gépkezelő” mezője alapján)</small>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + ' – ' + esc(u.title) + '</a>' + (u.venue ? ' <small>' + esc(u.venue) + '</small>' : '') + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
+			'<div><b>Közelgő rendezvényei</b> <small class="cpx-muted">(a deal „Gépkezelő” mezője alapján)</small>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '' + (u.venue ? ' <small>' + esc(u.venue) + '</small>' : '') + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
 	async function save(id, f, el) {
 		if (el) el.classList.add('saving');
