@@ -23,7 +23,7 @@
 		const seen = {}, out = [];
 		/* v2.9.71: az ismétlődő fájl (ugyanaz a név ugyanattól a feladótól – jellemzően aláírás-kép) egy példányban látszik (×N),
 		   a többi példány az elrejtettek közé kerül (a „Mutasd” alatt elérhető) */
-		(list || []).forEach(f => { const k = String(f.n || '').toLowerCase() + '|' + String(f.from || '').toLowerCase(); if (seen[k]) { seen[k].x++; out.push(Object.assign({}, f, { x: 1, emb: 1, dup: 1 })); return; } const g = Object.assign({}, f, { x: 1 }); seen[k] = g; out.push(g); });
+		(list || []).forEach(f => { const k = f.h ? 'h:' + f.h : String(f.n || '').toLowerCase() + '|' + String(f.from || '').toLowerCase(); /* v2.9.71: ha ismert a kép tartalma, az dönt (más név, más feladó is) */ if (seen[k]) { seen[k].x++; out.push(Object.assign({}, f, { x: 1, emb: 1, dup: 1 })); return; } const g = Object.assign({}, f, { x: 1 }); seen[k] = g; out.push(g); });
 		/* v2.9.20: a levélbe ágyazott képek (aláírás-logók, ikonok) a lista végére, alapból rejtve */
 		return out.filter(f => !f.emb).concat(out.filter(f => f.emb));
 	}
@@ -42,6 +42,22 @@
 		sh.querySelectorAll('a[data-sbopen]').forEach(a => a.addEventListener('click', e => { const b = sh.querySelector('[data-act="sablon"]'); if (b && !e.metaKey && !e.ctrlKey) { e.preventDefault(); /* v2.9.9: a Sablonkészítő elkészíti és a dealhez teszi a PNG-t */ try { localStorage.setItem('cpsb_png_' + a.dataset.sbopen, a.dataset.sbts || ''); } catch (x) { /* nincs tár */ } b.click(); } }));
 		/* v2.9.66: a meg nem jeleníthető (üres / sérült) kép az elrejtett csoportba kerül – a szerver a következő megnyitáskor eleve oda teszi */
 		sh.querySelectorAll('.d3-tb img').forEach(im => { const bad = () => { const p = im.parentNode; if (p) p.classList.remove('has'); im.remove(); const li = p && p.closest('.d3-fg > li'); if (li && !li.classList.contains('d3-emb') && !li.closest('.d3-sbf')) { li.classList.add('d3-emb'); const ul = li.parentNode; ul.appendChild(li); const sec = li.closest('[data-fsec]'), n = sec && sec.querySelector('[data-embn]'), bt = sec && sec.querySelector('[data-embt]'), h = sec && sec.querySelector('h4 small'); if (n) n.textContent = String(Number(n.textContent || 0) + 1); if (bt) bt.hidden = false; if (h) h.textContent = String(Math.max(0, Number(h.textContent || 0) - 1)); } }; im.addEventListener('error', bad); if (im.complete && !im.naturalWidth) bad(); });
+		/* v2.9.71: tartalom szerinti ismétlődés a böngészőben – a betöltött bélyegképek 12×12-es, színben durvított képe az ujjlenyomat;
+		   az azonos képből az első (legújabb) marad látható, a többi az elrejtettek közé kerül, és az elsőn nő a ×N */
+		const FP = {};
+		const dupHide = (li, first) => {
+			if (li.classList.contains('d3-emb') || li === first) return;
+			li.classList.add('d3-emb'); li.parentNode.appendChild(li);
+			const sec = li.closest('[data-fsec]'), n = sec && sec.querySelector('[data-embn]'), bt = sec && sec.querySelector('[data-embt]'), h = sec && sec.querySelector('h4 small');
+			if (n) n.textContent = String(Number(n.textContent || 0) + 1); if (bt) bt.hidden = false; if (h) h.textContent = String(Math.max(0, Number(h.textContent || 0) - 1));
+			const sm = first.querySelector('.d3-ft small'); if (sm) { const x = Number(first.dataset.x || ((/×(\d+)/.exec(sm.textContent) || [])[1]) || 1) + 1; first.dataset.x = x; sm.textContent = sm.textContent.replace(/ · ×\d+$/, '') + ' · ×' + x; }
+		};
+		const fpOf = im => { try { const c = document.createElement('canvas'); c.width = c.height = 12; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0, 12, 12); const d = x.getImageData(0, 0, 12, 12).data; let s = ''; for (let i = 0; i < d.length; i += 4) s += ((d[i] >> 5) * 64 + (d[i + 1] >> 5) * 8 + (d[i + 2] >> 5)).toString(36) + ','; return s; } catch (e) { return ''; } };
+		sh.querySelectorAll('.d3-fg > li:not(.d3-emb) .d3-tb img').forEach(im => {
+			if (im.closest('.d3-sbf')) return;
+			const go = () => { if (!im.naturalWidth) return; const li = im.closest('li'); if (!li || li.classList.contains('d3-emb')) return; const k = fpOf(im); if (!k) return; const first = FP[k]; if (!first || !first.isConnected || first.classList.contains('d3-emb')) { FP[k] = li; return; } const a = [first, li].sort((p, q) => (p.compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1); FP[k] = a[0]; dupHide(a[1], a[0]); };
+			if (im.complete) go(); else im.addEventListener('load', go, { once: true });
+		});
 		const imgs = fl.map((f, ix) => ({ f, ix })).filter(x => D3IMG.test(x.f.n) && x.f.m && window.CPMailAtt);
 		sh.querySelectorAll('a[data-fx]').forEach(a => a.addEventListener('click', e => {
 			const ix = Number(a.dataset.fx), pos = imgs.findIndex(x => x.ix === ix);
@@ -424,10 +440,14 @@
 
 	/* ------------------------------------------------------------ lista */
 	function stBadge(r) { return '<span class="crm-st ' + esc(String(r.status).toLowerCase()) + '">' + esc(ST_HU[r.status] || r.status) + '</span>'; }
+	/* v2.9.71: többnapos rendezvény – az első és az utolsó nap („2026. dec. 3. – 12.”); lezajlott, ha az utolsó nap is elmúlt */
+	const evEnd = r => r.eve && r.eve > r.ev ? r.eve : '';
+	const endTxt = (a, b) => (a.slice(0, 4) !== b.slice(0, 4) ? b.slice(0, 4) + '. ' : '') + (a.slice(0, 7) !== b.slice(0, 7) ? HU_MS[+b.slice(5, 7) - 1] + ' ' : '') + (+b.slice(8, 10)) + '.';
+	const evShort = r => shortD(r.ev) + (evEnd(r) ? '–' + endTxt(r.ev, r.eve) : '');
 	function evCell(r) {
 		if (!r.ev) return '<span class="cpx-muted">–</span>';
-		const past = r.ev < today();
-		return '<span class="' + (past ? 'cpx-muted' : '') + '">' + esc(huD(r.ev)) + '</span>';
+		const past = (evEnd(r) || r.ev) < today();
+		return '<span class="' + (past ? 'cpx-muted' : '') + '"' + (evEnd(r) ? ' title="Többnapos rendezvény – az első és az utolsó nap"' : '') + '>' + esc(huD(r.ev)) + (evEnd(r) ? ' – ' + esc(endTxt(r.ev, r.eve)) : '') + '</span>';
 	}
 	function contactCell(r) {
 		const a = [];
@@ -809,20 +829,20 @@
 				'<div class="crm-mh"><b>' + esc(s) + '</b><small>' + (v || !ve ? esc(money(v)) : '') + (ve ? (v ? ' + ' : '') + veH : '') + ' • ' + l.length + ' deal</small>' + prog(names.indexOf(s)) + '</div></header><div class="crm-cards">' +
 				pend.map(x => { const ev = x.f['Deal.dateCustomField1'] || '', sv = x.f['Deal.multiSelectCustomField3'] || ''; return '<article class="crm-card crm-pend" data-lead="' + x.id + '" tabindex="0"><div class="crm-ct"><span class="crm-lnew">új</span> ' + esc(x.n || x.e || 'Névtelen') + '</div><div class="crm-cl">' + (ev ? '<span>' + esc(shortD(ev)) + '</span><i>•</i>' : '') + '<span class="cpx-muted">' + esc(sv || x.form || 'weboldal') + '</span></div><div class="crm-pw">⏳ Salesmate-szinkronra vár · ' + esc(agoLead(x.at)) + '<button type="button" class="crm-px" data-pdel="' + x.id + '" title="Elvetés (spam / teszt)">×</button></div></article>'; }).join('');
 			l.forEach(r => {
-				const soon = r.ev && r.ev >= t && r.ev <= addDays(t, 14), past = r.ev && r.ev < t;
+				const soon = r.ev && (evEnd(r) || r.ev) >= t && r.ev <= addDays(t, 14), past = r.ev && (evEnd(r) || r.ev) < t; /* v2.9.71: többnapos: az utolsó napig */
 				const rot = r.rot && r.rot <= t ? dayDiff(r.rot, t) : 0;
 				const act = r.na ? (r.na < now ? '<span class="crm-na late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑ lejárt</span>' : '<span class="crm-na" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑ ' + esc(shortD(r.na.slice(0, 10))) + '</span>') : '<span class="crm-na none" title="Nincs ütemezett teendő">⚑ nincs teendő</span>';
 				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
 				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
 				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
 				if (S.dense && !MOB) {
-					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
+					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
 				}
 				h += open +
 					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
-					'<div class="crm-cl">' + valHtml(r) + '<i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(shortD(r.ev)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
+					'<div class="crm-cl">' + valHtml(r) + '<i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
 					(capHtml(r.cap, false) ? '<div class="crm-cl">' + capHtml(r.cap, false) + '</div>' : '') +
 					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + '</div></article>';
 			});

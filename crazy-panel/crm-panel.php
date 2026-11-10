@@ -125,7 +125,7 @@ function cp_crm_list_data($a) {
 
 /* v2.9.58: a lista, a pipeline-tábla és az egy sor (cp_crm_row_out) közös oszlopai és táblakapcsolatai */
 function cp_crm_list_cols() {
-	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
+	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.event_end_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
 }
 function cp_crm_list_from() {
 	return cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id LEFT JOIN ' . cp_crm_t('companies') . ' co ON co.id = d.company_id';
@@ -142,7 +142,7 @@ function cp_crm_list_row($r, $xk = array()) {
 	$o = array(
 		'id' => (int) $r['id'], 'title' => (string) $r['title'], 'stage' => (string) $r['stage'], 'status' => (string) $r['status'],
 		'value' => $r['value'] === null ? null : (float) $r['value'], 'cur' => (string) $r['currency'],
-		'ev' => (string) $r['event_d'], 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
+		'ev' => (string) $r['event_d'], 'eve' => isset($r['event_end_d']) ? (string) $r['event_end_d'] : '', /* v2.9.71: többnapos: utolsó nap */ 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
 		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'], 'rot' => isset($r['rotten_d']) ? (string) $r['rotten_d'] : '',
 		'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'cp' => (string) ($r['cm'] !== null && $r['cm'] !== '' ? $r['cm'] : $r['cp']), 'co' => (string) $r['con'],
 	);

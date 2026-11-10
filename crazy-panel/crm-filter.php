@@ -199,6 +199,40 @@ function cp_cf_date_sql($col, $dt, $o, $v, $v2) {
 	return null;
 }
 
+/* v2.9.71: „Rendezvény dátuma” szűrő többnapos dealekre: a deal akkor felel meg, ha BÁRMELYIK napja a tartományba esik.
+   Gyors előszűrés: az első nap (event_d, indexelt) a tartományban, VAGY az [event_d, event_end_d] átfedi a tartományt és a napok
+   táblájában (day index) tényleg van napja benne – így a szórt napok közötti üres tartomány nem talál.
+   „előtte X” = az első nap X előtt; „utána X” = az utolsó nap X után; ki van töltve / üres: az event_d. */
+function cp_cf_event_sql($o, $v, $v2) {
+	global $wpdb;
+	$today = wp_date('Y-m-d');
+	$n = max(0, min(3650, (int) (is_array($v) ? 0 : $v)));
+	$day = cp_cf_day(is_array($v) ? '' : $v);
+	$end = 'COALESCE(d.event_end_d, d.event_d)';
+	$rng = function ($a, $b) use ($wpdb) {
+		if ($a === '' && $b === '') { return null; }
+		$a = $a !== '' ? $a : '1000-01-01'; $b = $b !== '' ? $b : '9999-12-31';
+		if ($a > $b) { $t = $a; $a = $b; $b = $t; }
+		$md = function_exists('cp_mday_db_ok') && cp_mday_db_ok()
+			? $wpdb->prepare(' AND EXISTS (SELECT 1 FROM ' . cp_mday_t() . ' x WHERE x.deal_id = d.id AND x.day BETWEEN %s AND %s)', $a, $b) : ' AND 1=0';
+		return $wpdb->prepare('(d.event_d BETWEEN %s AND %s OR (d.event_end_d IS NOT NULL AND d.event_d < %s AND d.event_end_d >= %s', $a, $b, $a, $a) . $md . '))';
+	};
+	switch ($o) {
+		case 'on': return $day ? $rng($day, $day) : null;
+		case 'btw': $b = cp_cf_day($v2); return ($day || $b) ? $rng($day, $b) : null;
+		case 'today': return $rng($today, $today);
+		case 'next': return $rng($today, cp_cf_shift($n));
+		case 'past': return $rng(cp_cf_shift(-$n), $today);
+		case 'before': return $day ? $wpdb->prepare('d.event_d < %s', $day) : null;
+		case 'older': return $wpdb->prepare('d.event_d < %s', cp_cf_shift(-$n));
+		case 'after': return $day ? $wpdb->prepare("$end > %s", $day) : null;
+		case 'later': return $wpdb->prepare("$end > %s", cp_cf_shift($n));
+		case 'set': return 'd.event_d IS NOT NULL';
+		case 'empty': return 'd.event_d IS NULL';
+	}
+	return null;
+}
+
 /* egy feltétel → SQL-részlet (null: hiányos, kimarad) */
 function cp_cf_cond_sql($t, $c) {
 	global $wpdb;
@@ -256,6 +290,8 @@ function cp_cf_cond_sql($t, $c) {
 	} else {
 		$col = $al[$t] . '.`' . $c['f'] . '`';
 	}
+	/* v2.9.71: a rendezvény dátuma többnapos dealnél: bármelyik napja számít (lásd cp_cf_event_sql) */
+	if ($t === 'deal' && $c['f'] === 'event_d') { return cp_cf_event_sql($o, $v, $c['v2']); }
 	switch ($ty) {
 		case 'text': return cp_cf_text_sql($col, $o, $v);
 		case 'num':
