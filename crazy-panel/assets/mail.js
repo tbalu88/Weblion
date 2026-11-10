@@ -886,13 +886,14 @@
 	/* v2.9.113: megnyitás-követés jelvény a levél fejlécében (mint a Salesmate „Opened ▾”), kattintásra a megnyitások listája */
 	function pxBadge(m) {
 		const p = m && m.dir === 'out' ? m.px : null; if (!p) return '';
-		const [cls, lab] = p.n ? ['on', 'Megnyitva' + (p.n > 1 ? ' ' + p.n + '×' : '')] : p.na ? ['auto', 'Automatikus letöltés'] : ['', 'Kézbesítve'];
+		/* v2.9.114: csak két címke – „Elolvasva” (valódi megnyitás) vagy „Kézbesítve” (az automatikus letöltés is ide tartozik; a részletek a listában) */
+		const [cls, lab] = p.n ? ['on', 'Elolvasva' + (p.n > 1 ? ' ' + p.n + '×' : '')] : ['', 'Kézbesítve'];
 		return '<button type="button" class="ml-pxb ' + cls + '" data-pxm="' + m.id + '" aria-haspopup="dialog" title="Megnyitás-követés – részletek">' + esc(lab) + ' ▾</button>';
 	}
 	function pxPop(btn, m) {
 		const old = document.querySelector('.ml-pxp'); if (old) { const same = old.dataset.m === String(m.id); old._close(); if (same) return; }
 		const p = m.px || { ev: [] }, tt = s => esc(hdate(s));
-		const ev = (p.ev || []).map(e => '<li><span class="i">' + (e.a ? '⚙' : '✉︎') + '</span><span>' + (e.a ? 'Automatikus letöltés <small>(iPhone/Mac levelező vagy szűrő – nem biztos olvasás)</small>' : '<b>Megnyitotta</b> az ügyfél') + '</span><time>' + tt(e.at) + '</time></li>').join('');
+		const ev = (p.ev || []).map(e => '<li><span class="i">' + (e.a ? '⚙' : '✉︎') + '</span><span>' + (e.a ? 'Automatikus letöltés <small>(iPhone/Mac levelező vagy szűrő – nem biztos olvasás)</small>' : '<b>Elolvasta</b> az ügyfél') + '</span><time>' + tt(e.at) + '</time></li>').join('');
 		const el = document.createElement('div');
 		el.className = 'ml-pxp'; el.dataset.m = String(m.id); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Megnyitás-követés');
 		el.innerHTML = '<b class="h">Megnyitás-követés</b><ul>' + ev + '<li><span class="i">➤</span><span>Elküldve: ' + esc(m.to_list || '') + '</span><time>' + tt(m.sent_at) + '</time></li></ul>' +
