@@ -96,7 +96,8 @@
 		if (!el.isConnected) return;
 		el.innerHTML = '';
 		const m = window.L.map(el, { scrollWheelZoom: false });
-		window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(m);
+		/* az OSM a csempékhez forrás-fejlécet kér, a panel oldala viszont nem küld (Referrer-Policy: same-origin) – a csempéknél csak a domain megy át */
+		window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap', referrerPolicy: 'origin' }).addTo(m);
 		const pts = [];
 		if (d.home) { pts.push([d.home.lat, d.home.lon]); window.L.marker([d.home.lat, d.home.lon], { icon: window.L.divIcon({ className: 'lg-pin home', html: '🏠', iconSize: [30, 30] }) }).addTo(m).bindPopup('<b>Raktár</b><br>' + esc(d.home.n)); }
 		d.sites.forEach((s, i) => {
