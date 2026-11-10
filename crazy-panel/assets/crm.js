@@ -34,7 +34,7 @@
 	function d3Thumb(f) {
 		const e = d3Ext(f.n), cls = /^(PDF)$/.test(e) ? 'pdf' : /^(DOCX?|ODT|RTF|PAGES)$/.test(e) ? 'doc' : /^(XLSX?|CSV|ODS|NUMBERS)$/.test(e) ? 'xls' : /^(PPTX?|KEY|ODP)$/.test(e) ? 'ppt' : /^(ZIP|RAR|7Z|GZ)$/.test(e) ? 'zip' : D3IMG.test(f.n) ? 'img' : 'oth';
 		const C0 = window.CPX || {};
-		const img = D3T.on && D3IMG.test(f.n) && f.m && C0.ajax ? '<img loading="lazy" alt="" src="' + esc(C0.ajax + '?action=cp_mail_thumb&m=' + f.m + '&i=' + f.i + '&t=' + encodeURIComponent(C0.t || '')) + '">' : '';
+		const img = D3T.on && D3IMG.test(f.n) && f.m && C0.ajax ? '<img loading="lazy" alt="" src="' + esc(C0.ajax + '?action=cp_mail_thumb&v=2&m=' + f.m + '&i=' + f.i + '&t=' + encodeURIComponent(C0.t || '')) + '">' : '';
 		return '<span class="d3-tb t-' + cls + (img ? ' has' : '') + '">' + img + '<i>' + esc(e || 'FÁJL') + '</i></span>';
 	}
 	function d3FilesBind(sh, fl) {

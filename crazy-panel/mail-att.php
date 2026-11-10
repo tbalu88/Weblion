@@ -95,6 +95,12 @@ function cp_att_send_file($name, $mime, $data, $inline) {
 }
 /* v2.9.58: $perm – végleges hiba (a levél / melléklet nincs meg): a bélyegkép-kérés „nincs” jelölőt kap, és többé nem keres a postafiókban */
 function cp_att_fail($msg, $code = 404, $perm = false) {
+	/* v2.9.73: újramérés közben a postafiók nem adta ki a képet → a meglévő bélyeg marad (végleges hibánál nem próbálja újra) */
+	if (!empty($GLOBALS['cp_att_capture']) && !empty($GLOBALS['cp_thumb_fb']) && is_file($GLOBALS['cp_thumb_fb'] . '.webp')) {
+		if ($perm) { @file_put_contents($GLOBALS['cp_thumb_fb'] . '.m', '{}'); }
+		$b = (string) file_get_contents($GLOBALS['cp_thumb_fb'] . '.webp');
+		header('Content-Type: ' . (strncmp($b, 'RIFF', 4) === 0 ? 'image/webp' : 'image/jpeg')); header('Cache-Control: private, max-age=86400'); header('X-Content-Type-Options: nosniff'); echo $b; exit;
+	}
 	if (!empty($GLOBALS['cp_att_capture'])) { if ($perm && !empty($GLOBALS['cp_thumb_req'])) { cp_thumb_none(); } status_header(404); header('Cache-Control: no-store'); exit; } /* átmeneti hiba (pl. postafiók): nem jegyzi meg */
 	status_header($code);
 	nocache_headers();
@@ -267,8 +273,10 @@ function cp_thumb_ajax() {
 	$f = cp_thumb_dir() . '/' . cp_thumb_key();
 	if (is_file($f . '.none')) { status_header(404); header('Cache-Control: private, max-age=86400'); exit; }
 	$out = function ($b) { header('Content-Type: ' . (strncmp($b, 'RIFF', 4) === 0 ? 'image/webp' : (strncmp($b, "\x89PNG", 4) === 0 ? 'image/png' : 'image/jpeg'))); header('Cache-Control: private, max-age=2592000'); header('X-Content-Type-Options: nosniff'); header('Content-Length: ' . strlen($b)); echo $b; exit; };
-	if (is_file($f . '.webp')) { @touch($f . '.webp'); $out((string) file_get_contents($f . '.webp')); }
+	/* v2.9.73: a 2.9.72 előtt készült bélyegnél még nincs méret / ujjlenyomat – ilyenkor egyszer újra lekérjük az eredetit, és megmérjük */
+	if (is_file($f . '.webp') && is_file($f . '.m')) { @touch($f . '.webp'); $out((string) file_get_contents($f . '.webp')); }
 	@set_time_limit(40);
+	$GLOBALS['cp_thumb_fb'] = $f;
 	$GLOBALS['cp_thumb_req'] = 1; /* v2.9.58: a végleges „nincs meg” hibánál „nincs” jelölő (a zip-ellenőrzés nem ír ilyet) */
 	$GLOBALS['cp_att_capture'] = function ($name, $mime, $data) use ($f, $out) {
 		/* v2.9.66: a 10 KB alatti kép megjelölése – a deal Fájlok kártyáján az aláírásképekkel együtt rejtve */
