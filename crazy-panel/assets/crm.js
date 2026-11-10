@@ -1324,6 +1324,8 @@
 		sh.querySelectorAll('[data-pdiff]').forEach(b => b.addEventListener('click', async () => {
 			const f = ((x.portal || {}).diff || [])[Number(b.dataset.pdiff)]; if (!f) return;
 			b.disabled = true;
+			/* v2.9.78: többnapos rendezvény napi eltérése: a nap felülírásába (csak a panelben) */
+			if (f.f === 'mday') { try { await post('cp_crm_day_set', { id: id, day: f.day, fld: f.fld, v: String(f.v) }); toast(f.l + ' átvéve a nap adatai közé (csak a panelben).'); reopen(); } catch (e) { b.disabled = false; toast(e.message, true); } return; }
 			try { const r = await post('cp_crm_save', { id: id, f: JSON.stringify({ [f.f]: String(f.v) }), c: '{}' }); toast(r.warn ? 'Átvéve, de: ' + r.warn : f.l + ' átvéve a dealbe – a Salesmate-ben is.', !!r.warn); reopen(); }
 			catch (e) { b.disabled = false; toast(e.message, true); }
 		}));

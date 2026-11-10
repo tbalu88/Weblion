@@ -99,6 +99,9 @@ function cp_portal_render_form_page($portal, $tok) {
 	$fields = cp_portal_fields();
 	$secs = cp_portal_sections();
 	$sn = 0;
+	/* v2.9.78: többnapos rendezvény (az iroda napokat adott a dealhez): a dátum és a menetrend helyett napos kártyák,
+	   a helyszín „Helyszín (általános)”; egynapos portálnál minden marad, ahogy volt */
+	$pmd = function_exists('cp_portal_mdays') ? cp_portal_mdays($portal) : array();
 	foreach (cp_portal_stage_titles() as $stage => $tt) {
 		$sn++;
 		$secn = 0;
@@ -112,6 +115,9 @@ function cp_portal_render_form_page($portal, $tok) {
 				if ($f['section'] !== $sec) { continue; }
 				if ($k === 'background' && !cp_portal_bg_enabled($portal)) { continue; }
 				if (!cp_portal_field_svc_ok($f, $portal)) { continue; }  // pl. a helyigény csak szelfigépnél
+				if ($pmd ? ($k === 'event_date' || $k === 'schedule') : $k === 'event_days') { continue; } /* v2.9.78 */
+				if ($pmd && $k === 'venue_address') { $f['label'] = 'Helyszín (általános)'; $f['help'] = 'Ha valamelyik nap máshol lesz, azt a napnál add meg lent.'; }
+				if ($k === 'event_days') { $f['required'] = true; $f['q'] = 'schedule'; $f['label'] = 'Mettől meddig kéritek a szolgáltatást az egyes napokon?'; } /* a hiánylista a menetrend kérdésével jelöli */
 				$val = array_key_exists($k, $answers) ? $answers[$k] : (isset($prefill[$k]) ? $prefill[$k] : null);
 				if (is_object($val)) { $val = (array) $val; }
 				$req = !empty($f['required']) && cp_portal_stage_required($f['stage'], $flow);
@@ -191,6 +197,8 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 			$h .= cp_portal_input_html($k . '__' . $pk, $p, isset($v[$pk]) ? $v[$pk] : '', $dis, $p['label'], $f['label']);
 			$h .= '</div>';
 		}
+	} elseif ($kind === 'days') {
+		$h .= cp_portal_days_field_html($portal, is_array($val) ? $val : array(), $answers, $dis); /* v2.9.78 */
 	} elseif ($kind === 'bg') {
 		$h .= cp_portal_bg_html($portal, is_string($val) ? $val : '', $dis);
 	} elseif ($kind === 'sablon') {
@@ -333,4 +341,35 @@ function cp_portal_days_html($mdays) {
 		$h .= '<li><b>' . esc_html(cp_portal_hu_date((string) $x['d'])) . '</b><span>' . esc_html(trim((!empty($x['start']) ? $x['start'] . ($end !== '' ? '–' . $end : '') : '') . (!empty($x['venue']) ? (!empty($x['start']) ? ' · ' : '') . $x['venue'] : ''))) . '</span></li>';
 	}
 	return $h . '</ol><p class="cpp-days-n">Ha valamelyik nap adata nem stimmel, jelezd az irodának – itt nem módosítható.</p></section>';
+}
+
+/* v2.9.78: többnapos rendezvény – a napok kártyái a portál adatlapján. A dátumot az iroda adja (csak olvasható); kezdés és vége
+   szerkeszthető (ebből az óraszám), a helyszín üresen az általános, a létszám nem kötelező. Előtöltés: a nap felülírása, különben a foglalás. */
+function cp_portal_days_field_html($portal, $val, $answers, $dis) {
+	$md = cp_portal_mdays($portal);
+	$n = count($md);
+	$gv = isset($answers['venue_address']) && is_array($answers['venue_address']) ? trim(implode(', ', array_filter(array($answers['venue_address']['name'] ?? '', $answers['venue_address']['address'] ?? '')))) : '';
+	if ($gv === '') { $sm = is_array($portal->sm ?? null) ? $portal->sm : array(); $gv = trim((string) ($sm['venue'] ?? '')); }
+	$guests = isset(cp_portal_fields()['guests_type_dress']['parts']['guests']);
+	$h = '<p class="cpp-help">A napokat az iroda állította be – a dátum itt nem módosítható. Add meg, mettől meddig kéritek a szolgáltatást az egyes napokon; ha valamelyik nap máshol lesz, írd be a helyszínét.</p>';
+	if (!$dis && $n > 1) { $h .= '<button type="button" class="cpp-days-same" data-days-same>Minden napra ugyanaz, mint az 1. napon</button>'; }
+	$h .= '<p class="cpp-days-cnt"><b>Rendezvény – ' . $n . ' nap</b></p><ol class="cpp-dayl">';
+	foreach ($md as $i => $x) {
+		$v = isset($val[$x['d']]) && is_array($val[$x['d']]) ? $val[$x['d']] : array();
+		$saved = isset($answers['event_days'][$x['d']]);
+		$s = $saved ? (string) ($v['start'] ?? '') : $x['start'];
+		$e = $saved ? (string) ($v['end'] ?? '') : $x['end'];
+		$ve = $saved ? (string) ($v['venue'] ?? '') : $x['venue'];
+		$g = $saved ? (string) ($v['guests'] ?? '') : (string) $x['guests'];
+		$id = 'i-ed-' . $x['d'];
+		/* az előtöltött (még nem mentett) vége a kezdéssel együtt mozog, amíg az ügyfél kézzel át nem írja */
+		$h .= '<li class="cpp-day" data-day="' . esc_attr($x['d']) . '" data-part="' . esc_attr($x['d']) . '" data-hours="' . esc_attr($x['hours']) . '"' . (!$saved && $e !== '' ? ' data-auto-end="' . esc_attr($e) . '"' : '') . '>' .
+			'<div class="cpp-day-h"><b>' . ($i + 1) . '. nap</b><span>' . esc_html(cp_portal_hu_date($x['d'])) . '</span></div><div class="cpp-day-g">' .
+			'<label class="cpp-pl" for="' . esc_attr($id) . '-s">Kezdés<input id="' . esc_attr($id) . '-s" type="time" step="300" data-dp="start" value="' . esc_attr($s) . '"' . $dis . '></label>' .
+			'<label class="cpp-pl" for="' . esc_attr($id) . '-e">Vége<input id="' . esc_attr($id) . '-e" type="time" step="300" data-dp="end" value="' . esc_attr($e) . '"' . $dis . '></label>' .
+			($guests ? '<label class="cpp-pl" for="' . esc_attr($id) . '-g">Létszám<input id="' . esc_attr($id) . '-g" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-dp="guests" value="' . esc_attr($g) . '" placeholder="nem kötelező"' . $dis . '></label>' : '') .
+			'<label class="cpp-pl w" for="' . esc_attr($id) . '-v">Helyszín ezen a napon<input id="' . esc_attr($id) . '-v" type="text" maxlength="200" data-dp="venue" value="' . esc_attr($ve) . '" placeholder="' . esc_attr($gv !== '' ? $gv : 'az általános helyszín') . '"' . $dis . '></label>' .
+			'</div><p class="cpp-day-dur" data-day-dur aria-live="polite"></p></li>';
+	}
+	return $h . '</ol>';
 }

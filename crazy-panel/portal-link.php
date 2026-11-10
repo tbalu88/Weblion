@@ -39,6 +39,12 @@ function cp_plk_diff($deal_id, $d, $p = false, $a = false) {
 	$add = function ($k, $l, $pv, $dv, $v) use (&$out) { $out[] = array('k' => $k, 'l' => $l, 'p' => (string) $pv, 'd' => (string) $dv, 'f' => $k, 'v' => $v); };
 	$ad = isset($a['event_date']) && is_string($a['event_date']) ? $a['event_date'] : '';
 	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $ad) && $ad !== (string) ($d['event_d'] ?? '')) { $add('event_d', 'Dátum', $ad, $d['event_d'] ?? '', $ad); }
+	/* v2.9.78: többnapos rendezvény – az ügyfél napi válaszai a nap felülírásaihoz mérve (az 1. napi menetrend a napnál jelenik meg) */
+	$mdays = function_exists('cp_mday_get') && !empty($d['event_d']) ? cp_mday_align(cp_mday_get((int) $deal_id), (string) $d['event_d']) : array();
+	if ($mdays) {
+		$out = array_merge($out, cp_plk_diff_days($mdays, $d, isset($a['event_days']) && is_array($a['event_days']) ? $a['event_days'] : array()));
+		$a['schedule'] = array();
+	}
 	$sch = isset($a['schedule']) ? (array) $a['schedule'] : array();
 	$ps = (string) ($sch['start'] ?? ''); $pe = (string) ($sch['end'] ?? '');
 	$ds = !empty($d['start_at']) ? substr((string) $d['start_at'], 11, 5) : '';
@@ -53,6 +59,37 @@ function cp_plk_diff($deal_id, $d, $p = false, $a = false) {
 	if ($g > 0 && $g !== (int) ($d['guests'] ?? 0)) { $add('guests', 'Létszám', $g, (int) ($d['guests'] ?? 0) ?: '', $g); }
 	$b = isset($a['background']) && is_string($a['background']) ? trim($a['background']) : '';
 	if ($b !== '' && cp_panel_lc($b) !== cp_panel_lc(trim((string) ($d['background'] ?? '')))) { $add('background', 'Háttér', $b, $d['background'] ?? '', $b); }
+	return $out;
+}
+
+/* v2.9.78: napi eltérések – {k, l, p, d, f: 'mday', day, fld (start_t | hours | venue | guests), v}; a nap hatályos értéke
+   a nap felülírása, különben a dealé. Az „Átveszem” a nap felülírásába ír (cp_crm_day_set – csak a panelben, a Salesmate-be nem). */
+function cp_plk_diff_days($mdays, $d, $ans) {
+	$out = array(); $n = count($mdays);
+	$ds = !empty($d['start_at']) ? substr((string) $d['start_at'], 11, 5) : '';
+	$okt = function ($t) { return (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) $t); };
+	$hu = function ($day) { $m = array('jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'); return $m[(int) substr($day, 5, 2) - 1] . ' ' . (int) substr($day, 8, 2) . '.'; };
+	foreach ($mdays as $i => $x) {
+		$c = isset($ans[$x['day']]) && is_array($ans[$x['day']]) ? $ans[$x['day']] : array();
+		if (!$c) { continue; }
+		$lbl = ($i + 1) . '/' . $n . '. nap (' . $hu($x['day']) . ') – ';
+		$add = function ($fld, $l, $pv, $dv, $v) use (&$out, $x, $lbl) { $out[] = array('k' => 'mday:' . $x['day'] . ':' . $fld, 'l' => $lbl . $l, 'p' => (string) $pv, 'd' => (string) $dv, 'f' => 'mday', 'day' => $x['day'], 'fld' => $fld, 'v' => $v); };
+		$es = $x['start_t'] !== '' ? $x['start_t'] : $ds;
+		$ps = (string) ($c['start'] ?? ''); $pe = (string) ($c['end'] ?? '');
+		if ($okt($ps) && $ps !== $es) { $add('start_t', 'Kezdés', $ps, $es, $ps); }
+		if ($okt($ps) && $okt($pe)) {
+			$h = round((((int) substr($pe, 0, 2) * 60 + (int) substr($pe, 3, 2) - (int) substr($ps, 0, 2) * 60 - (int) substr($ps, 3, 2)) + 1440) % 1440 / 60, 1);
+			if ($h <= 0) { $h = 24; }
+			$eh = $x['hours'] !== null ? (float) $x['hours'] : (float) ($d['hours'] ?? 0);
+			if (abs($h - $eh) >= 0.25) { $add('hours', 'Óraszám', str_replace('.', ',', (string) $h), $eh > 0 ? str_replace('.', ',', (string) $eh) : '', (string) (round($h * 2) / 2)); }
+		}
+		$pv = trim((string) ($c['venue'] ?? ''));
+		$ev = $x['venue'] !== '' ? $x['venue'] : trim((string) ($d['venue'] ?? ''));
+		if ($pv !== '' && mb_strtolower($pv) !== mb_strtolower($ev)) { $add('venue', 'Helyszín', $pv, $ev, $pv); }
+		$pg = (int) ($c['guests'] ?? 0);
+		$eg = $x['guests'] !== null ? (int) $x['guests'] : (int) ($d['guests'] ?? 0);
+		if ($pg > 0 && $pg !== $eg) { $add('guests', 'Létszám', $pg, $eg ?: '', (string) $pg); }
+	}
 	return $out;
 }
 

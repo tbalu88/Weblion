@@ -158,3 +158,22 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-days li b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .cpp-days li span{color:var(--mu);min-width:0;overflow-wrap:anywhere}
 .cpp-days-n{margin:8px 0 0;font-size:13px;color:var(--mu)}
+/* v2.9.78: többnapos rendezvény – napok kártyái az adatlapon (mobilra tervezve; a dátum csak olvasható, mozgás nincs) */
+.cpp-days-same{display:inline-flex;align-items:center;min-height:44px;margin:0 0 10px;padding:0 14px;border:1.5px solid var(--li);border-radius:999px;background:#fff;font:600 14px Inter,system-ui,sans-serif;color:var(--ink);cursor:pointer}
+.cpp-days-same:hover{border-color:var(--o)}.cpp-days-same:focus-visible{outline:0;border-color:var(--o);box-shadow:0 0 0 3px rgba(232,137,74,.2)}
+.cpp-days-cnt{margin:0 0 8px;font-size:15px}
+.cpp-dayl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cpp-day{border:1.5px solid var(--li);border-radius:14px;padding:12px;background:#FCFBF9;min-width:0}
+.cpp-day.bad{border-color:var(--bad)}
+.cpp-day-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:0 0 10px}
+.cpp-day-h b{font:800 15px "Plus Jakarta Sans",sans-serif}
+.cpp-day-h span{color:var(--mu);font-size:14px;font-variant-numeric:tabular-nums}
+.cpp-day-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.cpp-day-g .cpp-pl{margin:0;min-width:0}.cpp-day-g .cpp-pl small{font-weight:500}
+.cpp-day-g .cpp-pl input{margin-top:6px}
+.cpp-day-g .w{grid-column:1/-1}
+.cpp-field .cpp-day-g input[type=time]{max-width:none}
+.cpp-day-dur{margin:8px 0 0;font-size:13px;color:var(--mu);font-variant-numeric:tabular-nums}
+.cpp-day-dur:empty{display:none}
+.cpp-day-dur.diff{color:#6E4A00;background:var(--warnb);border-radius:8px;padding:6px 9px;font-weight:600}
+@media (min-width:700px){.cpp-day-g{grid-template-columns:repeat(3,minmax(0,1fr))}}

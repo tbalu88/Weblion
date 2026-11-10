@@ -69,6 +69,8 @@
     if (!f) return typeof v === 'object' ? JSON.stringify(v) : String(v);
     if (f.kind === 'consent') return v.given ? 'igen' : 'nem';
     if (f.kind === 'sablon') return typeof v === 'string' ? v : (v.name || 'mentve');
+    /* v2.9.78: többnapos rendezvény napjai */
+    if (f.kind === 'days' && typeof v === 'object') return Object.keys(v).sort().map(d => d.slice(5).replace('-', '.') + '.: ' + [v[d].start && v[d].end ? v[d].start + '–' + v[d].end : '', v[d].venue || '', v[d].guests ? v[d].guests + ' fő' : ''].filter(Boolean).join(', ')).join(' · ') || '–';
     if (f.parts && typeof v === 'object') {
       return Object.keys(f.parts).filter(pk => v[pk] !== undefined && v[pk] !== '').map(pk => (f.parts[pk].label ? f.parts[pk].label.replace(/\s*\(.*\)\s*$/, '').replace(/\?$/, '') + ': ' : '') + optLabel(f, pk, v[pk])).join(' · ') || '–';
     }
@@ -239,7 +241,7 @@
       h += '<h4>Válaszok <small class="cpx-muted">– irodai szerkesztés' + (p.deadline && p.deadline.passed ? '; a határidő után minden módosítás „MÓDOSÍTVA” címkét és Pumble-értesítést ad' : '') + '</small></h4>';
       let stg = '';
       SCHEMA.forEach(f => {
-        if (f.kind === 'sablon' || f.kind === 'fixed' || !activeField(f, p.answers)) return;
+        if (f.kind === 'sablon' || f.kind === 'fixed' || f.kind === 'days' || !activeField(f, p.answers)) return; /* v2.9.78: a napokat az iroda a Deal-adatlapon kezeli */
         if (f.stage !== stg) { stg = f.stage; h += '<div class="pp-sec">' + esc(STAGE[stg] || stg) + '</div>'; }
         const v = p.answers[f.key] !== undefined ? p.answers[f.key] : (p.prefill && p.prefill[f.key]) || null;
         h += editor(f, v, p.meta[f.key]);

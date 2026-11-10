@@ -560,3 +560,29 @@ function cp_mday_ajax_save() {
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), (int) ($r->get_error_data() ?: 400)); }
 	wp_send_json_success($r);
 }
+
+/* ------------------------------------------------------------ v2.9.78: egy nap egy mezője (a portál-eltérés „Átveszem” gombja) – csak a panelben */
+add_action('wp_ajax_nopriv_cp_crm_day_set', 'cp_mday_ajax_day_set');
+add_action('wp_ajax_cp_crm_day_set', 'cp_mday_ajax_day_set');
+function cp_mday_ajax_day_set() {
+	cp_crm_ajax_guard();
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$r = cp_mday_day_set(isset($_POST['id']) ? (int) $_POST['id'] : 0, (string) wp_unslash($_POST['day'] ?? ''), (string) wp_unslash($_POST['fld'] ?? ''), (string) wp_unslash($_POST['v'] ?? ''));
+	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), (int) ($r->get_error_data() ?: 400)); }
+	wp_send_json_success($r);
+}
+function cp_mday_day_set($deal, $day, $fld, $v) {
+	global $wpdb;
+	if (!cp_mday_db_ok()) { return new WP_Error('cp_mday', 'A napok táblája még készül.', 503); }
+	if (!in_array($fld, array('start_t', 'hours', 'venue', 'guests'), true) || !cp_mday_ymd_ok($day) || $deal <= 0) { return new WP_Error('cp_mday', 'Hibás kérés.'); }
+	$row = $wpdb->get_row($wpdb->prepare('SELECT id, start_t, hours, venue, guests FROM ' . cp_mday_t() . ' WHERE deal_id = %d AND day = %s', $deal, $day), ARRAY_A);
+	if (!$row) { return new WP_Error('cp_mday', 'Ez a nap már nincs a deal napjai között – frissítsd az adatlapot.', 409); }
+	$c = cp_mday_clean_in(array('day' => $day, $fld => $v));
+	if (is_wp_error($c)) { return $c; }
+	$old = (string) $row[$fld];
+	$wpdb->update(cp_mday_t(), array($fld => $c[$fld], 'updated_at' => gmdate('Y-m-d H:i:s')), array('id' => (int) $row['id']));
+	$L = array('start_t' => 'kezdés', 'hours' => 'óraszám', 'venue' => 'helyszín', 'guests' => 'létszám');
+	cp_mday_hist($deal, $day . ' ' . $L[$fld] . ': ' . ($old !== '' ? $old : '(a dealé)'), $day . ' ' . $L[$fld] . ': ' . (string) $c[$fld] . ' – az ügyfél portálon megadott adata');
+	cp_mday_after_change();
+	return array('day' => $day, 'fld' => $fld, 'v' => $c[$fld]);
+}

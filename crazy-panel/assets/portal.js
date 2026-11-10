@@ -24,8 +24,15 @@
     var i = box.querySelector('input,textarea');
     return i ? i.value : '';
   }
+  /* v2.9.78: többnapos rendezvény – napok kártyái: { 'ÉÉÉÉ-HH-NN': { start, end, venue, guests } } */
+  function dayVal(li) {
+    var o = {};
+    $all(li, '[data-dp]').forEach(function (i) { o[i.getAttribute('data-dp')] = i.value.trim(); });
+    return o;
+  }
   function read(fd) {
     var kind = fd.getAttribute('data-kind');
+    if (kind === 'days') { var d = {}; $all(fd, '[data-day]').forEach(function (li) { d[li.getAttribute('data-day')] = dayVal(li); }); return d; }
     if (kind === 'consent') return { given: !!fd.querySelector('input[type=checkbox]').checked };
     if (kind === 'object') {
       var o = {};
@@ -42,12 +49,14 @@
   }
   function write(fd, v) {
     var kind = fd.getAttribute('data-kind');
+    if (kind === 'days') { $all(fd, '[data-day]').forEach(function (li) { var x = (v && v[li.getAttribute('data-day')]) || {}; $all(li, '[data-dp]').forEach(function (i) { var k = i.getAttribute('data-dp'); i.value = x[k] == null ? '' : String(x[k]); }); dayDur(li); }); return; }
     if (kind === 'consent') { fd.querySelector('input[type=checkbox]').checked = !!(v && v.given); return; }
     if (kind === 'object') { $all(fd, '[data-part]').forEach(function (p) { writePart(p, v && v[p.getAttribute('data-part')]); }); showIf(fd); return; }
     writePart(fd.querySelector('[data-part]'), v);
   }
   /* kötelező, látható, de üres rész (pl. a helyszín címe még nincs beírva) */
   function incomplete(fd) {
+    if (fd.getAttribute('data-kind') === 'days') return $all(fd, '[data-day]').some(function (li) { var x = dayVal(li); return !x.start !== !x.end; });
     return $all(fd, '[data-part][data-req]').some(function (p) { return !p.hidden && String(readPart(p)).trim() === ''; });
   }
   function blank(v) {
@@ -194,8 +203,36 @@
     return s.wait;
   }
 
+  /* v2.9.78: egy nap időtartama a kezdésből és a végből (éjfélen át is), eltérés a foglalt óraszámtól */
+  function hm(t) { var x = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return x ? (+x[1]) * 60 + (+x[2]) : null; }
+  function hrsTxt(h) { return String(Math.round(h * 100) / 100).replace('.', ',') + ' óra'; }
+  function dayDur(li) {
+    var p = li.querySelector('[data-day-dur]'); if (!p) return;
+    var x = dayVal(li), a = hm(x.start), b = hm(x.end), pkg = parseFloat(li.getAttribute('data-hours')) || 0;
+    if (a == null || b == null) { p.textContent = ''; p.className = 'cpp-day-dur'; return; }
+    var night = b <= a; if (night) b += 1440;
+    var h = (b - a) / 60, diff = pkg > 0 && Math.abs(h - pkg) >= 0.25;
+    p.textContent = (night ? 'Éjfélen át, ' : '') + hrsTxt(h) + (diff ? ' – a foglalás szerint ' + hrsTxt(pkg) + ', a kollégáink egyeztetnek veled a különbözetről.' : '');
+    p.className = 'cpp-day-dur' + (diff ? ' diff' : '');
+  }
+  /* a kezdés + a nap óraszáma → a vége, amíg kézzel át nem írják */
+  function dayAutoEnd(li) {
+    var si = li.querySelector('[data-dp="start"]'), ei = li.querySelector('[data-dp="end"]'), pkg = parseFloat(li.getAttribute('data-hours')) || 0, a = hm(si && si.value);
+    if (!ei || ei.disabled || a == null || !pkg || (ei.value !== '' && ei.value !== li.getAttribute('data-auto-end'))) return;
+    var m = (a + Math.round(pkg * 60)) % 1440, v = pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+    ei.value = v; li.setAttribute('data-auto-end', v);
+  }
+  form.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-days-same]'); if (!b || locked) return;
+    var fd = b.closest('[data-field]'), lis = $all(fd, '[data-day]'), first = dayVal(lis[0]);
+    if (!first.start || !first.end) { err(fd, 'Előbb add meg az 1. nap kezdését és végét.', lis[0].getAttribute('data-day')); return; }
+    lis.slice(1).forEach(function (li) { $all(li, '[data-dp]').forEach(function (i) { i.value = first[i.getAttribute('data-dp')] || ''; }); li.removeAttribute('data-auto-end'); dayDur(li); });
+    err(fd, ''); mark(fd, '', ''); save(fd);
+  });
+
   /* ---------------------------------------------------- események */
   fieldEls().forEach(function (fd) {
+    if (fd.getAttribute('data-kind') === 'days') $all(fd, '[data-day]').forEach(dayDur);
     if (fd.getAttribute('data-field') === 'schedule') { autoEnd(fd); duration(fd); }  // betöltéskor: üres vége a csomag alapján (előtöltésként)
     var s = st(fd);
     var sv = fd.querySelector('.cpp-saved');
@@ -214,8 +251,9 @@
       duration(fd);
     }
     if (fd.getAttribute('data-field') === 'guests_type_dress') guests(fd);
+    if (fd.getAttribute('data-kind') === 'days') { var dli = e.target.closest('[data-day]'); if (dli) { if (e.target.getAttribute('data-dp') === 'start') dayAutoEnd(dli); else if (e.target.getAttribute('data-dp') === 'end' && e.target.value === '') dli.removeAttribute('data-auto-end'); dayDur(dli); } }
     if (fd.getAttribute('data-field') === 'onsite_contact') { var sc = fd.querySelector('[data-same-as-client]'); if (sc) sc.checked = false; }
-    if (fd.getAttribute('data-kind') === 'object' && incomplete(fd)) return;  // amíg a mezőben dolgozik, nem szólunk a hiányzó részért
+    if ((fd.getAttribute('data-kind') === 'object' || fd.getAttribute('data-kind') === 'days') && incomplete(fd)) return;  // amíg a mezőben dolgozik, nem szólunk a hiányzó részért (v2.9.78: a napoknál is)
     later(fd, 800);
   });
   /* „Ugyanaz, mint a megrendelő”: a helyszíni kapcsolattartó a megrendelő (vagy a cég kapcsolattartójának) adataival */

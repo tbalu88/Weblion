@@ -185,6 +185,14 @@ function cp_portal_fields() {
 				'end'   => array('label' => 'Szolgáltatás vége', 'kind' => 'time', 'req' => true),
 			),
 		),
+		/* v2.9.78: többnapos rendezvény – csak ha az iroda a panelben napokat adott a dealhez (cp_portal_mdays); ilyenkor ez
+		   váltja ki a dátumot és a menetrendet: naponként kezdés, vége, helyszín (üresen az általános), létszám. A kötelezőséget
+		   a menetrend kérdése hordozza (cp_portal_missing), ezért itt nem kötelező. Érték: { 'ÉÉÉÉ-HH-NN': {start, end, venue, guests} } */
+		'event_days' => array(
+			'stage' => 'a', 'q' => 'event_days', 'qlabel' => 'A rendezvény napjai', 'section' => 'rendezveny', 'required' => false,
+			'label' => 'A rendezvény napjai',
+			'kind' => 'days',
+		),
 		'services' => array(
 			'stage' => 'a', 'q' => 'services', 'qlabel' => 'Megrendelt szolgáltatás', 'section' => 'rendezveny', 'required' => false,
 			'label' => 'A megrendelt szolgáltatás',
@@ -370,6 +378,17 @@ function cp_portal_missing($answers, $stage = null, $flow = 'v2', $portal = null
 		$byq[$f['q']] = isset($byq[$f['q']]) ? ($byq[$f['q']] && $ok) : $ok;
 	}
 	foreach ($byq as $q => $ok) { if ($ok) { unset($miss[$q]); } }
+	/* v2.9.78: többnapos rendezvény – a menetrend akkor kész, ha MINDEN napnak van kezdése és vége (a dátumot az iroda adta) */
+	if ($portal && function_exists('cp_portal_mdays') && ($md = cp_portal_mdays($portal))) {
+		$all = cp_portal_stage_required('a', $flow) && ($stage === null || $stage === 'a');
+		$dv = isset($answers['event_days']) && is_array($answers['event_days']) ? $answers['event_days'] : array();
+		$okd = true;
+		foreach ($md as $x) { $a = isset($dv[$x['d']]) && is_array($dv[$x['d']]) ? $dv[$x['d']] : array(); if (empty($a['start']) || empty($a['end'])) { $okd = false; } }
+		if ($all) {
+			unset($miss['event_date']);
+			if (!$okd) { $miss['schedule'] = cp_portal_fields()['schedule']['qlabel']; } else { unset($miss['schedule']); }
+		}
+	}
 	return $miss;
 }
 
@@ -483,6 +502,7 @@ function cp_portal_validate($key, $raw, $answers = array()) {
 	if ($kind === 'sablon') {
 		return new WP_Error('invalid', 'A fotósablon a sablonkészítőben menthető.');
 	}
+	if ($kind === 'days') { return cp_portal_validate_days($raw); } /* v2.9.78 */
 	if ($kind === 'bg') {
 		$v = is_scalar($raw) ? trim((string) $raw) : '';
 		return array('value' => $v === '' ? null : mb_substr($v, 0, 80));  // a szabad hátterek ellenőrzése a mentésnél (cp_portal_bg_check)
@@ -541,6 +561,35 @@ function cp_portal_validate($key, $raw, $answers = array()) {
 	// üres opcionális részek elhagyása (tömörebb JSON)
 	foreach ($out as $pk => $v) { if ($v === '' && empty($f['parts'][$pk]['req'])) { unset($out[$pk]); } }
 	return array('value' => $out);
+}
+
+/* v2.9.78: a napok válasza – napokként kezdés és vége (mindkettő vagy egyik sem), helyszín, létszám; a napok köre a mentésnél szűkül
+   a portál napjaira (cp_portal_save_field). Az éjfélen átnyúló zárás (pl. 22:00 → 02:00) a menetrendhez hasonlóan engedett. */
+function cp_portal_validate_days($raw) {
+	$in = is_array($raw) ? $raw : array();
+	$out = array();
+	$tp = array('kind' => 'time'); $vp = array('kind' => 'text', 'max' => 200); $gp = array('kind' => 'int', 'min' => 1, 'max' => 5000);
+	ksort($in);
+	foreach (array_slice($in, 0, 62, true) as $day => $x) {
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $day) || !is_array($x)) { continue; }
+		$hd = function_exists('cp_portal_hu_date') ? cp_portal_hu_date((string) $day, false) : (string) $day;
+		$s = cp_portal_clean_part($tp, $x['start'] ?? '', $hd . ' kezdés');
+		$e = cp_portal_clean_part($tp, $x['end'] ?? '', $hd . ' vége');
+		$v = cp_portal_clean_part($vp, $x['venue'] ?? '', $hd . ' helyszín');
+		$g = cp_portal_clean_part($gp, $x['guests'] ?? '', $hd . ' létszám');
+		foreach (array($s, $e, $v, $g) as $r) { if (is_wp_error($r)) { $r->add_data(array('part' => (string) $day)); return $r; } }
+		if (($s === '') !== ($e === '')) {
+			$er = new WP_Error('invalid', $hd . ': a kezdést és a szolgáltatás végét is add meg.'); $er->add_data(array('part' => (string) $day)); return $er;
+		}
+		if ($s !== '') {
+			$sm = cp_portal_minutes($s); $em = cp_portal_minutes($e);
+			if ($em <= $sm && $em <= 6 * 60 && $sm >= 12 * 60) { $em += 1440; }
+			if ($sm >= $em) { $er = new WP_Error('invalid', $hd . ': a szolgáltatás végének később kell lennie, mint a kezdésnek (éjfél után legfeljebb reggel 6-ig).'); $er->add_data(array('part' => (string) $day)); return $er; }
+		}
+		$o = array_filter(array('start' => $s, 'end' => $e, 'venue' => $v, 'guests' => $g), function ($z) { return $z !== ''; });
+		if ($o) { $out[(string) $day] = $o; }
+	}
+	return array('value' => $out ? $out : null);
 }
 
 /* a mezőséma a felületeknek (JS) */

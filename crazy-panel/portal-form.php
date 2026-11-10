@@ -73,8 +73,23 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 		$st = cp_portal_state($portal->id);
 		return array('value' => $new, 'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(null, cp_portal_flow($portal)), 'status' => $st->status, 'saved_at' => $saved_at, 'unchanged' => true);
 	}
+	if ($key === 'event_days' && is_array($new)) {
+		/* v2.9.78: csak a portál (a deal) napjai – a dátumot az iroda adja, az ügyfél nem vehet fel újat */
+		$md = cp_portal_mdays($portal);
+		if (!$md) { return new WP_Error('invalid', 'Ennél a rendezvénynél nincsenek külön napok – a menetrendet a fenti mezőben add meg.'); }
+		$new = array_intersect_key($new, array_flip(array_column($md, 'd')));
+		if (!$new) { $new = null; }
+		if (wp_json_encode($old) === wp_json_encode($new)) { $st = cp_portal_state($portal->id); return array('value' => $new, 'required_done' => (int) $st->required_done, 'required_total' => cp_portal_required_total(null, cp_portal_flow($portal)), 'status' => $st->status, 'saved_at' => $saved_at, 'unchanged' => true); }
+	}
 	cp_portal_answer_put($portal->id, $key, $new, $by);
 	$log_id = cp_portal_log_add($portal->id, $key, $old, $new, $by);
+	/* v2.9.78: az 1. nap menetrendje a „menetrend” (és a dátum) válasza is – az egynapos logika (szerződés, érkezés, időtartam) erre épül */
+	if ($key === 'event_days' && is_array($new) && ($md = cp_portal_mdays($portal))) {
+		$d1 = $md[0]['d'];
+		if (!empty($new[$d1]['start']) && !empty($new[$d1]['end'])) { cp_portal_save_field($portal, 'schedule', array('start' => $new[$d1]['start'], 'end' => $new[$d1]['end']), $by); }
+		$ans = cp_portal_answers($portal->id);
+		if (empty($ans['event_date'])) { cp_portal_save_field($portal, 'event_date', $d1, $by); }
+	}
 
 	$fields = cp_portal_fields();
 	$extra = array();
@@ -225,6 +240,26 @@ function cp_portal_prefill($portal) {
 	if ($ven !== '') { $out['venue_address'] = cp_portal_venue_split($ven); }
 	return (object) $out;
 }
+/* v2.9.78: többnapos rendezvény napjai a portálhoz – csak ha az iroda a panelben napokat adott a dealhez (≥ 2 nap), különben üres
+   (az egynapos portál semmit nem változik). Napok: d, start, end (a nap saját kezdése / óraszáma, különben a foglalásé), venue, guests (a nap felülírása). */
+function cp_portal_mdays($portal) {
+	if (empty($portal->deal_id) || empty($portal->event_date) || !function_exists('cp_mday_get') || !function_exists('cp_mday_align')) { return array(); }
+	static $mem = array();
+	$k = (int) $portal->deal_id . '|' . $portal->event_date;
+	if (isset($mem[$k])) { return $mem[$k]; }
+	$sm = is_array($portal->sm ?? null) ? $portal->sm : (array) ($portal->sm ?? array());
+	$st = isset($sm['start']) && cp_portal_time_ok((string) $sm['start']) ? (string) $sm['start'] : '';
+	$hr = isset($sm['hours']) ? (float) $sm['hours'] : 0;
+	$out = array();
+	foreach (cp_mday_align(cp_mday_get((int) $portal->deal_id), (string) $portal->event_date) as $x) {
+		$s = $x['start_t'] !== '' ? $x['start_t'] : $st;
+		$h = $x['hours'] !== null ? (float) $x['hours'] : $hr;
+		$e = $s !== '' && $h > 0 ? sprintf('%02d:%02d', intdiv((cp_portal_minutes($s) + (int) round($h * 60)) % 1440, 60), (cp_portal_minutes($s) + (int) round($h * 60)) % 60) : '';
+		$out[] = array('d' => $x['day'], 'start' => $s, 'end' => $e, 'hours' => $h, 'venue' => (string) $x['venue'], 'guests' => $x['guests'] !== null ? (int) $x['guests'] : '');
+	}
+	return $mem[$k] = $out;
+}
+
 /* a deal egysoros helyszíne → portál „név” + „pontos cím” (ha az első tag nem cím, az a név) */
 function cp_portal_venue_split($v) {
 	$v = trim(preg_replace('/\s+/u', ' ', (string) $v));
