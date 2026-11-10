@@ -740,3 +740,11 @@ a.d3-who:hover{background:#F6F3EE}
 .crm-ce-i button{flex:0 0 auto;width:28px;height:28px;border:0;border-radius:999px;background:transparent;color:#5A6070;font-size:16px;line-height:1;cursor:pointer}
 .crm-ce-i button:hover{background:#E6E0D6;color:#1A1F2B}
 .crm-ce-i button:focus-visible{outline:2px solid var(--o);outline-offset:1px}
+/* v2.9.110: telefonos deal-kártya – egy sor: ár · dátum · piktogramok */
+.crm-mrow{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+.crm-mrow .crm-est{background:none;padding:0;font-weight:700;color:var(--ink)}
+.crm-mrow > span:not(.crm-mis){white-space:nowrap;flex-shrink:0}
+.crm-mis{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.crm-mi{font-size:13px;line-height:1;white-space:nowrap;cursor:help}.crm-mi.none{opacity:.35;filter:grayscale(1)}.crm-mi.ok{color:var(--mu)}.crm-mi.late{color:var(--full)}
+.crm-mi.cap{font:700 12px Inter,sans-serif;color:#9A5B00}.crm-mi.cap.full,.crm-mi.cap.risk{color:var(--full)}.crm-mi.rot{font:600 12px Inter,sans-serif;color:var(--mu)}.crm-mi.rot.hot{color:var(--full)}
+.crm-mis .crm-qnb{margin:0}

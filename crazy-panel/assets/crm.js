@@ -842,6 +842,19 @@
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
 				}
+				/* v2.9.110: telefonon egyszerűbb kártya – cím, alatta egy sor: ár · dátum · piktogramok (teendő, kapacitás, rohadás, jegyzet); a kontakt csak ha a címben nincs benne */
+				if (MOB) {
+					const nm = String(r.cn || '').trim(), inT = nm && String(r.title || '').toLowerCase().includes(nm.toLowerCase());
+					const vS = r.est ? '<span class="crm-est" title="' + esc('Becsült ár ' + estSrc(r.est)) + '">~' + esc(money(r.est.p, 'HUF')) + '</span>' : (Number(r.value) ? '<span>' + esc(money(r.value, r.cur)) + '</span>' : '');
+					const yNow = String(new Date().getFullYear()) + '. ';
+					const dS = r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '" title="' + esc(evShort(r)) + '">' + esc(evShort(r).indexOf(yNow) === 0 ? evShort(r).slice(yNow.length) : evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>';
+					const naI = r.na ? (r.na < now ? '<span class="crm-mi late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑</span>' : '<span class="crm-mi ok" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑</span>') : '<span class="crm-mi none" title="Nincs ütemezett teendő">⚑</span>';
+					const k = r.cap, capI = k && !(k.lvl === 'ok' && !k.risk) ? '<span class="crm-mi cap ' + k.lvl + (k.risk ? ' risk' : '') + '" title="' + esc(capTip(k)) + '">📅' + (k.fs <= 0 ? '0' : k.fs) + '</span>' : '';
+					const rotI = rot ? '<span class="crm-mi rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult">⏳' + rot + '</span>' : '';
+					h += open + ((nm || r.co) && !inT ? '<div class="crm-cl">' + esc([nm, r.co].filter(Boolean).join(' • ')) + '</div>' : '') +
+						'<div class="crm-cl crm-mrow">' + vS + (vS ? '<i>•</i>' : '') + dS + '<span class="crm-mis">' + (r.status === 'Won' ? stBadge(r) : '') + capI + rotI + naI + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + '</span></div></article>';
+					return;
+				}
 				h += open +
 					'<div class="crm-cl">' + (r.cn || r.co ? esc([r.cn, r.co].filter(Boolean).join(' • ')) : '<span class="cpx-muted">nincs kontakt</span>') + '</div>' +
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
