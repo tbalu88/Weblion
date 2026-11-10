@@ -191,7 +191,13 @@ add_filter('cp_crm_deal_data', function ($x) {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT id, form_name, data, page, created_at FROM ' . cp_lead_t() . " WHERE deal_id = %d AND status <> 'spam' ORDER BY id DESC LIMIT 10", $id), ARRAY_A) as $l) {
 			$f = json_decode((string) $l['data'], true);
 			$kv = array();
-			if (is_array($f)) { foreach ($f as $k => $v) { if (is_scalar($v) && trim((string) $v) !== '' && count($kv) < 14) { $kv[] = array(mb_substr((string) $k, 0, 60), mb_substr((string) $v, 0, 300)); } } }
+			/* v2.9.106: a Salesmate mezőnevek (Deal.intCustomField1…) helyett magyar címke; a dátum magyar formában */
+			static $LL = null; if ($LL === null) { $LL = function_exists('cp_lead_labels') ? cp_lead_labels() : array(); }
+			if (is_array($f)) { foreach ($f as $k => $v) { if (is_scalar($v) && trim((string) $v) !== '' && count($kv) < 14) {
+				$lab = $LL[(string) $k] ?? preg_replace('/^(Deal|Contact|Company)\./', '', (string) $k);
+				$vv = (string) $v; if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $vv)) { $vv = str_replace('-', '. ', $vv) . '.'; }
+				$kv[] = array(mb_substr($lab, 0, 60), mb_substr($vv, 0, 300));
+			} } }
 			$x['leads'][] = array('id' => (int) $l['id'], 'form' => $l['form_name'], 'kv' => $kv, 'at' => cp_crm_local($l['created_at']));
 		}
 	}

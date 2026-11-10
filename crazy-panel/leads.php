@@ -185,6 +185,9 @@ function cp_lead_ajax_set() {
 function cp_lead_labels() {
 	$l = array('Contact.firstName' => 'Keresztnév', 'Contact.lastName' => 'Vezetéknév', 'Contact.name' => 'Név', 'Contact.email' => 'E-mail', 'Contact.mobile' => 'Mobil', 'Contact.phone' => 'Telefon',
 		'Contact.company' => 'Cég', 'Company.name' => 'Cég', 'Deal.title' => 'Deal neve', 'Deal.description' => 'Megjegyzés', 'Deal.dateCustomField1' => 'Rendezvény dátuma', 'Deal.multiSelectCustomField3' => 'Szolgáltatás(ok)');
+	/* v2.9.106: a többi Salesmate deal-mező címkéje a szűrő mezőlistájából (pl. Deal.intCustomField1 → Tervezett létszám) */
+	if (function_exists('cp_cf_defs')) { $df = cp_cf_defs(); $f = $df['deal']['f'] ?? array(); foreach (cp_lead_cols() as $sk => $col) { if (!isset($l[$sk]) && isset($f[$col][0])) { $l[$sk] = (string) $f[$col][0]; } } }
+	$l += array('Deal.source' => 'Forrás', 'Contact.mobile' => 'Mobil', 'Contact.phone' => 'Telefon');
 	return $l;
 }
 /* Salesmate deal-mező → a panel oszlopneve (a címkét a Deal-ek fül adja hozzá) */
