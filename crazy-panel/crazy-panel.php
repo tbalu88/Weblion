@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.114');
+define('CP_PANEL_VER', '2.9.115');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -794,6 +794,7 @@ function cp_panel_render_app() {
 		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
 		'wl'         => function_exists('cp_wl_cfg') ? cp_wl_cfg() : array('on' => false),
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
+		'slot'       => function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t') && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.115: beosztás a Kapacitás napjain */
 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
 		'pwa'        => function_exists('cp_pwa_cfg') ? cp_pwa_cfg() : array('on' => false),
@@ -3755,6 +3756,7 @@ require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/usage.php'; /* v2.9.88: panelhasználat */
 require_once __DIR__ . '/mail-px.php'; /* v2.9.109: megnyitás-követés */
+require_once __DIR__ . '/slots.php'; /* v2.9.115: slotok és beosztás */
 require_once __DIR__ . '/deal360.php';
 require_once __DIR__ . '/search.php';
 require_once __DIR__ . '/merge.php';
