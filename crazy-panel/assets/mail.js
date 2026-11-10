@@ -184,6 +184,32 @@
 		area.addEventListener('keyup', keep); area.addEventListener('mouseup', keep); area.addEventListener('blur', keep);
 		const restore = () => { area.focus(); if (range) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(range); } };
 		const exec = (c, v) => { restore(); document.execCommand(c, false, v == null ? null : v); keep(); };
+		/* v2.9.96: alapos formázástörlés – a böngésző „removeFormat”-ja a máshonnan (pl. jegyzetből, Wordből) bemásolt szöveg
+		   stílusait (span style, font, osztály, címsor, háttérszín) bent hagyja. A kijelölésen (ha nincs, a kurzor bekezdésén)
+		   minden betű- és színformázás törlődik; a bekezdések, sortörések, listák, táblázatok és linkek maradnak. */
+		const clearFmt = () => {
+			restore();
+			try { document.execCommand('removeFormat', false, null); } catch (e) { /* nem baj */ }
+			const sel = window.getSelection();
+			let rg = sel.rangeCount ? sel.getRangeAt(0) : null;
+			if (!rg || !area.contains(rg.commonAncestorContainer)) { rg = document.createRange(); rg.selectNodeContents(area); }
+			if (rg.collapsed) { let b = rg.startContainer; while (b && b !== area && !(b.nodeType === 1 && /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|TD)$/.test(b.tagName))) b = b.parentNode; rg = document.createRange(); rg.selectNodeContents(b && b !== area ? b : area); }
+			const INL = /^(SPAN|FONT|B|STRONG|I|EM|U|S|STRIKE|DEL|INS|MARK|SMALL|BIG|SUB|SUP|CODE|KBD|TT|ABBR|CITE|Q|LABEL)$/;
+			const hit = el => { try { return rg.intersectsNode(el); } catch (e) { return false; } };
+			const els = Array.from(area.querySelectorAll('*')).filter(hit);
+			/* a kijelölésen kívül eső, de azt körülölelő formázó elemek is (pl. a teljes bekezdést befoglaló span) */
+			let up = rg.commonAncestorContainer; up = up.nodeType === 1 ? up : up.parentNode;
+			while (up && up !== area) { if (!els.includes(up)) els.push(up); up = up.parentNode; }
+			els.forEach(el => {
+				if (!el.isConnected || el.classList.contains('cp-sign') || el.closest('.cp-sign')) return; /* az aláírás marad */
+				['style', 'class', 'color', 'face', 'size', 'bgcolor', 'align', 'lang', 'dir', 'id'].forEach(a => el.removeAttribute(a));
+				Array.from(el.attributes).forEach(a => { if (/^(data-|on)/i.test(a.name) && !/^data-(var|cp)/i.test(a.name)) el.removeAttribute(a.name); });
+				if (INL.test(el.tagName)) { const pa = el.parentNode; while (el.firstChild) pa.insertBefore(el.firstChild, el); pa.removeChild(el); return; }
+				if (/^(H[1-6]|PRE|BLOCKQUOTE)$/.test(el.tagName)) { const np = document.createElement('p'); while (el.firstChild) np.appendChild(el.firstChild); el.parentNode.replaceChild(np, el); }
+			});
+			area.normalize(); keep();
+			area.dispatchEvent(new Event('input', { bubbles: true }));
+		};
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
 			const c = b.dataset.cmd;
@@ -192,7 +218,8 @@
 			if (!code.hidden) return;
 			if (c === 'var') { vpop.hidden = !vpop.hidden; cpop.hidden = true; return; }
 			if (c === 'color') { cpop.hidden = !cpop.hidden; vpop.hidden = true; return; }
-			const M2 = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList', clear: 'removeFormat', undo: 'undo', redo: 'redo' };
+			const M2 = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList', undo: 'undo', redo: 'redo' };
+			if (c === 'clear') return clearFmt();
 			if (M2[c]) return exec(M2[c]);
 			if (c === 'h2' || c === 'p') return exec('formatBlock', c);
 			if (c === 'quote') return exec('formatBlock', 'blockquote');
@@ -469,6 +496,10 @@
 	const attRiskAttr = n => { const r = attRisk(n); return r ? ' data-risk="' + r.lvl + '" data-rn="' + esc(n) + '" class="ml-arisk ' + r.lvl + '" title="' + esc((r.lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + r.why) + '"' : ''; };
 	const attUrl = (mid, i, n) => C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&t=' + encodeURIComponent(C.t) + (/\.(png|jpe?g|gif|webp|pdf)$/i.test(n || '') ? '&view=1' : '');
 	window.CPMailAtt = attUrl;
+	/* v2.9.96: a melléklet linkje a személyes beállítás szerint – megnyitás (előnézet) vagy azonnali letöltés (Beállítások → Saját beállításaim) */
+	const attDl = () => !!M.attdl;
+	const attHref = (mid, i, n) => attDl() ? attUrl(mid, i, n).replace('&view=1', '') : attUrl(mid, i, n);
+	const attTgt = () => attDl() ? ' download' : ' target="_blank" rel="noopener"';
 	const CLIP_I = '<svg class="ml-ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>';
 
 	/* hasábszélességek: húzással méretezhetők, a böngésző megjegyzi */
@@ -842,7 +873,7 @@
 		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.dir === 'out' ? '' : cBtn(m.from_email, m.from_name)) + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
 			(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma">' + o.ma + '</span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
-			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attUrl(m.id, ai, a.n)) + '" target="_blank" rel="noopener"' + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
+			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek a biztonságod érdekében nincsenek betöltve. <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attHref(m.id, ai, a.n)) + '"' + attTgt() + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
 	}
 	/* v2.9.64: a válasz előtöltése (címzettek, tárgy, idézet) – az olvasó és a gyorsnézet „Válasz” gombja is ezt használja */
 	function replyDraft(t, d, m, all) {
