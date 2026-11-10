@@ -1872,7 +1872,7 @@
 		const d = x.deal;
 		sh.addEventListener('click', e => {
 			const el = e.target.closest('[data-ik]');
-			if (!el || el.classList.contains('ik-on') || e.target.closest('a, button, input, select, textarea, .crm-est')) return;
+			if (!el || el.classList.contains('ik-on') || e.target.closest('a, button, input, select, textarea')) return; /* v2.9.76: a becsült ár buborékjára kattintva is szerkeszthető az ár */
 			const k = el.dataset.ik, f = EDIT_T[k], type = f[2], cur = editVal(d, k), old = el.innerHTML;
 			let inp;
 			if (type === 'user') inp = '<select data-iv>' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(cur)).map(i => [i, USERS[i].n])), String(cur || '')) + '</select>';
