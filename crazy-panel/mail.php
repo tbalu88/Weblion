@@ -622,6 +622,12 @@ function cp_mail_thread_full($id) {
 	}
 	/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
 	$ret = function_exists('cp_ret_by_email') ? cp_ret_by_email((string) $t['contact_email'], (int) $t['deal_id']) : null;
+	/* v2.9.109: megnyitás-követés – a kimenő levelek adata, és a saját követő képünk kiszűrése a megjelenített szövegből */
+	if (function_exists('cp_px_for_msgs')) {
+		$pxm = cp_px_for_msgs(array_map(function ($m) { return $m['dir'] === 'out' ? (int) $m['id'] : 0; }, (array) $msgs));
+		foreach ($msgs as &$m) { if (isset($pxm[(int) $m['id']])) { $m['px'] = $pxm[(int) $m['id']]; } $m['body'] = cp_px_strip((string) $m['body']); }
+		unset($m);
+	}
 	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal, 'ret' => $ret);
 }
 

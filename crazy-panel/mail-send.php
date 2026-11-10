@@ -185,6 +185,8 @@ function cp_send_ajax() {
 	$i = cp_imp_opts();
 	$dom = substr(strrchr($i['user'], '@'), 1) ?: 'eventcrazy.hu';
 	$msgid = '<' . wp_generate_uuid4() . '@' . $dom . '>';
+	/* v2.9.109: megnyitás-követő kép (csak a kimenő példányba; az Elküldött mappába és a panelbe a kép nélküli megy) */
+	$px = !$test && function_exists('cp_px_new') ? cp_px_new($t ? (int) $t['id'] : 0, $deal) : null;
 	try {
 		$m = cp_send_mailer();
 		foreach ($to as $e) { $m->addAddress($e); }
@@ -192,7 +194,7 @@ function cp_send_ajax() {
 		foreach ($bcc as $e) { $m->addBCC($e); }
 		$m->Subject = $test ? '[PRÓBA] ' . $subj : $subj;
 		$m->isHTML(true);
-		$m->Body = $doc;
+		$m->Body = $px ? str_replace('</body>', $px['img'] . '</body>', $doc) : $doc;
 		$m->AltBody = trim(html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/div|/li)\b[^>]*>#i', "\n", $html)), ENT_QUOTES, 'UTF-8'));
 		$m->MessageID = $msgid;
 		$m->XMailer = 'Crazy panel';
@@ -201,6 +203,7 @@ function cp_send_ajax() {
 		if ($sidk !== '' && !$test) { set_transient($sidk, 'sending', 120); }
 		$m->send();
 		$mime = $m->getSentMIMEMessage();
+		if ($px) { try { $m->Body = $doc; $m->preSend(); $mime = $m->getSentMIMEMessage(); } catch (\Throwable $e2) { /* marad az eredeti */ } }
 	} catch (\Throwable $e) {
 		if ($sidk !== '') { delete_transient($sidk); }
 		cp_el_err('A levél nem ment el: ' . mb_substr($e->getMessage(), 0, 200), 502);
@@ -231,6 +234,7 @@ function cp_send_ajax() {
 	$row = array('thread_id' => (int) $t['id'], 'dir' => 'out', 'from_name' => (string) $o['from_name'] . ($who !== '' ? ' (' . $who . ')' : ''), 'from_email' => $i['user'], 'to_list' => implode(', ', $to), 'cc_list' => implode(', ', $cc), 'subject' => mb_substr($subj, 0, 255), 'body' => $html, 'attachments' => wp_json_encode($alist), 'status' => 'Elküldve a panelből', 'sent_at' => $now, 'mid' => md5($msgid));
 	$row['msgid'] = $msgid; /* v2.9.58: az oszlop mindig megvan (nincs SHOW COLUMNS) */
 	$wpdb->insert(cp_mail_t('messages'), $row);
+	if ($px && $wpdb->insert_id) { cp_px_bind($px['tok'], (int) $wpdb->insert_id, (int) $t['id'], (int) ($t['deal_id'] ?: $deal)); }
 	$wpdb->query($wpdb->prepare("UPDATE $T SET msg_count = msg_count + 1 WHERE id = %d", (int) $t['id'])); /* v2.9.58: az adatbázisban nő */
 	$wpdb->update($T, array('last_at' => $now, 'snippet' => mb_substr($plain, 0, 200), 'seen_at' => $now, 'deal_id' => $t['deal_id'] ?: ($deal ?: null)) + ($alist ? array('has_attach' => 1) : array()), array('id' => (int) $t['id']));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $t['id'], 'kind' => 'send', 'text' => 'Levél elküldve a panelből: ' . mb_substr(implode(', ', $to), 0, 200), 'author_uid' => $me, 'author' => $who, 'created_at' => $now));

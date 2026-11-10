@@ -255,13 +255,15 @@
 				'<label class="cs-lbl">Kik küldhetnek</label><div class="cs-users">' + d.users.filter(u => u.a).map(u => '<label class="cs-chk"><input type="checkbox" data-su="' + u.id + '"' + (s.users.includes(u.id) ? ' checked' : '') + '> ' + esc(u.n) + (u.sig ? ' <small>(saját aláírás ✓)</small>' : '') + '</label>').join('') + '</div>' +
 				'<div class="cs-grid"><label>Feladó neve<input type="text" data-k="from_name" value="' + esc(s.from_name) + '"></label><label>Kimenő szerver<input type="text" data-k="host" value="' + esc(s.host) + '" placeholder="' + esc(m.imap.host) + '" readonly title="Csak a WordPress adminban módosítható (biztonság)"></label><label>Port<input type="number" data-k="port" value="' + s.port + '" readonly title="Csak a WordPress adminban módosítható (biztonság)"></label><label>Titkosítás<select data-k="secure" disabled title="Csak a WordPress adminban módosítható (biztonság)"><option value="ssl"' + (s.secure === 'ssl' ? ' selected' : '') + '>SSL (465)</option><option value="tls"' + (s.secure === 'tls' ? ' selected' : '') + '>STARTTLS (587)</option></select></label></div>' +
 				sw('append', s.append, 'Másolat a postafiók Elküldött mappájába' + (s.sent_folder ? ' (' + esc(s.sent_folder) + ')' : '')) +
+				'<h3 style="margin-top:14px">Megnyitás-követés</h3>' + sw('px_on', m.px_on, 'Látszódjon, mikor nyitotta meg az ügyfél a panelből küldött levelet') +
+				'<p class="cs-note">A levélbe egy láthatatlan kép kerül a saját domainről; a megnyitás ideje a levél alatt és a deal idővonalán látszik. Csak időpontot és darabszámot tárolunk, 90 napig. Az iPhone / Mac levelezője a levelet automatikusan „megnyithatja” – ezt a panel külön jelöli. Kikapcsolva az új levelekbe nem kerül kép.</p>' +
 				'<label class="cs-lbl">Közös aláírás (ha a kollégának nincs saját)</label><textarea data-k="sign" rows="4">' + esc(s.sign) + '</textarea>' +
 				'<div class="cs-bar"><button type="button" class="cpx-btn ghost" data-smtp>SMTP-kapcsolat ellenőrzése (nem küld levelet)</button></div></div>' : '') +
 			'<div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button></div>';
 		box.querySelector('[data-save]').addEventListener('click', e => {
 			const su = Array.from(box.querySelectorAll('[data-su]')).filter(c => c.checked).map(c => Number(c.dataset.su));
 			if (val(box, 'send_on') && !su.length) { toast('Jelölj ki legalább egy kollégát, aki küldhet.', true); return; }
-			save(e.currentTarget, 'cp_set_admin', { sec: 'mail', sync_on: val(box, 'sync_on'), send_on: val(box, 'send_on'), send_users: JSON.stringify(su), from_name: val(box, 'from_name'), host: val(box, 'host'), port: val(box, 'port'), secure: val(box, 'secure'), append: val(box, 'append'), sign: val(box, 'sign') });
+			save(e.currentTarget, 'cp_set_admin', { sec: 'mail', px_on: box.querySelector('[data-k="px_on"]') ? (val(box, 'px_on') ? '1' : '0') : 'keep', sync_on: val(box, 'sync_on'), send_on: val(box, 'send_on'), send_users: JSON.stringify(su), from_name: val(box, 'from_name'), host: val(box, 'host'), port: val(box, 'port'), secure: val(box, 'secure'), append: val(box, 'append'), sign: val(box, 'sign') });
 		});
 		const t = box.querySelector('[data-smtp]');
 		if (t) t.addEventListener('click', () => save(t, 'cp_set_admin', { sec: 'smtp' }));

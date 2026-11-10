@@ -883,11 +883,20 @@
 	/* v2.9.64: egy levél kártyája (fejléc, eredeti nézet helye, mellékletek) – a Levelezés olvasója és a gyorsnézet ugyanezt rajzolja,
 	   így a biztonság is ugyanaz: külső kép csak gombra, az eredeti HTML elzárt keretben (loadHtml), kockázatos melléklet jelölve.
 	   o.open: kinyitva; o.mk: a levél kulcsa; o.ma: a levél gombjai (HTML); o.dv: Drive-jelvény a melléklet mellé (nem kötelező) */
+	/* v2.9.109: megnyitás-követés a panelből küldött levél alatt */
+	function pxLine(m) {
+		const p = m && m.dir === 'out' ? m.px : null; if (!p) return '';
+		const tt = s => esc(hdate(s));
+		if (p.n) return '<div class="ml-px on" title="Első megnyitás: ' + tt(p.f) + ' · utolsó: ' + tt(p.l) + '">👁 Megnyitva: ' + tt(p.f) + (p.n > 1 ? ' · ' + p.n + '× (utoljára ' + tt(p.l) + ')' : '') + '</div>';
+		if (p.na) return '<div class="ml-px auto" title="Az iPhone / Mac levelezője vagy egy vírusszűrő a kézbesítéskor magától letöltötte a levelet – ebből nem biztos, hogy az ügyfél el is olvasta.">👁 Kézbesítve – automatikus letöltés (' + tt(p.a) + '), olvasás még nem látszik</div>';
+		return '<div class="ml-px" title="Ha az ügyfél levelezője tiltja a képeket (pl. Outlook), az olvasás nem látszik.">👁 Még nem nyitotta meg</div>';
+	}
 	function msgHtml(m, o) {
 		const dv = o.dv || (() => '');
 		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe"><span class="ml-fet">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.dir === 'out' ? '' : cBtn(m.from_email, m.from_name)) + '</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
 			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
 			(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma">' + o.ma + '</span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
+			pxLine(m) +
 			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek nincsenek betöltve (a Spam mappában a biztonság kedvéért). <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attHref(m.id, ai, a.n)) + '"' + attTgt() + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
 	}
 	/* v2.9.64: a válasz előtöltése (címzettek, tárgy, idézet) – az olvasó és a gyorsnézet „Válasz” gombja is ezt használja */

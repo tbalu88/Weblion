@@ -117,5 +117,7 @@ function cp_mail_html_ajax() {
 		$wpdb->update($M, array('html' => $h), array('id' => (int) $m['id']));
 		$m['html'] = $h;
 	}
-	wp_send_json_success(array('id' => (int) $m['id'], 'html' => (string) $m['html'], 'ext' => cp_mail_html_ext($m['html'])));
+	/* v2.9.109: a saját megnyitás-követő képünk kiszűrve (a kolléga nézése ne számítson megnyitásnak) */
+	$hh = function_exists('cp_px_strip') ? cp_px_strip((string) $m['html']) : (string) $m['html'];
+	wp_send_json_success(array('id' => (int) $m['id'], 'html' => $hh, 'ext' => cp_mail_html_ext($hh)));
 }

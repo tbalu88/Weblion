@@ -46,7 +46,7 @@ function cp_set_data() {
 	$x += array(
 		'sx' => function_exists('cp_sx_sections') ? array_keys(cp_sx_sections()) : array(),
 		'users' => cp_set_users_out(), 'roles' => cp_pu_roles(), 'sm_users' => $sm, 'tabs' => $tabs, 'vis' => $vis, 'shared_on' => cp_pu_shared_on(), 'notif' => $nt, 'nt2' => function_exists('cp_nt_settings_out') ? cp_nt_settings_out() : null,
-		'mail' => array('sync_on' => get_option('cp_imp_sync_on') === '1', 'sync_last' => !empty($sy['last']) ? wp_date('Y.m.d. H:i', (int) $sy['last']) : '', 'sync_n' => (int) ($sy['n'] ?? 0), 'sync_err' => (string) ($sy['err'] ?? ''),
+		'mail' => array('px_on' => get_option('cp_px_on', '1') === '1', 'sync_on' => get_option('cp_imp_sync_on') === '1', 'sync_last' => !empty($sy['last']) ? wp_date('Y.m.d. H:i', (int) $sy['last']) : '', 'sync_n' => (int) ($sy['n'] ?? 0), 'sync_err' => (string) ($sy['err'] ?? ''),
 			'imap' => array('host' => $io['host'] ?? '', 'user' => $io['user'] ?? '', 'pw' => function_exists('cp_imp_pw') && cp_imp_pw() !== ''),
 			'send' => $so ? array('on' => (int) $so['on'], 'users' => array_map('intval', (array) $so['users']), 'from_name' => $so['from_name'], 'sign' => $so['sign'], 'host' => $so['host'], 'port' => (int) $so['port'], 'secure' => $so['secure'], 'append' => (int) $so['append'], 'sent_folder' => $so['sent_folder'] !== '' && function_exists('cp_imp_utf8') ? cp_imp_utf8($so['sent_folder']) : '') : null),
 		'ai' => $ai ? array('on' => (int) $ai['on'], 'model' => $ai['model'], 'models' => cp_ai_models(), 'effort' => $ai['effort'], 'style' => $ai['style'], 'key' => cp_ai_key() !== '') : null,
@@ -200,6 +200,8 @@ function cp_set_ajax_admin() {
 			$msg = trim($msg) ?: 'Nem változott semmi.';
 			break;
 		case 'mail':
+			/* v2.9.109: megnyitás-követés ki/be */
+			$pxo = (string) ($_POST['px_on'] ?? 'keep'); if ($pxo === '1' || $pxo === '0') { update_option('cp_px_on', $pxo, false); }
 			$on = (bool) $p('sync_on');
 			update_option('cp_imp_sync_on', $on ? '1' : '0', true);
 			if ($on) { if (!wp_next_scheduled('cp_imp_sync')) { wp_schedule_event(time() + 30, 'cp_5min', 'cp_imp_sync'); } } else { wp_clear_scheduled_hook('cp_imp_sync'); }
