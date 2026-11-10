@@ -1656,6 +1656,8 @@
 				(Number(d.rotten_d) > 0 && d.status === 'Open' ? '<dt>Rohad</dt><dd class="d3-bad">' + Number(d.rotten_d) + ' napja nincs vele teendő</dd>' : '') + '</dl></section>' +
 			'<section class="d3-c"><h4>Korábbi munkák – kontakt</h4>' + statLine(x.ct_stats) + (otherCt.length ? dealRows(otherCt, d.id) : '<p class="cpx-muted">' + (c ? 'Ez az első deal ezzel a kontakttal.' : 'Nincs kontakt.') + '</p>') + '</section>' +
 			(co ? '<section class="d3-c"><h4>Korábbi munkák – ' + esc(co.name) + '</h4>' + statLine(x.co_stats) + (otherCo.length ? dealRows(otherCo, d.id) : '<p class="cpx-muted">A cégnek nincs más (más kontakthoz tartozó) deal-je.</p>') + '</section>' : '') +
+			/* v2.9.117: beosztás (Kapacitás → Beosztás) */
+			((x.crew || []).length ? '<section class="d3-c"><h4>Beosztás</h4><ul class="d3-team">' + x.crew.map(c => '<li><span class="d3-av" style="background:' + avColor(String(c.n).length) + '">' + esc(initials(c.n)) + '</span>' + esc(c.n) + '<small>' + esc(huD(c.d) + ' · ' + c.g + ' · ' + c.sl) + '</small></li>').join('') + '</ul></section>' : '') +
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */

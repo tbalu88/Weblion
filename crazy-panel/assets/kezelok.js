@@ -138,7 +138,7 @@
 		const n = SK.length - x.miss.length;
 		const sens = x.kind === 'jelentkezo' ? '' : S.reveal ? '<div class="kz-sr">' + SK.map(k => '<div><small>' + esc(SENS[k]) + ':</small> ' + ((x.sens || {})[k] ? esc(x.sens[k]) : '<span class="kz-warn">hiányzik</span>') + '</div>').join('') + '</div>'
 			: '<p class="' + (x.miss.length ? 'kz-warn' : 'kz-open') + '">Személyes adatok: ' + n + '/' + SK.length + ' megvan' + (x.miss.length ? ' – hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) : '') + (K.admin ? ' <small class="cpx-muted">(megtekintés: „Személyes adatok megjelenítése”)</small>' : '') + '</p>';
-		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') + ivRec(x) /* v2.9.85 */ +
+		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') + ivRec(x) /* v2.9.85 */ + slotRec(x) +
 			'<p class="cpx-muted">' + (x.active ? 'Aktív' : 'Inaktív') + ' · ' + esc(KINDS[x.kind] || '') + (x.el ? ' · elszámolás: ' + esc(x.el.name) + ' (' + x.el.rate + ' Ft/óra)' : '') + (x.updated ? ' · módosítva: ' + esc(x.updated) + (x.by ? ' (' + esc(x.by) + ')' : '') : '') + '</p></div>' +
 			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
@@ -149,7 +149,7 @@
 			'<label class="kz-chk">Csoport: <select data-f="kind">' + Object.keys(KINDS).map(k => '<option value="' + k + '"' + (x.kind === k ? ' selected' : '') + '>' + esc(KINDS[k]) + '</option>').join('') + '</select></label>' +
 			(x.miss.length ? '<p class="kz-warn">Hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) + '</p>' : '') +
 			'<p class="cpx-muted">' + (x.phone ? '<a href="tel:' + esc(x.phone.replace(/[^\d+]/g, '')) + '">📞 Hívás</a> · ' : '') + (x.email ? '<a href="mailto:' + esc(x.email) + '">✉ E-mail</a> · ' : '') + (x.el ? 'Elszámolás: ' + esc(x.el.name) + ' (' + esc(x.el.role) + ', ' + x.el.rate + ' Ft/óra) · ' : '') + 'Módosítva: ' + esc(x.updated || '') + (x.by ? ' (' + esc(x.by) + ')' : '') + '</p>' +
-			ivRec(x) /* v2.9.85 */ + (K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
+			ivRec(x) /* v2.9.85 */ + slotRec(x) + (K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
 			'<div><b>Közelgő rendezvényei</b> <small class="cpx-muted">(a deal „Gépkezelő” mezője alapján)</small>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '' + (u.venue ? ' <small>' + esc(u.venue) + '</small>' : '') + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
 	async function save(id, f, el) {
@@ -398,6 +398,12 @@
 		return o;
 	}
 	/* v2.9.85: a jelentkező adatlapján az interjú-jegyzete – csak olvasható, link a foglaláshoz */
+	/* v2.9.117: közelgő beosztásai (Kapacitás → Beosztás) */
+	function slotRec(x) {
+		const L = x.slots || []; if (!L.length) return '';
+		const C2 = { final: 'ok', accepted: '', invited: 'no' };
+		return '<div class="kz-slots"><b>Beosztás (közelgő)</b><ul>' + L.map(v => '<li>' + esc(huD(v.d)) + ' · ' + esc(v.g) + (v.v ? ' · ' + esc(v.v) : '') + (v.deal ? ' – <a href="#deals:' + v.deal + '" data-deal="' + v.deal + '">' + esc(v.t || 'Deal #' + v.deal) + '</a>' : '') + ' <span class="kz-chip ' + (C2[v.st] || '') + '">' + esc(v.sl) + '</span></li>').join('') + '</ul></div>';
+	}
 	function ivRec(x) {
 		const L = (x.iv || []).filter(v => v.live || v.note || v.rate); if (!L.length) return '';
 		return '<div class="kz-iv"><b>Interjú</b>' + L.map(v => '<div class="kz-ivi"><div class="kz-ivh"><span>' + esc(v.when || 'időpont nélkül') + (v.live ? '' : ' <span class="cpx-muted">(lemondva)</span>') + '</span>' + rateChip(v.rate) +
@@ -437,7 +443,7 @@
 
 	const css = document.createElement('style');
 	css.id = 'kz-css';
-	css.textContent = '.kz-r td{padding:5px 8px;font-size:12.5px;line-height:1.3}.kz-r th{padding:6px 8px}.kz-r a{color:#2F5BD8;text-decoration:none}.kz-nm b{display:block;font-size:13px}.kz-nm small{display:block;color:#656973;font-size:11px}.kz-nw{white-space:nowrap}.kz-ex{color:#656973;max-width:220px}.kz-chips{min-width:120px}.kz-chip{display:inline-block;font-size:10.5px;font-weight:600;background:#EEF3FD;color:#2F4FA8;border-radius:5px;padding:1px 6px;margin:1px 3px 1px 0;white-space:nowrap}.kz-chip.ok{background:#DDF3E6;color:#17663A}.kz-chip.no{background:#F3F4F6;color:#656973}.kz-car{font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px}span.kz-car.szemely{background:#DDF3E6;color:#17663A}span.kz-car.teher{background:#3B2F2A;color:#fff}.kz-sc{text-align:center;font-weight:600;font-size:12px}.kz-sc.ok{color:#17663A}.kz-sc.mid{color:#9A5B00;background:#FFF8E1}.kz-sc.no{color:#B4400E;background:#FDF1EC}.kz-sr{font-size:11.5px;min-width:220px}.kz-sr small{color:#656973}.kz-note{white-space:pre-wrap;margin:0 0 6px}.cpx-btn.kz-on{background:#17663A;border-color:#17663A}' +
+	css.textContent = '.kz-slots{margin:8px 0}.kz-slots ul{margin:4px 0 0;padding-left:18px;font-size:13px}.kz-slots li{margin:2px 0}.kz-slots a{color:#2F5BD8;text-decoration:none}' + '.kz-r td{padding:5px 8px;font-size:12.5px;line-height:1.3}.kz-r th{padding:6px 8px}.kz-r a{color:#2F5BD8;text-decoration:none}.kz-nm b{display:block;font-size:13px}.kz-nm small{display:block;color:#656973;font-size:11px}.kz-nw{white-space:nowrap}.kz-ex{color:#656973;max-width:220px}.kz-chips{min-width:120px}.kz-chip{display:inline-block;font-size:10.5px;font-weight:600;background:#EEF3FD;color:#2F4FA8;border-radius:5px;padding:1px 6px;margin:1px 3px 1px 0;white-space:nowrap}.kz-chip.ok{background:#DDF3E6;color:#17663A}.kz-chip.no{background:#F3F4F6;color:#656973}.kz-car{font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px}span.kz-car.szemely{background:#DDF3E6;color:#17663A}span.kz-car.teher{background:#3B2F2A;color:#fff}.kz-sc{text-align:center;font-weight:600;font-size:12px}.kz-sc.ok{color:#17663A}.kz-sc.mid{color:#9A5B00;background:#FFF8E1}.kz-sc.no{color:#B4400E;background:#FDF1EC}.kz-sr{font-size:11.5px;min-width:220px}.kz-sr small{color:#656973}.kz-note{white-space:pre-wrap;margin:0 0 6px}.cpx-btn.kz-on{background:#17663A;border-color:#17663A}' +
 		'.kz-c{text-align:center}.kz-c input{width:17px!important;min-width:0!important;height:17px;accent-color:#2E7D32;cursor:pointer}.kz-t th.kz-ch{font-size:10.5px;text-align:center;white-space:normal;min-width:56px;max-width:86px}.kz-car{min-width:100px!important;border-radius:999px!important;text-align:center}.kz-car.szemely{background:#DDF3E6!important;color:#17663A}.kz-car.teher{background:#3B2F2A!important;color:#fff}.kz-c.saving{background:#FFF8E1}.kz-c.saved{background:#E8F6EE}' +
 		'.kz{max-width:100%}.kz-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.kz-h input[type=search]{flex:1;min-width:150px;border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13px Inter,sans-serif}.kz-help{font-size:12.5px;color:#656973;margin:0 0 8px}' +
 		'.kz-n{font-size:12.5px;color:#656973;margin-bottom:6px}.kz-warn{color:#B4400E}.kz-open{color:#17663A}.kz-tw{background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:auto}' +

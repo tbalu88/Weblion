@@ -25,6 +25,7 @@ function cp_nt_kinds() {
 		'wl_review'   => array('Munkanapló', 'Jóváhagyva / visszanyitva', 'Az admin jóváhagyta vagy javításra visszanyitotta a munkanaplódat.', 'a napló gazdája', 0),
 		'wl_comment'  => array('Munkanapló', 'Hozzászólás a munkanaplóhoz', 'Valaki hozzászólt egy munkanaplóhoz.', 'a napló gazdája és a korábbi hozzászólók', 0),
 		'wl_remind'   => array('Munkanapló', 'Emlékeztető: üres munkanapló', 'A nap végén, ha a mai munkanapló még üres.', 'akinek ma munkanaplót kell írnia', 0),
+		'slot_ans'    => array('Beosztás', 'Válasz beosztás-meghívásra', 'Egy kezelő vagy host a meghívó levél linkjéről válaszolt (ráér / nem ér rá).', 'aki meghívta és Ákos', 0),
 		'system'      => array('Rendszer', 'Rendszer-figyelmeztetés', 'A panel önellenőrzése hibát talált (pl. elakadt szinkron, hiányzó beállítás).', 'adminok', 1),
 	);
 }

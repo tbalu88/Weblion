@@ -114,6 +114,7 @@ function cp_kz_out($r, $reveal) {
 	if ($reveal) { $x['sens'] = cp_kz_sens_get($r); }
 	/* v2.9.85: az interjú-foglalásai jegyzettel / értékeléssel (csak olvasható; szerkeszteni a Kezelők → Interjú-időpontok oldalon lehet) */
 	$x['iv'] = function_exists('cp_iv_kz_notes') ? cp_iv_kz_notes((int) $r['id']) : array();
+	$x['slots'] = function_exists('cp_slot_for_kz') ? cp_slot_for_kz((int) $r['id']) : array(); /* v2.9.117: közelgő beosztásai */
 	return $x;
 }
 

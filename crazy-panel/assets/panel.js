@@ -527,6 +527,7 @@
     '.sl-acts{display:inline-flex;gap:4px;flex-shrink:0;align-items:center}.sl-acts button{border:1px solid #E6E2DC;background:#fff;border-radius:6px;font:600 11.5px Inter,sans-serif;padding:2px 7px;cursor:pointer}.sl-acts button.fin{background:#141C33;color:#fff;border-color:#141C33}.sl-acts button.x{border:0;background:none;font-size:16px;color:#6B6F78;padding:0 4px}.sl-acts a{text-decoration:none}' +
     '.sl-inv{margin-top:8px;border:1.5px dashed #C9C4BB;background:none;border-radius:8px;font:600 12.5px Inter,sans-serif;padding:5px 10px;cursor:pointer;color:#141C33}.sl-wait,.sl-note{font-size:12px;color:#6B6F78;margin:6px 0 0}' +
     '.sl-pick{margin-top:8px;border-top:1px solid #EEE9E2;padding-top:6px}.sl-c{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;cursor:pointer}.sl-c > span{flex:1;min-width:0}.sl-c small{display:block;color:#B42318;font-size:11.5px}.sl-c.bad{opacity:.75}.sl-k{font:700 10.5px Inter,sans-serif;font-style:normal;border-radius:999px;padding:0 6px;background:#EEF0F3}.sl-k.kezelo{background:#141C33;color:#fff}.sl-ph{text-decoration:none}' +
+    '.sl-ms{font:600 11px Inter,sans-serif;color:#8A5300;margin-left:4px}.sl-ms.ok{color:#17663A}.sl-ms.no{color:#B42318}.sl-send{margin:8px 0 0 6px;border:1.5px solid #141C33;background:#141C33;color:#fff;border-radius:8px;font:600 12.5px Inter,sans-serif;padding:5px 10px;cursor:pointer}.sl-send.all{margin:0 0 0 auto}' +
     '.sl-pick details summary{font-size:12px;color:#6B6F78;cursor:pointer;margin:4px 0}.sl-pb{display:flex;gap:8px;margin-top:8px}' +
     '.cpx-cal.v2 .cpx-day{border:1.5px solid transparent;border-left-width:1.5px;gap:4px;transition:transform .08s}' +
     '.cpx-cal.v2 .cpx-day:hover{transform:translateY(-1px);border-color:rgba(20,28,51,.35)}' +
@@ -688,17 +689,20 @@
       return '<div class="sl-row' + (fin ? ' done' : '') + (s.booked ? '' : ' soft') + '" data-i="' + i + '">' +
         '<div class="sl-h"><b>' + esc(s.title || 'Deal #' + s.deal) + '</b><span class="sl-tags"><i>' + (s.kind === 'spin' ? '360 Spinner' : esc(sk[s.skill] || 'Szelfigép')) + '</i><i class="' + (s.bp === 0 ? 'vid' : s.bp === -1 ? 'unk' : '') + '">' + where + '</i>' + (s.time ? '<i>' + esc(s.time) + '</i>' : '<i class="unk">időpont még nincs</i>') +
         '<button type="button" class="sl-need ' + s.need + '" data-need="' + i + '" title="Automatikus a helyszín és a gép alapján – kattintva átállítható">' + needL + (s.need_set ? ' ✎' : '') + '</button>' + (s.booked ? '' : '<i class="soft">' + esc(s.stage || 'ajánlat') + '</i>') + '</span></div>' +
-        (live.length ? '<ul class="sl-a">' + live.map(a => '<li class="' + SL_ST[a.st][1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + SL_ST[a.st][0] + '</i>' + (a.note ? ' <small>„' + esc(a.note) + '”</small>' : '') + '</span>' +
+        (live.length ? '<ul class="sl-a">' + live.map(a => '<li class="' + SL_ST[a.st][1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + SL_ST[a.st][0] + '</i>' + (a.note ? ' <small>„' + esc(a.note) + '”</small>' : '') + (a.st === 'invited' ? (a.sent ? ' <small class="sl-ms ok" title="Meghívó elküldve: ' + esc(a.sent) + '">✉ elküldve</small>' : a.em ? ' <small class="sl-ms">✉ még nincs elküldve</small>' : ' <small class="sl-ms no" title="A Kezelők fülön nincs e-mail-címe – telefonon kell megkeresni">📞 nincs e-mail</small>') : '') + (a.ans ? ' <small class="sl-ms ok" title="Linkről válaszolt: ' + esc(a.ans) + '">↩ linkről</small>' : '') + '</span>' +
           '<span class="sl-acts">' + (a.st !== 'final' ? '<button type="button" data-st="accepted" data-a="' + a.id + '" title="Telefonon / üzenetben igent mondott">Ráér</button><button type="button" data-st="declined" data-a="' + a.id + '" title="Nem ér rá">Nem</button>' + (x.can_final ? '<button type="button" class="fin" data-fin="' + a.id + '" title="Beosztás véglegesítése (Ákos)">Véglegesít</button>' : '') : '') +
           (a.ph ? '<a href="tel:' + esc(a.ph.replace(/[^\d+]/g, '')) + '" title="Hívás">📞</a>' : '') + '<button type="button" class="x" data-del="' + a.id + '" title="Meghívás törlése" aria-label="Meghívás törlése">×</button></span></li>').join('') + '</ul>' : '') +
-        (fin ? '' : (s.can_inv ? '<button type="button" class="sl-inv" data-inv="' + i + '"' + (open[i] ? ' hidden' : '') + '>＋ Meghívás</button>' : '<p class="sl-wait">Meghívni a szerződés kiküldése után lehet' + (x.xmas ? '' : ' (karácsonyi időszakban már ajánlatkéréskor)') + '.</p>')) +
+        (fin ? '' : (s.can_inv ? '<button type="button" class="sl-inv" data-inv="' + i + '"' + (open[i] ? ' hidden' : '') + '>＋ Meghívás</button>' + (live.some(a => a.st === 'invited' && !a.sent && a.em) ? '<button type="button" class="sl-send" data-send="' + i + '">✉ Meghívó küldése (' + live.filter(a => a.st === 'invited' && !a.sent && a.em).length + ')</button>' : '') : '<p class="sl-wait">Meghívni a szerződés kiküldése után lehet' + (x.xmas ? '' : ' (karácsonyi időszakban már ajánlatkéréskor)') + '.</p>')) +
         '<div class="sl-pick" data-pick="' + i + '"' + (open[i] ? '' : ' hidden') + '>' + (good.length ? good.map(cRow).join('') : '<p class="cpx-muted">Nincs a feltételeknek megfelelő szabad ember.</p>') +
           (bad.length ? '<details><summary>Nem javasolt (' + bad.length + ')</summary>' + bad.map(cRow).join('') + '</details>' : '') +
           '<div class="sl-pb"><button type="button" class="cpx-btn" data-go="' + i + '">Meghívás</button><button type="button" class="cpx-btn ghost" data-cancel="' + i + '">Mégse</button></div></div></div>';
     }).join('') + (x.can_final ? '' : '<p class="sl-note">A beosztást Ákos véglegesíti.</p>');
+    /* v2.9.117: az összes el nem küldött meghívó egyszerre */
+    const unsent = []; x.slots.forEach(s => s.asg.forEach(a => { if (a.st === 'invited' && !a.sent && a.em) unsent.push(a); }));
+    if (unsent.length > 1) box.querySelector('.cpx-dsec').insertAdjacentHTML('beforeend', '<button type="button" class="sl-send all" data-sendall>✉ Minden meghívó küldése (' + unsent.length + ')</button>');
     const act = async (p, b) => {
       if (b) b.disabled = true;
-      try { slotDraw(box, date, await slotPost('cp_slot_act', Object.assign({ day: date }, p))); slotMonthRefresh(date); }
+      try { const nx = await slotPost('cp_slot_act', Object.assign({ day: date }, p)); slotDraw(box, date, nx); slotMonthRefresh(date); if (nx.msg) setTimeout(() => alert(nx.msg), 30); }
       catch (e) {
         if (e.code === 'busy' && window.confirm(e.message)) return act(Object.assign({}, p, { force: 1 }), b);
         alert(e.message); if (b) b.disabled = false;
@@ -714,7 +718,10 @@
       act({ op: 'invite', deal: s.deal, skey: s.skey, kz: ids.join(',') }, b);
     }));
     box.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => { const note = b.dataset.st === 'declined' ? (window.prompt('Megjegyzés (nem kötelező, pl. miért nem ér rá):', '') || '') : ''; act({ op: 'st', id: b.dataset.a, st: b.dataset.st, note: note }, b); }));
-    box.querySelectorAll('[data-fin]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Véglegesíted ezt a beosztást? A slot többi jelöltje „nem rá esett” lesz.')) act({ op: 'final', id: b.dataset.fin }, b); }));
+    box.querySelectorAll('[data-fin]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Véglegesíted ezt a beosztást?\n\nA kezelő megerősítő e-mailt kap (ha van e-mail-címe), a slot többi jelöltje „nem rá esett” lesz.')) act({ op: 'final', id: b.dataset.fin }, b); }));
+    const sendIds = (L, b) => { if (!L.length) return; if (!window.confirm('Elküldöd a meghívót e-mailben ' + L.length + ' embernek?\n\n' + L.map(a => '• ' + a.n).join('\n') + '\n\nA levélben a nap, a helyszín, az időpont és a gép szerepel (az ügyfél neve nem), és egy „Ráérek / Nem érek rá” gomb.')) return; act({ op: 'send', ids: L.map(a => a.id).join(',') }, b); };
+    box.querySelectorAll('[data-send]').forEach(b => b.addEventListener('click', () => sendIds(S_(b.dataset.send).asg.filter(a => a.st === 'invited' && !a.sent && a.em), b)));
+    const sa = box.querySelector('[data-sendall]'); if (sa) sa.addEventListener('click', () => sendIds(unsent, sa));
     box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Törlöd ezt a meghívást?')) act({ op: 'del', id: b.dataset.del }, b); }));
     box.querySelectorAll('[data-need]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.need); const v = s.need === 'kezelo' ? 'host' : 'kezelo'; act({ op: 'need', deal: s.deal, skey: s.skey, v: v }, b); }));
   }

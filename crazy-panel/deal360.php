@@ -187,6 +187,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	}
 	/* webes megkeresések (űrlap) */
 	$x['opens'] = function_exists('cp_px_for_deal') ? cp_px_for_deal($id) : array(); /* v2.9.109: megnyitás-követés */
+	$x['crew'] = function_exists('cp_slot_for_deal') ? cp_slot_for_deal($id) : array(); /* v2.9.117: beosztás */
 	$x['leads'] = array();
 	if (function_exists('cp_lead_t') && function_exists('cp_lead_db_ok') && cp_lead_db_ok()) {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT id, form_name, data, page, created_at FROM ' . cp_lead_t() . " WHERE deal_id = %d AND status <> 'spam' ORDER BY id DESC LIMIT 10", $id), ARRAY_A) as $l) {
