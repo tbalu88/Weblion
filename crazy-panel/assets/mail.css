@@ -912,3 +912,19 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-dp-new b{display:block;color:#2F5BD8;font-weight:700}.ml-dp-new small{display:block;color:#656973;margin-top:2px}.ml-dp-new:hover{background:#EEF3FD}
 /* v2.9.105: telefonon a kontakt-gomb az e-mail-cím mellett marad (a hosszú cím rövidül, a gomb nem csúszik új sorba) */
 @media (max-width:760px){.ml-read .ml-from .ml-fe{display:flex;align-items:center;gap:6px;overflow:visible}.ml-read .ml-from .ml-fet{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ml-read .ml-from .ml-fe .ml-cadd{margin-left:0;flex-shrink:0;vertical-align:0}}
+/* v2.9.107: a levél eszköztára egy sorban, amíg a szélesség engedi – szűkebb olvasópanelnél a gombok csak ikonnal (a felirat rámutatva látszik) */
+@media (min-width:761px){
+  .ml-read{container-type:inline-size;container-name:mlread}
+  .ml-read .ml-rtool{flex-wrap:nowrap;min-width:0}
+  .ml-read .ml-rtool select{flex:0 1 150px;min-width:96px}
+  .ml-read .ml-rtool .ml-sw{white-space:nowrap;flex-shrink:0}
+  .ml-read .ml-rtool > button{flex-shrink:0;white-space:nowrap}
+  @container mlread (max-width:880px){
+    .ml-read .ml-rtool > button{font-size:0;gap:0;padding:6px 8px}
+    .ml-read .ml-rtool > button .ml-ic,.ml-read .ml-rtool > button svg{width:16px;height:16px}
+  }
+  @container mlread (max-width:560px){
+    .ml-read .ml-rtool{flex-wrap:wrap}
+    .ml-read .ml-rtool .ml-sw{font-size:0;gap:0}
+  }
+}
