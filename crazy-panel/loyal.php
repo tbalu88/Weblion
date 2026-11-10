@@ -162,17 +162,17 @@ function cp_rcl_tick($force = false) {
 		$svc = trim(implode(', ', array_filter(array((string) $r['service'], str_replace(' | ', ', ', (string) $r['services_ec'])))));
 		$ev = cp_rcl_hud($r['event_d'], true);
 		$next = cp_rcl_hud(wp_date('Y-m-d', strtotime($r['event_d'] . ' 12:00 +1 year')), false);
-		$title = mb_substr('🔁 Visszahívás: ' . $who . ' – tavaly ' . $ev . ($svc !== '' ? ' (' . $svc . ')' : ''), 0, 250);
-		$descr = 'Tavaly ' . $ev . ' rendezvényük volt velünk' . ($svc !== '' ? ' (' . $svc . ')' : '') . ($r['venue'] ? ', helyszín: ' . $r['venue'] : '') . ($r['value'] ? ', ' . number_format((float) $r['value'], 0, ',', ' ') . ' Ft értékben' : '') . ".\n" .
-			'Ha idén is lesz (kb. ' . $next . ' körül), most érdemes megkeresni őket – azóta nem jelentkeztek.' . "\n" . 'Kapcsolat: ' . trim(($r['cn'] ?: '') . ' ' . ($r['ce'] ? '<' . $r['ce'] . '>' : '')) . "\n\nA tavalyi deal a kártyához van kötve.";
+		$title = mb_substr('🔁 Visszahívás: ' . $who . ' – egy éve: ' . $ev . ($svc !== '' ? ' (' . $svc . ')' : ''), 0, 250);
+		$descr = 'Egy éve, ' . $ev . ' rendezvényük volt velünk' . ($svc !== '' ? ' (' . $svc . ')' : '') . ($r['venue'] ? ', helyszín: ' . $r['venue'] : '') . ($r['value'] ? ', ' . number_format((float) $r['value'], 0, ',', ' ') . ' Ft értékben' : '') . ".\n" .
+			'Ha idén is lesz (kb. ' . $next . ' körül), most érdemes megkeresni őket – azóta nem jelentkeztek.' . "\n" . 'Kapcsolat: ' . trim(($r['cn'] ?: '') . ' ' . ($r['ce'] ? '<' . $r['ce'] . '>' : '')) . "\n\nAz egy évvel ezelőtti deal a kártyához van kötve.";
 		$as = isset($uids[(int) $r['owner_id']]) ? (string) $uids[(int) $r['owner_id']] : '';
 		$pos = (int) $wpdb->get_var($wpdb->prepare('SELECT COALESCE(MIN(pos), 1) - 1 FROM ' . cp_kb_t('cards') . ' WHERE list_id = %d', $list));
 		$now = gmdate('Y-m-d H:i:s');
 		$wpdb->insert(cp_kb_t('cards'), array('board_id' => $board, 'list_id' => $list, 'pos' => $pos, 'title' => $title, 'descr' => $descr, 'assignees' => $as, 'labels' => '', 'due' => $today,
 			'checklist' => wp_json_encode(array(array('t' => 'Felhívni / e-mailt írni', 'd' => 0), array('t' => 'Ha kér: új deal a panelben', 'd' => 0))), 'deal_id' => $id, 'created_uid' => null, 'created_by' => 'Crazy panel', 'created_at' => $now, 'updated_at' => $now));
 		$cid = (int) $wpdb->insert_id;
-		if ($cid && function_exists('cp_kb_log')) { cp_kb_log($cid, 'Létrehozta az éves visszahívó (tavalyi rendezvény: ' . $r['event_d'] . ')'); }
-		if ($cid && $as !== '' && function_exists('cp_notify')) { cp_notify((int) $as, 'kb_recall', 'visszahívandó ügyfél: ' . $who . ' (tavaly ' . $ev . ')', 'feladatok:' . $cid, 'Crazy panel'); }
+		if ($cid && function_exists('cp_kb_log')) { cp_kb_log($cid, 'Létrehozta az éves visszahívó (az egy évvel ezelőtti rendezvény: ' . $r['event_d'] . ')'); }
+		if ($cid && $as !== '' && function_exists('cp_notify')) { cp_notify((int) $as, 'kb_recall', 'visszahívandó ügyfél: ' . $who . ' (egy éve volt rendezvényük: ' . $ev . ')', 'feladatok:' . $cid, 'Crazy panel'); }
 		$done[$id] = time(); $made++;
 	}
 	/* 2 évnél régebbi jelölések törlése */
