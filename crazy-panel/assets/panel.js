@@ -2701,6 +2701,10 @@ function elCsv() {
 	/* ------------------------------------------------------------ start */
   shell();
   render();
+  /* v2.9.104: kontakt / cég saját linkje (#kapcsolatok:ct:<id>) */
+  if (DEEP && S.tab === 'kapcsolatok' && /^(ct|co):\d+$/.test(DEEP)) {
+    const dp = DEEP; setTimeout(() => { if (window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(dp); }, 400);
+  }
   if (DEEP && (S.tab === 'feladatok' || S.tab === 'mail' || S.tab === 'deals')) {
     history.replaceState(null, '', '#' + S.tab);
     /* v2.9.60 (P3): a Feladatok modul igény szerint töltődik – a mélylink a betöltése után nyílik */
