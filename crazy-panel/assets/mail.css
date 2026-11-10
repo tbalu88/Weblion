@@ -902,7 +902,8 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 /* v2.9.94: deal-csempe – WON / LOST jelölés és gombok */
 .ml-dt{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}.ml-dt a{overflow-wrap:anywhere}
 .ml-dst{font:700 11px Inter,sans-serif;letter-spacing:.04em;border-radius:6px;padding:3px 8px;flex-shrink:0}.ml-dst.won{background:#DDF3E6;color:#17663A}.ml-dst.lost{background:#FDECEA;color:#B42318}
-.ml-dact{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.ml-dcard>.ml-dact{display:flex;flex:none;flex-direction:row;gap:6px;align-self:center;min-width:auto}
+@media (max-width:560px){.ml-dcard{flex-wrap:wrap}.ml-dcard>div:not(.ml-dact){flex-basis:calc(100% - 70px)}.ml-dcard>.ml-dact{order:3;flex-basis:100%;padding-left:30px;align-self:auto;flex-wrap:wrap}}
 .ml-dbtn{border:1px solid #E6E3DE;background:#fff;border-radius:999px;padding:4px 12px;font:600 12.5px Inter,sans-serif;color:#3A3F4B;cursor:pointer}
 .ml-dbtn.won:hover{border-color:#17663A;color:#17663A;background:#F1FAF4}.ml-dbtn.lost:hover{border-color:#B42318;color:#B42318;background:#FEF5F4}.ml-dbtn:hover{border-color:#141C33}
 .ml-dbtn:disabled{opacity:.55;cursor:default}.ml-dbtn:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
