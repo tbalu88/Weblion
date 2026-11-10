@@ -57,10 +57,14 @@
 	const PR = { th: 0, known: {}, t: null };
 	/* v2.9.64: a levélszál gyorsnézetének (peek) állapota – lásd peek() lent */
 	const PK = { th: 0, el: null, x: null, o: null, cmp: false, ch: null, ret: null, xs: {}, def: null, seq: 0, hist: false, backAt: 0, after: null, down: null };
+	/* v2.9.83: a Levelezés szálpaneljében nyitott válaszíró (lásd icOpen lent): el = a keret, ch = a levélíró befogadója, th = a szál */
+	const IR = { el: null, ch: null, th: 0, kind: '', hist: false, ret: null };
 	function presCtx() {
 		/* v2.9.64: a dealről nyitott gyorsnézet (peek) is „nézésnek” számít, a benne írt válasz „válaszolásnak” – amíg nyitva van, ez az elsődleges */
 		if (PK.el && PK.th) return { th: PK.th, st: PK.cmp ? 'reply' : 'view' };
 		if (!S.main || !S.main.isConnected) return null;
+		/* v2.9.83: a szálon belül írt válasz is „válaszolásnak” számít */
+		if (S.view === 'inbox' && IR.el && IR.th && IR.el.isConnected) return { th: IR.th, st: 'reply' };
 		if (S.view === 'compose' && S.cctx && S.cctx.thread) return { th: S.cctx.thread, st: 'reply' };
 		if (S.view === 'inbox' && S.th > 0) return { th: S.th, st: 'view' };
 		return null;
@@ -98,6 +102,11 @@
 		if (!S.main || !S.main.isConnected || S.view !== 'inbox') return;
 		const tg = e.target, tn = tg && tg.tagName;
 		if (tn === 'INPUT' || tn === 'TEXTAREA' || tn === 'SELECT' || (tg && tg.isContentEditable)) { if (e.key === 'Escape' && tg.blur) tg.blur(); return; }
+		/* v2.9.83: nyitott válaszírónál az Esc (szövegmezőn kívül) a válaszírót zárja – a megírt szöveg a Piszkozatok közé kerül; a válaszíró gombjain a többi billentyű nem hat a szálra */
+		if (IR.el && IR.el.isConnected) {
+			if (e.key === 'Escape') { e.preventDefault(); icClose(true); return; }
+			if (tg && tg.closest && tg.closest('.ml-irc')) return;
+		}
 		if (document.querySelector('.ml-snzp') || Array.from(document.querySelectorAll('.cpx-modal, .crm-page')).some(x => x.offsetParent !== null || getComputedStyle(x).position === 'fixed' && getComputedStyle(x).display !== 'none' && x.childElementCount)) return;
 		const box = S.main.querySelector('.ml-body') || S.main;
 		const k = e.key;
@@ -635,6 +644,8 @@
 		});
 		selUI(box);
 		const rd = box.querySelector('[data-read]');
+		/* v2.9.83: ha a válaszíró szála már nem nyílik meg újra (másik mappa, kijelölés), a félbeírt válasz a Piszkozatok közé kerül */
+		if (IR.el && !(IR.th === S.th && !S.sel.size && (rows.some(t => t.id === S.th) || S.forceTh === S.th))) icClose(true);
 		if (S.sel.size) return;
 		if (S.th && (rows.some(t => t.id === S.th) || S.forceTh === S.th)) { S.forceTh = 0; openThread(box, S.th); }
 		else rd.innerHTML = '<div class="ml-empty"><b>Válassz egy levelet</b><span>Itt jelenik meg a levélváltás, fölötte a hozzá tartozó deal kártyája és a kollégák jegyzetei; alul írhatsz jegyzetet, @ jellel megemlítve a kollégákat.</span></div>';
@@ -814,6 +825,8 @@
 	/* v1.86.1: mobilon a megnyitott levél előzménylépést kap, így a visszalegyintés / Android vissza gomb a listára visz, nem lép ki */
 	const isMob = () => !!(window.matchMedia && window.matchMedia('(max-width:760px)').matches);
 	window.addEventListener('popstate', () => {
+		/* v2.9.83: mobilon a válaszíró saját előzménylépést kap – a Vissza előbb a válaszírót zárja (a piszkozat megmarad), a szál nyitva marad */
+		if (IR.hist && !(history.state && history.state.cpMailRe)) { IR.hist = false; icClose(true); return; }
 		if (S.reading && !(history.state && history.state.cpMailTh) && typeof S.closeTh === 'function' && document.querySelector('.ml-inbox.reading')) S.closeTh();
 	});
 	/* v2.9.64: a levél első sora (összecsukott levélnél) – az olvasó és a gyorsnézet közös segédje */
@@ -842,9 +855,102 @@
 		const quote = '<p><br></p><p>' + esc(hdate(m.sent_at)) + ', ' + esc(m.from_name || m.from_email) + ' ezt írta:</p><blockquote style="margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex">' + (m.body || '') + '</blockquote>';
 		return { to: toL, cc: ccL, subject: subj, body: quote, quote: quote, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '', known: PR.known[t.id] || 0 };
 	}
+	/* ------------------------------------------------------------ v2.9.83: válasz a szálpanelben (Salesmate Team Inbox mintájára)
+	   A Válasz / Válasz mindenkinek / Továbbítás (és az r / a billentyű, a mobil gyorsgombok, az AI-piszkozat átvétele, a félbehagyott
+	   válasz folytatása) a levélírót a szálpanelben nyitja – a mappák, a lista és a szál a helyén marad. Ugyanaz a levélíró
+	   (drawCompose befogadóval), mint a gyorsnézetben: piszkozat, ütemezés, visszavonható küldés, melléklet, sablon, AI.
+	   Helye: „Legújabb felül” sorrendnél a szál tetején (a legújabb levél fölött), különben a végén. ✕ / Esc: bezárás, a
+	   megírt szöveg a Piszkozatok közé kerül; Elvetés: törli; Teljes képernyő: a tartalommal együtt a nagy levélíróba vált.
+	   Mobilon a válaszíró kitölti a szálpanelt, és saját előzménylépést kap (a Vissza gomb zárja). */
+	const IC_T = { reply: 'Válasz', all: 'Válasz mindenkinek', fwd: 'Továbbítás', draft: 'Válasz – folytatás' };
+	const EXP_I = svg('<path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="M20 4l-6.5 6.5"/><path d="M4 20l6.5-6.5"/>');
+	function icPlace(rd) {
+		const w = IR.el, th = rd && rd.querySelector('.ml-thread');
+		if (!w || !th) return;
+		if (newFirst()) th.insertBefore(w, th.querySelector(':scope > .ml-msg, :scope > .ml-ev')); else th.appendChild(w);
+		rd.classList.add('cmp');
+	}
+	function icOpen(box, rd, th, kind, draft, draftId) {
+		if (IR.el && IR.el.isConnected && IR.th === th) {
+			/* ugyanaz a fajta már nyitva: csak odaugrik; másik fajtánál a megkezdett szöveg előbb a Piszkozatok közé kerül */
+			if (IR.kind === kind && kind !== 'draft') { icFocus(); return; }
+			if (IR.ch && IR.ch.changed && IR.ch.changed() && !window.confirm('Lecseréled a megkezdett levelet? (A mostani a Piszkozatok közé kerül.)')) { icFocus(); return; }
+		}
+		const ret = IR.el && IR.el.contains(document.activeElement) ? IR.ret : document.activeElement;
+		/* csere: a mobil előzménylépés megmarad (nincs vissza-, majd újralépés) */
+		const hadHist = IR.hist; IR.hist = false;
+		if (IR.el) icClose(true, true);
+		const w = document.createElement('section');
+		w.className = 'ml-irc'; w.setAttribute('aria-label', IC_T[kind] || 'Válasz');
+		w.innerHTML = '<div class="ml-irh"><b>' + esc(IC_T[kind] || 'Válasz') + '</b>' +
+			'<button type="button" class="ml-irb" data-icfull title="Teljes képernyő – a megírt szöveg megmarad" aria-label="Teljes képernyő">' + EXP_I + '</button>' +
+			'<button type="button" class="ml-irb" data-icx title="Bezárás (Esc) – a megírt szöveg a Piszkozatok közé kerül" aria-label="Bezárás">' + X_I + '</button></div><div class="ml-irx"></div>';
+		const ch = {
+			draft: draft, draftId: draftId, title: IC_T[kind] || 'Válasz', inline: true,
+			alive: () => IR.ch === ch,
+			onClose: () => { if (IR.ch === ch) icClose(false); },
+			onSent: r => { if (IR.ch === ch) icClose(false); icSent(box, th, r); },
+			/* a küldés visszavonásakor a szál már nem volt nyitva: a szál újranyílik, benne a válaszíróval */
+			reopen: (snap, did) => { if (IR.ch === ch) icClose(false); S.icPend = { th: th, kind: kind, d: snap, id: did }; open(th); }
+		};
+		Object.assign(IR, { el: w, ch: ch, th: th, kind: kind, ret: ret });
+		icPlace(rd);
+		w.querySelector('[data-icx]').addEventListener('click', () => icClose(true));
+		w.querySelector('[data-icfull]').addEventListener('click', () => icFull());
+		if (isMob()) { window.scrollTo(0, 0); if (hadHist) IR.hist = true; else try { history.pushState(Object.assign({}, history.state || {}, { cpMailRe: th }), '', location.href); IR.hist = true; } catch (e) { IR.hist = false; } }
+		drawCompose(w.querySelector('.ml-irx'), ch).then(() => { if (IR.ch === ch) icFocus(kind === 'fwd'); });
+		setTimeout(presPing, 50);
+	}
+	/* a válaszíró a látható részre görög (animáció nélkül); válasznál a szövegbe, továbbításnál a címzetthez kerül a kurzor */
+	function icFocus(toAddr) {
+		const w = IR.el; if (!w || !w.isConnected) return;
+		if (!isMob()) w.scrollIntoView({ block: 'nearest' });
+		const f = toAddr ? w.querySelector('[data-to] input') : w.querySelector('.ml-area');
+		if (!f) return;
+		f.focus({ preventScroll: true });
+		if (!toAddr) { const s = window.getSelection(), r = document.createRange(); r.setStart(f, 0); r.collapse(true); s.removeAllRanges(); s.addRange(r); }
+	}
+	/* save: a megírt szöveg a Piszkozatok közé (ha változott); quiet: nincs fókusz-visszaadás (rögtön más nyílik) */
+	function icClose(save, quiet) {
+		const w = IR.el, ch = IR.ch;
+		if (!w) return;
+		if (save && ch && ch.save) ch.save();
+		const rd = w.closest('.ml-read'), ret = IR.ret, hist = IR.hist;
+		Object.assign(IR, { el: null, ch: null, th: 0, kind: '', hist: false, ret: null });
+		w.remove();
+		if (rd) rd.classList.remove('cmp');
+		if (hist) history.back();
+		if (!quiet && ret && ret.isConnected && ret.focus) { try { ret.focus({ preventScroll: true }); } catch (e) { /* régi böngésző */ } }
+		presPing();
+	}
+	/* Teljes képernyő: a nagy levélíró ugyanazzal a tartalommal és piszkozattal; ✕ / Elvetés onnan is ide, a szálhoz tér vissza */
+	async function icFull() {
+		const ch = IR.ch, th = IR.th;
+		if (!ch || !ch.state) return;
+		const st = ch.state(), did = await ch.save();
+		if (IR.ch !== ch) return;
+		icClose(false, true);
+		S.reply = st; S.draftId = did || ch.did() || ''; S.cfrom = th; S.view = 'compose';
+		if (S.main) view(S.main);
+	}
+	/* küldés után a szál helyben frissül (nincs „Betöltés…”), a lista sora is (idő, levélszám, piszkozat-jel) */
+	async function icSent(box, th) {
+		const row = (S.rows || []).find(x => x.id === th); if (row) row.dr = 0;
+		let x;
+		try { x = th > 0 ? await post('cp_mail_thread', { id: th }) : await thAct(th, 'view', {}); } catch (e) { return; }
+		if (!box.isConnected) return;
+		const rd = box.querySelector('[data-read]');
+		if (rd && S.th === th) drawThread(box, rd, x);
+		if (!x || !x.t) return;
+		refreshItem(box, x.t);
+		const it = box.querySelector('.ml-item[data-th="' + th + '"]');
+		if (it) { const dr = it.querySelector('.ml-drc'); if (dr) dr.remove(); const sm = it.querySelector('.ml-i1 small'); if (sm && x.t.at) sm.textContent = ago(x.t.at); }
+	}
 	async function openThread(box, id) {
 		if (isMob() && !(history.state && history.state.cpMailTh)) history.pushState(Object.assign({}, history.state || {}, { cpMailTh: id }), '', location.href);
 		const rd = box.querySelector('[data-read]');
+		/* v2.9.83: másik szál megnyitásakor a félbeírt válasz a Piszkozatok közé kerül; ugyanannál a szálnál a válaszíró megmarad (drawThread visszateszi) */
+		if (IR.el) { if (IR.th !== id) icClose(true); else IR.el.remove(); }
 		S.reading = true;
 		const ib = box.querySelector('.ml-inbox'); if (ib) ib.classList.add('reading');
 		if (window.matchMedia && window.matchMedia('(max-width:760px)').matches) window.scrollTo(0, 0);
@@ -890,6 +996,10 @@
 		const dvHtml = (m, a, ai) => a.dv ? ' <a class="ml-dv' + (a.dv.s === 'mail' ? ' warn' : '') + '" href="https://drive.google.com/file/d/' + encodeURIComponent(a.dv.id) + '/view" target="_blank" rel="noopener" title="' + esc(dvTitle(a.dv)) + '">✓ Drive · ' + esc(a.dv.f) + (a.dv.s === 'mail' ? ' ?' : '') + '</a><button type="button" class="ml-dvx" data-dvx="' + Number(m.id) + '" data-dvi="' + ai + '" title="Másik hónapba (a fájl a Drive-on is átkerül)" aria-label="Hónap módosítása">✎</button>'
 			: (isInv && m.dir === 'in' && /\.pdf$/i.test(a.n || '') ? ' <button type="button" class="ml-dvb" data-dvm="' + Number(m.id) + '" data-dvi="' + ai + '" title="A számla mentése a Drive számlamappájába, a kelte szerinti hónapba">Mentés a Drive-ra</button>' : '');
 		const dvAny = msgs0.some(m => (m.attachments || []).some(a => a.dv));
+		/* v2.9.83: a nyitott válaszíró az újrarajzolást túléli (címke, kiosztás, jegyzet, sorrend…) – kivesszük, a végén visszatesszük, a beírt szöveggel együtt */
+		const icKeep = IR.el && IR.th === t.id ? IR.el : null;
+		if (IR.el && !icKeep) icClose(true);
+		if (icKeep) icKeep.remove();
 		rd.innerHTML = '<div class="ml-backbar"><button type="button" data-back aria-label="Vissza">‹ Vissza</button><span>' + esc(t.subj) + '</span>' +
 			'<button type="button" class="ml-bi' + (t.as ? ' on' : '') + '" data-mas aria-label="Kiosztás" title="Kiosztás: ' + esc(pname(t.as) || 'kiosztatlan') + '">' + IC('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 8h5M19.5 5.5v5"/>') + '</button>' +
 			'<button type="button" class="ml-bi' + (following ? ' on' : '') + '" data-mfo aria-label="Követés" title="' + (following ? 'Követed: értesítést kapsz az új levelekről – koppints a leállításhoz' : 'Követés: értesítést kapsz, ha új levél jön ebbe a szálba') + '">' + IC('<path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 0 0 4 0"/>') + '</button>' +
@@ -952,10 +1062,8 @@
 		rd.querySelectorAll('[data-ttx]').forEach(b => b.addEventListener('click', () => { tcur = tcur.filter(x => x !== b.dataset.ttx); tgSet(); }));
 		rd.querySelector('[data-as]').addEventListener('change', e => act('cp_mail_thread_set', { f: 'assignee', v: e.target.value }));
 		/* v1.52: válasz a panelből (próbaüzem) */
-		const reply = (m, all) => {
-			S.reply = replyDraft(t, d, m, all); /* v2.9.64: közös segéd (a gyorsnézet is ezt használja) */
-			S.view = 'compose'; view(S.main);
-		};
+		/* v2.9.83: a válasz a szálpanelben nyílik (Salesmate Team Inbox mintájára) – a lista és a szál a helyén marad */
+		const reply = (m, all) => icOpen(box, rd, t.id, all ? 'all' : 'reply', replyDraft(t, d, m, all), ''); /* v2.9.64: közös segéd (a gyorsnézet is ezt használja) */
 		const xb = rd.querySelector('[data-xall]');
 		const xlab = () => { if (xb) xb.textContent = allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása'; };
 		rd.querySelectorAll('.ml-msg[data-mk]').forEach(a => a.addEventListener('click', e => {
@@ -1019,8 +1127,7 @@
 		const forward = m => {
 			const hdr = '<p><br></p><p>---------- Továbbított üzenet ----------<br>Feladó: ' + esc(m.from_name || '') + ' &lt;' + esc(m.from_email || '') + '&gt;<br>Dátum: ' + esc(hdate(m.sent_at)) + '<br>Tárgy: ' + esc(m.subject || t.subj || '') + '<br>Címzett: ' + esc(m.to_list || '') + '</p>';
 			const q = hdr + (m.status === 'Elküldve a panelből' ? (m.body || '') : tidyBody(m.body)) + ((m.attachments || []).length ? '<p><i>(A mellékleteket – ' + m.attachments.map(a => esc(a.n)).join(', ') + ' – szükség esetén töltsd le és csatold újra.)</i></p>' : '');
-			S.reply = { to: [], cc: [], subject: /^(fw|fwd|továbbítva)\s*:/i.test(t.subj || '') ? t.subj : 'Fw: ' + (t.subj || ''), body: q, quote: q, thread: 0, tsubj: '', deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' };
-			S.view = 'compose'; view(S.main);
+			icOpen(box, rd, t.id, 'fwd', { to: [], cc: [], subject: /^(fw|fwd|továbbítva)\s*:/i.test(t.subj || '') ? t.subj : 'Fw: ' + (t.subj || ''), body: q, quote: q, thread: 0, tsubj: '', deal: d && d.id ? d.id : 0, dealTitle: d ? d.title : '' }, ''); /* v2.9.83: a szálpanelben */
 		};
 		const printMsg = m => {
 			const w = window.open('', '_blank', 'noopener=no'); if (!w) { toast('A böngésző letiltotta az új ablakot.', true); return; }
@@ -1055,7 +1162,12 @@
 		}));
 		const clb = rd.querySelector('.ml-rtool [data-cl]'); if (clb) clb.addEventListener('click', () => copyLink(t.id));
 		rd.querySelectorAll('[data-one]').forEach(b => b.addEventListener('click', () => { if (b.dataset.one === 'unread') S.th = null; bulk(box, [t.id], b.dataset.one, ''); }));
-		const drc = rd.querySelector('[data-drcont]'); if (drc) drc.addEventListener('click', () => openDraft('', t.id));
+		/* v2.9.83: a félbehagyott válasz is a szálpanelben folytatódik */
+		const drc = rd.querySelector('[data-drcont]'); if (drc) drc.addEventListener('click', async () => {
+			drc.disabled = true;
+			try { const r = await post('cp_mail_draft_get', { thread: t.id }); if (rd.isConnected && S.th === t.id) icOpen(box, rd, t.id, 'draft', r.d, r.id); }
+			catch (e) { drc.disabled = false; toast(e.message, true); }
+		});
 		rd.querySelectorAll('[data-snz]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); snzMenu(b).then(ts => { if (ts) bulk(box, [t.id], 'snooze', String(ts)); }); }));
 		rd.querySelector('[data-fol]').addEventListener('change', e => act('cp_mail_thread_set', { f: 'follow', v: e.target.checked ? '1' : '0' }));
 		const det = rd.querySelector('[data-detach]');
@@ -1071,7 +1183,7 @@
 		});
 		/* v1.38: AI válaszvarázsló – piszkozat, amit a levélíróban nézel át */
 		const aib = rd.querySelector('[data-ai]');
-		if (aib) aib.addEventListener('click', () => aiPanel(rd.querySelector('[data-aip]'), t));
+		if (aib) aib.addEventListener('click', () => aiPanel(rd.querySelector('[data-aip]'), t, dr => icOpen(box, rd, t.id, 'reply', dr, ''))); /* v2.9.83: átvétel a szálpanel válaszírójába */
 		/* v1.35: teendő a Feladatokba (kanban), és a levélszálhoz kapcsolt kártyák */
 		const kbl = rd.querySelector('[data-kbl]');
 		if (window.CPKanban && t.id > 0) window.CPKanban.linked(kbl, { th: t.id });
@@ -1100,6 +1212,9 @@
 		const save = () => { const v = ta.value.trim(); if (!v) return; act('cp_mail_note_add', { body: v }); };
 		ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } if (e.key === 'Escape') mp.hidden = true; });
 		rd.querySelector('[data-nsave]').addEventListener('click', save);
+		/* v2.9.83: a válaszíró vissza a helyére; visszavont küldés után (másik szálról visszatérve) újranyílik */
+		if (icKeep && IR.el === icKeep) icPlace(rd); else rd.classList.remove('cmp');
+		if (S.icPend && S.icPend.th === t.id && !IR.el) { const p = S.icPend; S.icPend = null; icOpen(box, rd, t.id, p.kind, p.d, p.id); }
 	}
 	/* a levéllista egy sorának frissítése (jegyzet, felelős, lezárás) újratöltés nélkül */
 	function refreshItem(box, t) {
@@ -1347,17 +1462,19 @@
 		if (!ho) S.reply = null;
 		/* v2.9: a szerveren tárolt piszkozat azonosítója (a Piszkozatok mappából vagy a visszavont küldésből) */
 		let draftId = ho ? (ho.draftId || '') : (S.draftId || ''); if (!ho) S.draftId = '';
+		/* v2.9.83: melyik szálból jött a teljes képernyős levélíró (továbbításnál a ctx.thread 0) – ✕ / Elvetés oda tér vissza */
+		const cfrom = ho ? 0 : (Number(S.cfrom) || 0); if (!ho) S.cfrom = 0;
 		const ctx = { thread: draft && draft.thread ? Number(draft.thread) : 0, subj: draft && draft.tsubj ? draft.tsubj : '', quote: draft && draft.quote ? draft.quote : '', known: draft && draft.known ? Number(draft.known) : 0 };
 		if (!ho) S.cctx = ctx;
 		const SON = !!(M.send && M.send.on);
 		box.innerHTML = '<div class="ml-compose">' +
 			/* v1.62: mobilon a Salesmate „Compose” fejléce: bezárás, cím, melléklet, küldés, továbbiak */
-			'<div class="ml-ctb"><button type="button" data-mx aria-label="Bezárás" title="Bezárás (a piszkozat megmarad)">✕</button><b>' + (ctx.thread ? 'Válasz' : 'Új levél') + '</b><button type="button" data-matt aria-label="Melléklet"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button><button type="button" class="ml-ctb-send" data-msend aria-label="Küldés"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M3 20l18-8L3 4l2 8z"/><path d="M5 12h8"/></svg></button><button type="button" data-mmore aria-label="Továbbiak">⋮</button></div>' +
+			'<div class="ml-ctb"><button type="button" data-mx aria-label="Bezárás" title="Bezárás (a piszkozat megmarad)">✕</button><b>' + (ho && ho.title ? esc(ho.title) : ctx.thread ? 'Válasz' : 'Új levél') + '</b><button type="button" data-matt aria-label="Melléklet"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button><button type="button" class="ml-ctb-send" data-msend aria-label="Küldés"' + (SON ? '' : ' disabled') + '><svg viewBox="0 0 24 24"><path d="M3 20l18-8L3 4l2 8z"/><path d="M5 12h8"/></svg></button><button type="button" data-mmore aria-label="Továbbiak">⋮</button></div>' +
 			'<div class="ml-qa" data-cqa hidden><div class="ml-qab" data-cqax></div><div class="ml-qas"><div class="ml-qah"><b>Továbbiak</b><button type="button" data-cqax aria-label="Bezárás">✕</button></div>' +
 			(ctx.thread && M.ai ? '<button type="button" data-mq="ai">✨ AI válasz</button>' : '') + '<button type="button" data-mq="deal">🔗 Deal csatolása</button>' + (C.portal && C.portal.on ? '<button type="button" data-mq="portal">📝 Ügyfélportál-link beszúrása</button>' : '') +
 			(SON ? '<button type="button" data-mq="test">🧪 Próbalevél magamnak</button>' : '') + '<button type="button" data-mq="prev">👁 Előnézet</button><button type="button" data-mq="save">💾 Piszkozat mentése</button>' +
 			(ctx.thread ? '<button type="button" data-mq="unthread">✉ Új levélként küldöm</button>' : '') + '<button type="button" data-mq="clear">🗑 Új, üres levél</button>' + (SON ? '' : '<small>A panelből küldés neked még nincs bekapcsolva.</small>') + '</div></div>' +
-			(ctx.thread ? '<div class="ml-rctx">↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>' + (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
+			(ctx.thread ? '<div class="ml-rctx">' + (ho && ho.inline ? '' : '↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>') + /* v2.9.83: a szálon belül a fejléc már mondja */ (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
 			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Ügyfélportál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
 			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
@@ -1577,6 +1694,7 @@
 		/* v2.9: automatikus mentés a szerverre (v2.9.58: 15 mp-enként – korábban 4 –, ha változott; a levélíró elhagyásakor is) */
 		const dstate = () => JSON.stringify({ to: to.get(), cc: cc.get(), bcc: bcc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) });
 		let dlast = dstate(), dsent = false, dbusy = null;
+		const dinit = dlast; /* v2.9.83: változott-e a megnyitás óta */
 		const dsave = async (force) => {
 			if (dsent) return draftId;
 			const st = dstate();
@@ -1587,15 +1705,20 @@
 			return draftId;
 		};
 		if (ho) ho.save = () => dsave(false);
-		const dtimer = setInterval(() => { if (!box.isConnected || (!ho && S.view !== 'compose')) { clearInterval(dtimer); window.removeEventListener('pagehide', dhide); dsave(false); return; } dsave(false); }, 15000);
+		/* v2.9.83: a szálpanel válaszírójának: változott-e, a mostani tartalom (teljes képernyőre váltáshoz), a piszkozat azonosítója */
+		if (ho) { ho.changed = () => !dsent && dstate() !== dinit; ho.state = () => JSON.parse(dstate()); ho.did = () => draftId; }
+		/* v2.9.83: a szálpanel újrarajzolásakor a válaszíró egy pillanatra kikerül a lapból – amíg a befogadó él (ho.alive), a mentés megy tovább */
+		const dtimer = setInterval(() => { if ((!box.isConnected && !(ho && ho.alive && ho.alive())) || (!ho && S.view !== 'compose')) { clearInterval(dtimer); window.removeEventListener('pagehide', dhide); dsave(false); return; } dsave(false); }, 15000);
 		const dhide = () => { if (dsent || dstate() === dlast || !navigator.sendBeacon) return; const fd = new FormData(); fd.append('action', 'cp_mail_draft_save'); fd.append('t', C.t); fd.append('id', draftId); fd.append('d', dstate()); navigator.sendBeacon(C.ajax, fd); };
 		window.addEventListener('pagehide', dhide);
 		q('[data-save]').addEventListener('click', async () => { const id = await dsave(true); toast(id ? 'Piszkozat mentve a Piszkozatok közé.' : 'Üres levél – nincs mit menteni.'); });
-		q('[data-clear]').addEventListener('click', async () => { if (!window.confirm('Elveted ezt a levelet? (A piszkozat is törlődik.)')) return; dsent = true; clearInterval(dtimer); if (draftId) { try { await post('cp_mail_draft_del', { id: draftId }); } catch (e) { /* később */ } } toast('Piszkozat elvetve.'); if (ho) ho.onClose(); else drawCompose(box); });
+		q('[data-clear]').addEventListener('click', async () => { if (!window.confirm('Elveted ezt a levelet? (A piszkozat is törlődik.)')) return; dsent = true; clearInterval(dtimer); if (draftId) { try { await post('cp_mail_draft_del', { id: draftId }); } catch (e) { /* később */ } } toast('Piszkozat elvetve.'); if (ho) ho.onClose(); else if (ctx.thread || cfrom) backTo(ctx.thread || cfrom); else drawCompose(box); });
+		/* v2.9.83: hibajavítás – az Elvetés és a ✕ a levélszálhoz tér vissza, ahonnan a levélíró nyílt (a lista a helyén) */
+		function backTo(th) { S.view = 'inbox'; S.th = th; S.reading = true; S.forceTh = th; view(S.main); }
 		/* v1.62: mobil fejléc és a „Továbbiak” lap – a meglévő gombokat hívja */
 		const cqa = q('[data-cqa]'), cqaShow = on => { cqa.hidden = !on; };
 		const clk = sel => { const el = q(sel); if (el) el.click(); };
-		q('[data-mx]').addEventListener('click', () => { if (ho) { dsave(false); ho.onClose(); return; } clk('[data-save]'); S.view = 'inbox'; if (ctx.thread) { S.th = ctx.thread; S.reading = true; } view(S.main); });
+		q('[data-mx]').addEventListener('click', () => { if (ho) { dsave(false); ho.onClose(); return; } clk('[data-save]'); if (ctx.thread || cfrom) { backTo(ctx.thread || cfrom); return; } S.view = 'inbox'; view(S.main); });
 		q('[data-matt]').addEventListener('click', () => clk('[data-cmd="attach"]'));
 		q('[data-msend]').addEventListener('click', () => clk('[data-send]'));
 		q('[data-mmore]').addEventListener('click', () => cqaShow(true));
@@ -1694,7 +1817,7 @@
 		edit(S.cur);
 	}
 
-	function aiPanel(host, t) {
+	function aiPanel(host, t, take) {
 		if (!host.hidden && host.dataset.open) { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; return; }
 		host.hidden = false; host.dataset.open = '1';
 		host.innerHTML = '<div class="ml-ai"><div class="ml-aih"><b>✨ AI válaszpiszkozat</b><button type="button" class="ml-dx" data-aix title="Bezárás">' + X_I + '</button></div>' +
@@ -1711,8 +1834,9 @@
 					'<div class="ml-aisub"><small>Tárgy:</small> ' + esc(r.subject) + '</div><div class="ml-aibody ml-mb">' + r.html.replace(/\[KITÖLTENDŐ:([^\]]*)\]/g, '<mark>[KITÖLTENDŐ:$1]</mark>') + '</div>' +
 					'<div class="ml-aia"><button type="button" class="cpx-btn" data-copy title="A Salesmate-be beilleszthető formában">Szöveg másolása</button><button type="button" class="cpx-btn ghost" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
 				out.querySelector('[data-take]').addEventListener('click', () => {
-					S.reply = { to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 };
-					S.view = 'compose'; view(S.main); toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
+					const dr = { to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 };
+					if (take) take(dr); else { S.reply = dr; S.view = 'compose'; view(S.main); } /* v2.9.83: a szálpanel válaszírójába */
+					toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
 				});
 				out.querySelector('[data-again]').addEventListener('click', run);
 				/* a piszkozat vágólapra – formázva (HTML) és sima szövegként is, hogy a Salesmate szerkesztőjébe beilleszthető legyen */

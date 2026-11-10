@@ -856,3 +856,35 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-creset{margin-top:2px;border:1px solid var(--li);background:#fff;border-radius:8px;padding:6px 10px;font:500 12.5px Inter,sans-serif;color:var(--ink,#141C33);cursor:pointer;text-align:left}
 .ml-creset:hover{background:#F6F3EE}
 @media (hover:none){.ml-cpal button{width:32px;height:32px}.ml-cpal button:hover{transform:none}}
+/* v2.9.83: válasz a szálpanelben (Salesmate Team Inbox mintájára) – a lista és a szál a helyén marad; nincs mozgás (munkafelület) */
+.ml-irc{flex:none;min-width:0;background:#fff;border:1px solid #D6D0C6;border-radius:12px;box-shadow:0 2px 8px -4px rgba(20,28,51,.18)}
+.ml-irh{display:flex;align-items:center;gap:2px;padding:6px 6px 6px 14px;border-bottom:1px solid #E9E6E1}
+.ml-irh b{flex:1;min-width:0;font:600 14px/1.3 Inter,sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ml-irb{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:#555B66;cursor:pointer;flex:none}
+.ml-irb:hover{background:#F2F0EC;color:var(--ink)}
+.ml-irb:focus-visible{outline:2px solid var(--o);outline-offset:1px}
+.ml-irb .ml-ic{width:16px;height:16px;stroke-width:1.9}
+.ml-irc .ml-compose{border:0;border-radius:0 0 12px 12px;padding:10px 14px 14px;max-width:none}
+.ml-irc .ml-compose>.ml-pres{display:none}
+.ml-irc .ml-rctx{background:transparent;padding:0;margin-bottom:6px}
+.ml-irc .ml-rctx .ml-link{margin-left:0}
+.ml-irc .ml-area{min-height:150px;max-height:min(42vh,420px)}
+/* a gombsor a szálpanel alján marad, amíg a válaszíró látszik */
+.ml-irc .ml-send{position:sticky;bottom:-8px;z-index:4;margin:12px -14px -14px;padding:10px 14px;border-radius:0 0 12px 12px;box-shadow:0 -1px 0 #EEEAE4}
+.ml-read.cmp .ml-drb{display:none}
+/* a keskeny szálpanelben a hosszú (törhetetlen) cím is a kereten belül marad; a még nem élő „Megnyitás követése” helyet nem foglal */
+.ml-irc .ml-row,.ml-irc .ml-chips{min-width:0}
+.ml-irc .ml-chips input{min-width:120px}
+.ml-irc .ml-chip{max-width:100%;min-width:0;overflow-wrap:anywhere}
+.ml-irc .ml-row .ml-link{flex:none}
+.ml-irc .ml-send .ml-track{display:none}
+@media (max-width:760px){
+  /* mobilon a válaszíró kitölti a szálpanelt; a fejléce a levélíró saját mobil fejléce (✕, cím, melléklet, küldés, továbbiak) */
+  .ml-read.cmp>:not(.ml-thread),.ml-read.cmp .ml-thread>:not(.ml-irc){display:none!important}
+  .ml-read.cmp .ml-thread{padding:0;background:transparent}
+  .ml-irc{border:0;border-radius:0;box-shadow:none;background:transparent}
+  .ml-irh{display:none}
+  .ml-irc .ml-compose{padding:0 12px 24px;border-radius:0}
+  .ml-irc .ml-area{min-height:calc(100vh - 330px);min-height:calc(100dvh - 330px);max-height:none}
+  .ml-irc .ml-send{position:static;margin:12px -12px -12px;box-shadow:none}
+}
