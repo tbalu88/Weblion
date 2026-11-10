@@ -11,7 +11,8 @@
  * ===================================================================== */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PX_DB_VER', '1');
+define('CP_PX_DB_VER', '2'); /* 2: eseménynapló (crazy_mail_px_ev) – megnyitásonként egy sor (idő, automatikus-e), mint a Salesmate „Tracking” listája */
+function cp_px_ev_t() { global $wpdb; return $wpdb->prefix . 'crazy_mail_px_ev'; }
 function cp_px_t() { global $wpdb; return $wpdb->prefix . 'crazy_mail_px'; }
 function cp_px_on() { return get_option('cp_px_on', '1') === '1' && get_option('cp_px_db_ver') === CP_PX_DB_VER; }
 
@@ -33,6 +34,14 @@ add_action('init', function () {
   PRIMARY KEY  (tok),
   KEY msg_id (msg_id),
   KEY deal_id (deal_id)
+) " . $wpdb->get_charset_collate() . ';');
+	dbDelta('CREATE TABLE ' . cp_px_ev_t() . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  tok char(24) NOT NULL,
+  at datetime NOT NULL,
+  auto tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY  (id),
+  KEY tok (tok)
 ) " . $wpdb->get_charset_collate() . ';');
 	update_option('cp_px_db_ver', CP_PX_DB_VER, true);
 });
@@ -69,6 +78,8 @@ add_action('plugins_loaded', function () {
 			if (!$recent) {
 				if ($auto) { $wpdb->query($wpdb->prepare('UPDATE ' . cp_px_t() . ' SET n_auto = n_auto + 1, auto_at = %s WHERE tok = %s', $nowS, $tok)); }
 				else { $wpdb->query($wpdb->prepare('UPDATE ' . cp_px_t() . ' SET n = n + 1, first_at = COALESCE(first_at, %s), last_at = %s WHERE tok = %s', $nowS, $nowS, $tok)); }
+				/* v2.9.113: eseménynapló (levelenként legfeljebb 100 sor) */
+				if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_px_ev_t() . ' WHERE tok = %s', $tok)) < 100) { $wpdb->insert(cp_px_ev_t(), array('tok' => $tok, 'at' => $nowS, 'auto' => $auto ? 1 : 0)); }
 			}
 		}
 	}
@@ -85,8 +96,18 @@ function cp_px_for_msgs($ids) {
 	if (!$ids || get_option('cp_px_db_ver') !== CP_PX_DB_VER) { return array(); }
 	global $wpdb;
 	$out = array();
-	foreach ((array) $wpdb->get_results('SELECT msg_id, n, n_auto, first_at, last_at, auto_at FROM ' . cp_px_t() . ' WHERE msg_id IN (' . implode(',', $ids) . ')', ARRAY_A) as $r) {
-		$out[(int) $r['msg_id']] = cp_px_out($r);
+	$tk = array();
+	foreach ((array) $wpdb->get_results('SELECT tok, msg_id, n, n_auto, first_at, last_at, auto_at FROM ' . cp_px_t() . ' WHERE msg_id IN (' . implode(',', $ids) . ')', ARRAY_A) as $r) {
+		$out[(int) $r['msg_id']] = cp_px_out($r) + array('ev' => array());
+		$tk[$r['tok']] = (int) $r['msg_id'];
+	}
+	/* v2.9.113: a megnyitások listája (legújabb elöl, levelenként legfeljebb 30) */
+	if ($tk) {
+		$in = implode(',', array_map(function ($t) use ($wpdb) { return $wpdb->prepare('%s', $t); }, array_keys($tk)));
+		foreach ((array) $wpdb->get_results('SELECT tok, at, auto FROM ' . cp_px_ev_t() . " WHERE tok IN ($in) ORDER BY id DESC LIMIT 600", ARRAY_A) as $e) {
+			$mid = $tk[$e['tok']] ?? 0;
+			if ($mid && count($out[$mid]['ev']) < 30) { $out[$mid]['ev'][] = array('at' => function_exists('cp_mail_local') ? cp_mail_local($e['at']) : $e['at'], 'a' => (int) $e['auto']); }
+		}
 	}
 	return $out;
 }
@@ -110,4 +131,5 @@ add_action('init', function () { if (get_option('cp_px_db_ver') === CP_PX_DB_VER
 add_action('cp_px_gc', function () {
 	global $wpdb;
 	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_px_t() . ' WHERE sent_at < %s LIMIT 20000', gmdate('Y-m-d H:i:s', time() - 90 * DAY_IN_SECONDS)));
+	$wpdb->query($wpdb->prepare('DELETE FROM ' . cp_px_ev_t() . ' WHERE at < %s LIMIT 50000', gmdate('Y-m-d H:i:s', time() - 90 * DAY_IN_SECONDS)));
 });

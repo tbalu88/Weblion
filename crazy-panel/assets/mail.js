@@ -883,7 +883,33 @@
 	/* v2.9.64: egy levél kártyája (fejléc, eredeti nézet helye, mellékletek) – a Levelezés olvasója és a gyorsnézet ugyanezt rajzolja,
 	   így a biztonság is ugyanaz: külső kép csak gombra, az eredeti HTML elzárt keretben (loadHtml), kockázatos melléklet jelölve.
 	   o.open: kinyitva; o.mk: a levél kulcsa; o.ma: a levél gombjai (HTML); o.dv: Drive-jelvény a melléklet mellé (nem kötelező) */
-	/* v2.9.109: megnyitás-követés a panelből küldött levél alatt */
+	/* v2.9.113: megnyitás-követés jelvény a levél fejlécében (mint a Salesmate „Opened ▾”), kattintásra a megnyitások listája */
+	function pxBadge(m) {
+		const p = m && m.dir === 'out' ? m.px : null; if (!p) return '';
+		const [cls, lab] = p.n ? ['on', 'Megnyitva' + (p.n > 1 ? ' ' + p.n + '×' : '')] : p.na ? ['auto', 'Automatikus letöltés'] : ['', 'Kézbesítve'];
+		return '<button type="button" class="ml-pxb ' + cls + '" data-pxm="' + m.id + '" aria-haspopup="dialog" title="Megnyitás-követés – részletek">' + esc(lab) + ' ▾</button>';
+	}
+	function pxPop(btn, m) {
+		const old = document.querySelector('.ml-pxp'); if (old) { const same = old.dataset.m === String(m.id); old._close(); if (same) return; }
+		const p = m.px || { ev: [] }, tt = s => esc(hdate(s));
+		const ev = (p.ev || []).map(e => '<li><span class="i">' + (e.a ? '⚙' : '✉︎') + '</span><span>' + (e.a ? 'Automatikus letöltés <small>(iPhone/Mac levelező vagy szűrő – nem biztos olvasás)</small>' : '<b>Megnyitotta</b> az ügyfél') + '</span><time>' + tt(e.at) + '</time></li>').join('');
+		const el = document.createElement('div');
+		el.className = 'ml-pxp'; el.dataset.m = String(m.id); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Megnyitás-követés');
+		el.innerHTML = '<b class="h">Megnyitás-követés</b><ul>' + ev + '<li><span class="i">➤</span><span>Elküldve: ' + esc(m.to_list || '') + '</span><time>' + tt(m.sent_at) + '</time></li></ul>' +
+			(!p.n ? '<p>Ha az ügyfél levelezője tiltja a képeket (pl. céges Outlook), az olvasás nem látszik.</p>' : '');
+		document.body.appendChild(el);
+		const r = btn.getBoundingClientRect(), w = Math.min(420, window.innerWidth - 16);
+		el.style.width = w + 'px'; el.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px'; el.style.top = (r.bottom + 6) + 'px';
+		const off = e => { if (!el.contains(e.target) && e.target !== btn) el._close(); }, key = e => { if (e.key === 'Escape') { el._close(); btn.focus(); } };
+		el._close = () => { el.remove(); document.removeEventListener('pointerdown', off, true); document.removeEventListener('keydown', key, true); window.removeEventListener('scroll', el._close, true); };
+		setTimeout(() => { document.addEventListener('pointerdown', off, true); document.addEventListener('keydown', key, true); window.addEventListener('scroll', el._close, true); }, 0);
+	}
+	document.addEventListener('click', e => {
+		const b = e.target.closest && e.target.closest('[data-pxm]'); if (!b) return;
+		e.preventDefault(); e.stopPropagation();
+		const m = (window.__cpPxMsgs || {})[b.dataset.pxm]; if (m) pxPop(b, m);
+	}, true);
+	/* v2.9.109: megnyitás-követés a panelből küldött levél alatt (2.9.113 óta a fejléc-jelvény váltja) */
 	function pxLine(m) {
 		const p = m && m.dir === 'out' ? m.px : null; if (!p) return '';
 		const tt = s => esc(hdate(s));
@@ -894,9 +920,8 @@
 	function msgHtml(m, o) {
 		const dv = o.dv || (() => '');
 		return '<article class="ml-msg' + (o.open ? '' : ' cl') + '" data-mk="' + esc(o.mk) + '"><div class="ml-mh"><span class="ml-av lg ml-av1' + (m.dir === 'out' ? ' out' : '') + '"' + (m.dir === 'out' ? '' : ' style="background:' + avc(m.from_name) + '"') + '>' + esc(ini(m.from_name).slice(0, 1)) + '</span><div><div class="ml-from"><span>' + esc(m.from_name) + '</span> <span class="ml-fe"><span class="ml-fet">&lt;' + esc(m.from_email) + '&gt;</span>' + (m.dir === 'out' ? '' : cBtn(m.from_email, m.from_name)) + '</span>' + /* v1.78.6: a nem ellenőrizhető saját levélnél egyetlen sárga jelvény (a magyarázat rámutatva); a többi állapot kék címke */
-			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
+			(m.status && m.status !== 'idézetből' && m.status !== 'ellenőrizetlen' && !m.px ? '<span class="ml-dlv">' + esc(m.status) + '</span>' : '') + ((m.px && ((window.__cpPxMsgs = window.__cpPxMsgs || {})[m.id] = m)) ? pxBadge(m) : '') + '</div>' + '<div class="ml-snip">' + esc(msgSnip(m.body)) + '</div>' +
 			(m.status === 'idézetből' ? '<div class="ml-unv" title="A levél nincs meg a postafiók Elküldött mappájában – a panel az ügyfél válaszában idézett szövegből állította vissza, ezért a tartalma nem ellenőrizhető.">⚠ Válaszból visszaállítva · ellenőrizetlen</div>' : m.status === 'ellenőrizetlen' ? '<div class="ml-unv" title="A levél a saját címünkről a Beérkezett mappába jött, nem az Elküldött mappából vagy a panelből – a tartalma hamis is lehet.">⚠ Ellenőrizetlen saját levél</div>' : '') + '<div class="ml-to">Címzett: ' + addr(m.to_list) + (m.cc_list ? '<br>Másolat: ' + addr(m.cc_list) : '') + '</div></div><span class="ml-mt"><span class="ml-ma">' + o.ma + '</span><span class="ml-md">' + esc(hdate(m.sent_at)) + '</span></span></div>' +
-			pxLine(m) +
 			'<div class="ml-mb"' + (m.id > 0 && m.hh !== 0 && m.status !== 'Elküldve a panelből' && m.status !== 'idézetből' ? ' data-hm="' + m.id + '"' : '') + '>' + (m.status === 'Elküldve a panelből' ? (m.body || '') : (b => (/<img\b[^>]*\sdata-xsrc/i.test(b) ? '<div class="ml-extbar">🖼 A külső képek nincsenek betöltve (a Spam mappában a biztonság kedvéért). <button type="button" data-ximgs>Képek megjelenítése</button></div>' : '') + b)(noExtImg(tidyBody(m.body)))) + '</div>' + ((m.attachments || []).length ? '<div class="ml-atts">' + CLIP_I + ' <b>Mellékletek:</b> ' + m.attachments.map((a, ai) => '<span class="ml-atti">' + (m.id > 0 ? '<a href="' + esc(attHref(m.id, ai, a.n)) + '"' + attTgt() + (attRisk(a.n) ? attRiskAttr(a.n) : ' title="Megnyitás / letöltés"') + '>' + (attRisk(a.n) ? '<span class="ml-ariskb" aria-hidden="true">⚠</span>' : '') + esc(a.n) + '</a>' + dv(m, a, ai) : '<span>' + esc(a.n) + '</span>') + '</span>').join('') + '</div>' : '') + '</article>';
 	}
 	/* v2.9.64: a válasz előtöltése (címzettek, tárgy, idézet) – az olvasó és a gyorsnézet „Válasz” gombja is ezt használja */

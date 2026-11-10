@@ -934,3 +934,11 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-inbox.fold .ml-tplb span{display:none}.ml-inbox.fold .ml-tplb{justify-content:center;padding:7px 0}
 /* v2.9.109: megnyitás-követés */
 .ml-px{font-size:12px;color:var(--mu);margin:-2px 0 8px;padding-left:2px}.ml-px.on{color:#17663A;font-weight:600}.ml-px.auto{color:#9A5B00}
+/* v2.9.113: megnyitás-követés jelvény + lista */
+.ml-pxb{border:0;border-radius:6px;padding:2px 8px;margin-left:8px;font:600 12px Inter,sans-serif;cursor:pointer;background:#EEF0F3;color:#3A3F4B;vertical-align:1px;white-space:nowrap}
+.ml-pxb.on{background:#2E7D4F;color:#fff}.ml-pxb.auto{background:#FFF0D6;color:#8A5300}.ml-pxb:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
+.ml-pxp{position:fixed;z-index:10050;background:#fff;border:1px solid #E6E3DE;border-radius:12px;box-shadow:0 14px 34px rgba(20,28,51,.18);padding:12px 14px;font:13px Inter,sans-serif;color:#141C33;box-sizing:border-box;max-height:60vh;overflow:auto}
+.ml-pxp .h{display:block;font-size:14px;margin-bottom:8px}.ml-pxp ul{list-style:none;margin:0;padding:0;border:1px solid #EEF0F2;border-radius:8px}
+.ml-pxp li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:9px 10px;border-top:1px solid #EEF0F2}.ml-pxp li:first-child{border-top:0}
+.ml-pxp li small{color:#656973}.ml-pxp li span{overflow-wrap:anywhere}.ml-pxp .i{color:#656973;text-align:center}.ml-pxp time{color:#656973;white-space:nowrap;font-size:12px}
+.ml-pxp p{margin:8px 0 0;font-size:12px;color:#656973}
