@@ -1015,7 +1015,9 @@
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
 			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (dvAny ? '<span class="ml-dvh" title="A szálban lévő számla a Drive számlamappájában van">✓ Számla a Drive-on</span>' : '') + '<button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div>' + (tgList(t.tags).length ? '<div class="ml-ttags">' + tgList(t.tags).map(n => tgChip(n, 'data-ttx')).join('') + '<button type="button" class="ml-tadd" data-tag2 aria-label="Címke hozzáadása">+ Címke</button></div>' : '') + '<div class="ml-pres" data-pres hidden></div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
-			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + '</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
+			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><span class="ml-dt"><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a>' + (d.status === 'Won' ? '<span class="ml-dst won">WON</span>' : d.status === 'Lost' ? '<span class="ml-dst lost">LOST</span>' : '') + '</span><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + /* v2.9.94: megnyert / elvesztett jelölés a csempéről (megerősítéssel, a Salesmate-be is ír) */
+				(d.id > 0 ? '<div class="ml-dact">' + (d.status === 'Won' || d.status === 'Lost' ? '<button type="button" class="ml-dbtn" data-dmove="Open">↺ Újranyitás</button>' : '<button type="button" class="ml-dbtn won" data-dmove="Won">✓ Megnyert</button><button type="button" class="ml-dbtn lost" data-dmove="Lost">✕ Elvesztett</button>') + '</div>' : '') +
+				'</div><button type="button" class="ml-dx" data-detach aria-label="Deal leválasztása" title="Deal leválasztása">' + X_I + '</button></div>' +
 				/* v1.98: lezárt / elvesztett / törölt deal figyelmeztetés, ajánlott nyitott deal */
 				(d.warn ? '<div class="ml-dwarn">⚠ ' + esc(d.warn) + (d.alt ? '<button type="button" class="cpx-btn sm" data-dalt="' + Number(d.alt.id) + '">Áthelyezés ide: ' + esc(d.alt.title) + '</button>' : '') + '</div>' : '') : '') +
 			/* v2.5: visszatérő ügyfél – a feladó korábbi rendezvényei */
@@ -1174,6 +1176,20 @@
 		});
 		rd.querySelectorAll('[data-snz]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); snzMenu(b).then(ts => { if (ts) bulk(box, [t.id], 'snooze', String(ts)); }); }));
 		rd.querySelector('[data-fol]').addEventListener('change', e => act('cp_mail_thread_set', { f: 'follow', v: e.target.checked ? '1' : '0' }));
+		rd.querySelectorAll('[data-dmove]').forEach(b => b.addEventListener('click', async () => {
+			const st = b.dataset.dmove, name = d.title || ('Deal #' + d.id);
+			const what = st === 'Won' ? 'MEGNYERTNEK jelölöd' : st === 'Lost' ? 'ELVESZTETTNEK jelölöd' : 'újra NYITOTTNAK jelölöd';
+			if (!window.confirm(name + '\n\nBiztosan ' + what + ' ezt a dealt?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai lefutnak (pl. e-mail az ügyfélnek).')) return;
+			const p = { id: d.id, st: st };
+			if (st === 'Lost') { const w = window.prompt('Az elvesztés oka (nem kötelező):', ''); if (w === null) return; p.why = w; }
+			rd.querySelectorAll('[data-dmove]').forEach(x2 => { x2.disabled = true; }); b.textContent = 'Mentés…';
+			try {
+				const r = await post('cp_crm_move', p);
+				toast(r.warn ? r.warn : (r.changed ? (st === 'Won' ? 'Megnyertnek jelölve' : st === 'Lost' ? 'Elvesztettnek jelölve' : 'Újranyitva') + ' – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már így volt.'), !!r.warn);
+				if (r.row) x.deal = Object.assign({}, d, { status: r.row.status || st, stage: r.row.stage || d.stage }); else x.deal = Object.assign({}, d, { status: st });
+				drawThread(box, rd, x);
+			} catch (e) { toast(e.message, true); rd.querySelectorAll('[data-dmove]').forEach(x2 => { x2.disabled = false; }); drawThread(box, rd, x); }
+		}));
 		const det = rd.querySelector('[data-detach]');
 		if (det) det.addEventListener('click', () => { if (window.confirm('Leválasztod a dealt erről a levélszálról?')) act('cp_mail_thread_set', { f: 'deal', v: '' }); });
 		const dalt = rd.querySelector('[data-dalt]');
