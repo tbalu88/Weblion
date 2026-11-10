@@ -76,7 +76,7 @@
 		(x.stale || []).filter(d => !S.mine || !x.sm || d.own === x.sm).forEach(d => att.push({ k: 'deal', id: d.id, t: d.t, w: 'Elakadt a(z) „' + d.st + '” szakaszban' + (d.lc ? ' – utolsó kapcsolat: ' + dOnly(d.lc) : '') + (d.on ? ' · ' + d.on : '') }));
 		if (x.mail && x.mail.unassigned > 0) att.push({ k: 'tab', tab: 'mail', t: x.mail.unassigned + ' kiosztatlan levélszál', w: 'Oszd ki valakinek, hogy ne maradjon válasz nélkül' });
 		if (x.leads) att.push({ k: 'leads', t: x.leads + ' webes megkeresés vár párosításra', w: 'Az elmúlt 7 napból – Deal-ek → Megkeresések' });
-		if (x.kpi || x.mail) {
+		if ((x.kpi || x.mail) && !x.nosales) {
 			html += card('dh-att', 'Figyelmet igényel', '<i class="dh-dot"></i>', att.length ? '<ul class="dh-list">' + att.slice(0, 10).map(a => '<li><button type="button" data-att="' + esc(JSON.stringify({ k: a.k, id: a.id || 0, tab: a.tab || '' })) + '"><b>' + esc(a.t) + '</b><small>' + esc(a.w) + '</small></button></li>').join('') + '</ul>' + (att.length > 10 ? '<p class="dh-more">+ ' + (att.length - 10) + ' további</p>' : '') : empty('Minden rendben – nincs elakadt deal vagy sürgős hiány. 🎉'), x.stale_n ? '<span class="dh-n">' + att.length + '</span>' : '');
 		}
 		/* mai teendőim */
@@ -92,7 +92,7 @@
 				(x.todo_need_sm ? '<p class="dh-hint">A Salesmate-tevékenységeid akkor jelennek meg itt, ha a fiókodhoz hozzá van rendelve a Salesmate-felhasználód (WordPress admin → Panel-felhasználók).</p>' : ''), '<span class="dh-n">' + t.length + '</span>');
 		}
 		/* új ajánlatkérések */
-		if (x.new) {
+		if (x.new && !x.nosales) {
 			const l = x.new.filter(d => !S.mine || !x.sm || d.own === x.sm);
 			html += card('dh-new', 'Új ajánlatkérések', ico('deals'), (x.leads ? '<button type="button" class="dh-banner" data-leads>' + x.leads + ' webes megkeresés vár párosításra →</button>' : '') +
 				(l.length ? '<ul class="dh-list">' + l.slice(0, 8).map(d => '<li><button type="button" data-deal="' + d.id + '"><b>' + esc(d.t) + '</b><small>' + esc(d.st) + (d.on ? ' · ' + esc(d.on) : '') + ' · ' + esc(dueTxtPast(d.at)) + (d.ev ? ' · rendezvény: ' + esc(d.ev) : '') + '</small></button></li>').join('') + '</ul>' + (l.length > 8 ? '<button type="button" class="dh-more" data-go="deals">Mind a ' + l.length + ' megnyitása →</button>' : '') : empty('Az elmúlt 7 napban nem jött új ajánlatkérés' + (S.mine ? ' neked' : '') + '.')),

@@ -22,6 +22,8 @@ function cp_dash_ajax_data() {
 	$today = wp_date('Y-m-d');
 	$eod = (new DateTime($today . ' 23:59:59', $tz))->getTimestamp();
 	$out = array('me' => $me ? (string) $me['n'] : '', 'sm' => $sm, 'today' => $today);
+	/* v2.9.101: felhasználónként elrejthetők az értékesítési dobozok (Figyelmet igényel, Új ajánlatkérések) – Saját beállítások */
+	$out['nosales'] = $uid && get_option('cp_dash_nosales_' . $uid) ? 1 : 0;
 	$crm = function_exists('cp_crm_panel_on') && cp_crm_panel_on() && cp_panel_can_any(array('deals', 'kapcsolatok'));
 	$D = $crm ? cp_crm_t('deals') : '';
 	$loc = function ($dt) { return function_exists('cp_crm_local') ? cp_crm_local($dt) : (string) $dt; };

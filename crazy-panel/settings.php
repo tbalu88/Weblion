@@ -32,7 +32,7 @@ function cp_set_users_out() {
 }
 function cp_set_data() {
 	$me = cp_set_me(); $u = $me ? cp_pu_get($me) : null;
-	$x = array('me' => array('uid' => $me, 'n' => $u ? $u['n'] : (function_exists('cp_panel_who') ? cp_panel_who() : ''), 'e' => $u ? $u['e'] : '', 'r' => $u ? $u['r'] : (function_exists('cp_panel_role') ? cp_panel_role() : ''), 'sig' => $me ? cp_set_user_sig($me) : '', 'attdl' => $u && !empty($u['attdl']) ? 1 : 0, 'hook' => $me && function_exists('cp_nt_hook_get') && cp_nt_hook_get('notif_hook_u' . $me) !== ''), 'admin' => cp_set_admin());
+	$x = array('me' => array('uid' => $me, 'n' => $u ? $u['n'] : (function_exists('cp_panel_who') ? cp_panel_who() : ''), 'e' => $u ? $u['e'] : '', 'r' => $u ? $u['r'] : (function_exists('cp_panel_role') ? cp_panel_role() : ''), 'sig' => $me ? cp_set_user_sig($me) : '', 'attdl' => $u && !empty($u['attdl']) ? 1 : 0, 'nosales' => $me && get_option('cp_dash_nosales_' . $me) ? 1 : 0, 'hook' => $me && function_exists('cp_nt_hook_get') && cp_nt_hook_get('notif_hook_u' . $me) !== ''), 'admin' => cp_set_admin());
 	if (!$x['admin']) { return $x; }
 	$tabs = cp_pu_tabs(); $vis = array();
 	foreach (cp_pu_data()['list'] as $id => $uu) { if (empty($uu['a'])) { continue; } foreach (array_keys($tabs) as $k) { $vis[(int) $id][$k] = cp_pu_can_uid((int) $id, $k, $uu['r']) ? 1 : 0; } }
@@ -83,6 +83,7 @@ function cp_set_ajax_me() {
 		$sig = cp_sig_norm_links(cp_mail_clean(wp_unslash($_POST['sig'] ?? '')));
 		$d['list'][$me]['sig'] = trim(wp_strip_all_tags($sig)) === '' && strpos($sig, '<img') === false ? '' : mb_substr($sig, 0, 20000);
 		if (isset($_POST['attdl'])) { $d['list'][$me]['attdl'] = $_POST['attdl'] === '1' ? 1 : 0; }
+		if (isset($_POST['nosales'])) { if ($_POST['nosales'] === '1') { update_option('cp_dash_nosales_' . $me, 1, false); } else { delete_option('cp_dash_nosales_' . $me); } }
 		cp_pu_save($d);
 		$h = trim((string) wp_unslash($_POST['hook'] ?? ''));
 		if (!empty($_POST['hook_clear'])) { cp_nt_hook_set('notif_hook_u' . $me, ''); }
