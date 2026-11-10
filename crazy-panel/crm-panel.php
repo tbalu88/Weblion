@@ -232,7 +232,7 @@ function cp_crm_deal_data($id) {
 	unset($deal['raw']);
 	foreach (array('closed_at', 'last_note_at', 'last_comm_at', 'created_at', 'modified_at', 'start_at', 'synced_at', 'deleted_at') as $k) { $deal[$k] = cp_crm_local($deal[$k]); }
 	/* v1.83.2: ajánlat előtt (első szakasz, érték nélkül) becsült ár, mint a csempén */
-	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && !((float) $deal['value'] > 0) && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } }
+	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } } /* v2.9.77: beírt ár mellett is (az ajánlatlevél tételeihez) */
 	/* v2.9.70: többnapos rendezvény: a napok listája (az 1. nap igazítva az event_d-hez) és a tömör kiírás */
 	$mdays = function_exists('cp_mday_get') && !empty($deal['event_d']) ? cp_mday_align(cp_mday_get($id), (string) $deal['event_d']) : array();
 	if ($mdays) { $deal['days'] = $mdays; $deal['days_label'] = cp_mday_label(wp_list_pluck($mdays, 'day')); }
