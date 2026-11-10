@@ -458,6 +458,8 @@ function cp_crm_del_plan($id) {
 			if (!in_array((int) $id, array_map('intval', array_column($all, 'id')), true)) { $all[] = $d; }
 			list($byDate, $byId) = cp_gcal_index($all);
 			foreach ($ev as $e) { if ((is_array($made) && ($made[$id] ?? '') === $e['id']) || cp_gcal_match($e, $byDate, $byId) === (int) $id) { $out['cal'][$e['id']] = $e['t']; } }
+			/* v2.9.71: a többnapos rendezvény panel által létrehozott napi bejegyzései (napi kulcs) */
+			foreach ((is_array($made) ? $made : array()) as $mk => $eid) { if (strpos((string) $mk, (int) $id . ':') === 0 && !isset($out['cal'][$eid])) { $out['cal'][$eid] = 'napi bejegyzés: ' . substr((string) $mk, strlen((int) $id . ':')); } }
 		}
 	}
 	if (function_exists('cp_mail_t')) { $out['threads'] = array_map('intval', (array) $wpdb->get_col($wpdb->prepare('SELECT id FROM ' . cp_mail_t('threads') . " WHERE deal_id = %d AND folder <> 'trash'", $id))); }
@@ -478,7 +480,7 @@ function cp_crm_del_clean($id, $plan) {
 	if ($plan['cal']) {
 		$ok = 0; $made = get_option('cp_gcal_made', array());
 		foreach ($plan['cal'] as $eid => $t) { $x = cp_gcal_req('DELETE', '/events/' . rawurlencode($eid)); if (!is_wp_error($x)) { $ok++; } }
-		if (is_array($made) && isset($made[$id])) { unset($made[$id]); update_option('cp_gcal_made', $made, false); }
+		if (is_array($made)) { foreach (array_keys($made) as $mk) { if ((string) $mk === (string) (int) $id || strpos((string) $mk, (int) $id . ':') === 0) { unset($made[$mk]); } } update_option('cp_gcal_made', $made, false); } /* v2.9.71: a napi kulcsok is */
 		update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false);
 		$r[] = $ok . ' naptárbejegyzés' . ($ok < count($plan['cal']) ? ' (' . (count($plan['cal']) - $ok) . ' nem sikerült)' : '');
 	} elseif ($plan['cal_err'] !== '') { $r[] = 'a naptárat nem értem el: ' . $plan['cal_err']; }

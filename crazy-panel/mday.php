@@ -319,6 +319,13 @@ function cp_mday_cap_worst($days, $cached_only = false) {
 function cp_mday_rekey($map) {
 	$map = array_filter((array) $map, function ($v, $k) { return (string) $v !== (string) $k; }, ARRAY_FILTER_USE_BOTH);
 	if (!$map) { return; }
+	/* v2.9.71: a panel által létrehozott napi Google Naptár-bejegyzés is a napjával megy (a következő szinkron áthelyezi) */
+	$made = get_option('cp_gcal_made', null);
+	if (is_array($made)) {
+		$mv = array();
+		foreach ($map as $old => $new) { if (isset($made[$old])) { $mv[$new] = $made[$old]; unset($made[$old]); } }
+		if ($mv) { update_option('cp_gcal_made', $mv + $made, false); }
+	}
 	$pre = array(defined('CP_PANEL_TRACK') ? CP_PANEL_TRACK : 'cp_pt_', defined('CP_EL_ST') ? CP_EL_ST : 'cp_eld_');
 	foreach ($pre as $px) {
 		$vals = array();

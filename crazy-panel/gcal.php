@@ -103,57 +103,99 @@ function cp_gcal_events($from, $to, $force = false) {
 function cp_gcal_norm($s) { return trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(remove_accents((string) $s)))); }
 function cp_gcal_deals($from, $to) {
 	global $wpdb;
-	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.event_d BETWEEN %s AND %s AND d.status <> 'Lost'", $from, $to), ARRAY_A); /* v2.9.58: a törölt deal nem számít */
+	/* v2.9.71: a többnapos deal akkor is, ha csak a 2..n. napja esik a tartományba */
+	$mor = function_exists('cp_mday_or_ids') ? cp_mday_or_ids($from, $to) : '';
+	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.status <> 'Lost' AND (d.event_d BETWEEN %s AND %s", $from, $to) . $mor . ')', ARRAY_A); /* v2.9.58: a törölt deal nem számít */
 }
-/* az esemény dealje: 1) a leírásban lévő kezelői adatlap link (…?k=<deal>.<aláírás>), 2) a kontakt neve a címben, azonos napon */
-function cp_gcal_match($ev, $byDate, $byId) {
-	if (preg_match('/[?&](?:amp;)?k=(\d{1,12})\.[a-f0-9]{14}/', $ev['raw'], $m) && isset($byId[(int) $m[1]])) { return (int) $m[1]; }
+/* az esemény napi kulcsa (v2.9.71): 1) a leírásban lévő kezelői adatlap link (…?k=<deal>[:<nap>].<aláírás>, a kettőspont
+   „%3A”-ként is), 2) a kontakt neve a címben, azon a napon – többnapos dealnél a nap kulcsa („<deal>:<nap>”, az 1. nap a deal) */
+function cp_gcal_match_key($ev, $byDate, $byId) {
+	if (preg_match('/[?&](?:amp;)?k=(\d{1,12})(?:(?:%3A|:)(\d{4}-\d{2}-\d{2}))?\.[a-f0-9]{14}/i', $ev['raw'], $m) && isset($byId[(int) $m[1]])) { return !empty($m[2]) ? (int) $m[1] . ':' . $m[2] : (string) (int) $m[1]; }
 	$day = substr($ev['s'], 0, 10);
 	$t = ' ' . cp_gcal_norm($ev['t']) . ' ';
-	$best = 0; $bl = 0;
+	$best = ''; $bl = 0;
 	foreach ($byDate[$day] ?? array() as $d) {
 		$k = cp_gcal_norm($d['cn']);
 		if (strlen($k) < 3) { continue; }
 		$toks = array_filter(explode(' ', $k), function ($x) { return strlen($x) > 1; });
 		$ok = strpos($t, ' ' . $k . ' ') !== false || (count($toks) >= 2 && !array_filter($toks, function ($x) use ($t) { return strpos($t, ' ' . $x . ' ') === false; }));
-		if ($ok && strlen($k) > $bl) { $best = (int) $d['id']; $bl = strlen($k); }
+		if ($ok && strlen($k) > $bl) { $best = isset($d['key']) ? (string) $d['key'] : (string) (int) $d['id']; $bl = strlen($k); }
 	}
 	return $best;
 }
+/* az esemény dealje (a deal azonosítója, a napi kulcsból) */
+function cp_gcal_match($ev, $byDate, $byId) {
+	$k = cp_gcal_match_key($ev, $byDate, $byId);
+	return $k === '' ? 0 : (int) $k;
+}
+/* v2.9.71: többnapos deal minden napja a saját dátumán szerepel ('key', 'day', 'dn', 'dof'); a harmadik elem: napi kulcs => sor */
 function cp_gcal_index($deals) {
-	$byDate = array(); $byId = array();
-	foreach ($deals as $d) { $byDate[$d['event_d']][] = $d; $byId[(int) $d['id']] = $d; }
-	return array($byDate, $byId);
+	$byDate = array(); $byId = array(); $byKey = array();
+	$map = function_exists('cp_mday_many') ? cp_mday_many(array_map(function ($d) { return (int) $d['id']; }, (array) $deals)) : array();
+	foreach ($deals as $d) {
+		$byId[(int) $d['id']] = $d;
+		if (isset($map[(int) $d['id']]) && !empty($d['event_d'])) {
+			$days = cp_mday_align($map[(int) $d['id']], (string) $d['event_d']);
+			foreach ($days as $k => $dr) {
+				$x = $d + array('key' => cp_mday_key((int) $d['id'], $dr['day'], $k + 1), 'day' => $dr['day'], 'dn' => $k + 1, 'dof' => count($days));
+				$byDate[$dr['day']][] = $x; $byKey[$x['key']] = $x;
+			}
+			continue;
+		}
+		$x = $d + array('key' => (string) (int) $d['id'], 'day' => (string) $d['event_d']);
+		$byDate[$d['event_d']][] = $x; $byKey[$x['key']] = $x;
+	}
+	return array($byDate, $byId, $byKey);
 }
 
 /* ------------------------------------------------------------ amit a panel írna (átállás után) */
-function cp_gcal_plan($id) {
+/* v2.9.71: $day – többnapos dealnél az adott nap bejegyzése (a nap kezdése, óraszáma, helyszíne, saját kezelői adatlap-linkje,
+   a címben „ – 2/3. nap”); üresen az 1. nap. Ha a nap már nincs a deal napjai között: null */
+function cp_gcal_plan($id, $day = '') {
 	global $wpdb;
 	$d = $wpdb->get_row($wpdb->prepare('SELECT d.*, c.name cn, c.phone cp, c.mobile cm FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id = %d', $id), ARRAY_A);
 	if (!$d) { return null; }
 	$pen = cp_gcal_mark_on() && $d['stage'] === cp_gcal_stages()[0];
 	$date = (string) $d['event_d'];
+	$key = (string) (int) $id; $dn = 0; $dof = 0; $md = false;
+	$days = function_exists('cp_mday_get') && $date !== '' ? cp_mday_align(cp_mday_get((int) $id), $date) : array();
+	if ($days) {
+		$md = true; $dof = count($days); $hit = null;
+		foreach ($days as $k => $dr) { if ($dr['day'] === ($day !== '' ? $day : $date)) { $hit = $dr; $dn = $k + 1; } }
+		if (!$hit) { return null; }
+		$date = $hit['day']; $key = cp_mday_key((int) $id, $date, $dn);
+		if ($hit['venue'] !== '') { $d['venue'] = $hit['venue']; }
+		if ($hit['hours'] !== null) { $d['hours'] = $hit['hours']; }
+		if ($hit['guests'] !== null) { $d['guests'] = $hit['guests']; }
+		$d['_st'] = $hit['start_t'];
+	} elseif ($day !== '' && $day !== $date) { return null; }
 	$s = ''; $e = '';
-	if (!empty($d['start_at'])) {
+	$hrs = (float) $d['hours'];
+	if (!empty($d['_st'])) { $s = $d['_st']; }
+	elseif (!empty($d['start_at'])) {
 		$st = new DateTime($d['start_at'] . ' UTC'); $st->setTimezone(wp_timezone());
-		if ($st->format('Y-m-d') === $date && $st->format('H:i') !== '00:00') { $s = $st->format('H:i'); if ((int) $d['hours'] > 0) { $st->modify('+' . (int) $d['hours'] . ' hours'); $e = $st->format('Y-m-d') > $date ? '24:00' : $st->format('H:i'); } }
+		/* többnapos dealnél a deal kezdési ideje minden napra érvényes (a napnak nincs saját időpontja) */
+		if (($md || $st->format('Y-m-d') === $date) && $st->format('H:i') !== '00:00') { $s = $st->format('H:i'); }
 	}
+	if ($s !== '' && $hrs > 0) { $st = new DateTime($date . ' ' . $s, wp_timezone()); $st->modify('+' . (int) round($hrs * 60) . ' minutes'); $e = $st->format('Y-m-d') > $date ? '24:00' : $st->format('H:i'); }
 	$L = array();
-	if (function_exists('cp_el_link')) { $L[] = '<b>📋 KEZELŐI ADATLAP</b> – a rendezvény után itt töltsd ki:<br><b><a href="' . esc_url(cp_el_link($id)) . '">' . esc_html(cp_el_link($id)) . '</a></b><br>━━━━━━━━━━━━━━━━━━━━<br>'; }
+	if (function_exists('cp_el_link')) { $L[] = '<b>📋 KEZELŐI ADATLAP</b> – a rendezvény után itt töltsd ki:<br><b><a href="' . esc_url(cp_el_link($key)) . '">' . esc_html(cp_el_link($key)) . '</a></b><br>━━━━━━━━━━━━━━━━━━━━<br>'; }
 	$row = function ($k, $v) use (&$L) { if (trim((string) $v) !== '') { $L[] = esc_html($k) . ': ' . esc_html(trim((string) $v)); } };
 	$row('Helyszín', $d['venue']);
 	$row('Időpont', $date !== '' ? str_replace('-', '.', $date) . '.' : '');
 	$row('Aktivitás', $s !== '' ? $s . ($e !== '' ? '-' . $e : '') : '');
 	$row('Kontakt személy', $d['cn']);
 	$row('Kontakt telefonszám', $d['cm'] ?: $d['cp']);
-	$row('Rendelkezésre állási idő', (int) $d['hours'] > 0 ? (int) $d['hours'] . ' óra' : '');
+	$row('Rendelkezésre állási idő', $hrs > 0 ? str_replace('.', ',', rtrim(rtrim(number_format($hrs, 1, '.', ''), '0'), '.')) . ' óra' : '');
+	if ($md) { $row('Rendezvénynapok', function_exists('cp_mday_label') ? cp_mday_label(wp_list_pluck($days, 'day')) . ' – ez a ' . $dn . '. nap' : ''); }
 	$row('Fizetés', $d['pay_method']);
 	$x = array();
 	if (trim((string) $d['album']) !== '') { $x[] = ' - Album: ' . esc_html($d['album']); }
 	if ((int) $d['guests'] > 0) { $x[] = ' - Létszám: ' . (int) $d['guests'] . ' fő'; }
 	if ($x) { $L[] = '<br>Egyéb:<br>' . implode('<br>', $x); }
 	$L[] = '------------------------------------------------------------------------<br>bruttó = nettó + ÁFA<br>Hosszabbítás nettó 30 000 Ft / óra + ÁFA<br>Készenlét nettó  10 000 Ft / óra + ÁFA<br>Áttelepítés nettó  10 000 Ft / alkalom +ÁFA';
-	return array('title' => ($pen ? CP_GCAL_PEN : '') . (trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date), /* v1.71.1: a naptárban a deal neve a cím */ 'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L));
+	return array('title' => ($pen ? CP_GCAL_PEN : '') . (trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date) /* v1.71.1: a naptárban a deal neve a cím */ . ($md ? ' – ' . $dn . '/' . $dof . '. nap' : ''),
+		'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L), 'key' => $key, 'dn' => $dn, 'dof' => $dof);
 }
 
 /* ------------------------------------------------------------ Naptár fül */
@@ -168,12 +210,14 @@ function cp_gcal_ajax_ev() {
 	$ev = cp_gcal_events($from, $to, !empty($_POST['force']));
 	if (is_wp_error($ev)) { cp_el_err($ev->get_error_message(), 502); }
 	$deals = function_exists('cp_crm_t') ? cp_gcal_deals($from, $to) : array();
-	list($byDate, $byId) = cp_gcal_index($deals);
+	list($byDate, $byId, $byKey) = cp_gcal_index($deals);
 	$seen = array(); $out = array();
 	foreach ($ev as $e) {
-		$id = $deals ? cp_gcal_match($e, $byDate, $byId) : 0;
+		$key = $deals ? cp_gcal_match_key($e, $byDate, $byId) : ''; /* v2.9.71: napi kulcs */
+		$id = (int) $key;
 		$d = $id ? $byId[$id] : null;
-		if ($id) { $seen[$id] = 1; }
+		if ($key !== '') { $seen[$key] = 1; }
+		if ($key !== '' && isset($byKey[$key]['dof'])) { $e['dn'] = $byKey[$key]['dn']; $e['dof'] = $byKey[$key]['dof']; }
 		$o = $e; unset($o['raw']);
 		$o['desc'] = cp_gcal_desc_html($e['raw']);
 		$o['pen'] = cp_gcal_pen($e['t']);
@@ -183,10 +227,12 @@ function cp_gcal_ajax_ev() {
 	}
 	/* szerződéses szakaszban lévő, jövőbeli rendezvény, amelyhez nincs bejegyzés */
 	$miss = array(); $today = wp_date('Y-m-d');
-	foreach ($deals as $d) {
-		if (isset($seen[(int) $d['id']]) || $d['event_d'] < $today || !in_array($d['stage'], cp_gcal_stages(), true)) { continue; }
-		$miss[] = array('id' => (int) $d['id'], 'title' => (string) $d['title'], 'd' => (string) $d['event_d'], 'stg' => (string) $d['stage']);
+	/* v2.9.71: napra – a többnapos deal hiányzó napja is (a tartományba eső napok) */
+	foreach ($byKey as $k => $d) {
+		if (isset($seen[$k]) || $d['day'] < $today || $d['day'] < $from || $d['day'] > $to || !in_array($d['stage'], cp_gcal_stages(), true)) { continue; }
+		$miss[] = array('id' => (int) $d['id'], 'title' => (string) $d['title'] . (isset($d['dof']) ? ' – ' . $d['dn'] . '/' . $d['dof'] . '. nap' : ''), 'd' => (string) $d['day'], 'stg' => (string) $d['stage']);
 	}
+	usort($miss, function ($a, $b) { return strcmp($a['d'], $b['d']); });
 	wp_send_json_success(array('ok' => true, 'ev' => $out, 'miss' => $miss, 'today' => $today, 'at' => time()));
 }
 
@@ -196,7 +242,7 @@ add_action('wp_ajax_cp_gcal_plan', 'cp_gcal_ajax_plan');
 function cp_gcal_ajax_plan() {
 	cp_el_auth();
 	cp_tab_need(array('gnaptar'));
-	$p = cp_gcal_plan((int) ($_POST['id'] ?? 0));
+	$p = cp_gcal_plan((int) ($_POST['id'] ?? 0), cp_el_req_date('day')); /* v2.9.71: többnapos: az adott nap */
 	if (!$p) { cp_el_err('Nincs ilyen deal.', 404); }
 	wp_send_json_success($p);
 }
@@ -269,14 +315,14 @@ function cp_gcal_pen_sync($dry = false) {
 	$from = wp_date('Y-m-d'); $to = wp_date('Y-m-d', time() + 400 * DAY_IN_SECONDS);
 	$ev = cp_gcal_events($from, $to, true);
 	if (is_wp_error($ev)) { if (!$dry) { delete_transient('cp_gcal_pen_lock'); } return $ev; }
-	$deals = cp_gcal_deals($from, $to); list($bd, $bi) = cp_gcal_index($deals);
+	$deals = cp_gcal_deals($from, $to); list($bd, $bi, $bk) = cp_gcal_index($deals);
 	$PEN = cp_gcal_stages()[0];
 	$later = array('Szerződés aláírva', 'Adatlap kiküldve', 'Rendezvény felkészül', 'Pénzre várunk', 'Rendezvény lement (G&R)');
 	$out = array('add' => array(), 'remove' => array(), 'create' => array(), 'wait' => array(), 'err' => array());
 	$has = array();
 	foreach ($ev as $e) {
-		$id = cp_gcal_match($e, $bd, $bi); if (!$id) { continue; }
-		$d = $bi[$id]; $has[$id] = 1;
+		$key = cp_gcal_match_key($e, $bd, $bi); if ($key === '') { continue; } /* v2.9.71: napi kulcs („<deal>:<nap>”, az 1. nap a deal) */
+		$id = (int) $key; $d = $bi[$id]; $has[$key] = 1;
 		if ($d['status'] !== 'Open' || !cp_gcal_mark_on()) { continue; }
 		$pen = cp_gcal_pen($e['t']); $new = null; $k = '';
 		if ($d['stage'] === $PEN && !$pen) { $new = CP_GCAL_PEN . $e['t']; $k = 'add'; }
@@ -302,15 +348,39 @@ function cp_gcal_pen_sync($dry = false) {
 		$made[$id] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
 		cp_gcal_wlog('bejegyzés létrehozva', $id, $p['title']);
 	}
+	/* v2.9.71: többnapos rendezvény 2..n. napja – külön bejegyzés napi kulccsal (cp_gcal_made['<deal>:<nap>']), ha a deal már
+	   szerződéses vagy későbbi szakaszban van, és a napnak még nincs bejegyzése (a kézzel felvettet is felismeri a napon) */
+	$okSt = array_merge(array($PEN), $later);
+	foreach ($bk as $key => $x) {
+		if (strpos((string) $key, ':') === false || isset($has[$key]) || isset($made[$key]) || $x['day'] < $from || $x['status'] === 'Lost' || !in_array($x['stage'], $okSt, true)) { continue; }
+		$out['create'][] = $key;
+		if ($dry || $out['err']) { continue; }
+		$p = cp_gcal_plan((int) $key, $x['day']); if (!$p) { continue; }
+		$r = cp_gcal_req('POST', '/events', array(), cp_gcal_body($p));
+		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+		$made[$key] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
+		cp_gcal_wlog('bejegyzés létrehozva (' . $x['dn'] . '/' . $x['dof'] . '. nap)', (int) $key, $p['title']);
+	}
 	/* v1.93: a panel által létrehozott bejegyzések követik a deal változását (dátum, kezdés, óraszám, helyszín, leírás);
 	   elvesztett dealnél „[ELVESZETT]” jelölés kerül a cím elé (nem töröljük). A kézzel felvett bejegyzésekhez nem nyúlunk. */
 	$out['update'] = array(); $out['lost'] = array();
 	if ($made && !$out['err']) {
 		$byEv = array(); foreach ($ev as $e) { $byEv[$e['id']] = $e; }
-		$ids = array_map('intval', array_keys($made));
+		$ids = array_values(array_unique(array_map('intval', array_keys($made)))); /* v2.9.71: a napi kulcsból a deal */
 		$st = array(); foreach ((array) $wpdb->get_results('SELECT id, status FROM ' . cp_crm_t('deals') . ' WHERE id IN (' . implode(',', $ids ?: array(0)) . ')', ARRAY_A) as $r) { $st[(int) $r['id']] = (string) $r['status']; }
-		foreach ($made as $did => $eid) {
-			$did = (int) $did; if (!isset($byEv[$eid])) { continue; }
+		$out['delete'] = array();
+		foreach ($made as $mk => $eid) {
+			$did = (int) $mk; $mday = strpos((string) $mk, ':') !== false ? substr((string) $mk, strpos((string) $mk, ':') + 1) : '';
+			/* v2.9.71: a többnapos deal törölt napja (vagy a deal újra egynapos): a panel által létrehozott napi bejegyzés törlődik */
+			if ($mday !== '' && ($st[$did] ?? '') !== 'Lost' && !cp_gcal_plan($did, $mday)) {
+				$out['delete'][] = (string) $mk; if ($dry) { continue; }
+				$r = cp_gcal_req('DELETE', '/events/' . rawurlencode($eid));
+				if (is_wp_error($r) && !isset($byEv[$eid])) { $r = null; } /* már nincs a naptárban */
+				if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+				unset($made[$mk]); update_option('cp_gcal_made', $made, false);
+				cp_gcal_wlog('napi bejegyzés törölve (a nap kikerült)', $did, $mday); continue;
+			}
+			if (!isset($byEv[$eid])) { continue; }
 			$e = $byEv[$eid];
 			if (($st[$did] ?? '') === 'Lost') {
 				if (mb_stripos($e['t'], '[ELVESZETT]') === 0) { continue; }
@@ -320,7 +390,7 @@ function cp_gcal_pen_sync($dry = false) {
 				if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
 				cp_gcal_wlog('elvesztett deal jelölve', $did, $nt); continue;
 			}
-			$p = cp_gcal_plan($did); if (!$p || $p['date'] === '') { continue; }
+			$p = cp_gcal_plan($did, $mday); if (!$p || $p['date'] === '') { continue; }
 			$chg = substr($e['s'], 0, 10) !== $p['date'] || ($p['start'] !== '' && ($e['ad'] || substr($e['s'], 11, 5) !== $p['start'])) || ($p['start'] === '' && !$e['ad'])
 				|| ($p['end'] !== '' && $p['end'] !== '24:00' && !$e['ad'] && substr($e['e'], 11, 5) !== $p['end']) || trim($e['loc']) !== trim((string) $p['loc']);
 			if (!$chg) { continue; }
@@ -332,7 +402,7 @@ function cp_gcal_pen_sync($dry = false) {
 		}
 	}
 	if (!$dry) {
-		if ($out['add'] || $out['remove'] || $out['create'] || $out['update'] || $out['lost']) { update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false); }
+		if ($out['add'] || $out['remove'] || $out['create'] || $out['update'] || $out['lost'] || !empty($out['delete'])) { update_option('cp_gcal_gen', (int) get_option('cp_gcal_gen', 0) + 1, false); }
 		if ($out['err']) { update_option('cp_gcal_werr', array('at' => time(), 'msg' => $out['err'][0]), false); } else { delete_option('cp_gcal_werr'); }
 		delete_transient('cp_gcal_pen_lock');
 	}

@@ -112,7 +112,7 @@
 			if (!days.length) h += '<div class="cpx-empty">Ebben a hónapban nincs bejegyzés.</div>';
 			h += '<div class="gc-list">' + days.map(d => '<section class="gc-ld' + (d === today ? ' today' : '') + (d < today ? ' past' : '') + '" id="gc-d-' + d + '"><h4>' + dayLabel(d) + (d === today ? ' <em>ma</em>' : '') + '</h4>' +
 				bd[d].map(e => { const i = idx(e); return '<button type="button" class="gc-li ' + cls(e) + '" ' + sty(e) + ' data-ev="' + i + '"><span class="gc-tm">' + (e.ad ? 'egész nap' : esc(hm(e.s)) + (hm(e.e) ? '<b>–' + esc(hm(e.e)) + '</b>' : '')) + '</span><span class="gc-tt"><b>' + esc(e.t) + '</b>' +
-					(e.loc ? '<small>📍 ' + esc(e.loc) + '</small>' : '') + (e.deal ? '<small>' + esc(e.stg) + (e.own ? ' · ' + esc(e.own) : '') + (e.g && e.g.length ? ' · 👤 ' + e.g.length + ' kezelő' : '') + '</small>' : '') + '</span></button>'; }).join('') + '</section>').join('') + '</div>';
+					(e.loc ? '<small>📍 ' + esc(e.loc) + '</small>' : '') + (e.deal ? '<small>' + (e.dof ? '<span class="dtag">' + e.dn + '/' + e.dof + '. nap</span> ' : '') /* v2.9.71 */ + esc(e.stg) + (e.own ? ' · ' + esc(e.own) : '') + (e.g && e.g.length ? ' · 👤 ' + e.g.length + ' kezelő' : '') + '</small>' : '') + '</span></button>'; }).join('') + '</section>').join('') + '</div>';
 		}
 		h += '</div>';
 		m.innerHTML = h;
@@ -156,7 +156,7 @@
 			(e.deal ? '<div class="gc-deal"><div><b>Deal:</b> ' + esc(e.stg) + (e.dst && e.dst !== 'Open' ? ' (' + esc(e.dst === 'Won' ? 'megnyert' : e.dst) + ')' : '') + (e.own ? ' · ' + esc(e.own) : '') + (e.pen ? ' · <span class="gc-pen">✏️ ceruzás</span>' : '') + '</div><button type="button" class="cpx-btn" data-deal="' + e.deal + '">Deal megnyitása</button></div>' : '<p class="gc-sm">Ehhez a bejegyzéshez a panel nem talált dealt (a kezelői adatlap linkje vagy a kontakt neve alapján keres).</p>') +
 			(e.g && e.g.length ? '<div class="gc-g"><b>Kezelők, meghívottak</b><ul>' + e.g.map(g => '<li>' + esc(g.n || g.e) + ' <small>' + esc(st[g.st] || '') + '</small></li>').join('') + '</ul></div>' : '') +
 			(e.desc ? '<div class="gc-desc">' + e.desc + '</div>' : '<p class="gc-sm">Nincs leírás.</p>') +
-			(e.deal ? '<details class="gc-plan" data-plan="' + e.deal + '"><summary>Mit írna a panel ebbe a bejegyzésbe? (az átállás után)</summary><div class="gc-pb">Betöltés…</div></details>' : '') +
+			(e.deal ? '<details class="gc-plan" data-plan="' + e.deal + '" data-pday="' + (e.dof ? esc(String(e.s).slice(0, 10)) : '') + '"><summary>Mit írna a panel ebbe a bejegyzésbe? (az átállás után)</summary><div class="gc-pb">Betöltés…</div></details>' : '') +
 			'</div><footer>' + (e.link ? '<a class="cpx-btn ghost" href="' + esc(e.link) + '" target="_blank" rel="noopener">Megnyitás a Google Naptárban ↗</a>' : '') + '</footer></div>';
 		document.body.appendChild(w);
 		w.querySelectorAll('.gc-desc a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
@@ -167,7 +167,7 @@
 			if (!pl.open || pl.dataset.done) return;
 			pl.dataset.done = '1';
 			const box = pl.querySelector('.gc-pb');
-			try { const p = await post('cp_gcal_plan', { id: pl.dataset.plan }); box.innerHTML = '<p><b>Cím:</b> ' + esc(p.title) + '</p><p><b>Időpont:</b> ' + esc(p.date) + (p.start ? ' ' + esc(p.start) + (p.end ? '–' + esc(p.end) : '') : ' (egész nap)') + '</p><div class="gc-desc">' + p.desc + '</div><p class="gc-sm">Ami nincs a dealben (pl. tematika, dress code, galérianév), azt az ügyfélportál adataiból egészíti majd ki.</p>'; box.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; }); }
+			try { const p = await post('cp_gcal_plan', { id: pl.dataset.plan, day: pl.dataset.pday || '' }); box.innerHTML = '<p><b>Cím:</b> ' + esc(p.title) + '</p><p><b>Időpont:</b> ' + esc(p.date) + (p.start ? ' ' + esc(p.start) + (p.end ? '–' + esc(p.end) : '') : ' (egész nap)') + '</p><div class="gc-desc">' + p.desc + '</div><p class="gc-sm">Ami nincs a dealben (pl. tematika, dress code, galérianév), azt az ügyfélportál adataiból egészíti majd ki.</p>'; box.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; }); }
 			catch (err) { box.textContent = err.message; }
 		});
 		document.addEventListener('keydown', onKey);
