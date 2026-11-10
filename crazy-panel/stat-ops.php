@@ -44,9 +44,20 @@ function cp_st_ops($rows, $f, $t) {
 	$evs = array();
 	$has = array('pa' => array(), 'sa' => array(), 'gm' => array());
 	/* a fotós (nyomtatós) rendezvények száma a lefedettséghez */
+	/* v2.9.71: többnapos rendezvény – minden napja külön rendezvény (napi kulccsal, mint az Elszámolás kezelő-sorai), így a
+	   lefedettség (értékelt / papírfogyasztásos rendezvények aránya) számlálója és nevezője ugyanazt számolja, nem mehet 100% fölé */
+	$mdm = function_exists('cp_mday_many') ? cp_mday_many(array_map(function ($r) { return (int) $r['id']; }, $rows)) : array();
+	$evRows = array();
 	foreach ($rows as $r) {
+		if (isset($mdm[(int) $r['id']]) && !empty($r['event_d'])) {
+			$md = cp_mday_align($mdm[(int) $r['id']], (string) $r['event_d']);
+			foreach ($md as $k => $x) { $evRows[] = array(cp_mday_key((int) $r['id'], $x['day'], $k + 1), array_merge($r, array('event_d' => $x['day']))); }
+		} else { $evRows[] = array((string) $r['id'], $r); }
+	}
+	foreach ($evRows as $er) {
+		list($ek, $r) = $er;
 		if (!cp_st_in($r['event_d'], $f, $t) || (function_exists('cp_st_dg_booked') ? !cp_st_dg_booked($r) : empty($r['signed_d']))) { continue; }
-		$evs[(string) $r['id']] = $r;
+		$evs[$ek] = $r;
 		if (cp_st_is_print($r)) { $o['print']['photo']++; }
 		else {
 			$nm = $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : 'nincs megadva');
@@ -58,7 +69,9 @@ function cp_st_ops($rows, $f, $t) {
 		list($id, $st) = $pair;
 		if (empty($st['r']) || !is_array($st['r'])) { continue; }
 		$id = (string) $id;
-		$d = isset($by[$id]) && !empty($by[$id]['event_d']) ? $by[$id]['event_d'] : (string) (isset($st['d']) ? $st['d'] : '');
+		/* v2.9.71: napi kulcs („<deal>:<nap>”) – a nap a kulcsból, a deal adatai (cím, szolgáltatás) a dealből */
+		$bid = strpos($id, ':') !== false ? substr($id, 0, strpos($id, ':')) : $id;
+		$d = $bid !== $id ? substr($id, strpos($id, ':') + 1) : (isset($evs[$id]) ? (string) $evs[$id]['event_d'] : (isset($by[$id]) && !empty($by[$id]['event_d']) ? $by[$id]['event_d'] : (string) (isset($st['d']) ? $st['d'] : '')));
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) || $d > $today) { continue; }
 		/* a mérés kezdete (minden időszakra) */
 		foreach ($st['r'] as $row) {
@@ -68,8 +81,8 @@ function cp_st_ops($rows, $f, $t) {
 			if (!empty($row['gm']) && ($o['since']['gm'] === '' || $d < $o['since']['gm'])) { $o['since']['gm'] = $d; }
 		}
 		if ($d < $f || $d > $t) { continue; }
-		$title = isset($titles[$id]) ? (string) $titles[$id]->title : ('Deal #' . $id);
-		$svc = isset($by[$id]) ? ($by[$id]['svc'] !== '' ? $by[$id]['svc'] : (!empty($by[$id]['svcs']) ? $by[$id]['svcs'][0] : 'nincs megadva')) : 'nincs megadva';
+		$title = isset($titles[$bid]) ? (string) $titles[$bid]->title : ('Deal #' . $bid);
+		$svc = isset($by[$bid]) ? ($by[$bid]['svc'] !== '' ? $by[$bid]['svc'] : (!empty($by[$bid]['svcs']) ? $by[$bid]['svcs'][0] : 'nincs megadva')) : 'nincs megadva';
 		$ev_pa = 0; $ev_has = false; $ev_rated = false;
 		foreach ($st['r'] as $row) {
 			if (!is_array($row)) { continue; }
@@ -90,12 +103,12 @@ function cp_st_ops($rows, $f, $t) {
 				$o['sat']['counts'][$sa] = (isset($o['sat']['counts'][$sa]) ? $o['sat']['counts'][$sa] : 0) + 1;
 				$o['sat']['rated']++;
 				$ev_rated = true;
-				if (cp_panel_lc($sa) !== 'elégedett') { $o['sat']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $sa, 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['no']) ? $row['no'] : ''))), 0, 160)); }
+				if (cp_panel_lc($sa) !== 'elégedett') { $o['sat']['bad'][] = array('id' => $bid, 't' => $title, 'd' => $d, 'v' => $sa, 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['no']) ? $row['no'] : ''))), 0, 160)); }
 			}
 			if (!empty($row['gm'])) {
 				$gm = (string) $row['gm'];
 				$o['gm']['counts'][$gm] = (isset($o['gm']['counts'][$gm]) ? $o['gm']['counts'][$gm] : 0) + 1;
-				if (cp_panel_lc($gm) !== 'jó') { $o['gm']['bad'][] = array('id' => $id, 't' => $title, 'd' => $d, 'v' => $gm, 'dev' => (string) (isset($row['sv']) ? $row['sv'] : ''), 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['gmn']) ? $row['gmn'] : ''))), 0, 160)); }
+				if (cp_panel_lc($gm) !== 'jó') { $o['gm']['bad'][] = array('id' => $bid, 't' => $title, 'd' => $d, 'v' => $gm, 'dev' => (string) (isset($row['sv']) ? $row['sv'] : ''), 'note' => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) (isset($row['gmn']) ? $row['gmn'] : ''))), 0, 160)); }
 			}
 		}
 		if ($ev_has) {
@@ -104,14 +117,15 @@ function cp_st_ops($rows, $f, $t) {
 			if (!isset($o['print']['svc'][$svc])) { $o['print']['svc'][$svc] = array('k' => $svc, 'n' => 0, 'ev' => 0); }
 			$o['print']['svc'][$svc]['n'] += $ev_pa;
 			$o['print']['svc'][$svc]['ev']++;
-			$o['print']['top'][] = array('id' => $id, 't' => $title, 'd' => $d, 'n' => $ev_pa);
+			$o['print']['top'][] = array('id' => $bid, 't' => $title, 'd' => $d, 'n' => $ev_pa);
 		}
 		if ($ev_rated) { $o['sat']['ratedEvents']++; }
 	}
 	/* hiányzó adat rendezvényenként (csak a fülre): fotós rendezvény papírfogyasztás nélkül, értékelés / gépállapot nélküli rendezvény */
 	$miss = array('pa' => array(), 'sa' => array(), 'gm' => array());
 	foreach ($evs as $eid => $r) {
-		$it = array('id' => $eid, 't' => isset($titles[$eid]) ? (string) $titles[$eid]->title : ('Deal #' . $eid), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => (int) !empty($cache['map'][(string) $eid]['r']));
+		$bid = (string) (int) $eid; /* v2.9.71: napi kulcsnál a deal */
+		$it = array('id' => $bid, 'key' => (string) $eid, 't' => (isset($titles[$bid]) ? (string) $titles[$bid]->title : ('Deal #' . $bid)), 'd' => $r['event_d'], 'svc' => $r['svc'] !== '' ? $r['svc'] : (!empty($r['svcs']) ? $r['svcs'][0] : ''), 'el' => (int) !empty($cache['map'][(string) $eid]['r']));
 		if (cp_st_is_print($r) && empty($has['pa'][$eid])) { $miss['pa'][] = $it; }
 		if (empty($has['sa'][$eid])) { $miss['sa'][] = $it; }
 		if (empty($has['gm'][$eid]) && ($o['since']['gm'] === '' || $r['event_d'] >= $o['since']['gm'])) { $miss['gm'][] = $it; }
