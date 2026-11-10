@@ -218,7 +218,7 @@
 	/* értesítésből: „kezelok:interju”, „kezelok:iv”, „kezelok:interju:12” */
 	function deep(arg) { const m = /^(?:interju|iv)(?::(\d+))?$/.exec(String(arg || '')); if (m && K.iv) nav('iv', Number(m[1]) || 0); }
 	const ivOpen = () => nav('iv'); /* v2.9.85: a régi felugró ablak helyett az oldalra visz */
-	const vsw = () => K.iv ? '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'iv' ? '' : ' class="on" aria-current="page"') + '>Kezelők</a><a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a></nav>' : '';
+	const vsw = () => K.iv ? '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'iv' ? '' : ' class="on" aria-current="page"') + '>Lista</a><a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a></nav>' : '';
 	function bindVsw(main) {
 		main.querySelectorAll('.kz-vs [data-view]').forEach(a => a.addEventListener('click', e => {
 			if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; /* új lapon / ablakban: a böngészőé */
