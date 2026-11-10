@@ -209,7 +209,15 @@ function cp_flow_tick() {
 			$t = $f['def']['trigger'];
 			if (($t['type'] ?? '') !== 'date' || $hour < (int) $t['hour'] || ($st['days'][$f['id']] ?? '') === $today) { continue; }
 			$ev = gmdate('Y-m-d', strtotime($today . ' 12:00:00 UTC') - (int) $t['days'] * DAY_IN_SECONDS);
-			foreach ((array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE event_d = %s AND deleted_at IS NULL LIMIT 500", $ev)) as $id) { cp_flow_run($f, (int) $id); }
+			if ((int) $t['days'] > 0) {
+				/* v2.9.75: a rendezvény UTÁNI időpont a többnapos rendezvény utolsó napjához igazodik (event_end_d), és 3 napra visszamenőleg
+				   pótol (ha egy nap kimaradt); a folyamat feltételei (pl. szakasz) miatt egy deal nem fut kétszer */
+				$ev0 = gmdate('Y-m-d', strtotime($ev . ' 12:00:00 UTC') - 3 * DAY_IN_SECONDS);
+				$ids = (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE COALESCE(event_end_d, event_d) BETWEEN %s AND %s AND deleted_at IS NULL LIMIT 500", $ev0, $ev));
+			} else {
+				$ids = (array) $wpdb->get_col($wpdb->prepare("SELECT id FROM $D WHERE event_d = %s AND deleted_at IS NULL LIMIT 500", $ev));
+			}
+			foreach ($ids as $id) { cp_flow_run($f, (int) $id); }
 			$st['days'][$f['id']] = $today;
 		}
 	}
