@@ -53,6 +53,11 @@ function cp_ct_art($w) { $f = mb_strtolower(mb_substr(ltrim((string) $w), 0, 1))
 function cp_ct_dev($G, $key, $dev) { return str_replace('a(z) {DEV}', cp_ct_art($dev) . ' ' . $dev, $G[$key]); }
 function cp_ct_fmt($n) { return number_format((float) $n, 0, ',', ' '); }
 function cp_ct_money($n, $vat) { return $vat === 'aam' ? 'AAM bruttó ' . cp_ct_fmt($n) . ' Ft' : 'nettó ' . cp_ct_fmt($n) . ' Ft (+ÁFA)'; }
+/* v2.9.71: a hét napja („csütörtök”) a többnapos felsoroláshoz */
+function cp_ct_hudow($ymd) {
+	$D = array('vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat');
+	return preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $ymd) ? $D[(int) gmdate('w', strtotime($ymd . ' 12:00:00 UTC'))] : '';
+}
 function cp_ct_hudate($ymd) {
 	$M = array('január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december');
 	if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $ymd, $m)) { return (string) $ymd; }
@@ -112,8 +117,18 @@ function cp_ct_prefill($id) {
 	$pm = mb_strtolower((string) $d['pay_method']);
 	$pay = strpos($pm, 'kész') !== false ? 'cash' : (strpos($pm, 'előre') !== false || strpos($pm, 'elore') !== false ? 'pre' : 'post');
 	$city = ''; if (preg_match('/\b\d{4}\s+([^\s,]+)/u', $venue ?: (string) $d['venue'], $m)) { $city = $m[1]; }
+	/* v2.9.71: többnapos rendezvény – minden nap a saját kezdésével, végével (kezdés + óraszám) és – ha eltér – helyszínével */
+	$days = array();
+	$md = function_exists('cp_mday_get') && !empty($d['event_d']) ? cp_mday_align(cp_mday_get((int) $id), (string) $d['event_d']) : array();
+	foreach ($md as $dr) {
+		$ds = $dr['start_t'] !== '' ? $dr['start_t'] : $start;
+		$dh = $dr['hours'] !== null ? (float) $dr['hours'] : (float) $d['hours'];
+		$de = '';
+		if ($ds !== '' && preg_match('/^\d{1,2}:\d{2}$/', $ds) && $dh > 0) { $t = new DateTime($dr['day'] . ' ' . $ds, wp_timezone()); $t->modify('+' . (int) round($dh * 60) . ' minutes'); $de = $t->format('Y-m-d') > $dr['day'] ? '24:00' : $t->format('H:i'); }
+		$days[] = array('d' => $dr['day'], 'start' => $ds, 'end' => $de, 'venue' => (string) $dr['venue']);
+	}
 	return array('deal' => (int) $id, 'src' => $src, 'issuer' => strtoupper((string) $d['ctype']) === 'EV' ? 'EV' : 'KFT', 'lang' => 'hu', 'client' => $cl, 'contact' => $ct,
-		'venue' => $venue ?: (string) $d['venue'], 'date' => (string) $d['event_d'], 'start' => $start, 'end' => $end, 'svc' => $svc,
+		'venue' => $venue ?: (string) $d['venue'], 'date' => (string) $d['event_d'], 'start' => $start, 'end' => $end, 'svc' => $svc, 'days' => $days,
 		'travel_city' => $city ?: ($d['ccity'] ?: 'Budapest'), 'travel' => (float) $d['km_fee'], 'pay' => $pay, 'cdate' => wp_date('Y-m-d'), 'place' => 'Budapest', 'note' => '');
 }
 
@@ -202,8 +217,22 @@ function cp_ct_build($st) {
 	$p($multi ? str_replace($T['one'], $T['many'], $G['targy_intro']) : $G['targy_intro']);
 	$lb = function ($l, $v) use (&$out) { $out[] = array('b', $l . $v, mb_strlen($l)); };
 	$lb($T['svc'], implode(', ', array_map(function ($s) { return $s['line']; }, $sel)));
-	$lb($T['venue'], $st['venue']);
-	$lb($T['dt'], trim(cp_ct_date_l($st['date'], $lang) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
+	$days = isset($st['days']) && is_array($st['days']) && count($st['days']) >= 2 ? $st['days'] : array();
+	if ($days) {
+		/* v2.9.71: többnapos rendezvény – a napok felsorolva; a helyszín csak akkor napi, ha valamelyik nap eltér */
+		$gv = trim((string) $st['venue']);
+		$perDay = (bool) array_filter($days, function ($x) use ($gv) { $v = trim((string) $x['venue']); return $v !== '' && $v !== $gv; });
+		$lb($T['venue'], $perDay ? ($lang === 'en' ? 'per day, see below' : 'napok szerint, lásd alább') : $st['venue']);
+		$lb($lang === 'en' ? 'Event days: ' : 'Rendezvénynapok: ', count($days) . ($lang === 'en' ? ' days' : ' nap'));
+		foreach ($days as $x) {
+			$t = cp_ct_date_l($x['d'], $lang) . ($lang === 'en' ? '' : ' (' . cp_ct_hudow($x['d']) . ')') . ($x['start'] !== '' ? ' ' . $x['start'] . ($x['end'] !== '' ? '–' . $x['end'] : '') : '');
+			$v = trim((string) $x['venue']) !== '' ? trim((string) $x['venue']) : $gv;
+			$out[] = array('b', $t . ($perDay && $v !== '' ? ' – ' . $v : ''));
+		}
+	} else {
+		$lb($T['venue'], $st['venue']);
+		$lb($T['dt'], trim(cp_ct_date_l($st['date'], $lang) . ($st['start'] !== '' ? ' ' . $st['start'] . ($st['end'] !== '' ? '–' . $st['end'] : '') : '')));
+	}
 	$H(1);
 	$p($G['feladat_intro']);
 	foreach ($sel as $s) {
@@ -399,8 +428,11 @@ function cp_ct_state_in() {
 		'client' => array('type' => ($c['type'] ?? '') === 'magan' ? 'magan' : 'ceg', 'company' => $s($c['company'] ?? ''), 'seat' => $s($c['seat'] ?? ''), 'reg' => $s($c['reg'] ?? '', 40), 'tax' => $s($c['tax'] ?? '', 40), 'signer' => $s($c['signer'] ?? ''), 'name' => $s($c['name'] ?? ''), 'address' => $s($c['address'] ?? '')),
 		'contact' => array('name' => $s($st['contact']['name'] ?? ''), 'tel' => $s($st['contact']['tel'] ?? '', 40)),
 		'venue' => $s($st['venue'] ?? ''), 'date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($st['date'] ?? '')) ? $st['date'] : '', 'start' => $s($st['start'] ?? '', 10), 'end' => $s($st['end'] ?? '', 10),
-		'svc' => array(), 'travel_city' => $s($st['travel_city'] ?? '', 80), 'travel' => max(0, (float) ($st['travel'] ?? 0)), 'pay' => in_array($st['pay'] ?? '', array('pre', 'post', 'cash'), true) ? $st['pay'] : 'post',
+		'svc' => array(), 'days' => array(), 'travel_city' => $s($st['travel_city'] ?? '', 80), 'travel' => max(0, (float) ($st['travel'] ?? 0)), 'pay' => in_array($st['pay'] ?? '', array('pre', 'post', 'cash'), true) ? $st['pay'] : 'post',
 		'cdate' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($st['cdate'] ?? '')) ? $st['cdate'] : wp_date('Y-m-d'), 'place' => $s($st['place'] ?? 'Budapest', 60) ?: 'Budapest', 'note' => mb_substr(sanitize_textarea_field((string) ($st['note'] ?? '')), 0, 3000));
+	/* v2.9.71: többnapos rendezvény napjai */
+	foreach (array_slice((array) ($st['days'] ?? array()), 0, 62) as $x) { if (is_array($x) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($x['d'] ?? ''))) { $out['days'][] = array('d' => $x['d'], 'start' => $s($x['start'] ?? '', 10), 'end' => $s($x['end'] ?? '', 10), 'venue' => $s($x['venue'] ?? '', 255)); } }
+	usort($out['days'], function ($a, $b) { return strcmp($a['d'], $b['d']); });
 	foreach (array_slice((array) ($st['svc'] ?? array()), 0, 16) as $x) { if (isset($L['services'][$x['k'] ?? ''])) { $out['svc'][] = array('k' => $x['k'], 'hours' => max(1, min(24, (int) ($x['hours'] ?? 3))), 'price' => max(0, (float) ($x['price'] ?? 0)), 'bg' => $s($x['bg'] ?? '', 120)); } }
 	return $out;
 }

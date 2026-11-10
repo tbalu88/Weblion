@@ -150,3 +150,11 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-logo-btn{width:auto;cursor:pointer}
 .cpp-logo .cpp-note{margin:0}
 .cpp-link{background:none;border:0;padding:0;color:var(--bad);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
+/* v2.9.71: többnapos rendezvény – a napok listája (csak megjelenítés) */
+.cpp-days h2{font:800 17px "Plus Jakarta Sans",sans-serif;margin:0 0 8px}
+.cpp-days ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.cpp-days li{display:flex;flex-wrap:wrap;gap:2px 12px;padding:9px 0;border-top:1px solid var(--li);min-width:0}
+.cpp-days li:first-child{border-top:0}
+.cpp-days li b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cpp-days li span{color:var(--mu);min-width:0;overflow-wrap:anywhere}
+.cpp-days-n{margin:8px 0 0;font-size:13px;color:var(--mu)}

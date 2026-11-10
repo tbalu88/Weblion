@@ -44,7 +44,16 @@ function cp_portal_sm_snapshot($deal_id) {
 	if ($start === '' && $p['f_time'] !== '') { $start = cp_panel_norm_time(cp_panel_get($d, $p['f_time'])); }
 	$hours = $e['f_hours'] !== '' ? cp_panel_get($d, $e['f_hours']) : null;
 	$title = cp_panel_str(cp_panel_get($d, 'title'));
+	/* v2.9.71: többnapos rendezvény – a napok (az ügyfél a portálon csak látja őket); a nap saját kezdése / óraszáma / helyszíne, különben a dealé */
+	$date = cp_panel_norm_date(cp_panel_get($d, $p['f_date']));
+	$days = array();
+	if ($date !== '' && function_exists('cp_mday_get')) {
+		foreach (cp_mday_align(cp_mday_get((int) $deal_id), $date) as $dr) {
+			$days[] = array('d' => $dr['day'], 'start' => $dr['start_t'] !== '' ? $dr['start_t'] : (cp_portal_time_ok($start) ? $start : ''), 'hours' => $dr['hours'] !== null ? (float) $dr['hours'] : (is_numeric($hours) ? (float) $hours : 0), 'venue' => $dr['venue'] !== '' ? $dr['venue'] : cp_panel_str(cp_panel_get($d, $p['f_loc'])));
+		}
+	}
 	return array(
+		'days'     => $days,
 		'title'    => $title,
 		'who'      => cp_el_who($title, $c['name'] !== '' ? $c['name'] : 'Deal #' . $deal_id),
 		'name'     => $c['name'],

@@ -55,6 +55,23 @@ function cp_portal_bg_taken($date, $except_deal = '') {
 	return $out;
 }
 
+/* v2.9.71: többnapos rendezvény – a választott (a dealre szóló) háttér minden olyan napon kell, amelyiknek nincs saját háttere:
+   a háttér akkor szabad, ha mindegyik ilyen napon szabad (napi foglaltság közül a legnagyobb); null, ha valamelyik nap nem ellenőrizhető */
+function cp_portal_bg_taken_all($portal) {
+	$days = array((string) $portal->event_date);
+	if (function_exists('cp_mday_get') && !empty($portal->event_date)) {
+		$md = cp_mday_align(cp_mday_get((int) $portal->deal_id), (string) $portal->event_date);
+		if ($md) { $days = array(); foreach ($md as $x) { if ($x['bg'] === '') { $days[] = $x['day']; } } }
+	}
+	$out = array();
+	foreach ($days as $d) {
+		$t = cp_portal_bg_taken($d, $portal->deal_id);
+		if ($t === null) { return null; }
+		foreach ($t as $k => $n) { $out[$k] = max($out[$k] ?? 0, $n); }
+	}
+	return $out;
+}
+
 /* a panel háttérlistája a portálon nem választható hátterek nélkül (beállítás: bg_exclude, alapból Fehér, Zöld) */
 function cp_portal_bg_list() {
 	$o = cp_portal_opts();
@@ -64,7 +81,7 @@ function cp_portal_bg_list() {
 
 /* választható hátterek a portálon: array(name, img, free) – csak a szabadok (+ a jelenlegi választás, ha közben foglalt lett) */
 function cp_portal_bg_options($portal, $current = '') {
-	$taken = cp_portal_bg_taken($portal->event_date, $portal->deal_id);
+	$taken = cp_portal_bg_taken_all($portal); /* v2.9.71: minden napra */
 	$unknown = $taken === null;
 	$out = array();
 	foreach (cp_portal_bg_list() as $b) {
@@ -83,9 +100,9 @@ function cp_portal_bg_check($portal, $name) {
 	$k = cp_panel_lc($name);
 	foreach (cp_portal_bg_list() as $b) {
 		if (cp_panel_lc($b['name']) !== $k) { continue; }
-		$taken = cp_portal_bg_taken($portal->event_date, $portal->deal_id);
+		$taken = cp_portal_bg_taken_all($portal); /* v2.9.71: minden napra */
 		if (is_array($taken) && isset($taken[$k]) && $taken[$k] >= (int) $b['qty']) {
-			return new WP_Error('invalid', 'Ez a háttér erre a napra már foglalt – válassz másikat.');
+			return new WP_Error('invalid', 'Ez a háttér a rendezvény (egyik) napjára már foglalt – válassz másikat.');
 		}
 		return $b['name'];
 	}

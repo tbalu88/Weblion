@@ -71,10 +71,14 @@ function cp_portal_render_form_page($portal, $tok) {
 	echo '<body class="cpp">' . cp_portal_page_top(true);
 	echo '<main class="cpp-main">';
 	echo '<section class="cpp-hero"><small>Ügyfélportál</small><h1>' . esc_html($full !== '' ? 'Kedves ' . $full . '!' : 'Kedves Ügyfelünk!') . '</h1>';
-	echo '<p>' . esc_html(cp_portal_hu_date($portal->event_date)) . ($pkg !== '' ? ' · ' . esc_html($pkg) : '') . '</p>';
+	/* v2.9.71: többnapos rendezvény – a napok tömören a fejlécben, alatta a napok listája (csak megjelenítés) */
+	$smA = is_array($sm) ? $sm : (array) json_decode((string) $sm, true);
+	$mdays = isset($smA['days']) && is_array($smA['days']) && count($smA['days']) >= 2 ? $smA['days'] : array();
+	echo '<p>' . esc_html($mdays && function_exists('cp_mday_label') ? cp_mday_label(array_column($mdays, 'd')) : cp_portal_hu_date($portal->event_date)) . ($pkg !== '' ? ' · ' . esc_html($pkg) : '') . '</p>';
 	echo '<p class="cpp-lead">' . ($flow === 'v2'
 		? 'Két lépésben kérünk adatokat: először a szerződéshez szükségeseket, aztán a rendezvény részleteit. Minden válasz azonnal mentődik, bármikor visszajöhetsz folytatni.'
 		: 'Néhány kérdés a helyszínről, hogy a kollégánk mindenre felkészülten érkezzen. Minden válasz azonnal mentődik, bármikor visszajöhetsz folytatni.') . '</p></section>';
+	if ($mdays) { echo cp_portal_days_html($mdays); }
 
 	echo '<section class="cpp-card cpp-status" id="cpp-status">';
 	if ($ca > 0) {
@@ -318,4 +322,15 @@ function cp_portal_space_svg() {
 		'<path d="M288 54 L292 48 L296 54 M288 170 L292 176 L296 170" fill="none" stroke="#5B6275" stroke-width="1.5"/>' .
 		'<text x="300" y="116" font-size="11" font-weight="700" font-family="Inter,sans-serif" fill="#141C33" transform="rotate(90 300 116)" text-anchor="middle">min. 1,5 m</text>' .
 		'</svg><p>Felülnézet: a háttérszerkezet 213 cm széles, előtte állnak a vendégek, a szelfigépnek legalább 1,5 m kell a háttértől. Összesen nagyjából 6 m² szabad, fedett terület kell.</p></div>';
+}
+
+/* v2.9.71: többnapos rendezvény – „A rendezvény napjai” kártya (csak megjelenítés): dátum a hét napjával, kezdés–vége, helyszín */
+function cp_portal_days_html($mdays) {
+	$h = '<section class="cpp-card cpp-days" aria-label="A rendezvény napjai"><h2>A rendezvény napjai</h2><ol>';
+	foreach ($mdays as $x) {
+		$end = '';
+		if (!empty($x['start']) && (float) ($x['hours'] ?? 0) > 0 && preg_match('/^(\d{1,2}):(\d{2})$/', (string) $x['start'], $hm)) { $mins = (int) $hm[1] * 60 + (int) $hm[2] + (int) round((float) $x['hours'] * 60); $end = $mins >= 1440 ? '24:00' : sprintf('%02d:%02d', intdiv($mins, 60), $mins % 60); }
+		$h .= '<li><b>' . esc_html(cp_portal_hu_date((string) $x['d'])) . '</b><span>' . esc_html(trim((!empty($x['start']) ? $x['start'] . ($end !== '' ? '–' . $end : '') : '') . (!empty($x['venue']) ? (!empty($x['start']) ? ' · ' : '') . $x['venue'] : ''))) . '</span></li>';
+	}
+	return $h . '</ol><p class="cpp-days-n">Ha valamelyik nap adata nem stimmel, jelezd az irodának – itt nem módosítható.</p></section>';
 }
