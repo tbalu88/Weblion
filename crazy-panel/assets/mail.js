@@ -386,7 +386,7 @@
 	/* v1.67: a bejövő levél eredeti (HTML) nézete – elzárt keretben: szkript nem fut, külső kép csak kérésre */
 	const HC = {};
 	let HV = 'html';
-	try { if (localStorage.getItem('cpmail_hv') === 'txt') HV = 'txt'; } catch (e) { /* privát mód */ }
+	/* v2.9.99: az Eredeti / Szöveg váltó megszűnt (a felhasználó döntése) – mindig az eredeti nézet; ha az eredeti HTML nem érhető el, a szöveges marad */
 	function frameDoc(mid, html, imgs) {
 		const o = location.origin, att = i => (C.ajax + '?action=cp_mail_att&m=' + mid + '&i=' + i + '&view=1&t=' + encodeURIComponent(C.t)).replace(/&/g, '&amp;');
 		return '<!doctype html><html' + (document.documentElement.getAttribute('data-theme') === 'dark' ? ' class="cpdark"' : '') + '><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: ' + o + (imgs ? ' https: http:' : '') + '; font-src data:' + (imgs ? ' https:' : '') + '">' +
@@ -397,7 +397,7 @@
 		const x = HC[mid];
 		if (extOk()) imgs = true;
 		if (el._txt === undefined) el._txt = el.innerHTML;
-		const bar = '<div class="ml-hv"><button type="button" data-hv="html" class="' + (HV === 'html' ? 'on' : '') + '">Eredeti</button><button type="button" data-hv="txt" class="' + (HV === 'txt' ? 'on' : '') + '">Szöveg</button></div>';
+		const bar = '';
 		if (HV === 'txt') { el.innerHTML = bar + el._txt; }
 		else {
 			el.innerHTML = bar + (x.ext && !imgs ? '<div class="ml-extbar">🖼 A külső képek nincsenek betöltve (a Spam mappában a biztonság kedvéért). <button type="button" data-imgs>Képek megjelenítése</button></div>' : '') +
