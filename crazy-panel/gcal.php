@@ -337,9 +337,14 @@ function cp_gcal_pen_sync($dry = false) {
 	$made = get_option('cp_gcal_made', array()); if (!is_array($made)) { $made = array(); }
 	foreach ($deals as $d) {
 		$id = (int) $d['id'];
-		if (isset($has[$id]) || $d['stage'] !== $PEN || $d['status'] !== 'Open' || $d['event_d'] < $from || isset($made[$id])) { continue; }
-		$since = (string) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage' AND new_val = %s", $id, $PEN));
-		if ($since !== '' && strtotime($since . ' UTC') > time() - 3 * HOUR_IN_SECONDS) { $out['wait'][] = $id; continue; }
+		/* v2.9.164: a szerződés utáni szakaszokban is létrejön (eddig csak „Szerződés kiküldve” + 3 óra után, így a gyorsan
+		   továbblépett vagy azt kihagyó deal soha nem került naptárba); a 3 órás várakozás csak a „Szerződés kiküldve” szakaszra vonatkozik */
+		$okC = array($PEN, 'Szerződés aláírva', 'Rendezvény felkészül', 'Rendezvény lement (G&R)', 'Pénzre várunk');
+		if (isset($has[$id]) || !in_array($d['stage'], $okC, true) || $d['status'] !== 'Open' || $d['event_d'] < $from || isset($made[$id])) { continue; }
+		if ($d['stage'] === $PEN) {
+			$since = (string) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage' AND new_val = %s", $id, $PEN));
+			if ($since !== '' && strtotime($since . ' UTC') > time() - 3 * HOUR_IN_SECONDS) { $out['wait'][] = $id; continue; }
+		}
 		$out['create'][] = $id;
 		if ($dry || $out['err']) { continue; }
 		$p = cp_gcal_plan($id); if (!$p || $p['date'] === '') { continue; }
