@@ -179,8 +179,10 @@ function cp_gcal_plan($id, $day = '') {
 	}
 	/* v2.9.165: az ügyfél-adatlap (portál) kezdés/befejezés, ha a dealen nincs időpont; és a hasznos válaszok a leírásba */
 	$pi = function_exists('cp_pinfo_rows') ? cp_pinfo_rows((int) $id) : null;
-	if ($s === '' && $pi && $pi['start'] !== '') { $s = str_pad($pi['start'], 5, '0', STR_PAD_LEFT); if ($pi['end'] !== '') { $e = str_pad($pi['end'], 5, '0', STR_PAD_LEFT); $hrs = 0; } }
-	if ($s !== '' && $hrs > 0) { $st = new DateTime($date . ' ' . $s, wp_timezone()); $st->modify('+' . (int) round($hrs * 60) . ' minutes'); $e = $st->format('Y-m-d') > $date ? '24:00' : $st->format('H:i'); }
+	if ($s === '' && $pi && $pi['start'] !== '') { $s = str_pad($pi['start'], 5, '0', STR_PAD_LEFT); if ($pi['end'] !== '') { $e = str_pad($pi['end'], 5, '0', STR_PAD_LEFT); $efix = true; } }
+	/* ha a deal kezdése egyezik az adatlapéval, a befejezés is az adatlapról (pontosabb, mint a kezdés + rendelkezésre állás) */
+	elseif ($s !== '' && $pi && $pi['end'] !== '' && str_pad($pi['start'], 5, '0', STR_PAD_LEFT) === $s) { $e = str_pad($pi['end'], 5, '0', STR_PAD_LEFT); $efix = true; }
+	if ($s !== '' && $hrs > 0 && empty($efix)) { $st = new DateTime($date . ' ' . $s, wp_timezone()); $st->modify('+' . (int) round($hrs * 60) . ' minutes'); $e = $st->format('Y-m-d') > $date ? '24:00' : $st->format('H:i'); }
 	$L = array();
 	if (function_exists('cp_el_link')) { $L[] = '<b>📋 KEZELŐI ADATLAP</b> – a rendezvény után itt töltsd ki:<br><b><a href="' . esc_url(cp_el_link($key)) . '">' . esc_html(cp_el_link($key)) . '</a></b><br>━━━━━━━━━━━━━━━━━━━━<br>'; }
 	$row = function ($k, $v) use (&$L) { if (trim((string) $v) !== '') { $L[] = esc_html($k) . ': ' . esc_html(trim((string) $v)); } };

@@ -312,7 +312,10 @@ function cp_slot_info($aid) {
 	$slot = null;
 	foreach (cp_slot_day($r['day'])['slots'] as $s) { if ($s['deal'] === (int) $r['deal_id'] && $s['skey'] === $r['skey']) { $slot = $s; } }
 	$sk = function_exists('cp_kz_skills') ? cp_kz_skills() : array();
-	return array('r' => $r, 'k' => $k, 'day' => cp_slot_hu_day($r['day']), 'time' => $slot ? $slot['time'] : '', 'loc' => $slot ? $slot['loc'] : '',
+	/* v2.9.166: az időpont és a helyszín ugyanonnan, ahonnan a naptárbejegyzés (deal + ügyfél-adatlap) – a napi kapacitás-adat elavult lehet */
+	$tm = $slot ? (string) $slot['time'] : ''; $lc = $slot ? (string) $slot['loc'] : '';
+	if (function_exists('cp_gcal_plan')) { $pl = cp_gcal_plan((int) $r['deal_id'], (string) $r['day']); if ($pl) { if ($pl['start'] !== '') { $tm = $pl['start'] . ($pl['end'] !== '' ? '–' . ($pl['end'] === '24:00' ? '24:00' : $pl['end']) : ''); } if (trim((string) $pl['loc']) !== '') { $lc = (string) $pl['loc']; } } }
+	return array('r' => $r, 'k' => $k, 'day' => cp_slot_hu_day($r['day']), 'time' => $tm, 'loc' => $lc,
 		'gep' => $slot ? ($slot['kind'] === 'spin' ? '360 Spinner' : ($sk[$slot['skill']] ?? 'Szelfigép')) : '', 'need' => $slot ? $slot['need'] : '', 'url' => home_url('/?cp_slot=' . $r['tok']));
 }
 /* ------------------------------------------------------------ v2.9.162: naptárbejegyzés a kezelőnek / hostnak
