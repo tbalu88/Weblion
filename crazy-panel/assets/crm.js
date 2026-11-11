@@ -37,7 +37,20 @@
 		const img = D3T.on && D3IMG.test(f.n) && f.m && C0.ajax ? '<img loading="lazy" alt="" src="' + esc(C0.ajax + '?action=cp_mail_thumb&v=2&m=' + f.m + '&i=' + f.i + '&t=' + encodeURIComponent(C0.t || '')) + '">' : '';
 		return '<span class="d3-tb t-' + cls + (img ? ' has' : '') + '">' + img + '<i>' + esc(e || 'FÁJL') + '</i></span>';
 	}
+	/* v2.9.176: Fájlok szűrő – PDF / Képek / Dokumentumok / Egyéb */
+	const d3Kind = n => { const e = d3Ext(n); return e === 'PDF' ? 'pdf' : D3IMG.test(n || '') ? 'img' : /^(DOCX?|ODT|RTF|PAGES|TXT|XLSX?|CSV|ODS|NUMBERS|PPTX?|KEY|ODP)$/.test(e) ? 'doc' : 'oth'; };
+	const D3K = [['pdf', 'PDF'], ['img', 'Képek'], ['doc', 'Dokumentumok'], ['oth', 'Egyéb']];
+	function d3FiltBar(fl, sbf) {
+		const c = { pdf: 0, img: (sbf || []).length, doc: 0, oth: 0 };
+		fl.forEach(f => { if (!f.emb) c[d3Kind(f.n)]++; });
+		const ks = D3K.filter(k => c[k[0]]);
+		if (ks.length < 2) return '';
+		const cur = ks.some(k => k[0] === D3T.ff) ? D3T.ff : '';
+		return '<div class="d3-ff" role="group" aria-label="Fájlok szűrése"><button type="button" data-ff=""' + (cur ? '' : ' class="on" aria-pressed="true"') + '>Mind</button>' + ks.map(k => '<button type="button" data-ff="' + k[0] + '"' + (cur === k[0] ? ' class="on" aria-pressed="true"' : '') + '>' + k[1] + ' <small>' + c[k[0]] + '</small></button>').join('') + '</div>';
+	}
 	function d3FilesBind(sh, fl) {
+		sh.querySelectorAll('[data-ff]').forEach(b => b.addEventListener('click', () => { const sec = b.closest('[data-fsec]'); D3T.ff = b.dataset.ff; if (b.dataset.ff) sec.dataset.ffv = b.dataset.ff; else delete sec.dataset.ffv; sec.querySelectorAll('[data-ff]').forEach(x => { const on = x === b; x.classList.toggle('on', on); if (on) x.setAttribute('aria-pressed', 'true'); else x.removeAttribute('aria-pressed'); }); }));
+		{ const on = sh.querySelector('[data-ff].on'); if (on && on.dataset.ff) on.closest('[data-fsec]').dataset.ffv = on.dataset.ff; }
 		if (window.CPZipScan) window.CPZipScan(sh); /* v2.9.28: zip-ek tartalomellenőrzése */
 		const et = sh.querySelector('[data-embt]');
 		if (et) et.addEventListener('click', () => { const sec = et.closest('[data-fsec]'), on = sec.classList.toggle('emb-on'); const l = et.querySelector('[data-embl]'); if (l) l.textContent = on ? 'Elrejtés' : 'Mutasd'; });
@@ -732,8 +745,9 @@
 		if (act === 'stage') return dialog('Szakasz – ' + rows.length + ' deal', '<select data-v>' + opts(STAGES.map(x => [x, x]), '') + '</select>', v => runBulk(rows, 'a(z) „' + v + '” szakaszba helyezés', r => post('cp_crm_move', { id: r.id, to: v })));
 		if (act === 'won') return confirmRun(rows, 'megnyertnek jelölés', r => post('cp_crm_move', { id: r.id, st: 'Won' }));
 		if (act === 'lost') {
-			/* v2.9.172: az elvesztés oka választólistából (kötelező) */
-			return lostWhy(rows.length + ' deal elvesztettnek jelölése').then(w => { if (w === null) return; return runBulk(rows, 'elvesztettnek jelölés', r => post('cp_crm_move', { id: r.id, st: 'Lost', why: w })); });
+			const w = window.prompt('Az elvesztés oka (nem kötelező) – mind a ' + rows.length + ' deal-hez:', '');
+			if (w === null) return;
+			return confirmRun(rows, 'elvesztettnek jelölés', r => post('cp_crm_move', { id: r.id, st: 'Lost', why: w }));
 		}
 		if (act === 'set') {
 			const F = R.bulk || {};
@@ -751,12 +765,15 @@
 			});
 		}
 		if (act === 'del') {
-			return window.CPXAsk({ title: rows.length + ' deal törlése', text: 'A deal-ek a Salesmate-ből is törlődnek, velük az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük; a levélszálaik a Kukába kerülnek.\nA panel Lomtárából 30 napig visszaállíthatók (a Salesmate-be új deal-ként kerülnek vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true })
-				.then(ok => ok ? runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' })) : undefined);
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: ' + rows.length + ' deal.\nVelük együtt törlődik az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük, a levélszálaik a Kukába kerülnek.\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			if (w === null) return;
+			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
+			return runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' }));
 		}
 	}
 	function confirmRun(rows, what, fn) {
-		return window.CPXConfirm(rows.length + ' deal: ' + what + '?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).', { title: 'Tömeges művelet', ok: 'Mehet' }).then(ok => ok ? runBulk(rows, what, fn) : undefined);
+		if (!window.confirm(rows.length + ' deal: ' + what + '?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).')) return;
+		return runBulk(rows, what, fn);
 	}
 	/* kis párbeszédablak a műveletsáv alatt; ok(v, f) a kiválasztott értékkel */
 	function dialog(title, body, ok, init) {
@@ -768,12 +785,12 @@
 		box.after(dl);
 		if (init) init(dl);
 		dl.querySelector('[data-no]').onclick = () => dl.remove();
-		dl.querySelector('[data-ok]').onclick = async () => {
+		dl.querySelector('[data-ok]').onclick = () => {
 			const v = (dl.querySelector('[data-v]') || {}).value, f = (dl.querySelector('[data-f]') || {}).value;
 			if (v == null || String(v).trim() === '') { toast('Adj meg egy értéket.', true); return; }
 			const fa = (R.bulk || {})[f];
-			if (f && !(await window.CPXConfirm(SEL.size + ' deal: ' + (fa ? '„' + fa[0] + '” mező' : 'módosítás') + ' → „' + (fa && fa[1] === 'user' ? uname(v) : v) + '”?\n\nA Salesmate-be is beírom (a Salesmate automatizmusai lefuthatnak).', { title: 'Tömeges módosítás', ok: 'Mehet' }))) return;
-			if (!f && !(await window.CPXConfirm(SEL.size + ' deal áthelyezése: „' + v + '”?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).', { title: 'Tömeges áthelyezés', ok: 'Mehet' }))) return;
+			if (f && !window.confirm(SEL.size + ' deal: ' + (fa ? '„' + fa[0] + '” mező' : 'módosítás') + ' → „' + (fa && fa[1] === 'user' ? uname(v) : v) + '”?\n\nA Salesmate-be is beírom (a Salesmate automatizmusai lefuthatnak).')) return;
+			if (!f && !window.confirm(SEL.size + ' deal áthelyezése: „' + v + '”?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai mindegyiknél lefutnak (pl. e-mail az ügyfélnek).')) return;
 			dl.remove(); ok(String(v).trim(), f);
 		};
 	}
@@ -883,7 +900,7 @@
 		});
 		box.querySelectorAll('[data-pdel]').forEach(b => b.addEventListener('click', async e => {
 			e.stopPropagation();
-			if (!(await window.CPXConfirm('Elveted ezt a megkeresést a pipeline-ról (spam vagy teszt)? A Salesmate-et nem érinti.'))) return;
+			if (!window.confirm('Elveted ezt a megkeresést a pipeline-ról (spam vagy teszt)? A Salesmate-et nem érinti.')) return;
 			try { await post('cp_lead_set', { id: b.dataset.pdel, st: 'spam' }); S.pend.rows = S.pend.rows.filter(x => x.id !== Number(b.dataset.pdel)); redrawBoard(); } catch (er) { alert(er.message); }
 		}));
 		const bd = box.querySelector('.crm-board');
@@ -953,10 +970,6 @@
 		d.textContent = t; d.classList.toggle('bad', !!bad); d.classList.add('on');
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3200);
 	}
-	/* v2.9.172: az elvesztés oka – választólista (kötelező), „Egyéb”-nél szabad szöveg */
-	const LOST_WHY = [['Ár – drágának találta', 'Ár – drágának találta'], ['A dátumra nincs szabad gép', 'A dátumra nincs szabad gép'], ['Nem válaszolt', 'Nem válaszolt'], ['Más szolgáltatót választott', 'Más szolgáltatót választott'], ['Elmarad a rendezvény', 'Elmarad a rendezvény'], ['Teszt / spam / duplikált', 'Teszt / spam / duplikált']];
-	const lostWhy = name => window.CPXAsk({ title: 'Miért veszett el?', text: name, options: LOST_WHY, other: 'Egyéb (írd be)', required: true, ok: 'Elvesztett', danger: true });
-	window.CPXLostWhy = lostWhy;
 	/* áthelyezés: p = { to: szakasz } vagy { st: 'Won' | 'Lost' | 'Open' }; a Salesmate-be is ír */
 	async function doMove(id, p, title) {
 		const rows = S.board ? S.board.rows : [];
@@ -964,14 +977,10 @@
 		const name = title || (r ? shortTitle(r) : 'Deal #' + id);
 		if (p.to && r && r.stage === p.to) return false;
 		const what = p.to ? 'a(z) „' + p.to + '” szakaszba' : (p.st === 'Won' ? 'a megnyertek közé' : p.st === 'Lost' ? 'az elvesztettek közé' : 'újra nyitottnak');
-		/* v2.9.172: megerősítés helyett 5 mp-ig visszavonható (a Salesmate-be csak utána írunk, így visszavonáskor semmi nem fut le);
-		   elvesztésnél kötelező ok választólistából */
-		if (p.st === 'Lost') { const w = await lostWhy(name); if (w === null) return false; p.why = w; }
+		if (!window.confirm('Áthelyezed: ' + name + ' → ' + what + '?\n\nA Salesmate-ben is átírom, és a Salesmate automatizmusai lefutnak (pl. e-mail az ügyfélnek).')) return false;
+		if (p.st === 'Lost') { const w = window.prompt('Az elvesztés oka (nem kötelező):', ''); if (w === null) return false; p.why = w; }
 		const old = r ? Object.assign({}, r) : null;
 		if (r) { if (p.to) r.stage = p.to; if (p.st) r.status = p.st; r._busy = 1; redrawBoard(); }
-		if (!(await window.CPXUndo('Áthelyezve: ' + name + ' → ' + what, 5000))) {
-			if (r && old) { Object.assign(r, old); delete r._busy; } redrawBoard(); toast('Visszavonva – nem változott semmi.'); return false;
-		}
 		let ok = false;
 		try {
 			const x = await post('cp_crm_move', Object.assign({ id: id }, p));
@@ -1272,7 +1281,7 @@
 		root.querySelectorAll('[data-tgdet]').forEach(b => b.addEventListener('click', async e => {
 			e.stopPropagation();
 			const g = b.closest('.d3-tg'), subj = (g.querySelector('.d3-tgs') || {}).textContent || '';
-			if (!(await window.CPXConfirm((b.dataset.auto ? 'Ez a levélszál nincs a dealhez csatolva, csak a kontakt címe miatt látszik itt. Jelölöd úgy, hogy nem ehhez a dealhez tartozik?' : 'Leválasztod ezt a levélszálat a dealről?') + '\n\n„' + subj + '”\n\nA levél a Levelezésben megmarad, a deal adatlapján nem jelenik meg többé.'))) return;
+			if (!window.confirm((b.dataset.auto ? 'Ez a levélszál nincs a dealhez csatolva, csak a kontakt címe miatt látszik itt. Jelölöd úgy, hogy nem ehhez a dealhez tartozik?' : 'Leválasztod ezt a levélszálat a dealről?') + '\n\n„' + subj + '”\n\nA levél a Levelezésben megmarad, a deal adatlapján nem jelenik meg többé.')) return;
 			b.disabled = true;
 			try { await post('cp_mail_thread_set', { id: b.dataset.tgdet, thread: b.dataset.tgdet, f: 'deal', v: 'none' }); g.remove(); toast('Levélszál leválasztva a dealről.'); }
 			catch (er) { b.disabled = false; toast(er.message, true); }
@@ -1302,7 +1311,7 @@
 			sel.addEventListener('change', async () => {
 				const nk = Number(sel.value); if (!nk || nk === c.kz) return;
 				const nn = sel.options[sel.selectedIndex].textContent;
-				if (!(await window.CPXConfirm('Lecseréled: ' + c.n + ' → ' + nn + '?\n\n' + (c.st === 'final' ? 'Az új ember véglegesített beosztást és megerősítő levelet kap.' : 'Az új ember meghívást kap (a levelet a beosztásnál küldheted ki).')))) { sel.value = String(c.kz); return; }
+				if (!window.confirm('Lecseréled: ' + c.n + ' → ' + nn + '?\n\n' + (c.st === 'final' ? 'Az új ember véglegesített beosztást és megerősítő levelet kap.' : 'Az új ember meghívást kap (a levelet a beosztásnál küldheted ki).'))) { sel.value = String(c.kz); return; }
 				sel.disabled = true;
 				try { await post('cp_slot_act', { op: 'swap', day: c.d, id: c.id, kz: nk }); toast('Beosztás módosítva.'); openDeal(dealId, back, true); }
 				catch (e) { toast(e.message, true); sel.disabled = false; sel.value = String(c.kz); }
@@ -1366,7 +1375,7 @@
 		box.querySelectorAll('[data-adone]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.adone, done: 1 }, 'Kész – a Salesmate-ben is.'); }));
 		box.querySelectorAll('[data-aundo]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); run(b, 'cp_crm_act_done', { id: b.dataset.aundo, done: '' }, 'Visszanyitva – a Salesmate-ben is.'); }));
 		box.querySelectorAll('[data-aedit]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const a = (x.acts || []).find(z => String(z.id) === b.dataset.aedit); const c = document.querySelector('.crm-360 [data-comp]'); if (a && c) compose(c, x, 'act', a); }));
-		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); window.CPXConfirm('A Salesmate-ből is törlődik.', { title: 'Törlöd a jegyzetet?', ok: 'Törlés', danger: true }).then(ok => { if (ok) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }); }));
+		box.querySelectorAll('[data-ndel]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (window.confirm('Törlöd a jegyzetet? A Salesmate-ből is törlődik.')) run(b, 'cp_crm_note_del', { id: b.dataset.ndel }, 'Jegyzet törölve.'); }));
 		/* v2.9.170: jegyzet szerkesztése helyben (a Salesmate-ben is módosul) */
 		box.querySelectorAll('[data-nedit]').forEach(b => b.addEventListener('click', e => {
 			e.stopPropagation();
@@ -1408,7 +1417,7 @@
 		const call = async (action, p) => post(action, Object.assign({ id: id }, p || {}));
 		const ps = sh.querySelector('[data-psend]');
 		if (ps) ps.addEventListener('click', async () => {
-			if (!(await window.CPXConfirm('Kiküldöd az ügyfélportált?\n\nAz ügyfél meghívó levelet kap a belépőlinkkel' + ((C.portal || {}).sentStage ? ', és a deal a Salesmate-ben az „' + C.portal.sentStage + '” szakaszba kerül.' : '.')))) return;
+			if (!window.confirm('Kiküldöd az ügyfélportált?\n\nAz ügyfél meghívó levelet kap a belépőlinkkel' + ((C.portal || {}).sentStage ? ', és a deal a Salesmate-ben az „' + C.portal.sentStage + '” szakaszba kerül.' : '.'))) return;
 			ps.disabled = true;
 			try { const r = await call('cp_portal_p_send', { type: sh.querySelector('[data-ptype]').value }); toast(r.msg || 'Kiküldve.'); reopen(); } catch (e) { ps.disabled = false; toast(e.message, true); }
 		});
@@ -1431,7 +1440,7 @@
 			catch (e) { b.disabled = false; toast(e.message, true); }
 		}));
 		const pm = sh.querySelector('[data-pmail]');
-		if (pm) pm.addEventListener('click', async () => { if (!(await window.CPXConfirm('Új belépőlinket küldök e-mailben az ügyfélnek. Mehet?'))) return; pm.disabled = true; try { const r = await call('cp_portal_p_link', { op: 'send' }); toast(r.msg || 'Elküldve.'); reopen(); } catch (e) { pm.disabled = false; toast(e.message, true); } });
+		if (pm) pm.addEventListener('click', async () => { if (!window.confirm('Új belépőlinket küldök e-mailben az ügyfélnek. Mehet?')) return; pm.disabled = true; try { const r = await call('cp_portal_p_link', { op: 'send' }); toast(r.msg || 'Elküldve.'); reopen(); } catch (e) { pm.disabled = false; toast(e.message, true); } });
 	}
 	/* jegyzet vagy tevékenység felvétele a dealre (a Salesmate-be is) */
 	function compose(box, x, mode, a) {
@@ -1754,10 +1763,10 @@
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
-			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length) + '</small></h4>' +
+			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length) + '</small></h4>' + d3FiltBar(fl, sbf) +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */
 				(sbf.length ? '<div class="d3-sbf"><b class="d3-sbh">Online fotósablon</b><ul class="d3-fg">' + sbf.map(t => { const fn = 'fotosablon-' + d.id + '-' + String(t.at || '').slice(0, 10) + '.png'; return '<li><a class="d3-ft" href="' + esc(t.png ? t.png + '&dl=' + encodeURIComponent(fn) : t.prev) + '" target="_blank" rel="noopener"' + (!t.png && t.cur ? ' data-sbopen="' + esc(d.id) + '" data-sbts="' + esc(t.ts || '') + '"' : '') + ' title="' + esc(t.png ? 'Lyukasztott PNG letöltése (4×6")' : t.cur ? 'Kattints: a Sablonkészítő az ügyfél beállításaiból elkészíti a lyukasztott PNG-t, és ide teszi' : 'Előnézet (ehhez a régebbi változathoz nem készült PNG)') + '"><span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(t.prev) + '"><i>' + (t.png ? 'PNG' : 'JPG') + '</i></span><b>' + (t.cur ? 'Aktuális' : 'Korábbi') + (t.name ? ' – ' + esc(t.name) : '') + '</b><small>' + esc(huDT(t.at)) + (t.png ? ' · ⬇ lyukasztott PNG' : t.cur ? ' · PNG készítése ›' : ' · csak előnézet') + '</small></a></li>'; }).join('') + '</ul></div>' : '') +
-				(fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li' + (f.emb ? ' class="d3-emb"' : '') + '>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '"' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? ' data-risk="' + window.CPAttRisk(f.n).lvl + '" data-rn="' + esc(f.n) + '" title="' + esc((window.CPAttRisk(f.n).lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + window.CPAttRisk(f.n).why) + '"' : ' title="' + esc(f.n) + '"') + '>' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? '<span class="ml-ariskb ' + window.CPAttRisk(f.n).lvl + '" aria-label="Kockázatos fájl">⚠</span> ' : '') + esc(f.n) + '</b><small>' + esc(d3Meta(f)) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul>' + '<button type="button" class="d3-embt" data-embt' + (embN ? '' : ' hidden') + '><span data-embn>' + embN + '</span> elrejtett fájl (aláírás, apró, üres vagy ismétlődő) · <span data-embl>Mutasd</span></button>' + (fl.length > embN ? '<p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) + '</section>'; })() +
+				(fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li data-fk="' + d3Kind(f.n) + '"' + (f.emb ? ' class="d3-emb"' : '') + '>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '"' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? ' data-risk="' + window.CPAttRisk(f.n).lvl + '" data-rn="' + esc(f.n) + '" title="' + esc((window.CPAttRisk(f.n).lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + window.CPAttRisk(f.n).why) + '"' : ' title="' + esc(f.n) + '"') + '>' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? '<span class="ml-ariskb ' + window.CPAttRisk(f.n).lvl + '" aria-label="Kockázatos fájl">⚠</span> ' : '') + esc(f.n) + '</b><small>' + esc(d3Meta(f)) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul>' + '<button type="button" class="d3-embt" data-embt' + (embN ? '' : ' hidden') + '><span data-embn>' + embN + '</span> elrejtett fájl (aláírás, apró, üres vagy ismétlődő) · <span data-embl>Mutasd</span></button>' + (fl.length > embN ? '<p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) + '</section>'; })() +
 			'</aside></div>';
 		sh.innerHTML = h;
 		d3FilesBind(sh, d3Files(m.files || []));
@@ -1814,7 +1823,9 @@
 			try { inf = await post('cp_crm_del_info', { id: d.id }); } catch (e) { inf = null; }
 			d3d.disabled = false;
 			const also = inf ? [inf.portal ? '• az ügyfélportál' + (inf.files ? ' és ' + inf.files + ' fájlja (sablon, logó)' : '') + ', a link sem működik tovább' : '', inf.cal ? '• ' + inf.cal + ' naptárbejegyzés a Google Naptárból' : (inf.cal_err ? '• (a naptárat most nem érem el – onnan kézzel töröld)' : ''), inf.threads ? '• ' + inf.threads + ' levélszál a Kukába kerül' : ''].filter(Boolean) : [];
-			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\nA panel Lomtárából 30 napig visszaállítható (a Salesmate-be új deal-ként kerül vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
+			const w = window.prompt('Végleges törlés a Salesmate-ből is: „' + (d.title || '#' + d.id) + '”.' + (also.length ? '\nVele együtt törlődik:\n' + also.join('\n') : '') + '\nNem vonható vissza. A megerősítéshez írd be: TÖRLÉS', '');
+			if (w === null) return;
+			if (w.trim() !== 'TÖRLÉS') { toast('Nem írtad be pontosan, hogy TÖRLÉS – nem töröltem semmit.', true); return; }
 			d3d.disabled = true;
 			try { const r = await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id) + (r && r.clean && r.clean.length ? ' · vele együtt: ' + r.clean.join(', ') : '')); closePage(); hideModal(); load(); }
 			catch (e) { d3d.disabled = false; toast(e.message, true); }
@@ -1937,7 +1948,7 @@
 		if (after && after.nextElementSibling) after.nextElementSibling.after(dt, dd); else dl.prepend(dt, dd);
 		dd.querySelectorAll('[data-cedel]').forEach(b => b.addEventListener('click', async () => {
 			const a = rows.find(x => String(x.id) === b.dataset.cedel);
-			if (!a || !(await window.CPXConfirm('Eltávolítod a(z) ' + a.e + ' címet ettől a kontakttól? Az innen érkező levelek ezután nem kerülnek automatikusan a dealjéhez.'))) return;
+			if (!a || !window.confirm('Eltávolítod a(z) ' + a.e + ' címet ettől a kontakttól? Az innen érkező levelek ezután nem kerülnek automatikusan a dealjéhez.')) return;
 			b.disabled = true;
 			try { await post('cp_ce_del', { id: a.id, cid: cid }); toast('Cím eltávolítva.'); ceList(sh, cid); } catch (e) { b.disabled = false; toast(e.message, true); }
 		}));
@@ -2203,7 +2214,7 @@
 			form.querySelectorAll('[data-k]').forEach(el => { d[el.dataset.k] = el.dataset.multi !== undefined ? Array.from(el.querySelectorAll('input:checked')).map(i => i.value).join(' | ') : el.value.trim(); });
 			if (!d.c_name) { msg.textContent = 'Add meg a kontakt nevét.'; msg.className = 'crm-emsg err'; return; }
 			if (!d.title) { msg.textContent = 'Add meg a deal nevét.'; msg.className = 'crm-emsg err'; return; }
-			if (!(await window.CPXConfirm('Létrehozod a deal-t: ' + d.title + '?\n\nA Salesmate-ben is létrejön, és az automatizmusok lefutnak.'))) return;
+			if (!window.confirm('Létrehozod a deal-t: ' + d.title + '?\n\nA Salesmate-ben is létrejön, és az automatizmusok lefutnak.')) return;
 			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Létrehozás…'; msg.className = 'crm-emsg';
 			try {
 				const r = await post('cp_crm_create', { d: JSON.stringify(d) });
