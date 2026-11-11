@@ -354,7 +354,7 @@
 				const nC = (b.cm || []).length;
 				return '<div class="iv-r bk' + (op ? ' op' : '') + '" data-bid="' + b.id + '"><div class="iv-tm">' + esc(s.tm) + '</div>' +
 					'<div class="iv-who"><b>' + esc(b.name) + '</b><span class="iv-c"><a href="tel:' + esc(String(b.phone).replace(/[^0-9+]/g, '')) + '">' + esc(b.phone) + '</a> · <a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a></span>' +
-					(!op && (first || rt || nC) ? '<button type="button" class="iv-np" data-ivnote="' + b.id + '" title="A bejegyzések megnyitása">' + (CM() ? rateSum((b.cm || []).concat(b.rate ? [{ rate: b.rate }] : [])) + (nC ? '<em>' + nC + ' bejegyzés</em>' : '') : rateChip(rt)) + (first ? '<span>' + esc(first) + '</span>' : '') + '</button>' : '') + '</div>' +
+					(!op && (first || rt || nC) ? '<button type="button" class="iv-np" data-ivnote="' + b.id + '" title="A bejegyzések megnyitása">' + (CM() ? rateSum((b.cm || []).concat(b.rate && !(b.cm || []).some(c => c.who === b.nby) ? [{ rate: b.rate }] : [])) /* v2.9.144: a régi közös értékelés csak akkor számít, ha a szerzőjétől még nincs saját bejegyzés */ + (nC ? '<em>' + nC + ' bejegyzés</em>' : '') : rateChip(rt)) + (first ? '<span>' + esc(first) + '</span>' : '') + '</button>' : '') + '</div>' +
 					'<div class="iv-a">' + (NT ? '<button type="button" class="kz-link" data-ivnote="' + b.id + '" aria-expanded="' + op + '" aria-controls="ivn-' + b.id + '">' + (op ? 'Becsuk' : (CM() ? 'Bejegyzések' : 'Jegyzet')) + '</button>' : '') + '<button type="button" class="kz-link iv-del" data-ivcancel="' + b.id + '" data-n="' + esc(b.name) + '">Lemondás</button></div>' +
 					(op ? ivNoteBox(b) : '') + '</div>';
 			}).join('') + '</div></section>';
