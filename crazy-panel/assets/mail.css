@@ -1007,3 +1007,11 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-nta:focus{outline:none;border-color:#2F5BD8}
 .ml-nbar{display:flex;gap:6px;margin-top:6px}
 .ml-ned{font-size:12px}
+
+/* v2.9.171: címzett-kiegészítés */
+.ml-chips{position:relative}
+.ml-rac{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:60;background:#fff;border:1px solid #E6E3DE;border-radius:12px;box-shadow:0 12px 28px rgba(20,28,51,.16);padding:4px;max-height:300px;overflow:auto}
+.ml-rac button{display:block;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:8px 10px;cursor:pointer;font:14px Inter,sans-serif;color:#141C33}
+.ml-rac button small{display:block;color:#656973;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-rac button.on,.ml-rac button:hover{background:#F2EFEA}
+@media (max-width:760px){.ml-rac{position:fixed;left:8px;right:8px;top:auto;margin-top:4px;max-height:40vh}.ml-rac button{padding:11px 12px;font-size:16px}}

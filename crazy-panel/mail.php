@@ -689,6 +689,31 @@ function cp_mail_ajax_note_del() {
 	wp_send_json_success(cp_mail_thread_full((int) $n['thread_id']));
 }
 
+/* v2.9.171: címzett-kiegészítés a levélíróban – kontaktok (név, e-mail, további címek) és a korábbi levelezőpartnerek */
+add_action('wp_ajax_nopriv_cp_mail_rcpt', 'cp_mail_ajax_rcpt');
+add_action('wp_ajax_cp_mail_rcpt', 'cp_mail_ajax_rcpt');
+function cp_mail_ajax_rcpt() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	global $wpdb;
+	$q = trim(sanitize_text_field(wp_unslash($_POST['q'] ?? '')));
+	if (mb_strlen($q) < 2) { wp_send_json_success(array('rows' => array())); }
+	$like = '%' . $wpdb->esc_like($q) . '%';
+	$out = array();
+	$add = function ($n, $e, $src) use (&$out) { $e = strtolower(trim((string) $e)); if (!is_email($e) || isset($out[$e]) || count($out) >= 10) { return; } $out[$e] = array('n' => trim((string) $n), 'e' => $e, 's' => $src); };
+	if (function_exists('cp_crm_t')) {
+		$C = cp_crm_t('contacts');
+		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT c.name, c.email, co.name con FROM $C c LEFT JOIN " . cp_crm_t('companies') . " co ON co.id = c.company_id WHERE c.deleted_at IS NULL AND c.email <> '' AND (c.name LIKE %s OR c.email LIKE %s) ORDER BY c.modified_at DESC LIMIT 10", $like, $like), ARRAY_A) as $r) { $add($r['name'], $r['email'], $r['con'] ? (string) $r['con'] : 'kontakt'); }
+		if (function_exists('cp_ce_t')) {
+			foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT c.name, e.email FROM ' . cp_ce_t() . " e JOIN $C c ON c.id = e.contact_id WHERE c.deleted_at IS NULL AND (e.email LIKE %s OR c.name LIKE %s) LIMIT 10", $like, $like), ARRAY_A) as $r) { $add($r['name'], $r['email'], 'kontakt'); }
+		}
+	}
+	if (count($out) < 10) {
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT contact_name n, contact_email e FROM ' . cp_mail_t('threads') . " WHERE contact_email <> '' AND (contact_email LIKE %s OR contact_name LIKE %s) GROUP BY contact_email ORDER BY MAX(last_at) DESC LIMIT 10", $like, $like), ARRAY_A) as $r) { $add($r['n'], $r['e'], 'korábbi levelezés'); }
+	}
+	wp_send_json_success(array('rows' => array_values($out)));
+}
+
 /* v2.9.170: levélszál-jegyzet szerkesztése (a saját, adminnak bármelyik) */
 add_action('wp_ajax_nopriv_cp_mail_note_edit', 'cp_mail_ajax_note_edit');
 add_action('wp_ajax_cp_mail_note_edit', 'cp_mail_ajax_note_edit');

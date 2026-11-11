@@ -16,7 +16,7 @@
 	setTimeout(() => { try { const o = localStorage.getItem('cpmail_draft'); if (o) { post('cp_mail_draft_save', { d: o }).then(() => { localStorage.removeItem('cpmail_draft'); }).catch(() => {}); } } catch (e) { /* privát mód */ } }, 1500);
 
 	/* v1.67: a mappák / fülek listája gyorsítótárban – váltáskor azonnal megjelenik, a friss adat a háttérben jön */
-	const RO = ['cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save', 'cp_mail_fill', 'cp_ai_draft']; /* v2.9.58: a kitöltés és az AI-piszkozat sem módosít listát */
+	const RO = ['cp_mail_rcpt', 'cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save', 'cp_mail_fill', 'cp_ai_draft']; /* v2.9.58: a kitöltés és az AI-piszkozat sem módosít listát */
 	S.lc = {}; S.lcAt = {};
 	async function post(action, params) {
 		if (!RO.includes(action)) { S.lc = {}; S.lcAt = {}; } /* bármilyen módosítás után friss lista */
@@ -1726,8 +1726,30 @@
 			host.innerHTML = list.map((x, i) => '<span class="ml-chip"><i>' + esc((x[0] || '?').toUpperCase()) + '</i>' + esc(x) + '<button type="button" data-rm="' + i + '" aria-label="Eltávolítás">×</button></span>').join('') + '<input type="text" placeholder="' + (list.length ? '' : 'nev@example.com') + '">';
 			const inp = host.querySelector('input');
 			const add = () => { inp.value.split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).forEach(x => { if (!list.includes(x)) list.push(x); }); inp.value = ''; draw(); host.querySelector('input').focus(); };
-			inp.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',' || e.key === ';') { e.preventDefault(); add(); } if (e.key === 'Backspace' && !inp.value && list.length) { list.pop(); draw(); host.querySelector('input').focus(); } });
-			inp.addEventListener('blur', () => { if (inp.value.trim()) add(); });
+			/* v2.9.171: címzett-kiegészítés – kontaktok és korábbi levelezőpartnerek (név vagy e-mail alapján) */
+			let ac = null, acL = [], acI = -1, acT = 0, acSeq = 0;
+			const acClose = () => { if (ac) { ac.remove(); ac = null; } acL = []; acI = -1; };
+			const acPick = r => { if (r && !list.includes(r.e)) list.push(r.e); inp.value = ''; acClose(); draw(); host.querySelector('input').focus(); };
+			const acDraw = () => {
+				if (!acL.length) { acClose(); return; }
+				if (!ac) { ac = document.createElement('div'); ac.className = 'ml-rac'; ac.setAttribute('role', 'listbox'); host.appendChild(ac); }
+				ac.innerHTML = acL.map((r, i) => '<button type="button" role="option" data-aci="' + i + '" class="' + (i === acI ? 'on' : '') + '"><b>' + esc(r.n || r.e) + '</b><small>' + esc(r.n ? r.e : '') + (r.s ? ' · ' + esc(r.s) : '') + '</small></button>').join('');
+				ac.querySelectorAll('[data-aci]').forEach(b => { b.addEventListener('mousedown', e => e.preventDefault()); b.addEventListener('click', () => acPick(acL[Number(b.dataset.aci)])); });
+			};
+			inp.addEventListener('input', () => {
+				clearTimeout(acT); const v = inp.value.trim();
+				if (v.length < 2 || /[,;]/.test(v)) { acClose(); return; }
+				acT = setTimeout(async () => { const my = ++acSeq; try { const r = await post('cp_mail_rcpt', { q: v }); if (my !== acSeq || inp.value.trim() !== v) return; acL = (r.rows || []).filter(x => !list.includes(x.e)); acI = acL.length ? 0 : -1; acDraw(); } catch (e) { /* kiegészítés nélkül is írható */ } }, 180);
+			});
+			inp.addEventListener('keydown', e => {
+				if (ac && acL.length) {
+					if (e.key === 'ArrowDown') { e.preventDefault(); acI = (acI + 1) % acL.length; acDraw(); return; }
+					if (e.key === 'ArrowUp') { e.preventDefault(); acI = (acI - 1 + acL.length) % acL.length; acDraw(); return; }
+					if ((e.key === 'Enter' || e.key === 'Tab') && acI >= 0 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(inp.value.trim())) { e.preventDefault(); acPick(acL[acI]); return; }
+					if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); acClose(); return; }
+				}
+				if (e.key === 'Enter' || e.key === ',' || e.key === ';') { e.preventDefault(); acClose(); add(); } if (e.key === 'Backspace' && !inp.value && list.length) { list.pop(); draw(); host.querySelector('input').focus(); } });
+			inp.addEventListener('blur', () => { setTimeout(acClose, 150); if (inp.value.trim() && /@/.test(inp.value)) add(); });
 			host.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { list.splice(Number(b.dataset.rm), 1); draw(); }));
 		};
 		draw();
