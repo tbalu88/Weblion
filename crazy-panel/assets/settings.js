@@ -26,7 +26,7 @@
 	/* v1.79: csoportosítva; az „x:” kezdetűek a WordPress-adminból áthozott oldalak (közös mezőleírásból, settings-x.php) */
 	const SECS = [['me', 'Saját beállításaim', 0], ['-', 'Csapat', 1], ['users', 'Felhasználók', 1], ['vis', 'Láthatóság', 1], ['notif', 'Értesítések', 1],
 		['-', 'Kapcsolatok', 1], ['x:crm', 'Salesmate-kapcsolat', 1], ['panel', 'Salesmate-be írás, hátterek', 1], ['mail', 'Levelezés', 1], ['x:mailimp', 'Postafiók', 1], ['x:gcal', 'Google Naptár', 1], ['x:gdrive', 'Google Drive mentés', 1], ['ai', 'AI', 1], ['x:leadhook', 'Új deal értesítés (Pumble)', 1], ['x:aiuse', 'AI-használat (tokenek)', 1], ['x:bil_KFT', 'Számlázás – Kft.', 1], ['x:bil_EV', 'Számlázás – E.V.', 1],
-		['-', 'Működés', 1], ['x:core', 'Kapacitás, szakaszok', 1], ['x:el', 'Kezelői elszámolás', 1], ['x:wl', 'Munkanapló', 1], ['x:portal', 'Ügyfélportál', 1], ['ct', 'Szerződésmodulok', 1], ['cut', 'Átállás', 1],
+		['-', 'Működés', 1], ['x:core', 'Kapacitás, szakaszok', 1], ['rot', 'Rohadás', 1], ['x:el', 'Kezelői elszámolás', 1], ['x:wl', 'Munkanapló', 1], ['x:portal', 'Ügyfélportál', 1], ['ct', 'Szerződésmodulok', 1], ['cut', 'Átállás', 1],
 		['-', 'Statisztika', 1], ['x:stat', 'Statisztikák', 1], ['x:digest', 'Összesítők', 1], ['wp', 'Tartalék: WordPress', 1]];
 	const secret = (name, has, ph) => '<input type="password" data-k="' + name + '" autocomplete="new-password" placeholder="' + esc(has ? 'beállítva – csak cseréhez írd be az újat' : ph) + '">' + (has ? '<label class="cs-chk"><input type="checkbox" data-k="' + name + '_clear"> törlés</label>' : '');
 	const sw = (k, on, label) => '<label class="cs-sw"><input type="checkbox" data-k="' + k + '"' + (on ? ' checked' : '') + '><span></span>' + label + '</label>';
@@ -45,7 +45,7 @@
 		S.main.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => { S.sec = b.dataset.sec; try { localStorage.setItem('cpx_set_sec', S.sec); } catch (e) { /* privát mód */ } draw(); }));
 		const box = S.main.querySelector('[data-body]');
 		if (S.sec.indexOf('x:') === 0) { secX(box, S.sec.slice(2)); return; }
-		({ me: secMe, users: secUsers, vis: secVis, notif: secNotif, mail: secMail, ai: secAi, panel: secPanel, cut: secCut, ct: secCt, wp: secWp })[S.sec](box, d);
+		({ me: secMe, rot: secRot, users: secUsers, vis: secVis, notif: secNotif, mail: secMail, ai: secAi, panel: secPanel, cut: secCut, ct: secCt, wp: secWp })[S.sec](box, d);
 	}
 	/* mentés: a válasz friss adataival újrarajzol; a meghívó-linket megmutatja */
 	async function save(btn, action, params, after) {
@@ -279,6 +279,24 @@
 		box.querySelector('[data-save]').addEventListener('click', e => save(e.currentTarget, 'cp_set_admin', { sec: 'ai', on: val(box, 'on'), key: val(box, 'key'), key_clear: val(box, 'key_clear'), model: val(box, 'model'), effort: val(box, 'effort'), style: val(box, 'style') }));
 	}
 	/* ------------------------------------------------------------ Salesmate-be írás, hátterek */
+	/* v2.9.124: rohadás – határidők és türelmi idők szakaszonként */
+	function secRot(box, d) {
+		const o = d.rot; if (!o) { box.innerHTML = '<h2>Rohadás</h2><div class="cpx-empty">Nem érhető el.</div>'; return; }
+		const n = (k, unit, max) => '<span class="cs-rn"><input type="number" min="0" max="' + max + '" step="1" data-k="' + k + '" value="' + esc(o[k]) + '"> ' + unit + '</span>';
+		const row = (st, rule, grace) => '<tr><th>' + st + '</th><td>' + rule + '</td><td>' + grace + '</td></tr>';
+		box.innerHTML = '<h2>Rohadás</h2><p class="cs-note">Mikor számít egy nyitott deal „rohadónak” a Pipeline-on (a csempe elszíneződik halványsárgától pirosig). A <b>türelmi idő</b>: ha mi foglalkoztunk a deallel (kimenő levél, deal- vagy levélszál-jegyzet, elvégzett tevékenység), ennyi ideig nem rohad, akkor sem, ha a határidő lejárt – a szakaszváltás nem mindig rajtunk múlik.</p>' +
+			'<div class="cs-card"><table class="cs-t cs-rot"><thead><tr><th>Szakasz</th><th>Határidő</th><th>Türelmi idő a legutóbbi saját kommunikációtól</th></tr></thead><tbody>' +
+			row('Érdeklődő / Megrendelő', n('lead_h', 'órával a szakaszba kerülés után', 720), n('g_lead_h', 'óra', 720)) +
+			row('Ajánlat kiküldve', n('offer_d', 'nappal a szakaszba kerülés után', 365), n('g_offer', 'nap', 90)) +
+			row('Adatlap kiküldve', n('sheet_before', 'nappal a rendezvény előtt', 120) + '<br>' + n('sheet_min', 'napot legalább a szakaszban', 60), n('g_sheet', 'nap', 60)) +
+			row('Szerződés kiküldve', n('con_before', 'nappal a rendezvény előtt', 365) + '<br>' + n('con_min', 'napot legalább a szakaszban', 90), n('g_con', 'nap', 90)) +
+			row('Szerződés aláírva, Rendezvény felkészül', '<span class="cs-muted">nem rohad</span>', '') +
+			row('Rendezvény lement', n('done_wd', 'munkanappal a rendezvény után (ha nincs lezárva)', 30), n('g_done', 'nap', 30)) +
+			'</tbody></table></div><div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button><button type="button" class="cpx-btn ghost" data-def>Alapértékek</button></div>';
+		const keys = ['lead_h', 'offer_d', 'sheet_before', 'sheet_min', 'con_before', 'con_min', 'done_wd', 'g_lead_h', 'g_offer', 'g_sheet', 'g_con', 'g_done'];
+		box.querySelector('[data-save]').addEventListener('click', e => { const p = { sec: 'rot' }; keys.forEach(k => { p[k] = val(box, k); }); save(e.currentTarget, 'cp_set_admin', p); });
+		box.querySelector('[data-def]').addEventListener('click', () => { const D = { lead_h: 24, offer_d: 30, sheet_before: 7, sheet_min: 3, con_before: 30, con_min: 7, done_wd: 2, g_lead_h: 24, g_offer: 7, g_sheet: 3, g_con: 7, g_done: 2 }; keys.forEach(k => { const i = box.querySelector('[data-k="' + k + '"]'); if (i) i.value = D[k]; }); });
+	}
 	function secPanel(box, d) {
 		const p = d.panel;
 		box.innerHTML = '<h2>Salesmate és hátterek</h2>' +
@@ -407,6 +425,7 @@
 		'.cs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 14px;margin:6px 0 10px}.cs-grid label,.cs-lbl{display:flex;flex-direction:column;gap:3px;font:600 12px Inter,sans-serif;color:#656973;margin-top:6px;min-width:0}.cs-grid label input,.cs-grid label select{width:100%}' +
 		'.cs input[type=text],.cs input[type=email],.cs input[type=number],.cs input[type=password],.cs select,.cs textarea{border:1px solid #E6E3DE;border-radius:8px;padding:7px 9px;font:13.5px Inter,sans-serif;background:#fff;color:#141C33;box-sizing:border-box;max-width:100%}.cs textarea{width:100%;resize:vertical}.cs input[type=password]{width:min(560px,100%)}.cs input:disabled{background:#F6F4F0;color:#656973}' +
 		'.cs-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;margin:6px 12px 0 0}.cs-sw{display:flex;align-items:center;gap:10px;font:600 13.5px Inter,sans-serif;margin:6px 0;cursor:pointer}.cs-sw input{display:none}.cs-sw span{width:36px;height:20px;border-radius:999px;background:#D7D3CC;position:relative;transition:.15s;flex:none}.cs-sw span::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}.cs-sw input:checked+span{background:#2E9E62}.cs-sw input:checked+span::after{left:18px}' +
+		'.cs-rot th,.cs-rot td{vertical-align:top;text-align:left;padding:8px 10px;font-size:13px}.cs-rot tbody th{font-weight:600;white-space:nowrap}.cs-rn{display:inline-flex;align-items:center;gap:6px;margin:2px 0}.cs-rn input{width:70px}' +
 		'.cs-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.cs-tw{overflow:auto;background:#fff;border:1px solid #E6E3DE;border-radius:12px}.cs-t{width:100%;border-collapse:collapse;font-size:13px}.cs-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#656973;padding:8px 10px;background:#FAF8F5;border-bottom:1px solid #E6E3DE;white-space:nowrap}.cs-t td{padding:6px 10px;border-bottom:1px solid #F0ECE6;vertical-align:middle}' +
 		'.cs-t td input[type=text]{width:125px}.cs-t td select{max-width:125px}.cs-act{white-space:normal}.cs-act .cpx-btn{padding:4px 9px;font-size:12px;margin:2px 4px 2px 0}.cs-ut td small{display:block;color:#656973;font-size:11.5px;margin-top:3px}.cs-ut td:last-child{min-width:170px}.cs-ut td,.cs-ut th{padding:6px 8px}.cs-st{display:inline-block;border-radius:999px;padding:1px 8px;font:600 11.5px Inter,sans-serif;background:#EEF0F4}.cs-st.ok{background:#DFF3E8;color:#216E4E}.cs-st.bad{background:#FDECEA;color:#AE2E24}' +
 		'.cs-nth{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.cs-nth h3{margin:0}.cs-ntu{display:inline-flex;align-items:center;gap:8px;font:600 13px Inter,sans-serif;color:#4A4F5A}.cs-ntu select{min-width:190px}' +

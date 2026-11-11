@@ -50,6 +50,7 @@ function cp_set_data() {
 			'imap' => array('host' => $io['host'] ?? '', 'user' => $io['user'] ?? '', 'pw' => function_exists('cp_imp_pw') && cp_imp_pw() !== ''),
 			'send' => $so ? array('on' => (int) $so['on'], 'users' => array_map('intval', (array) $so['users']), 'from_name' => $so['from_name'], 'sign' => $so['sign'], 'host' => $so['host'], 'port' => (int) $so['port'], 'secure' => $so['secure'], 'append' => (int) $so['append'], 'sent_folder' => $so['sent_folder'] !== '' && function_exists('cp_imp_utf8') ? cp_imp_utf8($so['sent_folder']) : '') : null),
 		'ai' => $ai ? array('on' => (int) $ai['on'], 'model' => $ai['model'], 'models' => cp_ai_models(), 'effort' => $ai['effort'], 'style' => $ai['style'], 'key' => cp_ai_key() !== '') : null,
+		'rot' => function_exists('cp_crm_rot_opts') ? cp_crm_rot_opts() : null, /* v2.9.124 */
 		'panel' => array('stage_write' => (int) !empty($po['stage_write']), 'backgrounds' => (string) $po['backgrounds'], 'bg_pairs' => (string) ($po['bg_pairs'] ?? ''), 'unknown' => function_exists('cp_panel_bg_pairs_unknown') ? cp_panel_bg_pairs_unknown() : array()),
 		'wp' => array(
 			array('n' => 'Salesmate-kapcsolat, kapacitások, szakaszok, ügyfélportál', 'u' => admin_url('options-general.php?page=cp-panel')),
@@ -235,6 +236,15 @@ function cp_set_ajax_admin() {
 			if ($p('key_clear')) { cp_st_secret_set('ai_key', ''); $msg = 'AI mentve, a kulcs törölve.'; }
 			elseif ($k !== '') { if (!preg_match('/^sk-ant-[A-Za-z0-9_\-]{20,}$/', $k)) { cp_el_err('Ez nem Anthropic API-kulcsnak tűnik (sk-ant-… kezdetű).'); } cp_st_secret_set('ai_key', $k); $msg = 'AI mentve, a kulcs beállítva.'; }
 			else { $msg = 'AI mentve.'; }
+			break;
+		case 'rot':
+			if (!function_exists('cp_crm_rot_opts')) { cp_el_err('Nem érhető el.'); }
+			$lim = array('lead_h' => 720, 'offer_d' => 365, 'sheet_before' => 120, 'sheet_min' => 60, 'con_before' => 365, 'con_min' => 90, 'done_wd' => 30, 'g_lead_h' => 720, 'g_offer' => 90, 'g_sheet' => 60, 'g_con' => 90, 'g_done' => 30);
+			$ro = array();
+			foreach ($lim as $k => $mx) { $ro[$k] = max(0, min($mx, (int) $p($k))); }
+			update_option('cp_rot_opts', $ro, false);
+			if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+			$msg = 'Mentve – a csempék a következő frissítéskor már az új határidőkkel színeződnek.';
 			break;
 		case 'panel':
 			$o = get_option(CP_PANEL_OPT, array()); if (!is_array($o)) { $o = array(); }

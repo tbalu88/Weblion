@@ -153,6 +153,13 @@ function cp_crm_lastout_sql() {
 	}
 	return 'GREATEST(' . implode(', ', array_map(function ($x) { return 'COALESCE(' . $x . ", '1970-01-01')"; }, $q)) . (count($q) === 1 ? ", '1970-01-01'" : '') . ')';
 }
+/* v2.9.124: a rohadás szabályai – Beállítások → Rohadás (admin) */
+function cp_crm_rot_opts() {
+	$d = array('lead_h' => 24, 'offer_d' => 30, 'sheet_before' => 7, 'sheet_min' => 3, 'con_before' => 30, 'con_min' => 7, 'done_wd' => 2,
+		'g_lead_h' => 24, 'g_offer' => 7, 'g_sheet' => 3, 'g_con' => 7, 'g_done' => 2);
+	$o = get_option('cp_rot_opts', array());
+	return array_merge($d, is_array($o) ? array_intersect_key($o, $d) : array());
+}
 function cp_crm_rot($r) {
 	/* csak a nyitott deal rohad (a megnyert rendezvények örökre a „Rendezvény lement” szakaszban maradnak) */
 	if (($r['status'] ?? 'Open') !== 'Open') { return array('', 0); }
@@ -163,13 +170,14 @@ function cp_crm_rot($r) {
 	$ev = (string) ($r['event_d'] ?? ''); $eve = (string) ($r['event_end_d'] ?? '') ?: $ev;
 	$evT = $ev ? (new DateTime($ev . ' 00:00:00', $tz))->getTimestamp() : null;
 	$at = null; $w = 0;
-	if ($stage === $st[0]) { $at = $sinceT + DAY_IN_SECONDS; $w = 24 * 60; }
-	elseif ($stage === $st[1]) { $at = $sinceT + 30 * DAY_IN_SECONDS; $w = 30 * 24 * 60; }
-	elseif ($stage === $st[2]) { $at = $evT ? max($evT - 7 * DAY_IN_SECONDS, $sinceT + 3 * DAY_IN_SECONDS) : $sinceT + 14 * DAY_IN_SECONDS; $w = 7 * 24 * 60; }
-	elseif ($stage === $st[3]) { $at = $evT ? max($evT - 30 * DAY_IN_SECONDS, $sinceT + 7 * DAY_IN_SECONDS) : $sinceT + 21 * DAY_IN_SECONDS; $w = 14 * 24 * 60; }
+	static $O = null; if ($O === null) { $O = cp_crm_rot_opts(); }
+	if ($stage === $st[0]) { $at = $sinceT + (int) $O['lead_h'] * HOUR_IN_SECONDS; $w = max(60, (int) $O['lead_h'] * 60); }
+	elseif ($stage === $st[1]) { $at = $sinceT + (int) $O['offer_d'] * DAY_IN_SECONDS; $w = max(1, (int) $O['offer_d']) * 24 * 60; }
+	elseif ($stage === $st[2]) { $at = $evT ? max($evT - (int) $O['sheet_before'] * DAY_IN_SECONDS, $sinceT + (int) $O['sheet_min'] * DAY_IN_SECONDS) : $sinceT + 14 * DAY_IN_SECONDS; $w = 7 * 24 * 60; }
+	elseif ($stage === $st[3]) { $at = $evT ? max($evT - (int) $O['con_before'] * DAY_IN_SECONDS, $sinceT + (int) $O['con_min'] * DAY_IN_SECONDS) : $sinceT + 21 * DAY_IN_SECONDS; $w = 14 * 24 * 60; }
 	elseif ($stage === ($st[6] ?? '') && $eve) {
 		$d = new DateTime($eve . ' 00:00:00', $tz); $n = 0;
-		while ($n < 2) { $d->modify('+1 day'); if ((int) $d->format('N') <= 5) { $n++; } }
+		while ($n < max(0, (int) $O['done_wd'])) { $d->modify('+1 day'); if ((int) $d->format('N') <= 5) { $n++; } }
 		$d->modify('+1 day'); /* a 2. munkanap végéig */
 		$at = $d->getTimestamp(); $w = 5 * 24 * 60;
 	}
@@ -178,9 +186,9 @@ function cp_crm_rot($r) {
 	   Türelmi idő a legutóbbi saját kommunikációtól: Érdeklődő 24 óra, Ajánlat kiküldve 7 nap, Adatlap 3 nap, Szerződés 7 nap, Lement 2 nap. */
 	$lo = (string) ($r['last_out'] ?? '');
 	if ($lo !== '' && $lo > '1971') {
-		$grace = array($st[0] => 1, $st[1] => 7, $st[2] => 3, $st[3] => 7);
-		$g = $grace[$stage] ?? 2;
-		$at = max($at, strtotime($lo . ' UTC') + $g * DAY_IN_SECONDS);
+		$grace = array($st[0] => (int) $O['g_lead_h'] * HOUR_IN_SECONDS, $st[1] => (int) $O['g_offer'] * DAY_IN_SECONDS, $st[2] => (int) $O['g_sheet'] * DAY_IN_SECONDS, $st[3] => (int) $O['g_con'] * DAY_IN_SECONDS);
+		$g = $grace[$stage] ?? (int) $O['g_done'] * DAY_IN_SECONDS;
+		$at = max($at, strtotime($lo . ' UTC') + $g);
 	}
 	return array(wp_date('Y-m-d H:i', $at), $w);
 }
