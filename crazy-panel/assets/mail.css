@@ -1035,3 +1035,8 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-mf input[type=text],.ml-mf input[type=date]{width:100%;box-sizing:border-box}
 .ml-mf input[type=date]{padding:0 6px;font-size:13px}
 mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}
+mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
+.ml-hlnav{display:inline-flex;align-items:center;gap:4px;background:#FFF6D6;border:1px solid #F3E1A0;border-radius:999px;padding:2px 4px 2px 10px;font:600 12.5px Inter,sans-serif;color:#6B5300;white-space:nowrap;flex:none}
+.ml-hlnav[hidden]{display:none}
+.ml-hlnav button{border:0;background:#fff;border-radius:999px;width:24px;height:24px;cursor:pointer;font-size:15px;line-height:1;color:#3A3F4B}
+.ml-hlnav button:hover{background:#FFE58A}

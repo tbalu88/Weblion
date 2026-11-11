@@ -485,25 +485,46 @@
 		});
 		return n;
 	}
-	/* a szál első (legfelső) találatára görget – csak a levélszál saját görgethető része mozdul (a scrollIntoView a külső
-	   tárolókat is elgörgette). v2.9.192: a később betöltődő (feljebb lévő) levél találata átveszi a célt; a képek betöltése után
-	   újraigazít; ha közben a felhasználó maga görget, nem rángatja vissza. */
-	const hlY = t => (t.frame ? t.frame.getBoundingClientRect().top : 0) + t.mark.getBoundingClientRect().top;
-	function hlScroll(el, mark, frame) {
+	/* v2.9.194: keresés után a szál a legfelső találatot tartalmazó levél TETEJÉRE áll (nem a levél közepére – ott a később
+	   betöltődő képek elcsúsztatták, és az előző levél alja csíkként kilógott); a pontos szóhoz a fejléc „‹ ›” léptetője visz.
+	   Csak a levélszál listája görget (.ml-thread / gyorsnézet), más elem soha. */
+	const hlSc = el => el && el.closest ? el.closest('.ml-thread, .mlp-b') : null;
+	function hlScroll(el, mark) {
 		if (!S.mq || !el || !mark || !el.isConnected) return;
+		const sc = hlSc(el), card = el.closest('.ml-msg'); if (!sc || !card) return;
 		const key = String(S.th) + '|' + String(S.mq || '');
-		let sc = el.parentElement;
-		while (sc && sc !== document.body) { const cs = getComputedStyle(sc); if (/(auto|scroll)/.test(cs.overflowY) && sc.scrollHeight > sc.clientHeight + 2) break; sc = sc.parentElement; }
-		if (!sc || sc === document.body) return;
-		const H = S.hl && S.hl.key === key ? S.hl : (S.hl = { key: key, t0: Date.now(), user: false, sc: sc, tgt: null });
+		const H = S.hl && S.hl.key === key ? S.hl : (S.hl = { key: key, t0: Date.now(), user: false, card: null });
 		if (H.user || Date.now() - H.t0 > 6000) return;
-		if (H.sc !== sc) { H.sc = sc; }
 		if (!sc._hlUser) { sc._hlUser = true; ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(ev => sc.addEventListener(ev, () => { if (S.hl) S.hl.user = true; }, { passive: true })); }
-		const cand = { mark: mark, frame: frame };
-		if (H.tgt && H.tgt.mark.isConnected && hlY(H.tgt) <= hlY(cand)) return; /* a meglévő cél feljebb van */
-		H.tgt = cand;
-		const go = () => { if (!S.hl || S.hl !== H || H.user || !H.tgt || !H.tgt.mark.isConnected) return; const y = hlY(H.tgt) - sc.getBoundingClientRect().top; sc.scrollTop = Math.max(0, sc.scrollTop + y - Math.round(sc.clientHeight / 3)); };
-		[80, 500, 1300, 2600].forEach(ms => setTimeout(go, ms));
+		if (H.card && H.card.isConnected && H.card.getBoundingClientRect().top <= card.getBoundingClientRect().top) return;
+		H.card = card;
+		const go = () => { if (S.hl !== H || H.user || !H.card.isConnected) return; const pt = parseFloat(getComputedStyle(sc).paddingTop) || 0; sc.scrollTop = Math.max(0, sc.scrollTop + H.card.getBoundingClientRect().top - sc.getBoundingClientRect().top - pt); };
+		[60, 400, 1200, 2500].forEach(ms => setTimeout(go, ms));
+		hlNavUpd(sc);
+	}
+	/* találat-léptető: a szál összes kiemelése (a levelek sorrendjében, a kereteken belül is) */
+	function hlAll(root) {
+		const o = [];
+		root.querySelectorAll('mark.cp-hl, iframe.ml-hf').forEach(x => {
+			if (x.tagName === 'IFRAME') { try { x.contentDocument.querySelectorAll('mark.cp-hl').forEach(m => { if (m.getClientRects().length) o.push({ m: m, f: x }); }); } catch (e) { /* idegen keret */ } }
+			else if (x.getClientRects().length) o.push({ m: x, f: null });
+		});
+		return o;
+	}
+	function hlNavUpd(sc) {
+		const root = sc && (sc.closest('.ml-read, .mlp') || sc); if (!root) return;
+		const nav = root.querySelector('[data-hlnav]'); if (!nav) return;
+		const n = hlAll(sc).length; nav.hidden = !n; const c = nav.querySelector('[data-hlc]'); if (c) c.textContent = n ? ((nav._i >= 0 ? (nav._i + 1) + '/' : '') + n + ' találat') : '';
+	}
+	function hlJump(sc, nav, d) {
+		const L = hlAll(sc); if (!L.length) return;
+		if (S.hl) S.hl.user = true;
+		L.forEach(x => x.m.classList.remove('cur'));
+		nav._i = ((nav._i == null || nav._i < 0 ? (d > 0 ? -1 : 0) : nav._i) + d + L.length) % L.length;
+		const t = L[nav._i]; t.m.classList.add('cur');
+		const y = (t.f ? t.f.getBoundingClientRect().top : 0) + t.m.getBoundingClientRect().top - sc.getBoundingClientRect().top;
+		sc.scrollTop = Math.max(0, sc.scrollTop + y - Math.round(sc.clientHeight / 3));
+		const c = nav.querySelector('[data-hlc]'); if (c) c.textContent = (nav._i + 1) + '/' + L.length + ' találat';
 	}
 	function mountHtml(el, mid, imgs) {
 		const x = HC[mid];
@@ -544,7 +565,7 @@
 					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40 || /-{3,}\s*(Forwarded message|Továbbított üzenet|Továbbított levél)|^\s*Begin forwarded message/i.test((q.textContent || '').slice(0, 400))) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
 					/* v2.9.36: ha az összecsukás után semmi sem látszana (a levél egésze idézet), kinyitva mutatjuk */
 					{ const cl = d.body.cloneNode(true); cl.querySelectorAll('details.cpq, style, script').forEach(x => x.remove()); if ((cl.textContent || '').replace(/\s+/g, '') === '' && !cl.querySelector('img')) d.querySelectorAll('details.cpq').forEach(x => { x.open = true; }); }
-					{ const hre = hlRe(true); if (hre) { const st = d.createElement('style'); st.textContent = 'mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}'; (d.head || d.body).appendChild(st); if (hlMark(d.body, hre)) { d.querySelectorAll('details').forEach(q => { if (q.querySelector('mark.cp-hl')) q.open = true; }); fit(); const mk0 = Array.from(d.querySelectorAll('mark.cp-hl')).find(x => x.getClientRects().length); if (mk0) hlScroll(el, mk0, f); } } }
+					{ const hre = hlRe(true); if (hre) { const st = d.createElement('style'); st.textContent = 'mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}'; (d.head || d.body).appendChild(st); if (hlMark(d.body, hre)) { d.querySelectorAll('details').forEach(q => { if (q.querySelector('mark.cp-hl')) q.open = true; }); fit(); const mk0 = Array.from(d.querySelectorAll('mark.cp-hl')).find(x => x.getClientRects().length); if (mk0) hlScroll(el, mk0); else hlNavUpd(hlSc(el)); } } }
 					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
 					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
 				} catch (e) { f.style.height = '480px'; }
@@ -1246,7 +1267,7 @@
 			'<select data-as aria-label="Felelős"><option value="">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '"' + (t.as === p.id ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' +
 			'<label class="ml-sw"><input type="checkbox" data-fol' + (following ? ' checked' : '') + '><span></span> Követés</label></div>' +
 			(S.fromDeal && S.fromDeal.th === S.th ? '<div class="ml-fromdeal"><button type="button" class="cpx-btn ghost" data-fromdeal style="margin:0 0 8px">← Vissza a dealhez (#' + Number(S.fromDeal.deal) + ')</button></div>' : '') +
-			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (dvAny ? '<span class="ml-dvh" title="A szálban lévő számla a Drive számlamappájában van">✓ Számla a Drive-on</span>' : '') + '<button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div>' + (tgList(t.tags).length ? '<div class="ml-ttags">' + tgList(t.tags).map(n => tgChip(n, 'data-ttx')).join('') + '<button type="button" class="ml-tadd" data-tag2 aria-label="Címke hozzáadása">+ Címke</button></div>' : '') + '<div class="ml-pres" data-pres hidden></div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
+			'<div class="ml-subjh"><h3>' + esc(t.subj) + '</h3>' + (S.mq ? '<span class="ml-hlnav" data-hlnav hidden><span data-hlc></span><button type="button" data-hlp aria-label="Előző találat" title="Előző találat">‹</button><button type="button" data-hln aria-label="Következő találat" title="Következő találat">›</button></span>' : '') + (dvAny ? '<span class="ml-dvh" title="A szálban lévő számla a Drive számlamappájában van">✓ Számla a Drive-on</span>' : '') + '<button type="button" class="ml-link" data-ord title="A levelek sorrendje a szálban">' + (newFirst() ? '↓ Legújabb felül' : '↑ Legrégebbi felül') + '</button>' + (d ? '' : '<button type="button" class="ml-link" data-attach>$ Deal csatolása</button>') + (msgs0.length > 1 ? '<button type="button" class="ml-link" data-xall title="A szál összes levelének kinyitása / összecsukása">' + (allOpen() ? '⇡ Összes összecsukása' : '⇣ Összes kinyitása') + '</button>' : '') + '</div>' + (tgList(t.tags).length ? '<div class="ml-ttags">' + tgList(t.tags).map(n => tgChip(n, 'data-ttx')).join('') + '<button type="button" class="ml-tadd" data-tag2 aria-label="Címke hozzáadása">+ Címke</button></div>' : '') + '<div class="ml-pres" data-pres hidden></div><div data-dpat hidden class="ml-dpat"></div><div data-kbq hidden class="ml-dpat"></div><div data-aip hidden class="ml-aip"></div><div data-kbl class="ml-kbl"></div>' +
 			'<div class="ml-thread">' +
 			(d ? '<div class="ml-dcard">' + DEAL_I + '<div><span class="ml-dt"><a href="#deals" data-opendeal="' + (d.id || '') + '">' + esc(d.title) + '</a>' + (d.status === 'Won' ? '<span class="ml-dst won">WON</span>' : d.status === 'Lost' ? '<span class="ml-dst lost">LOST</span>' : '') + '</span><small>' + [money(d.value), d.cn, d.co, d.stage].filter(Boolean).map(esc).join('<i>•</i>') + '</small>' + (d.portal ? '<span class="ml-pchip ' + esc(d.portal.st) + '" title="Ügyfélportál' + (d.portal.deadline ? ' · határidő: ' + esc(d.portal.deadline) : '') + '">Portál ' + d.portal.done + '/' + d.portal.total + '</span>' : '') + /* v2.9.94: megnyert / elvesztett jelölés a csempéről (megerősítéssel, a Salesmate-be is ír) */
 				'</div>' + (d.id > 0 ? '<div class="ml-dact">' + (d.status === 'Won' || d.status === 'Lost' ? '<button type="button" class="ml-dbtn" data-dmove="Open">↺ Újranyitás</button>' : '<button type="button" class="ml-dbtn won" data-dmove="Won">✓ Megnyert</button><button type="button" class="ml-dbtn lost" data-dmove="Lost">✕ Elvesztett</button>') + '</div>' : '') +
@@ -1338,8 +1359,9 @@
 			xlab(); if (open) loadHtml(rd);
 		});
 		loadHtml(rd);
+		{ const nav = rd.querySelector('[data-hlnav]'), th = rd.querySelector('.ml-thread'); if (nav && th) { nav._i = -1; nav.querySelector('[data-hlp]').addEventListener('click', () => hlJump(th, nav, -1)); nav.querySelector('[data-hln]').addEventListener('click', () => hlJump(th, nav, 1)); } }
 		/* v2.9.191: kiemelés a szöveges nézetben és a tárgyban; görgetés az első találatra */
-		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first, first.querySelector('mark.cp-hl'), null); } }
+		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first, first.querySelector('mark.cp-hl')); else hlNavUpd(rd.querySelector('.ml-thread')); } }
 		const tl = timeline(x);
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
 		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));
