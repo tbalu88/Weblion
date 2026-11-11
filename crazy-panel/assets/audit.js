@@ -104,7 +104,10 @@
 	const tabName = k => { if (!k) return 'Fül nélkül (frissítés előtt)'; const b = document.querySelector('.cpx-tabs [data-tab="' + k + '"] span'); return (b && b.textContent.trim()) || TABN[k] || k; };
 	const doingH = u => { const g = u.doing; if (!g) return ''; return '<span class="au-do">' + (g.st === 'reply' ? '✍ levelet ír · ' : '') + esc(tabName(g.tab)) + (g.o ? ' · ' + objA(g) : '') + '</span>'; };
 	const objA = g => { const m = /^(mail|deal):(\d+)$/.exec(g.o || ''); return m ? '<a href="#" class="au-go" data-k="' + m[1] + '" data-id="' + m[2] + '">' + esc(g.ol) + '</a>' : esc(g.ol || ''); };
-	const U = { pre: 'het', from: '', to: '', uid: 0, d: null, seq: 0, err: '' };
+	const U = { pre: 'het', from: '', to: '', uid: 0, d: null, seq: 0, err: '', ms: [] };
+	/* v2.9.135: több ember összevetése (a kijelölés megmarad ezen a gépen) */
+	try { U.ms = JSON.parse(localStorage.getItem('cpx_au_ms') || '[]').map(Number).filter(Boolean).slice(0, 8); } catch (e) { U.ms = []; }
+	const msSave = () => { try { localStorage.setItem('cpx_au_ms', JSON.stringify(U.ms)); } catch (e) { /* privát mód */ } };
 	function useView(main) {
 		if (!U.from) { const p = presets().find(x => x[0] === U.pre); U.from = p[2]; U.to = p[3]; }
 		main.innerHTML = '<div class="au"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Ki mennyi időt töltött a panelben, és mikor. <b>Aktív</b>: dolgozott a panelben (egér, billentyű, görgetés, érintés). <b>Nyitva</b>: a panel látható ablakban volt. Csak a személyes fiókokat méri, és csak az adminok látják; a percenkénti részletek 90 napig, a napi összesítők 2 évig maradnak meg.</p></div>' +
@@ -119,14 +122,15 @@
 		const main = S.main; if (!main || !main.isConnected || S.mode !== 'use') return;
 		const box = main.querySelector('.au-box'); const my = ++U.seq;
 		let r;
-		try { r = await post('cp_us_stats', { from: U.from, to: U.to, uid: U.uid || '' }); } catch (e) { if (my !== U.seq) return; U.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		try { r = await post('cp_us_stats', { from: U.from, to: U.to, uid: U.uid || '', uids: U.ms.join(',') }); } catch (e) { if (my !== U.seq) return; U.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		if (my !== U.seq || !main.isConnected) return;
 		U.err = ''; U.d = r; U.uid = r.uid;
 		const any = r.users.some(u => u.open);
 		const sel = r.users.find(u => u.id === r.uid);
 		box.innerHTML = '<div class="au-tw"><table class="au-t au-ut"><thead><tr><th>Ki</th><th class="r">Aktív</th><th class="r">Nyitva</th><th class="r">Napok</th><th class="r">Aktív / nap</th><th>Utoljára</th><th>Most</th></tr></thead><tbody>' +
-			r.users.map(u => '<tr data-u="' + u.id + '" class="' + (u.id === r.uid ? 'on' : '') + (u.open ? '' : ' nil') + '" tabindex="0"><td class="au-who">' + (u.now ? '<i class="au-live" title="Most a panelben"></i>' : '') + esc(u.n) + (u.now && u.doing ? '<small class="au-dom">' + doingH(u) + '</small>' : '') + '</td><td class="r"><b>' + dur(u.act) + '</b></td><td class="r">' + dur(u.open) + '</td><td class="r">' + (u.days || '–') + '</td><td class="r">' + (u.days ? dur(Math.round(u.act / u.days)) : '–') + '</td><td class="au-at">' + (u.now ? 'most a panelben' : esc(when(u.last))) + '</td><td class="au-dc">' + (u.now ? doingH(u) : '') + '</td></tr>').join('') + '</tbody></table></div>' +
+			r.users.map(u => '<tr data-u="' + u.id + '" class="' + (u.id === r.uid ? 'on' : '') + (u.open ? '' : ' nil') + '" tabindex="0"><td class="au-who"><input type="checkbox" class="au-ck" data-ck="' + u.id + '"' + (U.ms.includes(u.id) ? ' checked' : '') + ' title="Kijelölés az összevetéshez (ki mikor kezdett és fejezett be)" aria-label="' + esc(u.n) + ' kijelölése az összevetéshez">' + (u.now ? '<i class="au-live" title="Most a panelben"></i>' : '') + esc(u.n) + (u.now && u.doing ? '<small class="au-dom">' + doingH(u) + '</small>' : '') + '</td><td class="r"><b>' + dur(u.act) + '</b></td><td class="r">' + dur(u.open) + '</td><td class="r">' + (u.days || '–') + '</td><td class="r">' + (u.days ? dur(Math.round(u.act / u.days)) : '–') + '</td><td class="au-at">' + (u.now ? 'most a panelben' : esc(when(u.last))) + '</td><td class="au-dc">' + (u.now ? doingH(u) : '') + '</td></tr>').join('') + '</tbody></table></div>' +
 			(!any ? '<p class="cpx-muted">Ebben az időszakban még nincs adat. A mérés a 2.9.88-as frissítéssel indult; ettől kezdve minden személyes fiók panelhasználata ide kerül.</p>' : '') +
+			cmpH(r) +
 			(sel ? '<h3 class="au-h3">' + esc(sel.n) + ' – napi idővonal' + (U.from < r.detail_from ? ' <small>(a 90 napnál régebbi napoknál csak az összesítő van meg)</small>' : '') + '</h3>' +
 				(r.days.length ? '<div class="au-tl"><div class="au-tlh"><span></span><div class="au-ax">' + [0, 6, 12, 18, 24].map(h => '<i style="left:' + (h / 24 * 100) + '%">' + h + '</i>').join('') + '</div><span></span></div>' +
 					r.days.map(d => '<div class="au-tlr"><span class="au-dl">' + dLabel(d.d) + '<small>' + hm(d.first) + '–' + hm(d.last) + '</small></span><div class="au-bar">' + bar(d.bar) + '</div><span class="au-tn"><b>' + dur(d.act) + '</b><small>' + dur(d.open) + ' nyitva</small></span></div>').join('') +
@@ -136,7 +140,22 @@
 					(r.objs && r.objs.length ? '<div class="au-obj"><b>Legtöbbet ezekkel foglalkozott</b>' + r.objs.map(o => '<div class="au-objr"><span>' + (o.o.indexOf('mail:') === 0 ? '✉ ' : '$ ') + objA(o) + '</span><span class="au-tn">' + dur(o.a || o.n) + '</span></div>').join('') + '</div>' : '') +
 					'<p class="au-cpn">A fülenkénti bontás a 2.9.93-as frissítéstől mért percekből készül (a percek 90 napig maradnak meg).</p></div>'; })() : '') : '');
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); go(a.dataset.k, Number(a.dataset.id)); }));
+		box.querySelectorAll('[data-ck]').forEach(c => { c.addEventListener('click', e => e.stopPropagation()); c.addEventListener('keydown', e => e.stopPropagation()); c.addEventListener('change', () => { const id = Number(c.dataset.ck); U.ms = U.ms.filter(x => x !== id); if (c.checked) U.ms.push(id); U.ms = U.ms.slice(-8); msSave(); useLoad(); }); });
+		const cx = box.querySelector('[data-cmpx]'); if (cx) cx.addEventListener('click', () => { U.ms = []; msSave(); useLoad(); });
 		box.querySelectorAll('[data-u]').forEach(tr => { const go = () => { U.uid = Number(tr.dataset.u); useLoad(); }; tr.addEventListener('click', go); tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }); });
+	}
+	/* v2.9.135: összevetés – naponként egymás alatt a kijelöltek: kezdés–befejezés, idővonal, aktív idő */
+	function cmpH(r) {
+		const M = r.multi || [];
+		if (U.ms.length === 1) return '<p class="au-cmph">Jelölj ki még legalább egy embert (☐ a nevük előtt) az összevetéshez.</p>';
+		if (M.length < 2) return '';
+		const dd = Array.from(new Set([].concat(...M.map(p => p.days.map(d => d.d))))).sort().reverse();
+		const tot = p => p.days.reduce((a, d) => a + d.act, 0);
+		return '<h3 class="au-h3">Összevetés – ' + M.map(p => esc(p.n)).join(', ') + ' <button type="button" class="au-cmpx" data-cmpx>Kijelölés törlése</button></h3>' +
+			'<div class="au-tl au-cmp"><div class="au-tlh"><span></span><div class="au-ax">' + [0, 6, 12, 18, 24].map(h => '<i style="left:' + (h / 24 * 100) + '%">' + h + '</i>').join('') + '</div><span></span></div>' +
+			(dd.length ? dd.map(day => '<div class="au-cday">' + dLabel(day) + '</div>' + M.map(p => { const d = p.days.find(x => x.d === day); return '<div class="au-tlr au-cr' + (d ? '' : ' nil') + '"><span class="au-dl">' + esc(p.n) + '<small>' + (d ? hm(d.first) + '–' + hm(d.last) : 'nem dolgozott') + '</small></span><div class="au-bar">' + (d ? bar(d.bar) : '') + '</div><span class="au-tn">' + (d ? '<b>' + dur(d.act) + '</b><small>' + dur(d.open) + ' nyitva</small>' : '') + '</span></div>'; }).join('')).join('') : '<p class="cpx-muted">Ebben az időszakban egyikük sem használta a panelt.</p>') +
+			'<div class="au-csum">' + M.map(p => '<span><b>' + esc(p.n) + '</b> ' + dur(tot(p)) + ' aktív · ' + p.days.length + ' nap</span>').join('') + '</div>' +
+			'<div class="au-lg"><span><i class="a2"></i>aktív</span><span><i class="a1"></i>nyitva, de nem dolgozott benne</span></div></div>';
 	}
 	/* 288 db 5 perces sáv → összefüggő szakaszok (0 nincs, 1 nyitva, 2 aktív) */
 	function bar(s) {
@@ -197,5 +216,10 @@
 		'.au-lg{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--mu)}.au-lg i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px}' +
 		'@media (max-width:760px){.au-tlh,.au-tlr{grid-template-columns:70px minmax(0,1fr) 70px;gap:6px}.au-ut th:nth-child(3),.au-ut td:nth-child(3),.au-ut th:nth-child(4),.au-ut td:nth-child(4),.au-ut th:nth-child(5),.au-ut td:nth-child(5){display:none}.au-ut td.au-who{white-space:normal;overflow-wrap:anywhere}.au-ut th:nth-child(7){display:none}.au-ut td.au-dc{display:none}.au-brr{grid-template-columns:84px minmax(0,1fr) 70px;gap:6px}.au-ut .au-at{white-space:normal}}' +
 		'@media (max-width:760px){.au-csv{margin-left:0}.au-t th:nth-child(3),.au-t td:nth-child(3){display:none}}';
+	css.textContent += '.au-ck{width:15px;height:15px;margin:0 7px 0 0;vertical-align:-2px;accent-color:#2F5BD8;cursor:pointer}.au-cmph{font-size:12.5px;color:var(--mu);margin:12px 0 0}' +
+		'.au-cmpx{border:1px solid var(--li);background:#fff;border-radius:999px;padding:2px 10px;font:500 12px Inter,sans-serif;color:var(--mu);cursor:pointer;margin-left:8px;vertical-align:2px}.au-cmpx:hover{color:var(--ink)}' +
+		'.au-cday{font:700 12.5px Inter,sans-serif;margin:10px 0 2px;padding-top:8px;border-top:2px solid #E6E3DE;font-variant-numeric:tabular-nums}.au-cmp .au-tlh + .au-cday{border-top:0;padding-top:2px}.au-cmp .au-cr{border-top:0;padding:3px 0}.au-cmp .au-cr .au-dl{font-weight:600;overflow-wrap:anywhere}.au-cmp .au-cr.nil .au-dl{color:var(--mu);font-weight:400}' +
+		'.au-csum{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;padding-top:8px;border-top:1px solid #F0ECE6;font-size:12.5px;font-variant-numeric:tabular-nums}' +
+		'@media (max-width:760px){.au-ck{width:18px;height:18px}}';
 	document.head.appendChild(css);
 })();

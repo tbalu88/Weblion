@@ -94,6 +94,8 @@ function cp_us_ajax_stats() {
 	/* napi idővonal egy kiválasztott fióknak: 5 perces sávok (0 = nem volt, 1 = nyitva, 2 = aktív); a percek 90 napig vannak meg */
 	$uid = (int) ($_REQUEST['uid'] ?? 0);
 	if (!$uid && $users) { $uid = $users[0]['id']; }
+	/* v2.9.135: egy ember napjai (idővonal-sávval) – az összevetéshez több emberre is */
+	$daysOf = function ($uid) use ($wpdb, $from, $to) {
 	$days = array();
 	if ($uid) {
 		$tf = max($from, wp_date('Y-m-d', strtotime($to . ' 12:00:00') - 62 * DAY_IN_SECONDS));
@@ -107,6 +109,15 @@ function cp_us_ajax_stats() {
 			unset($x);
 		}
 	}
+	return $days;
+	};
+	$days = $daysOf($uid);
+	$multi = array();
+	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_REQUEST['uids'] ?? '')))))), 0, 8);
+	if (count($ids) >= 2) {
+		$nm = array(); foreach ($users as $u) { $nm[$u['id']] = $u['n']; }
+		foreach ($ids as $i) { if (isset($nm[$i])) { $multi[] = array('id' => $i, 'n' => $nm[$i], 'days' => array_values($i === $uid ? $days : $daysOf($i))); } }
+	}
 	/* v2.9.93: mire ment az idő (fülenként, a percek 90 napig vannak meg) + a leggyakoribb tárgyak */
 	$tabs = array(); $objs = array();
 	if ($uid) {
@@ -115,7 +126,7 @@ function cp_us_ajax_stats() {
 			$objs[] = array('n' => (int) $r['n'], 'a' => (int) $r['a']) + cp_us_obj((string) $r['obj']);
 		}
 	}
-	wp_send_json_success(array('from' => $from, 'to' => $to, 'users' => $users, 'uid' => $uid, 'days' => array_values($days), 'tabs' => $tabs, 'objs' => $objs, 'detail_from' => wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS)));
+	wp_send_json_success(array('from' => $from, 'to' => $to, 'users' => $users, 'uid' => $uid, 'days' => array_values($days), 'multi' => $multi, 'tabs' => $tabs, 'objs' => $objs, 'detail_from' => wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS)));
 }
 /* a tárgy (mail:12 / deal:345) olvasható neve és linkje */
 function cp_us_obj($o) {
