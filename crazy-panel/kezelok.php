@@ -9,7 +9,7 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_KZ_DB_VER', '2');
+define('CP_KZ_DB_VER', '3'); /* v2.9.151: 3 = elérhetőség (avail) */
 function cp_kz_t() { global $wpdb; return $wpdb->prefix . 'crazy_kezelok'; }
 /* v2.6.1: csoport, gépenkénti tudás, autó, felvételi lépések (az új kezelői táblázat szerint) */
 function cp_kz_kinds() { return array('kezelo' => 'Kezelők', 'host' => 'Host/Hostess', 'jelentkezo' => 'Jelentkezők'); }
@@ -37,6 +37,7 @@ add_action('init', function () {
   extra varchar(255) NOT NULL DEFAULT '',
   proc varchar(60) NOT NULL DEFAULT '',
   note text NULL,
+  avail text NULL,
   flag varchar(12) NOT NULL DEFAULT '',
   active tinyint(1) NOT NULL DEFAULT 1,
   pos int(11) NOT NULL DEFAULT 0,
@@ -103,12 +104,42 @@ function cp_kz_upcoming($names, $limit = 8) {
 	}
 	return $out;
 }
+/* ------------------------------------------------------------ v2.9.151: elérhetőség
+ * avail JSON: wd = a hét napjai (1 = hétfő … 7 = vasárnap), amikor soha nem ér rá; days = kizárt dátumok (ÉÉÉÉ-HH-NN); note = megjegyzés */
+function cp_kz_avail_get($r) {
+	$j = json_decode((string) ($r['avail'] ?? ''), true);
+	return array('wd' => array_values(array_map('intval', (array) ($j['wd'] ?? array()))), 'days' => array_values((array) ($j['days'] ?? array())), 'note' => (string) ($j['note'] ?? ''));
+}
+function cp_kz_avail_clean($a) {
+	$a = is_array($a) ? $a : array();
+	$wd = array_values(array_unique(array_filter(array_map('intval', (array) ($a['wd'] ?? array())), function ($v) { return $v >= 1 && $v <= 7; }))); sort($wd);
+	$min = wp_date('Y-m-d', time() - 30 * DAY_IN_SECONDS); /* a 30 napnál régebbi napok kimaradnak */
+	$days = array();
+	foreach ((array) ($a['days'] ?? array()) as $d) { $d = (string) $d; if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m) && checkdate((int) $m[2], (int) $m[3], (int) $m[1]) && $d >= $min) { $days[$d] = 1; } }
+	$days = array_keys($days); sort($days); $days = array_slice($days, 0, 400);
+	$note = mb_substr(sanitize_text_field((string) ($a['note'] ?? '')), 0, 200);
+	return ($wd || $days || $note !== '') ? wp_json_encode(array('wd' => $wd, 'days' => $days, 'note' => $note), JSON_UNESCAPED_UNICODE) : '';
+}
+/* az adott napon miért nem ér rá ('' = ráér) */
+function cp_kz_avail_na($av, $ymd) {
+	if (!$av || (!$av['wd'] && !$av['days'])) { return ''; }
+	if (in_array($ymd, $av['days'], true)) { return 'erre a napra nem ér rá'; }
+	$n = (int) wp_date('N', strtotime($ymd . ' 12:00:00'));
+	if (in_array($n, $av['wd'], true)) {
+		$wd = $av['wd'];
+		if ($wd === array(6, 7)) { return 'hétvégén nem ér rá'; }
+		if ($wd === array(1, 2, 3, 4, 5)) { return 'hétköznap nem ér rá'; }
+		$DN = array(1 => 'hétfőn', 'kedden', 'szerdán', 'csütörtökön', 'pénteken', 'szombaton', 'vasárnap');
+		return $DN[$n] . ' soha nem ér rá';
+	}
+	return '';
+}
 function cp_kz_out($r, $reveal) {
 	$el = $r['el_id'] !== '' && function_exists('cp_el_kez_find') ? cp_el_kez_find($r['el_id']) : null;
 	$have = $r['sens_have'] === '' ? array() : explode(',', $r['sens_have']);
 	$x = array('id' => (int) $r['id'], 'name' => $r['name'], 'email' => $r['email'], 'phone' => $r['phone'], 'plate' => $r['plate'], 'note' => (string) $r['note'], 'flag' => $r['flag'], 'active' => (int) $r['active'],
 		'kind' => $r['kind'] ?: 'kezelo', 'car' => $r['car'], 'has_car' => (int) $r['has_car'], 'skills' => $r['skills'] === '' ? array() : explode(',', $r['skills']), 'extra' => $r['extra'], 'proc' => $r['proc'] === '' ? array() : explode(',', $r['proc']),
-		'el_id' => $r['el_id'], 'el' => $el ? array('name' => $el['name'], 'role' => $el['role'], 'rate' => (int) $el['rate']) : null,
+		'avail' => cp_kz_avail_get($r), 'el_id' => $r['el_id'], 'el' => $el ? array('name' => $el['name'], 'role' => $el['role'], 'rate' => (int) $el['rate']) : null,
 		'have' => $have, 'miss' => array_values(array_diff(array_keys(cp_kz_sens_keys()), $have)), 'updated' => function_exists('cp_crm_local') ? cp_crm_local($r['updated_at']) : $r['updated_at'], 'by' => $r['updated_by']);
 	$x['up'] = cp_kz_upcoming(array($r['name'], $el ? $el['name'] : '', $el ? ($el['sm'] ?? '') : ''), 6);
 	if ($reveal) { $x['sens'] = cp_kz_sens_get($r); }
@@ -164,6 +195,7 @@ function cp_kz_ajax_save() {
 	if (array_key_exists('skills', $f)) { $set['skills'] = cp_kz_csv_ok($f['skills'], cp_kz_skills()); }
 	if (array_key_exists('proc', $f)) { $set['proc'] = cp_kz_csv_ok($f['proc'], cp_kz_procs()); }
 	if (array_key_exists('extra', $f)) { $set['extra'] = $s('extra', 255); }
+	if (array_key_exists('avail', $f)) { $set['avail'] = cp_kz_avail_clean($f['avail']); }
 	/* személyes azonosítók: csak admin */
 	$sk = array_intersect(array_keys($f), array_keys(cp_kz_sens_keys()));
 	if ($sk) {
@@ -182,7 +214,7 @@ function cp_kz_ajax_save() {
 		$wpdb->insert($T, $set + array('created_at' => gmdate('Y-m-d H:i:s'), 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T")));
 		$id = (int) $wpdb->insert_id;
 	}
-	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys(array_diff_key($f, array('note_base' => 1)))))); }
+	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'avail' => 'elérhetőség', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys(array_diff_key($f, array('note_base' => 1)))))); }
 	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
 	wp_send_json_success(array('row' => cp_kz_out($r, cp_panel_is_admin() && !empty($_POST['reveal']))));
 }

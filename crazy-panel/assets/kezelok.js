@@ -138,9 +138,55 @@
 		const n = SK.length - x.miss.length;
 		const sens = x.kind === 'jelentkezo' ? '' : S.reveal ? '<div class="kz-sr">' + SK.map(k => '<div><small>' + esc(SENS[k]) + ':</small> ' + ((x.sens || {})[k] ? esc(x.sens[k]) : '<span class="kz-warn">hiányzik</span>') + '</div>').join('') + '</div>'
 			: '<p class="' + (x.miss.length ? 'kz-warn' : 'kz-open') + '">Személyes adatok: ' + n + '/' + SK.length + ' megvan' + (x.miss.length ? ' – hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) : '') + (K.admin ? ' <small class="cpx-muted">(megtekintés: „Személyes adatok megjelenítése”)</small>' : '') + '</p>';
-		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') + ivRec(x) /* v2.9.85 */ + slotRec(x) +
+		return '<div class="kz-d"><div>' + sens + (x.note ? '<p class="kz-note">' + esc(x.note) + '</p>' : '<p class="cpx-muted">Nincs megjegyzés.</p>') + (avTxt(x) ? '<p class="kz-avs"><b>Elérhetőség:</b> ' + esc(avTxt(x)) + '</p>' : '') /* v2.9.151 */ + ivRec(x) /* v2.9.85 */ + slotRec(x) +
 			'<p class="cpx-muted">' + (x.active ? 'Aktív' : 'Inaktív') + ' · ' + esc(KINDS[x.kind] || '') + (x.el ? ' · elszámolás: ' + esc(x.el.name) + ' (' + x.el.rate + ' Ft/óra)' : '') + (x.updated ? ' · módosítva: ' + esc(x.updated) + (x.by ? ' (' + esc(x.by) + ')' : '') : '') + '</p></div>' +
 			'<div><b>Közelgő rendezvényei</b>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
+	}
+	/* ------------------------------------------------------------ v2.9.151: elérhetőség (soha nem ér rá napok, kizárt dátumok) */
+	const AVD = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'], AVDL = ['hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat', 'vasárnap'];
+	const avOf = x => x.avail || { wd: [], days: [], note: '' };
+	/* egymást követő dátumok összevonása: 12.24–12.26. */
+	function avRanges(days) {
+		const L = (days || []).slice().sort(), out = []; let a = null, b = null;
+		const nx = d => { const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() + 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); };
+		L.forEach(d => { if (b && nx(b) === d) b = d; else { if (a) out.push([a, b]); a = b = d; } }); if (a) out.push([a, b]);
+		return out;
+	}
+	const avD = d => d.slice(5).replace('-', '.') + '.';
+	function avTxt(x) {
+		const v = avOf(x), p = [];
+		const wd = v.wd || [];
+		if (wd.length) p.push(wd.join() === '6,7' ? 'hétvégén nem ér rá' : wd.join() === '1,2,3,4,5' ? 'hétköznap nem ér rá' : wd.length === 7 ? 'egyik nap sem ér rá' : 'soha nem ér rá: ' + wd.map(n => AVDL[n - 1]).join(', '));
+		const r = avRanges(v.days); if (r.length) p.push('kizárt napok: ' + r.slice(0, 6).map(z => z[0] === z[1] ? avD(z[0]) : avD(z[0]) + '–' + avD(z[1])).join(', ') + (r.length > 6 ? ' …' : ''));
+		if (v.note) p.push('„' + v.note + '”');
+		return p.join(' · ');
+	}
+	function avH(x) {
+		const v = avOf(x), wd = v.wd || [], has = n => wd.includes(n);
+		const all = (L) => L.every(n => has(n));
+		return '<div class="kz-av" data-av><b>Elérhetőség</b> <small class="cpx-muted">– a beosztásnál a „nem javasolt” közé kerül, akinek aznap nem jó</small>' +
+			'<div class="kz-avq"><label class="kz-chk"><input type="checkbox" data-avq="1,2,3,4,5"' + (all([1, 2, 3, 4, 5]) ? ' checked' : '') + '> Hétköznap nem ér rá</label><label class="kz-chk"><input type="checkbox" data-avq="6,7"' + (all([6, 7]) ? ' checked' : '') + '> Hétvégén nem ér rá</label></div>' +
+			'<div class="kz-avw" role="group" aria-label="Soha nem ér rá ezeken a napokon"><small>Soha nem ér rá:</small>' + AVD.map((d, i) => '<button type="button" data-avw="' + (i + 1) + '" aria-pressed="' + has(i + 1) + '" title="' + AVDL[i] + 'enként soha">' + d + '</button>').join('') + '</div>' +
+			'<div class="kz-avr"><small>Adott nap(ok) kizárása:</small><input type="date" data-avf aria-label="Ettől"><span>–</span><input type="date" data-avt aria-label="Eddig (nem kötelező)"><button type="button" class="cpx-btn sm" data-avadd>Kizárás</button></div>' +
+			(v.days && v.days.length ? '<div class="kz-avl">' + avRanges(v.days).map(z => '<span class="kz-chip">' + (z[0] === z[1] ? avD(z[0]) : avD(z[0]) + '–' + avD(z[1])) + '<button type="button" data-avx="' + z[0] + '|' + z[1] + '" aria-label="Törlés" title="Törlés">×</button></span>').join('') + '</div>' : '') +
+			'<label class="kz-avn">Megjegyzés<input type="text" data-avn maxlength="200" value="' + esc(v.note || '') + '" placeholder="pl. egyetem miatt csütörtökön csak este"></label></div>';
+	}
+	function bindAv(tr, id) {
+		const box = tr.querySelector('[data-av]'); if (!box) return;
+		const x = () => S.rows.find(z => z.id === id) || {};
+		const put = async (v) => { const r = await save(id, { avail: v }, box); if (r) draw(); };
+		const cur = () => { const v = avOf(x()); return { wd: (v.wd || []).slice(), days: (v.days || []).slice(), note: v.note || '' }; };
+		box.querySelectorAll('[data-avq]').forEach(cb => cb.addEventListener('change', () => { const v = cur(), L = cb.dataset.avq.split(',').map(Number); v.wd = cb.checked ? Array.from(new Set(v.wd.concat(L))) : v.wd.filter(n => !L.includes(n)); put(v); }));
+		box.querySelectorAll('[data-avw]').forEach(b => b.addEventListener('click', () => { const v = cur(), n = Number(b.dataset.avw); v.wd = v.wd.includes(n) ? v.wd.filter(z => z !== n) : v.wd.concat([n]); put(v); }));
+		box.querySelector('[data-avadd]').addEventListener('click', () => {
+			const f = box.querySelector('[data-avf]').value, t = box.querySelector('[data-avt]').value || f;
+			if (!f) { toast('Válaszd ki a napot.', true); return; }
+			const a = new Date((f < t ? f : t) + 'T12:00:00'), z = new Date((f < t ? t : f) + 'T12:00:00'), v = cur(); let n = 0;
+			while (a <= z && n < 120) { v.days.push(a.getFullYear() + '-' + String(a.getMonth() + 1).padStart(2, '0') + '-' + String(a.getDate()).padStart(2, '0')); a.setDate(a.getDate() + 1); n++; }
+			put(v);
+		});
+		box.querySelectorAll('[data-avx]').forEach(b => b.addEventListener('click', () => { const [f, t] = b.dataset.avx.split('|'), v = cur(); v.days = v.days.filter(d => d < f || d > t); put(v); }));
+		const nt = box.querySelector('[data-avn]'); nt.addEventListener('change', () => { const v = cur(); v.note = nt.value.trim(); put(v); }); nt.addEventListener('keydown', e => { if (e.key === 'Enter') nt.blur(); });
 	}
 	function detail(x) {
 		return '<div class="kz-d"><div><label>Megjegyzés<textarea data-f="note" rows="2">' + esc(x.note) + '</textarea></label>' +
@@ -149,7 +195,7 @@
 			'<label class="kz-chk">Csoport: <select data-f="kind">' + Object.keys(KINDS).map(k => '<option value="' + k + '"' + (x.kind === k ? ' selected' : '') + '>' + esc(KINDS[k]) + '</option>').join('') + '</select></label>' +
 			(x.miss.length ? '<p class="kz-warn">Hiányzik: ' + esc(x.miss.map(k => SENS[k]).join(', ')) + '</p>' : '') +
 			'<p class="cpx-muted">' + (x.phone ? '<a href="tel:' + esc(x.phone.replace(/[^\d+]/g, '')) + '">📞 Hívás</a> · ' : '') + (x.email ? '<a href="mailto:' + esc(x.email) + '">✉ E-mail</a> · ' : '') + (x.el ? 'Elszámolás: ' + esc(x.el.name) + ' (' + esc(x.el.role) + ', ' + x.el.rate + ' Ft/óra) · ' : '') + 'Módosítva: ' + esc(x.updated || '') + (x.by ? ' (' + esc(x.by) + ')' : '') + '</p>' +
-			ivRec(x) /* v2.9.85 */ + slotRec(x) + (K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
+			(x.kind !== 'jelentkezo' ? avH(x) : '') /* v2.9.151 */ + ivRec(x) /* v2.9.85 */ + slotRec(x) + (K.admin ? '<button type="button" class="cpx-btn ghost danger sm" data-del>Kezelő törlése</button>' : '') + '</div>' +
 			'<div><b>Közelgő rendezvényei</b> <small class="cpx-muted">(a deal „Gépkezelő” mezője alapján)</small>' + (x.up.length ? '<ul>' + x.up.map(u => '<li><a href="#deals:' + u.id + '" data-deal="' + u.id + '">' + esc(huD(u.event_d)) + (u.tm ? ' ' + esc(u.tm) : '') + ' – ' + esc(u.title) + '</a>' + (u.dof ? ' <span class="dtag">' + u.dn + '/' + u.dof + '. nap</span>' : '') /* v2.9.71 */ + '' + (u.venue ? ' <small>' + esc(u.venue) + '</small>' : '') + '</li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</div></div>';
 	}
 	async function save(id, f, el) {
@@ -184,6 +230,7 @@
 				const v = Array.from(tr.querySelectorAll('[data-' + t + ']:checked')).map(z => z.dataset[t]).join(',');
 				await save(id, { [t === 'sk' ? 'skills' : 'proc']: v }, cb.closest('td'));
 			})));
+			bindAv(tr, id); /* v2.9.151 */
 			const hire = tr.querySelector('[data-hire]');
 			if (hire) hire.addEventListener('click', async () => { if (!window.confirm(x.name + ' átkerül a Kezelők közé. Mehet?')) return; if (await save(id, { kind: 'kezelo' })) { toast(x.name + ' mostantól a Kezelők között van.'); draw(); } });
 			const more = tr.querySelector('[data-more]'), up = tr.querySelector('[data-up]');
@@ -479,6 +526,10 @@
 		'.iv-who{min-width:0}.iv-who b{display:block;overflow-wrap:anywhere}.iv-a{display:flex;gap:14px;justify-content:flex-end;align-items:center;white-space:nowrap}.iv-a .kz-link{padding:2px 0}.iv-a .iv-del{color:#9A3A12}' +
 		'.iv-np{display:flex;gap:6px;align-items:center;max-width:100%;margin-top:4px;padding:0;border:0;background:none;cursor:pointer;font:12.5px/1.4 Inter,sans-serif;color:#3C4252;text-align:left}.iv-np span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iv-np:hover span:last-child{text-decoration:underline;text-underline-offset:2px}' +
 		'.iv-rt{flex:none;font:600 10.5px Inter,sans-serif;border-radius:5px;padding:1px 6px;white-space:nowrap}.iv-rt.ok{background:#DDF3E6;color:#17663A}.iv-rt.mid{background:#FFF1D6;color:#8A4B08}.iv-rt.no{background:#FBE3DC;color:#9A3A12}' +
+		'.kz-av{margin:10px 0;padding:10px 12px;border:1px solid var(--li);border-radius:12px;background:#FAF8F5;display:flex;flex-direction:column;gap:8px}.kz-av.saving{opacity:.6}.kz-avq{display:flex;flex-wrap:wrap;gap:4px 16px}.kz-avw,.kz-avr{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.kz-avw small,.kz-avr small{color:var(--mu);font-size:12px;margin-right:2px}' +
+		'.kz-avw button{min-width:38px;height:30px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;font:600 12.5px Inter,sans-serif;color:var(--ink);cursor:pointer}.kz-avw button[aria-pressed=true]{background:#FDECEA;border-color:#E8A5A0;color:#B42318;text-decoration:line-through}' +
+		'.kz-avr input{height:32px;border:1px solid var(--li);border-radius:8px;padding:0 8px;font:13px Inter,sans-serif;background:#fff}.kz-avl{display:flex;flex-wrap:wrap;gap:6px}.kz-avl .kz-chip{background:#FDECEA;color:#B42318;display:inline-flex;align-items:center;gap:4px}.kz-avl button{border:0;background:none;color:inherit;font-size:14px;cursor:pointer;padding:0 2px}' +
+		'.kz-avn{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mu)}.kz-avn input{height:32px;border:1px solid var(--li);border-radius:8px;padding:0 8px;font:13px Inter,sans-serif;color:var(--ink);background:#fff}.kz-avs{font-size:13px;margin:6px 0}' +
 		'.iv-oth{display:flex;flex-direction:column;gap:6px}.iv-cm{background:#FAF8F5;border:1px solid #EEE9E1;border-radius:10px;padding:8px 10px}.iv-cm.old{background:#F5F3EF;border-style:dashed}.iv-cm.me{background:#EEF3FD;border-color:#D6E2FB}.iv-cmh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px}.iv-cmh small{margin-left:auto;color:var(--mu);font-size:11.5px;font-variant-numeric:tabular-nums}.iv-cm p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px}.iv-cm0{margin:0;font-size:12.5px;color:var(--mu)}.iv-mel{font:700 11.5px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);margin-top:6px}.iv-np em{font-style:normal;font-size:12px;color:var(--mu);margin:0 4px}.kz-ivi .iv-cm{margin-top:6px}' +
 		'.iv-nb{grid-column:2/-1;display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}.iv-rates{display:flex;gap:6px;flex-wrap:wrap}.iv-rb{min-height:30px;padding:0 12px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;color:#3C4252;font:600 12.5px Inter,sans-serif;cursor:pointer}.iv-rb:hover{border-color:#B9B2A7}' +
 		'.iv-rb.ok[aria-pressed=true]{background:#DDF3E6;border-color:#9FD3B4;color:#17663A}.iv-rb.mid[aria-pressed=true]{background:#FFF1D6;border-color:#EBC27E;color:#8A4B08}.iv-rb.no[aria-pressed=true]{background:#FBE3DC;border-color:#E9A991;color:#9A3A12}' +

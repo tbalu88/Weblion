@@ -102,7 +102,7 @@ function cp_slot_day($day) {
 	}
 	/* beosztások */
 	$kz = array();
-	if (function_exists('cp_kz_t')) { foreach ((array) $wpdb->get_results('SELECT id, name, kind, phone, email, has_car, skills, active FROM ' . cp_kz_t(), ARRAY_A) as $r) { $kz[(int) $r['id']] = $r; } }
+	if (function_exists('cp_kz_t')) { foreach ((array) $wpdb->get_results('SELECT id, name, kind, phone, email, has_car, skills, active' . (get_option('cp_kz_db_ver') === '3' ? ', avail' : '') . ' FROM ' . cp_kz_t(), ARRAY_A) as $r) { $kz[(int) $r['id']] = $r; } }
 	$rows = cp_slot_db_ok() ? (array) $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cp_slot_t() . " WHERE day = %s ORDER BY id", $day), ARRAY_A) : array();
 	$busy = array(); /* aznap kinek van már (nem elutasított) beosztása: kz_id => [slot-kulcsok] */
 	foreach ($rows as $r) {
@@ -119,7 +119,7 @@ function cp_slot_day($day) {
 	$cands = array();
 	foreach ($kz as $id => $k) {
 		if (empty($k['active']) || !in_array($k['kind'], array('kezelo', 'host'), true)) { continue; }
-		$cands[] = array('id' => $id, 'n' => (string) $k['name'], 'kind' => (string) $k['kind'], 'ph' => (string) $k['phone'], 'car' => (int) $k['has_car'], 'sk' => $k['skills'] === '' ? array() : explode(',', $k['skills']), 'busy' => $busy[$id] ?? array());
+		$cands[] = array('id' => $id, 'n' => (string) $k['name'], 'kind' => (string) $k['kind'], 'ph' => (string) $k['phone'], 'car' => (int) $k['has_car'], 'sk' => $k['skills'] === '' ? array() : explode(',', $k['skills']), 'busy' => $busy[$id] ?? array(), 'na' => function_exists('cp_kz_avail_na') && isset($k['avail']) ? cp_kz_avail_na(cp_kz_avail_get($k), $day) : ''); /* v2.9.151: elérhetőség */
 	}
 	/* sorrend: Kezelők elöl, Ákos legelöl (spinner-elsőbbség), majd név */
 	usort($cands, function ($a, $b) { $pa = preg_match('/ákos/iu', $a['n']) ? 0 : 1; $pb = preg_match('/ákos/iu', $b['n']) ? 0 : 1; return ($a['kind'] === 'kezelo' ? 0 : 1) - ($b['kind'] === 'kezelo' ? 0 : 1) ?: $pa - $pb ?: strcmp($a['n'], $b['n']); });

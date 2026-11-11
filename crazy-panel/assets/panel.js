@@ -679,6 +679,7 @@
       if (c.sk.length && s.skill && !c.sk.includes(s.skill)) why.push('nem kezel ' + (sk[s.skill] || s.skill) + ' gépet');
       if (!c.sk.length && s.skill === 'spinner') why.push('nincs spinner-tudása');
       if (c.busy.some(k => k !== s.deal + '|' + s.skey)) why.push('aznap már be van osztva');
+      if (c.na) why.push(c.na); /* v2.9.151: a Kezelők adatlapján megadott elérhetőség */
       return why;
     };
     const head = '<div class="cpx-dsec"><h4>Beosztás (' + x.slots.length + ' slot)</h4>' + (x.xmas ? '<span class="sl-x" title="Karácsonyi időszak: már ajánlatkérés után is meghívható">🎄 ajánlatkéréstől</span>' : '') + '</div>';
