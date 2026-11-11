@@ -177,6 +177,9 @@ function cp_gcal_plan($id, $day = '') {
 		/* többnapos dealnél a deal kezdési ideje minden napra érvényes (a napnak nincs saját időpontja) */
 		if (($md || $st->format('Y-m-d') === $date) && $st->format('H:i') !== '00:00') { $s = $st->format('H:i'); }
 	}
+	/* v2.9.165: az ügyfél-adatlap (portál) kezdés/befejezés, ha a dealen nincs időpont; és a hasznos válaszok a leírásba */
+	$pi = function_exists('cp_pinfo_rows') ? cp_pinfo_rows((int) $id) : null;
+	if ($s === '' && $pi && $pi['start'] !== '') { $s = str_pad($pi['start'], 5, '0', STR_PAD_LEFT); if ($pi['end'] !== '') { $e = str_pad($pi['end'], 5, '0', STR_PAD_LEFT); $hrs = 0; } }
 	if ($s !== '' && $hrs > 0) { $st = new DateTime($date . ' ' . $s, wp_timezone()); $st->modify('+' . (int) round($hrs * 60) . ' minutes'); $e = $st->format('Y-m-d') > $date ? '24:00' : $st->format('H:i'); }
 	$L = array();
 	if (function_exists('cp_el_link')) { $L[] = '<b>📋 KEZELŐI ADATLAP</b> – a rendezvény után itt töltsd ki:<br><b><a href="' . esc_url(cp_el_link($key)) . '">' . esc_html(cp_el_link($key)) . '</a></b><br>━━━━━━━━━━━━━━━━━━━━<br>'; }
@@ -193,6 +196,7 @@ function cp_gcal_plan($id, $day = '') {
 	if (trim((string) $d['album']) !== '') { $x[] = ' - Album: ' . esc_html($d['album']); }
 	if ((int) $d['guests'] > 0) { $x[] = ' - Létszám: ' . (int) $d['guests'] . ' fő'; }
 	if ($x) { $L[] = '<br>Egyéb:<br>' . implode('<br>', $x); }
+	if ($pi && $pi['rows']) { $L[] = '<br><b>Az ügyfél adatlapjáról:</b><br>' . implode('<br>', array_map(function ($r) { return esc_html($r['l']) . ': ' . esc_html($r['t']); }, array_filter($pi['rows'], function ($r) { return $r['k'] !== 'schedule'; }))); }
 	$L[] = '------------------------------------------------------------------------<br>bruttó = nettó + ÁFA<br>Hosszabbítás nettó 30 000 Ft / óra + ÁFA<br>Készenlét nettó  10 000 Ft / óra + ÁFA<br>Áttelepítés nettó  10 000 Ft / alkalom +ÁFA';
 	return array('title' => ($pen ? CP_GCAL_PEN : '') . (trim((string) $d['title']) !== '' ? trim((string) $d['title']) : '[' . $d['source'] . '] ' . trim((string) $d['cn']) . ' | ' . $date) /* v1.71.1: a naptárban a deal neve a cím */ . ($md ? ' – ' . $dn . '/' . $dof . '. nap' : ''),
 		'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L), 'key' => $key, 'dn' => $dn, 'dof' => $dof);

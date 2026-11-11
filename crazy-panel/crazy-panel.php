@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.164');
+define('CP_PANEL_VER', '2.9.165');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3758,6 +3758,7 @@ require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/usage.php'; /* v2.9.88: panelhasználat */
 require_once __DIR__ . '/analytics.php'; /* v2.9.145: Napló → Elemzés */
+require_once __DIR__ . '/pinfo.php'; /* v2.9.165: ügyfél-adatlap a deal adatlapján, naptárbejegyzés frissítése */
 require_once __DIR__ . '/mail-px.php'; /* v2.9.109: megnyitás-követés */
 require_once __DIR__ . '/slots.php'; /* v2.9.115: slotok és beosztás */
 require_once __DIR__ . '/logi.php'; /* v2.9.118: logisztika */

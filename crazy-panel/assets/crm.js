@@ -1463,9 +1463,11 @@
 		['Megjegyzés', ['note', 'last_note']]
 	];
 	const NOSHOW = ['id', 'title', 'currency', 'contact_id', 'company_id', 'raw', 'via', 'synced_at', 'deleted_at', 'created_at', 'modified_at', 'created_by', 'modified_by', 'created_by_n', 'modified_by_n', 'owner', 'last_comm_at', 'last_comm_mode', 'last_note_at', 'rotten_d', 'win_prob', 'description', 'closed_stage', 'pkg_old', 'pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg'];
-	function fieldGroups(d) {
+	function fieldGroups(d, pinfo) {
 		const used = new Set(NOSHOW);
-		let h = GROUPS.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : ''; }).join('');
+		/* v2.9.165: az ügyfél-adatlap (portál) hasznos válaszai a Rendezvény csoport után – csak olvasható */
+		const pi = (pinfo || []).length ? '<details class="d3-g d3-pinfo" open><summary>Az ügyfél adatlapjáról</summary><dl class="crm-dl">' + pinfo.map(r => '<dt>' + esc(r.l) + '</dt><dd>' + esc(r.t) + '</dd>').join('') + '</dl></details>' : '';
+		let h = GROUPS.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return (b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : '') + (g[0] === 'Rendezvény' ? pi : ''); }).join('');
 		const rest = Object.keys(d).filter(k => !used.has(k) && d[k] != null && d[k] !== '' && LBL[k]);
 		const pk = ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'].filter(k => d[k]);
 		if (rest.length || pk.length) h += '<details class="d3-g"><summary>Egyéb</summary>' + dl(d, rest.concat(pk)) + '</details>';
@@ -1711,7 +1713,8 @@
 				(c.email ? '<dt>E-mail</dt><dd><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></dd>' : '') + (ph ? '<dt>Telefon</dt><dd><a href="tel:' + esc(String(ph).replace(/[^\d+]/g, '')) + '">' + esc(ph) + '</a></dd>' : '') +
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>' + (W && c && c.email && !d.deleted_at ? '<div class="d3-cos" data-cos></div>' : '')) + '</section>' +
-			'<section class="d3-c"><h4>Adatok</h4>' + fieldGroups(d) + '<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section></aside>' +
+			'<section class="d3-c"><h4 class="d3-adh">Adatok' + (x.gcal_on && R.edit && d.event_d && !d.deleted_at ? '<button type="button" class="d3-gsync" data-gsync title="A cégnaptár bejegyzésének frissítése a deal és az ügyfél-adatlap mostani adataival (ha nincs, létrehozza)">📅 Naptárbejegyzés frissítése</button>' : '') + '</h4>' + fieldGroups(d, x.pinfo) +
+				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section></aside>' +
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok */
@@ -1748,6 +1751,7 @@
 		bindCommon(sh, self);
 		bindCrew(sh, x, d.id, back);
 		bindBack(sh, back);
+		{ const gs = sh.querySelector('[data-gsync]'); if (gs) gs.addEventListener('click', async () => { gs.disabled = true; const t0 = gs.textContent; gs.textContent = 'Frissítés…'; try { const r = await post('cp_gcal_deal_sync', { id: x.deal.id }); toast(r.msg); } catch (e) { toast(e.message, true); } gs.disabled = false; gs.textContent = t0; }); } /* v2.9.165 */
 		bindInline(sh, x, back);
 		/* v1.84: „Ajánlat küldése” – előtöltött levél a becsült árral; küldés után a deal „Ajánlat kiküldve” lesz, értéke a becsült ár */
 		const ob = sh.querySelector('[data-offer]');

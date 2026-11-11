@@ -820,3 +820,9 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .crm-cfoot .crm-na{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crm-cfr{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex:none}
 .crm-cfr .crm-rot,.crm-cfr>*{white-space:nowrap}
+
+/* v2.9.165: Adatok csempe – naptárfrissítés gomb, ügyfél-adatlap válaszai */
+.d3-adh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.d3-gsync{margin-left:auto;border:1px solid #E6E3DE;background:#fff;border-radius:999px;padding:4px 11px;font:600 12px Inter,sans-serif;color:#141C33;cursor:pointer}
+.d3-gsync:hover{border-color:#2F5BD8;color:#2F5BD8}.d3-gsync:disabled{opacity:.6;cursor:progress}
+.d3-pinfo summary{cursor:pointer}
