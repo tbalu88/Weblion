@@ -1016,3 +1016,4 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-rac button.on,.ml-rac button:hover{background:#F2EFEA}
 @media (max-width:760px){.ml-rac{position:fixed;left:8px;right:8px;top:auto;margin-top:4px;max-height:40vh}.ml-rac button{padding:11px 12px;font-size:16px}}
 .ml-mclip{display:inline-flex;align-items:center;gap:2px;margin-right:8px;color:#3A3F4B;font-weight:600;vertical-align:middle}.ml-mclip .ml-ni{width:14px;height:14px;flex:none}
+.ml-tabs .ml-allread{align-self:center;border:0;background:none;color:#2F5BD8;font:600 12.5px Inter,sans-serif;cursor:pointer;padding:2px 4px 2px 8px;white-space:nowrap}.ml-tabs .ml-allread:hover{text-decoration:underline}

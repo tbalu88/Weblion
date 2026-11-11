@@ -533,7 +533,9 @@
 		const by = d.by || {};
 		const sum = Object.keys(by).map(k => (ST_HU[k] || k) + ': ' + num(by[k].n) + (by[k].v ? ' · ' + money(by[k].v) : '')).join(' · ');
 		let h = '<div class="crm-sum"><b>' + num(d.total) + ' deal</b>' + (sum ? '<span class="cpx-muted"> – ' + esc(sum) + '</span>' : '') + '</div>';
-		if (!d.rows.length) { box.innerHTML = h + '<div class="cpx-empty">Nincs a szűrésnek megfelelő deal.</div>'; return; }
+		/* v2.9.181: mobilon a lista nézetben is van „+ Új deal” gomb (eddig csak a pipeline-on) */
+		const listFab = () => { const f = box.querySelector('[data-fab]'); if (f) f.addEventListener('click', () => newDeal()); };
+		if (!d.rows.length) { box.innerHTML = h + '<div class="cpx-empty">Nincs a szűrésnek megfelelő deal.</div>' + (R.edit ? '<button type="button" class="crm-fab" data-fab aria-label="Új deal" title="Új deal">+</button>' : ''); listFab(); return; }
 		h += '<div class="crm-bulk" id="crm-bulk" hidden></div>';
 		const ws = [44, S.tw || 300].concat(S.cols.map(colW));
 		h += '<div class="cpx-trk-wrap crm-wrap"><table class="cpx-trk crm-tbl crm-xt" style="width:' + ws.reduce((a, b) => a + b, 0) + 'px"><colgroup>' + ws.map(w => '<col style="width:' + w + 'px">').join('') + '</colgroup><thead><tr><th class="crm-cbh crm-stk0"><input type="checkbox" class="crm-cb" data-all aria-label="Az oldal összes deal-jének kijelölése"></th>' +
@@ -544,7 +546,8 @@
 		if (pages > 1) {
 			h += '<div class="crm-pager"><button class="cpx-btn ghost" type="button" data-pg="-1"' + (d.p <= 0 ? ' disabled' : '') + '>‹ Előző</button><span>' + (d.p + 1) + ' / ' + pages + ' oldal</span><button class="cpx-btn ghost" type="button" data-pg="1"' + (d.p + 1 >= pages ? ' disabled' : '') + '>Következő ›</button></div>';
 		}
-		box.innerHTML = h;
+		box.innerHTML = h + (R.edit ? '<button type="button" class="crm-fab" data-fab aria-label="Új deal" title="Új deal">+</button>' : '');
+		listFab();
 		box.querySelectorAll('[data-so]').forEach(b => b.addEventListener('click', () => {
 			const k = b.dataset.so;
 			if (S.so === k) S.dir = S.dir === 'asc' ? 'desc' : 'asc';

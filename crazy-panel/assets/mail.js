@@ -718,7 +718,7 @@
 			((S.tags || []).length ? '<select class="ml-tsel" data-tsel aria-label="Címke"><option value="">Minden címke</option>' + S.tags.map(t => '<option value="' + esc(t.n) + '"' + ((S.tg || []).length === 1 && S.tg[0].toLowerCase() === t.n.toLowerCase() ? ' selected' : '') + '>' + esc(t.n) + (t.cnt ? ' (' + t.cnt + ')' : '') + '</option>').join('') + '</select>' : '') + '<select class="ml-ssel" data-sort aria-label="Rendezés"><option value="new"' + (S.so === 'new' ? ' selected' : '') + '>Legújabb</option><option value="old"' + (S.so === 'old' ? ' selected' : '') + '>Legrégebbi</option></select></div>' +
 			'<div class="ml-tabs">' + [['open', 'Nyitott'], ['unassigned', 'Kiosztatlan'], ['all', 'Mind']].map(x => '<button type="button" data-tab="' + x[0] + '" class="' + (((S.mq || (S.tg || []).length) ? 'all' : S.tab) === x[0] ? 'on' : '') + '"' + ((S.mq || (S.tg || []).length) && x[0] !== 'all' ? ' disabled title="Keresésnél és címkeszűrésnél minden levél látszik"' : '') + '>' + x[1] + '</button>').join('') +
 				/* v1.88: „Csak olvasatlan” gyorsszűrő – bármelyik füllel kombinálható */
-				'<button type="button" class="ml-unf' + (S.unf ? ' on' : '') + '" data-unf aria-pressed="' + !!S.unf + '" title="Csak az olvasatlan levelek">Olvasatlan' + (un[S.folder] ? ' <b>' + un[S.folder] + '</b>' : '') + '</button></div>' + tagBar() + '<div class="ml-selbar" data-selbar></div>' +
+				'<button type="button" class="ml-unf' + (S.unf ? ' on' : '') + '" data-unf aria-pressed="' + !!S.unf + '" title="Csak az olvasatlan levelek">Olvasatlan' + (un[S.folder] ? ' <b>' + un[S.folder] + '</b>' : '') + '</button>' + (rows.some(t => t.un && t.id > 0) ? '<button type="button" class="ml-allread" data-allread title="A listában látható összes levélszál olvasottnak jelölése">✓ Mind olvasott</button>' : '') + '</div>' + tagBar() + '<div class="ml-selbar" data-selbar></div>' +
 			'<div class="ml-items">' + (rows.length ? rows.map(t => '<div role="button" tabindex="0" class="ml-item' + (S.th === t.id ? ' on' : '') + (t.st === 'closed' ? ' closed' : '') + (t.un ? ' un' : '') + (S.sel.has(t.id) ? ' ck' : '') + '" data-th="' + t.id + '">' +
 				'<span class="ml-ckw" data-ck role="checkbox" aria-checked="' + S.sel.has(t.id) + '" aria-label="Kijelölés" title="Kijelölés (Shift: tartomány)"><span class="ml-av" style="background:' + avc(t.cn) + '">' + esc(ini(t.cn)) + '</span><i class="ml-cb"></i></span><span class="ml-ib">' +
 				'<span class="ml-i1"><b>' + esc(t.cn || t.ce) + '</b>' + (t.as ? '<span class="ml-as">› ' + esc(pname(t.as) || 'kolléga') + '</span>' : '') + '<small>' + esc(ago(t.at)) + '</small></span>' +
@@ -735,6 +735,8 @@
 		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { pick('[data-tab]', b); S.tab = b.dataset.tab; drawInbox(box); }));
 		box.querySelector('.ml-box').addEventListener('change', e => { S.box = e.target.value; drawInbox(box); });
 		box.querySelector('[data-unf]').addEventListener('click', () => { S.unf = !S.unf; S.th = null; drawInbox(box); });
+		/* v2.9.181: a listában látható összes olvasatlan szál olvasottnak jelölése */
+		{ const ar = box.querySelector('[data-allread]'); if (ar) ar.addEventListener('click', () => { const ids = rows.filter(t => t.un && t.id > 0).map(t => t.id); if (ids.length) { ar.disabled = true; bulk(box, ids, 'read', ''); } }); }
 		/* v2.9.25: címke-szűrő (oldalsáv, szűrőcsík, mobil lenyíló) és kezelő */
 		const tgGo = l => { S.tg = l; S.th = null; S.lim = 100; drawInbox(box); };
 		box.querySelectorAll('[data-tg]').forEach(b => b.addEventListener('click', () => { const n = b.dataset.tg, on = (S.tg || []).some(x => x.toLowerCase() === n.toLowerCase()); tgGo(on ? S.tg.filter(x => x.toLowerCase() !== n.toLowerCase()) : (S.tg || []).concat([n])); }));
@@ -1807,7 +1809,7 @@
 			'<div class="ml-row" data-ccrow hidden><label>Rejtett</label><div class="ml-chips" data-bcc></div></div>' +
 			'<div class="ml-row ml-srow"><label>Tárgy</label><input type="text" data-subj placeholder="Tárgy" value="' + esc(draft ? draft.subject : '') + '"></div>' +
 			'<div data-ed></div>' +
-			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + '<button type="button" class="cpx-btn ghost" disabled title="Később">Ütemezés</button>' +
+			'<div class="ml-send">' + ((M.send && M.send.on) ? '<button type="button" class="cpx-btn" data-send>Küldés</button><button type="button" class="cpx-btn ghost" data-test title="Ugyanez a levél csak neked, [PRÓBA] tárggyal – a szálba nem kerül be">Próbalevél magamnak</button>' : '<button type="button" class="cpx-btn" disabled title="A panelből küldés neked nincs bekapcsolva (próbaüzem) – küldj a Salesmate-ből">Küldés</button>') + /* v2.9.181: a nem működő „Ütemezés” gomb kikerült */ 
 			'<button type="button" class="cpx-btn ghost" data-prev>Előnézet</button><button type="button" class="cpx-btn ghost" data-save>Piszkozat mentése</button><button type="button" class="ml-link" data-clear>Elvetés</button><small class="ml-dst" data-dst></small>' +
 			/* v2.9.112: megnyitás-követés levelenként (alapból a Beállítások szerint; ha ott ki van kapcsolva, nem látszik) */
 			(M.px ? '<label class="ml-track" title="A levélbe egy láthatatlan kép kerül; a megnyitás ideje a levél alatt és a deal idővonalán látszik"><input type="checkbox" data-px checked> Megnyitás követése</label>' : '') + '</div>' +
@@ -1927,6 +1929,15 @@
 				cmp.addEventListener('dragover', e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); cmp.classList.add('drop'); } });
 				cmp.addEventListener('dragleave', e => { if (!cmp.contains(e.relatedTarget)) cmp.classList.remove('drop'); });
 				cmp.addEventListener('drop', e => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); cmp.classList.remove('drop'); Array.from(e.dataTransfer.files).forEach(upload); });
+				/* v2.9.181: vágólapról beillesztett kép (képernyőkép) mellékletként csatolódik – a szövegbe nem kerül beágyazott kép */
+				cmp.addEventListener('paste', e => {
+					const fs = Array.from((e.clipboardData && e.clipboardData.items) || []).filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
+					if (!fs.length) return;
+					e.preventDefault();
+					const d = new Date(), p2 = n => String(n).padStart(2, '0'), stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
+					fs.forEach((f, i) => { const ext = (/\/(png|jpe?g|gif|webp)$/i.exec(f.type || '') || [])[1] || 'png'; const named = f.name && !/^image\.\w+$/i.test(f.name) ? f : new File([f], 'beillesztett-kep-' + stamp + (fs.length > 1 ? '-' + (i + 1) : '') + '.' + ext.replace('jpeg', 'jpg'), { type: f.type || 'image/png' }); upload(named); });
+					toast(fs.length > 1 ? fs.length + ' beillesztett fájl mellékletként csatolva.' : 'A beillesztett kép mellékletként csatolva.');
+				}, true);
 			} else ab.title = 'Melléklet – a panelből küldés bekapcsolása után';
 		}
 		/* v2.9.14: sablon-helytartók kitöltése a deal adataival már a levélíróban; a hiányzók sárgán jelölve (title: az eredeti helytartó) */

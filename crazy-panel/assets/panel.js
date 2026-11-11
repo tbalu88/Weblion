@@ -146,9 +146,16 @@
       '</nav><div class="cpx-top-r"><span class="cpx-status" id="cpx-status"></span>' +
       '<button type="button" class="cpx-theme" id="cpx-theme" role="switch" aria-checked="' + (document.documentElement.getAttribute('data-theme') === 'dark') + '" title="Éjszakai mód be / ki"><span class="cpx-tg"><svg class="tg-s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg><svg class="tg-m" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><i></i></span><span>Éjszakai mód</span></button>' +
       '<button class="cpx-btn ghost" id="cpx-refresh" title="Frissítés a Salesmate-ből">' + ico('refresh') + '<span>Frissítés</span></button>' +
+      '<a class="cpx-btn ghost" href="https://claude.ai/artifact/HfLeD1Sh5MPMqhaxW4JMvd" target="_blank" rel="noopener" title="Felhasználói útmutató (új lapon)">' + ico('help') + '<span>Súgó</span></a>' +
       '<a class="cpx-btn ghost" href="' + esc(C.logout) + '" title="Kilépés">' + ico('logout') + '<span>Kilépés' + (C.user ? ' <small>(' + esc(C.user) + ')</small>' : (C.role ? ' <small>(' + (C.role === 'iroda' ? 'iroda' : 'admin') + ')</small>' : '')) + '</span></a></div></div>';
     app.appendChild(top);
     curLabel();
+    /* v2.9.181: offline jelzés – amíg nincs internet, a módosítások nem mentődnek */
+    const off = el('div', { class: 'cpx-off', role: 'status' }); off.hidden = navigator.onLine !== false;
+    off.textContent = 'Nincs internetkapcsolat – amit most módosítasz, nem mentődik. Várd meg, amíg visszajön.';
+    app.appendChild(off);
+    window.addEventListener('offline', () => { off.hidden = false; });
+    window.addEventListener('online', () => { if (!off.hidden) { off.hidden = true; const t = document.getElementById('cpx-toast'); if (t) { t.textContent = 'Újra van internetkapcsolat.'; t.classList.remove('bad'); t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), 3000); } } });
     const main = el('main', { class: 'cpx-main', id: 'cpx-main' });
     app.appendChild(main);
     top.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
@@ -215,6 +222,7 @@
     tarca: '<path d="M4 7V6a2 2 0 0 1 2-2h11v3"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 13.5h2"/>',
     refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/>',
     logout: '<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.9.6c0 1.7-2.5 2.2-2.5 3.7M12 17h.01"/>',
     fold: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
     kapcsolatok: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',

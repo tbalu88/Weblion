@@ -776,3 +776,6 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 .dtag{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:#EFEAF8;color:#4B3A7A;font:600 11.5px/18px Inter,sans-serif;white-space:nowrap;vertical-align:1px;font-variant-numeric:tabular-nums}
 @media print{.dtag{background:none;border:1px solid #999;color:#000}}
 .note-link{color:#2F5BD8;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;word-break:break-word} /* v2.9.81: jegyzetben lévő link */
+/* v2.9.181: offline jelzés */
+.cpx-off{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:10060;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;background:#B42318;color:#fff;border-radius:10px;padding:9px 14px;font:600 13.5px Inter,sans-serif;box-shadow:0 10px 30px -10px rgba(0,0,0,.4)}
+.cpx-off[hidden]{display:none}
