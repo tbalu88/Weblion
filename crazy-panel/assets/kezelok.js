@@ -390,7 +390,9 @@
 		Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (!s.blocked) tot++; if (s.b) bk++; }));
 		if (IV.focus && NT) { if (ivFind(IV.focus)) IV.open.add(IV.focus); else toast('Ez a foglalás már nincs a listában (lemondták vagy áthelyezték).', true); }
 		let h = '<div class="iv-top"><label class="iv-sw"><input type="checkbox" data-ivon' + (o.on ? ' checked' : '') + (K.admin ? '' : ' disabled') + '> <b>' + (o.on ? 'A foglalás nyitva' : 'A foglalás zárva') + '</b></label>' +
-			'<span class="iv-sum">' + bk + ' / ' + tot + ' időpont foglalt' + (d.cancelled ? ' · ' + d.cancelled + ' lemondás' : '') + '</span></div>' +
+			'<span class="iv-sum">' + bk + ' / ' + tot + ' időpont foglalt' + (d.cancelled ? ' · <button type="button" class="kz-link iv-cbtn" data-ivcanc aria-expanded="' + !!IV.canc + '">' + d.cancelled + ' lemondás ' + (IV.canc ? '▴' : '▾') + '</button>' : '') + '</span></div>' +
+			/* v2.9.169: a lemondások listája – ki mondta le, mikor */
+			(IV.canc && (d.cancels || []).length ? '<div class="iv-canc"><b>Lemondások</b>' + d.cancels.map(c => '<div class="iv-cr"><span><b>' + esc(c.name) + '</b>' + (c.slot ? ' · ' + esc(c.slot) : '') + '<small>' + esc([c.phone, c.email].filter(Boolean).join(' · ')) + '</small></span><span class="iv-cby"><b>' + esc(c.by) + '</b><small>' + esc(c.at) + '</small></span></div>').join('') + '</div>' : '') +
 			'<div class="iv-link"><input type="text" readonly value="' + esc(d.url) + '" aria-label="A jelentkezőknek küldendő link"><button type="button" class="cpx-btn" data-ivcopy>Link másolása</button><a class="cpx-btn ghost" href="' + esc(d.url) + '" target="_blank" rel="noopener">Megnyitás</a></div>' +
 			(!o.location ? '<p class="iv-warn">Még nincs megadva az interjú helyszíne – a levelekbe és az oldalra ez kerül.' + (K.admin ? ' Add meg lent, a Beállításokban.' : '') + '</p>' : '') +
 			(NT ? '' : '<p class="iv-warn">A jegyzetek az első oldalbetöltés után lesznek elérhetők (az adatbázis frissül).</p>');
@@ -426,6 +428,7 @@
 		const q = (s, fn, ev) => box.querySelectorAll(s).forEach(el => el.addEventListener(ev || 'click', e => fn(el, e)));
 		q('[data-ivcopy]', async () => { const v = d.url; try { await navigator.clipboard.writeText(v); toast('Link a vágólapon.'); } catch (e) { const i = box.querySelector('.iv-link input'); i.select(); document.execCommand('copy'); toast('Link a vágólapon.'); } });
 		q('[data-ivon]', el => { const oo = ivCollect(box); oo.on = el.checked ? 1 : 0; ivDo({ do: 'save', o: JSON.stringify(oo) }).then(ok => ok && toast(oo.on ? 'A foglalás megnyitva.' : 'A foglalás lezárva.')); }, 'change');
+		q('[data-ivcanc]', () => { IV.canc = !IV.canc; ivDraw(); });
 		q('[data-ivblock]', el => ivDo({ do: el.dataset.on === '1' ? 'block' : 'unblock', id: el.dataset.ivblock }));
 		q('[data-ivcancel]', el => { const b = ivFind(Number(el.dataset.ivcancel)) || {}; if (window.confirm('Lemondod ' + el.dataset.n + ' interjúját? Az időpont felszabadul. (A jelentkező nem kap erről levelet – szólj neki.)' + (b.note || (b.cm || []).length ? ' A bejegyzések megmaradnak a jelentkező adatlapján.' : ''))) { ivFlushAll(); ivDo({ do: 'cancel', id: el.dataset.ivcancel }); } });
 		q('[data-ivsave]', () => ivDo({ do: 'save', o: JSON.stringify(ivCollect(box)) }).then(ok => ok && toast('Elmentve.')));
@@ -529,6 +532,7 @@
 		'.iv-who{min-width:0}.iv-who b{display:block;overflow-wrap:anywhere}.iv-a{display:flex;gap:14px;justify-content:flex-end;align-items:center;white-space:nowrap}.iv-a .kz-link{padding:2px 0}.iv-a .iv-del{color:#9A3A12}' +
 		'.iv-np{display:flex;gap:6px;align-items:center;max-width:100%;margin-top:4px;padding:0;border:0;background:none;cursor:pointer;font:12.5px/1.4 Inter,sans-serif;color:#3C4252;text-align:left}.iv-np span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iv-np:hover span:last-child{text-decoration:underline;text-underline-offset:2px}' +
 		'.iv-rt{flex:none;font:600 10.5px Inter,sans-serif;border-radius:5px;padding:1px 6px;white-space:nowrap}.iv-rt.ok{background:#DDF3E6;color:#17663A}.iv-rt.mid{background:#FFF1D6;color:#8A4B08}.iv-rt.no{background:#FBE3DC;color:#9A3A12}' +
+		'.iv-cbtn{font-size:inherit;padding:0}.iv-canc{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px;margin:8px 0 12px;font-size:13px}.iv-canc>b{display:block;margin-bottom:4px}.iv-cr{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #F0ECE6}.iv-cr small{display:block;color:var(--mu);font-size:11.5px}.iv-cby{text-align:right;flex:none}.iv-cby b{font-weight:600}' +
 		'.kz-srev{cursor:pointer}.kz-srev:hover{outline:2px solid #2F5BD8;outline-offset:-2px}' +
 		'.kz-av{margin:10px 0;padding:10px 12px;border:1px solid var(--li);border-radius:12px;background:#FAF8F5;display:flex;flex-direction:column;gap:8px}.kz-av.saving{opacity:.6}.kz-avq{display:flex;flex-wrap:wrap;gap:4px 16px}.kz-avw,.kz-avr{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.kz-avw small,.kz-avr small{color:var(--mu);font-size:12px;margin-right:2px}' +
 		'.kz-avw button{min-width:38px;height:30px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;font:600 12.5px Inter,sans-serif;color:var(--ink);cursor:pointer}.kz-avw button[aria-pressed=true]{background:#FDECEA;border-color:#E8A5A0;color:#B42318;text-decoration:line-through}' +

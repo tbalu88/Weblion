@@ -12,7 +12,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_IV_DB_VER', '3'); /* v2.9.85: 2 = interjú-jegyzet és értékelés a foglalásokon (note, note_by, note_at, rate); v2.9.143: 3 = személyenkénti bejegyzések (cmt tábla) */
+define('CP_IV_DB_VER', '4'); /* v2.9.169: 4 = lemondás: ki mondta le (cancel_by) */ /* v2.9.85: 2 = interjú-jegyzet és értékelés a foglalásokon (note, note_by, note_at, rate); v2.9.143: 3 = személyenkénti bejegyzések (cmt tábla) */
 function cp_iv_t($n) { global $wpdb; return $wpdb->prefix . 'crazy_iv_' . $n; }
 
 /* v2.9.85: a táblák (és az új oszlopok) csak normál, nem-AJAX kérésnél települnek (az első oldalbetöltés vagy a /interju/ teszi fel);
@@ -50,6 +50,7 @@ function cp_iv_db_install() {
   note_by varchar(100) NOT NULL DEFAULT '',
   note_at datetime NULL,
   rate tinyint(1) unsigned NOT NULL DEFAULT 0,
+  cancel_by varchar(100) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   UNIQUE KEY slot (slot_id),
   KEY token (token),
@@ -85,9 +86,9 @@ add_action('init', function () {
 	cp_iv_db_install();
 }, 8);
 /* v2.9.85: az 1-es változat is használható (a foglaló működik), a jegyzet csak a 2-es táblával */
-function cp_iv_ok() { $v = get_option('cp_iv_db_ver'); return in_array($v, array(CP_IV_DB_VER, '1', '2'), true); }
-function cp_iv_note_ok() { $v = get_option('cp_iv_db_ver'); return $v === CP_IV_DB_VER || $v === '2'; }
-function cp_iv_cmt_ok() { return get_option('cp_iv_db_ver') === CP_IV_DB_VER; }
+function cp_iv_ok() { $v = get_option('cp_iv_db_ver'); return in_array($v, array(CP_IV_DB_VER, '1', '2', '3'), true); }
+function cp_iv_note_ok() { $v = get_option('cp_iv_db_ver'); return in_array($v, array(CP_IV_DB_VER, '2', '3'), true); }
+function cp_iv_cmt_ok() { $v = get_option('cp_iv_db_ver'); return $v === CP_IV_DB_VER || $v === '3'; }
 
 /* ------------------------------------------------------------ beállítások */
 function cp_iv_defaults() {
@@ -238,6 +239,8 @@ function cp_iv_cancel($b, $by_admin = false) {
 	if (!$by_admin && $s && cp_iv_ts($s['day'], $s['tm']) < time() + 3600 * (int) $o['cancel_h']) { return new WP_Error('iv', 'Az interjú előtti ' . (int) $o['cancel_h'] . ' órában már nem lehet lemondani – kérjük, hívj minket.'); }
 	/* v2.9.58: csak élő foglalást mondunk le, és csak az első kérés értesít (dupla kattintásnál a második nem csinál semmit) */
 	$n = $wpdb->query($wpdb->prepare('UPDATE ' . cp_iv_t('bookings') . " SET last_slot = slot_id, slot_id = NULL, status = 'cancel', changed_at = %s WHERE id = %d AND status = 'ok'", gmdate('Y-m-d H:i:s'), (int) $b['id']));
+	/* v2.9.169: ki mondta le (a jelentkező a linkjéről, vagy a panelből – név szerint) */
+	if ((int) $n === 1 && get_option('cp_iv_db_ver') === CP_IV_DB_VER) { $wpdb->update(cp_iv_t('bookings'), array('cancel_by' => $by_admin ? 'panel:' . mb_substr(function_exists('cp_panel_who') ? (string) cp_panel_who() : '', 0, 90) : 'jelentkezo'), array('id' => (int) $b['id'])); }
 	if ((int) $n !== 1) { return true; }
 	if ($s) { cp_iv_kz_upsert($b, $s, $by_admin ? 'lemondva (a panelből)' : 'lemondva'); }
 	if (!$by_admin) { cp_iv_notify('Interjú lemondva: ' . $b['name'] . ($s ? ' – ' . cp_iv_slot_label($s, false) : '')); }
@@ -505,7 +508,20 @@ function cp_iv_admin_data() {
 		$days[$r['day']]['slots'][] = array('id' => (int) $r['id'], 'tm' => $r['tm'], 'blocked' => (int) $r['blocked'], 'b' => $b);
 	}
 	$cancelled = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_iv_t('bookings') . " WHERE status = 'cancel'");
-	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0, 'cmt' => cp_iv_cmt_ok() ? 1 : 0);
+	/* v2.9.169: a lemondások listája – ki mondta le (régieknél a jelentkező adatlapjának megjegyzéséből következtetve) */
+	$cl = array();
+	$cb = get_option('cp_iv_db_ver') === CP_IV_DB_VER ? ', b.cancel_by' : ", '' cancel_by";
+	foreach ((array) $wpdb->get_results('SELECT b.id, b.name, b.phone, b.email, b.kz_id, b.changed_at' . $cb . ', s.day, s.tm FROM ' . cp_iv_t('bookings') . ' b LEFT JOIN ' . cp_iv_t('slots') . " s ON s.id = b.last_slot WHERE b.status = 'cancel' ORDER BY b.changed_at DESC LIMIT 50", ARRAY_A) as $r) {
+		$by = (string) $r['cancel_by'];
+		if ($by === 'jelentkezo') { $who = 'a jelentkező (a linkjéről)'; }
+		elseif (strpos($by, 'panel:') === 0) { $who = 'a panelből' . (trim(substr($by, 6)) !== '' ? ' – ' . trim(substr($by, 6)) : ''); }
+		else {
+			$kn = $r['kz_id'] && function_exists('cp_kz_t') ? (string) $wpdb->get_var($wpdb->prepare('SELECT note FROM ' . cp_kz_t() . ' WHERE id = %d', (int) $r['kz_id'])) : '';
+			$who = strpos($kn, 'lemondva (a panelből)') !== false ? 'a panelből (név nincs rögzítve)' : (strpos($kn, 'Interjú lemondva') !== false ? 'a jelentkező (a linkjéről)' : 'nem ismert');
+		}
+		$cl[] = array('id' => (int) $r['id'], 'name' => $r['name'], 'phone' => $r['phone'], 'email' => $r['email'], 'slot' => $r['day'] ? cp_iv_hu_day($r['day'], false) . ' ' . $r['tm'] : '', 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['changed_at']) : (string) $r['changed_at'], 'by' => $who);
+	}
+	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0, 'cmt' => cp_iv_cmt_ok() ? 1 : 0, 'cancels' => $cl);
 }
 
 /* ------------------------------------------------------------ v2.9.85: interjú-jegyzet és értékelés (csak a panelben – soha nem a nyilvános oldalon, soha nem levélben) */
