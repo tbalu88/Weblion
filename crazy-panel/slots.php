@@ -224,6 +224,7 @@ function cp_slot_ajax_act() {
 		if (!$r || $r['day'] !== $day) { cp_el_err('Nincs ilyen meghívás.', 404); }
 		if ($op === 'del') {
 			if ($r['status'] === 'final' && !cp_slot_can_final()) { cp_el_err('Véglegesített beosztást csak Ákos vagy admin vonhat vissza.', 403); }
+			cp_slot_ics_cancel($id); /* v2.9.162: ha kapott naptárbejegyzést, lemondás */
 			$wpdb->delete($T, array('id' => $id)); $log = 'meghívás törölve';
 		} elseif ($op === 'final') {
 			if (!cp_slot_can_final()) { cp_el_err('Véglegesíteni Ákos vagy admin tud.', 403); }
@@ -232,13 +233,15 @@ function cp_slot_ajax_act() {
 			/* v2.9.121: egy slotra egy véglegesített ember – a korábbit leváltja (rákérdezés után) */
 			$prev = $wpdb->get_var($wpdb->prepare("SELECT k.name FROM $T a LEFT JOIN " . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.day = %s AND a.skey = %s AND a.status = 'final' AND a.id <> %d LIMIT 1", (int) $r['deal_id'], $day, $r['skey'], $id));
 			if ($prev !== null && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Erre a slotra már ' . ($prev ?: 'valaki') . ' van véglegesítve. Leváltod?')); }
-			if ($prev !== null) { $wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", $now, (int) $r['deal_id'], $day, $r['skey'], $id)); }
+			if ($prev !== null) { $pids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", (int) $r['deal_id'], $day, $r['skey'], $id)); $wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", $now, (int) $r['deal_id'], $day, $r['skey'], $id)); foreach ($pids as $pid) { cp_slot_ics_cancel((int) $pid); } }
 			$wpdb->update($T, array('status' => 'final', 'by_name' => $who, 'updated_at' => $now), array('id' => $id));
 			/* v2.9.117: megerősítő levél a kezelőnek (ha van e-mail-címe) */
 			$fm = cp_slot_mail((int) $id, 'final');
 			if ($fm === true) { $wpdb->update($T, array('fin_mail_at' => $now), array('id' => $id)); }
-			/* a slot többi jelöltje: „nem rá esett” */
+			/* a slot többi jelöltje: „nem rá esett” (v2.9.162: akinek ment naptárbejegyzés, az lemondást kap) */
+			$oids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", (int) $r['deal_id'], $day, $r['skey'], $id));
 			$wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", $now, (int) $r['deal_id'], $day, $r['skey'], $id));
+			foreach ($oids as $oid) { cp_slot_ics_cancel((int) $oid); }
 			$log = 'véglegesítve';
 		} else {
 			$st = sanitize_key($_POST['st'] ?? '');
@@ -247,6 +250,9 @@ function cp_slot_ajax_act() {
 			$note = mb_substr(sanitize_text_field(wp_unslash($_POST['note'] ?? '')), 0, 255);
 			$wpdb->update($T, array('status' => $st, 'note' => $note !== '' ? $note : $r['note'], 'by_name' => $who, 'updated_at' => $now), array('id' => $id));
 			$log = cp_slot_states()[$st];
+			/* v2.9.162: „Ráér” → naptárbejegyzés a kezelőnek; ha visszavonják, lemondás */
+			if ($st === 'accepted' && $r['status'] !== 'accepted') { $cm = cp_slot_mail($id, 'accepted'); if ($cm === true) { $log .= ' (naptárbejegyzés elküldve)'; } }
+			elseif ($st !== 'accepted' && in_array($r['status'], array('accepted', 'final'), true)) { cp_slot_ics_cancel($id); }
 		}
 		$deal = (int) $r['deal_id'];
 	} elseif ($op === 'swap') {
@@ -258,6 +264,7 @@ function cp_slot_ajax_act() {
 		$fin = $r['status'] === 'final';
 		if ($fin && !cp_slot_can_final()) { cp_el_err('Véglegesített beosztást csak Ákos vagy admin cserélhet.', 403); }
 		$wpdb->update($T, array('status' => 'dropped', 'updated_at' => $now), array('id' => $id));
+		cp_slot_ics_cancel($id); /* v2.9.162 */
 		$wpdb->insert($T, array('deal_id' => (int) $r['deal_id'], 'day' => $day, 'skey' => $r['skey'], 'kz_id' => $nk, 'status' => $fin ? 'final' : 'invited', 'tok' => substr(bin2hex(random_bytes(12)), 0, 24), 'by_name' => $who, 'inv_uid' => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0, 'created_at' => $now, 'updated_at' => $now));
 		if ($fin) { $nid = (int) $wpdb->insert_id; if (cp_slot_mail($nid, 'final') === true) { $wpdb->update($T, array('fin_mail_at' => $now), array('id' => $nid)); } }
 		$deal = (int) $r['deal_id']; $skey = $r['skey'];
@@ -308,6 +315,66 @@ function cp_slot_info($aid) {
 	return array('r' => $r, 'k' => $k, 'day' => cp_slot_hu_day($r['day']), 'time' => $slot ? $slot['time'] : '', 'loc' => $slot ? $slot['loc'] : '',
 		'gep' => $slot ? ($slot['kind'] === 'spin' ? '360 Spinner' : ($sk[$slot['skill']] ?? 'Szelfigép')) : '', 'need' => $slot ? $slot['need'] : '', 'url' => home_url('/?cp_slot=' . $r['tok']));
 }
+/* ------------------------------------------------------------ v2.9.162: naptárbejegyzés a kezelőnek / hostnak
+ * Elfogadáskor egész napos „foglalt nap” bejegyzés, véglegesítéskor ugyanazzal az azonosítóval (UID) frissítés a megszokott
+ * rendezvény-naptárbejegyzés tartalmával (cp_gcal_plan), ha mégsem ő megy: lemondás. Csak e-mailben megy (iCalendar) –
+ * a cégnaptárba nem kerül. Kiküldött bejegyzések: cp_slot_ics opció (meghívás-azonosító => 1). */
+function cp_slot_ics_uid($r) { return 'cpslot-' . (int) $r['deal_id'] . '-' . str_replace('-', '', (string) $r['day']) . '-' . (int) $r['kz_id'] . '@eventcrazy.hu'; }
+function cp_slot_ics_esc($v) { return str_replace(array('\\', ';', ',', "\r\n", "\n", "\r"), array('\\\\', '\\;', '\\,', '\\n', '\\n', ''), (string) $v); }
+function cp_slot_ics_fold($l) { $o = ''; while (strlen($l) > 74) { $cut = 74; while ($cut > 0 && (ord($l[$cut]) & 0xC0) === 0x80) { $cut--; } $o .= substr($l, 0, $cut) . "\r\n "; $l = substr($l, $cut); } return $o . $l; }
+/* $kind: early (foglalt nap), final (részletekkel), cancel */
+function cp_slot_ics($x, $kind) {
+	$r = $x['r']; $day = (string) $r['day']; $tz = wp_timezone();
+	$org = function_exists('cp_imp_opts') ? (string) (cp_imp_opts()['user'] ?? '') : ''; if (!is_email($org)) { $org = 'info@eventcrazy.hu'; } /* a levél feladója */
+	$em = (string) $x['k']['email'];
+	$sum = 'EventCrazy rendezvény – ' . $x['gep'] . ' (foglalt nap)'; $desc = "Jelezted, hogy erre a napra ráérsz. Ez még nem végleges beosztás – a véglegesítéskor ez a bejegyzés frissül a pontos részletekkel.\n\n" . $x['url'];
+	$loc = (string) $x['loc']; $start = ''; $end = '';
+	if ($kind === 'final' && function_exists('cp_gcal_plan')) {
+		$p = cp_gcal_plan((int) $r['deal_id'], $day);
+		if ($p) {
+			$sum = (string) $p['title'] . ' – ' . $x['gep'];
+			$desc = trim(html_entity_decode(wp_strip_all_tags(preg_replace('#<br\s*/?>#i', "\n", (string) $p['desc'])), ENT_QUOTES, 'UTF-8')) . "\n\n" . $x['url'];
+			$loc = (string) $p['loc']; $start = (string) $p['start']; $end = (string) $p['end'];
+		} else { $sum = 'EventCrazy rendezvény – ' . $x['gep']; }
+	}
+	if ($start !== '') {
+		$s = new DateTime($day . ' ' . $start, $tz); $e = clone $s;
+		if ($end === '24:00') { $e = new DateTime($day . ' 00:00', $tz); $e->modify('+1 day'); } elseif ($end !== '') { $e = new DateTime($day . ' ' . $end, $tz); if ($e <= $s) { $e->modify('+1 day'); } } else { $e->modify('+4 hours'); }
+		$s->setTimezone(new DateTimeZone('UTC')); $e->setTimezone(new DateTimeZone('UTC'));
+		$dt = array('DTSTART:' . $s->format('Ymd\THis\Z'), 'DTEND:' . $e->format('Ymd\THis\Z'));
+	} else {
+		$dt = array('DTSTART;VALUE=DATE:' . str_replace('-', '', $day), 'DTEND;VALUE=DATE:' . gmdate('Ymd', strtotime($day . ' 00:00:00 UTC') + DAY_IN_SECONDS));
+	}
+	$method = $kind === 'cancel' ? 'CANCEL' : 'REQUEST';
+	$L = array('BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EventCrazy//Crazy panel//HU', 'CALSCALE:GREGORIAN', 'METHOD:' . $method, 'BEGIN:VEVENT',
+		'UID:' . cp_slot_ics_uid($r), 'SEQUENCE:' . max(1, (int) floor((time() - 1700000000) / 60)), 'DTSTAMP:' . gmdate('Ymd\THis\Z')) ;
+	$L = array_merge($L, $dt, array('SUMMARY:' . cp_slot_ics_esc($sum), 'DESCRIPTION:' . cp_slot_ics_esc($desc)));
+	if ($loc !== '') { $L[] = 'LOCATION:' . cp_slot_ics_esc($loc); }
+	$L[] = 'ORGANIZER;CN=EventCrazy:mailto:' . $org;
+	$L[] = 'ATTENDEE;CN="' . str_replace(array('"', "\r", "\n"), '', (string) $x['k']['name']) . '";ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:' . $em;
+	$L[] = 'STATUS:' . ($kind === 'cancel' ? 'CANCELLED' : 'CONFIRMED'); $L[] = 'TRANSP:OPAQUE';
+	$L[] = 'END:VEVENT'; $L[] = 'END:VCALENDAR';
+	return array('ics' => implode("\r\n", array_map('cp_slot_ics_fold', $L)) . "\r\n", 'method' => $method, 'sum' => $sum, 'start' => $start, 'loc' => $loc, 'desc' => $desc);
+}
+function cp_slot_ics_sent($aid, $on = null) {
+	$m = get_option('cp_slot_ics', array()); if (!is_array($m)) { $m = array(); }
+	if ($on === null) { return !empty($m[(int) $aid]); }
+	if ($on) { $m[(int) $aid] = 1; } else { unset($m[(int) $aid]); }
+	update_option('cp_slot_ics', $m, false); return $on;
+}
+/* Google Naptár „hozzáadás” link (egész napos vagy időponttal) */
+function cp_slot_gcal_link($x, $c) {
+	$day = str_replace('-', '', (string) $x['r']['day']);
+	$dates = $day . '/' . gmdate('Ymd', strtotime($x['r']['day'] . ' 00:00:00 UTC') + DAY_IN_SECONDS);
+	return 'https://calendar.google.com/calendar/render?' . http_build_query(array('action' => 'TEMPLATE', 'text' => $c['sum'], 'dates' => $dates, 'details' => $c['desc'], 'location' => $c['loc']));
+}
+/* lemondás: ha korábban ment neki bejegyzés */
+function cp_slot_ics_cancel($aid) {
+	if (!cp_slot_ics_sent($aid)) { return; }
+	$r = cp_slot_mail((int) $aid, 'cancel');
+	cp_slot_ics_sent($aid, false);
+	return $r;
+}
 function cp_slot_mail($aid, $what) {
 	$x = cp_slot_info($aid);
 	if (!$x || !$x['k']) { return 'nincs ilyen meghívás'; }
@@ -320,7 +387,16 @@ function cp_slot_mail($aid, $what) {
 		'<tr><td style="padding:4px 12px 4px 0;color:#666">Helyszín</td><td>' . ($x['loc'] !== '' ? $e($x['loc']) : 'még egyeztetés alatt') . '</td></tr>' .
 		'<tr><td style="padding:4px 12px 4px 0;color:#666">Gép</td><td>' . $e($x['gep']) . '</td></tr>';
 	$hi = 'Szia ' . $e(trim((string) preg_replace('/^\S+\s+/u', '', (string) $x['k']['name'])) ?: $x['k']['name']) . '!';
-	if ($what === 'invite') {
+	$cal = in_array($what, array('accepted', 'final', 'cancel'), true) ? cp_slot_ics($x, $what === 'accepted' ? 'early' : $what) : null;
+	$calBtns = $cal && $what !== 'cancel' ? '<p style="margin:18px 0"><a href="' . esc_url(cp_slot_gcal_link($x, $cal)) . '" style="background:#1A73E8;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:bold;margin-right:8px;display:inline-block">📅 Hozzáadás a Google Naptárhoz</a> <a href="' . esc_url($x['url'] . '&ics=1') . '" style="color:#1A73E8;font-weight:bold;display:inline-block;padding:10px 4px">Letöltés (Apple / Outlook naptár)</a></p><p style="color:#666;font-size:13px">A legtöbb levelezőprogram (Gmail, Outlook, iPhone) a levélben lévő meghívóból magától is felajánlja a naptárba tételt.' . ($what === 'final' ? ' Ha korábban már betetted a naptáradba, az a bejegyzés most frissül a pontos részletekkel.' : ' A véglegesítéskor ez a bejegyzés frissül a pontos részletekkel.') . '</p>' : '';
+	if ($what === 'accepted') {
+		$subj = 'Köszönjük, hogy ráérsz – ' . $x['day'];
+		$body = '<p>' . $hi . '</p><p>Jeleztük, hogy <b>ráérsz</b> erre a napra – tedd be a naptáradba, hogy ne foglald le másra:</p><table style="border-collapse:collapse;font-size:14px">' . $rows . '</table>' . $calBtns .
+			'<p style="color:#666;font-size:13px">Ez még nem végleges beosztás – a beosztást Ákos véglegesíti, arról külön levelet kapsz.</p>';
+	} elseif ($what === 'cancel') {
+		$subj = 'Mégsem kell jönnöd – ' . $x['day'];
+		$body = '<p>' . $hi . '</p><p>Erre a napra mégsem rád esett a beosztás – köszönjük, hogy jelezted, hogy ráérsz! A naptáradból a bejegyzés törlődik (ha a leveleződ nem törli magától, nyugodtan töröld ki).</p><table style="border-collapse:collapse;font-size:14px">' . $rows . '</table>';
+	} elseif ($what === 'invite') {
 		$subj = 'Ráérsz? Rendezvény ' . $x['day'];
 		$body = '<p>' . $hi . '</p><p>Erre a napra keresünk embert egy rendezvényre – ráérnél?</p><table style="border-collapse:collapse;font-size:14px">' . $rows . '</table>' .
 			'<p style="margin:22px 0"><a href="' . esc_url($x['url'] . '&v=igen') . '" style="background:#17663A;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:bold;margin-right:8px">Ráérek</a> <a href="' . esc_url($x['url'] . '&v=nem') . '" style="background:#fff;color:#B42318;border:1.5px solid #B42318;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold">Nem érek rá</a></p>' .
@@ -328,7 +404,7 @@ function cp_slot_mail($aid, $what) {
 	} else {
 		$subj = 'Beosztás véglegesítve: ' . $x['day'];
 		$body = '<p>' . $hi . '</p><p><b>Be vagy osztva</b> erre a rendezvényre:</p><table style="border-collapse:collapse;font-size:14px">' . $rows . '</table>' .
-			'<p style="color:#666;font-size:13px">A pontos részleteket (cím, kapcsolattartó, bepakolás) a nap közeledtével küldjük. Ha mégsem tudsz menni, minél előbb szólj Ákosnak.</p>' .
+			'<p style="color:#666;font-size:13px">A pontos részleteket (cím, kapcsolattartó, bepakolás) a nap közeledtével küldjük. Ha mégsem tudsz menni, minél előbb szólj Ákosnak.</p>' . $calBtns .
 			'<p><a href="' . esc_url($x['url']) . '">A beosztásod megtekintése</a></p>';
 	}
 	$doc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1F2B">' . $body . '<p style="color:#999;font-size:12px">EventCrazy · Crazy panel</p></body></html>';
@@ -340,8 +416,11 @@ function cp_slot_mail($aid, $what) {
 		$m->Body = $doc;
 		$m->AltBody = trim(html_entity_decode(wp_strip_all_tags(preg_replace('#<\s*(br|/p|/tr)\b[^>]*>#i', "\n", $body)), ENT_QUOTES, 'UTF-8')) . "\n\n" . $x['url'];
 		$m->XMailer = 'Crazy panel';
+		/* v2.9.162: naptárbejegyzés – a levelezők felismerik (Gmail, Outlook, iPhone), és csatolmányként is megy */
+		if ($cal) { $m->Ical = $cal['ics']; $m->addStringAttachment($cal['ics'], $what === 'cancel' ? 'lemondas.ics' : 'rendezveny.ics', 'base64', 'text/calendar; charset=utf-8; method=' . $cal['method']); }
 		$m->send();
 	} catch (\Throwable $ex) { return mb_substr($ex->getMessage(), 0, 160); }
+	if ($cal && $what !== 'cancel') { cp_slot_ics_sent($aid, true); }
 	return true;
 }
 
@@ -354,6 +433,12 @@ add_action('init', function () {
 	global $wpdb;
 	$r = strlen($tok) === 24 && cp_slot_db_ok() ? $wpdb->get_row($wpdb->prepare('SELECT id FROM ' . cp_slot_t() . ' WHERE tok = %s', $tok), ARRAY_A) : null;
 	$x = $r ? cp_slot_info((int) $r['id']) : null;
+	/* v2.9.162: naptárfájl letöltése (Apple / Outlook): ?cp_slot=<jel>&ics=1 – elfogadott vagy véglegesített meghívásnál */
+	if ($x && isset($_GET['ics']) && $x['k'] && in_array($x['r']['status'], array('accepted', 'final'), true)) {
+		$c = cp_slot_ics($x, $x['r']['status'] === 'final' ? 'final' : 'early');
+		header('Content-Type: text/calendar; charset=utf-8'); header('Content-Disposition: attachment; filename="rendezveny-' . $x['r']['day'] . '.ics"');
+		echo str_replace('METHOD:REQUEST', 'METHOD:PUBLISH', $c['ics']); exit;
+	}
 	$msg = '';
 	if ($x && $_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['v'] ?? '', array('igen', 'nem'), true)) {
 		$st = $x['r']['status'];
@@ -361,6 +446,9 @@ add_action('init', function () {
 			$ns = $_POST['v'] === 'igen' ? 'accepted' : 'declined';
 			$note = mb_substr(sanitize_text_field(wp_unslash($_POST['note'] ?? '')), 0, 255);
 			$wpdb->update(cp_slot_t(), array('status' => $ns, 'note' => $note, 'ans_at' => gmdate('Y-m-d H:i:s'), 'updated_at' => gmdate('Y-m-d H:i:s')), array('id' => (int) $x['r']['id']));
+			/* v2.9.162: elfogadáskor naptárbejegyzés e-mailben; ha visszavonja, lemondás */
+			if ($ns === 'accepted' && $st !== 'accepted') { cp_slot_mail((int) $x['r']['id'], 'accepted'); }
+			elseif ($ns === 'declined' && $st === 'accepted') { cp_slot_ics_cancel((int) $x['r']['id']); }
 			/* értesítés: aki meghívta + Ákos */
 			if (function_exists('cp_notify')) {
 				$to = array((int) $x['r']['inv_uid']);
@@ -382,6 +470,11 @@ add_action('init', function () {
 		echo '<h1>' . ($x['r']['status'] === 'final' ? 'A beosztásod' : 'Meghívás rendezvényre') . '</h1>' . ($msg !== '' ? '<p class="m">' . $e($msg) . '</p>' : '') .
 			'<span class="st" style="background:' . $st[1] . ';color:' . $st[2] . '">' . $e($st[0]) . '</span>' .
 			'<dl><dt>Nap</dt><dd>' . $e($x['day']) . '</dd><dt>Időpont</dt><dd>' . ($x['time'] !== '' ? $e($x['time']) : 'még egyeztetés alatt') . '</dd><dt>Helyszín</dt><dd>' . ($x['loc'] !== '' ? $e($x['loc']) : 'még egyeztetés alatt') . '</dd><dt>Gép</dt><dd>' . $e($x['gep']) . '</dd></dl>';
+		/* v2.9.162: naptárba tétel a válaszoldalról is */
+		if (in_array($x['r']['status'], array('accepted', 'final'), true) && $x['k']) {
+			$c = cp_slot_ics($x, $x['r']['status'] === 'final' ? 'final' : 'early');
+			echo '<p class="b" style="flex-wrap:wrap"><a href="' . esc_url(cp_slot_gcal_link($x, $c)) . '" style="background:#1A73E8;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:600">📅 Google Naptár</a> <a href="' . esc_url($x['url'] . '&ics=1') . '" style="color:#1A73E8;font-weight:600;padding:10px 4px">Apple / Outlook naptár</a></p>';
+		}
 		if (in_array($x['r']['status'], array('invited', 'accepted', 'declined'), true)) {
 			$pre = isset($_GET['v']) && in_array($_GET['v'], array('igen', 'nem'), true) && $msg === '' ? (string) $_GET['v'] : '';
 			echo '<form method="post">' . ($pre === 'nem' ? '<input type="text" name="note" maxlength="200" placeholder="Megjegyzés (nem kötelező)">' : '<input type="text" name="note" maxlength="200" placeholder="Megjegyzés (nem kötelező)">') .
