@@ -55,6 +55,15 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 | # | Javaslat | Becslés |
 |---|---|---|
 
+## Alapfunkció-audit (2026-11-11) – a felhasználó nem választotta, későbbre félretéve
+| # | Javaslat | Becslés |
+|---|---|---|
+| A4 | Határidő-emlékeztető: a deal / teendő lejárta előtt értesítés (push + e-mail összefoglaló) | ~0,5 nap |
+| X1 | Deal másolása (duplikálás) – ugyanannak az ügyfélnek új rendezvény az adatok átvételével | ~0,5 nap |
+| X2 | CSV-export: a szűrt deal-lista és a kontaktlista egészének letöltése | ~0,5 nap |
+| X3 | „Legutóbb megnyitott” deal-ek / levelek, eszközök között szinkronizálva | ~0,5 nap |
+| C2 | Levél ütemezett küldése (a gomb 2.9.181 óta rejtve) | ~1 nap |
+
 ## Jegelt funkciók
 
 | # | Funkció | Mi lenne | Állapot |
