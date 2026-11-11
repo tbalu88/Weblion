@@ -201,6 +201,13 @@
 	const RATES = [[3, 'Alkalmas', 'ok'], [2, 'Talán', 'mid'], [1, 'Nem', 'no']];
 	const rateOf = n => RATES.find(r => r[0] === Number(n));
 	const rateChip = n => { const r = rateOf(n); return r ? '<span class="iv-rt ' + r[2] + '">' + r[1] + '</span>' : ''; };
+	/* v2.9.143: személyenkénti bejegyzések – a saját (szerkeszthető), a többieké (csak olvasható), összesítés értékelésenként */
+	const CM = () => !!(IV.d && IV.d.cmt);
+	const myC = b => (b.cm || []).find(c => c.mine);
+	const rateSum = L => { const n = {}; (L || []).forEach(c => { if (c.rate) n[c.rate] = (n[c.rate] || 0) + 1; }); return RATES.filter(r => n[r[0]]).map(r => '<span class="iv-rt ' + r[2] + '">' + r[1] + (n[r[0]] > 1 ? ' ×' + n[r[0]] : '') + '</span>').join(''); };
+	const cmCard = c => '<div class="iv-cm' + (c.mine ? ' me' : '') + '"><div class="iv-cmh"><b>' + esc(c.who || '–') + (c.mine ? ' (te)' : '') + '</b>' + rateChip(c.rate) + '<small>' + esc(c.at || '') + '</small></div>' + (c.body ? '<p>' + esc(c.body) + '</p>' : '') + '</div>';
+	const oldCard = b => b.note ? '<div class="iv-cm old"><div class="iv-cmh"><b>Korábbi közös jegyzet</b>' + rateChip(b.rate) + '<small>' + esc((b.nat || '') + (b.nby ? ' · ' + b.nby : '')) + '</small></div><p>' + esc(b.note) + '</p></div>' : '';
+	const cmText = b => [b.note ? 'Közös jegyzet' + (rateOf(b.rate) ? ' (' + rateOf(b.rate)[1] + ')' : '') + ': ' + b.note : ''].concat((b.cm || []).map(c => (c.who || '–') + (rateOf(c.rate) ? ' (' + rateOf(c.rate)[1] + ')' : '') + (c.body ? ': ' + c.body : ''))).filter(Boolean).join('\n');
 	const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 	/* a cím → nézet: #kezelok = lista, #kezelok:interju (vagy a régi értesítésekből #kezelok:iv), opcionálisan :<foglalás> */
 	function ivHash() { const m = /^#kezelok(?::(interju|iv)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
@@ -243,11 +250,11 @@
 		try { IV.d = await post('cp_iv_admin', params); ivSync(); ivDraw(); return true; } catch (e) { toast(e.message, true); return false; } finally { IV.busy = false; }
 	}
 	/* friss adat után a mentett (nem függő) helyi szövegek helyett a szerveré látszik – így más kolléga jegyzete is megjelenik */
-	function ivSync() { Object.keys(IV.ed).forEach(k => { const e = IV.ed[k]; if (!e.dirty && !e.inflight && !e.err) { const b = ivFind(Number(k)); if (!b || b.note !== e.text || (b.rate || 0) !== e.rate || !e.saved) delete IV.ed[k]; } }); }
+	function ivSync() { Object.keys(IV.ed).forEach(k => { const e = IV.ed[k]; if (!e.dirty && !e.inflight && !e.err) { const b = ivFind(Number(k)); if (b && CM()) { const m = myC(b); if ((m ? m.body : '') !== e.text || (m ? m.rate : 0) !== e.rate || !e.saved) delete IV.ed[k]; return; } if (!b || b.note !== e.text || (b.rate || 0) !== e.rate || !e.saved) delete IV.ed[k]; } }); }
 	const ivBox = () => S.main && S.main.isConnected ? S.main.querySelector('.kz-ivv .iv-b') : null;
 	function ivFind(bid) { const days = (IV.d && IV.d.days) || {}; for (const k of Object.keys(days)) for (const s of days[k].slots) if (s.b && s.b.id === bid) return s.b; return null; }
 	/* ---- jegyzet: helyi szerkesztési állapot foglalásonként (a szöveg újrarajzoláskor és mentési hibánál sem vész el) */
-	const edOf = b => IV.ed[b.id] || (IV.ed[b.id] = { text: b.note || '', rate: b.rate || 0, base: b.note || '', brate: b.rate || 0, timer: 0, inflight: false, dirty: false, err: '', saved: '', mby: '' });
+	const edOf = b => IV.ed[b.id] || (IV.ed[b.id] = CM() ? (m => ({ text: m ? m.body : '', rate: m ? m.rate : 0, base: '', brate: 0, timer: 0, inflight: false, dirty: false, err: '', saved: '', mby: '' }))(myC(b)) : { text: b.note || '', rate: b.rate || 0, base: b.note || '', brate: b.rate || 0, timer: 0, inflight: false, dirty: false, err: '', saved: '', mby: '' });
 	function ivQueue(bid, now) {
 		const e = IV.ed[bid]; if (!e) return;
 		e.dirty = true; e.err = ''; clearTimeout(e.timer);
@@ -262,6 +269,12 @@
 		try {
 			/* v2.9.87: a kiinduló szerveri változat is megy – ha közben más is írt bele, a szerver összefésüli (semmi nem vész el) */
 			const sent = e.text, srate = e.rate;
+			if (CM()) {
+				const r2 = await post('cp_iv_cmt', { id: bid, body: sent, rate: srate });
+				const b2 = ivFind(bid); if (b2) { b2.cm = r2.cm; const box2 = ivBox(), ol = box2 && box2.querySelector('[data-ivoth="' + bid + '"]'); if (ol) ol.innerHTML = othH(b2); }
+				e.saved = hhmm(); e.err = ''; IV.changed = true;
+				throw { ok2: 1 };
+			}
 			const r = await post('cp_iv_note', { id: bid, note: sent, rate: srate, base: e.base, brate: e.brate });
 			const b = ivFind(bid); if (b) { b.note = r.note; b.rate = r.rate; b.nby = r.nby; b.nat = r.nat; }
 			e.base = r.note; e.brate = r.rate;
@@ -270,7 +283,7 @@
 			if (r.note !== sent && e.text === sent) { e.text = r.note; ivSetTa(bid, r.note); }
 			if (r.rate !== srate && e.rate === srate) { e.rate = r.rate; const box = ivBox(); if (box) box.querySelectorAll('[data-ivrate="' + bid + '"]').forEach(x => x.setAttribute('aria-pressed', String(Number(x.dataset.v) === e.rate))); }
 			e.saved = hhmm(); e.err = ''; IV.changed = true;
-		} catch (er) { e.dirty = true; e.err = er.message; }
+		} catch (er) { if (!(er && er.ok2)) { e.dirty = true; e.err = er.message; } }
 		e.inflight = false;
 		/* közben tovább gépelt: újra mentjük; hibánál 8 mp múlva újrapróbálja (a szöveg addig is megmarad) */
 		if (e.dirty) e.timer = setTimeout(() => ivSave(bid), e.err ? 8000 : 0);
@@ -285,6 +298,7 @@
 		if (e && (e.dirty || e.inflight)) return ['', 'Mentés…'];
 		if (e && e.saved && e.mby) return ['ok', 'Mentve ' + e.saved + ' – közben ' + e.mby + ' is írt bele, a kettőt összefésültem.'];
 		if (e && e.saved) return ['ok', 'Mentve ' + e.saved];
+		if (CM()) { const m = myC(b); return ['', m ? 'A bejegyzésed: ' + m.at + ' · gépelés közben magától mentődik; üresre törölve eltűnik.' : 'Gépelés közben magától mentődik. A neved és az idő automatikusan kerül mellé.']; }
 		return ['', b.nat ? 'Utoljára: ' + b.nat + (b.nby ? ' · ' + b.nby : '') : 'Gépelés közben magától mentődik.'];
 	}
 	function ivStat(bid) {
@@ -308,11 +322,12 @@
 		} catch (er) { /* a következő kör újrapróbálja */ }
 	}, 20000);
 	const autosz = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 480) + 'px'; };
+	const othH = b => { const L = (b.cm || []).filter(c => !c.mine); return oldCard(b) + L.map(cmCard).join('') + (!L.length && !b.note ? '<p class="iv-cm0">Még senki más nem írt bejegyzést.</p>' : ''); };
 	function ivNoteBox(b) {
 		const e = edOf(b), [c, t] = ivStatTxt(b.id);
-		return '<div class="iv-nb" id="ivn-' + b.id + '"><div class="iv-rates" role="group" aria-label="Értékelés">' +
+		return '<div class="iv-nb" id="ivn-' + b.id + '">' + (CM() ? '<div class="iv-oth" data-ivoth="' + b.id + '">' + othH(b) + '</div><div class="iv-mel">A te bejegyzésed</div>' : '') + '<div class="iv-rates" role="group" aria-label="Értékelés">' +
 			RATES.map(r => '<button type="button" class="iv-rb ' + r[2] + '" data-ivrate="' + b.id + '" data-v="' + r[0] + '" aria-pressed="' + (e.rate === r[0]) + '">' + r[1] + '</button>').join('') + '</div>' +
-			'<textarea data-ivta="' + b.id + '" rows="3" maxlength="5000" aria-label="Interjú-jegyzet: ' + esc(b.name) + '" placeholder="Jegyzet az interjúhoz – benyomás, tapasztalat, mikor ér rá…">' + esc(e.text) + '</textarea>' +
+			'<textarea data-ivta="' + b.id + '" rows="3" maxlength="5000" aria-label="Interjú-jegyzet: ' + esc(b.name) + '" placeholder="' + (CM() ? 'A te benyomásod – a neved és az idő automatikusan mellé kerül' : 'Jegyzet az interjúhoz – benyomás, tapasztalat, mikor ér rá…') + '">' + esc(e.text) + '</textarea>' +
 			'<div class="iv-ns' + (c ? ' ' + c : '') + '" data-ivst="' + b.id + '" aria-live="polite">' + esc(t) + '</div></div>';
 	}
 	function ivDraw() {
@@ -334,12 +349,13 @@
 			h += '<section class="iv-day"><h4>' + esc(D.label) + ' <small>' + n + ' / ' + D.slots.filter(s => !s.blocked).length + ' foglalt</small></h4><div class="iv-list">' + D.slots.map(s => {
 				const b = s.b;
 				if (!b) return '<div class="iv-r' + (s.blocked ? ' bl' : '') + '"><div class="iv-tm">' + esc(s.tm) + '</div><div class="iv-who"><span class="iv-mu">' + (s.blocked ? 'letiltva' : 'szabad') + '</span></div><div class="iv-a"><button type="button" class="kz-link" data-ivblock="' + s.id + '" data-on="' + (s.blocked ? 0 : 1) + '">' + (s.blocked ? 'Feloldás' : 'Letiltás') + '</button></div></div>';
-				const op = NT && IV.open.has(b.id), e = IV.ed[b.id], nt = e ? e.text : (b.note || ''), rt = e ? e.rate : (b.rate || 0);
+				const op = NT && IV.open.has(b.id), e = IV.ed[b.id], nt = CM() ? (((b.cm || []).slice(-1)[0] || {}).body || b.note || '') : (e ? e.text : (b.note || '')), rt = e ? e.rate : (b.rate || 0);
 				const first = String(nt).split('\n').map(x => x.trim()).filter(Boolean)[0] || '';
+				const nC = (b.cm || []).length;
 				return '<div class="iv-r bk' + (op ? ' op' : '') + '" data-bid="' + b.id + '"><div class="iv-tm">' + esc(s.tm) + '</div>' +
 					'<div class="iv-who"><b>' + esc(b.name) + '</b><span class="iv-c"><a href="tel:' + esc(String(b.phone).replace(/[^0-9+]/g, '')) + '">' + esc(b.phone) + '</a> · <a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a></span>' +
-					(!op && (first || rt) ? '<button type="button" class="iv-np" data-ivnote="' + b.id + '" title="A jegyzet megnyitása">' + rateChip(rt) + (first ? '<span>' + esc(first) + '</span>' : '') + '</button>' : '') + '</div>' +
-					'<div class="iv-a">' + (NT ? '<button type="button" class="kz-link" data-ivnote="' + b.id + '" aria-expanded="' + op + '" aria-controls="ivn-' + b.id + '">' + (op ? 'Becsuk' : 'Jegyzet') + '</button>' : '') + '<button type="button" class="kz-link iv-del" data-ivcancel="' + b.id + '" data-n="' + esc(b.name) + '">Lemondás</button></div>' +
+					(!op && (first || rt || nC) ? '<button type="button" class="iv-np" data-ivnote="' + b.id + '" title="A bejegyzések megnyitása">' + (CM() ? rateSum((b.cm || []).concat(b.rate ? [{ rate: b.rate }] : [])) + (nC ? '<em>' + nC + ' bejegyzés</em>' : '') : rateChip(rt)) + (first ? '<span>' + esc(first) + '</span>' : '') + '</button>' : '') + '</div>' +
+					'<div class="iv-a">' + (NT ? '<button type="button" class="kz-link" data-ivnote="' + b.id + '" aria-expanded="' + op + '" aria-controls="ivn-' + b.id + '">' + (op ? 'Becsuk' : (CM() ? 'Bejegyzések' : 'Jegyzet')) + '</button>' : '') + '<button type="button" class="kz-link iv-del" data-ivcancel="' + b.id + '" data-n="' + esc(b.name) + '">Lemondás</button></div>' +
 					(op ? ivNoteBox(b) : '') + '</div>';
 			}).join('') + '</div></section>';
 		});
@@ -361,7 +377,7 @@
 		q('[data-ivcopy]', async () => { const v = d.url; try { await navigator.clipboard.writeText(v); toast('Link a vágólapon.'); } catch (e) { const i = box.querySelector('.iv-link input'); i.select(); document.execCommand('copy'); toast('Link a vágólapon.'); } });
 		q('[data-ivon]', el => { const oo = ivCollect(box); oo.on = el.checked ? 1 : 0; ivDo({ do: 'save', o: JSON.stringify(oo) }).then(ok => ok && toast(oo.on ? 'A foglalás megnyitva.' : 'A foglalás lezárva.')); }, 'change');
 		q('[data-ivblock]', el => ivDo({ do: el.dataset.on === '1' ? 'block' : 'unblock', id: el.dataset.ivblock }));
-		q('[data-ivcancel]', el => { const b = ivFind(Number(el.dataset.ivcancel)) || {}; if (window.confirm('Lemondod ' + el.dataset.n + ' interjúját? Az időpont felszabadul. (A jelentkező nem kap erről levelet – szólj neki.)' + (b.note ? ' A jegyzet megmarad a jelentkező adatlapján.' : ''))) { ivFlushAll(); ivDo({ do: 'cancel', id: el.dataset.ivcancel }); } });
+		q('[data-ivcancel]', el => { const b = ivFind(Number(el.dataset.ivcancel)) || {}; if (window.confirm('Lemondod ' + el.dataset.n + ' interjúját? Az időpont felszabadul. (A jelentkező nem kap erről levelet – szólj neki.)' + (b.note || (b.cm || []).length ? ' A bejegyzések megmaradnak a jelentkező adatlapján.' : ''))) { ivFlushAll(); ivDo({ do: 'cancel', id: el.dataset.ivcancel }); } });
 		q('[data-ivsave]', () => ivDo({ do: 'save', o: JSON.stringify(ivCollect(box)) }).then(ok => ok && toast('Elmentve.')));
 		q('[data-ivaddday]', () => { const w = box.querySelector('.iv-days'); w.insertAdjacentHTML('beforeend', ivDayRow({ d: '', from: '10:00', to: '14:00' }, w.children.length)); w.lastElementChild.querySelector('[data-ivdel]').addEventListener('click', e => e.target.closest('.iv-dr').remove()); });
 		q('[data-ivdel]', el => el.closest('.iv-dr').remove());
@@ -376,7 +392,7 @@
 		if (IV.focus) { const r = box.querySelector('.iv-r[data-bid="' + IV.focus + '"]'); IV.focus = 0; if (r) { r.scrollIntoView({ block: 'center' }); const t = r.querySelector('[data-ivta]'); if (t) t.focus({ preventScroll: true }); } }
 		q('[data-ivcsv]', () => {
 			const L = [['Nap', 'Időpont', 'Név', 'Telefon', 'E-mail'].concat(NT ? ['Értékelés', 'Jegyzet'] : [])];
-			Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (!s.b) return; const e = IV.ed[s.b.id], r = rateOf(e ? e.rate : s.b.rate); L.push([days[k].label, s.tm, s.b.name, s.b.phone, s.b.email].concat(NT ? [r ? r[1] : '', e ? e.text : (s.b.note || '')] : [])); }));
+			Object.keys(days).forEach(k => days[k].slots.forEach(s => { if (!s.b) return; const e = IV.ed[s.b.id], r = rateOf(e ? e.rate : s.b.rate); L.push([days[k].label, s.tm, s.b.name, s.b.phone, s.b.email].concat(NT ? (CM() ? [(s.b.cm || []).filter(c => c.rate).map(c => c.who + ': ' + rateOf(c.rate)[1]).join(', ') || (r ? r[1] : ''), cmText(s.b)] : [r ? r[1] : '', e ? e.text : (s.b.note || '')]) : [])); }));
 			/* képletként értelmezhető cellák (=, +, -, @ az elején) elé aposztróf – a táblázatkezelő ne futtassa */
 			const cel = c => { let v = String(c == null ? '' : c); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
 			const csv = '﻿' + L.map(r => r.map(cel).join(';')).join('\r\n');
@@ -385,7 +401,7 @@
 		q('[data-ivprint]', () => {
 			const w = window.open('', '_blank'); if (!w) return;
 			let p = '<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Interjú-időpontok</title><style>body{font:13px Arial,sans-serif;margin:24px}h2{font-size:16px;margin:18px 0 6px}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ccc;padding:6px 4px;vertical-align:top}td:first-child{width:60px;font-weight:bold}.n{white-space:pre-wrap;margin-top:4px;color:#333}.r{font-weight:bold}tr{break-inside:avoid}</style></head><body><h1 style="font-size:18px">' + esc(o.title) + '</h1>';
-			Object.keys(days).forEach(k => { p += '<h2>' + esc(days[k].label) + '</h2><table>' + days[k].slots.map(s => { const b = s.b, e = b && IV.ed[b.id], nt = b ? (e ? e.text : (b.note || '')) : '', r = b && rateOf(e ? e.rate : b.rate); return '<tr><td>' + esc(s.tm) + '</td><td>' + (b ? esc(b.name) + '<br>' + esc(b.phone) + ' · ' + esc(b.email) + (r ? '<div class="r">Értékelés: ' + r[1] + '</div>' : '') + (nt ? '<div class="n">' + esc(nt) + '</div>' : '') : (s.blocked ? '— letiltva —' : '')) + '</td></tr>'; }).join('') + '</table>'; });
+			Object.keys(days).forEach(k => { p += '<h2>' + esc(days[k].label) + '</h2><table>' + days[k].slots.map(s => { const b = s.b, e = b && IV.ed[b.id], nt = b ? (CM() ? cmText(b) : (e ? e.text : (b.note || ''))) : '', r = b && !CM() && rateOf(e ? e.rate : b.rate); return '<tr><td>' + esc(s.tm) + '</td><td>' + (b ? esc(b.name) + '<br>' + esc(b.phone) + ' · ' + esc(b.email) + (r ? '<div class="r">Értékelés: ' + r[1] + '</div>' : '') + (nt ? '<div class="n">' + esc(nt) + '</div>' : '') : (s.blocked ? '— letiltva —' : '')) + '</td></tr>'; }).join('') + '</table>'; });
 			w.document.write(p + '</body></html>'); w.document.close(); w.focus(); w.print();
 		});
 	}
@@ -405,10 +421,10 @@
 		return '<div class="kz-slots"><b>Beosztás (közelgő)</b><ul>' + L.map(v => '<li>' + esc(huD(v.d)) + ' · ' + esc(v.g) + (v.v ? ' · ' + esc(v.v) : '') + (v.deal ? ' – <a href="#deals:' + v.deal + '" data-deal="' + v.deal + '">' + esc(v.t || 'Deal #' + v.deal) + '</a>' : '') + ' <span class="kz-chip ' + (C2[v.st] || '') + '">' + esc(v.sl) + '</span></li>').join('') + '</ul></div>';
 	}
 	function ivRec(x) {
-		const L = (x.iv || []).filter(v => v.live || v.note || v.rate); if (!L.length) return '';
+		const L = (x.iv || []).filter(v => v.live || v.note || v.rate || (v.cm || []).length); if (!L.length) return '';
 		return '<div class="kz-iv"><b>Interjú</b>' + L.map(v => '<div class="kz-ivi"><div class="kz-ivh"><span>' + esc(v.when || 'időpont nélkül') + (v.live ? '' : ' <span class="cpx-muted">(lemondva)</span>') + '</span>' + rateChip(v.rate) +
 			(v.live && K.iv ? '<a class="kz-link" href="#kezelok:interju:' + v.bid + '" data-ivgo="' + v.bid + '">Jegyzet a foglalásnál →</a>' : '') + '</div>' +
-			(v.note ? '<p class="kz-note">' + esc(v.note) + '</p>' : '<p class="cpx-muted">Még nincs jegyzet.</p>') + (v.nat ? '<small class="cpx-muted">' + esc(v.nat) + (v.nby ? ' · ' + esc(v.nby) : '') + '</small>' : '') + '</div>').join('') + '</div>';
+			(v.cm && v.cm.length || v.note ? oldCard(v) + (v.cm || []).map(cmCard).join('') : '<p class="cpx-muted">Még nincs bejegyzés.</p>') + '</div>').join('') + '</div>';
 	}
 	function view(main, keep) {
 		S.main = main;
@@ -463,6 +479,7 @@
 		'.iv-who{min-width:0}.iv-who b{display:block;overflow-wrap:anywhere}.iv-a{display:flex;gap:14px;justify-content:flex-end;align-items:center;white-space:nowrap}.iv-a .kz-link{padding:2px 0}.iv-a .iv-del{color:#9A3A12}' +
 		'.iv-np{display:flex;gap:6px;align-items:center;max-width:100%;margin-top:4px;padding:0;border:0;background:none;cursor:pointer;font:12.5px/1.4 Inter,sans-serif;color:#3C4252;text-align:left}.iv-np span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iv-np:hover span:last-child{text-decoration:underline;text-underline-offset:2px}' +
 		'.iv-rt{flex:none;font:600 10.5px Inter,sans-serif;border-radius:5px;padding:1px 6px;white-space:nowrap}.iv-rt.ok{background:#DDF3E6;color:#17663A}.iv-rt.mid{background:#FFF1D6;color:#8A4B08}.iv-rt.no{background:#FBE3DC;color:#9A3A12}' +
+		'.iv-oth{display:flex;flex-direction:column;gap:6px}.iv-cm{background:#FAF8F5;border:1px solid #EEE9E1;border-radius:10px;padding:8px 10px}.iv-cm.old{background:#F5F3EF;border-style:dashed}.iv-cm.me{background:#EEF3FD;border-color:#D6E2FB}.iv-cmh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px}.iv-cmh small{margin-left:auto;color:var(--mu);font-size:11.5px;font-variant-numeric:tabular-nums}.iv-cm p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px}.iv-cm0{margin:0;font-size:12.5px;color:var(--mu)}.iv-mel{font:700 11.5px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--mu);margin-top:6px}.iv-np em{font-style:normal;font-size:12px;color:var(--mu);margin:0 4px}.kz-ivi .iv-cm{margin-top:6px}' +
 		'.iv-nb{grid-column:2/-1;display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}.iv-rates{display:flex;gap:6px;flex-wrap:wrap}.iv-rb{min-height:30px;padding:0 12px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;color:#3C4252;font:600 12.5px Inter,sans-serif;cursor:pointer}.iv-rb:hover{border-color:#B9B2A7}' +
 		'.iv-rb.ok[aria-pressed=true]{background:#DDF3E6;border-color:#9FD3B4;color:#17663A}.iv-rb.mid[aria-pressed=true]{background:#FFF1D6;border-color:#EBC27E;color:#8A4B08}.iv-rb.no[aria-pressed=true]{background:#FBE3DC;border-color:#E9A991;color:#9A3A12}' +
 		'.iv-nb textarea{width:100%;min-height:76px;max-height:480px;border:1px solid #DCD6CC;border-radius:8px;padding:8px 10px;font:13.5px/1.45 Inter,sans-serif;color:#141C33;background:#fff;resize:vertical;box-sizing:border-box}.iv-nb textarea:focus{border-color:#2F5BD8;outline:none;box-shadow:0 0 0 3px rgba(47,91,216,.15)}.iv-ns{font-size:12px;color:#656973}.iv-ns.ok{color:#17663A}.iv-ns.bad{color:#B4400E}' +

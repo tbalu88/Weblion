@@ -12,7 +12,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_IV_DB_VER', '2'); /* v2.9.85: 2 = interjú-jegyzet és értékelés a foglalásokon (note, note_by, note_at, rate) */
+define('CP_IV_DB_VER', '3'); /* v2.9.85: 2 = interjú-jegyzet és értékelés a foglalásokon (note, note_by, note_at, rate); v2.9.143: 3 = személyenkénti bejegyzések (cmt tábla) */
 function cp_iv_t($n) { global $wpdb; return $wpdb->prefix . 'crazy_iv_' . $n; }
 
 /* v2.9.85: a táblák (és az új oszlopok) csak normál, nem-AJAX kérésnél települnek (az első oldalbetöltés vagy a /interju/ teszi fel);
@@ -56,6 +56,21 @@ function cp_iv_db_install() {
   KEY email (email),
   KEY kz_id (kz_id)
 ) $c;");
+	/* v2.9.143: interjú-bejegyzések – foglalásonként és személyenként egy (saját szöveg és saját értékelés) */
+	dbDelta('CREATE TABLE ' . cp_iv_t('cmt') . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  bid bigint(20) unsigned NOT NULL,
+  wk varchar(120) NOT NULL DEFAULT '',
+  uid int(11) NOT NULL DEFAULT 0,
+  who varchar(100) NOT NULL DEFAULT '',
+  body text NULL,
+  rate tinyint(1) unsigned NOT NULL DEFAULT 0,
+  created_at datetime NULL,
+  updated_at datetime NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY bw (bid,wk),
+  KEY bid (bid)
+) $c;");
 	update_option('cp_iv_db_ver', CP_IV_DB_VER, true);
 	delete_transient('cp_iv_db_inst');
 	cp_iv_sync_slots();
@@ -70,8 +85,9 @@ add_action('init', function () {
 	cp_iv_db_install();
 }, 8);
 /* v2.9.85: az 1-es változat is használható (a foglaló működik), a jegyzet csak a 2-es táblával */
-function cp_iv_ok() { $v = get_option('cp_iv_db_ver'); return $v === CP_IV_DB_VER || $v === '1'; }
-function cp_iv_note_ok() { return get_option('cp_iv_db_ver') === CP_IV_DB_VER; }
+function cp_iv_ok() { $v = get_option('cp_iv_db_ver'); return in_array($v, array(CP_IV_DB_VER, '1', '2'), true); }
+function cp_iv_note_ok() { $v = get_option('cp_iv_db_ver'); return $v === CP_IV_DB_VER || $v === '2'; }
+function cp_iv_cmt_ok() { return get_option('cp_iv_db_ver') === CP_IV_DB_VER; }
 
 /* ------------------------------------------------------------ beállítások */
 function cp_iv_defaults() {
@@ -483,13 +499,13 @@ function cp_iv_admin_data() {
 		$b = null;
 		if ($r['bid']) {
 			$b = array('id' => (int) $r['bid'], 'name' => $r['name'], 'phone' => $r['phone'], 'email' => $r['email'], 'kz' => (int) $r['kz_id'], 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['created_at']) : $r['created_at']);
-			if ($nt) { $b += cp_iv_note_out($r); }
+			if ($nt) { $b += cp_iv_note_out($r); $b['cm'] = cp_iv_cmts((int) $r['bid']); }
 		}
 		$days[$r['day']]['label'] = cp_iv_hu_day($r['day']);
 		$days[$r['day']]['slots'][] = array('id' => (int) $r['id'], 'tm' => $r['tm'], 'blocked' => (int) $r['blocked'], 'b' => $b);
 	}
 	$cancelled = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_iv_t('bookings') . " WHERE status = 'cancel'");
-	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0);
+	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0, 'cmt' => cp_iv_cmt_ok() ? 1 : 0);
 }
 
 /* ------------------------------------------------------------ v2.9.85: interjú-jegyzet és értékelés (csak a panelben – soha nem a nyilvános oldalon, soha nem levélben) */
@@ -565,6 +581,51 @@ function cp_iv_note_merge($base, $cur, $mine) {
 	foreach (explode("\n", $mine) as $l) { $t = $k($l); if ($t !== '' && !isset($have[$t])) { $add[] = $l; $have[$t] = 1; } }
 	return $add ? rtrim($cur) . "\n" . implode("\n", $add) : $cur;
 }
+/* ------------------------------------------------------------ v2.9.143: személyenkénti interjú-bejegyzések
+ * Foglalásonként mindenkinek egy saját bejegyzése van (szöveg + saját értékelés), névvel és idővel; a sajátját mindenki
+ * javíthatja / törölheti (üresre állítva), a másokét csak olvassa. A korábbi közös jegyzet (bookings.note) csak olvasható. */
+function cp_iv_wk() {
+	$uid = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	$who = function_exists('cp_panel_who') ? mb_substr((string) cp_panel_who(), 0, 100) : '';
+	return array($uid ? 'u' . $uid : 'n:' . mb_substr($who, 0, 110), $uid, $who);
+}
+function cp_iv_cmts($bid) {
+	static $all = null;
+	if (!cp_iv_cmt_ok()) { return array(); }
+	global $wpdb;
+	if ($all === null) {
+		$all = array();
+		foreach ((array) $wpdb->get_results('SELECT bid, wk, who, body, rate, updated_at FROM ' . cp_iv_t('cmt') . ' ORDER BY updated_at, id', ARRAY_A) as $r) { $all[(int) $r['bid']][] = $r; }
+	}
+	$me = cp_iv_wk()[0];
+	return array_map(function ($r) use ($me) {
+		return array('who' => (string) $r['who'], 'body' => (string) $r['body'], 'rate' => (int) $r['rate'], 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['updated_at']) : (string) $r['updated_at'], 'mine' => $r['wk'] === $me ? 1 : 0);
+	}, $all[(int) $bid] ?? array());
+}
+add_action('wp_ajax_nopriv_cp_iv_cmt', 'cp_iv_ajax_cmt');
+add_action('wp_ajax_cp_iv_cmt', 'cp_iv_ajax_cmt');
+function cp_iv_ajax_cmt() {
+	if (!function_exists('cp_kz_auth')) { wp_send_json_error(array('msg' => 'Hiba')); }
+	cp_kz_auth();
+	if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { cp_el_err('Hibás kérés.'); }
+	if (!cp_iv_cmt_ok()) { cp_el_err('A bejegyzések még települnek – töltsd újra az oldalt egy perc múlva.', 503); }
+	global $wpdb;
+	$bid = (int) ($_POST['id'] ?? 0);
+	if ($bid <= 0 || !$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_iv_t('bookings') . ' WHERE id = %d', $bid))) { cp_el_err('Nincs ilyen foglalás.', 404); }
+	$body = cp_iv_note_clean(wp_unslash($_POST['body'] ?? ''));
+	if (mb_strlen($body) > CP_IV_NOTE_MAX) { cp_el_err('A bejegyzés legfeljebb ' . CP_IV_NOTE_MAX . ' karakter lehet.'); }
+	$rate = (int) ($_POST['rate'] ?? 0); if (!isset(cp_iv_rates()[$rate])) { $rate = 0; }
+	list($wk, $uid, $who) = cp_iv_wk();
+	$T = cp_iv_t('cmt'); $now = gmdate('Y-m-d H:i:s');
+	if (trim($body) === '' && !$rate) { $wpdb->delete($T, array('bid' => $bid, 'wk' => $wk)); }
+	else {
+		$q = $wpdb->query($wpdb->prepare("INSERT INTO $T (bid, wk, uid, who, body, rate, created_at, updated_at) VALUES (%d, %s, %d, %s, %s, %d, %s, %s) ON DUPLICATE KEY UPDATE who = VALUES(who), body = VALUES(body), rate = VALUES(rate), updated_at = VALUES(updated_at)", $bid, $wk, $uid, $who, $body, $rate, $now, $now));
+		if ($q === false) { cp_el_err('Nem sikerült menteni.', 500); }
+	}
+	$L = array_map(function ($r) use ($wk) { return array('who' => (string) $r['who'], 'body' => (string) $r['body'], 'rate' => (int) $r['rate'], 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['updated_at']) : (string) $r['updated_at'], 'mine' => $r['wk'] === $wk ? 1 : 0); },
+		(array) $wpdb->get_results($wpdb->prepare("SELECT wk, who, body, rate, updated_at FROM $T WHERE bid = %d ORDER BY updated_at, id", $bid), ARRAY_A));
+	wp_send_json_success(array('id' => $bid, 'cm' => $L));
+}
 /* a Kezelők-adatlaphoz: a jelentkező foglalásai (jegyzettel, értékeléssel) – kérésenként egyetlen lekérdezés */
 function cp_iv_kz_notes($kz_id) {
 	static $m = null;
@@ -574,7 +635,7 @@ function cp_iv_kz_notes($kz_id) {
 		global $wpdb;
 		$rows = $wpdb->get_results('SELECT b.id, b.kz_id, b.status, b.note, b.rate, b.note_by, b.note_at, s.day, s.tm FROM ' . cp_iv_t('bookings') . ' b LEFT JOIN ' . cp_iv_t('slots') . ' s ON s.id = COALESCE(b.slot_id, b.last_slot) WHERE b.kz_id IS NOT NULL ORDER BY b.id DESC', ARRAY_A);
 		foreach ((array) $rows as $r) {
-			$m[(int) $r['kz_id']][] = array('bid' => (int) $r['id'], 'when' => $r['day'] ? cp_iv_hu_day($r['day'], false) . ' ' . $r['tm'] : '', 'live' => $r['status'] === 'ok' ? 1 : 0) + cp_iv_note_out($r);
+			$m[(int) $r['kz_id']][] = array('bid' => (int) $r['id'], 'when' => $r['day'] ? cp_iv_hu_day($r['day'], false) . ' ' . $r['tm'] : '', 'live' => $r['status'] === 'ok' ? 1 : 0, 'cm' => cp_iv_cmts((int) $r['id'])) + cp_iv_note_out($r);
 		}
 	}
 	return $m[(int) $kz_id] ?? array();
