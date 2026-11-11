@@ -967,3 +967,6 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-te .ml-vars{font-size:12px;margin:8px 0}
 .ml-te .ml-vars button{font-size:11.5px;padding:2px 8px}
 @media (max-width:760px){.ml-tl{position:static;max-height:46vh}}
+
+/* v2.9.134: kézi számlamentés (nincs teljesítési dátum) */
+.ml-dvb.nd{border-color:#E8B04B;background:#FFF6E0;color:#7A4B00}

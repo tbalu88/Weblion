@@ -1110,7 +1110,7 @@
 		const nf = v => String(Math.round(Number(v) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 		const dvTitle = dv => {
 			const x = dv.ai || {}, l = ['A Drive-on: EC - Számlák ' + dv.y + ' / ' + dv.f];
-			l.push(dv.s === 'mail' ? 'A számla keltét nem sikerült kiolvasni – a levél dátuma szerinti hónapba került. A ✎ gombbal áthelyezheted.' : dv.s === 'kezi' ? 'A hónapot kézzel állították be.' : 'A számla kelte: ' + dv.d + (dv.s === 'ai' ? ' (AI olvasta ki)' : ' (szövegfelismerés)'));
+			l.push(dv.s === 'mail' ? 'A számla teljesítési dátumát és keltét sem sikerült kiolvasni – a levél dátuma szerinti hónapba került. A ✎ gombbal áthelyezheted.' : dv.s === 'kezi' ? 'A hónapot kézzel állították be.' : (dv.dk === 'k' ? 'Nincs teljesítési dátum – a kelte: ' : dv.dk === 't' ? 'Teljesítés: ' : 'A számla dátuma: ') + dv.d + (dv.s === 'ai' ? ' (AI olvasta ki)' : ' (szövegfelismerés)'));
 			if (x.sup) l.push('Kiállító: ' + x.sup);
 			if (x.no) l.push('Számlaszám: ' + x.no);
 			if (x.amt) l.push('Bruttó: ' + x.amt + (x.cur ? ' ' + x.cur : ''));
@@ -1120,7 +1120,7 @@
 			return l.join('\n');
 		};
 		const dvHtml = (m, a, ai) => a.dv ? ' <a class="ml-dv' + (a.dv.s === 'mail' ? ' warn' : '') + '" href="https://drive.google.com/file/d/' + encodeURIComponent(a.dv.id) + '/view" target="_blank" rel="noopener" title="' + esc(dvTitle(a.dv)) + '">✓ Drive · ' + esc(a.dv.f) + (a.dv.s === 'mail' ? ' ?' : '') + '</a><button type="button" class="ml-dvx" data-dvx="' + Number(m.id) + '" data-dvi="' + ai + '" title="Másik hónapba (a fájl a Drive-on is átkerül)" aria-label="Hónap módosítása">✎</button>'
-			: (isInv && m.dir === 'in' && /\.pdf$/i.test(a.n || '') ? ' <button type="button" class="ml-dvb" data-dvm="' + Number(m.id) + '" data-dvi="' + ai + '" title="A számla mentése a Drive számlamappájába, a kelte szerinti hónapba">Mentés a Drive-ra</button>' : '');
+			: (isInv && m.dir === 'in' && /\.pdf$/i.test(a.n || '') ? ' ' + (a.dvn ? '<button type="button" class="ml-dvb nd" data-dvm="' + Number(m.id) + '" data-dvi="' + ai + '" data-dvn="1" title="A teljesítés dátumát nem sikerült kiolvasni – válaszd ki a hónapot, és a számla abba a mappába kerül">⚠ Kézi mentés – hónap választása</button>' : '<button type="button" class="ml-dvb" data-dvm="' + Number(m.id) + '" data-dvi="' + ai + '" title="A számla mentése a Drive számlamappájába, a teljesítés dátuma szerinti hónapba">Mentés a Drive-ra</button>') : '');
 		const dvAny = msgs0.some(m => (m.attachments || []).some(a => a.dv));
 		/* v2.9.83: a nyitott válaszíró az újrarajzolást túléli (címke, kiosztás, jegyzet, sorrend…) – kivesszük, a végén visszatesszük, a beírt szöveggel együtt */
 		const icKeep = IR.el && IR.th === t.id ? IR.el : null;
@@ -1155,16 +1155,36 @@
 		rd.querySelector('[data-st]').addEventListener('click', () => act('cp_mail_thread_set', { f: 'status', v: t.st === 'closed' ? 'open' : 'closed' }));
 		window.CPZipScan(rd);
 		ceMark(rd, t.id);
+		/* v2.9.134: ha a teljesítés dátuma nem olvasható ki, a hónapot a felhasználó választja */
+		const HN0 = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
+		const pickMonth = (b, mm, done) => {
+			const base = new Date(String((mm && mm.sent_at) || '').slice(0, 10) + 'T12:00:00'), b0 = isNaN(base) ? new Date() : base, opts = ['<option value="">Melyik hónap? (teljesítés)</option>'];
+			for (let k = 1; k >= -13; k--) { const d = new Date(b0.getFullYear(), b0.getMonth() + k, 15), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); opts.push('<option value="' + ym + '">' + d.getFullYear() + ' · ' + String(d.getMonth() + 1).padStart(2, '0') + ' - ' + HN0[d.getMonth()] + '</option>'); }
+			const sel = document.createElement('select'); sel.className = 'ml-dvs'; sel.setAttribute('aria-label', 'Melyik hónap mappájába kerüljön (a teljesítés hónapja)'); sel.innerHTML = opts.join('');
+			b.replaceWith(sel); sel.focus();
+			sel.addEventListener('change', () => { if (sel.value) { sel.disabled = true; done(sel.value, sel); } });
+			sel.addEventListener('blur', () => { if (!sel.disabled) setTimeout(() => { if (sel.isConnected && !sel.disabled) drawThread(box, rd, x); }, 150); });
+		};
 		rd.querySelectorAll('[data-dvm]').forEach(b => b.addEventListener('click', async e => {
 			e.preventDefault(); e.stopPropagation();
+			const mm0 = (x.msgs || []).find(z => String(z.id) === b.dataset.dvm), ix0 = Number(b.dataset.dvi);
+			const saveYm = async (ym, sel) => {
+				try { const r = await post('cp_mail_drive_save', { m: b.dataset.dvm, i: b.dataset.dvi, ym: ym }); if (mm0 && mm0.attachments[ix0]) { mm0.attachments[ix0].dv = r.dv; delete mm0.attachments[ix0].dvn; } toast((r.dv.k ? 'Ez a számla már fent volt a Drive-on: ' : 'Mentve a Drive-ra: ') + r.dv.f); drawThread(box, rd, x); }
+				catch (er) { sel.disabled = false; toast(er.message, true); }
+			};
+			if (b.dataset.dvn) { pickMonth(b, mm0, saveYm); return; }
 			b.disabled = true; b.textContent = 'Mentés…';
 			try {
 				const r = await post('cp_mail_drive_save', { m: b.dataset.dvm, i: b.dataset.dvi });
 				const mm = (x.msgs || []).find(z => String(z.id) === b.dataset.dvm);
 				if (mm && mm.attachments && mm.attachments[Number(b.dataset.dvi)]) mm.attachments[Number(b.dataset.dvi)].dv = r.dv;
-				toast(r.dv.k ? 'Ez a számla már fent volt a Drive-on: ' + r.dv.f : 'Mentve a Drive-ra: ' + r.dv.f + (r.dv.s === 'mail' ? ' (a kelte nem volt kiolvasható – a levél dátuma szerint)' : ''));
+				toast(r.dv.k ? 'Ez a számla már fent volt a Drive-on: ' + r.dv.f : 'Mentve a Drive-ra: ' + r.dv.f + (r.dv.s === 'mail' ? ' (a teljesítés dátuma nem volt kiolvasható – a levél dátuma szerint)' : r.dv.dk === 'k' ? ' (nincs teljesítési dátum – a kelte szerint)' : ''));
 				drawThread(box, rd, x);
-			} catch (er) { b.disabled = false; b.textContent = 'Mentés a Drive-ra'; toast(er.message, true); }
+			} catch (er) {
+				b.disabled = false; b.textContent = 'Mentés a Drive-ra';
+				if (er.code === 'nodate') { if (mm0 && mm0.attachments[ix0]) mm0.attachments[ix0].dvn = 1; toast(er.message); pickMonth(b, mm0, saveYm); return; }
+				toast(er.message, true);
+			}
 		}));
 		rd.querySelectorAll('[data-dvx]').forEach(b => b.addEventListener('click', e => {
 			e.preventDefault(); e.stopPropagation();

@@ -1,7 +1,8 @@
 <?php
 /**
  * Crazy panel – bejövő számlák mentése a Google Drive számlamappájába (v2.9.38)
- * A „Számla” címkés bejövő levelek PDF-mellékletei a számla kelte szerinti havi mappába kerülnek:
+ * A „Számla” címkés bejövő levelek PDF-mellékletei a számla teljesítési dátuma szerinti havi mappába kerülnek
+ * (v2.9.133 – korábban a kelte szerint; ha a teljesítés nem olvasható ki, a kelte, végül a levél dátuma dönt):
  *   <szülő> / „EC - Számlák ÉÉÉÉ” / „HH - Hónap” / <eredeti fájlnév>
  * A keltet a Google Drive szövegfelismerése olvassa ki (ideiglenes Google-dokumentum, utána törölve – a számla
  * a Google-nál marad); ha nem sikerül, a levél dátuma dönt, és ez jelölve van. Azonos nevű fájl a mappában = már
@@ -105,9 +106,28 @@ function cp_mdr_parse_date($s) {
 }
 /* a „Számla kelte / Kelt / Kiállítás dátuma / Invoice date” utáni dátum; ésszerűségi korlát: a levél előtt legfeljebb 400, utána 5 nap */
 function cp_mdr_inv_date($text, $mail_ymd) {
-	$lab = '(sz[aá]mla\s*kelte|kelte|kelt|ki[aá]ll[ií]t[aá]s(?:\s*(?:d[aá]tuma|kelte|napja))?|sz[aá]mla\s*d[aá]tuma|invoice\s*date|date\s*of\s*issue|issue\s*date|date\s*issued|rechnungsdatum)';
+	/* v2.9.133: elsőként a teljesítés dátuma; táblázatos fejlécnél (címkék egy sorban, dátumok alattuk) az oszlop sorszáma dönt */
+	$t = preg_replace('/[ \t]+/u', ' ', (string) $text); $L = preg_split('/\n/u', $t);
+	$DR = '/(20\d\d\s*[.\-\/]\s*\d{1,2}\s*[.\-\/]\s*\d{1,2}|\d{1,2}\s*[.\-\/]\s*\d{1,2}\s*[.\-\/]\s*20\d\d)/u';
+	foreach ($L as $ix => $ln) {
+		if (!preg_match('/teljes[ií]t[eé]s/iu', $ln) || preg_match($DR, $ln)) { continue; }
+		if (!preg_match_all('/(teljes[ií]t[eé]s|kelte|kelt\b|ki[aá]ll[ií]t[aá]s|hat[aá]rid[oő]|esed[eé]kess[eé]g|fizet[eé]s\s*d[aá]tuma)/iu', $ln, $hm) || count($hm[1]) < 2) { continue; }
+		$col = 0; foreach ($hm[1] as $k => $h) { if (preg_match('/^teljes/iu', $h)) { $col = $k; break; } }
+		for ($j = $ix + 1; $j <= $ix + 3 && $j < count($L); $j++) {
+			if (preg_match_all($DR, $L[$j], $dd) && count($dd[1]) >= count($hm[1])) {
+				$d = cp_mdr_parse_date($dd[1][$col]); $lo = strtotime($mail_ymd . ' 12:00 UTC') - 400 * DAY_IN_SECONDS; $hi = strtotime($mail_ymd . ' 12:00 UTC') + 60 * DAY_IN_SECONDS;
+				if ($d !== '' && strtotime($d . ' 12:00 UTC') >= $lo && strtotime($d . ' 12:00 UTC') <= $hi) { return $d; }
+				break;
+			}
+		}
+	}
+	$p = cp_mdr_inv_date_l($text, $mail_ymd, '(teljes[ií]t[eé]s(?:\s*(?:d[aá]tuma|napja|id[oő]pontja|ideje))?|delivery\s*date|date\s*of\s*supply|service\s*date|leistungsdatum)', 60);
+	return $p;
+}
+function cp_mdr_inv_date_l($text, $mail_ymd, $lab0, $after) {
+	$lab = $lab0 !== '' ? $lab0 : '(sz[aá]mla\s*kelte|kelte|kelt|ki[aá]ll[ií]t[aá]s(?:\s*(?:d[aá]tuma|kelte|napja))?|sz[aá]mla\s*d[aá]tuma|invoice\s*date|date\s*of\s*issue|issue\s*date|date\s*issued|rechnungsdatum)';
 	$t = preg_replace('/[ \t]+/u', ' ', (string) $text);
-	$lo = strtotime($mail_ymd . ' 12:00 UTC') - 400 * DAY_IN_SECONDS; $hi = strtotime($mail_ymd . ' 12:00 UTC') + 5 * DAY_IN_SECONDS;
+	$lo = strtotime($mail_ymd . ' 12:00 UTC') - 400 * DAY_IN_SECONDS; $hi = strtotime($mail_ymd . ' 12:00 UTC') + $after * DAY_IN_SECONDS;
 	$ok = function ($d) use ($lo, $hi) { if ($d === '') { return false; } $ts = strtotime($d . ' 12:00 UTC'); return $ts >= $lo && $ts <= $hi; };
 	/* 1. a címke után közvetlenül (ugyanabban vagy a következő sorban) */
 	if (preg_match_all('/' . $lab . '\s*[:.]?\s*\n?[^\n\d]{0,25}?((?:20\d\d|\d{1,2}[.\-\/]|[a-z]{3,})[^\n]{0,24})/iu', $t, $mm, PREG_SET_ORDER)) {
@@ -128,11 +148,12 @@ function cp_mdr_ai($data, $mail_ymd, $ref = '') {
 	if (!cp_mdr_ai_on()) { return new WP_Error('cp_mdr', 'Nincs AI-kulcs.'); }
 	if (strlen($data) > 20 * 1048576) { return new WP_Error('cp_mdr', 'A PDF túl nagy az AI-kiolvasáshoz.'); }
 	$sys = 'Egy beérkezett számla (vagy díjbekérő / nyugta) PDF-jéből olvasd ki az adatokat. Csak azt írd, ami a dokumentumban szerepel; ha valami nincs benne vagy nem egyértelmű, üres szöveg. '
-		. 'A „kelte” a számla kiállításának dátuma (Számla kelte / Kelt / Kiállítás dátuma / Invoice date / Date of issue) – NEM a teljesítés és NEM a fizetési határidő. Dátum formája: ÉÉÉÉ-HH-NN. '
+		. 'Az issue_date a számla kiállításának dátuma (Számla kelte / Kelt / Kiállítás dátuma / Invoice date / Date of issue). '
+		. 'A perf_date a teljesítés dátuma (Teljesítés dátuma / Teljesítés / Teljesítési időpont / Delivery date / Date of supply / Service date / Leistungsdatum) – NEM a kelte és NEM a fizetési határidő; ha nincs a számlán, üres. Dátum formája: ÉÉÉÉ-HH-NN. '
 		. 'Az összeg a fizetendő bruttó végösszeg számként (tizedesponttal, ezres elválasztó nélkül), a pénznem háromjegyű kód (HUF, EUR, USD).';
-	$schema = array('type' => 'object', 'additionalProperties' => false, 'required' => array('kind', 'issue_date', 'supplier', 'invoice_no', 'gross', 'currency', 'due_date'), 'properties' => array(
+	$schema = array('type' => 'object', 'additionalProperties' => false, 'required' => array('kind', 'issue_date', 'perf_date', 'supplier', 'invoice_no', 'gross', 'currency', 'due_date'), 'properties' => array(
 		'kind' => array('type' => 'string', 'enum' => array('szamla', 'dijbekero', 'nyugta', 'egyeb'), 'description' => 'A dokumentum fajtája'),
-		'issue_date' => array('type' => 'string'), 'supplier' => array('type' => 'string', 'description' => 'A kiállító (eladó) neve'),
+		'issue_date' => array('type' => 'string'), 'perf_date' => array('type' => 'string', 'description' => 'A teljesítés dátuma'), 'supplier' => array('type' => 'string', 'description' => 'A kiállító (eladó) neve'),
 		'invoice_no' => array('type' => 'string'), 'gross' => array('type' => 'string'), 'currency' => array('type' => 'string'), 'due_date' => array('type' => 'string'),
 	));
 	$msg = array(array('role' => 'user', 'content' => array(
@@ -145,10 +166,12 @@ function cp_mdr_ai($data, $mail_ymd, $ref = '') {
 	if (is_wp_error($r)) { return $r; }
 	$j = json_decode((string) $r, true);
 	if (!is_array($j)) { return new WP_Error('cp_mdr', 'Az AI válasza nem értelmezhető.'); }
-	$d = preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', (string) $j['issue_date'], $m) ? cp_mdr_mk($m[1], $m[2], $m[3]) : '';
-	if ($d !== '') { $ts = strtotime($d . ' 12:00 UTC'); $mt = strtotime($mail_ymd . ' 12:00 UTC'); if ($ts < $mt - 400 * DAY_IN_SECONDS || $ts > $mt + 5 * DAY_IN_SECONDS) { $d = ''; } }
+	/* v2.9.133: a mappát a teljesítés dátuma dönti el (ha nincs, a kelte); ésszerűségi korlát: a levél előtt 400, utána 5 (teljesítésnél 60) nap */
+	$dt = function ($v, $after) use ($mail_ymd) { $d = preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', (string) $v, $m) ? cp_mdr_mk($m[1], $m[2], $m[3]) : ''; if ($d !== '') { $ts = strtotime($d . ' 12:00 UTC'); $mt = strtotime($mail_ymd . ' 12:00 UTC'); if ($ts < $mt - 400 * DAY_IN_SECONDS || $ts > $mt + $after * DAY_IN_SECONDS) { $d = ''; } } return $d; };
+	$kd = $dt($j['issue_date'] ?? '', 5); $td = $dt($j['perf_date'] ?? '', 60);
+	$d = $td; /* v2.9.134: csak a teljesítés dátuma dönt – ha nincs, kézi mentés (a felhasználó dönt) */
 	$cl = function ($v, $n) { return mb_substr(sanitize_text_field((string) $v), 0, $n); };
-	return array('d' => $d, 'kind' => $cl($j['kind'], 10), 'sup' => $cl($j['supplier'], 80), 'no' => $cl($j['invoice_no'], 40), 'amt' => $cl($j['gross'], 20), 'cur' => $cl($j['currency'], 3), 'due' => $cl($j['due_date'], 10), 'tk' => $tk);
+	return array('d' => $d, 'dk' => $td !== '' ? 't' : 'k', 'kd' => $kd, 'kind' => $cl($j['kind'], 10), 'sup' => $cl($j['supplier'], 80), 'no' => $cl($j['invoice_no'], 40), 'amt' => $cl($j['gross'], 20), 'cur' => $cl($j['currency'], 3), 'due' => $cl($j['due_date'], 10), 'tk' => $tk);
 }
 
 /* ------------------------------------------------------------ a melléklet tartalma a postafiókból (kérés nélkül, háttérből is) */
@@ -183,7 +206,7 @@ function cp_mdr_fetch($m, $i) {
 function cp_mdr_is_pdf($n) { return (bool) preg_match('/\.pdf$/i', (string) $n); }
 
 /* ------------------------------------------------------------ egy melléklet mentése; visszaadja a „dv” adatot */
-function cp_mdr_save($mid, $i, $by = '') {
+function cp_mdr_save($mid, $i, $by = '', $ym = '') {
 	global $wpdb;
 	$M = cp_mail_t('messages');
 	$m = $wpdb->get_row($wpdb->prepare("SELECT id, thread_id, dir, from_email, attachments, sent_at, mid, imap_folder, imap_uid FROM $M WHERE id = %d", $mid), ARRAY_A); /* v2.9.58: csak a szükséges oszlopok (a törzs és a HTML nélkül) */
@@ -197,7 +220,11 @@ function cp_mdr_save($mid, $i, $by = '') {
 	if (is_wp_error($data)) { return $data; }
 	if (strncmp($data, '%PDF', 4) !== 0) { return new WP_Error('cp_mdr', 'A melléklet nem PDF.'); }
 	$mail_ymd = wp_date('Y-m-d', strtotime($m['sent_at'] . ' UTC'));
-	/* a kelte: 1. a Claude olvassa ki (és a többi adatot is), 2. Drive-szövegfelismerés, 3. a levél dátuma */
+	/* v2.9.134: kézi mentésnél a felhasználó választotta hónap */
+	$ym = preg_match('/^(20\d\d)-(0[1-9]|1[0-2])$/', (string) $ym) ? (string) $ym : '';
+	if ($ym !== '') { $ai = null; $d = $ym . '-15'; $src = 'kezi'; }
+	else {
+	/* a teljesítés dátuma: 1. a Claude olvassa ki (és a többi adatot is), 2. Drive-szövegfelismerés; ha egyik sem: kézi mentés */
 	$ai = cp_mdr_ai_on() ? cp_mdr_ai($data, $mail_ymd, 'levél ' . (int) $mid) : null;
 	$d = is_array($ai) ? $ai['d'] : '';
 	$src = $d !== '' ? 'ai' : '';
@@ -208,8 +235,19 @@ function cp_mdr_save($mid, $i, $by = '') {
 		$d = is_wp_error($txt) ? '' : cp_mdr_inv_date($txt, $mail_ymd);
 		$src = $d !== '' ? 'pdf' : 'mail';
 	}
-	if ($d === '') { $d = $mail_ymd; }
+	}
+	if ($d === '') {
+		/* v2.9.134: nem olvasható ki a teljesítés dátuma – nem a rendszer dönt (a levél dátuma szerint sem): kézi mentés kell */
+		$list = json_decode((string) $wpdb->get_var($wpdb->prepare("SELECT attachments FROM $M WHERE id = %d", $mid)), true) ?: array();
+		if (isset($list[$i]) && empty($list[$i]['dvn'])) {
+			$list[$i]['dvn'] = 1;
+			$wpdb->update($M, array('attachments' => wp_json_encode($list)), array('id' => (int) $mid));
+			$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $m['thread_id'], 'kind' => 'drive', 'text' => mb_substr('Számla: a teljesítés dátuma nem olvasható ki (' . $name . ') – kézi mentés kell (Mentés a Drive-ra → hónap)', 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+		}
+		return new WP_Error('cp_mdr_nodate', 'A számla teljesítési dátumát nem sikerült kiolvasni – válaszd ki, melyik hónap mappájába kerüljön.');
+	}
 	$dsrc = $src;
+	$dk = is_array($ai) && $src === 'ai' ? $ai['dk'] : ''; /* t = teljesítés, k = kelte szerint */
 	$f = cp_mdr_month_folder($d);
 	if (is_wp_error($f)) { return $f; }
 	$ex = cp_mdr_find_file($f['id'], $name, md5($data));
@@ -223,12 +261,12 @@ function cp_mdr_save($mid, $i, $by = '') {
 	}
 	if ($ex !== '') { $id = $ex; $src = 'van'; }
 	else { $id = cp_mdr_upload($f['id'], $name, $data, 'application/pdf'); if (is_wp_error($id)) { return $id; } }
-	$dv = array('id' => $id, 'f' => $f['name'], 'y' => $f['year'], 'd' => $d, 's' => $dsrc, 'k' => $ex !== '' ? 1 : 0);
+	$dv = array('id' => $id, 'f' => $f['name'], 'y' => $f['year'], 'd' => $d, 's' => $dsrc, 'k' => $ex !== '' ? 1 : 0, 'dk' => $dk);
 	if (is_array($ai)) { $dv['ai'] = array_intersect_key($ai, array_flip(array('kind', 'sup', 'no', 'amt', 'cur', 'due'))); $dv['tk'] = $ai['tk']; }
 	/* friss olvasás, hogy egy közben történt másik mentést ne írjunk felül */
 	$list = json_decode((string) $wpdb->get_var($wpdb->prepare("SELECT attachments FROM $M WHERE id = %d", $mid)), true) ?: array();
-	if (isset($list[$i])) { $list[$i]['dv'] = $dv; $wpdb->update($M, array('attachments' => wp_json_encode($list)), array('id' => (int) $mid)); }
-	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $m['thread_id'], 'kind' => 'drive', 'text' => mb_substr((!empty($dv['k']) ? 'Számla már a Drive-on: ' : 'Számla a Drive-ra mentve: ') . 'EC - Számlák ' . $f['year'] . ' / ' . $f['name'] . ' (' . $name . ')' . ($dv['s'] === 'mail' ? ' – a kelte nem volt kiolvasható, a levél dátuma szerint' : '') . (isset($dv['tk']) ? ' · AI: ' . number_format($dv['tk']['in'] + $dv['tk']['out'], 0, ',', ' ') . ' token' : ''), 0, 255), 'author_uid' => 0, 'author' => $by !== '' ? $by : 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+	if (isset($list[$i])) { $list[$i]['dv'] = $dv; unset($list[$i]['dvn']); $wpdb->update($M, array('attachments' => wp_json_encode($list)), array('id' => (int) $mid)); }
+	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $m['thread_id'], 'kind' => 'drive', 'text' => mb_substr((!empty($dv['k']) ? 'Számla már a Drive-on: ' : 'Számla a Drive-ra mentve: ') . 'EC - Számlák ' . $f['year'] . ' / ' . $f['name'] . ' (' . $name . ')' . ($dv['s'] === 'kezi' ? ' – kézzel választott hónap' : '') . (isset($dv['tk']) ? ' · AI: ' . number_format($dv['tk']['in'] + $dv['tk']['out'], 0, ',', ' ') . ' token' : ''), 0, 255), 'author_uid' => 0, 'author' => $by !== '' ? $by : 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
 	return $dv;
 }
 
@@ -250,7 +288,7 @@ function cp_mdr_run() {
 		if (time() - $t0 > 90) { break; }
 		$list = json_decode((string) $wpdb->get_var($wpdb->prepare('SELECT attachments FROM ' . cp_mail_t('messages') . ' WHERE id = %d', $mid)), true) ?: array();
 		$err = '';
-		foreach ($list as $i => $a) { if (cp_mdr_is_pdf($a['n'] ?? '') && empty($a['dv'])) { $r = cp_mdr_save((int) $mid, (int) $i); if (is_wp_error($r)) { $err = $r->get_error_message(); } } }
+		foreach ($list as $i => $a) { if (cp_mdr_is_pdf($a['n'] ?? '') && empty($a['dv']) && empty($a['dvn'])) { $r = cp_mdr_save((int) $mid, (int) $i); if (is_wp_error($r) && $r->get_error_code() !== 'cp_mdr_nodate') { $err = $r->get_error_message(); } } }
 		/* hiba: legfeljebb 3 próbálkozás (a következő körökben) */
 		if ($err !== '' && $tries < 2) { $done[$mid] = $tries + 1; } else { $done[$mid] = true; if ($err !== '') { update_option('cp_mdr_err', array('t' => time(), 'm' => (int) $mid, 'e' => mb_substr($err, 0, 200)), false); } }
 	}
@@ -271,8 +309,8 @@ function cp_mdr_ajax_save() {
 	if (!function_exists('cp_gdb_api')) { cp_el_err('A Google Drive nincs bekötve.'); }
 	@set_time_limit(120);
 	$mid = (int) ($_POST['m'] ?? 0); $i = (int) ($_POST['i'] ?? 0);
-	$r = cp_mdr_save($mid, $i, function_exists('cp_panel_who') ? cp_panel_who() : '');
-	if (is_wp_error($r)) { cp_el_err($r->get_error_message()); }
+	$r = cp_mdr_save($mid, $i, function_exists('cp_panel_who') ? cp_panel_who() : '', (string) ($_POST['ym'] ?? ''));
+	if (is_wp_error($r)) { if ($r->get_error_code() === 'cp_mdr_nodate') { wp_send_json_error(array('code' => 'nodate', 'msg' => $r->get_error_message())); } cp_el_err($r->get_error_message()); }
 	global $wpdb;
 	$tid = (int) $wpdb->get_var($wpdb->prepare('SELECT thread_id FROM ' . cp_mail_t('messages') . ' WHERE id = %d', $mid));
 	if ($tid && function_exists('cp_mail_tag_add')) { cp_mail_tag_add($tid, CP_MAIL_INV_TAG); }

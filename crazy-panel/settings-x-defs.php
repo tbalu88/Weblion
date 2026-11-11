@@ -450,7 +450,7 @@ add_filter('cp_sx_sections', function ($S) {
 				return $o;
 			},
 			'fields' => array(
-				array('k' => 'mdr_ai', 't' => 'sw', 'l' => 'Számlák kiolvasása AI-jal (a kelte, a szállító, a számlaszám és az összeg); kikapcsolva csak a Google szövegfelismerése', 'opt' => 'cp_mdr_ai', 'def' => 1),
+				array('k' => 'mdr_ai', 't' => 'sw', 'l' => 'Számlák kiolvasása AI-jal (a teljesítés dátuma és a kelte, a szállító, a számlaszám és az összeg); kikapcsolva csak a Google szövegfelismerése', 'opt' => 'cp_mdr_ai', 'def' => 1),
 			),
 		);
 	}
