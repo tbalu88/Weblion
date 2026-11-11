@@ -851,8 +851,10 @@
 				const rotB = rot ? rotHtml(r, rot) : '';
 				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
 				/* v2.9.122: a rohadó csempe egésze elszíneződik (halványsárga → narancs → piros); a felső sávban kikapcsolható */
-				const rotSt = rot && rotOn() ? (c => ' style="background:' + c.card + ';border-color:' + c.bd + ';box-shadow:inset 4px 0 0 ' + c.bd + '"')(rotCol(rot / Math.max(60, r.rw || 1440))) : '';
-				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + (rotSt ? ' rotting' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + rotSt + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
+				/* v2.9.125: ha a késés eléri a szakasz idejét (a skála piros vége): lüktető piros fénygyűrű + időnkénti remegés (a csempék nem egyszerre) */
+				const rotF = rot / Math.max(60, r.rw || 1440), rotMax = rot && rotOn() && rotF >= 1;
+				const rotSt = rot && rotOn() ? (c => ' style="background:' + c.card + ';border-color:' + c.bd + ';box-shadow:inset 4px 0 0 ' + c.bd + (rotMax ? ';--rd:-' + ((r.id * 7919) % 5000) + 'ms' : '') + '"')(rotCol(rotF)) : '';
+				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + (rotSt ? ' rotting' : '') + (rotMax ? ' rot-max' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + rotSt + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
 				if (S.dense && !MOB) {
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
