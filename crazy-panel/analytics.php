@@ -6,6 +6,7 @@
  *   S7  az első válasz gyorsasága és a nyerési arány
  *   S12 terhelés: beérkező levelek és a mi válaszaink órák / napok szerint, mellette a panelben töltött aktív idő
  *   S13 megválaszolatlan levelek most (kor és felelős szerint)
+ *   v2.9.146 (a percenkénti panelhasználatból, max. 90 nap): S1 idő ügyenként, S2 válaszírás ráfordítása, S4 fülváltások, S5 üresjárat
  * Az időpontok a táblákban UTC-ben vannak; a napszak-bontásnál a helyi időre számolunk.
  */
 if (!defined('ABSPATH')) { exit; }
@@ -28,7 +29,7 @@ function cp_an_ajax_stats() {
 	if ($from > $to) { list($from, $to) = array($to, $from); }
 	$ck = 'cp_an_' . md5($from . '|' . $to);
 	if (empty($_REQUEST['fresh']) && ($c = get_transient($ck))) { wp_send_json_success($c); }
-	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'at' => wp_date('Y-m-d H:i'));
+	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'use' => cp_an_use($from, $to), 'at' => wp_date('Y-m-d H:i'));
 	set_transient($ck, $out, 10 * MINUTE_IN_SECONDS);
 	wp_send_json_success($out);
 }
@@ -143,4 +144,47 @@ function cp_an_unans() {
 	usort($L, function ($a, $b) { return $b['h'] <=> $a['h']; });
 	$who = array_values($who); usort($who, function ($a, $b) { return $b['n'] - $a['n']; });
 	return array('n' => count($rows), 'b' => $B, 'who' => $who, 'list' => array_slice($L, 0, 15));
+}
+
+/* ------------------------------------------------------------ v2.9.146: S1, S2, S4, S5 a percenkénti panelhasználatból */
+function cp_an_use($from, $to) {
+	if (!function_exists('cp_us_t')) { return null; }
+	global $wpdb;
+	$from = max($from, wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS));
+	if ($from > $to) { return null; }
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT uid, d, m, act, tab, obj, st FROM ' . cp_us_t('min') . ' WHERE d BETWEEN %s AND %s ORDER BY uid, d, m', $from, $to), ARRAY_A);
+	if (!$rows) { return array('from' => $from, 'obj' => array(), 'rep' => array(), 'sw' => array(), 'pairs' => array(), 'idle' => array()); }
+	$nm = function ($uid) { $u = function_exists('cp_pu_get') ? cp_pu_get((int) $uid) : null; return $u ? (string) $u['n'] : '#' . (int) $uid; };
+	$obj = array(); $rep = array(); $sw = array(); $pairs = array(); $idle = array_fill(0, 24, array('o' => 0, 'a' => 0));
+	$pu = 0; $pd = ''; $pm = -9; $ptab = ''; $pobj = ''; $pst = '';
+	foreach ($rows as $r) {
+		$u = (int) $r['uid']; $m = (int) $r['m']; $a = (int) $r['act']; $tab = (string) $r['tab']; $o = (string) $r['obj'];
+		$cont = $u === $pu && $r['d'] === $pd && $m - $pm <= 3;
+		/* S1: ügyenként */
+		if ($o !== '') { if (!isset($obj[$o])) { $obj[$o] = array('n' => 0, 'a' => 0, 'u' => array()); } $obj[$o]['n']++; $obj[$o]['a'] += $a; $obj[$o]['u'][$u] = 1; }
+		/* S2: válaszírás – összefüggő „reply” szakaszok */
+		if (!isset($rep[$u])) { $rep[$u] = array('min' => 0, 'ses' => 0); }
+		if ($r['st'] === 'reply') { $rep[$u]['min']++; if (!($cont && $pst === 'reply' && $pobj === $o)) { $rep[$u]['ses']++; } }
+		/* S4: fülváltások egy munkamenetben */
+		if (!isset($sw[$u])) { $sw[$u] = array('n' => 0, 'min' => 0, 'days' => array()); }
+		$sw[$u]['min']++; $sw[$u]['days'][$r['d']] = 1;
+		if ($cont && $tab !== '' && $ptab !== '' && $tab !== $ptab) { $sw[$u]['n']++; $k = $ptab . '→' . $tab; $pairs[$k] = ($pairs[$k] ?? 0) + 1; }
+		/* S5: üresjárat óránként */
+		$h = (int) floor($m / 60); if ($h >= 0 && $h < 24) { $idle[$h]['o']++; $idle[$h]['a'] += $a; }
+		$pu = $u; $pd = $r['d']; $pm = $m; $ptab = $tab; $pobj = $o; $pst = (string) $r['st'];
+	}
+	uasort($obj, function ($x, $y) { return $y['n'] - $x['n']; });
+	$O = array();
+	foreach (array_slice($obj, 0, 15, true) as $k => $x) { $O[] = array('n' => $x['n'], 'a' => $x['a'], 'ppl' => count($x['u'])) + cp_us_obj($k); }
+	/* a deal-ek állapota és értéke (S1 mellé) */
+	$dids = array(); foreach ($O as $x) { if (preg_match('/^deal:(\d+)$/', $x['o'], $mm)) { $dids[] = (int) $mm[1]; } }
+	if ($dids) { $st = array(); foreach ((array) $wpdb->get_results('SELECT id, status, stage, value FROM ' . cp_crm_t('deals') . ' WHERE id IN (' . implode(',', $dids) . ')', ARRAY_A) as $d) { $st['deal:' . $d['id']] = $d; }
+		foreach ($O as &$x) { if (isset($st[$x['o']])) { $x['ds'] = $st[$x['o']]['status']; $x['dst'] = $st[$x['o']]['stage']; $x['dv'] = round((float) $st[$x['o']]['value']); } } unset($x); }
+	$R = array(); foreach ($rep as $u => $x) { if ($x['ses']) { $R[] = array('who' => $nm($u), 'min' => $x['min'], 'ses' => $x['ses'], 'avg' => round($x['min'] / $x['ses'], 1)); } }
+	usort($R, function ($x, $y) { return $y['ses'] - $x['ses']; });
+	$W = array(); foreach ($sw as $u => $x) { if ($x['min'] >= 30) { $W[] = array('who' => $nm($u), 'n' => $x['n'], 'perhr' => round($x['n'] / max(1, $x['min']) * 60, 1), 'days' => count($x['days'])); } }
+	usort($W, function ($x, $y) { return $y['perhr'] <=> $x['perhr']; });
+	arsort($pairs);
+	$P = array(); foreach (array_slice($pairs, 0, 8, true) as $k => $n) { $P[] = array('k' => $k, 'n' => $n); }
+	return array('from' => $from, 'obj' => $O, 'rep' => $R, 'sw' => $W, 'pairs' => $P, 'idle' => $idle);
 }

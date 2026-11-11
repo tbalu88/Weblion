@@ -186,7 +186,7 @@
 		try { r = await post('cp_an_stats', { from: A.from, to: A.to, fresh: fresh ? 1 : '' }); } catch (e) { if (my !== A.seq) return; A.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		if (my !== A.seq || !main.isConnected) return;
 		A.err = ''; A.d = r;
-		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
+		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
 	}
 	const card = (t, sub, body) => '<section class="an-c"><h3 class="au-h3">' + t + '</h3>' + (sub ? '<p class="an-sub">' + sub + '</p>' : '') + body + '</section>';
@@ -218,6 +218,23 @@
 			'<div class="an-kpi">' + B.map(b => '<div class="' + (b[0] === 'd3' || b[0] === 'gt3' ? (u.b[b[0]] ? 'bad' : '') : '') + '"><b>' + (u.b[b[0]] || 0) + '</b><span>' + b[1] + '</span></div>').join('') + '</div>' +
 			(u.who.length ? '<div class="an-own">' + u.who.map(w => '<span><b>' + esc(w.who) + '</b> ' + w.n + (w.old ? ' · ebből ' + w.old + ' egy napnál régebbi' : '') + '</span>').join('') + '</div>' : '') +
 			(u.list.length ? '<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Mióta vár</th><th>Levél</th><th>Felelős</th></tr></thead><tbody>' + u.list.map(l => '<tr><td class="r">' + mins(l.h * 60) + '</td><td><a href="#" class="au-go" data-k="mail" data-id="' + l.id + '">' + esc(l.s || '(nincs tárgy)') + '</a>' + (l.c ? '<small>' + esc(l.c) + '</small>' : '') + '</td><td>' + esc(l.as) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="cpx-muted">Nincs megválaszolatlan levél. 🎉</p>'));
+	}
+	/* v2.9.146: S1, S2, S4, S5 – hol megy el az idő */
+	function anUse(u) {
+		if (!u) return '';
+		const note = u.from > A.from ? ' <small>(a panelhasználat percenkénti adata ' + esc(u.from.replace(/-/g, '.')) + '-tól van meg)</small>' : '';
+		const objT = (u.obj || []).length ? '<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Ügy</th><th class="r">Panelidő</th><th class="r">Ebből aktív</th><th class="r">Kollégák</th><th>Állapot</th></tr></thead><tbody>' +
+			u.obj.map(o => { const m = /^(mail|deal):(\d+)$/.exec(o.o || ''); return '<tr><td>' + (m ? (m[1] === 'mail' ? '✉ ' : '$ ') + '<a href="#" class="au-go" data-k="' + m[1] + '" data-id="' + m[2] + '">' + esc(o.ol) + '</a>' : esc(o.ol)) + '</td><td class="r"><b>' + dur(o.n) + '</b></td><td class="r">' + dur(o.a) + '</td><td class="r">' + o.ppl + '</td><td>' + (o.ds ? esc(o.ds === 'Won' ? 'Megnyert' : o.ds === 'Lost' ? 'Elvesztett' : o.dst || 'Nyitott') + (o.dv ? '<small>' + nf(o.dv) + ' Ft</small>' : '') : '') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="cpx-muted">Nincs adat.</p>';
+		const rep = (u.rep || []).length ? '<div class="an-own">' + u.rep.map(x => '<span><b>' + esc(x.who) + '</b> ' + x.ses + ' válaszírás · átlag ' + String(x.avg).replace('.', ',') + ' perc / válasz · összesen ' + dur(x.min) + '</span>').join('') + '</div>' : '<p class="cpx-muted">Még nincs mért válaszírás.</p>';
+		const sw = (u.sw || []).length ? '<div class="an-own">' + u.sw.map(x => '<span><b>' + esc(x.who) + '</b> ' + String(x.perhr).replace('.', ',') + ' fülváltás / óra</span>').join('') + '</div>' + ((u.pairs || []).length ? '<div class="an-pairs">' + u.pairs.map(x => { const [f, t] = x.k.split('→'); return '<span>' + esc(tabName(f)) + ' → ' + esc(tabName(t)) + ' <b>' + x.n + '×</b></span>'; }).join('') + '</div>' : '') : '';
+		const ih = (u.idle || []).slice(6, 23), mx = Math.max(1, ...ih.map(x => x.o));
+		const idle = '<div class="an-two an-one"><div><b class="an-l">Nyitott panel óránként – ebből aktív (6–22 óra)</b><div class="an-cols">' + ih.map((x, i) => '<div class="an-col" title="' + esc((i + 6) + ' óra: ' + dur(x.o) + ' nyitva, ebből ' + dur(x.a) + ' aktív (' + pct(x.a, x.o) + ')') + '"><div class="an-cb"><i class="op" style="height:' + (x.o / mx * 100) + '%;width:60%;position:relative"><i class="ac" style="position:absolute;left:0;right:0;bottom:0;height:' + (x.o ? x.a / x.o * 100 : 0) + '%"></i></i></div><small>' + (i + 6) + 'h</small><small class="an-pc">' + pct(x.a, x.o) + '</small></div>').join('') + '</div></div></div>' +
+			'<div class="au-lg an-lg"><span><i class="op"></i>nyitva, de nem dolgozott benne</span><span><i class="ac"></i>aktív</span></div>';
+		return card('Hol megy el az idő' + note, 'A panelben töltött percekből: mely ügyek vitték a legtöbb időt, mennyi idő egy válasz megírása, mennyit ugrálunk a fülek között, és mikor áll üresen a nyitott panel.',
+			'<h4 class="an-h4">Legtöbb időt vivő ügyek</h4><p class="an-sub">Ha egy ügytípus rendszeresen sok időt visz el, oda érdemes sablon, csomagár vagy szabály.</p>' + objT +
+			'<h4 class="an-h4">Válaszírás ráfordítása</h4><p class="an-sub">Egy levélválasz megírására fordított percek (a válaszíró megnyitásától a küldésig vagy bezárásig).</p>' + rep +
+			'<h4 class="an-h4">Fülváltások</h4><p class="an-sub">Sok ugrálás két fül között azt jelzi, hogy egy adat rossz helyen van – ide kell egy gomb vagy előnézet.</p>' + sw +
+			'<h4 class="an-h4">Üresjárat napszak szerint</h4>' + idle);
 	}
 	/* S12 */
 	function anLoadH(l) {
@@ -345,6 +362,7 @@
 		'.an-bar .w,.an-lg .w{background:#1F9D55}.an-bar .l,.an-lg .l{background:#D9534F}.an-bar .o,.an-lg .o{background:#C9CFDA}.an-lg i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px}' +
 		'.an-own{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:12.5px}.an-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}.an-kpi div{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.an-kpi b{display:block;font:800 22px "Plus Jakarta Sans",sans-serif}.an-kpi span{font-size:12px;color:var(--mu)}.an-kpi .bad{border-color:#F3C2BF;background:#FDF1F0}.an-kpi .bad b{color:#B42318}' +
 		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
+		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}' +
 		'@media (max-width:760px){.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
 	document.head.appendChild(css);
 })();
