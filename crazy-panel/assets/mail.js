@@ -648,7 +648,7 @@
 	/* „Név <cím>” lista: a név kékkel, a cím alatta */
 	/* v2.9.90: kontakt a levélből – minden külső cím mellett egy gomb (ismert kontaktnál 👤 = megnyitás, különben + = felvétel) */
 	const OURS_RE = /@(eventcrazy\.hu|crazyphoto\.hu|studioframes\.hu)$/i;
-	const cBtn = (e, n) => { e = String(e || '').trim().toLowerCase(); return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) && !OURS_RE.test(e) ? '<button type="button" class="ml-cadd" data-cadd="' + esc(e) + '" data-cn="' + esc(n || '') + '" aria-label="Kontakt hozzáadása: ' + esc(e) + '" title="Kontakt hozzáadása">+</button>' : ''; };
+	const cBtn = (e, n) => { e = String(e || '').trim().toLowerCase(); return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) && !OURS_RE.test(e) ? '<button type="button" class="ml-cadd" data-cadd="' + esc(e) + '" data-cn="' + esc(n || '') + '" aria-label="Kontakt hozzáadása: ' + esc(e) + '" title="Kontakt hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>' : ''; };
 	const addr = l => String(l || '').split(/,(?![^<]*>)/).map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^"?(.*?)"?\s*<([^>]+)>$/); return m && m[1] ? '<span class="ml-tn">' + esc(m[1]) + '</span> <span class="ml-fe"><span class="ml-fet">&lt;' + esc(m[2]) + '&gt;</span>' + cBtn(m[2], m[1]) + '</span>' : '<span class="ml-tn">' + esc(x) + '</span>' + cBtn(x.replace(/^<|>$/g, ''), ''); }).join(', ');
 
 	/* a levelek és a szál eseményei időrendben */
@@ -1645,8 +1645,9 @@
 		if (need.length) { try { const r = await post('cp_ce_lookup', { e: JSON.stringify(need) }); Object.assign(CE.m, r.m || {}); CE.sm = r.sm; need.forEach(e => { if (!(e in CE.m)) CE.m[e] = { cid: 0 }; }); } catch (e) { return; } }
 		bs.forEach(b => {
 			const k = CE.m[b.dataset.cadd]; if (!k) return;
-			if (k.cid) { b.textContent = '👤'; b.classList.add('k'); b.title = 'Kontakt: ' + (k.cn || b.dataset.cadd) + ' – megnyitás'; b.setAttribute('aria-label', b.title); }
-			else { b.textContent = '+'; b.classList.remove('k'); b.title = 'Kontakt hozzáadása'; b.setAttribute('aria-label', 'Kontakt hozzáadása: ' + b.dataset.cadd); }
+			/* v2.9.142: emoji helyett rajzolt ikon (az emoji betűtípusonként elcsúszott) */
+			if (k.cid) { b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg>'; b.classList.add('k'); b.title = 'Kontakt: ' + (k.cn || b.dataset.cadd) + ' – megnyitás'; b.setAttribute('aria-label', b.title); }
+			else { b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>'; b.classList.remove('k'); b.title = 'Kontakt hozzáadása'; b.setAttribute('aria-label', 'Kontakt hozzáadása: ' + b.dataset.cadd); }
 			if (b.dataset.cbd) return; b.dataset.cbd = '1';
 			b.addEventListener('click', e => {
 				e.preventDefault(); e.stopPropagation();

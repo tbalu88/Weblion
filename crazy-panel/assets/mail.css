@@ -990,3 +990,9 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-lpop button:hover{background:#F5F3EF}
 .ml-lpop [data-lx]{color:#B42318}
 .ml-area a{cursor:pointer}
+
+/* v2.9.142: kontakt-ikon rajzolva, középre igazítva, a szöveg vonalán */
+.ml-cadd{vertical-align:middle;margin-top:-2px;padding:0}
+.ml-cadd svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;display:block}
+.ml-cadd.k svg{width:14px;height:14px;stroke-width:2.2}
+.ml-fe .ml-cadd{vertical-align:middle}
