@@ -306,6 +306,61 @@
   /* v2.9.126: egy nap beosztásának megnyitása máshonnan (pl. a deal adatlapjáról) */
   window.CPXSlotDay = date => { if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return; S.month = monthKey(date); S.calMode = 'slot'; S.calView = 'month'; try { localStorage.setItem('cpx_calm', 'slot'); } catch (e) { /* privát mód */ } const mn = document.getElementById('cpx-main'); if (mn) { mn.classList.remove('crm-pg-on'); const pg = mn.querySelector(':scope > .crm-page'); if (pg) pg.remove(); } go('naptar'); setTimeout(() => openSlotDay(date), 350); };
   window.CPXStatus = () => renderStatus();
+  /* ------------------------------------------------------------ v2.9.172: közös párbeszédablak és visszavonás (a böngésző confirm / prompt helyett)
+     CPXAsk({ title, text, ok, cancel, danger, input: { value, placeholder, area }, options: [[érték, felirat], …], other: 'Egyéb', type: 'TÖRLÉS' })
+       → Promise: megerősítésnél true / false; szövegnél a szöveg vagy null; választásnál a választott érték (Egyébnél a beírt szöveg) vagy null
+     CPXUndo(szöveg, ms = 5000) → Promise: true, ha nem vonták vissza (lefuthat a művelet), false, ha visszavonták */
+  (function () {
+    const esc2 = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const st = document.createElement('style');
+    st.textContent = '.cpx-ask{position:fixed;inset:0;z-index:10080;background:rgba(20,28,51,.38);display:flex;align-items:center;justify-content:center;padding:16px;animation:cpxaskf .12s ease-out}' +
+      '.cpx-ask>div{background:#fff;color:#141C33;border-radius:16px;box-shadow:0 20px 50px rgba(20,28,51,.3);width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:20px 20px 16px;font:14.5px/1.5 Inter,-apple-system,Arial,sans-serif}' +
+      '.cpx-ask h3{margin:0 0 6px;font:700 17px "Plus Jakarta Sans",Inter,sans-serif}.cpx-ask p{margin:0 0 12px;white-space:pre-wrap;color:#3A3F4B}' +
+      '.cpx-ask input,.cpx-ask textarea{width:100%;box-sizing:border-box;border:1.5px solid #E6E3DE;border-radius:10px;padding:9px 11px;font:15px Inter,sans-serif;margin:2px 0 10px}.cpx-ask input:focus,.cpx-ask textarea:focus{outline:none;border-color:#2F5BD8}' +
+      '.cpx-ask .ao{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}.cpx-ask .ao label{display:flex;align-items:center;gap:9px;border:1.5px solid #E6E3DE;border-radius:10px;padding:9px 11px;cursor:pointer}.cpx-ask .ao label:has(input:checked){border-color:#2F5BD8;background:#EEF3FD}.cpx-ask .ao input{width:auto;margin:0}' +
+      '.cpx-ask .ab{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}.cpx-ask .ab button{border-radius:999px;padding:9px 18px;font:600 14px Inter,sans-serif;cursor:pointer;border:1.5px solid #E6E3DE;background:#fff;color:#141C33}.cpx-ask .ab .ok{background:#141C33;border-color:#141C33;color:#fff}.cpx-ask .ab .ok.dg{background:#B42318;border-color:#B42318}.cpx-ask .ab .ok:disabled{opacity:.45;cursor:not-allowed}' +
+      '@keyframes cpxaskf{from{opacity:0}to{opacity:1}}' +
+      '.cpx-undo{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10070;background:#141C33;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;font:14px Inter,sans-serif;box-shadow:0 12px 30px rgba(20,28,51,.3);overflow:hidden;max-width:calc(100vw - 24px)}' +
+      '.cpx-undo button{background:#fff;color:#141C33;border:0;border-radius:999px;padding:6px 14px;font:700 13px Inter,sans-serif;cursor:pointer;flex:none}.cpx-undo i{position:absolute;left:0;bottom:0;height:3px;background:#F2A33A;animation:cpxundo linear forwards}' +
+      '@keyframes cpxundo{from{width:100%}to{width:0}}@media (prefers-reduced-motion:reduce){.cpx-ask{animation:none}}';
+    document.head.appendChild(st);
+    window.CPXAsk = o => new Promise(res => {
+      o = o || {};
+      const w = document.createElement('div'); w.className = 'cpx-ask'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true');
+      const opts = o.options || null, inp = o.input || null, typ = o.type || '';
+      w.innerHTML = '<div><h3>' + esc2(o.title || 'Megerősítés') + '</h3>' + (o.text ? '<p>' + esc2(o.text) + '</p>' : '') +
+        (opts ? '<div class="ao">' + opts.map((x, i) => '<label><input type="radio" name="cpxao" value="' + i + '"> ' + esc2(x[1]) + '</label>').join('') + (o.other ? '<label><input type="radio" name="cpxao" value="other"> ' + esc2(o.other) + '</label><input type="text" data-oth placeholder="Írd be…" hidden>' : '') + '</div>' : '') +
+        (inp ? (inp.area ? '<textarea data-in rows="4" placeholder="' + esc2(inp.placeholder || '') + '"></textarea>' : '<input type="text" data-in placeholder="' + esc2(inp.placeholder || '') + '">') : '') +
+        (typ ? '<input type="text" data-ty autocomplete="off" placeholder="Írd be: ' + esc2(typ) + '">' : '') +
+        '<div class="ab"><button type="button" data-no>' + esc2(o.cancel || 'Mégse') + '</button><button type="button" class="ok' + (o.danger ? ' dg' : '') + '" data-ok>' + esc2(o.ok || 'OK') + '</button></div></div>';
+      document.body.appendChild(w);
+      const ok = w.querySelector('[data-ok]'), ti = w.querySelector('[data-in]'), ty = w.querySelector('[data-ty]'), oth = w.querySelector('[data-oth]');
+      if (ti) ti.value = inp.value || '';
+      const valid = () => { let v = true; if (ty) v = ty.value.trim().toUpperCase() === typ.toUpperCase(); if (opts && o.required) { const c = w.querySelector('input[name=cpxao]:checked'); v = v && !!c && (c.value !== 'other' || (oth && oth.value.trim() !== '')); } ok.disabled = !v; };
+      w.querySelectorAll('input,textarea').forEach(x => x.addEventListener('input', () => { if (oth) oth.hidden = !(w.querySelector('input[name=cpxao]:checked') || {}).value || w.querySelector('input[name=cpxao]:checked').value !== 'other'; valid(); }));
+      w.querySelectorAll('input[name=cpxao]').forEach(x => x.addEventListener('change', () => { if (oth) { oth.hidden = x.value !== 'other'; if (!oth.hidden) oth.focus(); } valid(); }));
+      valid();
+      const done = v => { document.removeEventListener('keydown', kd, true); w.remove(); res(v); };
+      const val = () => { if (opts) { const c = w.querySelector('input[name=cpxao]:checked'); return c ? (c.value === 'other' ? (oth ? oth.value.trim() : '') : opts[Number(c.value)][0]) : (o.required ? null : ''); } if (inp) return ti.value; return true; };
+      const kd = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(opts || inp ? null : false); } if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA') && !ok.disabled) { e.preventDefault(); e.stopPropagation(); done(val()); } };
+      document.addEventListener('keydown', kd, true);
+      ok.addEventListener('click', () => done(val()));
+      w.querySelector('[data-no]').addEventListener('click', () => done(opts || inp ? null : false));
+      w.addEventListener('mousedown', e => { if (e.target === w) done(opts || inp ? null : false); });
+      setTimeout(() => (ty || ti || w.querySelector('input[name=cpxao]') || ok).focus(), 30);
+    });
+    window.CPXConfirm = (text, o) => window.CPXAsk(Object.assign({ text: text }, o || {}));
+    window.CPXUndo = (text, ms) => new Promise(res => {
+      ms = ms || 5000;
+      const old = document.querySelector('.cpx-undo'); if (old && old._fin) old._fin(true);
+      const d = document.createElement('div'); d.className = 'cpx-undo'; d.setAttribute('role', 'status');
+      d.innerHTML = '<span>' + esc2(text) + '</span><button type="button">Visszavonás</button><i style="animation-duration:' + ms + 'ms"></i>';
+      document.body.appendChild(d);
+      let fin = false; const end = v => { if (fin) return; fin = true; clearTimeout(t); d.remove(); res(v); };
+      d._fin = end; const t = setTimeout(() => end(true), ms);
+      d.querySelector('button').addEventListener('click', () => end(false));
+    });
+  })();
   function go(tab) {
     S.tab = tab;
     try { localStorage.setItem('cpx_last', JSON.stringify({ t: tab, at: Date.now() })); } catch (e) { /* privát mód */ }
