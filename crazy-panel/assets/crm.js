@@ -1207,7 +1207,8 @@
 		const chips = '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + Number(t.na) + ' melléklet a szálban">' + CLIP_S + Number(t.na) + '</span>' : '') +
 			(dir === 'out' ? ' <span class="d3-q d3-tcwo">Ügyfél válaszára vár</span>' : dir === 'in' ? ' <span class="d3-q' + (closed ? '' : ' warn') + '">Válaszra vár</span>' : '') + (closed ? ' <span class="d3-q d3-tccl">lezárva</span>' : '');
 		return '<section class="d3-tg' + (closed ? ' closed' : '') + '" data-tg="' + t.id + '" data-tgk="' + esc(key) + '">' +
-			'<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
+			'<div class="d3-tgr">' + '<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
+			(R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" title="Levélszál leválasztása erről a dealről" aria-label="Levélszál leválasztása erről a dealről">×</button>' : '') + '</div>' + /* v2.9.152 */
 			'<div class="d3-tgl">' + lm.map(g => tmItem(t, g)).join('') +
 			(rest ? '<button type="button" class="d3-tgx" data-tgx="' + rest + '" data-skip="' + lm.length + '" aria-expanded="' + !!open + '">' + (open ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest)) + '</button><div class="d3-tgo" data-tgo' + (open ? '>' + cached.html : ' hidden>') + '</div>' : '') +
 			'</div></section>';
@@ -1245,6 +1246,15 @@
 		root.querySelectorAll('.d3-tgh[data-th]').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
 		root.querySelectorAll('.d3-tg .d3-tm').forEach(bindTm);
 		root.querySelectorAll('[data-tgx]').forEach(b => b.addEventListener('click', () => tgToggle(b)));
+		/* v2.9.152: levélszál leválasztása a dealről (a levél a Levelezésben megmarad, csak a dealhez nem tartozik többé) */
+		root.querySelectorAll('[data-tgdet]').forEach(b => b.addEventListener('click', async e => {
+			e.stopPropagation();
+			const g = b.closest('.d3-tg'), subj = (g.querySelector('.d3-tgs') || {}).textContent || '';
+			if (!window.confirm('Leválasztod ezt a levélszálat a dealről?\n\n„' + subj + '”\n\nA levél a Levelezésben megmarad, csak ehhez a dealhez nem tartozik többé.')) return;
+			b.disabled = true;
+			try { await post('cp_mail_thread_set', { id: b.dataset.tgdet, thread: b.dataset.tgdet, f: 'deal', v: '' }); g.remove(); toast('Levélszál leválasztva a dealről.'); }
+			catch (er) { b.disabled = false; toast(er.message, true); }
+		}));
 		root.querySelectorAll('.d3-tg [data-tgc]').forEach(c => c.addEventListener('click', () => { const b = c.closest('.d3-tg').querySelector('[data-tgx]'); tgToggle(b); b.focus(); }));
 	}
 	function bindCrew(sh, x, dealId, back) {
