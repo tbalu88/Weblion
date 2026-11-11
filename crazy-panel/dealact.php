@@ -145,6 +145,28 @@ function cp_dact_ajax_note_del() {
 	wp_send_json_success(array('notes' => cp_dact_notes((int) $n['deal_id'])));
 }
 
+/* v2.9.170: jegyzet szerkesztése (a saját, adminnak bármelyik) – a Salesmate-ben is módosul */
+add_action('wp_ajax_nopriv_cp_crm_note_edit', 'cp_dact_ajax_note_edit');
+add_action('wp_ajax_cp_crm_note_edit', 'cp_dact_ajax_note_edit');
+function cp_dact_ajax_note_edit() {
+	cp_dact_auth_write();
+	global $wpdb;
+	$n = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_dact_t() . ' WHERE id = %d AND deleted_at IS NULL', (int) ($_POST['id'] ?? 0)), ARRAY_A);
+	if (!$n) { cp_el_err('Nincs ilyen jegyzet.', 404); }
+	$admin = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
+	if (!$admin && ((int) $n['author_uid'] !== cp_dact_me() || cp_dact_me() <= 0)) { cp_el_err('Csak a saját jegyzetedet szerkesztheted.', 403); }
+	$body = mb_substr(trim(sanitize_textarea_field(wp_unslash($_POST['body'] ?? ''))), 0, 5000);
+	if ($body === '') { cp_el_err('Üres a jegyzet – ha törölni szeretnéd, a × gombbal teheted.'); }
+	if ($body === (string) $n['body']) { wp_send_json_success(array('notes' => cp_dact_notes((int) $n['deal_id']))); }
+	if ($n['sm_id']) {
+		$r = cp_sm_request('PUT', '/apis/deal/v4/modules/4/object/' . (int) $n['deal_id'] . '/notes/' . (int) $n['sm_id'], array('note' => '<div>' . nl2br(esc_html($body)) . '</div>', 'attachments' => array(), 'type' => 'Note'));
+		if (is_wp_error($r)) { cp_el_err('A Salesmate nem fogadta a módosítást: ' . $r->get_error_message(), 502); }
+	}
+	$wpdb->update(cp_dact_t(), array('body' => $body), array('id' => (int) $n['id']));
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'note_edit', 'Jegyzet szerkesztve', 'deal:' . (int) $n['deal_id'], mb_substr($body, 0, 120)); }
+	wp_send_json_success(array('notes' => cp_dact_notes((int) $n['deal_id'])));
+}
+
 /* ------------------------------------------------------------ tevékenység: felvétel, szerkesztés, késznek jelölés */
 function cp_dact_due_iso($date, $time) {
 	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { return null; }

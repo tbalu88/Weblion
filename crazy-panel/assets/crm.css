@@ -826,3 +826,9 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-gsync{margin-left:auto;border:1px solid #E6E3DE;background:#fff;border-radius:999px;padding:4px 11px;font:600 12px Inter,sans-serif;color:#141C33;cursor:pointer}
 .d3-gsync:hover{border-color:#2F5BD8;color:#2F5BD8}.d3-gsync:disabled{opacity:.6;cursor:progress}
 .d3-pinfo summary{cursor:pointer}
+
+/* v2.9.170: jegyzet szerkesztése */
+.d3-ned{font-size:13px}
+.d3-nta{width:100%;box-sizing:border-box;border:1.5px solid #E6E3DE;border-radius:10px;padding:8px 10px;font:inherit;resize:vertical;min-height:70px}
+.d3-nta:focus{outline:none;border-color:#2F5BD8}
+.d3-nbar{display:flex;gap:6px;margin-top:6px}

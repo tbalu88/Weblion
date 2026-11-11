@@ -1001,3 +1001,9 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-mh [data-cfrom]{cursor:pointer}
 .ml-from span[data-cfrom]:hover{text-decoration:underline;text-underline-offset:2px}
 .ml-av[data-cfrom]:hover{box-shadow:0 0 0 2px #2F5BD8}
+
+/* v2.9.170: levélszál-jegyzet szerkesztése */
+.ml-nta{width:100%;box-sizing:border-box;border:1.5px solid #E6E3DE;border-radius:10px;padding:8px 10px;font:inherit;resize:vertical;min-height:70px;background:#fff}
+.ml-nta:focus{outline:none;border-color:#2F5BD8}
+.ml-nbar{display:flex;gap:6px;margin-top:6px}
+.ml-ned{font-size:12px}

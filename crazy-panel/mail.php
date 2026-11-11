@@ -689,6 +689,24 @@ function cp_mail_ajax_note_del() {
 	wp_send_json_success(cp_mail_thread_full((int) $n['thread_id']));
 }
 
+/* v2.9.170: levélszál-jegyzet szerkesztése (a saját, adminnak bármelyik) */
+add_action('wp_ajax_nopriv_cp_mail_note_edit', 'cp_mail_ajax_note_edit');
+add_action('wp_ajax_cp_mail_note_edit', 'cp_mail_ajax_note_edit');
+function cp_mail_ajax_note_edit() {
+	cp_el_auth();
+	cp_tab_need(array('mail'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !cp_mail_db_ok()) { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$n = $wpdb->get_row($wpdb->prepare('SELECT id, thread_id, author_uid FROM ' . cp_mail_t('notes') . ' WHERE id = %d AND deleted_at IS NULL', (int) ($_POST['nid'] ?? 0)), ARRAY_A);
+	if (!$n) { cp_el_err('Nincs ilyen jegyzet.', 404); }
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	if ((int) $n['author_uid'] !== $me && !(function_exists('cp_panel_is_admin') && cp_panel_is_admin())) { cp_el_err('Csak a saját jegyzetedet szerkesztheted.', 403); }
+	$body = trim(mb_substr(sanitize_textarea_field(wp_unslash($_POST['body'] ?? '')), 0, 4000));
+	if ($body === '') { cp_el_err('Üres jegyzet – ha törölni szeretnéd, a × gombbal teheted.'); }
+	$wpdb->update(cp_mail_t('notes'), array('body' => $body), array('id' => (int) $n['id']));
+	wp_send_json_success(cp_mail_thread_full((int) $n['thread_id']));
+}
+
 /* szál beállításai: deal csatolása / leválasztása, felelős, lezárás / újranyitás, követés, címkék */
 add_action('wp_ajax_nopriv_cp_mail_thread_set', 'cp_mail_ajax_thread_set');
 add_action('wp_ajax_cp_mail_thread_set', 'cp_mail_ajax_thread_set');
