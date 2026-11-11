@@ -743,6 +743,8 @@
 		const ids = new Set(rows.map(t => t.id));
 		S.sel.forEach(id => { if (!ids.has(id)) S.sel.delete(id); });
 		const L = cols();
+		/* v2.9.193: gépelés közben a keresőmező nem cserélődik le (a közben leütött betűk és a kurzor a helyén maradnak) */
+		const oq = box.querySelector('.ml-q'), oqKeep = oq && document.activeElement === oq;
 		box.innerHTML = '<div class="ml-inbox' + (L.fold ? ' fold' : '') + (S.sel.size ? ' sel' : '') + (S.reading && S.th ? ' reading' : '') + '" style="--c1:' + (L.fold ? 40 : L.c1) + 'px;--c2:' + L.c2 + 'px">' +
 			'<aside class="ml-side"><div class="ml-sideh"><button type="button" class="cpx-btn ml-new" data-compose>Új levél</button><button type="button" class="ml-fold" data-fold title="' + (L.fold ? 'Mappák kinyitása' : 'Mappák összecsukása') + '">' + (L.fold ? '»' : '«') + '</button></div>' +
 			'<select class="ml-box" aria-label="Postafiók"><option value="">Minden postafiók</option>' + BOXES.map(b => '<option value="' + esc(b.id) + '"' + (S.box === b.id ? ' selected' : '') + '>' + esc(b.n) + '</option>').join('') + '</select>' +
@@ -764,6 +766,7 @@
 				'<span class="ml-i3">' + (t.note ? '<span class="ml-inote">' + NOTE_I + esc(t.note.b.replace(/\s+/g, ' ')) + '</span>' : '<span>' + esc(t.snip) + '</span>') + (t.cnt ? '<i>' + t.cnt + '</i>' : '') + '</span></span>' + (t.id > 0 ? '<span class="ml-cl" data-cl role="button" tabindex="-1" title="Link másolása" aria-label="Link másolása">' + LINK_I + '</span>' : '') + '</div>').join('') :
 				'<div class="ml-empty"><b>' + (S.mq || mfOn() ? 'Nincs találat' : S.unf ? 'Nincs olvasatlan levél' : M.connected ? 'Nincs levél' : 'Még nincsenek levelek') + '</b><span>' + (S.mq ? 'A keresés minden levél között keres (lezártak, archív, kimenő is) – csak a Kuka és a Spam marad ki.' : M.connected || S.unf ? '' : 'A postafiókok bekötése után itt jelennek meg a beérkező levelek, deal-ekhez és kollégákhoz rendelve. Addig a „Minta megtekintése” kapcsolóval kipróbálhatod a nézetet.') + '</span></div>') + (S.more && !S.demo ? '<button type="button" class="ml-more" data-more>Régebbi levelek betöltése</button>' : '') + '</div></section><div class="ml-split" data-split="c2" title="Húzd az oszlop méretezéséhez (dupla kattintás: alapméret)"></div>' +
 			'<section class="ml-read" data-read></section><button type="button" class="ml-fab" data-fab aria-label="Új levél" title="Új levél"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button></div>';
+		if (oqKeep) { const nq = box.querySelector('.ml-q'); if (nq && nq !== oq) nq.replaceWith(oq); }
 		layout(box);
 		if (S.folder === 'draft' && !S.demo) drawDrafts(box);
 		const pick = (sel, b) => { box.querySelectorAll(sel).forEach(x => x.classList.toggle('on', x === b)); };
@@ -808,7 +811,7 @@
 				mp.querySelector('[data-mfx]').addEventListener('click', () => { S.mf = {}; S.th = null; drawInbox(box); });
 			}
 		}
-		box.querySelector('.ml-q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { S.mq = e.target.value; drawInbox(box).then(() => { const i = box.querySelector('.ml-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 350); });
+		{ const qi = box.querySelector('.ml-q'); if (!qi._qb) { qi._qb = true; qi.addEventListener('input', e => { clearTimeout(S.qt); S.qt = setTimeout(() => { S.mq = e.target.value; drawInbox(box).then(() => { const i = box.querySelector('.ml-q'); if (i && document.activeElement !== i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 350); }); } }
 		box.querySelector('[data-compose]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
 		const gt = box.querySelector('[data-gotpl]'); if (gt) gt.addEventListener('click', () => { S.view = 'tpl'; try { localStorage.setItem('cpmail_view', 'tpl'); } catch (e) { /* privát mód */ } view(S.main); });
 		box.querySelector('[data-fab]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
