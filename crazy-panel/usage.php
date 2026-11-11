@@ -107,6 +107,19 @@ function cp_us_ajax_stats() {
 			foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT d, FLOOR(m / 5) k, MAX(act) a FROM ' . cp_us_t('min') . ' WHERE uid = %d AND d BETWEEN %s AND %s GROUP BY d, k', $uid, $tf, $to), ARRAY_A) as $r) { $b[$r['d']][(int) $r['k']] = (int) $r['a'] ? '2' : '1'; }
 			foreach ($days as $d => &$x) { if (isset($b[$d])) { $s = str_repeat('0', 288); foreach ($b[$d] as $k => $v) { if ($k >= 0 && $k < 288) { $s[$k] = $v; } } $x['bar'] = $s; } }
 			unset($x);
+			/* v2.9.140: percre pontos szakaszok (aktív?, fül, tárgy) az egérrel bejárható idővonalhoz – legfeljebb 31 napra */
+			if (count($days) <= 31) {
+				$sg = array();
+				foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT d, m, act, tab, obj, st FROM ' . cp_us_t('min') . ' WHERE uid = %d AND d BETWEEN %s AND %s ORDER BY d, m', $uid, $tf, $to), ARRAY_A) as $r) {
+					$k = (int) $r['act'] . '|' . $r['tab'] . '|' . $r['obj'] . '|' . $r['st']; $m = (int) $r['m']; $L = &$sg[$r['d']];
+					$n = $L ? count($L) - 1 : -1;
+					if ($n >= 0 && $L[$n]['k'] === $k && $m - $L[$n]['b'] <= 2) { $L[$n]['b'] = $m; }
+					else { $ob = cp_us_obj((string) $r['obj']); $L[] = array('k' => $k, 'a' => $m, 'b' => $m, 'x' => (int) $r['act'], 't' => (string) $r['tab'], 'o' => $ob['o'], 'ol' => $ob['ol'], 's' => (string) $r['st']); }
+					unset($L);
+				}
+				foreach ($days as $d => &$x) { $x['seg'] = isset($sg[$d]) ? array_map(function ($v) { unset($v['k']); return $v; }, $sg[$d]) : array(); }
+				unset($x);
+			}
 		}
 	}
 	return $days;
