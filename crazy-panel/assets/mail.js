@@ -1911,7 +1911,9 @@
 			if (!sj) { toast('Add meg a tárgyat.', true); q('[data-subj]').focus(); return; }
 			if (ed.isEmpty()) { toast('Üres a levél.', true); return; }
 			/* v2.9.14: kitöltetlen sablon-helytartó nem mehet ki (próbalevélnél mehet, hogy lásd) */
-			if (!test) { const um = unfilled(sj, body); if (um.length) { toast('Kitöltetlen adat maradt a levélben: ' + um.join(', ') + '. ' + (deal ? 'Írd be a sárga helyekre, vagy töltsd ki a dealen.' : 'Válaszd ki a dealt fent, és kitöltöm.'), true); const f = q('.ml-compose .cp-ph'); if (f) f.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; } }
+			if (!test) { const um = unfilled(sj, body); if (um.length) {
+				if (!deal) { if (await autoDeal()) toast('Kitöltöttem a deal adataival – nézd át, és küldd el újra.'); return; } /* v2.9.163 */
+				toast('Kitöltetlen adat maradt a levélben: ' + um.join(', ') + '. Írd be a sárga helyekre, vagy töltsd ki a dealen.', true); const f = q('.ml-compose .cp-ph'); if (f) f.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; } }
 			/* v2.9.2: nincs külön megerősítő ablak – a 20 mp-es visszavonás véd az elsietett küldés ellen */
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
@@ -1952,6 +1954,19 @@
 		if (sendBtn) sendBtn.addEventListener('click', () => doSend(false));
 		if (testBtn) testBtn.addEventListener('click', () => doSend(true));
 		dealPicker(q('[data-dp]'), x => { deal = x; if (x.ce) to.add(x.ce); pbSync(); fillNow(true); });
+		/* v2.9.163: ha nincs deal, de a levélben sablonváltozó van: a levelezés alapján javasolt deal – egy nyitottnál automatikusan,
+		   többnél a deal-választó nyílik meg (telefonon is látható) */
+		const showDp = () => { const c = q('.ml-compose'); if (c) c.classList.add('dp-on'); const i = q('[data-dp] input'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } };
+		const autoDeal = async () => {
+			if (deal && deal.id) return true;
+			const em = (to.get()[0] || '').toLowerCase();
+			try {
+				const r = ctx.thread ? await post('cp_mail_deal_suggest', { th: ctx.thread }) : (em ? await post('cp_mail_deals', { q: em }) : { rows: [] });
+				const open = (r.rows || []).filter(x => !x.st || x.st === 'Open');
+				if (open.length === 1) { deal = open[0]; pbSync(); await fillNow(false); toast('A sablont a(z) „' + deal.title + '” deal adataival töltöttem ki – ha nem ez a jó, válassz másikat fent.'); return true; }
+			} catch (e) { /* kézi választás */ }
+			toast('Melyik dealhez írod? Válaszd ki a deal-keresőben, és a sablon adatait rögtön kitöltöm.'); showDp(); return false;
+		};
 		if (deal && deal.id) fillNow(false);
 		q('[data-cc]').addEventListener('click', () => box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = !r.hidden; }));
 		q('[data-tplbtn]').addEventListener('click', e => {
@@ -1965,7 +1980,7 @@
 				ed.set(withSig(normFont(t.body || ''))); /* v2.9.131: a sablon betűtípusa / mérete egységes (a levél alapbetűje) */
 				/* v2.9.14: azonnali kitöltés; deal nélkül rákérdez */
 				if (deal && deal.id) fillNow(true);
-				else if (/\{\{/.test((t.subject || '') + (t.body || ''))) { toast('Melyik dealhez írod? Válaszd ki fent a deal-keresőben, és a sablon adatait rögtön kitöltöm.'); const c = q('.ml-compose'); c.classList.add('dp-on'); const i = q('[data-dp] input'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
+				else if (/\{\{/.test((t.subject || '') + (t.body || ''))) autoDeal();
 			});
 		});
 		/* v2.9: automatikus mentés a szerverre (v2.9.58: 15 mp-enként – korábban 4 –, ha változott; a levélíró elhagyásakor is) */
