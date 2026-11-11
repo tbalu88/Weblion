@@ -808,3 +808,15 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-r .d3-insc h4{margin:0 0 4px;font-size:14px}
 .d3-r .d3-insc .crm-dl{font-size:12.5px;row-gap:2px;column-gap:10px}
 .d3-insc dd small{font-size:11px}
+
+/* v2.9.157: utolsó kommunikáció a csempe jobb alsó sarkában */
+.crm-cfoot .crm-lc{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:#7A7F8A;font-variant-numeric:tabular-nums;white-space:nowrap}
+.crm-cfoot .crm-lc svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.crm-cfoot .crm-lc.old{color:#B45309}
+
+/* v2.9.158: csempe-lábléc egy sorban – balra felelős, jegyzet, teendő; jobbra rohadás és utolsó kommunikáció */
+.crm-cfoot{flex-wrap:nowrap;min-width:0}
+.crm-cfoot .crm-qnb{margin-left:-2px;flex:none}
+.crm-cfoot .crm-na{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crm-cfr{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex:none}
+.crm-cfr .crm-rot,.crm-cfr>*{white-space:nowrap}

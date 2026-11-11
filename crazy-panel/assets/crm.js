@@ -864,7 +864,7 @@
 					(r.venue ? '<div class="crm-cl crm-cv" title="' + esc(r.venue) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>' + esc(r.venue) + '</span></div>' : '') +
 					'<div class="crm-cl">' + valHtml(r) + '<i>•</i>' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '</div>' +
 					(capHtml(r.cap, false) ? '<div class="crm-cl">' + capHtml(r.cap, false) + '</div>' : '') +
-					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (r.status === 'Won' ? stBadge(r) : '') + act + rotB + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + '</div></article>';
+					'<div class="crm-cfoot"><span class="crm-av" style="background:' + avColor(r.own) + '" title="' + esc(uname(r.own)) + '">' + esc(initials(uname(r.own))) + '</span>' + (W ? '<button type="button" class="crm-qnb" data-qnote="' + r.id + '" title="Jegyzet hozzáadása" aria-label="Jegyzet hozzáadása"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/></svg></button>' : '') + (r.status === 'Won' ? stBadge(r) : '') + act + '<span class="crm-cfr">' + rotB + lcH(r) + '</span></div></article>'; /* v2.9.158: jegyzet balra (mint a Salesmate-ben), jobbra rohadás + utolsó kommunikáció, egy sorban */
 			});
 			if (!l.length) h += '<div class="crm-none">Nincs deal</div>';
 			h += '</div></section>';
@@ -1201,6 +1201,12 @@
 		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
 	const tgMoreTxt = n => '+' + n + ' korábbi levél';
+	/* v2.9.157: hány napja volt az utolsó kommunikáció (a csempe jobb alsó sarkában, a Salesmate mintájára) */
+	function lcH(r) {
+		if (!r.lc) return '';
+		const d = Math.max(0, Math.floor((Date.now() - new Date(r.lc.replace(' ', 'T')).getTime()) / 86400000));
+		return '<span class="crm-lc' + (d >= 14 ? ' old' : '') + '" title="Utolsó kommunikáció: ' + esc(r.lc) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M21 12a9 9 0 1 1-3-6.7" stroke-dasharray="2.2 2.6"/><path d="M21 4v4h-4"/></svg>' + (d ? d + ' n' : 'ma') + '</span>';
+	}
 	function threadGroup(t, inDeal) { /* v2.9.155: inDeal = a deal idővonalán (csatolás / leválasztás gombokkal) */
 		const n = t.n != null ? t.n : t.cnt, lm = t.lm || [], rest = Math.max(0, n - lm.length), dir = t.ld === 'out' ? 'out' : t.ld === 'in' ? 'in' : '', closed = t.st === 'closed';
 		const key = t.id + '|' + (t.la || t.at), cached = TG.cache.get(t.id), open = rest > 0 && TG.open.has(t.id) && cached && cached.key === key;

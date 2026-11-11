@@ -125,7 +125,7 @@ function cp_crm_list_data($a) {
 
 /* v2.9.58: a lista, a pipeline-tábla és az egy sor (cp_crm_row_out) közös oszlopai és táblakapcsolatai */
 function cp_crm_list_cols() {
-	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.event_end_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, (SELECT MAX(h.at) FROM ' . cp_crm_t('history') . " h WHERE h.deal_id = d.id AND h.field = 'stage') stage_at, " . cp_crm_lastout_sql() . " last_out, " . 'c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
+	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.event_end_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, d.last_comm_at, (SELECT MAX(h.at) FROM ' . cp_crm_t('history') . " h WHERE h.deal_id = d.id AND h.field = 'stage') stage_at, " . cp_crm_lastout_sql() . " last_out, " . 'c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
 }
 function cp_crm_list_from() {
 	return cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id LEFT JOIN ' . cp_crm_t('companies') . ' co ON co.id = d.company_id';
@@ -202,6 +202,9 @@ function cp_crm_list_row($r, $xk = array()) {
 	);
 	/* v2.9.122: rohadás a panel szabályai szerint (a felhasználó döntése, 2026-11-11) – rot: mikortól rohad (helyi idő), rw: a színskála hossza percben */
 	list($o['rot'], $o['rw']) = cp_crm_rot($r);
+	/* v2.9.157: utolsó kommunikáció (a Salesmate-é és a mi levelünk / jegyzetünk / teendőnk közül a későbbi) – a csempe jobb alsó sarkába */
+	$lc = max((string) ($r['last_comm_at'] ?? ''), (string) ($r['last_out'] ?? ''));
+	$o['lc'] = $lc > '1971' ? cp_crm_local($lc) : '';
 	if ($xk) { $o['x'] = array(); foreach ($xk as $al => $kt) { $v = $r[$al]; if ($kt[1] === 'dt' && $v) { $v = cp_crm_local($v); } $o['x'][$kt[0]] = $v === null ? null : (string) $v; } }
 	return $o;
 }
