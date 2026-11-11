@@ -1017,3 +1017,17 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 @media (max-width:760px){.ml-rac{position:fixed;left:8px;right:8px;top:auto;margin-top:4px;max-height:40vh}.ml-rac button{padding:11px 12px;font-size:16px}}
 .ml-mclip{display:inline-flex;align-items:center;gap:2px;margin-right:8px;color:#3A3F4B;font-weight:600;vertical-align:middle}.ml-mclip .ml-ni{width:14px;height:14px;flex:none}
 .ml-tabs .ml-allread{align-self:center;border:0;background:none;color:#2F5BD8;font:600 12.5px Inter,sans-serif;cursor:pointer;padding:2px 4px 2px 8px;white-space:nowrap}.ml-tabs .ml-allread:hover{text-decoration:underline}
+/* v2.9.189: részletes keresés */
+.ml-qw .ml-q{padding-right:38px}.ml-qw.rf .ml-q{padding-right:66px}
+.ml-mfb{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:26px;height:26px;padding:0;border:0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:#656973;background:none;cursor:pointer}
+.ml-qw.rf .ml-mfb{right:31px}
+.ml-mfb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.ml-mfb:hover{color:#2F6FDB;background:#EEF3FD}.ml-mfb.on{color:#fff;background:#2F6FDB}
+.ml-mf{position:absolute;top:calc(100% + 6px);left:0;right:0;min-width:260px;z-index:30;background:#fff;border:1px solid var(--li);border-radius:12px;box-shadow:0 12px 32px -12px rgba(20,28,51,.3);padding:12px;display:flex;flex-direction:column;gap:10px}
+.ml-mf[hidden]{display:none}
+.ml-mf label{display:flex;flex-direction:column;gap:4px;font:600 12px Inter,sans-serif;color:#656973}
+.ml-mf input[type=text],.ml-mf input[type=date]{height:34px;border:1.5px solid var(--li);border-radius:8px;padding:0 10px;font:13.5px Inter,sans-serif;color:var(--ink);min-width:0}
+.ml-mfd{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ml-mf .ml-mfc{flex-direction:row;align-items:center;gap:8px;font-weight:500;color:var(--ink);font-size:13px}
+.ml-mfa{display:flex;justify-content:space-between;align-items:center}
+@media (max-width:760px){.ml-list .ml-qw.rf .ml-q{padding-right:84px}.ml-qw.rf .ml-mfb{right:42px;width:36px;height:36px}.ml-mfb{width:36px;height:36px}}

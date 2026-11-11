@@ -524,7 +524,7 @@ function cp_mail_ajax_threads() {
 	cp_mail_snooze_due();
 	$folder = sanitize_key(wp_unslash($_POST['folder'] ?? 'inbox'));
 	/* v2.9.40: keresésnél minden levél között (minden mappa és a lezártak is) – csak a Kuka és a Spam marad ki */
-	$qs = trim((string) wp_unslash($_POST['q'] ?? '')) !== '';
+	$qs = trim((string) wp_unslash($_POST['q'] ?? '')) !== '' || trim((string) wp_unslash($_POST['sf'] ?? '')) !== '' || !empty($_POST['d1']) || !empty($_POST['d2']) || ($_POST['att'] ?? '') === '1';
 	/* v2.9.42: címkére szűrve is minden levél között (a „Mind” fül szerint, minden mappából) */
 	$tg0 = json_decode((string) wp_unslash($_POST['tg'] ?? ''), true);
 	if (is_array($tg0) && array_filter(array_map('strval', $tg0), 'strlen')) { $qs = true; }
@@ -545,7 +545,22 @@ function cp_mail_ajax_threads() {
 	$box = sanitize_key(wp_unslash($_POST['box'] ?? ''));
 	if ($box !== '') { $w[] = $wpdb->prepare('mailbox = %s', $box); }
 	$q = trim((string) wp_unslash($_POST['q'] ?? ''));
-	if ($q !== '') { $like = '%' . $wpdb->esc_like($q) . '%'; $w[] = $wpdb->prepare('(subject LIKE %s OR contact_name LIKE %s OR contact_email LIKE %s OR snippet LIKE %s)', $like, $like, $like, $like); }
+	if ($q !== '') {
+		$like = '%' . $wpdb->esc_like($q) . '%'; $M = cp_mail_t('messages');
+		/* v2.9.189: teljes szöveges keresés – a levelek szövegében (FULLTEXT) és a feladók / címzettek között is */
+		$ft = array(); foreach (preg_split('/[\s"+\-<>()~*@.,;:!?]+/u', mb_substr($q, 0, 120)) as $wd) { if (mb_strlen($wd) >= 3) { $ft[] = '+' . $wd . '*'; } }
+		$or = array($wpdb->prepare('subject LIKE %s OR contact_name LIKE %s OR contact_email LIKE %s OR snippet LIKE %s', $like, $like, $like, $like));
+		if ($ft) { $or[] = $wpdb->prepare("id IN (SELECT thread_id FROM $M WHERE MATCH(body) AGAINST (%s IN BOOLEAN MODE))", implode(' ', array_slice($ft, 0, 8))); }
+		$or[] = $wpdb->prepare("id IN (SELECT thread_id FROM $M WHERE from_email LIKE %s OR from_name LIKE %s OR to_list LIKE %s OR subject LIKE %s)", $like, $like, $like, $like);
+		$w[] = '(' . implode(' OR ', $or) . ')';
+	}
+	/* v2.9.189: részletes szűrők – feladó, dátum (az utolsó levél ideje), csak mellékletes */
+	$sf = trim((string) wp_unslash($_POST['sf'] ?? ''));
+	if ($sf !== '') { $sl = '%' . $wpdb->esc_like(mb_substr($sf, 0, 120)) . '%'; $w[] = $wpdb->prepare('(contact_email LIKE %s OR contact_name LIKE %s OR id IN (SELECT thread_id FROM ' . cp_mail_t('messages') . " WHERE dir = 'in' AND (from_email LIKE %s OR from_name LIKE %s)))", $sl, $sl, $sl, $sl); }
+	$d1 = (string) ($_POST['d1'] ?? ''); $d2 = (string) ($_POST['d2'] ?? '');
+	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d1)) { $w[] = $wpdb->prepare('last_at >= %s', get_gmt_from_date($d1 . ' 00:00:00')); }
+	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d2)) { $w[] = $wpdb->prepare('last_at <= %s', get_gmt_from_date($d2 . ' 23:59:59')); }
+	if (($_POST['att'] ?? '') === '1') { $w[] = 'has_attach > 0'; }
 	/* v2.9.25: címke-szűrő – a megadott címkék bármelyike (JSON-tömb) */
 	$tg = json_decode((string) wp_unslash($_POST['tg'] ?? ''), true);
 	if (is_array($tg)) { $or = array(); foreach (array_slice($tg, 0, 20) as $x) { $x = cp_mail_tag_norm($x); if ($x !== '' && !cp_mail_tag_is_sys($x)) { $or[] = cp_mail_tag_where($x); } } if ($or) { $w[] = '(' . implode(' OR ', $or) . ')'; } }
