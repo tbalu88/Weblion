@@ -258,6 +258,29 @@
 		cpop.querySelector('[data-creset]').addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, '#141C33'); if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent'); keep(); cpop.hidden = true; });
 		document.addEventListener('click', e => { if (!cpop.hidden && e.target.isConnected && !e.target.closest('.ml-cpop') && !e.target.closest('[data-cmd="color"]')) cpop.hidden = true; });
 		cpop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cpop.hidden = true; area.focus(); } });
+		/* v2.9.139: link a szerkesztőben – kattintásra buborék (Megnyitás / Módosítás / Eltávolítás), Ctrl/⌘+kattintás: megnyitás */
+		let lpop = null;
+		const lclose = () => { if (lpop) { lpop.remove(); lpop = null; } };
+		area.addEventListener('click', e => {
+			const a = e.target.closest('a[href]'); lclose();
+			if (!a || !area.contains(a)) return;
+			const href = a.getAttribute('href') || '';
+			if (e.metaKey || e.ctrlKey) { e.preventDefault(); if (/^(https?:|mailto:|tel:)/i.test(href)) window.open(href, '_blank', 'noopener'); return; }
+			const r = a.getBoundingClientRect();
+			lpop = document.createElement('div'); lpop.className = 'ml-lpop';
+			lpop.innerHTML = '<a target="_blank" rel="noopener" class="ml-lpu"></a><button type="button" data-lo>Megnyitás ↗</button><button type="button" data-le>Módosítás</button><button type="button" data-lx>Eltávolítás</button>';
+			const u = lpop.querySelector('.ml-lpu'); u.textContent = href.length > 48 ? href.slice(0, 45) + '…' : href; u.title = href; if (/^(https?:|mailto:|tel:)/i.test(href)) u.href = href;
+			document.body.appendChild(lpop);
+			lpop.style.left = Math.max(8, Math.min(window.innerWidth - lpop.offsetWidth - 8, r.left)) + 'px';
+			lpop.style.top = (r.bottom + 6 + lpop.offsetHeight > window.innerHeight ? r.top - lpop.offsetHeight - 6 : r.bottom + 6) + 'px';
+			lpop.querySelectorAll('button').forEach(x => x.addEventListener('mousedown', ev => ev.preventDefault()));
+			lpop.querySelector('[data-lo]').addEventListener('click', () => { if (/^(https?:|mailto:|tel:)/i.test(href)) window.open(href, '_blank', 'noopener'); lclose(); });
+			lpop.querySelector('[data-le]').addEventListener('click', () => { const v = window.prompt('A link címe:', href); if (v && /^(https?:|mailto:|tel:)/i.test(v.trim())) { a.setAttribute('href', v.trim()); area.dispatchEvent(new Event('input', { bubbles: true })); } lclose(); });
+			lpop.querySelector('[data-lx]').addEventListener('click', () => { const pa = a.parentNode; while (a.firstChild) pa.insertBefore(a.firstChild, a); pa.removeChild(a); area.dispatchEvent(new Event('input', { bubbles: true })); lclose(); });
+		});
+		area.addEventListener('keydown', lclose);
+		document.addEventListener('mousedown', e => { if (lpop && !lpop.contains(e.target)) lclose(); });
+		window.addEventListener('scroll', lclose, true);
 		/* v2.9.131: betűtípus és méret – a böngésző <font> jelölését inline stílusú span-re cseréljük (levelezőkben is megmarad) */
 		const fontApply = (prop, val) => {
 			restore();
@@ -2026,6 +2049,7 @@
 				try {
 					const r = await post('cp_mail_preview', { deal: deal ? deal.id : '', subject: te.querySelector('[data-s]').value, body: ed.get() });
 					pv.innerHTML = '<div class="ml-prev-h"><b>Előnézet</b><small>' + (deal ? esc(deal.title) + ' adataival' : 'mintaadatokkal') + '</small></div><div class="ml-prev-s"><span>Tárgy:</span> ' + esc(r.subject) + '</div><div class="ml-prev-b">' + r.body + '</div>';
+					pv.querySelectorAll('a[href]').forEach(x => { x.target = '_blank'; x.rel = 'noopener'; }); /* v2.9.139: a link új lapon nyílik */
 					pv.hidden = false;
 				} catch (e) { toast(e.message, true); }
 			});
