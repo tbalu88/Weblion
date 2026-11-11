@@ -873,3 +873,4 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-upl > li:hover .d3-dfx,.d3-dfx:focus-visible{opacity:1}
 @media (hover:none){.d3-dfx{opacity:1}}
 [data-fsec].d3-drop{outline:2px dashed #2F5BD8;outline-offset:-4px}
+.d3-tgl .d3-tnote{background:#FFFBEA;border-color:#F3E6B5}
