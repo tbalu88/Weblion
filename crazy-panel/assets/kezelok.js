@@ -39,7 +39,8 @@
 		if (type === 'car') return '<td><select data-f="car" class="kz-car ' + esc(x.car) + '" aria-label="Autó típusa"><option value="">–</option><option value="szemely"' + (x.car === 'szemely' ? ' selected' : '') + '>személy</option><option value="teher"' + (x.car === 'teher' ? ' selected' : '') + '>teher</option></select></td>';
 		if (sens && !S.reveal) {
 			const has = (x.have || []).includes(k);
-			return '<td class="kz-s ' + (has ? 'ok' : 'no') + '" title="' + (has ? 'Megadva – a megtekintéshez: „Személyes adatok megjelenítése”' : 'Hiányzik') + '">' + (has ? '•••' : 'hiányzik') + '</td>';
+			/* v2.9.167: kattintásra (adminnak) megjelennek a személyes adatok, és a mező szerkeszthető */
+			return '<td class="kz-s ' + (has ? 'ok' : 'no') + (K.admin ? ' kz-srev' : '') + '"' + (K.admin ? ' data-srev role="button" tabindex="0"' : '') + ' title="' + (K.admin ? (has ? 'Megadva' : 'Hiányzik') + ' – kattints a szerkesztéshez (a személyes adatok megjelennek, naplózva)' : (has ? 'Megadva – csak admin láthatja és módosíthatja' : 'Hiányzik – csak admin adhatja meg')) + '">' + (has ? '•••' : 'hiányzik') + '</td>';
 		}
 		const v = sens ? ((x.sens || {})[k] || '') : (x[k] || '');
 		const ro = sens && !K.admin;
@@ -210,6 +211,8 @@
 	}
 	function bind() {
 		const main = S.main;
+		/* v2.9.167: a rejtett személyes adat cellájára kattintva (admin) megjelennek az adatok, és szerkeszthetők */
+		main.querySelectorAll('[data-srev]').forEach(td => { const go = () => { if (!window.confirm('Megjeleníted a személyes adatokat a szerkesztéshez? (A megtekintés naplózva lesz.)')) return; S.reveal = true; view(main); }; td.addEventListener('click', go); td.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }); });
 		main.querySelectorAll('tr[data-id], tr.kz-det').forEach(tr => {
 			const id = Number((tr.dataset.id || (tr.previousElementSibling && tr.previousElementSibling.dataset.id)) || 0);
 			const x = S.rows.find(z => z.id === id); if (!x) return;
@@ -526,6 +529,7 @@
 		'.iv-who{min-width:0}.iv-who b{display:block;overflow-wrap:anywhere}.iv-a{display:flex;gap:14px;justify-content:flex-end;align-items:center;white-space:nowrap}.iv-a .kz-link{padding:2px 0}.iv-a .iv-del{color:#9A3A12}' +
 		'.iv-np{display:flex;gap:6px;align-items:center;max-width:100%;margin-top:4px;padding:0;border:0;background:none;cursor:pointer;font:12.5px/1.4 Inter,sans-serif;color:#3C4252;text-align:left}.iv-np span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iv-np:hover span:last-child{text-decoration:underline;text-underline-offset:2px}' +
 		'.iv-rt{flex:none;font:600 10.5px Inter,sans-serif;border-radius:5px;padding:1px 6px;white-space:nowrap}.iv-rt.ok{background:#DDF3E6;color:#17663A}.iv-rt.mid{background:#FFF1D6;color:#8A4B08}.iv-rt.no{background:#FBE3DC;color:#9A3A12}' +
+		'.kz-srev{cursor:pointer}.kz-srev:hover{outline:2px solid #2F5BD8;outline-offset:-2px}' +
 		'.kz-av{margin:10px 0;padding:10px 12px;border:1px solid var(--li);border-radius:12px;background:#FAF8F5;display:flex;flex-direction:column;gap:8px}.kz-av.saving{opacity:.6}.kz-avq{display:flex;flex-wrap:wrap;gap:4px 16px}.kz-avw,.kz-avr{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.kz-avw small,.kz-avr small{color:var(--mu);font-size:12px;margin-right:2px}' +
 		'.kz-avw button{min-width:38px;height:30px;border:1px solid #DCD6CC;border-radius:999px;background:#fff;font:600 12.5px Inter,sans-serif;color:var(--ink);cursor:pointer}.kz-avw button[aria-pressed=true]{background:#FDECEA;border-color:#E8A5A0;color:#B42318;text-decoration:line-through}' +
 		'.kz-avr input{height:32px;border:1px solid var(--li);border-radius:8px;padding:0 8px;font:13px Inter,sans-serif;background:#fff}.kz-avl{display:flex;flex-wrap:wrap;gap:6px}.kz-avl .kz-chip{background:#FDECEA;color:#B42318;display:inline-flex;align-items:center;gap:4px}.kz-avl button{border:0;background:none;color:inherit;font-size:14px;cursor:pointer;padding:0 2px}' +
