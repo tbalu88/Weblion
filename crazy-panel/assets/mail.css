@@ -979,3 +979,6 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-tgbar .ml-tg>button{flex:none}
 .ml-tgbar small{flex:none}
 .ml-tgbar .ml-link{flex:none;white-space:nowrap;padding:0}
+/* v2.9.138: a linkek a szerkesztőben és az előnézetben is linknek látszanak (a saját stílusú linkek maradnak) */
+.ml-area a,.ml-prev-b a{color:#1A5FD0;text-decoration:underline;cursor:text}
+.ml-prev-b a{cursor:pointer}
