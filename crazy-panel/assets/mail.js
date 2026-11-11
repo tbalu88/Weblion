@@ -479,6 +479,18 @@
 			f.addEventListener('load', () => {
 				try {
 					const d = f.contentDocument;
+					/* v2.9.141: betűméret-egységesítés – a feladó nagy (pl. Outlook 14–16 pt) szövegbetűje 15 px-re áll, a nagy címek arányosan
+					   kisebbek (legfeljebb 24 px), az apró (9 px alatti) betű olvashatóra nő; csak a saját szöveget tartalmazó elemeket nézzük */
+					try {
+						const w = d.defaultView;
+						d.body.querySelectorAll('*').forEach(e => {
+							if (!Array.from(e.childNodes).some(n => n.nodeType === 3 && n.nodeValue.trim())) return;
+							const px = parseFloat(w.getComputedStyle(e).fontSize) || 0;
+							if (px > 22) e.style.setProperty('font-size', Math.min(24, Math.round(15 + (px - 22) * 0.4)) + 'px', 'important');
+							else if (px > 15.5) e.style.setProperty('font-size', '15px', 'important');
+							else if (px && px < 9) e.style.setProperty('font-size', '11px', 'important');
+						});
+					} catch (e2) { /* marad az eredeti */ }
 					/* v2.7.3: magasság a tartalomhoz – a vízszintes csúszka magasságával együtt, és csak valódi változásra
 					   (különben a csúszka megjelenése/eltűnése és az újraméretezés egymást váltogatta, a levél „remegett”) */
 					let last = 0, n = 0, t0 = Date.now();
