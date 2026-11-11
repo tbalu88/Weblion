@@ -1201,14 +1201,15 @@
 		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
 	const tgMoreTxt = n => '+' + n + ' korábbi levél';
-	function threadGroup(t) {
+	function threadGroup(t, inDeal) { /* v2.9.155: inDeal = a deal idővonalán (csatolás / leválasztás gombokkal) */
 		const n = t.n != null ? t.n : t.cnt, lm = t.lm || [], rest = Math.max(0, n - lm.length), dir = t.ld === 'out' ? 'out' : t.ld === 'in' ? 'in' : '', closed = t.st === 'closed';
 		const key = t.id + '|' + (t.la || t.at), cached = TG.cache.get(t.id), open = rest > 0 && TG.open.has(t.id) && cached && cached.key === key;
-		const chips = '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + Number(t.na) + ' melléklet a szálban">' + CLIP_S + Number(t.na) + '</span>' : '') +
+		const chips = (inDeal && !t.deal ? '<span class="d3-q d3-tcau" title="Nincs a dealhez csatolva – a kontakt e-mail-címe alapján látszik itt. A lánc ikonnal csatolhatod.">kontakt alapján</span> ' : '') + '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + Number(t.na) + ' melléklet a szálban">' + CLIP_S + Number(t.na) + '</span>' : '') +
 			(dir === 'out' ? ' <span class="d3-q d3-tcwo">Ügyfél válaszára vár</span>' : dir === 'in' ? ' <span class="d3-q' + (closed ? '' : ' warn') + '">Válaszra vár</span>' : '') + (closed ? ' <span class="d3-q d3-tccl">lezárva</span>' : '');
 		return '<section class="d3-tg' + (closed ? ' closed' : '') + '" data-tg="' + t.id + '" data-tgk="' + esc(key) + '">' +
 			'<div class="d3-tgr">' + '<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
-			(R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" aria-label="Levélszál leválasztása erről a dealről"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5l-1.8 1.8a3.2 3.2 0 0 1-4.5-4.5l2.6-2.6a3.2 3.2 0 0 1 4 .4"/><path d="M14.5 9.5l1.8-1.8a3.2 3.2 0 0 1 4.5 4.5l-2.6 2.6a3.2 3.2 0 0 1-4-.4"/><path d="M8 3.5v2.2M3.5 8h2.2M16 20.5v-2.2M20.5 16h-2.2"/></svg></button>' : '') + '</div>' + /* v2.9.152 */
+			(inDeal && R.edit && !t.deal ? '<button type="button" class="d3-tgdx d3-tgat" data-tgatt="' + t.id + '" aria-label="Levélszál csatolása ehhez a dealhez"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>' : '') +
+			(inDeal && R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" data-auto="' + (t.deal ? '' : '1') + '" aria-label="Levélszál leválasztása erről a dealről"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5l-1.8 1.8a3.2 3.2 0 0 1-4.5-4.5l2.6-2.6a3.2 3.2 0 0 1 4 .4"/><path d="M14.5 9.5l1.8-1.8a3.2 3.2 0 0 1 4.5 4.5l-2.6 2.6a3.2 3.2 0 0 1-4-.4"/><path d="M8 3.5v2.2M3.5 8h2.2M16 20.5v-2.2M20.5 16h-2.2"/></svg></button>' : '') + '</div>' + /* v2.9.152 */
 			'<div class="d3-tgl">' + lm.map(g => tmItem(t, g)).join('') +
 			(rest ? '<button type="button" class="d3-tgx" data-tgx="' + rest + '" data-skip="' + lm.length + '" aria-expanded="' + !!open + '">' + (open ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest)) + '</button><div class="d3-tgo" data-tgo' + (open ? '>' + cached.html : ' hidden>') + '</div>' : '') +
 			'</div></section>';
@@ -1247,12 +1248,19 @@
 		root.querySelectorAll('.d3-tg .d3-tm').forEach(bindTm);
 		root.querySelectorAll('[data-tgx]').forEach(b => b.addEventListener('click', () => tgToggle(b)));
 		/* v2.9.152: levélszál leválasztása a dealről (a levél a Levelezésben megmarad, csak a dealhez nem tartozik többé) */
+		root.querySelectorAll('[data-tgatt]').forEach(b => b.addEventListener('click', async e => {
+			e.stopPropagation();
+			const did = D3.ctx && D3.ctx.id; if (!did) return;
+			b.disabled = true;
+			try { await post('cp_mail_thread_set', { id: b.dataset.tgatt, thread: b.dataset.tgatt, f: 'deal', v: String(did) }); toast('Levélszál csatolva a dealhez.'); openDeal(D3.ctx.id, D3.ctx.back); }
+			catch (er) { b.disabled = false; toast(er.message, true); }
+		}));
 		root.querySelectorAll('[data-tgdet]').forEach(b => b.addEventListener('click', async e => {
 			e.stopPropagation();
 			const g = b.closest('.d3-tg'), subj = (g.querySelector('.d3-tgs') || {}).textContent || '';
-			if (!window.confirm('Leválasztod ezt a levélszálat a dealről?\n\n„' + subj + '”\n\nA levél a Levelezésben megmarad, csak ehhez a dealhez nem tartozik többé.')) return;
+			if (!window.confirm((b.dataset.auto ? 'Ez a levélszál nincs a dealhez csatolva, csak a kontakt címe miatt látszik itt. Jelölöd úgy, hogy nem ehhez a dealhez tartozik?' : 'Leválasztod ezt a levélszálat a dealről?') + '\n\n„' + subj + '”\n\nA levél a Levelezésben megmarad, a deal adatlapján nem jelenik meg többé.')) return;
 			b.disabled = true;
-			try { await post('cp_mail_thread_set', { id: b.dataset.tgdet, thread: b.dataset.tgdet, f: 'deal', v: '' }); g.remove(); toast('Levélszál leválasztva a dealről.'); }
+			try { await post('cp_mail_thread_set', { id: b.dataset.tgdet, thread: b.dataset.tgdet, f: 'deal', v: 'none' }); g.remove(); toast('Levélszál leválasztva a dealről.'); }
 			catch (er) { b.disabled = false; toast(er.message, true); }
 		}));
 		root.querySelectorAll('.d3-tg [data-tgc]').forEach(c => c.addEventListener('click', () => { const b = c.closest('.d3-tg').querySelector('[data-tgx]'); tgToggle(b); b.focus(); }));
@@ -1299,7 +1307,7 @@
 	function timeline(x) {
 		const d = x.deal, m = x.mail || { msgs: [], notes: [] }, it = [];
 		/* v2.9.68: levelenkénti elemek helyett szálanként egy csoport, a szál legutóbbi levelének idejénél (új levéllel a szál felülre kerül); v2.9.69: hibrid csoport */
-		(m.off ? [] : m.threads || []).forEach(t => it.push({ k: 'mail', at: t.la || t.at, h: threadGroup(t) }));
+		(m.off ? [] : m.threads || []).forEach(t => it.push({ k: 'mail', at: t.la || t.at, h: threadGroup(t, true) }));
 		(x.dnotes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note dnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a dealen</b> – ' + esc(n.author || '') + (n.src === 'sm' || n.src === 'smi' ? ' <span class="d3-q" title="' + (n.src === 'smi' ? 'A Salesmate egyik levélszálán írták' : 'A Salesmate-ben írták') + '">Salesmate</span>' : '') + '<small>' + esc(huDT(n.at)) + '</small>' + (W && (n.mine || (C.au && C.au.on)) ? '<button type="button" class="d3-x" data-ndel="' + n.id + '" title="Jegyzet törlése (a Salesmate-ből is)">×</button>' : '') + '</div><div class="d3-tx">' + nl(n.body) + '</div></div></div>' }));
 		(m.notes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note" data-th="' + n.th + '" role="button" tabindex="0"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div></div></div>' }));
 		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small>' + (W && Number(a.related_id) === d.id ? '<button type="button" class="d3-ab" data-aundo="' + a.id + '" title="Visszanyitás">↺</button>' : '') + '</div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));

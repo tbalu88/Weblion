@@ -798,3 +798,7 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-tgdx:hover::after,.d3-tgdx:focus-visible::after{content:'Leválasztás a dealről';position:absolute;right:0;top:calc(100% + 6px);background:#141C33;color:#fff;font:500 12px/1 Inter,sans-serif;padding:7px 9px;border-radius:7px;white-space:nowrap;z-index:5;pointer-events:none}
 .d3-tg:hover .d3-tgdx,.d3-tgdx:focus-visible{opacity:1}.d3-tgdx:hover{background:#EEEAE4;color:#141C33}
 @media (hover:none){.d3-tgdx{opacity:1}}
+
+/* v2.9.155: csak kontakt alapján látszó levélszál + csatolás */
+.d3-tcau{background:#FFF4D6;color:#7A5300}
+.d3-tgat:hover::after,.d3-tgat:focus-visible::after{content:'Csatolás a dealhez'}

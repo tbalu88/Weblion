@@ -704,7 +704,8 @@ function cp_mail_ajax_thread_set() {
 	$v = (string) wp_unslash($_POST['v'] ?? '');
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	$set = array();
-	if ($f === 'deal') { $set['deal_id'] = ctype_digit($v) && (int) $v > 0 ? (int) $v : null; }
+	/* v2.9.155: 'none' = kifejezetten egyik dealhez sem tartozik (0) – a kontakt címe alapján sem jelenik meg a deal adatlapján */
+	if ($f === 'deal') { $set['deal_id'] = ctype_digit($v) && (int) $v > 0 ? (int) $v : ($v === 'none' ? 0 : null); }
 	elseif ($f === 'assignee') { $set['assignee_uid'] = ctype_digit($v) && (int) $v > 0 ? (int) $v : null; }
 	elseif ($f === 'status') { $set['status'] = $v === 'closed' ? 'closed' : 'open'; }
 	elseif ($f === 'follow') { $l = array_filter(array_map('intval', explode(',', (string) $t['followers']))); $l = $v === '1' ? array_unique(array_merge($l, array($me))) : array_diff($l, array($me)); $set['followers'] = implode(',', $l); }

@@ -1368,7 +1368,7 @@
 			} catch (e) { toast(e.message, true); rd.querySelectorAll('[data-dmove]').forEach(x2 => { x2.disabled = false; }); drawThread(box, rd, x); }
 		}));
 		const det = rd.querySelector('[data-detach]');
-		if (det) det.addEventListener('click', () => { if (window.confirm('Leválasztod a dealt erről a levélszálról?')) act('cp_mail_thread_set', { f: 'deal', v: '' }); });
+		if (det) det.addEventListener('click', () => { if (window.confirm('Leválasztod a dealt erről a levélszálról?')) act('cp_mail_thread_set', { f: 'deal', v: 'none' }); }); /* v2.9.155: kifejezett leválasztás */
 		const dalt = rd.querySelector('[data-dalt]');
 		if (dalt) dalt.addEventListener('click', () => act('cp_mail_thread_set', { f: 'deal', v: dalt.dataset.dalt }));
 		const retb = rd.querySelector('[data-ret]');
