@@ -643,7 +643,7 @@ function cp_mail_thread_full($id) {
 		foreach ($msgs as &$m) { if (isset($pxm[(int) $m['id']])) { $m['px'] = $pxm[(int) $m['id']]; } $m['body'] = cp_px_strip((string) $m['body']); }
 		unset($m);
 	}
-	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal, 'ret' => $ret);
+	return array('t' => cp_mail_thread_row($t), 'msgs' => $msgs, 'notes' => $notes, 'events' => $ev, 'deal' => $deal, 'ret' => $ret, 'blk' => function_exists('cp_mail_blocked') && cp_mail_blocked((string) $t['contact_email']) ? 1 : 0);
 }
 
 add_action('wp_ajax_nopriv_cp_mail_thread', 'cp_mail_ajax_thread');

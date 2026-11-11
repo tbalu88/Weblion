@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.187');
+define('CP_PANEL_VER', '2.9.188');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3753,6 +3753,7 @@ require_once __DIR__ . '/kanban.php';
 require_once __DIR__ . '/notify.php';
 require_once __DIR__ . '/ping.php'; /* v2.9.59: könnyített változásjelző (P1) – a gyors út a mu-plugins/cp-ping.php */
 require_once __DIR__ . '/ai.php';
+require_once __DIR__ . '/mail-block.php'; /* v2.9.188: feladó tiltása */
 require_once __DIR__ . '/mail-import.php';
 require_once __DIR__ . '/leads.php';
 require_once __DIR__ . '/flows.php';

@@ -1344,7 +1344,7 @@
 			const old = rd.querySelector('.ml-mmenu'); if (old) { old.remove(); if (old._b === b) return; }
 			const it = tl[Number(b.dataset.mmore)], m = it && it.m; if (!m) return;
 			const pop = document.createElement('div'); pop.className = 'ml-mmenu'; pop._b = b;
-			pop.innerHTML = (window.CPCrm && window.CPCrm.newDeal && C.crm && C.crm.on ? '<button type="button" data-k="deal">💼 Deal létrehozása ebből a levélből</button>' : '') + ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>' + (t.folder === 'spam' ? '' : '<button type="button" data-k="spam">⛔ Spamnek jelölés</button>');
+			pop.innerHTML = (window.CPCrm && window.CPCrm.newDeal && C.crm && C.crm.on ? '<button type="button" data-k="deal">💼 Deal létrehozása ebből a levélből</button>' : '') + ((M.send && M.send.on) ? '<button type="button" data-k="fw">↪ Továbbítás</button>' : '') + '<button type="button" data-k="unread">● Olvasatlannak jelölés</button><button type="button" data-k="copy">⧉ Szöveg másolása</button><button type="button" data-k="print">🖨 Nyomtatás</button>' + (t.folder === 'spam' ? '' : '<button type="button" data-k="spam">⛔ Spamnek jelölés</button>') + (t.id > 0 && t.ce ? '<button type="button" data-k="blk">' + (x.blk ? '✓ Feladó tiltásának feloldása' : '🚫 Feladó tiltása') + '</button>' : '');
 			b.parentNode.style.position = 'relative'; b.parentNode.appendChild(pop);
 			pop.querySelectorAll('[data-k]').forEach(x => x.addEventListener('click', async () => {
 				pop.remove();
@@ -1360,6 +1360,13 @@
 				else if (k === 'unread') { S.th = null; S.reading = false; bulk(box, [t.id], 'unread', ''); }
 				else if (k === 'copy') { const tmp = document.createElement('div'); tmp.innerHTML = noExtImg(m.body); /* v2.9.58: külső kép a másoláskor se töltődjön */ try { await navigator.clipboard.writeText(tmp.innerText.trim()); toast('A levél szövege a vágólapon.'); } catch (er) { toast('A másolás nem sikerült.', true); } }
 				else if (k === 'print') printMsg(m);
+				else if (k === 'blk') { /* v2.9.188: feladó tiltása – a levelei a Spambe kerülnek */
+					const ce = String(t.ce || '').toLowerCase(), dom = ce.split('@')[1] || '';
+					if (x.blk) { if (!(await ask('Feloldod a(z) ' + ce + ' tiltását? Az új levelei újra a Beérkezettbe jönnek (a Spamben lévők ott maradnak, onnan visszaállíthatók).', { title: 'Tiltás feloldása', ok: 'Feloldás' }))) return; try { await post('cp_mail_block', { op: 'unblock', e: ce }); toast('Tiltás feloldva.'); x.blk = 0; } catch (er) { toast(er.message, true); } return; }
+					const w = window.CPXAsk ? await window.CPXAsk({ title: 'Feladó tiltása', text: 'A tiltott feladó levelei ezentúl a Spam mappába kerülnek, értesítés nélkül; a meglévő levélszálai is a Spambe kerülnek (onnan visszaállíthatók). Csak a panelben hat.', options: [['addr', 'Csak ez a cím: ' + ce], ['dom', 'Az egész domain: @' + dom + ' (ingyenes levelezőnél, pl. gmail, nem lehet)']], required: true, ok: 'Tiltás', danger: true }) : (window.confirm('Tiltod: ' + ce + '?') ? 'addr' : null);
+					if (!w) return;
+					try { const r = await post('cp_mail_block', { op: 'block', e: ce, dom: w === 'dom' ? '1' : '' }); toast('Feladó tiltva' + (r.moved ? ' – ' + r.moved + ' levélszál a Spambe került.' : '.')); S.th = null; S.reading = false; drawInbox(box); } catch (er) { toast(er.message, true); }
+				}
 				else if (k === 'spam') { if (!(await ask('Spamnek jelölöd ezt a levélszálat? A Spam mappába kerül (csak a panelben – onnan visszaállítható).'))) return; S.th = null; S.reading = false; bulk(box, [t.id], 'spam', ''); }
 			}));
 			setTimeout(() => document.addEventListener('click', function off(ev) { if (!pop.isConnected || !pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', off); } }), 0);
@@ -1384,6 +1391,7 @@
 			try {
 				const r = await post('cp_crm_move', p);
 				toast(r.warn ? r.warn : (r.changed ? (st === 'Won' ? 'Megnyertnek jelölve' : st === 'Lost' ? 'Elvesztettnek jelölve' : 'Újranyitva') + ' – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már így volt.'), !!r.warn);
+				if (st === 'Lost' && window.CPXSlotStorno) window.CPXSlotStorno(d.id, name); /* v2.9.188: beosztás lemondása (rákérdez) */
 				if (r.row) x.deal = Object.assign({}, d, { status: r.row.status || st, stage: r.row.stage || d.stage }); else x.deal = Object.assign({}, d, { status: st });
 				drawThread(box, rd, x);
 			} catch (e) { toast(e.message, true); rd.querySelectorAll('[data-dmove]').forEach(x2 => { x2.disabled = false; }); drawThread(box, rd, x); }

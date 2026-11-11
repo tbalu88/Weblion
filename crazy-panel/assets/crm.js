@@ -1011,6 +1011,18 @@
 	}
 	/* v2.9.172: az elvesztés oka – választólista (kötelező), „Egyéb”-nél szabad szöveg */
 	const lostWhy = name => window.CPXLostWhy(name); /* v2.9.179: a lista a panel.js-ben (a Levelezés is ezt használja) */
+	/* v2.9.188: elveszett / törölt deal aktív beosztásai – rákérdez, lemondja-e (a kezelő „Elmarad a rendezvény” levelet kap) */
+	const SLST = { invited: 'meghívva', accepted: 'ráér', final: 'véglegesítve' };
+	async function slotStorno(dealId, name) {
+		let rows = [];
+		try { rows = (await post('cp_slot_deal_active', { deal: dealId })).rows || []; } catch (e) { return; }
+		if (!rows.length) return;
+		const ok = await window.CPXConfirm((name ? name + '\n\n' : '') + 'Ehhez a rendezvényhez beosztás tartozik:\n' + rows.map(r => '• ' + r.n + ' – ' + huD(r.day) + ' (' + (SLST[r.st] || r.st) + ')' + (r.mail ? '' : ' – nincs e-mail-címe')).join('\n') + '\n\nLemondod? Lemondáskor „Elmarad a rendezvény” levelet kapnak, a naptárukból törlődik a bejegyzés, és a beosztás felszabadul.', { title: 'Beosztás lemondása', ok: 'Lemondom (levéllel)', cancel: 'Meghagyom' });
+		if (!ok) return;
+		try { const r = await post('cp_slot_deal_storno', { deal: dealId }); toast('Beosztás lemondva: ' + r.done + (r.mailed ? ' · ' + r.mailed + ' levél elküldve' : '') + (r.err && r.err.length ? ' · hiba: ' + r.err.join('; ') : ''), !!(r.err && r.err.length)); }
+		catch (e) { toast('A beosztás lemondása nem sikerült: ' + e.message, true); }
+	}
+	window.CPXSlotStorno = slotStorno;
 	/* áthelyezés: p = { to: szakasz } vagy { st: 'Won' | 'Lost' | 'Open' }; a Salesmate-be is ír */
 	async function doMove(id, p, title) {
 		const rows = S.board ? S.board.rows : [];
@@ -1032,6 +1044,7 @@
 			if (x.row && S.board) { const i = S.board.rows.findIndex(y => y.id === id); if (i >= 0) S.board.rows[i] = x.row; }
 			toast(x.warn ? x.warn : (x.changed ? 'Kész – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már ott volt.'), !!x.warn);
 			ok = true;
+			if (p.st === 'Lost') slotStorno(id, name);
 		} catch (e) {
 			if (r && old) Object.assign(r, old);
 			toast('Nem sikerült: ' + e.message, true);
@@ -1878,6 +1891,7 @@
 			d3d.disabled = false;
 			const also = inf ? [inf.portal ? '• az ügyfélportál' + (inf.files ? ' és ' + inf.files + ' fájlja (sablon, logó)' : '') + ', a link sem működik tovább' : '', inf.cal ? '• ' + inf.cal + ' naptárbejegyzés a Google Naptárból' : (inf.cal_err ? '• (a naptárat most nem érem el – onnan kézzel töröld)' : ''), inf.threads ? '• ' + inf.threads + ' levélszál a Kukába kerül' : ''].filter(Boolean) : [];
 			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\n\n30 napig visszaállítható a Lomtárból (a Salesmate-ben új dealként; az ügyfélportál és a Salesmate-beli jegyzetek, tevékenységek nem jönnek vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
+			await slotStorno(d.id, d.title || ''); /* v2.9.188: a törlés előtt (utána a beosztás adatai már nem érhetők el) */
 			d3d.disabled = true;
 			try { const r = await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id) + (r && r.clean && r.clean.length ? ' · vele együtt: ' + r.clean.join(', ') : '')); closePage(); hideModal(); load(); }
 			catch (e) { d3d.disabled = false; toast(e.message, true); }

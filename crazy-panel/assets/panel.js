@@ -330,7 +330,12 @@
       '@keyframes cpxaskf{from{opacity:0}to{opacity:1}}' +
       '.cpx-undo{width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10070;background:#141C33;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;font:14px Inter,sans-serif;box-shadow:0 12px 30px rgba(20,28,51,.3);overflow:hidden;max-width:calc(100vw - 24px)}' +
       '.cpx-undo button{background:#fff;color:#141C33;border:0;border-radius:999px;padding:6px 14px;font:700 13px Inter,sans-serif;cursor:pointer;flex:none}.cpx-undo i{position:absolute;left:0;bottom:0;height:3px;background:#F2A33A;animation:cpxundo linear forwards}' +
-      '@keyframes cpxundo{from{width:100%}to{width:0}}@media (prefers-reduced-motion:reduce){.cpx-ask{animation:none}}';
+      '@keyframes cpxundo{from{width:100%}to{width:0}}@media (prefers-reduced-motion:reduce){.cpx-ask{animation:none}}' +
+      '.cpx-pv{position:fixed;inset:0;z-index:10090;background:rgba(12,16,28,.92);display:flex;flex-direction:column}.cpx-pvh{background:#0C101C;display:flex;align-items:center;gap:10px;padding:10px 14px;color:#fff;font:14px Inter,sans-serif;min-width:0}.cpx-pvh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.cpx-pvh small{color:#AEB4C2;flex:none}.cpx-pvsp{flex:1}' +
+      '.cpx-pvb{flex:none;color:#fff;background:rgba(255,255,255,.12);border:0;border-radius:999px;padding:7px 14px;font:600 13px Inter,sans-serif;text-decoration:none;cursor:pointer}.cpx-pvb:hover{background:rgba(255,255,255,.22)}.cpx-pvx{font-size:20px;line-height:1;padding:5px 12px}' +
+      '.cpx-pvbody{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 56px 16px}.cpx-pvbody img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;background:#fff}.cpx-pvbody iframe{width:min(1000px,100%);height:100%;border:0;border-radius:6px;background:#fff}.cpx-pvld{color:#fff;font:14px Inter,sans-serif}.cpx-pvld.err{color:#FECACA}' +
+      '.cpx-pvn{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.14);color:#fff;font-size:26px;cursor:pointer}.cpx-pvn.p{left:8px}.cpx-pvn.n{right:8px}' +
+      '@media (max-width:640px){.cpx-pvbody{padding:0 8px 10px}.cpx-pvn{top:auto;bottom:14px;transform:none}.cpx-pvh [data-pvnw]{display:none}}';
     document.head.appendChild(st);
     window.CPXAsk = o => new Promise(res => {
       o = o || {};
@@ -360,6 +365,63 @@
     /* elvesztés oka – kötelező, listából (deal, tömeges művelet, levélből indított „Elvesztett”) */
     const LOST_WHY = ['Ár – drágának találta', 'A dátumra nincs szabad gép', 'Nem válaszolt', 'Más szolgáltatót választott', 'Elmarad a rendezvény', 'Teszt / spam / duplikált'].map(x => [x, x]);
     window.CPXLostWhy = name => window.CPXAsk({ title: 'Miért veszett el?', text: name, options: LOST_WHY, other: 'Egyéb (írd be)', required: true, ok: 'Elvesztett', danger: true });
+    /* v2.9.188: melléklet-előnézet a panelben (kép, PDF) – a fájlt a böngésző tölti le, és helyben (blob) mutatja; lapozás a csoporton belül */
+    const PV_RE = /\.(png|jpe?g|gif|webp|pdf)$/i;
+    const pvName = a => (a.getAttribute('data-pvn') || (a.querySelector('b') || a).textContent || a.getAttribute('title') || '').replace(/^[⚠✓]\s*/, '').trim();
+    const pvOk = a => {
+      const h = a.getAttribute('href') || '';
+      if (/action=cp_mail_att\b/.test(h)) return /[?&]view=1/.test(h) && PV_RE.test(pvName(a));
+      if (/action=cp_crm_dfile\b/.test(h)) return !/[?&]dl=1/.test(h) && PV_RE.test(pvName(a));
+      return false;
+    };
+    window.CPXPreview = (list, ix) => {
+      ix = ix || 0;
+      const w = document.createElement('div'); w.className = 'cpx-pv'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', 'Előnézet');
+      w.innerHTML = '<div class="cpx-pvh"><b data-pvt></b><small data-pvc></small><span class="cpx-pvsp"></span><a class="cpx-pvb" data-pvdl download>Letöltés</a><a class="cpx-pvb" data-pvnw target="_blank" rel="noopener">Új lapon</a><button type="button" class="cpx-pvb cpx-pvx" data-pvx aria-label="Bezárás">×</button></div>' +
+        '<div class="cpx-pvbody" data-pvb></div>' + (list.length > 1 ? '<button type="button" class="cpx-pvn p" data-pvp aria-label="Előző">‹</button><button type="button" class="cpx-pvn n" data-pvn2 aria-label="Következő">›</button>' : '');
+      document.body.appendChild(w);
+      let url = null, seq = 0;
+      const body = w.querySelector('[data-pvb]');
+      const show = async () => {
+        const it = list[ix], my = ++seq;
+        if (url) { URL.revokeObjectURL(url); url = null; }
+        w.querySelector('[data-pvt]').textContent = it.name;
+        w.querySelector('[data-pvc]').textContent = list.length > 1 ? (ix + 1) + ' / ' + list.length : '';
+        const dl = w.querySelector('[data-pvdl]'); dl.href = it.dl || it.url.replace(/&view=1/, ''); dl.setAttribute('download', it.name);
+        w.querySelector('[data-pvnw]').href = it.url;
+        body.innerHTML = '<div class="cpx-pvld">Betöltés…</div>';
+        try {
+          const r = await fetch(it.url, { credentials: 'same-origin' });
+          if (!r.ok) throw new Error('A fájl nem érhető el (' + r.status + ').');
+          const ct = (r.headers.get('Content-Type') || '').split(';')[0];
+          const buf = await r.arrayBuffer(); if (my !== seq) return;
+          const pdf = /\.pdf$/i.test(it.name);
+          const type = pdf ? 'application/pdf' : (/^image\//.test(ct) ? ct : 'image/' + ((/\.(\w+)$/.exec(it.name) || [])[1] || 'png').toLowerCase().replace('jpg', 'jpeg'));
+          url = URL.createObjectURL(new Blob([buf], { type: type }));
+          body.innerHTML = pdf ? '<iframe title="' + esc2(it.name) + '" src="' + url + '"></iframe>' : '<img alt="' + esc2(it.name) + '" src="' + url + '">';
+        } catch (e) { if (my === seq) body.innerHTML = '<div class="cpx-pvld err">' + esc2(e.message || 'Hiba') + '</div>'; }
+      };
+      const close = () => { seq++; if (url) URL.revokeObjectURL(url); document.removeEventListener('keydown', kd, true); w.remove(); };
+      const go = d => { if (list.length < 2) return; ix = (ix + d + list.length) % list.length; show(); };
+      const kd = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } else if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); };
+      document.addEventListener('keydown', kd, true);
+      w.querySelector('[data-pvx]').addEventListener('click', close);
+      const pp = w.querySelector('[data-pvp]'), nn = w.querySelector('[data-pvn2]');
+      if (pp) pp.addEventListener('click', () => go(-1)); if (nn) nn.addEventListener('click', () => go(1));
+      w.addEventListener('mousedown', e => { if (e.target === w || e.target === body) close(); });
+      show();
+    };
+    /* a melléklet-linkek (Levelezés, deal Fájlok) kattintásra előnézetben nyílnak; Ctrl/⌘-kattintás: új lap, mint eddig */
+    document.addEventListener('click', e => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest && e.target.closest('a[href]'); if (!a || !pvOk(a) || a.hasAttribute('data-risk')) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      const grp = a.closest('.ml-atts, .d3-fg, .ml-msg, [data-fsec]') || document.body;
+      const links = Array.from(grp.querySelectorAll('a[href]')).filter(x => pvOk(x) && !x.hasAttribute('data-risk') && x.offsetParent !== null);
+      const uniq = []; links.forEach(x => { if (!uniq.some(y => y.getAttribute('href') === x.getAttribute('href'))) uniq.push(x); });
+      const list = uniq.map(x => ({ url: x.href, name: pvName(x) }));
+      window.CPXPreview(list, Math.max(0, uniq.findIndex(x => x.getAttribute('href') === a.getAttribute('href'))));
+    }, true);
     window.CPXConfirm = (text, o) => window.CPXAsk(Object.assign({ text: text }, o || {}));
     window.CPXUndo = (text, ms) => new Promise(res => {
       ms = ms || 5000;
