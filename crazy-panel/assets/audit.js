@@ -186,7 +186,7 @@
 		try { r = await post('cp_an_stats', { from: A.from, to: A.to, fresh: fresh ? 1 : '' }); } catch (e) { if (my !== A.seq) return; A.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		if (my !== A.seq || !main.isConnected) return;
 		A.err = ''; A.d = r;
-		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
+		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + anEff(r.eff) + anLost(r.lost) + anRot(r.rot) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
 	}
 	const card = (t, sub, body) => '<section class="an-c"><h3 class="au-h3">' + t + '</h3>' + (sub ? '<p class="an-sub">' + sub + '</p>' : '') + body + '</section>';
@@ -235,6 +235,31 @@
 			'<h4 class="an-h4">Válaszírás ráfordítása</h4><p class="an-sub">Egy levélválasz megírására fordított percek (a válaszíró megnyitásától a küldésig vagy bezárásig).</p>' + rep +
 			'<h4 class="an-h4">Fülváltások</h4><p class="an-sub">Sok ugrálás két fül között azt jelzi, hogy egy adat rossz helyen van – ide kell egy gomb vagy előnézet.</p>' + sw +
 			'<h4 class="an-h4">Üresjárat napszak szerint</h4>' + idle);
+	}
+	/* v2.9.147: S8 ráfordítás és érték, S9 elvesztés okai, S10 rohadás */
+	function anEff(e) {
+		if (!e || !(e.rows || []).length) return '';
+		return card('Ráfordítás és érték szolgáltatásonként', 'A deal-ekre és a hozzájuk kötött levelekre fordított panelidő (' + esc(e.from.replace(/-/g, '.')) + '-tól), a deal szolgáltatása szerint. A „megnyert érték / munkaóra” mutatja, mely ügyek fizetnek jól a ráfordított időhöz képest.',
+			'<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Szolgáltatás</th><th class="r">Deal</th><th class="r">Panelidő</th><th class="r">Átlag / deal</th><th class="r">Megnyert</th><th class="r">Megnyert érték</th><th class="r">Érték / munkaóra</th></tr></thead><tbody>' +
+			e.rows.map(x => '<tr><td>' + esc(x.svc) + '</td><td class="r">' + x.n + '</td><td class="r"><b>' + dur(x.min) + '</b></td><td class="r">' + dur(Math.round(x.avg)) + '</td><td class="r">' + x.won + '<small>' + x.lost + ' elvesztett</small></td><td class="r">' + nf(x.won_v) + ' Ft</td><td class="r">' + (x.per_h ? nf(x.per_h) + ' Ft' : '–') + '</td></tr>').join('') + '</tbody></table></div>' +
+			'<p class="an-note">Az új deal-eknél a megnyerés még hátravan, ezért az érték az idő múlásával nő. A telefonon és a Salesmate-ben töltött idő nem látszik.</p>');
+	}
+	function anLost(l) {
+		if (!l || !l.n) return '';
+		const mx = Math.max(...l.why.map(x => x.n));
+		return card('Miért veszítünk', 'Az időszakban elvesztettnek jelölt ' + l.n + ' deal: az ok, és hogy melyik szakaszban estek ki.',
+			'<div class="an-two an-lw"><div>' + l.why.map(x => '<div class="an-hr"><span>' + esc(x.k) + '</span><div class="an-bar"><i class="l" style="width:' + (x.n / mx * 100) + '%"></i></div><b>' + x.n + '</b></div>').join('') + '</div>' +
+			'<div><b class="an-l">Melyik szakaszban estek ki</b>' + l.stage.map(x => '<div class="an-hr"><span>' + esc(x.k) + '</span><b>' + x.n + '</b><small>' + pct(x.n, l.n) + '</small></div>').join('') + '</div></div>' +
+			(l.why[0] && /Nincs megadva/.test(l.why[0].k) ? '<p class="an-note">A legtöbb elvesztésnél nincs ok – ha elvesztéskor kötelezővé tennénk az ok kiválasztását (pl. ár, dátum foglalt, nem válaszolt, más szolgáltató), ez a táblázat sokkal többet mondana.</p>' : ''));
+	}
+	function anRot(r) {
+		if (!r) return '';
+		const H = Object.keys(r.hist || {}), hv = H.map(k => r.hist[k]), mx = Math.max(1, ...hv);
+		return card('Rohadó deal-ek – most', 'Nyitott deal-ek, amelyeknél lejárt a szakasz türelmi ideje (Beállítások → Rohadás szerint).',
+			'<div class="an-kpi"><div class="' + (r.n ? 'bad' : '') + '"><b>' + r.n + '</b><span>rohadó deal (' + pct(r.n, r.open) + ' a nyitottakból)</span></div><div><b>' + nf(r.v) + ' Ft</b><span>összértékük</span></div><div><b>' + (r.med == null ? '–' : String(r.med).replace('.', ',') + ' nap') + '</b><span>medián késés</span></div><div><b>' + r.open + '</b><span>nyitott deal összesen</span></div></div>' +
+			'<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Szakasz</th><th class="r">Rohadó</th><th class="r">Átlagos késés</th></tr></thead><tbody>' + r.stage.map(x => '<tr><td>' + esc(x.k) + '</td><td class="r"><b>' + x.n + '</b></td><td class="r">' + String(x.d).replace('.', ',') + ' nap</td></tr>').join('') + '</tbody></table></div>' +
+			(r.own.length ? '<div class="an-own">' + r.own.map(o => '<span><b>' + esc(o.k) + '</b> ' + o.n + ' rohadó</span>').join('') + '</div>' : '') +
+			(H.length > 1 ? '<div class="an-two an-one"><div><b class="an-l">Rohadó deal-ek száma naponként</b><div class="an-cols an-sm">' + H.map((k, i) => '<div class="an-col" title="' + esc(k.replace(/-/g, '.') + ': ' + hv[i]) + '"><div class="an-cb"><i class="l" style="height:' + (hv[i] / mx * 100) + '%;width:70%;background:#D9534F"></i></div></div>').join('') + '</div></div></div>' : '<p class="an-note">A napi számot mostantól minden nap eltároljuk, így pár nap múlva itt látszik a trend is.</p>'));
 	}
 	/* S12 */
 	function anLoadH(l) {
@@ -362,7 +387,7 @@
 		'.an-bar .w,.an-lg .w{background:#1F9D55}.an-bar .l,.an-lg .l{background:#D9534F}.an-bar .o,.an-lg .o{background:#C9CFDA}.an-lg i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px}' +
 		'.an-own{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:12.5px}.an-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}.an-kpi div{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.an-kpi b{display:block;font:800 22px "Plus Jakarta Sans",sans-serif}.an-kpi span{font-size:12px;color:var(--mu)}.an-kpi .bad{border-color:#F3C2BF;background:#FDF1F0}.an-kpi .bad b{color:#B42318}' +
 		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
-		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}' +
+		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}.an-hr{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}.an-hr span{overflow-wrap:anywhere}.an-hr small{color:var(--mu)}.an-lw{grid-template-columns:3fr 2fr}.an-lw>div:last-child .an-hr{grid-template-columns:minmax(0,1fr) auto auto}.an-sm{height:70px}' +
 		'@media (max-width:760px){.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
 	document.head.appendChild(css);
 })();

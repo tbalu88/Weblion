@@ -29,7 +29,7 @@ function cp_an_ajax_stats() {
 	if ($from > $to) { list($from, $to) = array($to, $from); }
 	$ck = 'cp_an_' . md5($from . '|' . $to);
 	if (empty($_REQUEST['fresh']) && ($c = get_transient($ck))) { wp_send_json_success($c); }
-	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'use' => cp_an_use($from, $to), 'at' => wp_date('Y-m-d H:i'));
+	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'use' => cp_an_use($from, $to), 'eff' => cp_an_eff($from, $to), 'lost' => cp_an_lost($from, $to), 'rot' => cp_an_rot(), 'at' => wp_date('Y-m-d H:i'));
 	set_transient($ck, $out, 10 * MINUTE_IN_SECONDS);
 	wp_send_json_success($out);
 }
@@ -187,4 +187,75 @@ function cp_an_use($from, $to) {
 	arsort($pairs);
 	$P = array(); foreach (array_slice($pairs, 0, 8, true) as $k => $n) { $P[] = array('k' => $k, 'n' => $n); }
 	return array('from' => $from, 'obj' => $O, 'rep' => $R, 'sw' => $W, 'pairs' => $P, 'idle' => $idle);
+}
+
+/* ------------------------------------------------------------ v2.9.147: S8 ráfordítás és érték szolgáltatásonként
+ * A deal-re és a hozzá kötött levélszálakra fordított panelpercek (max. 90 nap), szolgáltatás szerint csoportosítva. */
+function cp_an_eff($from, $to) {
+	if (!function_exists('cp_us_t')) { return null; }
+	global $wpdb;
+	$from = max($from, wp_date('Y-m-d', time() - 90 * DAY_IN_SECONDS));
+	$min = array();
+	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT obj, COUNT(*) n FROM ' . cp_us_t('min') . " WHERE d BETWEEN %s AND %s AND obj <> '' GROUP BY obj", $from, $to), ARRAY_A) as $r) {
+		if (!preg_match('/^(deal|mail):(\d+)$/', $r['obj'], $m)) { continue; }
+		$min[$m[1]][(int) $m[2]] = (int) $r['n'];
+	}
+	$per = array(); /* deal → perc */
+	foreach ($min['deal'] ?? array() as $id => $n) { $per[$id] = ($per[$id] ?? 0) + $n; }
+	if (!empty($min['mail'])) {
+		foreach ((array) $wpdb->get_results('SELECT id, deal_id FROM ' . cp_mail_t('threads') . ' WHERE deal_id > 0 AND id IN (' . implode(',', array_map('intval', array_keys($min['mail']))) . ')', ARRAY_A) as $t) { $per[(int) $t['deal_id']] = ($per[(int) $t['deal_id']] ?? 0) + $min['mail'][(int) $t['id']]; }
+	}
+	if (!$per) { return array('from' => $from, 'rows' => array()); }
+	$g = array();
+	foreach ((array) $wpdb->get_results('SELECT id, service, status, value FROM ' . cp_crm_t('deals') . ' WHERE deleted_at IS NULL AND id IN (' . implode(',', array_keys($per)) . ')', ARRAY_A) as $d) {
+		$k = trim((string) $d['service']) ?: 'Nincs megadva';
+		if (!isset($g[$k])) { $g[$k] = array('svc' => $k, 'n' => 0, 'min' => 0, 'won' => 0, 'lost' => 0, 'won_v' => 0); }
+		$x = &$g[$k]; $x['n']++; $x['min'] += $per[(int) $d['id']];
+		if ($d['status'] === 'Won') { $x['won']++; $x['won_v'] += (float) $d['value']; } elseif ($d['status'] === 'Lost') { $x['lost']++; }
+		unset($x);
+	}
+	foreach ($g as &$x) { $x['avg'] = round($x['min'] / max(1, $x['n']), 1); $x['won_v'] = round($x['won_v']); $x['per_h'] = $x['min'] ? round($x['won_v'] / ($x['min'] / 60)) : 0; } unset($x);
+	usort($g, function ($a, $b) { return $b['min'] - $a['min']; });
+	return array('from' => $from, 'rows' => array_slice($g, 0, 12));
+}
+
+/* ------------------------------------------------------------ v2.9.147: S9 elvesztett deal-ek okai */
+function cp_an_lost($from, $to) {
+	global $wpdb;
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT lost_reason, closed_stage, stage, value, created_at, closed_at FROM ' . cp_crm_t('deals') . " WHERE deleted_at IS NULL AND status = 'Lost' AND closed_at BETWEEN %s AND %s", cp_an_utc($from), cp_an_utc($to, true)), ARRAY_A);
+	$why = array(); $stg = array();
+	foreach ($rows as $r) {
+		$k = trim((string) $r['lost_reason']); $tr = array('no reason' => 'Nincs megadva ok', 'competition' => 'Versenytárs', 'need' => 'Nincs rá igény', 'price' => 'Ár', 'timing' => 'Időpont', 'budget' => 'Keret');
+		$k = $k === '' ? 'Nincs megadva ok' : ($tr[mb_strtolower($k)] ?? mb_substr($k, 0, 80));
+		if (!isset($why[$k])) { $why[$k] = array('k' => $k, 'n' => 0, 'v' => 0); } $why[$k]['n']++; $why[$k]['v'] += (float) $r['value'];
+		$s = (string) ($r['closed_stage'] ?: $r['stage']); $stg[$s] = ($stg[$s] ?? 0) + 1;
+	}
+	usort($why, function ($a, $b) { return $b['n'] - $a['n']; });
+	foreach ($why as &$x) { $x['v'] = round($x['v']); } unset($x);
+	arsort($stg); $S = array(); foreach ($stg as $k => $n) { $S[] = array('k' => $k, 'n' => $n); }
+	return array('n' => count($rows), 'why' => array_slice(array_values($why), 0, 12), 'stage' => $S);
+}
+
+/* ------------------------------------------------------------ v2.9.147: S10 rohadó deal-ek most + napi történet
+ * A napi darabszám egy opcióba kerül (365 napig), így idővel trend is látszik. */
+function cp_an_rot() {
+	if (!function_exists('cp_crm_rot') || !function_exists('cp_crm_lastout_sql')) { return null; }
+	global $wpdb;
+	$D = cp_crm_t('deals'); $H = cp_crm_t('history');
+	$rows = (array) $wpdb->get_results("SELECT d.id, d.stage, d.status, d.owner_id, d.value, d.event_d, d.event_end_d, d.created_at, (SELECT MAX(h.at) FROM $H h WHERE h.deal_id = d.id AND h.field = 'stage') stage_at, " . cp_crm_lastout_sql() . " last_out FROM $D d WHERE d.deleted_at IS NULL AND d.status = 'Open'", ARRAY_A);
+	$now = time(); $st = array(); $ow = array(); $n = 0; $v = 0; $late = array();
+	foreach ($rows as $r) {
+		list($rot) = cp_crm_rot($r); if ($rot === '') { continue; }
+		$t = strtotime($rot . ':00 ' . wp_timezone_string()); if (!$t || $t > $now) { continue; }
+		$days = ($now - $t) / DAY_IN_SECONDS; $n++; $v += (float) $r['value']; $late[] = $days;
+		$s = (string) $r['stage']; if (!isset($st[$s])) { $st[$s] = array('k' => $s, 'n' => 0, 'd' => 0); } $st[$s]['n']++; $st[$s]['d'] += $days;
+		$o = cp_an_owner($r['owner_id']); if (!isset($ow[$o])) { $ow[$o] = array('k' => $o, 'n' => 0); } $ow[$o]['n']++;
+	}
+	foreach ($st as &$x) { $x['d'] = round($x['d'] / max(1, $x['n']), 1); } unset($x);
+	usort($st, function ($a, $b) { return $b['n'] - $a['n']; }); usort($ow, function ($a, $b) { return $b['n'] - $a['n']; });
+	sort($late);
+	$hist = get_option('cp_an_rot_hist', array()); if (!is_array($hist)) { $hist = array(); }
+	$hist[wp_date('Y-m-d')] = $n; ksort($hist); $hist = array_slice($hist, -365, null, true);
+	update_option('cp_an_rot_hist', $hist, false);
+	return array('n' => $n, 'open' => count($rows), 'v' => round($v), 'med' => $late ? round($late[(int) floor((count($late) - 1) / 2)], 1) : null, 'stage' => array_values($st), 'own' => array_values($ow), 'hist' => $hist);
 }
