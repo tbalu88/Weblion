@@ -468,6 +468,30 @@
 			'<meta name="referrer" content="no-referrer"><base target="_blank"><style>html,body{margin:0;padding:0}html{overflow-y:hidden;overflow-x:auto}div,table,p,img,center{max-width:100%!important;box-sizing:border-box}body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1A1F2B;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blockquote{margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex}blockquote blockquote,.cpq blockquote{margin-left:0!important;padding-left:8px!important;border-left:2px solid #ddd!important}blockquote blockquote blockquote,.cpq blockquote blockquote{border-left:0!important;padding-left:0!important;margin-left:0!important}details.cpq>summary{cursor:pointer;display:inline-block;margin:8px 0;padding:2px 10px;border-radius:6px;background:#F1EDE7;color:#656973;font:12.5px Arial,sans-serif;list-style:none}details.cpq>summary::-webkit-details-marker{display:none}html.cpdark img,html.cpdark video,html.cpdark [background],html.cpdark [style*="background-image"]{filter:invert(1) hue-rotate(180deg)}@media (max-width:760px){body{font-size:13px}}</style></head><body>' +
 			String(html).replace(/cpatt:(\d+)/g, (x, i) => att(i)) + '</body></html>';
 	}
+	/* v2.9.191: a keresett szavak kiemelése a megnyitott levélszálban (szöveges és eredeti nézetben is), görgetés az első találatra */
+	const hlRe = (g) => { const w = String(S.mq || '').trim().split(/\s+/).filter(x => x.length >= 2).slice(0, 8).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); return w.length ? new RegExp('(' + w.join('|') + ')', g ? 'giu' : 'iu') : null; };
+	const hlHit = m => { const re = hlRe(false); if (!re || !m) return false; const t = document.createElement('div'); t.innerHTML = String(m.body || ''); return re.test(t.textContent || '') || re.test(String(m.subject || '')); };
+	function hlMark(root, re) {
+		if (!root || !re) return 0;
+		const doc = root.ownerDocument, tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => (n.parentNode && /^(SCRIPT|STYLE|MARK|TEXTAREA|INPUT|BUTTON)$/.test(n.parentNode.nodeName)) || !n.nodeValue.trim() ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+		const L = []; while (tw.nextNode()) L.push(tw.currentNode);
+		let n = 0;
+		L.forEach(t => {
+			const v = t.nodeValue; re.lastIndex = 0; if (!re.test(v)) return; re.lastIndex = 0;
+			const f = doc.createDocumentFragment(); let last = 0, mm;
+			while ((mm = re.exec(v))) { if (mm.index > last) f.appendChild(doc.createTextNode(v.slice(last, mm.index))); const k = doc.createElement('mark'); k.className = 'cp-hl'; k.textContent = mm[0]; f.appendChild(k); n++; last = mm.index + mm[0].length; if (!mm[0].length) re.lastIndex++; }
+			if (last < v.length) f.appendChild(doc.createTextNode(v.slice(last)));
+			t.parentNode.replaceChild(f, t);
+		});
+		return n;
+	}
+	/* a szál első találatára görget (szálanként, keresésenként egyszer) */
+	function hlScroll(el) {
+		const key = String(S.th) + '|' + String(S.mq || '');
+		if (!S.mq || S.hlKey === key) return;
+		const art = el && el.closest ? el.closest('.ml-msg') || el : el; if (!art) return;
+		S.hlKey = key; setTimeout(() => { try { art.scrollIntoView({ block: 'start' }); } catch (e) { /* régi böngésző */ } }, 60);
+	}
 	function mountHtml(el, mid, imgs) {
 		const x = HC[mid];
 		if (extOk()) imgs = true;
@@ -507,6 +531,7 @@
 					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40 || /-{3,}\s*(Forwarded message|Továbbított üzenet|Továbbított levél)|^\s*Begin forwarded message/i.test((q.textContent || '').slice(0, 400))) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
 					/* v2.9.36: ha az összecsukás után semmi sem látszana (a levél egésze idézet), kinyitva mutatjuk */
 					{ const cl = d.body.cloneNode(true); cl.querySelectorAll('details.cpq, style, script').forEach(x => x.remove()); if ((cl.textContent || '').replace(/\s+/g, '') === '' && !cl.querySelector('img')) d.querySelectorAll('details.cpq').forEach(x => { x.open = true; }); }
+					{ const hre = hlRe(true); if (hre) { const st = d.createElement('style'); st.textContent = 'mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}'; (d.head || d.body).appendChild(st); if (hlMark(d.body, hre)) { d.querySelectorAll('details').forEach(q => { if (q.querySelector('mark.cp-hl')) q.open = true; }); hlScroll(el); } } }
 					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
 					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
 				} catch (e) { f.style.height = '480px'; }
@@ -1165,7 +1190,7 @@
 		const MX = (S.mx = S.mx || {}), mk = m => String(m.id || m.sent_at || ''), msgs0 = (x.msgs || []).slice();
 		const newest = msgs0.reduce((a, b) => (!a || String(b.sent_at || '') >= String(a.sent_at || '') ? b : a), null);
 		const XS = MX[t.id] || (MX[t.id] = { def: null, o: {} });
-		const isOpen = m => msgs0.length <= 1 ? true : (Object.prototype.hasOwnProperty.call(XS.o, mk(m)) ? XS.o[mk(m)] : (XS.def !== null ? XS.def : m === newest));
+		const isOpen = m => msgs0.length <= 1 ? true : (Object.prototype.hasOwnProperty.call(XS.o, mk(m)) ? XS.o[mk(m)] : (XS.def !== null ? XS.def : (m === newest || hlHit(m)))); /* v2.9.191: keresésnél a találatot tartalmazó levelek nyitva */
 		const allOpen = () => msgs0.every(isOpen);
 		PR.known[t.id] = msgs0.reduce((a, m) => Math.max(a, Number(m.id) || 0), 0);
 		setTimeout(presPing, 50);
@@ -1297,6 +1322,8 @@
 			xlab(); if (open) loadHtml(rd);
 		});
 		loadHtml(rd);
+		/* v2.9.191: kiemelés a szöveges nézetben és a tárgyban; görgetés az első találatra */
+		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first); } }
 		const tl = timeline(x);
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
 		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));

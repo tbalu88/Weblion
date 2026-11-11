@@ -1034,3 +1034,4 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-mfd{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .ml-mf input[type=text],.ml-mf input[type=date]{width:100%;box-sizing:border-box}
 .ml-mf input[type=date]{padding:0 6px;font-size:13px}
+mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}
