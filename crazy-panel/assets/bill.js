@@ -26,7 +26,10 @@
 		d.textContent = m; d.className = 'cpx-toast on' + (bad ? ' err' : ''); clearTimeout(d._t); d._t = setTimeout(() => { d.className = 'cpx-toast'; }, 5000);
 	}
 
-	const slot = () => (C.bil && C.bil.on ? '<section class="d3-c d3-bill" data-bill><h4>Számlázás</h4><p class="cpx-muted">Betöltés…</p></section>' : '');
+	/* v2.9.197: a felhasználó kérésére a Számlázás kártya egyelőre nem jelenik meg a deal adatlapján (a számlázás funkciói
+	   és beállításai megmaradnak; visszakapcsolás: BILL_CARD = true) */
+	const BILL_CARD = false;
+	const slot = () => (BILL_CARD && C.bil && C.bil.on ? '<section class="d3-c d3-bill" data-bill><h4>Számlázás</h4><p class="cpx-muted">Betöltés…</p></section>' : '');
 	async function mount(sh, x) {
 		const box = sh.querySelector('[data-bill]');
 		if (!box) return;
