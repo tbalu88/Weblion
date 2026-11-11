@@ -793,6 +793,8 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 
 /* v2.9.152: levélszál leválasztása a deal idővonaláról */
 .d3-tgr{display:flex;align-items:flex-start;gap:4px}.d3-tgr .d3-tgh{flex:1;min-width:0}
-.d3-tgdx{flex:none;width:28px;height:28px;margin-top:2px;border:0;border-radius:8px;background:none;color:#9A9EA8;font-size:18px;line-height:1;cursor:pointer;opacity:.55}
-.d3-tg:hover .d3-tgdx,.d3-tgdx:focus-visible{opacity:1}.d3-tgdx:hover{background:#FDECEA;color:#B42318}
+.d3-tgdx{flex:none;width:30px;height:30px;margin-top:1px;border:0;border-radius:8px;background:none;color:#656973;cursor:pointer;opacity:.6;display:inline-flex;align-items:center;justify-content:center;position:relative}
+.d3-tgdx svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.d3-tgdx:hover::after,.d3-tgdx:focus-visible::after{content:'Leválasztás a dealről';position:absolute;right:0;top:calc(100% + 6px);background:#141C33;color:#fff;font:500 12px/1 Inter,sans-serif;padding:7px 9px;border-radius:7px;white-space:nowrap;z-index:5;pointer-events:none}
+.d3-tg:hover .d3-tgdx,.d3-tgdx:focus-visible{opacity:1}.d3-tgdx:hover{background:#EEEAE4;color:#141C33}
 @media (hover:none){.d3-tgdx{opacity:1}}

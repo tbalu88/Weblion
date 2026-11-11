@@ -1208,7 +1208,7 @@
 			(dir === 'out' ? ' <span class="d3-q d3-tcwo">Ügyfél válaszára vár</span>' : dir === 'in' ? ' <span class="d3-q' + (closed ? '' : ' warn') + '">Válaszra vár</span>' : '') + (closed ? ' <span class="d3-q d3-tccl">lezárva</span>' : '');
 		return '<section class="d3-tg' + (closed ? ' closed' : '') + '" data-tg="' + t.id + '" data-tgk="' + esc(key) + '">' +
 			'<div class="d3-tgr">' + '<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
-			(R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" title="Levélszál leválasztása erről a dealről" aria-label="Levélszál leválasztása erről a dealről">×</button>' : '') + '</div>' + /* v2.9.152 */
+			(R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" aria-label="Levélszál leválasztása erről a dealről"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5l-1.8 1.8a3.2 3.2 0 0 1-4.5-4.5l2.6-2.6a3.2 3.2 0 0 1 4 .4"/><path d="M14.5 9.5l1.8-1.8a3.2 3.2 0 0 1 4.5 4.5l-2.6 2.6a3.2 3.2 0 0 1-4-.4"/><path d="M8 3.5v2.2M3.5 8h2.2M16 20.5v-2.2M20.5 16h-2.2"/></svg></button>' : '') + '</div>' + /* v2.9.152 */
 			'<div class="d3-tgl">' + lm.map(g => tmItem(t, g)).join('') +
 			(rest ? '<button type="button" class="d3-tgx" data-tgx="' + rest + '" data-skip="' + lm.length + '" aria-expanded="' + !!open + '">' + (open ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest)) + '</button><div class="d3-tgo" data-tgo' + (open ? '>' + cached.html : ' hidden>') + '</div>' : '') +
 			'</div></section>';
