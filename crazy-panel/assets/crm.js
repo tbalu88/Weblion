@@ -1940,8 +1940,13 @@
 	/* v1.84: helyben szerkesztés – az adatlapon az értékre kattintva (egy mező, ugyanaz a mentés, mint a Szerkesztés ablaké) */
 	const EDIT_T = {}; EDIT.forEach(sec => sec[1].forEach(f => { EDIT_T[f[0]] = f; }));
 	function ikA(k, d) { const f = EDIT_T[k]; return R.edit && f && f[2] !== 'multi' && !(d && d.deleted_at) ? ' data-ik="' + k + '" title="Kattints a szerkesztéshez"' : ''; }
+	/* v2.9.127: választólisták az inline szerkesztőhöz (egyszer töltődik) */
+	let IVALS = null, IVP = null;
+	const ivVals = () => IVALS ? Promise.resolve(IVALS) : (IVP || (IVP = post('cp_crm_opts', {}).then(r => (IVALS = r.vals || {}), () => { IVP = null; return {}; })));
+	const IV_OTHER = '\u0000egyedi';
 	function bindInline(sh, x, back) {
 		const d = x.deal;
+		ivVals();
 		sh.addEventListener('click', e => {
 			const el = e.target.closest('[data-ik]');
 			if (!el || el.classList.contains('ik-on') || e.target.closest('a, button, input, select, textarea')) return; /* v2.9.76: a becsült ár buborékjára kattintva is szerkeszthető az ár */
@@ -1949,13 +1954,20 @@
 			let inp;
 			if (type === 'user') inp = '<select data-iv>' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(cur)).map(i => [i, USERS[i].n])), String(cur || '')) + '</select>';
 			else if (type === 'area') inp = '<textarea data-iv rows="3">' + esc(cur) + '</textarea>';
+			else if (type === 'text' && IVALS && (IVALS[k] || []).length) {
+				/* lenyíló lista az ismert értékekkel + „Egyedi érték…” (kézzel beírható) */
+				const L = IVALS[k].slice(); if (cur && !L.includes(cur)) L.unshift(cur);
+				inp = '<select data-iv><option value="">– nincs –</option>' + L.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '<option value="' + IV_OTHER + '">✎ Egyedi érték…</option></select>';
+			}
 			else inp = '<input data-iv type="' + ({ date: 'date', time: 'time', int: 'number', num: 'number', email: 'email', tel: 'tel' }[type] || 'text') + '"' + (type === 'num' ? ' step="0.5"' : '') + ' value="' + esc(cur) + '">';
 			el.classList.add('ik-on');
 			el.innerHTML = '<span class="ik-ed">' + inp + '<button type="button" class="ik-ok" title="Mentés (Enter)">✓</button><button type="button" class="ik-x" title="Mégse (Esc)">✕</button></span>';
-			const iv = el.querySelector('[data-iv]'); iv.focus(); if (iv.select && type !== 'date' && type !== 'time') iv.select();
+			let iv = el.querySelector('[data-iv]'); iv.focus(); if (iv.select && type !== 'date' && type !== 'time') iv.select();
+			/* „Egyedi érték…”: szövegmezőre vált */
+			if (iv.tagName === 'SELECT' && type === 'text') iv.addEventListener('change', () => { if (iv.value !== IV_OTHER) return; const t = document.createElement('input'); t.type = 'text'; t.setAttribute('data-iv', ''); t.value = cur; t.placeholder = 'Írd be az értéket'; iv.replaceWith(t); iv = t; t.focus(); t.select(); bindKeys(t); });
 			const cancel = () => { el.classList.remove('ik-on'); el.innerHTML = old; };
 			const save = async () => {
-				const v = iv.value.trim();
+				const v = iv.value === IV_OTHER ? cur : iv.value.trim();
 				if (v === cur) { cancel(); return; }
 				if (k === 'title' && !v) { toast('A név nem lehet üres.', true); return; }
 				el.querySelectorAll('button').forEach(b => { b.disabled = true; });
@@ -1964,7 +1976,8 @@
 			};
 			el.querySelector('.ik-ok').addEventListener('click', ev => { ev.stopPropagation(); save(); });
 			el.querySelector('.ik-x').addEventListener('click', ev => { ev.stopPropagation(); cancel(); });
-			iv.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); cancel(); } if (ev.key === 'Enter' && (type !== 'area' || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); } });
+			const bindKeys = t => t.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); cancel(); } if (ev.key === 'Enter' && (type !== 'area' || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); } });
+			bindKeys(iv);
 		});
 	}
 	function editVal(d, k) { const v = d[k]; if (v == null) return ''; if (k === 'start_at') return timeOf(v); if (k === 'value' || k === 'extension') return String(Number(v)); return String(v); }

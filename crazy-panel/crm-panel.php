@@ -638,6 +638,11 @@ function cp_crm_ajax_opts() {
 		arsort($n);
 		$out[$f] = array_slice(array_keys($n), 0, 40);
 	}
+	/* v2.9.127: a gépkezelő választólistája elöl a Kezelők fül aktív kezelői és hostjai */
+	if (function_exists('cp_kz_t')) {
+		$kn = array_map('strval', (array) $wpdb->get_col('SELECT name FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host') AND name <> '' ORDER BY kind = 'host', name"));
+		$out['operator'] = array_values(array_unique(array_merge($kn, (array) ($out['operator'] ?? array()))));
+	}
 	wp_send_json_success(array('vals' => $out));
 }
 
