@@ -485,12 +485,25 @@
 		});
 		return n;
 	}
-	/* a szál első találatára görget (szálanként, keresésenként egyszer) */
-	function hlScroll(el) {
+	/* a szál első (legfelső) találatára görget – csak a levélszál saját görgethető része mozdul (a scrollIntoView a külső
+	   tárolókat is elgörgette). v2.9.192: a később betöltődő (feljebb lévő) levél találata átveszi a célt; a képek betöltése után
+	   újraigazít; ha közben a felhasználó maga görget, nem rángatja vissza. */
+	const hlY = t => (t.frame ? t.frame.getBoundingClientRect().top : 0) + t.mark.getBoundingClientRect().top;
+	function hlScroll(el, mark, frame) {
+		if (!S.mq || !el || !mark || !el.isConnected) return;
 		const key = String(S.th) + '|' + String(S.mq || '');
-		if (!S.mq || S.hlKey === key) return;
-		const art = el && el.closest ? el.closest('.ml-msg') || el : el; if (!art) return;
-		S.hlKey = key; setTimeout(() => { try { art.scrollIntoView({ block: 'start' }); } catch (e) { /* régi böngésző */ } }, 60);
+		let sc = el.parentElement;
+		while (sc && sc !== document.body) { const cs = getComputedStyle(sc); if (/(auto|scroll)/.test(cs.overflowY) && sc.scrollHeight > sc.clientHeight + 2) break; sc = sc.parentElement; }
+		if (!sc || sc === document.body) return;
+		const H = S.hl && S.hl.key === key ? S.hl : (S.hl = { key: key, t0: Date.now(), user: false, sc: sc, tgt: null });
+		if (H.user || Date.now() - H.t0 > 6000) return;
+		if (H.sc !== sc) { H.sc = sc; }
+		if (!sc._hlUser) { sc._hlUser = true; ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(ev => sc.addEventListener(ev, () => { if (S.hl) S.hl.user = true; }, { passive: true })); }
+		const cand = { mark: mark, frame: frame };
+		if (H.tgt && H.tgt.mark.isConnected && hlY(H.tgt) <= hlY(cand)) return; /* a meglévő cél feljebb van */
+		H.tgt = cand;
+		const go = () => { if (!S.hl || S.hl !== H || H.user || !H.tgt || !H.tgt.mark.isConnected) return; const y = hlY(H.tgt) - sc.getBoundingClientRect().top; sc.scrollTop = Math.max(0, sc.scrollTop + y - Math.round(sc.clientHeight / 3)); };
+		[80, 500, 1300, 2600].forEach(ms => setTimeout(go, ms));
 	}
 	function mountHtml(el, mid, imgs) {
 		const x = HC[mid];
@@ -531,7 +544,7 @@
 					quotes.forEach(q => { if (!q.isConnected || (q.textContent || '').trim().length < 40 || /-{3,}\s*(Forwarded message|Továbbított üzenet|Továbbított levél)|^\s*Begin forwarded message/i.test((q.textContent || '').slice(0, 400))) return; const dt = d.createElement('details'); dt.className = 'cpq'; const sm = d.createElement('summary'); sm.textContent = '… korábbi levelek'; q.parentNode.insertBefore(dt, q); dt.appendChild(sm); let n = q; const tail = []; while (n) { tail.push(n); n = n.nextSibling; } if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') tail.forEach(x => dt.appendChild(x)); else dt.appendChild(q); dt.addEventListener('toggle', fit); });
 					/* v2.9.36: ha az összecsukás után semmi sem látszana (a levél egésze idézet), kinyitva mutatjuk */
 					{ const cl = d.body.cloneNode(true); cl.querySelectorAll('details.cpq, style, script').forEach(x => x.remove()); if ((cl.textContent || '').replace(/\s+/g, '') === '' && !cl.querySelector('img')) d.querySelectorAll('details.cpq').forEach(x => { x.open = true; }); }
-					{ const hre = hlRe(true); if (hre) { const st = d.createElement('style'); st.textContent = 'mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}'; (d.head || d.body).appendChild(st); if (hlMark(d.body, hre)) { d.querySelectorAll('details').forEach(q => { if (q.querySelector('mark.cp-hl')) q.open = true; }); hlScroll(el); } } }
+					{ const hre = hlRe(true); if (hre) { const st = d.createElement('style'); st.textContent = 'mark.cp-hl{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}'; (d.head || d.body).appendChild(st); if (hlMark(d.body, hre)) { d.querySelectorAll('details').forEach(q => { if (q.querySelector('mark.cp-hl')) q.open = true; }); fit(); const mk0 = Array.from(d.querySelectorAll('mark.cp-hl')).find(x => x.getClientRects().length); if (mk0) hlScroll(el, mk0, f); } } }
 					fit(); d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
 					if (window.ResizeObserver) new ResizeObserver(fit).observe(d.body);
 				} catch (e) { f.style.height = '480px'; }
@@ -1323,7 +1336,7 @@
 		});
 		loadHtml(rd);
 		/* v2.9.191: kiemelés a szöveges nézetben és a tárgyban; görgetés az első találatra */
-		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first); } }
+		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first, first.querySelector('mark.cp-hl'), null); } }
 		const tl = timeline(x);
 		rd.querySelectorAll('[data-reply]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.reply)]; if (it && it.m) reply(it.m, false); }));
 		rd.querySelectorAll('[data-replyall]').forEach(b => b.addEventListener('click', () => { const it = tl[Number(b.dataset.replyall)]; if (it && it.m) reply(it.m, true); }));
