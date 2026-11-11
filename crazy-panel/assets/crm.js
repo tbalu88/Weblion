@@ -1944,19 +1944,23 @@
 	let IVALS = null, IVP = null;
 	const ivVals = () => IVALS ? Promise.resolve(IVALS) : (IVP || (IVP = post('cp_crm_opts', {}).then(r => (IVALS = r.vals || {}), () => { IVP = null; return {}; })));
 	const IV_OTHER = '\u0000egyedi';
+	/* fix értékkészletű mezők (a Salesmate választólistái szerint) – a ritkán használt értékek is mindig a listában vannak */
+	const IV_FIX = { ctype: ['EV', 'KFT'], paid: ['Igen', 'Nem'], album: ['Kell', 'Nem kell'], reminder: ['Igen', 'Nem'], template_paid: ['Igen', 'Nem'] };
 	function bindInline(sh, x, back) {
 		const d = x.deal;
 		ivVals();
-		sh.addEventListener('click', e => {
+		sh.addEventListener('click', async e => {
 			const el = e.target.closest('[data-ik]');
 			if (!el || el.classList.contains('ik-on') || e.target.closest('a, button, input, select, textarea')) return; /* v2.9.76: a becsült ár buborékjára kattintva is szerkeszthető az ár */
+			/* v2.9.128: a választólisták megvárása (első kattintásnál) */
+			if (!IVALS && EDIT_T[el.dataset.ik] && EDIT_T[el.dataset.ik][2] === 'text') { el.classList.add('ik-load'); await ivVals(); el.classList.remove('ik-load'); if (el.classList.contains('ik-on')) return; }
 			const k = el.dataset.ik, f = EDIT_T[k], type = f[2], cur = editVal(d, k), old = el.innerHTML;
 			let inp;
 			if (type === 'user') inp = '<select data-iv>' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a || String(i) === String(cur)).map(i => [i, USERS[i].n])), String(cur || '')) + '</select>';
 			else if (type === 'area') inp = '<textarea data-iv rows="3">' + esc(cur) + '</textarea>';
-			else if (type === 'text' && IVALS && (IVALS[k] || []).length) {
+			else if (type === 'text' && ((IVALS && (IVALS[k] || []).length) || IV_FIX[k])) {
 				/* lenyíló lista az ismert értékekkel + „Egyedi érték…” (kézzel beírható) */
-				const L = IVALS[k].slice(); if (cur && !L.includes(cur)) L.unshift(cur);
+				const L = Array.from(new Set((IV_FIX[k] || []).concat((IVALS && IVALS[k]) || []))); if (cur && !L.includes(cur)) L.unshift(cur);
 				inp = '<select data-iv><option value="">– nincs –</option>' + L.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '<option value="' + IV_OTHER + '">✎ Egyedi érték…</option></select>';
 			}
 			else inp = '<input data-iv type="' + ({ date: 'date', time: 'time', int: 'number', num: 'number', email: 'email', tel: 'tel' }[type] || 'text') + '"' + (type === 'num' ? ' step="0.5"' : '') + ' value="' + esc(cur) + '">';

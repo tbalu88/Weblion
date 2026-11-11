@@ -776,6 +776,10 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-cw select:hover,.d3-cw select:focus{border-color:var(--li);background:#fff}
 .d3-crgo{border:0;background:none;padding:0;text-align:left;font:12px Inter,sans-serif;color:#2F5BD8;cursor:pointer}.d3-crgo:hover{text-decoration:underline}
 /* v2.9.127: inline szerkesztés – a szerkesztett mező a sor teljes szélességét kapja (a címke fölötte marad), a gombok kiférnek */
-.crm-360 dd.ik-on{grid-column:1 / -1;margin:2px 0 6px}
+dd.ik-on{grid-column:1 / -1;margin:2px 0 8px;max-width:none}
+dt:has(+ dd.ik-on){grid-column:1 / -1;margin-top:4px}
+[data-ik].ik-load{opacity:.55;cursor:progress}
 .ik-ed{flex-wrap:nowrap}.ik-ed select{appearance:auto;cursor:pointer}
-.crm-360 dd.ik-on .ik-ed input,.crm-360 dd.ik-on .ik-ed select,.crm-360 dd.ik-on .ik-ed textarea{width:100%;min-width:0}
+dd.ik-on .ik-ed input,dd.ik-on .ik-ed select,dd.ik-on .ik-ed textarea{width:100%;min-width:0;height:36px;font-size:14px}
+dd.ik-on .ik-ed textarea{height:auto}
+dd.ik-on .ik-ed button{width:36px;height:36px}
