@@ -498,7 +498,7 @@ function cp_mail_local($dt) {
 function cp_mail_thread_row($t, $notes = null) {
 	global $wpdb;
 	/* v2.9.21: a listánál a legutóbbi jegyzeteket egyetlen lekérdezés hozza ($notes), egyedi szálnál külön */
-	$n = is_array($notes) ? ($notes[(int) $t['id']] ?? null) : $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $t['id']), ARRAY_A);
+	$n = is_array($notes) ? ($notes[(int) $t['id']] ?? null) : $wpdb->get_row($wpdb->prepare('SELECT body, author, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1', $t['id']), ARRAY_A);
 	return array(
 		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
 		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'sz' => $t['folder'] === 'snooze' ? (int) ((get_option('cp_mail_snooze', array())[(int) $t['id']]['ts'] ?? 0)) : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
@@ -561,7 +561,7 @@ function cp_mail_ajax_threads() {
 	$counts['draft'] = count($myd);
 	$dth = function_exists('cp_mail_draft_threads') ? cp_mail_draft_threads() : array();
 	$ids = array_map(function ($t) { return (int) $t['id']; }, (array) $rows); $notes = array();
-	if ($ids) { $N = cp_mail_t('notes'); $in = implode(',', $ids); foreach ((array) $wpdb->get_results("SELECT n.thread_id, n.body, n.author, n.created_at FROM $N n JOIN (SELECT MAX(id) id FROM $N WHERE deleted_at IS NULL AND thread_id IN ($in) GROUP BY thread_id) x ON x.id = n.id", ARRAY_A) as $r) { $notes[(int) $r['thread_id']] = $r; } }
+	if ($ids) { $N = cp_mail_t('notes'); $in = implode(',', $ids); /* v2.9.178: a legutóbbi jegyzet a dátum szerint (az áthozott jegyzetek azonosítója nem időrendi) */ foreach ((array) $wpdb->get_results("SELECT thread_id, body, author, created_at FROM $N WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY thread_id, created_at, id", ARRAY_A) as $r) { $notes[(int) $r['thread_id']] = $r; } }
 	$rowsOut = array_map(function ($t) use ($dth, $notes) { $r = cp_mail_thread_row($t, $notes); if (isset($dth[(int) $t['id']])) { $r['dr'] = 1; } return $r; }, (array) $rows);
 	wp_send_json_success(array('rows' => $rowsOut, 'counts' => $counts, 'un' => $un, 'more' => $more ? 1 : 0, 'tags' => cp_mail_tags_all()));
 }
@@ -606,7 +606,7 @@ function cp_mail_thread_full($id) {
 	if ($qh) { $msgs = array_values(array_filter($msgs, function ($m) use ($qh) { return !isset($qh[(int) $m['id']]); })); }
 	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
 	unset($m);
-	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY id', $id), ARRAY_A);
+	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY created_at, id', $id), ARRAY_A);
 	foreach ($notes as &$n) { $n['id'] = (int) $n['id']; $n['author_uid'] = (int) $n['author_uid']; $n['created_at'] = cp_mail_local($n['created_at']); }
 	unset($n);
 	$ev = $wpdb->get_results($wpdb->prepare('SELECT id, kind, text, author, created_at FROM ' . cp_mail_t('events') . ' WHERE thread_id = %d ORDER BY id', $id), ARRAY_A);
