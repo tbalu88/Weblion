@@ -46,9 +46,10 @@
 
 	/* v2.9.88: nézetváltó – Műveletek (a napló) | Panelhasználat (ki mennyi időt töltött a panelben, mikor) */
 	/* v2.9.89: saját címek – #naplo = Műveletek, #naplo:hasznalat = Panelhasználat (könyvjelzőzhető, küldhető) */
-	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : '#naplo';
-	function auHash() { const m = /^#naplo(?::(hasznalat))?$/.exec(location.hash); return m ? (m[1] ? 'use' : 'log') : null; }
-	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a></nav>';
+	/* v2.9.145: #naplo:elemzes = Elemzés */
+	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : '#naplo';
+	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : 'log') : null; }
+	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a></nav>';
 	function nav(mode) {
 		S.mode = mode;
 		try { localStorage.setItem('cpx_au_mode', mode); } catch (e) { /* privát mód */ }
@@ -68,6 +69,7 @@
 		if (!S.mode) { try { S.mode = localStorage.getItem('cpx_au_mode') || 'log'; } catch (e) { S.mode = 'log'; } }
 		if (location.hash !== auUrl(S.mode) && /^#naplo(:|$)/.test(location.hash || '#naplo')) history.replaceState(history.state, '', auUrl(S.mode));
 		if (S.mode === 'use') { useView(main); return; }
+		if (S.mode === 'an') { anView(main); return; }
 		main.innerHTML = '<div class="au"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Ki, mikor, mit csinált a panelben: deal-ek, levelezés, feladatok, elszámolás, tárca, be- és kilépés. Csak az adminok látják; a bejegyzéseket nem lehet módosítani, 2 év után törlődnek.</p></div>' +
 			'<div class="au-f"><select data-f="who"><option value="">Mindenki</option></select><select data-f="area">' + AREAS.map(a => '<option value="' + a[0] + '">' + a[1] + '</option>').join('') + '</select>' +
 			'<label>Ettől <input type="date" data-f="from"></label><label>Eddig <input type="date" data-f="to"></label><input type="search" data-f="q" placeholder="Keresés (pl. deal neve)…">' +
@@ -158,6 +160,75 @@
 			'<div class="au-csum">' + M.map(p => '<span><b>' + esc(p.n) + '</b> ' + dur(tot(p)) + ' aktív · ' + p.days.length + ' nap</span>').join('') + '</div>' +
 			'<div class="au-lg"><span><i class="a2"></i>aktív</span><span><i class="a1"></i>nyitva, de nem dolgozott benne</span><span class="au-lgh">Vidd az egeret a sávra: mikor, mit csinált</span></div></div>';
 	}
+	/* ------------------------------------------------------------ v2.9.145: Elemzés – üzleti és működési számok */
+	const A = { pre: 'n90', from: '', to: '', d: null, seq: 0, err: '' };
+	const nf = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+	const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
+	const mins = m => m == null ? '–' : m < 60 ? Math.round(m) + ' perc' : m < 1440 ? (Math.round(m / 6) / 10).toString().replace('.', ',') + ' óra' : (Math.round(m / 144) / 10).toString().replace('.', ',') + ' nap';
+	function anPresets() {
+		const t = new Date(); t.setHours(12, 0, 0, 0); const back = n => { const d = new Date(t); d.setDate(d.getDate() - n); return ymd(d); };
+		return [['n30', 'Utolsó 30 nap', back(29), ymd(t)], ['n90', 'Utolsó 90 nap', back(89), ymd(t)], ['n180', 'Fél év', back(179), ymd(t)], ['n365', 'Egy év', back(364), ymd(t)]];
+	}
+	function anView(main) {
+		if (!A.from) { const p = anPresets().find(x => x[0] === A.pre); A.from = p[2]; A.to = p[3]; }
+		main.innerHTML = '<div class="au an"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Üzleti és működési számok a deal-ekből, a levelekből és a panelhasználatból – hol nyerünk, hol veszítünk, hol megy el az idő. Csak az adminok látják.</p></div>' +
+			'<div class="au-f"><div class="crm-seg au-pre">' + anPresets().map(p => '<button type="button" data-apre="' + p[0] + '" class="' + (A.pre === p[0] ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div>' +
+			'<label>Ettől <input type="date" data-af="from" value="' + A.from + '"></label><label>Eddig <input type="date" data-af="to" value="' + A.to + '"></label></div><div class="au-box"><div class="cpx-muted">Számolás…</div></div></div>';
+		bindSeg(main);
+		main.querySelectorAll('[data-apre]').forEach(b => b.addEventListener('click', () => { const p = anPresets().find(x => x[0] === b.dataset.apre); A.pre = p[0]; A.from = p[2]; A.to = p[3]; anView(main); }));
+		main.querySelectorAll('[data-af]').forEach(i => i.addEventListener('change', () => { if (!i.value) return; A[i.dataset.af] = i.value; A.pre = ''; main.querySelectorAll('[data-apre]').forEach(b => b.classList.remove('on')); anLoad(); }));
+		anLoad();
+	}
+	async function anLoad(fresh) {
+		const main = S.main; if (!main || !main.isConnected || S.mode !== 'an') return;
+		const box = main.querySelector('.au-box'); const my = ++A.seq;
+		let r;
+		try { r = await post('cp_an_stats', { from: A.from, to: A.to, fresh: fresh ? 1 : '' }); } catch (e) { if (my !== A.seq) return; A.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		if (my !== A.seq || !main.isConnected) return;
+		A.err = ''; A.d = r;
+		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
+		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
+	}
+	const card = (t, sub, body) => '<section class="an-c"><h3 class="au-h3">' + t + '</h3>' + (sub ? '<p class="an-sub">' + sub + '</p>' : '') + body + '</section>';
+	/* S7 */
+	function anResp(x) {
+		if (!x || !x.n) return card('Válaszsebesség és nyerés', '', '<p class="cpx-muted">Ebben az időszakban nincs deal-hez kötött, ügyfél által indított levélszál.</p>');
+		const L = x.b.filter(b => b.n), mx = Math.max(...L.map(b => b.n));
+		const rows = L.map(b => { const cl = b.won + b.lost; return '<tr><td>' + esc(b.l) + '</td><td class="r">' + b.n + '</td><td><div class="an-bar"><i class="w" style="width:' + (b.won / mx * 100) + '%"></i><i class="l" style="width:' + (b.lost / mx * 100) + '%"></i><i class="o" style="width:' + (b.open / mx * 100) + '%"></i></div></td><td class="r"><b>' + pct(b.won, cl) + '</b><small>' + b.won + ' / ' + cl + ' lezárt</small></td></tr>'; }).join('');
+		const best = L.filter(b => b.won + b.lost >= 5 && !/nem ment/.test(b.l)).sort((a, c) => c.won / (c.won + c.lost) - a.won / (a.won + a.lost))[0];
+		return card('Válaszsebesség és nyerés', 'Az ügyfél első levelétől az első válaszlevelünkig eltelt idő, és mi lett a deal sorsa (' + x.n + ' deal). A „nyerés” a lezártak (megnyert + elvesztett) közül a megnyertek aránya.' + (best ? ' Legjobb arány: <b>' + esc(best.l) + '</b>.' : ''),
+			'<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Első válasz</th><th class="r">Deal</th><th>Megnyert · elvesztett · nyitott</th><th class="r">Nyerés</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+			'<div class="au-lg an-lg"><span><i class="w"></i>megnyert</span><span><i class="l"></i>elvesztett</span><span><i class="o"></i>még nyitott</span></div>' +
+			(x.own.length ? '<div class="an-own">' + x.own.map(o => '<span><b>' + esc(o.who) + '</b> medián első válasz: ' + mins(o.med) + ' · 1 órán belül: ' + pct(o.fast, o.n) + '</span>').join('') + '</div>' : '') +
+			'<p class="an-note">A „nem ment válasz a levélből” csoportban telefonon vagy a Salesmate-ből intézett ügyek is lehetnek. Az időt naptári órákban mérjük (éjszaka és hétvége is beleszámít).</p>');
+	}
+	/* S6 */
+	function anFunnel(f) {
+		if (!f || !f.tot) return card('Tölcsér', '', '<p class="cpx-muted">Ebben az időszakban nem jött létre deal.</p>');
+		const row = (who, x) => '<tr><td class="au-who">' + esc(who) + '</td><td class="r">' + x.n + '</td><td class="r">' + x.offer + '<small>' + pct(x.offer, x.n) + '</small></td><td class="r">' + x.contract + '<small>' + pct(x.contract, x.offer) + '</small></td><td class="r"><b>' + x.won + '</b><small>' + pct(x.won, x.won + x.lost) + ' a lezártakból</small></td><td class="r">' + x.lost + '</td><td class="r">' + x.open + '</td><td class="r">' + nf(x.won_v) + ' Ft</td><td class="r">' + (x.med_days == null ? '–' : String(x.med_days).replace('.', ',') + ' nap') + '</td></tr>';
+		return card('Tölcsér kollégánként', 'Az időszakban létrejött deal-ek: hány jutott el ajánlatig, szerződésig, megnyerésig (a deal felelőse szerint). Az átfutás a létrehozástól a megnyerésig eltelt idő mediánja.',
+			'<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Felelős</th><th class="r">Új deal</th><th class="r">Ajánlatig</th><th class="r">Szerződésig</th><th class="r">Megnyert</th><th class="r">Elvesztett</th><th class="r">Nyitott</th><th class="r">Megnyert érték</th><th class="r">Átfutás</th></tr></thead><tbody>' +
+			f.rows.map(x => row(x.who, x)).join('') + (f.rows.length > 1 ? row('Összesen', f.tot).replace('<tr>', '<tr class="an-tot">') : '') + '</tbody></table></div>');
+	}
+	/* S13 */
+	function anUnans(u) {
+		if (!u) return '';
+		const B = [['lt4', '4 órán belüli'], ['d1', '4–24 órás'], ['d3', '1–3 napos'], ['gt3', '3 napnál régebbi']];
+		return card('Megválaszolatlan levelek – most', 'A Beérkezett mappa nyitott szálai, ahol az utolsó levél az ügyfélé (az elmúlt 30 napból). A lezárt szálak nem számítanak.',
+			'<div class="an-kpi">' + B.map(b => '<div class="' + (b[0] === 'd3' || b[0] === 'gt3' ? (u.b[b[0]] ? 'bad' : '') : '') + '"><b>' + (u.b[b[0]] || 0) + '</b><span>' + b[1] + '</span></div>').join('') + '</div>' +
+			(u.who.length ? '<div class="an-own">' + u.who.map(w => '<span><b>' + esc(w.who) + '</b> ' + w.n + (w.old ? ' · ebből ' + w.old + ' egy napnál régebbi' : '') + '</span>').join('') + '</div>' : '') +
+			(u.list.length ? '<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Mióta vár</th><th>Levél</th><th>Felelős</th></tr></thead><tbody>' + u.list.map(l => '<tr><td class="r">' + mins(l.h * 60) + '</td><td><a href="#" class="au-go" data-k="mail" data-id="' + l.id + '">' + esc(l.s || '(nincs tárgy)') + '</a>' + (l.c ? '<small>' + esc(l.c) + '</small>' : '') + '</td><td>' + esc(l.as) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="cpx-muted">Nincs megválaszolatlan levél. 🎉</p>'));
+	}
+	/* S12 */
+	function anLoadH(l) {
+		if (!l) return '';
+		const DN = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
+		const col = (L, lab) => { const mi = Math.max(1, ...L.map(x => Math.max(x.in, x.out))), ma = Math.max(1, ...L.map(x => x.act)); return '<div class="an-cols">' + L.map((x, i) => '<div class="an-col" title="' + esc(lab(i) + ': ' + x.in + ' beérkező, ' + x.out + ' kimenő levél, ' + dur(x.act) + ' aktív panelidő') + '"><div class="an-cb"><i class="in" style="height:' + (x.in / mi * 100) + '%"></i><i class="out" style="height:' + (x.out / mi * 100) + '%"></i><i class="act" style="height:' + (x.act / ma * 100) + '%"></i></div><small>' + lab(i) + '</small></div>').join('') + '</div>'; };
+		const hrs = l.h.slice(6, 23);
+		return card('Terhelés: mikor jönnek a levelek, és mikor dolgozunk', 'Beérkező és kimenő levelek, mellettük a panelben töltött aktív idő (a panelidő az elmúlt 90 napból van meg). Ha sok levél jön olyankor, amikor kevés az aktív idő, ott nő a válaszidő.',
+			'<div class="an-two"><div><b class="an-l">Napszak (6–22 óra)</b>' + col(hrs, i => (i + 6) + 'h') + '</div><div><b class="an-l">A hét napjai</b>' + col(l.w, i => DN[i]) + '</div></div>' +
+			'<div class="au-lg an-lg"><span><i class="in"></i>beérkező levél</span><span><i class="out"></i>kimenő levél</span><span><i class="act"></i>aktív panelidő</span></div>');
+	}
 	/* v2.9.140: a megjelenített órák (a használt időszak ±1 óra, legalább 4 óra), tengely, sáv, egérkövető buborék */
 	function rng(days) {
 		const f = (days || []).filter(d => d && (d.act || d.open));
@@ -229,10 +300,10 @@
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
 		box.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); main.scrollIntoView && window.scrollTo(0, 0); }));
 	}
-	function status(s) { if (S.mode === 'use') { s.textContent = U.err || ''; s.className = 'cpx-status' + (U.err ? ' err' : ''); return; } s.textContent = S.err || (S.data ? S.data.total + ' naplóbejegyzés' : ''); s.className = 'cpx-status' + (S.err ? ' err' : ''); }
-	async function refresh() { if (S.main && S.main.isConnected) { if (S.mode === 'use') await useLoad(); else await load(); } }
+	function status(s) { if (S.mode === 'an') { s.textContent = A.err || (A.d ? 'Számolva: ' + A.d.at : ''); s.className = 'cpx-status' + (A.err ? ' err' : ''); return; } if (S.mode === 'use') { s.textContent = U.err || ''; s.className = 'cpx-status' + (U.err ? ' err' : ''); return; } s.textContent = S.err || (S.data ? S.data.total + ' naplóbejegyzés' : ''); s.className = 'cpx-status' + (S.err ? ' err' : ''); }
+	async function refresh() { if (S.main && S.main.isConnected) { if (S.mode === 'an') await anLoad(true); else if (S.mode === 'use') await useLoad(); else await load(); } }
 	/* értesítésből vagy linkből: „naplo:hasznalat” */
-	function deep(arg) { if (String(arg || '') === 'hasznalat') nav('use'); }
+	function deep(arg) { if (String(arg || '') === 'hasznalat') nav('use'); if (String(arg || '') === 'elemzes') nav('an'); }
 	window.CPAudit = { view, status, refresh, deep };
 
 	const css = document.createElement('style');
@@ -244,7 +315,7 @@
 		'.au-s{color:var(--ink);opacity:.85;word-break:break-word;margin-top:1px}.au-go{color:#2F5BD8;font-weight:600;text-decoration:none;font-size:12.5px}.a-login_fail td{background:#FDECEA}.au-pg{display:flex;gap:8px;justify-content:center;margin-top:10px}' +
 		'.au{min-width:0;max-width:min(1100px,100%)}.au-pre{max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.au-pre::-webkit-scrollbar{display:none}.au-pre button{flex:0 0 auto}' +
 		'@media (max-width:760px){.au{overflow-x:clip}.au-f select,.au-f input{width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:16px}.au-f input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-height:38px}.au-f input[type=search]{grid-column:1 / -1}.au-f .au-csv{grid-column:1 / -1;text-align:center}' +
-		'.au-t:not(.au-ut) thead{display:none}.au-t:not(.au-ut),.au-t:not(.au-ut) tbody,.au-t:not(.au-ut) tr,.au-t:not(.au-ut) td{display:block;width:auto}.au-t:not(.au-ut) tr{padding:9px 12px;border-bottom:1px solid #F0ECE6}.au-t:not(.au-ut) td{padding:0;border:0}.au-t:not(.au-ut) td.au-at,.au-t:not(.au-ut) td.au-who{display:inline;font-size:12.5px}.au-t:not(.au-ut) td.au-who small{display:inline;margin-left:4px}.au-t:not(.au-ut) td.au-at:after{content:" · "}.au-t:not(.au-ut) td:last-child{margin-top:3px;overflow-wrap:anywhere}}' +
+		'.au-t:not(.au-ut):not(.an-t) thead{display:none}.au-t:not(.au-ut):not(.an-t),.au-t:not(.au-ut):not(.an-t) tbody,.au-t:not(.au-ut):not(.an-t) tr,.au-t:not(.au-ut):not(.an-t) td{display:block;width:auto}.au-t:not(.au-ut):not(.an-t) tr{padding:9px 12px;border-bottom:1px solid #F0ECE6}.au-t:not(.au-ut):not(.an-t) td{padding:0;border:0}.au-t:not(.au-ut):not(.an-t) td.au-at,.au-t:not(.au-ut):not(.an-t) td.au-who{display:inline;font-size:12.5px}.au-t:not(.au-ut):not(.an-t) td.au-who small{display:inline;margin-left:4px}.au-t:not(.au-ut):not(.an-t) td.au-at:after{content:" · "}.au-t:not(.au-ut):not(.an-t) td:last-child{margin-top:3px;overflow-wrap:anywhere}}' +
 		'@media (max-width:760px){.au-f{display:grid;grid-template-columns:1fr 1fr;gap:8px}.au-f .au-pre{grid-column:1 / -1;display:flex}.au-f label{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0}.au-f label input{width:100%;min-width:0;box-sizing:border-box;font-size:16px}.au-seg{max-width:100%;overflow-x:auto}}' +
 		'.au-seg a{border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;color:var(--mu);text-decoration:none;white-space:nowrap}.au-seg a.on{background:var(--n);color:#fff}.au-seg a:not(.on):hover{color:var(--n)}.au-seg a:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}.au-ht{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}.au-ht h2{margin:0}.au-pre button{white-space:nowrap}.au-t .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
 		'.au-dc{min-width:160px;max-width:320px}.au-do{font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}.au-do a{color:#2F5BD8;text-decoration:none;font-weight:600}' +
@@ -267,6 +338,13 @@
 		'.au-bar{height:30px;border-radius:6px;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(var(--hw,25%) - 1px),#E6E3DE calc(var(--hw,25%) - 1px),#E6E3DE var(--hw,25%)),#F5F3EF;cursor:crosshair}.au-bar i{border-radius:3px}.au-tlr{padding:7px 0}.au-cmp .au-cr{padding:5px 0}' +
 		'.au-hl{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:#141C33;border-radius:1px;display:none;pointer-events:none}.au-hl.on{display:block}' +
 		'.au-tip{position:fixed;z-index:10070;background:#141C33;color:#fff;border-radius:8px;padding:7px 10px;font:12.5px/1.4 Inter,sans-serif;box-shadow:0 8px 24px rgba(20,28,51,.25);pointer-events:none;max-width:320px}.au-tip b{font-variant-numeric:tabular-nums}.au-tip div{margin-top:2px;overflow-wrap:anywhere}.au-tip small{display:block;color:#AEB4C2;font-size:11px;font-variant-numeric:tabular-nums}.au-tip .ta{color:#9DB8FF;font-weight:600}.au-tip .tn{color:#C9CDD6}' +
-		'.au-lgh{margin-left:auto;font-style:italic}@media (hover:none){.au-lgh{display:none}}';
+		'.au-lgh{margin-left:auto;font-style:italic}@media (hover:none){.au-lgh{display:none}}' +
+		/* v2.9.145: Elemzés */
+		'.an .au-box{display:flex;flex-direction:column;gap:6px}.an-c{margin-bottom:6px}.an-sub{margin:-4px 0 8px;font-size:12.5px;color:var(--mu);max-width:760px}.an-note,.an-ft{font-size:11.5px;color:var(--mu);margin:6px 0 0}' +
+		'.an-t td small{display:block;color:var(--mu);font-size:11px;font-weight:400}.an-t tr.an-tot td{font-weight:700;background:#FAF8F5}.an-bar{display:flex;height:14px;min-width:120px;background:#F5F3EF;border-radius:4px;overflow:hidden}.an-bar i{display:block;height:100%}' +
+		'.an-bar .w,.an-lg .w{background:#1F9D55}.an-bar .l,.an-lg .l{background:#D9534F}.an-bar .o,.an-lg .o{background:#C9CFDA}.an-lg i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px}' +
+		'.an-own{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:12.5px}.an-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}.an-kpi div{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.an-kpi b{display:block;font:800 22px "Plus Jakarta Sans",sans-serif}.an-kpi span{font-size:12px;color:var(--mu)}.an-kpi .bad{border-color:#F3C2BF;background:#FDF1F0}.an-kpi .bad b{color:#B42318}' +
+		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
+		'@media (max-width:760px){.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
 	document.head.appendChild(css);
 })();
