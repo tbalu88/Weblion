@@ -692,7 +692,7 @@
 		layout(box);
 		if (S.folder === 'draft' && !S.demo) drawDrafts(box);
 		const pick = (sel, b) => { box.querySelectorAll(sel).forEach(x => x.classList.toggle('on', x === b)); };
-		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { pick('[data-f]', b); S.folder = b.dataset.f; S.th = null; S.lim = 100; drawInbox(box); }));
+		box.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { pick('[data-f]', b); S.folder = b.dataset.f; S.tg = []; /* v2.9.136: mappaváltáskor a címkeszűrő törlődik */ S.th = null; S.lim = 100; drawInbox(box); }));
 		const mb = box.querySelector('[data-more]');
 		if (mb) mb.addEventListener('click', () => { const it = box.querySelector('.ml-items'), y = it ? it.scrollTop : 0; mb.disabled = true; mb.textContent = 'Betöltés…'; S.lim = (S.lim || 100) + 200; drawInbox(box).then(() => { const n = box.querySelector('.ml-items'); if (n) n.scrollTop = y; }); });
 		box.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { pick('[data-tab]', b); S.tab = b.dataset.tab; drawInbox(box); }));
@@ -722,7 +722,7 @@
 		box.querySelector('[data-compose]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
 		const gt = box.querySelector('[data-gotpl]'); if (gt) gt.addEventListener('click', () => { S.view = 'tpl'; try { localStorage.setItem('cpmail_view', 'tpl'); } catch (e) { /* privát mód */ } view(S.main); });
 		box.querySelector('[data-fab]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
-		box.querySelector('[data-fsel]').addEventListener('change', e => { const v = e.target.value; if (v === '__demo') { S.demo = !S.demo; } else { S.folder = v; } S.th = null; S.reading = false; S.lim = 100; drawInbox(box); });
+		box.querySelector('[data-fsel]').addEventListener('change', e => { const v = e.target.value; if (v === '__demo') { S.demo = !S.demo; } else { S.folder = v; S.tg = []; } S.th = null; S.reading = false; S.lim = 100; drawInbox(box); });
 		box.querySelector('[data-sort]').addEventListener('change', e => { S.so = e.target.value; try { localStorage.setItem('cpmail_so', S.so); } catch (x) { /* privát mód */ } drawInbox(box); });
 		box.querySelectorAll('[data-th]').forEach(b => {
 			const go = () => { S.th = Number(b.dataset.th); box.querySelectorAll('.ml-item').forEach(x => x.classList.toggle('on', x === b)); b.classList.remove('un'); const r = S.rows.find(x => x.id === S.th); if (r) r.un = 0; if (S.sel.size) { S.sel.clear(); selUI(box); } openThread(box, S.th); };

@@ -287,6 +287,14 @@ function cp_mail_clean($html) {
 	/* a WordPress stílusszűrője alapból kidobna néhány, e-mailben gyakori CSS-tulajdonságot */
 	$css = function ($p) { return array_unique(array_merge($p, array('display', 'vertical-align', 'line-height', 'letter-spacing', 'white-space', 'text-decoration', 'text-transform', 'border', 'border-left', 'border-right', 'border-top', 'border-bottom', 'border-collapse', 'border-spacing', 'border-radius', 'border-color', 'border-style', 'border-width', 'padding', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom', 'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'width', 'height', 'max-width', 'min-width', 'max-height', 'color', 'background', 'background-color', 'font', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-align', 'float', 'clear', 'overflow', 'table-layout', 'mso-line-height-rule'))); };
 	add_filter('safe_style_css', $css, 99);
+	/* v2.9.136: a WordPress stílusszűrője a zárójeles értéket (rgb(…)) eldobja – így vesztek el a Salesmate-sablonok és a
+	   szerkesztőben (Chrome) választott betűszínek. Előtte #rrggbb alakra alakítjuk (átlátszó: transparent). */
+	$html = preg_replace_callback('/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)/i', function ($m) {
+		if (isset($m[4]) && $m[4] !== '' && (float) $m[4] === 0.0) { return 'transparent'; }
+		return sprintf('#%02x%02x%02x', min(255, (int) $m[1]), min(255, (int) $m[2]), min(255, (int) $m[3]));
+	}, (string) $html);
+	/* v2.9.136: a <style>, <script>, <head>, <title> blokk tartalmastul törlődik (különben a CSS szövegként a levélbe kerülne) */
+	$html = preg_replace('#<(style|script|head|title|xml)\b[^>]*>.*?</\1\s*>#is', '', $html);
 	$out = wp_kses(mb_substr((string) $html, 0, 200000), $allowed, array('http', 'https', 'mailto', 'tel'));
 	remove_filter('safe_style_css', $css, 99);
 	return $out;

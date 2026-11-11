@@ -970,3 +970,12 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 
 /* v2.9.134: kézi számlamentés (nincs teljesítési dátum) */
 .ml-dvb.nd{border-color:#E8B04B;background:#FFF6E0;color:#7A4B00}
+
+/* v2.9.136: címkeszűrő sáv egy sorban (keskeny listánál is) */
+.ml-tgbar{flex-wrap:nowrap;min-width:0}
+.ml-tgbar>span{flex:none}
+.ml-tgbar .ml-tg{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center}
+.ml-tgbar .ml-tg>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-tgbar .ml-tg>button{flex:none}
+.ml-tgbar small{flex:none}
+.ml-tgbar .ml-link{flex:none;white-space:nowrap;padding:0}
