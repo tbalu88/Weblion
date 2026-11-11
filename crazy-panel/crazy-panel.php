@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.183');
+define('CP_PANEL_VER', '2.9.184');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3779,6 +3779,8 @@ require_once __DIR__ . '/settings-x-defs.php';
 require_once __DIR__ . '/estimate.php';
 require_once __DIR__ . '/estimate-ec.php';
 require_once __DIR__ . '/company-suggest.php';
+require_once __DIR__ . '/deal-files.php'; /* v2.9.184: fájlfeltöltés a dealhez */
+require_once __DIR__ . '/people-new.php'; /* v2.9.184: új kontakt / új cég a Kapcsolatok oldalon */
 require_once __DIR__ . '/watchdog.php';
 require_once __DIR__ . '/sm-local.php';
 require_once __DIR__ . '/gdrive-backup.php';

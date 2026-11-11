@@ -81,7 +81,7 @@ function cp_bin_body($e) {
 function cp_bin_ref_tables() {
 	global $wpdb;
 	$out = array();
-	foreach (array('mail_threads', 'mail_notes', 'mail_px', 'logi', 'kb_cards', 'st_acts', 'slot_asg', 'crm_history', 'billing', 'leads') as $t) {
+	foreach (array('mail_threads', 'mail_notes', 'mail_px', 'logi', 'kb_cards', 'st_acts', 'slot_asg', 'crm_history', 'billing', 'leads', 'deal_files') as $t) {
 		$n = $wpdb->prefix . 'crazy_' . $t;
 		if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $n)) === $n) { $out[] = $n; }
 	}

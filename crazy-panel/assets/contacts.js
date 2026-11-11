@@ -30,19 +30,50 @@
 		return j.data;
 	}
 	const SORTS = [['recent', 'Legutóbbi deal'], ['event', 'Legutóbbi rendezvény'], ['deals', 'Legtöbb deal'], ['won', 'Legtöbb bevétel'], ['name', 'Név (A–Z)']];
+	/* v2.9.184: új kontakt / új cég – a Salesmate-ben jön létre; azonos e-mail-cím / cégnév esetén a meglévő nyílik meg */
+	function newPerson(kind) {
+		const ct = kind === 'ct';
+		const F = ct ? [['name', 'Név', 'pl. Kiss Anna', 1], ['email', 'E-mail', 'nev@ceg.hu', 0, 'email'], ['phone', 'Telefon', '+36 30 123 4567', 0, 'tel'], ['company', 'Cég (nem kötelező)', 'pl. Gála Kft. – ha nincs még ilyen, létrehozom', 0]] : [['name', 'Cégnév', 'pl. Gála Eseményszervező Kft.', 1], ['web', 'Weboldal (nem kötelező)', 'https://…', 0, 'url']];
+		const w = document.createElement('div'); w.className = 'cpx-ask pp-new'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true');
+		w.innerHTML = '<div><form><h3>' + (ct ? 'Új kontakt' : 'Új cég') + '</h3>' + F.map(f => '<label><span>' + esc(f[1]) + (f[3] ? ' <b aria-hidden="true">*</b>' : '') + '</span><input name="' + f[0] + '" type="' + (f[4] || 'text') + '" placeholder="' + esc(f[2]) + '"' + (f[3] ? ' required' : '') + ' autocomplete="off"></label>').join('') +
+			'<p class="pp-newn">A Salesmate-ben is létrejön.' + (ct ? ' Ha már van kontakt ezzel az e-mail-címmel, azt nyitom meg.' : ' Ha már van ilyen nevű cég, azt nyitom meg.') + '</p><p class="pp-newe" data-err hidden></p>' +
+			'<div class="ab"><button type="button" data-no>Mégse</button><button type="submit" class="ok">Létrehozás</button></div></form></div>';
+		document.body.appendChild(w);
+		const fm = w.querySelector('form'), er = w.querySelector('[data-err]'), ok = w.querySelector('.ok');
+		const close = () => { document.removeEventListener('keydown', kd, true); w.remove(); };
+		const kd = e => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+		document.addEventListener('keydown', kd, true);
+		w.querySelector('[data-no]').addEventListener('click', close);
+		w.addEventListener('mousedown', e => { if (e.target === w) close(); });
+		setTimeout(() => fm.querySelector('input').focus(), 30);
+		fm.addEventListener('submit', async e => {
+			e.preventDefault(); er.hidden = true;
+			const p = { kind: kind }; F.forEach(f => { p[f[0]] = fm.elements[f[0]].value.trim(); });
+			if (!p.name) { er.textContent = ct ? 'Add meg a nevet.' : 'Add meg a cég nevét.'; er.hidden = false; return; }
+			ok.disabled = true; ok.textContent = 'Létrehozás…';
+			try {
+				const r = await post('cp_crm_people_new', p);
+				close();
+				toast(r.exists ? (ct ? 'Már van kontakt ezzel az e-mail-címmel – megnyitom.' : 'Már van ilyen nevű cég – megnyitom.') : (r.warn || (ct ? 'Kontakt létrehozva.' : 'Cég létrehozva.')), !!r.warn);
+				load();
+				if (ct) window.CPCrm.contact(r.id); else window.CPCrm.company(r.id);
+			} catch (x) { er.textContent = x.message; er.hidden = false; ok.disabled = false; ok.textContent = 'Létrehozás'; }
+		});
+	}
 	function view(main) {
 		S.main = main;
 		main.innerHTML = '<div class="pp"><div class="pp-h"><div class="crm-seg"><button type="button" data-k="ct" class="' + (S.kind === 'ct' ? 'on' : '') + '">Kontaktok</button><button type="button" data-k="co" class="' + (S.kind === 'co' ? 'on' : '') + '">Cégek</button></div>' +
 			'<input type="search" data-q placeholder="' + (S.kind === 'ct' ? 'Keresés: név, e-mail, telefon, város, cég' : 'Keresés: cégnév, weboldal') + '" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<select data-so aria-label="Rendezés"' + (S.dup ? ' style="display:none"' : '') + '>' + SORTS.map(x => '<option value="' + x[0] + '"' + (S.so === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
 			'<label class="crm-chk" title="Keresés közben mindenkit mutat"' + (S.dup ? ' style="display:none"' : '') + '><input type="checkbox" data-only' + (S.only ? ' checked' : '') + '> Csak akiknek van deal-je</label>' +
-			'<button type="button" class="cpx-btn ghost pp-dupb' + (S.dup ? ' on' : '') + '" data-dup title="A rendszer által talált lehetséges duplikátumok">⧉ Duplikátumok<span class="pp-dupn" data-dupn></span></button></div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
+			'<button type="button" class="cpx-btn ghost pp-dupb' + (S.dup ? ' on' : '') + '" data-dup title="A rendszer által talált lehetséges duplikátumok">⧉ Duplikátumok<span class="pp-dupn" data-dupn></span></button>' + (C.crm && C.crm.edit ? '<button type="button" class="cpx-btn pp-newb" data-pnew>+ ' + (S.kind === 'ct' ? 'Új kontakt' : 'Új cég') + '</button>' : '') + '</div><div class="pp-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		main.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { if (S.kind === b.dataset.k) return; S.kind = b.dataset.k; S.p = 0; S.sel.clear(); save(); view(main); }));
 		let t = null;
 		main.querySelector('[data-q]').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value.trim(); S.p = 0; load(); }, 300); });
 		main.querySelector('[data-so]').addEventListener('change', e => { S.so = e.target.value; S.p = 0; save(); load(); });
 		main.querySelector('[data-only]').addEventListener('change', e => { S.only = e.target.checked; S.p = 0; save(); load(); });
 		main.querySelector('[data-dup]').addEventListener('click', () => { S.dup = !S.dup; view(main); });
+		const pn = main.querySelector('[data-pnew]'); if (pn) pn.addEventListener('click', () => newPerson(S.kind));
 		if (S.dup) { main.querySelector('[data-q]').placeholder = 'Szűrés a javaslatok között (név, e-mail, cég)'; }
 		dupBadge();
 		load();
@@ -209,6 +240,7 @@
 		'.pp-ln{color:inherit;text-decoration:none}.pp-ln:hover b{color:#2F5BD8;text-decoration:underline}.pp-nm{min-width:0}.pp-nm b{display:block;font-weight:600}.pp-nm small{display:block;color:#656973;font-size:12px}.pp-t a{color:#2F5BD8;text-decoration:none;font-weight:600}.pp-open{color:#2F5BD8;font-size:11.5px}.pp-pg{display:flex;gap:8px;justify-content:center;margin-top:10px}' +
 		'.pp-t td.pp-ck,.pp-t th.pp-ck{width:34px;padding-right:0;min-width:0;display:table-cell}.pp-ck input{width:17px;height:17px;cursor:pointer;accent-color:#2F5BD8}.pp-t tbody tr.ck{background:#EEF3FD}' +
 		'.pp-bulk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#EEF3FD;border:1px solid #C9D6FB;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px}.pp-bulk b{margin-right:auto}.pp-bulk .cpx-btn{height:32px;font-size:12.5px}' +
+		'.pp-newb{margin-left:auto}.pp-new form>label{display:flex;flex-direction:column;gap:4px;font:600 13px Inter,sans-serif;color:#3A3F4B}.pp-new form>label b{color:#B42318}.pp-new input{margin:0 0 10px!important}.pp-newn{font-size:12.5px;color:#656973!important;margin:0 0 8px!important}.pp-newe{color:#B42318!important;font-size:13px;margin:0 0 8px!important}' +
 		'.pp-dupb.on{background:#141C33;color:#fff;border-color:#141C33}.pp-dupn{font-weight:700;color:#C2410C;margin-left:5px}.pp-dupn:empty{display:none}.pp-dupb.on .pp-dupn{color:#FDBA74}.pd-help{font-size:12.5px;color:#656973;margin:0 0 10px}' +
 		'.pd{background:#fff;border:1px solid #E6E3DE;border-radius:12px;padding:10px 12px;margin-bottom:8px}.pd-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;font-size:12.5px;color:#4A4F5A}' +
 		'.pd-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:6px;padding:2px 7px}.pd-l.hi{background:#FDE7DA;color:#B4400E}.pd-l.md{background:#FDF3D2;color:#8A6200}.pd-l.lo{background:#EEF0F3;color:#5B6170}' +

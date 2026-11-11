@@ -48,6 +48,45 @@
 		const cur = ks.some(k => k[0] === D3T.ff) ? D3T.ff : '';
 		return '<div class="d3-ff" role="group" aria-label="Fájlok szűrése"><button type="button" data-ff=""' + (cur ? '' : ' class="on" aria-pressed="true"') + '>Mind</button>' + ks.map(k => '<button type="button" data-ff="' + k[0] + '"' + (cur === k[0] ? ' class="on" aria-pressed="true"' : '') + '>' + k[1] + ' <small>' + c[k[0]] + '</small></button>').join('') + '</div>';
 	}
+	/* v2.9.184: a dealhez feltöltött fájlok (a panelben tárolva, a Salesmate-be nem kerülnek) */
+	const dfUrl = (id, t, dl) => (window.CPX || {}).ajax + '?action=cp_crm_dfile&id=' + id + (t ? '&t=1' : '') + (dl ? '&dl=1' : '');
+	function d3UpHtml(up) {
+		if (!up.length) return '';
+		return '<b class="d3-sbh">Feltöltött fájlok</b><ul class="d3-fg d3-upl">' + up.map(f => '<li data-fk="' + d3Kind(f.n) + '"><a class="d3-ft" href="' + esc(dfUrl(f.id)) + '" target="_blank" rel="noopener" title="' + esc(f.n) + '">' +
+			(f.img ? '<span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(dfUrl(f.id, 1)) + '"><i>' + esc(d3Ext(f.n) || 'KÉP') + '</i></span>' : d3Thumb({ n: f.n })) +
+			'<b>' + esc(f.n) + '</b><small>' + esc([f.by, f.s ? d3Size(f.s) : '', huDT(f.at)].filter(Boolean).join(' · ')) + '</small></a>' + (f.del ? '<button type="button" class="d3-dfx" data-dfdel="' + f.id + '" title="Fájl törlése" aria-label="' + esc(f.n) + ' törlése">×</button>' : '') + '</li>').join('') + '</ul>';
+	}
+	function d3UpBind(sh, dealId) {
+		const re = () => { if (D3.ctx && D3.ctx.id === dealId) openDeal(dealId, D3.ctx.back, true); };
+		const C0 = window.CPX || {};
+		const send = async files => {
+			const L = Array.from(files || []); if (!L.length) return;
+			let ok = 0;
+			for (const f of L) {
+				if (f.size > 25 * 1048576) { toast(f.name + ': túl nagy (max. 25 MB).', true); continue; }
+				toast('Feltöltés: ' + f.name + '…');
+				try {
+					const fd = new FormData(); fd.append('action', 'cp_crm_dfile_up'); fd.append('t', C0.t); fd.append('deal', dealId); fd.append('file', f, f.name);
+					const r = await fetch(C0.ajax, { method: 'POST', body: fd, credentials: 'same-origin' }); let j = null; try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); }
+					if (!j || !j.success) throw new Error((j && j.data && j.data.msg) || 'Hiba'); ok++;
+				} catch (e) { toast(f.name + ': ' + e.message, true); }
+			}
+			if (ok) { toast(ok > 1 ? ok + ' fájl feltöltve.' : 'Fájl feltöltve.'); re(); }
+		};
+		const inp = sh.querySelector('[data-dfup]'); if (inp) inp.addEventListener('change', () => { send(inp.files); inp.value = ''; });
+		const sec = sh.querySelector('[data-fsec]');
+		if (sec && inp) {
+			sec.addEventListener('dragover', e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); sec.classList.add('d3-drop'); } });
+			sec.addEventListener('dragleave', e => { if (!sec.contains(e.relatedTarget)) sec.classList.remove('d3-drop'); });
+			sec.addEventListener('drop', e => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); sec.classList.remove('d3-drop'); send(e.dataTransfer.files); });
+		}
+		sh.querySelectorAll('[data-dfdel]').forEach(b => b.addEventListener('click', async e => {
+			e.preventDefault(); e.stopPropagation();
+			const n = (b.closest('li').querySelector('b') || {}).textContent || 'a fájlt';
+			if (!(await window.CPXConfirm('„' + n + '” törlése a dealről. Ez nem vonható vissza.', { title: 'Fájl törlése', ok: 'Törlés', danger: true }))) return;
+			try { await post('cp_crm_dfile_del', { id: b.dataset.dfdel }); toast('Fájl törölve.'); re(); } catch (x) { toast(x.message, true); }
+		}));
+	}
 	function d3FilesBind(sh, fl) {
 		sh.querySelectorAll('[data-ff]').forEach(b => b.addEventListener('click', () => { const sec = b.closest('[data-fsec]'); D3T.ff = b.dataset.ff; if (b.dataset.ff) sec.dataset.ffv = b.dataset.ff; else delete sec.dataset.ffv; sec.querySelectorAll('[data-ff]').forEach(x => { const on = x === b; x.classList.toggle('on', on); if (on) x.setAttribute('aria-pressed', 'true'); else x.removeAttribute('aria-pressed'); }); }));
 		{ const on = sh.querySelector('[data-ff].on'); if (on && on.dataset.ff) on.closest('[data-fsec]').dataset.ffv = on.dataset.ff; }
@@ -1328,7 +1367,7 @@
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open), back)));
 		/* az idővonal elemeit (.d3-ti) a drawTimeline köti be – itt nem, különben kétszer nyílna meg a levél */
 		/* v2.9.69: a szálcsoport fejlécét (.d3-tgh) a bindTc köti be */
-		sh.querySelectorAll('[data-th]:not(.d3-ti):not(.d3-tgh)').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
+		sh.querySelectorAll('[data-th]:not(.d3-ti):not(.d3-tgh):not(.d3-thl)').forEach(b => b.addEventListener('click', () => openTh(Number(b.dataset.th), b)));
 		sh.querySelectorAll('[data-ct]').forEach(b => { if (!(Number(b.dataset.ct) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openContact(Number(b.dataset.ct), back); }); });
 		sh.querySelectorAll('[data-co]').forEach(b => { if (!(Number(b.dataset.co) > 0)) return; b.addEventListener('click', e => { e.preventDefault(); openCompany(Number(b.dataset.co), back); }); });
 	}
@@ -1338,7 +1377,9 @@
 		/* v2.9.68: levelenkénti elemek helyett szálanként egy csoport, a szál legutóbbi levelének idejénél (új levéllel a szál felülre kerül); v2.9.69: hibrid csoport */
 		(m.off ? [] : m.threads || []).forEach(t => it.push({ k: 'mail', at: t.la || t.at, h: threadGroup(t, true) }));
 		(x.dnotes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note dnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a dealen</b> – ' + esc(n.author || '') + (n.src === 'sm' || n.src === 'smi' ? ' <span class="d3-q" title="' + (n.src === 'smi' ? 'A Salesmate egyik levélszálán írták' : 'A Salesmate-ben írták') + '">Salesmate</span>' : '') + '<small>' + esc(huDT(n.at)) + '</small>' + (W && (n.mine || (C.au && C.au.on)) ? '<button type="button" class="d3-x d3-ned" data-nedit="' + n.id + '" title="Jegyzet szerkesztése (a Salesmate-ben is)">✎</button><button type="button" class="d3-x" data-ndel="' + n.id + '" title="Jegyzet törlése (a Salesmate-ből is)">×</button>' : '') + '</div><div class="d3-tx" data-nbody="' + n.id + '">' + nl(n.body) + '</div></div></div>' }));
-		(m.notes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note" data-th="' + n.th + '" role="button" tabindex="0"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div></div></div>' }));
+		/* v2.9.184: a levélszálra írt jegyzet jelölve (melyik szálé), kattintásra nem nyit meg semmit; a szálat a „Levélszál ›” link nyitja */
+		const thS = {}; (m.threads || []).forEach(t => { thS[t.id] = t.subj || ''; });
+		(m.notes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note thnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a levélszálon</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div><div class="d3-tnth">✉ <span>' + esc(thS[n.th] || 'levélszál') + '</span> <button type="button" class="d3-thl" data-th="' + n.th + '" data-ths="' + esc(thS[n.th] || '') + '">Levélszál ›</button></div></div></div>' }));
 		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small>' + (W && Number(a.related_id) === d.id ? '<button type="button" class="d3-ab" data-aundo="' + a.id + '" title="Visszanyitás">↺</button>' : '') + '</div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));
 		(x.cards || []).forEach(c => it.push({ k: 'card', at: c.at, h: '<div class="d3-ti card" data-card="' + c.id + '" role="button" tabindex="0"><i>' + I.card + '</i><div><div class="d3-tt"><b>Feladat</b> – ' + esc(c.by) + '<small>' + esc(huDT(c.at)) + '</small></div><div class="d3-ts">' + (c.done ? '✓ ' : '') + esc(c.title) + '</div><div class="d3-tx">' + esc([c.list, c.as.join(', '), c.due ? 'határidő: ' + huD(c.due) : ''].filter(Boolean).join(' · ')) + '</div></div></div>' }));
 		/* v2.9.109: az ügyfél megnyitotta a panelből küldött levelet (első valódi megnyitás) */
@@ -1394,6 +1435,7 @@
 			tx.querySelector('[data-nx]').addEventListener('click', () => { tx.innerHTML = nl(n.body); });
 			ta.addEventListener('keydown', z => { if (z.key === 'Enter' && (z.ctrlKey || z.metaKey)) { z.preventDefault(); save(); } if (z.key === 'Escape') { z.preventDefault(); tx.innerHTML = nl(n.body); } });
 		}));
+		box.querySelectorAll('.d3-thl').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openTh(Number(b.dataset.th), b); }));
 		box.querySelectorAll('.d3-ti[data-th]:not(.d3-tm)').forEach(b => { const go = () => openTh(Number(b.dataset.th), b); b.addEventListener('click', e => { if (e.target.closest('a')) return; go(); }); /* v2.9.81: a jegyzetben lévő linkre kattintva a link nyílik, nem a szál */ b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 		bindTc(box);
 		box.querySelectorAll('.d3-ti[data-card]').forEach(b => { const go = () => { hideModal(); closePage(); if (window.CPNotify && window.CPNotify.go) window.CPNotify.go('feladatok:' + b.dataset.card); }; b.addEventListener('click', go); b.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
@@ -1769,13 +1811,14 @@
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
-			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length) + '</small></h4>' + d3FiltBar(fl, sbf) +
+			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; const up = x.dfiles || []; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length + up.length) + '</small>' + (R.edit ? '<label class="d3-upb" title="Fájl feltöltése a dealhez (PDF, kép, Office, zip – max. 25 MB) – vagy húzd ide"><input type="file" multiple hidden data-dfup>＋ Feltöltés</label>' : '') + '</h4>' + d3FiltBar(fl.concat(up.map(f => ({ n: f.n }))), sbf) + d3UpHtml(up) +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */
 				(sbf.length ? '<div class="d3-sbf"><b class="d3-sbh">Online fotósablon</b><ul class="d3-fg">' + sbf.map(t => { const fn = 'fotosablon-' + d.id + '-' + String(t.at || '').slice(0, 10) + '.png'; return '<li><a class="d3-ft" href="' + esc(t.png ? t.png + '&dl=' + encodeURIComponent(fn) : t.prev) + '" target="_blank" rel="noopener"' + (!t.png && t.cur ? ' data-sbopen="' + esc(d.id) + '" data-sbts="' + esc(t.ts || '') + '"' : '') + ' title="' + esc(t.png ? 'Lyukasztott PNG letöltése (4×6")' : t.cur ? 'Kattints: a Sablonkészítő az ügyfél beállításaiból elkészíti a lyukasztott PNG-t, és ide teszi' : 'Előnézet (ehhez a régebbi változathoz nem készült PNG)') + '"><span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(t.prev) + '"><i>' + (t.png ? 'PNG' : 'JPG') + '</i></span><b>' + (t.cur ? 'Aktuális' : 'Korábbi') + (t.name ? ' – ' + esc(t.name) : '') + '</b><small>' + esc(huDT(t.at)) + (t.png ? ' · ⬇ lyukasztott PNG' : t.cur ? ' · PNG készítése ›' : ' · csak előnézet') + '</small></a></li>'; }).join('') + '</ul></div>' : '') +
 				(fl.length ? '<ul class="d3-fg">' + fl.map((f, ix) => '<li data-fk="' + d3Kind(f.n) + '"' + (f.emb ? ' class="d3-emb"' : '') + '>' + (f.m && window.CPMailAtt ? '<a class="d3-ft" href="' + esc(window.CPMailAtt(f.m, f.i, f.n)) + '" target="_blank" rel="noopener" data-fx="' + ix + '"' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? ' data-risk="' + window.CPAttRisk(f.n).lvl + '" data-rn="' + esc(f.n) + '" title="' + esc((window.CPAttRisk(f.n).lvl === 'high' ? 'Veszélyes: ' : 'Kockázatos: ') + window.CPAttRisk(f.n).why) + '"' : ' title="' + esc(f.n) + '"') + '>' : '<button type="button" class="d3-ft" data-th="' + f.th + '" title="' + esc(f.n) + '">') + d3Thumb(f) + '<b>' + ((window.CPAttRisk && window.CPAttRisk(f.n)) ? '<span class="ml-ariskb ' + window.CPAttRisk(f.n).lvl + '" aria-label="Kockázatos fájl">⚠</span> ' : '') + esc(f.n) + '</b><small>' + esc(d3Meta(f)) + (f.x > 1 ? ' · ×' + f.x : '') + '</small>' + (f.m && window.CPMailAtt ? '</a>' : '</button>') + '</li>').join('') + '</ul>' + '<button type="button" class="d3-embt" data-embt' + (embN ? '' : ' hidden') + '><span data-embn>' + embN + '</span> elrejtett fájl (aláírás, apró, üres vagy ismétlődő) · <span data-embl>Mutasd</span></button>' + (fl.length > embN ? '<p class="d3-sub">Kép: kattintásra nagyítva · PDF és más fájl: megnyitás / letöltés (a postafiókból).</p>' : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) : (sbf.length ? '' : '<p class="cpx-muted">A levelekben nem volt melléklet.</p>')) + '</section>'; })() +
 			'</aside></div>';
 		sh.innerHTML = h;
 		d3FilesBind(sh, d3Files(m.files || []));
+		d3UpBind(sh, d.id);
 		D3.ctx = { id: id, back: back };
 		const cmp = sh.querySelector('[data-comp]');
 		if (cmp) compose(cmp, x, 'note');
