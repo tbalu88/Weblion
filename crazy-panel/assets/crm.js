@@ -1247,6 +1247,36 @@
 		root.querySelectorAll('[data-tgx]').forEach(b => b.addEventListener('click', () => tgToggle(b)));
 		root.querySelectorAll('.d3-tg [data-tgc]').forEach(c => c.addEventListener('click', () => { const b = c.closest('.d3-tg').querySelector('[data-tgx]'); tgToggle(b); b.focus(); }));
 	}
+	function bindCrew(sh, x, dealId, back) {
+		const crew = x.crew || [];
+		sh.querySelectorAll('[data-crgo]').forEach(b => b.addEventListener('click', () => { if (window.CPXSlotDay) window.CPXSlotDay(b.dataset.crgo); }));
+		sh.querySelectorAll('[data-crsw]').forEach(sel => {
+			const c = crew[Number(sel.dataset.crsw)];
+			let loaded = false;
+			const load = async () => {
+				if (loaded) return; loaded = true;
+				try {
+					const r = await post('cp_slot_day', { day: c.d });
+					const slot = (r.slots || []).find(s => s.deal === dealId && s.skey === c.sk);
+					const need = slot ? slot.need : '';
+					const L = (r.cands || []).filter(k => k.id !== c.kz);
+					const ok = k => !(need === 'kezelo' && k.kind !== 'kezelo') && !(slot && slot.skill && k.sk.length && !k.sk.includes(slot.skill)) && !k.busy.length;
+					sel.innerHTML = '<option value="' + c.kz + '" selected>' + esc(c.n) + '</option>' +
+						'<optgroup label="Javasolt">' + L.filter(ok).map(k => '<option value="' + k.id + '">' + esc(k.n) + (k.kind === 'kezelo' ? ' (Kezelő)' : ' (Host)') + '</option>').join('') + '</optgroup>' +
+						'<optgroup label="Nem javasolt (foglalt / nem kezeli / Host vidékre)">' + L.filter(k => !ok(k)).map(k => '<option value="' + k.id + '">' + esc(k.n) + (k.busy.length ? ' – aznap foglalt' : '') + '</option>').join('') + '</optgroup>';
+				} catch (e) { loaded = false; sel.innerHTML = '<option value="' + c.kz + '" selected>' + esc(c.n) + '</option>'; toast(e.message, true); }
+			};
+			sel.addEventListener('focus', load); sel.addEventListener('pointerdown', load);
+			sel.addEventListener('change', async () => {
+				const nk = Number(sel.value); if (!nk || nk === c.kz) return;
+				const nn = sel.options[sel.selectedIndex].textContent;
+				if (!window.confirm('Lecseréled: ' + c.n + ' → ' + nn + '?\n\n' + (c.st === 'final' ? 'Az új ember véglegesített beosztást és megerősítő levelet kap.' : 'Az új ember meghívást kap (a levelet a beosztásnál küldheted ki).'))) { sel.value = String(c.kz); return; }
+				sel.disabled = true;
+				try { await post('cp_slot_act', { op: 'swap', day: c.d, id: c.id, kz: nk }); toast('Beosztás módosítva.'); openDeal(dealId, back, true); }
+				catch (e) { toast(e.message, true); sel.disabled = false; sel.value = String(c.kz); }
+			});
+		});
+	}
 	function bindCommon(sh, back) {
 		sh.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openDeal(Number(b.dataset.open), back)));
 		/* az idővonal elemeit (.d3-ti) a drawTimeline köti be – itt nem, különben kétszer nyílna meg a levél */
@@ -1670,7 +1700,9 @@
 			'<section class="d3-c"><h4>Korábbi munkák – kontakt</h4>' + statLine(x.ct_stats) + (otherCt.length ? dealRows(otherCt, d.id) : '<p class="cpx-muted">' + (c ? 'Ez az első deal ezzel a kontakttal.' : 'Nincs kontakt.') + '</p>') + '</section>' +
 			(co ? '<section class="d3-c"><h4>Korábbi munkák – ' + esc(co.name) + '</h4>' + statLine(x.co_stats) + (otherCo.length ? dealRows(otherCo, d.id) : '<p class="cpx-muted">A cégnek nincs más (más kontakthoz tartozó) deal-je.</p>') + '</section>' : '') +
 			/* v2.9.117: beosztás (Kapacitás → Beosztás) */
-			((x.crew || []).length ? '<section class="d3-c"><h4>Beosztás</h4><ul class="d3-team">' + x.crew.map(c => '<li><span class="d3-av" style="background:' + avColor(String(c.n).length) + '">' + esc(initials(c.n)) + '</span>' + esc(c.n) + '<small>' + esc(huD(c.d) + ' · ' + c.g + ' · ' + c.sl) + '</small></li>').join('') + '</ul></section>' : '') +
+			/* v2.9.126: a beosztás sorai: lenyíló listából cserélhető ember, és átvisz a nap beosztásához (Kapacitás → Beosztás) */
+			((x.crew || []).length ? '<section class="d3-c"><h4>Beosztás</h4><ul class="d3-team d3-crew">' + x.crew.map((c, ci) => '<li><span class="d3-av" style="background:' + avColor(String(c.n).length) + '">' + esc(initials(c.n)) + '</span><span class="d3-cw"><select data-crsw="' + ci + '" aria-label="Beosztott ember: ' + esc(c.n) + '" title="Csere: válassz másik embert"><option value="' + c.kz + '" selected>' + esc(c.n) + '</option><option value="" disabled>– a lista betöltése… –</option></select>' +
+				'<button type="button" class="d3-crgo" data-crgo="' + esc(c.d) + '" title="A nap beosztásának megnyitása (Kapacitás → Beosztás)">' + esc(huD(c.d) + ' · ' + c.g + ' · ' + c.sl) + ' ↗</button></span></li>').join('') + '</ul></section>' : '') +
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
@@ -1689,6 +1721,7 @@
 		if (window.CPBill) window.CPBill.mount(sh, x);
 		if (window.CPContract) window.CPContract.mount(sh, x);
 		bindCommon(sh, self);
+		bindCrew(sh, x, d.id, back);
 		bindBack(sh, back);
 		bindInline(sh, x, back);
 		/* v1.84: „Ajánlat küldése” – előtöltött levél a becsült árral; küldés után a deal „Ajánlat kiküldve” lesz, értéke a becsült ár */

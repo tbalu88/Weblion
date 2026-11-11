@@ -770,3 +770,8 @@ a.d3-who:hover{background:#F6F3EE}
 @keyframes crmRotShake{0%,88%,100%{transform:none}90%{transform:translateX(-3px) rotate(-.6deg)}92%{transform:translateX(3px) rotate(.6deg)}94%{transform:translateX(-2px)}96%{transform:translateX(2px)}}
 .crm-card.rot-max:hover,.crm-card.rot-max:focus-visible,.crm-card.rot-max.busy{animation:crmRotPulse 1.6s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.crm-card.rot-max{animation:none;box-shadow:0 0 0 3px rgba(224,36,36,.45),inset 4px 0 0 #D21F1F}}
+/* v2.9.126: beosztás a deal adatlapján – csere lenyílóból, ugrás a nap beosztásához */
+.d3-crew li{align-items:flex-start}.d3-cw{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.d3-cw select{border:1px solid transparent;background:transparent;font:600 13.5px Inter,sans-serif;color:var(--ink);padding:2px 4px;margin-left:-4px;border-radius:6px;cursor:pointer;max-width:100%}
+.d3-cw select:hover,.d3-cw select:focus{border-color:var(--li);background:#fff}
+.d3-crgo{border:0;background:none;padding:0;text-align:left;font:12px Inter,sans-serif;color:#2F5BD8;cursor:pointer}.d3-crgo:hover{text-decoration:underline}

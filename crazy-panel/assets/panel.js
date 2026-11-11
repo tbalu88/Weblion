@@ -303,6 +303,8 @@
 
   /* v1.35: a modulok (Levelezés, Feladatok, Deal-ek) egymás fülére is átléphetnek */
   window.CPXGo = tab => go(tab);
+  /* v2.9.126: egy nap beosztásának megnyitása máshonnan (pl. a deal adatlapjáról) */
+  window.CPXSlotDay = date => { if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return; S.month = monthKey(date); S.calMode = 'slot'; S.calView = 'month'; try { localStorage.setItem('cpx_calm', 'slot'); } catch (e) { /* privát mód */ } const mn = document.getElementById('cpx-main'); if (mn) { mn.classList.remove('crm-pg-on'); const pg = mn.querySelector(':scope > .crm-page'); if (pg) pg.remove(); } go('naptar'); setTimeout(() => openSlotDay(date), 350); };
   window.CPXStatus = () => renderStatus();
   function go(tab) {
     S.tab = tab;

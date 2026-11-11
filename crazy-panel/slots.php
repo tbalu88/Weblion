@@ -249,6 +249,19 @@ function cp_slot_ajax_act() {
 			$log = cp_slot_states()[$st];
 		}
 		$deal = (int) $r['deal_id'];
+	} elseif ($op === 'swap') {
+		/* v2.9.126: csere a deal adatlapjáról – a régi ember helyére az új (véglegesítettnél csak Ákos / admin, és az új is véglegesített lesz) */
+		$id = (int) ($_POST['id'] ?? 0); $nk = (int) ($_POST['kz'] ?? 0);
+		$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
+		if (!$r || $r['day'] !== $day) { cp_el_err('Nincs ilyen beosztás.', 404); }
+		if ($nk <= 0 || $nk === (int) $r['kz_id']) { cp_el_err('Válassz másik embert.'); }
+		$fin = $r['status'] === 'final';
+		if ($fin && !cp_slot_can_final()) { cp_el_err('Véglegesített beosztást csak Ákos vagy admin cserélhet.', 403); }
+		$wpdb->update($T, array('status' => 'dropped', 'updated_at' => $now), array('id' => $id));
+		$wpdb->insert($T, array('deal_id' => (int) $r['deal_id'], 'day' => $day, 'skey' => $r['skey'], 'kz_id' => $nk, 'status' => $fin ? 'final' : 'invited', 'tok' => substr(bin2hex(random_bytes(12)), 0, 24), 'by_name' => $who, 'inv_uid' => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0, 'created_at' => $now, 'updated_at' => $now));
+		if ($fin) { $nid = (int) $wpdb->insert_id; if (cp_slot_mail($nid, 'final') === true) { $wpdb->update($T, array('fin_mail_at' => $now), array('id' => $nid)); } }
+		$deal = (int) $r['deal_id']; $skey = $r['skey'];
+		$log = 'csere' . ($fin ? ' (véglegesítve)' : '');
 	} elseif ($op === 'send') {
 		/* v2.9.117: meghívó levelek kiküldése (a még el nem küldött meghívásokra) */
 		$ids = array_slice(array_filter(array_map('intval', explode(',', (string) ($_POST['ids'] ?? '')))), 0, 40);
@@ -386,8 +399,8 @@ function cp_slot_for_deal($deal) {
 	if (!cp_slot_db_ok() || !function_exists('cp_kz_t')) { return array(); }
 	global $wpdb;
 	$st = cp_slot_states(); $out = array();
-	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT a.day, a.skey, a.status, k.name, k.kind FROM ' . cp_slot_t() . ' a LEFT JOIN ' . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.status <> 'dropped' ORDER BY a.day, a.skey, FIELD(a.status, 'final', 'accepted', 'invited', 'declined')", (int) $deal), ARRAY_A) as $r) {
-		$out[] = array('d' => $r['day'], 'g' => cp_slot_lbl($r['skey']), 'n' => (string) $r['name'], 'k' => (string) $r['kind'], 'st' => (string) $r['status'], 'sl' => $st[$r['status']] ?? $r['status']);
+	foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT a.id, a.kz_id, a.day, a.skey, a.status, k.name, k.kind FROM ' . cp_slot_t() . ' a LEFT JOIN ' . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.status <> 'dropped' ORDER BY a.day, a.skey, FIELD(a.status, 'final', 'accepted', 'invited', 'declined')", (int) $deal), ARRAY_A) as $r) {
+		$out[] = array('id' => (int) $r['id'], 'kz' => (int) $r['kz_id'], 'sk' => (string) $r['skey'], 'd' => $r['day'], 'g' => cp_slot_lbl($r['skey']), 'n' => (string) $r['name'], 'k' => (string) $r['kind'], 'st' => (string) $r['status'], 'sl' => $st[$r['status']] ?? $r['status']);
 	}
 	return $out;
 }
