@@ -1956,7 +1956,9 @@
 			e.stopPropagation();
 			if (box.querySelector('.ml-tpop')) { box.querySelector('.ml-tpop').remove(); return; }
 			tplMenu(e.currentTarget, tpls, t => {
-				if (!ed.isEmpty() && !window.confirm('A sablon felülírja a levél jelenlegi szövegét. Mehet?')) return;
+				/* v2.9.154: csak akkor kérdez, ha a levélben az aláíráson (és az idézett előzményen) kívül már van saját szöveg */
+				const own = (() => { const t0 = document.createElement('div'); t0.innerHTML = ed.get(); t0.querySelectorAll('.cp-sign, blockquote, .cpq, .gmail_quote').forEach(z => z.remove()); return (t0.textContent || '').replace(/[\s\u00a0\u200b-\u200d]+/g, '') !== '' || !!t0.querySelector('img'); })();
+				if (own && !window.confirm('A sablon felülírja a levél jelenlegi szövegét. Mehet?')) return;
 				if (t.subject) q('[data-subj]').value = t.subject;
 				ed.set(withSig(normFont(t.body || ''))); /* v2.9.131: a sablon betűtípusa / mérete egységes (a levél alapbetűje) */
 				/* v2.9.14: azonnali kitöltés; deal nélkül rákérdez */
