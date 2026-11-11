@@ -218,7 +218,7 @@
 .ml-aip{padding:0 12px 8px;flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;max-height:65%}
 .ml-ai{background:#fff;border:1.5px solid #B9A7EE;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 24px -16px rgba(75,46,131,.5)}
 .ml-aih{display:flex;align-items:center;justify-content:space-between;font-size:13.5px}
-.ml-aiw{display:flex;gap:8px}
+.ml-aiw{display:flex;gap:8px}.ml-ai [hidden]{display:none!important}
 .ml-aiw input{flex:1;height:34px;border:1.5px solid var(--li);border-radius:8px;padding:0 10px;font-size:13px}
 .ml-aiw .cpx-btn{height:34px;font-size:13px;white-space:nowrap}
 .ml-aild{display:flex;align-items:center;gap:8px;color:var(--mu);font-size:13px;padding:6px 0}

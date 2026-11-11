@@ -2168,19 +2168,36 @@
 		const out = host.querySelector('[data-aio]'), wish = host.querySelector('[data-wish]'), gen = host.querySelector('[data-gen]');
 		host.querySelector('[data-aix]').addEventListener('click', () => { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; });
 		const run = async () => {
+			if (!host.isConnected || !host.querySelector('.ml-aiw')) return;
+			host.querySelector('.ml-aiw').hidden = false; { const f = host.querySelector('.ml-aif'); if (f) f.hidden = false; }
 			gen.disabled = true; wish.disabled = true;
 			out.innerHTML = '<div class="ml-aild"><span class="ml-spin"></span>Az AI írja a választ… (általában 10–40 másodperc)</div>';
 			try {
 				const r = await post('cp_ai_draft', { thread: t.id, wish: wish.value.trim() });
-				out.innerHTML = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '') +
+				const notesH = (r.missing.length || r.notes.length ? '<div class="ml-ain">' + (r.missing.length ? '<b>Kitöltendő:</b><ul>' + r.missing.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + (r.notes.length ? '<b>Mire figyelj:</b><ul>' + r.notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>' : '');
+				const dr = { to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 };
+				/* v2.9.175: a kész piszkozat magától a levélíróba kerül, az AI-ablak bezárul; ha van mire figyelni, csak egy kis sáv marad belőle */
+				const takeIt = () => {
+					let ok = true;
+					try { if (take) ok = take(dr) !== false; else { S.reply = dr; S.view = 'compose'; view(S.main); } } /* v2.9.83: a szálpanel válaszírójába */
+					catch (e) { ok = false; toast('A levélíró nem nyílt meg: ' + e.message, true); }
+					if (!ok) return false;
+					if (!notesH || !take || !host.isConnected) { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; }
+					else {
+						host.querySelector('.ml-aiw').hidden = true; const f = host.querySelector('.ml-aif'); if (f) f.hidden = true;
+						out.innerHTML = notesH + '<div class="ml-aia"><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">A piszkozat lent, a levélíróban van – nézd át, és töltsd ki a jelölt részeket.</small></div>';
+						out.querySelector('[data-again]').addEventListener('click', run);
+					}
+					toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
+					return true;
+				};
+				gen.disabled = false; wish.disabled = false;
+				if (takeIt()) return;
+				/* nem került át (pl. a megkezdett levelet nem akartad lecserélni): előnézet a gombokkal */
+				out.innerHTML = notesH +
 					'<div class="ml-aisub"><small>Tárgy:</small> ' + esc(r.subject) + '</div><div class="ml-aibody ml-mb">' + r.html.replace(/\[KITÖLTENDŐ:([^\]]*)\]/g, '<mark>[KITÖLTENDŐ:$1]</mark>') + '</div>' +
 					'<div class="ml-aia"><button type="button" class="cpx-btn" data-copy title="A Salesmate-be beilleszthető formában">Szöveg másolása</button><button type="button" class="cpx-btn ghost" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
-				out.querySelector('[data-take]').addEventListener('click', () => {
-					const dr = { to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 };
-					if (take) { if (take(dr) === false) return; } else { S.reply = dr; S.view = 'compose'; view(S.main); } /* v2.9.83: a szálpanel válaszírójába */
-					host.hidden = true; host.innerHTML = ''; delete host.dataset.open; /* v2.9.172: az AI-ablak bezárul, látszik a levélíró */
-					toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
-				});
+				out.querySelector('[data-take]').addEventListener('click', takeIt);
 				out.querySelector('[data-again]').addEventListener('click', run);
 				/* a piszkozat vágólapra – formázva (HTML) és sima szövegként is, hogy a Salesmate szerkesztőjébe beilleszthető legyen */
 				out.querySelector('[data-copy]').addEventListener('click', async () => {
