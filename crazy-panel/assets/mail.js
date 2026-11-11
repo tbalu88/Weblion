@@ -488,6 +488,21 @@
 	/* v2.9.194: keresés után a szál a legfelső találatot tartalmazó levél TETEJÉRE áll (nem a levél közepére – ott a később
 	   betöltődő képek elcsúsztatták, és az előző levél alja csíkként kilógott); a pontos szóhoz a fejléc „‹ ›” léptetője visz.
 	   Csak a levélszál listája görget (.ml-thread / gyorsnézet), más elem soha. */
+	/* v2.9.195: ideiglenes diagnosztika – keresés után a szál elrendezéséről csak méreteket küld (szöveget nem) */
+	function hlDiag(rd) {
+		const key = String(S.th) + '|' + String(S.mq || '');
+		if (!S.mq || S.dgKey === key) return; S.dgKey = key;
+		setTimeout(() => {
+			try {
+				const R = e => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.left), Math.round(r.width)]; };
+				const cls = e => (e.tagName + '.' + String(e.className || '').replace(/\s+/g, '.')).slice(0, 60);
+				const sc = []; rd.querySelectorAll('*').forEach(e => { const cs = getComputedStyle(e); if (/(auto|scroll)/.test(cs.overflowY + cs.overflowX) && (e.scrollHeight > e.clientHeight + 2 || e.scrollWidth > e.clientWidth + 2)) sc.push([cls(e), e.scrollHeight, e.clientHeight, e.scrollTop, cs.overflowY, cs.position].concat(R(e))); });
+				let par = rd, chain = []; while (par && par !== document.body) { const cs = getComputedStyle(par); chain.push([cls(par), cs.overflowY, cs.position, par.scrollTop].concat(R(par))); par = par.parentElement; }
+				const msgs = Array.from(rd.querySelectorAll('.ml-msg')).map(m => { const f = m.querySelector('iframe.ml-hf'); let fi = null; if (f) { try { const d = f.contentDocument, de = d.documentElement, cs = d.defaultView.getComputedStyle(de), bs = d.defaultView.getComputedStyle(d.body); fi = [f.clientHeight, de.scrollHeight, d.body.scrollHeight, de.scrollTop, d.body.scrollTop, cs.overflowY, bs.overflowY, bs.height, d.querySelectorAll('mark.cp-hl').length, d.querySelectorAll('details').length, Array.from(d.querySelectorAll('details')).filter(x => x.open).length, f.style.height]; } catch (e) { fi = 'x'; } } return [m.className.slice(0, 40), m.querySelectorAll('mark.cp-hl').length].concat(R(m)).concat([fi]); });
+				post('cp_diag', { d: JSON.stringify({ v: (window.CPX || {}).ver || '', w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent.slice(0, 120), hv: typeof HV !== 'undefined' ? HV : '', sc: sc.slice(0, 20), chain: chain.slice(0, 12), msgs: msgs.slice(0, 40), hl: S.hl ? { user: S.hl.user, card: !!S.hl.card } : null }) }).catch(() => {});
+			} catch (e) { /* diagnosztika – nem baj */ }
+		}, 4000);
+	}
 	const hlSc = el => el && el.closest ? el.closest('.ml-thread, .mlp-b') : null;
 	function hlScroll(el, mark) {
 		if (!S.mq || !el || !mark || !el.isConnected) return;
@@ -1359,6 +1374,7 @@
 			xlab(); if (open) loadHtml(rd);
 		});
 		loadHtml(rd);
+		if (S.mq) hlDiag(rd);
 		{ const nav = rd.querySelector('[data-hlnav]'), th = rd.querySelector('.ml-thread'); if (nav && th) { nav._i = -1; nav.querySelector('[data-hlp]').addEventListener('click', () => hlJump(th, nav, -1)); nav.querySelector('[data-hln]').addEventListener('click', () => hlJump(th, nav, 1)); } }
 		/* v2.9.191: kiemelés a szöveges nézetben és a tárgyban; görgetés az első találatra */
 		{ const hre = hlRe(true); if (hre) { let first = null; rd.querySelectorAll('.ml-subjh h3, .ml-msg:not(.cl) .ml-mb').forEach(b => { if (b.querySelector('iframe')) return; if (hlMark(b, hre) && !first && b.classList.contains('ml-mb')) first = b; }); if (first) hlScroll(first, first.querySelector('mark.cp-hl')); else hlNavUpd(rd.querySelector('.ml-thread')); } }
