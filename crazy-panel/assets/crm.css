@@ -218,6 +218,7 @@ a.d3-who:hover{background:#F6F3EE}
 .d3-deals,.d3-ths,.d3-team{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
 .d3-deals li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #F2EFEA;padding:5px 0}
 .d3-deals li.cur{opacity:.55}
+.d3-more{margin-top:2px}.d3-more>summary{cursor:pointer;list-style:none;padding:8px 0 4px;font-size:13px;font-weight:600;color:#2F5BD8;border-top:1px solid #F2EFEA}.d3-more>summary::-webkit-details-marker{display:none}.d3-more>summary::before{content:"▸ "}.d3-more[open]>summary::before{content:"▾ "}.d3-more .d3-deals{margin-top:0}
 .d3-deals li>button,.d3-ths button{border:0;background:none;text-align:left;cursor:pointer;padding:0;min-width:0;font:13px Inter,sans-serif;color:#141C33}
 .d3-deals b,.d3-ths b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2F5BD8}
 .d3-deals small,.d3-ths small{display:block;color:#656973;font-size:11.5px}

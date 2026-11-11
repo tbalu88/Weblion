@@ -1182,8 +1182,12 @@
 	const openTh = (id, el) => { if (window.CPMail && window.CPMail.peek) window.CPMail.peek(id, { from: el, subj: el && el.dataset.ths ? el.dataset.ths : '', full: goMail }); else goMail(id); };
 	function dealRows(list, curId, back) {
 		if (!list.length) return '<p class="cpx-muted">Nincs.</p>';
-		return '<ul class="d3-deals">' + list.map(o => '<li class="' + (o.id === curId ? 'cur' : '') + '"><button type="button" data-open="' + o.id + '"><b>' + esc(o.title || 'Deal #' + o.id) + '</b><small>' +
-			esc([o.event_d ? huD(o.event_d) : '', o.stage].filter(Boolean).join(' · ')) + '</small></button><span>' + stBadge(o) + '<em>' + esc(o.value != null ? money(o.value, o.currency) : '') + '</em></span></li>').join('') + '</ul>';
+		const li = o => '<li class="' + (o.id === curId ? 'cur' : '') + '"><button type="button" data-open="' + o.id + '"><b>' + esc(o.title || 'Deal #' + o.id) + '</b><small>' +
+			esc([o.event_d ? huD(o.event_d) : '', o.stage].filter(Boolean).join(' · ')) + '</small></button><span>' + stBadge(o) + '<em>' + esc(o.value != null ? money(o.value, o.currency) : '') + '</em></span></li>';
+		/* v2.9.172: hosszú listánál a legutóbbi 10 látszik, a többi lenyitható */
+		const N = 10;
+		return '<ul class="d3-deals">' + list.slice(0, N).map(li).join('') + '</ul>' +
+			(list.length > N ? '<details class="d3-more"><summary>További ' + (list.length - N) + ' deal</summary><ul class="d3-deals">' + list.slice(N).map(li).join('') + '</ul></details>' : '');
 	}
 	function statLine(s) {
 		if (!s || !s.n) return '';

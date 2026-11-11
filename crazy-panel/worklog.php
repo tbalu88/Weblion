@@ -217,7 +217,7 @@ function cp_wl_ajax_save() {
 	if (array_key_exists('kinds', $f)) { $set['kinds'] = mb_substr(implode('|', array_map(function ($x) use ($s) { return str_replace('|', '/', $s($x, 40)); }, array_slice((array) $f['kinds'], 0, 10))), 0, 255); }
 	if (array_key_exists('place', $f)) { $set['place'] = $s($f['place'], 255); }
 	if (array_key_exists('deals', $f)) { $set['deals'] = implode(',', array_slice(array_unique(array_filter(array_map('intval', (array) $f['deals']))), 0, 20)); }
-	if (array_key_exists('tasks', $f)) { $set['tasks'] = wp_json_encode(array_values(array_slice(array_filter(array_map(function ($t) use ($s) { return is_array($t) && trim((string) ($t['t'] ?? '')) !== '' ? array('t' => $s($t['t'], 300), 'done' => !empty($t['done'])) : null; }, (array) $f['tasks'])), 0, 60)), JSON_UNESCAPED_UNICODE); }
+	if (array_key_exists('tasks', $f)) { $set['tasks'] = wp_json_encode(array_values(array_slice(array_filter(array_map(function ($t) use ($s) { return is_array($t) && trim((string) ($t['t'] ?? '')) !== '' ? array('t' => $s($t['t'], 300), 'done' => !empty($t['done']), 'min' => max(0, min(1440, (int) ($t['min'] ?? 0))), 'tag' => in_array((string) ($t['tag'] ?? ''), cp_wl_tags(), true) ? (string) $t['tag'] : '') : null; }, (array) $f['tasks'])), 0, 60)), JSON_UNESCAPED_UNICODE); }
 	if (array_key_exists('notes', $f)) { $set['notes'] = $ta($f['notes'], 8000); }
 	if (array_key_exists('vehicle', $f)) { $set['vehicle'] = $s($f['vehicle'], 100); }
 	foreach (array('km_start', 'km_end', 'km') as $k) { if (array_key_exists($k, $f)) { $set[$k] = $int($f[$k]); } }
@@ -247,6 +247,10 @@ function cp_wl_notify_admins($text, $day) {
 
 /* állapot: beküldés (saját), jóváhagyás / visszanyitás (admin, nem a sajátját) */
 add_action('wp_ajax_nopriv_cp_wl_status', 'cp_wl_ajax_status'); add_action('wp_ajax_cp_wl_status', 'cp_wl_ajax_status');
+/* v2.9.172: az elvégzett feladatok kötelező címkéi (és időtartam percben) */
+function cp_wl_tags() { return array('Raktár', 'Rendezvény', 'Office', 'Egyéb'); }
+function cp_wl_task_meta($t) { $m = (int) ($t['min'] ?? 0); $o = array(); if ($m > 0) { $o[] = ($m >= 60 ? intdiv($m, 60) . ' ó' : '') . ($m % 60 ? ($m >= 60 ? ' ' : '') . ($m % 60) . ' p' : ''); } if (!empty($t['tag'])) { $o[] = (string) $t['tag']; } return $o ? ' (' . implode(' · ', $o) . ')' : ''; }
+
 function cp_wl_ajax_status() {
 	cp_wl_auth();
 	global $wpdb;
@@ -256,6 +260,7 @@ function cp_wl_ajax_status() {
 	if ($to === 'submitted') {
 		if ($uid !== $me) { cp_el_err('Csak a saját napodat zárhatod le.'); }
 		if ($e['status'] === 'approved') { cp_el_err('Már jóvá van hagyva.'); }
+		foreach ((json_decode((string) $e['tasks'], true) ?: array()) as $t) { if (!empty($t['done']) && (empty($t['min']) || empty($t['tag']))) { cp_el_err('Minden elvégzett feladatnál add meg, mennyi idő ment el rá, és a címkéjét.'); } }
 		/* v2.9.58: már beküldött nap újraküldése (dupla kattintás / két fül) nem küld második értesítést és Pumble-riportot;
 		 * a feltételes UPDATE miatt két egyidejű kérésből is csak az egyik „nyer” */
 		if ($e['status'] === 'submitted') { wp_send_json_success(array('e' => cp_wl_out($e))); }
@@ -439,7 +444,7 @@ function cp_wl_report_text($uid, $day) {
 	if ($e['tasks']) {
 		$done = count(array_filter($e['tasks'], function ($t) { return !empty($t['done']); }));
 		$L[] = '✅ Feladatok: ' . $done . '/' . count($e['tasks']) . ' kész';
-		foreach (array_slice($e['tasks'], 0, 12) as $t) { $L[] = '   ' . (!empty($t['done']) ? '☑' : '☐') . ' ' . mb_substr((string) $t['t'], 0, 120); }
+		foreach (array_slice($e['tasks'], 0, 12) as $t) { $L[] = '   ' . (!empty($t['done']) ? '☑' : '☐') . ' ' . mb_substr((string) $t['t'], 0, 120) . cp_wl_task_meta($t); }
 	}
 	if (trim((string) $e['notes']) !== '') { $L[] = '📝 ' . mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $e['notes'])), 0, 400); }
 	if ($e['km'] !== null || $e['vehicle'] !== '') { $L[] = '🚐 ' . trim(($e['vehicle'] ? $e['vehicle'] . ' · ' : '') . ($e['km'] !== null ? $e['km'] . ' km' : ''), ' ·'); }

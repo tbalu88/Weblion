@@ -1034,8 +1034,8 @@
 	function icOpen(box, rd, th, kind, draft, draftId) {
 		if (IR.el && IR.el.isConnected && IR.th === th) {
 			/* ugyanaz a fajta már nyitva: csak odaugrik; másik fajtánál a megkezdett szöveg előbb a Piszkozatok közé kerül */
-			if (IR.kind === kind && kind !== 'draft') { icFocus(); return; }
-			if (IR.ch && IR.ch.changed && IR.ch.changed() && !window.confirm('Lecseréled a megkezdett levelet? (A mostani a Piszkozatok közé kerül.)')) { icFocus(); return; }
+			if (IR.kind === kind && kind !== 'draft' && !draft) { icFocus(); return; } /* v2.9.172: AI-piszkozat átvételekor a nyitott (üres) válaszíró tartalma cserélődik */
+			if (IR.ch && IR.ch.changed && IR.ch.changed() && !window.confirm('Lecseréled a megkezdett levelet? (A mostani a Piszkozatok közé kerül.)')) { icFocus(); return false; }
 		}
 		const ret = IR.el && IR.el.contains(document.activeElement) ? IR.ret : document.activeElement;
 		/* csere: a mobil előzménylépés megmarad (nincs vissza-, majd újralépés) */
@@ -2161,7 +2161,8 @@
 					'<div class="ml-aia"><button type="button" class="cpx-btn" data-copy title="A Salesmate-be beilleszthető formában">Szöveg másolása</button><button type="button" class="cpx-btn ghost" data-take>Átvétel a levélíróba</button><button type="button" class="cpx-btn ghost" data-again>Újraírás</button><small class="cpx-muted">Új kérést fent írhatsz, majd Újraírás.</small></div>';
 				out.querySelector('[data-take]').addEventListener('click', () => {
 					const dr = { to: r.to ? [r.to] : [], subject: r.subject, body: r.html, thread: t.id > 0 ? t.id : 0, tsubj: t.subj, deal: t.deal || 0 };
-					if (take) take(dr); else { S.reply = dr; S.view = 'compose'; view(S.main); } /* v2.9.83: a szálpanel válaszírójába */
+					if (take) { if (take(dr) === false) return; } else { S.reply = dr; S.view = 'compose'; view(S.main); } /* v2.9.83: a szálpanel válaszírójába */
+					host.hidden = true; host.innerHTML = ''; delete host.dataset.open; /* v2.9.172: az AI-ablak bezárul, látszik a levélíró */
 					toast('A piszkozat a levélíróban – nézd át, és töltsd ki a jelölt részeket.');
 				});
 				out.querySelector('[data-again]').addEventListener('click', run);
