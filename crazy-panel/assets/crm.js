@@ -1258,7 +1258,7 @@
 	const CLIP_S = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>';
 	const tcD = (s, yr) => { const p = s.slice(0, 10).split('-').map(Number); return (yr || p[0] !== new Date().getFullYear() ? p[0] + '. ' : '') + HU_MS[p[1] - 1] + ' ' + p[2] + '.'; };
 	const tcSpan = (f, l) => { if (!l) return ''; if (!f || f.slice(0, 10) === l.slice(0, 10)) return tcD(l); const yr = f.slice(0, 4) !== l.slice(0, 4); return tcD(f, yr) + ' – ' + tcD(l, yr); };
-	const TG = { open: new Set(), cache: new Map() }; /* kinyitott csoportok és a betöltött korábbi levelek (szűrőváltás / újrarajzolás után is) */
+	const TG = { open: new Set(), cache: new Map(), notes: new Map() }; /* kinyitott csoportok és a betöltött korábbi levelek (szűrőváltás / újrarajzolás után is) */
 	const tmItem = (t, g) => '<div class="d3-ti d3-tm ' + (g.dir === 'out' ? 'out' : 'in') + '" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" role="button" tabindex="0"><i>' + (g.dir === 'out' ? I.mail_out : I.mail_in) + '</i><div><div class="d3-tt"><b>' + (g.dir === 'out' ? 'Levél tőlünk' : 'Levél érkezett') + '</b> <span class="d3-tmf">– ' + esc(g.from || '?') + '</span>' +
 		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
@@ -1273,14 +1273,16 @@
 	}
 	function threadGroup(t, inDeal) { /* v2.9.155: inDeal = a deal idővonalán (csatolás / leválasztás gombokkal) */
 		const n = t.n != null ? t.n : t.cnt, lm = t.lm || [], rest = Math.max(0, n - lm.length), dir = t.ld === 'out' ? 'out' : t.ld === 'in' ? 'in' : '', closed = t.st === 'closed';
-		const key = t.id + '|' + (t.la || t.at), cached = TG.cache.get(t.id), open = rest > 0 && TG.open.has(t.id) && cached && cached.key === key;
+		const key = t.id + '|' + (t.la || t.at) + '|' + (t._notes || []).length, cached = TG.cache.get(t.id), open = rest > 0 && TG.open.has(t.id) && cached && cached.key === key;
 		const chips = (inDeal && !t.deal ? '<span class="d3-q d3-tcau" title="Nincs a dealhez csatolva – a kontakt e-mail-címe alapján látszik itt. A lánc ikonnal csatolhatod.">kontakt alapján</span> ' : '') + '<span class="d3-q">' + n + ' levél</span>' + (t.na ? ' <span class="d3-q d3-tca" title="' + Number(t.na) + ' melléklet a szálban">' + CLIP_S + Number(t.na) + '</span>' : '') +
 			(dir === 'out' ? ' <span class="d3-q d3-tcwo">Ügyfél válaszára vár</span>' : dir === 'in' ? ' <span class="d3-q' + (closed ? '' : ' warn') + '">Válaszra vár</span>' : '') + (closed ? ' <span class="d3-q d3-tccl">lezárva</span>' : '');
 		return '<section class="d3-tg' + (closed ? ' closed' : '') + '" data-tg="' + t.id + '" data-tgk="' + esc(key) + '">' +
 			'<div class="d3-tgr">' + '<button type="button" class="d3-tgh" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" title="A szál megnyitása"><b class="d3-tgs">' + esc(t.subj || '(nincs tárgy)') + '</b> <span class="d3-tgm">' + chips + ' <small>' + esc(tcSpan(t.f, t.la || t.at)) + '</small></span></button>' +
 			(inDeal && R.edit && !t.deal ? '<button type="button" class="d3-tgdx d3-tgat" data-tgatt="' + t.id + '" aria-label="Levélszál csatolása ehhez a dealhez"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>' : '') +
 			(inDeal && R.edit ? '<button type="button" class="d3-tgdx" data-tgdet="' + t.id + '" data-auto="' + (t.deal ? '' : '1') + '" aria-label="Levélszál leválasztása erről a dealről"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5l-1.8 1.8a3.2 3.2 0 0 1-4.5-4.5l2.6-2.6a3.2 3.2 0 0 1 4 .4"/><path d="M14.5 9.5l1.8-1.8a3.2 3.2 0 0 1 4.5 4.5l-2.6 2.6a3.2 3.2 0 0 1-4-.4"/><path d="M8 3.5v2.2M3.5 8h2.2M16 20.5v-2.2M20.5 16h-2.2"/></svg></button>' : '') + '</div>' + /* v2.9.152 */
-			'<div class="d3-tgl">' + (() => { const ns = (t._notes || []).slice().sort((a, b) => (a.at < b.at ? 1 : -1)); if (!ns.length) return lm.map(g => tmItem(t, g)).join(''); const oldest = lm.length ? lm[lm.length - 1].at || '' : ''; const mix = lm.map(g => ({ at: g.at || '', h: tmItem(t, g) })).concat(ns.filter(n => n.at >= oldest).map(n => ({ at: n.at, h: tnItem(n) }))).sort((a, b) => (a.at < b.at ? 1 : -1)); return mix.map(x => x.h).join('') + ns.filter(n => n.at < oldest).map(tnItem).join(''); })() +
+			'<div class="d3-tgl">' + (() => { const ns = (t._notes || []).slice().sort((a, b) => (a.at < b.at ? 1 : -1)); if (!ns.length) return lm.map(g => tmItem(t, g)).join(''); const oldest = lm.length ? lm[lm.length - 1].at || '' : ''; const mix = lm.map(g => ({ at: g.at || '', h: tmItem(t, g) })).concat(ns.filter(n => n.at >= oldest).map(n => ({ at: n.at, h: tnItem(n) }))).sort((a, b) => (a.at < b.at ? 1 : -1)); const older = ns.filter(n => n.at < oldest);
+				/* v2.9.187: a látható levelek előtti jegyzetek a „korábbi levelek” közé kerülnek (kinyitáskor időrendben); ha nincs több levél, a végén */
+				if (rest && older.length) { TG.notes.set(t.id, older); return mix.map(x => x.h).join(''); } TG.notes.delete(t.id); return mix.map(x => x.h).join('') + older.map(tnItem).join(''); })() +
 			(rest ? '<button type="button" class="d3-tgx" data-tgx="' + rest + '" data-skip="' + lm.length + '" aria-expanded="' + !!open + '">' + (open ? 'Korábbi levelek elrejtése' : tgMoreTxt(rest)) + '</button><div class="d3-tgo" data-tgo' + (open ? '>' + cached.html : ' hidden>') + '</div>' : '') +
 			'</div></section>';
 	}
@@ -1301,7 +1303,8 @@
 			try {
 				const r = await post('cp_crm_thread_msgs', { th: id, skip: b.dataset.skip });
 				const t = { id: id, subj: g.querySelector('.d3-tgh').dataset.ths };
-				const html = (r.msgs || []).map(m => tmItem(t, m)).join('') + (r.more ? '<p class="d3-tgn">További ' + Number(r.more) + ' levél nem fért ide – a teljes szál a gyorsnézetben (a tárgyra kattintva).</p>' : '') + (!(r.msgs || []).length ? '<p class="d3-tgn">Nincs több megjeleníthető levél.</p>' : '') +
+				const ons = TG.notes.get(id) || [], rm = r.msgs || [], low = r.more && rm.length ? rm[rm.length - 1].at || '' : '';
+				const html = rm.map(m => ({ at: m.at || '', h: tmItem(t, m) })).concat(ons.filter(n => !low || n.at >= low).map(n => ({ at: n.at, h: tnItem(n) }))).sort((a, b) => (a.at < b.at ? 1 : -1)).map(z => z.h).join('') + (r.more ? '<p class="d3-tgn">További ' + Number(r.more) + ' levél nem fért ide – a teljes szál a gyorsnézetben (a tárgyra kattintva).</p>' : '') + (!(r.msgs || []).length ? '<p class="d3-tgn">Nincs több megjeleníthető levél.</p>' : '') +
 					/* hosszú listánál alul is van elrejtés (a fókusz a felső gombra ugrik, így a csoport eleje látszik) */
 					((r.msgs || []).length > 4 ? '<button type="button" class="d3-tgx" data-tgc>Korábbi levelek elrejtése</button>' : '');
 				TG.cache.set(id, { key: g.dataset.tgk, html: html });
