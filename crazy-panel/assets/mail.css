@@ -1015,3 +1015,4 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-rac button small{display:block;color:#656973;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ml-rac button.on,.ml-rac button:hover{background:#F2EFEA}
 @media (max-width:760px){.ml-rac{position:fixed;left:8px;right:8px;top:auto;margin-top:4px;max-height:40vh}.ml-rac button{padding:11px 12px;font-size:16px}}
+.ml-mclip{display:inline-flex;align-items:center;gap:2px;margin-right:8px;color:#3A3F4B;font-weight:600;vertical-align:middle}.ml-mclip .ml-ni{width:14px;height:14px;flex:none}
