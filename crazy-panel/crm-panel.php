@@ -143,9 +143,12 @@ function cp_crm_xcols($raw) {
    · Szerződés aláírva, Rendezvény felkészül: nincs · Rendezvény lement: a rendezvény (utolsó napja) után 2 munkanappal.
    Az elvesztett deal nem rohad. A szakasz kezdete: az utolsó szakaszváltás a panel történetében, ennek hiányában a létrehozás. */
 /* v2.9.123: a legutóbbi saját kommunikáció a deallel – kimenő levél (a deal levélszálaiban) vagy elvégzett tevékenység (hívás, teendő) */
+/* v2.9.161: a Salesmate-ből örökölt, a fióktulajdonos nevén lévő „Crazyphoto aktivitás” tevékenységek a panelben nem látszanak
+   (a felhasználó döntése, 2026-11-11) – a Salesmate-ben megmaradnak */
+function cp_crm_act_hide_sql($a = '') { return " AND {$a}type NOT IN ('Crazyphoto aktivitás')"; }
 function cp_crm_lastout_sql() {
 	/* v2.9.123: + deal-jegyzet és levélszál-jegyzet (a hívást nem tudjuk naplózni, a jegyzet jelzi, hogy foglalkoztak vele) */
-	$q = array("(SELECT MAX(a.completed_at) FROM " . cp_crm_t('activities') . " a WHERE a.related_id = d.id AND a.completed = 1 AND a.deleted_at IS NULL)");
+	$q = array("(SELECT MAX(a.completed_at) FROM " . cp_crm_t('activities') . " a WHERE a.related_id = d.id AND a.completed = 1 AND a.deleted_at IS NULL" . cp_crm_act_hide_sql('a.') . ")");
 	if (function_exists('cp_dact_t')) { $q[] = "(SELECT MAX(n.created_at) FROM " . cp_dact_t() . " n WHERE n.deal_id = d.id AND n.deleted_at IS NULL AND n.src <> 'smi')"; }
 	if (function_exists('cp_mail_t') && function_exists('cp_mail_db_ok') && cp_mail_db_ok()) {
 		$q[] = "(SELECT MAX(m.sent_at) FROM " . cp_mail_t('messages') . " m JOIN " . cp_mail_t('threads') . " t ON t.id = m.thread_id WHERE t.deal_id = d.id AND m.dir = 'out')";
@@ -260,7 +263,7 @@ function cp_crm_board_data($a) {
 	if ($out) {
 		$ids = implode(',', array_map(function ($x) { return (int) $x['id']; }, $out));
 		$na = array();
-		foreach ((array) $wpdb->get_results('SELECT related_id rid, MIN(due_at) due FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND (completed IS NULL OR completed = 0) AND (related_module = '4' OR LOWER(related_module) LIKE 'deal%') AND related_id IN ($ids) GROUP BY related_id", ARRAY_A) as $x) { $na[(int) $x['rid']] = cp_crm_local($x['due']); }
+		foreach ((array) $wpdb->get_results('SELECT related_id rid, MIN(due_at) due FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL" . cp_crm_act_hide_sql() . " AND (completed IS NULL OR completed = 0) AND (related_module = '4' OR LOWER(related_module) LIKE 'deal%') AND related_id IN ($ids) GROUP BY related_id", ARRAY_A) as $x) { $na[(int) $x['rid']] = cp_crm_local($x['due']); }
 		foreach ($out as &$x) { $x['na'] = isset($na[$x['id']]) ? $na[$x['id']] : ''; }
 		unset($x);
 	}
@@ -317,7 +320,7 @@ function cp_crm_deal_data($id) {
 	/* a Salesmate a modult számmal adja (4 = deal, 1 = kontakt), régebben névvel */
 	$aw = $wpdb->prepare("(related_id = %d AND (related_module = '4' OR LOWER(related_module) LIKE 'deal%%'))", $id);
 	if ($deal['contact_id']) { $aw .= $wpdb->prepare(" OR (related_id = %d AND (related_module = '1' OR LOWER(related_module) LIKE 'contact%%'))", $deal['contact_id']); }
-	$acts = $wpdb->get_results('SELECT id, title, type, owner_id, due_at, duration, completed, completed_at, description, related_id, related_module FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL AND ($aw) ORDER BY due_at DESC LIMIT 50", ARRAY_A);
+	$acts = $wpdb->get_results('SELECT id, title, type, owner_id, due_at, duration, completed, completed_at, description, related_id, related_module FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL" . cp_crm_act_hide_sql() . " AND ($aw) ORDER BY due_at DESC LIMIT 50", ARRAY_A);
 	foreach ($acts as &$a) { $a['due_at'] = cp_crm_local($a['due_at']); $a['completed_at'] = cp_crm_local($a['completed_at']); $a['owner'] = cp_crm_user_name($a['owner_id']); }
 	unset($a);
 	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
