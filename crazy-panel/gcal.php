@@ -347,10 +347,7 @@ function cp_gcal_pen_sync($dry = false) {
 		   továbblépett vagy azt kihagyó deal soha nem került naptárba); a 3 órás várakozás csak a „Szerződés kiküldve” szakaszra vonatkozik */
 		$okC = array($PEN, 'Szerződés aláírva', 'Rendezvény felkészül', 'Rendezvény lement (G&R)', 'Pénzre várunk');
 		if (isset($has[$id]) || !in_array($d['stage'], $okC, true) || $d['status'] !== 'Open' || $d['event_d'] < $from || isset($made[$id])) { continue; }
-		if ($d['stage'] === $PEN) {
-			$since = (string) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage' AND new_val = %s", $id, $PEN));
-			if ($since !== '' && strtotime($since . ' UTC') > time() - 3 * HOUR_IN_SECONDS) { $out['wait'][] = $id; continue; }
-		}
+		/* v2.9.168: a „Szerződés kiküldve” utáni 3 órás várakozás megszűnt (a felhasználó döntése, 2026-11-11) – azonnal a naptárba */
 		$out['create'][] = $id;
 		if ($dry || $out['err']) { continue; }
 		$p = cp_gcal_plan($id); if (!$p || $p['date'] === '') { continue; }
@@ -420,6 +417,12 @@ function cp_gcal_pen_sync($dry = false) {
 	return $out;
 }
 add_action('cp_crm_tick', function () { cp_gcal_pen_sync(false); }, 32);
+/* v2.9.168: szakaszváltás / deal-mentés után a naptár-szinkron azonnal (pár mp múlva) lefut, nem kell kivárni az 5 perces kört */
+add_action('cp_gcal_now', function () { cp_gcal_pen_sync(false); });
+foreach (array('wp_ajax_cp_crm_move', 'wp_ajax_cp_crm_save') as $cp_gh) {
+	add_action($cp_gh, function () { if (function_exists('cp_gcal_ok') && cp_gcal_ok() && !wp_next_scheduled('cp_gcal_now')) { wp_schedule_single_event(time() + 15, 'cp_gcal_now'); } }, 1);
+}
+unset($cp_gh);
 
 /* ------------------------------------------------------------ WordPress-admin: kulcs és naptár */
 add_action('admin_menu', function () { add_options_page('Crazy Google Naptár', 'Crazy Google Naptár', 'manage_options', 'cp-gcal', 'cp_gcal_admin_page'); });
