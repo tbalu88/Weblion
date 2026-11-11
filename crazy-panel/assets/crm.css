@@ -802,3 +802,9 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 /* v2.9.155: csak kontakt alapján látszó levélszál + csatolás */
 .d3-tcau{background:#FFF4D6;color:#7A5300}
 .d3-tgat:hover::after,.d3-tgat:focus-visible::after{content:'Csatolás a dealhez'}
+
+/* v2.9.156: Összkép a jobb oszlop tetején, kompakt */
+.d3-r .d3-c.d3-insc{padding:10px 14px}
+.d3-r .d3-insc h4{margin:0 0 4px;font-size:14px}
+.d3-r .d3-insc .crm-dl{font-size:12.5px;row-gap:2px;column-gap:10px}
+.d3-insc dd small{font-size:11px}

@@ -1709,12 +1709,13 @@
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok */
-			'<aside class="d3-r">' + portalCard(x) + (window.CPBill ? window.CPBill.slot() : '') + (window.CPContract ? window.CPContract.slot() : '') + '<section class="d3-c"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
+			'<aside class="d3-r">' + /* v2.9.156: az Összkép legfelül, kompakt */ '<section class="d3-c d3-insc"><h4>Összkép</h4><dl class="crm-dl d3-ins">' +
 				(toEv != null ? '<dt>Rendezvényig</dt><dd>' + (toEv > 0 ? '<b>' + toEv + ' nap</b>' : toEv === 0 ? '<b>ma</b>' : 'lezajlott (' + (-toEv) + ' napja)') + '</dd>' : '') +
 				(x.stage_since ? '<dt>Ebben a szakaszban</dt><dd>' + esc(agoTxt(x.stage_since)) + ' óta</dd>' : '') +
 				(d.last_comm_at ? '<dt>Utolsó kommunikáció</dt><dd>' + esc(huDT(d.last_comm_at)) + (d.last_comm_mode ? ' · ' + esc(d.last_comm_mode) : '') + '</dd>' : '') +
 				(lastIn ? '<dt>Ügyfél utoljára írt</dt><dd>' + esc(agoTxt(lastIn.at)) + '</dd>' : '') + (lastOut ? '<dt>Mi utoljára írtunk</dt><dd>' + esc(agoTxt(lastOut.at)) + '</dd>' : '') +
 				(() => { const m = d.rot ? Math.round((Date.now() - new Date(d.rot.replace(' ', 'T')).getTime()) / 60000) : 0; return m > 0 ? '<dt>Rohad</dt><dd>' + rotHtml(d, m) + ' <small>' + esc(rotTxt(m)) + ' lejárt a határidő (' + esc(d.rot) + ')</small></dd>' : (d.rot ? '<dt>Rohad</dt><dd class="cpx-muted">' + esc(d.rot) + '-tól, ha addig nem lép tovább</dd>' : ''); })() + '</dl></section>' +
+			portalCard(x) + (window.CPBill ? window.CPBill.slot() : '') + (window.CPContract ? window.CPContract.slot() : '') +
 			'<section class="d3-c"><h4>Korábbi munkák – kontakt</h4>' + statLine(x.ct_stats) + (otherCt.length ? dealRows(otherCt, d.id) : '<p class="cpx-muted">' + (c ? 'Ez az első deal ezzel a kontakttal.' : 'Nincs kontakt.') + '</p>') + '</section>' +
 			(co ? '<section class="d3-c"><h4>Korábbi munkák – ' + esc(co.name) + '</h4>' + statLine(x.co_stats) + (otherCo.length ? dealRows(otherCo, d.id) : '<p class="cpx-muted">A cégnek nincs más (más kontakthoz tartozó) deal-je.</p>') + '</section>' : '') +
 			/* v2.9.117: beosztás (Kapacitás → Beosztás) */
