@@ -840,3 +840,13 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-ff button.on{background:#141C33;border-color:#141C33;color:#fff}.d3-ff button.on small{color:#C9CDD6}
 [data-ffv="pdf"] > .d3-fg > li:not([data-fk="pdf"]),[data-ffv="img"] > .d3-fg > li:not([data-fk="img"]),[data-ffv="doc"] > .d3-fg > li:not([data-fk="doc"]),[data-ffv="oth"] > .d3-fg > li:not([data-fk="oth"]){display:none!important}
 [data-ffv]:not([data-ffv="img"]) .d3-sbf{display:none}
+/* v2.9.182: Lomtár */
+.crm-bin>div{width:min(600px,100%)!important}
+.crm-binh{display:flex;align-items:center;justify-content:space-between;gap:10px}.crm-binh h3{margin:0}
+.crm-binx{border:0;background:none;font-size:24px;line-height:1;color:#656973;cursor:pointer;padding:4px 8px;border-radius:8px}.crm-binx:hover{background:#F1EEE9}
+.crm-bin p.cpx-muted{font-size:13px;margin:8px 0 12px}
+.crm-binl{list-style:none;margin:0;padding:0}
+.crm-binl li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #F0ECE6;padding:10px 0}
+.crm-binl li>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.crm-binl b{font-size:14px;overflow-wrap:anywhere}.crm-binl small{color:#656973;font-size:12.5px}
+.crm-binl .cpx-btn{flex:none}

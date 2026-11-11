@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.181');
+define('CP_PANEL_VER', '2.9.182');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3743,6 +3743,7 @@ require_once __DIR__ . '/sudoku.php';
 require_once __DIR__ . '/stat.php';
 require_once __DIR__ . '/crm.php';
 require_once __DIR__ . '/crm-panel.php';
+require_once __DIR__ . '/bin.php'; /* v2.9.182: Lomtár (törölt deal 30 napig visszaállítható) */
 require_once __DIR__ . '/crm-source.php';
 require_once __DIR__ . '/mday.php'; /* v2.9.70: többnapos rendezvény (napok listája) */
 require_once __DIR__ . '/panel-users.php';

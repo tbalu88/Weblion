@@ -17,6 +17,16 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+/* v2.9.182: a panel-felhasználók (kollégák) belépési címei és a WordPress admin címe */
+function cp_dl_team() {
+	static $t = null;
+	if ($t !== null) { return $t; }
+	$t = array();
+	if (function_exists('cp_pu_data')) { foreach ((array) (cp_pu_data()['list'] ?? array()) as $u) { $e = strtolower(trim((string) ($u['e'] ?? ''))); if ($e !== '') { $t[$e] = 1; } } }
+	$a = strtolower(trim((string) get_option('admin_email'))); if ($a !== '') { $t[$a] = 1; }
+	return $t;
+}
+
 /* ------------------------------------------------------------ tárgy-elemzés */
 
 /* v2.9.73: a deal-jel ([#123]) – több esetén az utolsó */
@@ -119,13 +129,16 @@ function cp_dl_ctx(array $ths) {
 			$ctx[$r['kind'] === 'deal' ? 'manual' : 'smauth'][(int) $r['thread_id']] = 1;
 		}
 	}
+	/* v2.9.182: a kollégák saját (pl. gmail-es) címe sem ügyfélcím – különben a kolléga nevére felvett teszt-deal minden
+	   olyan levélszálat magához köt, amelyben a kolléga címe szerepel (pl. másolatként) */
+	$team = cp_dl_team();
 	/* a szálak résztvevői sorrendben: az új levél partnere, a szál kontaktja, a levelek címei */
 	$emails = array(); $smids = array(); $toks = array(); $curs = array();
 	foreach ($ths as $i => $t) {
 		$l = array();
 		foreach (array_merge(array((string) ($t['first'] ?? ''), (string) ($t['contact_email'] ?? '')), (array) ($t['parts'] ?? array()), $ctx['parts'][(int) ($t['id'] ?? 0)] ?? array()) as $e) {
 			$e = strtolower(trim($e));
-			if ($e !== '' && strpos($e, '@') !== false && !cp_imp_ours($e) && !in_array($e, $l, true)) { $l[] = $e; }
+			if ($e !== '' && strpos($e, '@') !== false && !cp_imp_ours($e) && !isset($team[$e]) && !in_array($e, $l, true)) { $l[] = $e; }
 		}
 		$ths[$i]['_parts'] = array_slice($l, 0, 15);
 		foreach ($ths[$i]['_parts'] as $e) { $emails[$e] = 1; }

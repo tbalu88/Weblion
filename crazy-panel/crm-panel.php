@@ -486,12 +486,13 @@ function cp_crm_ajax_delete() {
 	$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 	if ($id <= 0 || (isset($_POST['ok']) ? (string) wp_unslash($_POST['ok']) : '') !== 'TÖRLÉS') { cp_el_err('Hibás kérés.'); }
 	$plan = cp_crm_del_plan($id); /* v2.9.19: a deallel együtt törlendők (a Salesmate-törlés előtt, amíg az adatok megvannak) */
+	if (function_exists('cp_bin_put')) { cp_bin_put($id, $plan); } /* v2.9.182: Lomtár – 30 napig visszaállítható */
 	$res = cp_sm_request('DELETE', '/apis/deal/v4/' . $id);
-	if (is_wp_error($res)) { cp_el_err($res->get_error_message(), 502); }
+	if (is_wp_error($res)) { if (function_exists('cp_bin_drop')) { cp_bin_drop($id); } cp_el_err($res->get_error_message(), 502); }
 	$chk = cp_sm_get_deal($id);
 	/* v2.1.2: a Salesmate a törölt deal-t „isDeleted / deletedAt” jelöléssel még visszaadja */
 	$gone = is_wp_error($chk) || empty($chk) || !cp_panel_get($chk, 'id') || !empty($chk['isDeleted']) || !empty($chk['deletedAt']);
-	if (!$gone) { cp_el_err('A Salesmate nem törölte a dealt.', 502); }
+	if (!$gone) { if (function_exists('cp_bin_drop')) { cp_bin_drop($id); } cp_el_err('A Salesmate nem törölte a dealt.', 502); }
 	global $wpdb;
 	$wpdb->update(cp_crm_t('deals'), array('deleted_at' => gmdate('Y-m-d H:i:s')), array('id' => $id));
 	cp_crm_rev_bump();

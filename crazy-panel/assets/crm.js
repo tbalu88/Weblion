@@ -210,8 +210,8 @@
 			if (S.mode === 'board') f += '<span class="crm-seg crm-dens" role="group" aria-label="Kártyák"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '" aria-pressed="' + !S.dense + '" title="Részletes kártyák" aria-label="Részletes kártyák">' + IC.cards + '</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '" aria-pressed="' + S.dense + '" title="Kompakt kártyák" aria-label="Kompakt kártyák">' + IC.dense + '</button></span>';
 		}
 		const inf = '<span class="crm-info" tabindex="0" role="note" aria-label="' + esc(info) + '" data-tip="' + esc(info) + '">' + IC.info + '</span>';
-		if (MOBH && S.mode !== 'leads') return '<div class="crm-bar crm-mbar">' + seg + f + '</div>';
-		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + '</div>' + inf + '</div><div class="crm-bar">' + f + '</div>';
+		if (MOBH && S.mode !== 'leads') return '<div class="crm-bar crm-mbar">' + seg + f + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑 Lomtár</button>' : '') + '</div>';
+		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑 Lomtár</button>' : '') + '</div>' + inf + '</div><div class="crm-bar">' + f + '</div>';
 	}
 
 	/* ------------------------------------------------------------ v2.9.53: összetett szűrő (mint a Salesmate „View Settings → Filter”) */
@@ -383,6 +383,7 @@
 		main.querySelectorAll('[data-dense]').forEach(b => b.addEventListener('click', () => { S.dense = b.dataset.dense === '1'; main.querySelectorAll('[data-dense]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); save(); redrawBoard(); }));
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', newDeal);
+		const bnb = main.querySelector('[data-bin]'); if (bnb) bnb.addEventListener('click', openBin);
 		const cb = main.querySelector('[data-cols]');
 		if (cb) cb.addEventListener('click', e => { e.stopPropagation(); colPick(cb); });
 		const wb = main.querySelector('[data-who]');
@@ -767,7 +768,7 @@
 			});
 		}
 		if (act === 'del') {
-			return window.CPXAsk({ title: rows.length + ' deal törlése', text: 'A deal-ek a Salesmate-ből is törlődnek, velük az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük; a levélszálaik a Kukába kerülnek.\nEz nem vonható vissza.', type: 'TÖRLÉS', ok: 'Törlés', danger: true })
+			return window.CPXAsk({ title: rows.length + ' deal törlése', text: 'A deal-ek a Salesmate-ből is törlődnek, velük az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük; a levélszálaik a Kukába kerülnek.\n30 napig visszaállíthatók a Lomtárból (a Salesmate-ben új dealként).', type: 'TÖRLÉS', ok: 'Törlés', danger: true })
 				.then(ok => ok ? runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' })) : undefined);
 		}
 	}
@@ -1828,7 +1829,7 @@
 			try { inf = await post('cp_crm_del_info', { id: d.id }); } catch (e) { inf = null; }
 			d3d.disabled = false;
 			const also = inf ? [inf.portal ? '• az ügyfélportál' + (inf.files ? ' és ' + inf.files + ' fájlja (sablon, logó)' : '') + ', a link sem működik tovább' : '', inf.cal ? '• ' + inf.cal + ' naptárbejegyzés a Google Naptárból' : (inf.cal_err ? '• (a naptárat most nem érem el – onnan kézzel töröld)' : ''), inf.threads ? '• ' + inf.threads + ' levélszál a Kukába kerül' : ''].filter(Boolean) : [];
-			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\nEz nem vonható vissza.', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
+			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\n\n30 napig visszaállítható a Lomtárból (a Salesmate-ben új dealként; az ügyfélportál és a Salesmate-beli jegyzetek, tevékenységek nem jönnek vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
 			d3d.disabled = true;
 			try { const r = await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id) + (r && r.clean && r.clean.length ? ' · vele együtt: ' + r.clean.join(', ') : '')); closePage(); hideModal(); load(); }
 			catch (e) { d3d.disabled = false; toast(e.message, true); }
@@ -2281,5 +2282,33 @@
 
 	/* mélylink: #deals:leads = a Megkeresések nézet */
 	function deep(arg) { const pm = /^(ct|co):(\d+)$/.exec(String(arg || '')); if (pm) { if (pm[1] === 'ct') openContact(Number(pm[2])); else openCompany(Number(pm[2])); return; } if (arg === 'leads') { S.mode = 'board'; save(); if (S.main && S.main.isConnected) view(S.main); } else if (Number(arg) > 0) openDeal(Number(arg)); }
+	/* v2.9.182: Lomtár – a törölt deal-ek 30 napig visszaállíthatók (csak admin) */
+	async function openBin() {
+		const w = document.createElement('div'); w.className = 'cpx-ask crm-bin'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', 'Lomtár');
+		w.innerHTML = '<div><div class="crm-binh"><h3>🗑 Lomtár</h3><button type="button" class="crm-binx" data-x aria-label="Bezárás">×</button></div><p class="cpx-muted">A törölt deal-ek 30 napig visszaállíthatók. Visszaállításkor a Salesmate-ben új deal jön létre a régi adataival; a panelben a levelek, a beosztás, az elszámolás és a jegyzetek visszakerülnek hozzá. Az ügyfélportál és a Salesmate-beli jegyzetek, tevékenységek nem jönnek vissza.</p><div data-l><div class="cpx-empty">Betöltés…</div></div></div>';
+		document.body.appendChild(w);
+		const close = () => { document.removeEventListener('keydown', kd, true); w.remove(); };
+		const kd = e => { if (e.key === 'Escape' && !document.querySelector('.cpx-ask:not(.crm-bin)')) { e.preventDefault(); close(); } };
+		document.addEventListener('keydown', kd, true);
+		w.querySelector('[data-x]').addEventListener('click', close);
+		w.addEventListener('mousedown', e => { if (e.target === w) close(); });
+		const L = w.querySelector('[data-l]');
+		const draw = async () => {
+			let r; try { r = await post('cp_crm_bin_list', {}); } catch (e) { L.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+			if (!r.rows.length) { L.innerHTML = '<div class="cpx-empty">A Lomtár üres.</div>'; return; }
+			L.innerHTML = '<ul class="crm-binl">' + r.rows.map(x => '<li><div><b>' + esc(x.title || 'Deal #' + x.id) + '</b><small>' + esc([x.cn, x.event_d ? huD(x.event_d) : '', x.value ? money(x.value) : '', x.status === 'Won' ? 'Megnyert' : x.status === 'Lost' ? 'Elvesztett' : x.stage].filter(Boolean).join(' · ')) + '</small><small>Törölve: ' + esc(x.at.replace(/-/g, '.')) + (x.by ? ' · ' + esc(x.by) : '') + ' · még ' + x.left + ' napig</small></div><button type="button" class="cpx-btn ghost" data-rs="' + x.id + '">Visszaállítás</button></li>').join('') + '</ul>';
+			L.querySelectorAll('[data-rs]').forEach(b => b.addEventListener('click', async () => {
+				const x = r.rows.find(y => y.id === Number(b.dataset.rs));
+				if (!(await window.CPXConfirm('„' + (x.title || '#' + x.id) + '” visszaállítása.\n\nA Salesmate-ben új deal jön létre a régi adataival (új azonosítóval), és a Salesmate automatizmusai lefuthatnak. A panelben a levelek' + (x.threads ? ' (' + x.threads + ' szál a Kukából)' : '') + ', a beosztás, az elszámolás és a jegyzetek visszakerülnek hozzá.' + (x.portal ? '\nAz ügyfélportál nem jön vissza – szükség esetén újat kell kiküldeni.' : ''), { title: 'Visszaállítás', ok: 'Visszaállítás' }))) return;
+				b.disabled = true; b.textContent = 'Visszaállítás…';
+				try {
+					const z = await post('cp_crm_bin_restore', { id: x.id });
+					toast('Visszaállítva: ' + (x.title || '#' + x.id) + (z.partial ? ' – a Salesmate csak az alapadatokat fogadta el, a többit nézd át.' : ''), !!z.partial);
+					close(); load(); openDeal(z.id);
+				} catch (e) { toast(e.message, true); b.disabled = false; b.textContent = 'Visszaállítás'; }
+			}));
+		};
+		draw();
+	}
 	window.CPCrm = { view, status, refresh, newDeal, open: id => openDeal(id), contact: id => openContact(id), company: id => openCompany(id), deep };
 })();
