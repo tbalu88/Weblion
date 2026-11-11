@@ -1031,3 +1031,6 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-mf .ml-mfc{flex-direction:row;align-items:center;gap:8px;font-weight:500;color:var(--ink);font-size:13px}
 .ml-mfa{display:flex;justify-content:space-between;align-items:center}
 @media (max-width:760px){.ml-list .ml-qw.rf .ml-q{padding-right:84px}.ml-qw.rf .ml-mfb{right:42px;width:36px;height:36px}.ml-mfb{width:36px;height:36px}}
+.ml-mfd{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.ml-mf input[type=text],.ml-mf input[type=date]{width:100%;box-sizing:border-box}
+.ml-mf input[type=date]{padding:0 6px;font-size:13px}
