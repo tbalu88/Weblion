@@ -942,3 +942,11 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-pxp li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:9px 10px;border-top:1px solid #EEF0F2}.ml-pxp li:first-child{border-top:0}
 .ml-pxp li small{color:#656973}.ml-pxp li span{overflow-wrap:anywhere}.ml-pxp .i{color:#656973;text-align:center}.ml-pxp time{color:#656973;white-space:nowrap;font-size:12px}
 .ml-pxp p{margin:8px 0 0;font-size:12px;color:#656973}
+
+/* v2.9.131: betűtípus és méret */
+.ml-fico{font:600 13px Georgia,serif;letter-spacing:-.02em}
+.ml-fpop{width:236px}
+.ml-flist{display:flex;flex-direction:column;max-height:240px;overflow:auto}
+.ml-flist button,.ml-fsz button{background:none;border:0;border-radius:6px;padding:6px 8px;text-align:left;font-size:14px;color:#141C33;cursor:pointer}
+.ml-flist button:hover,.ml-fsz button:hover{background:#F5F3EF}
+.ml-fsz{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px}
