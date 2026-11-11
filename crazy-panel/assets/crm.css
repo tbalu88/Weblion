@@ -783,3 +783,10 @@ dt:has(+ dd.ik-on){grid-column:1 / -1;margin-top:4px}
 dd.ik-on .ik-ed input,dd.ik-on .ik-ed select,dd.ik-on .ik-ed textarea{width:100%;min-width:0;height:36px;font-size:14px}
 dd.ik-on .ik-ed textarea{height:auto}
 dd.ik-on .ik-ed button{width:36px;height:36px}
+
+/* v2.9.130: többválasztós mező szerkesztése helyben */
+.ik-ed .ik-multi{flex:1;min-width:0;height:auto;align-items:center}
+dd.ik-on .ik-ed{align-items:flex-start}
+dd.ik-on .ik-ed .ik-multi input[type=checkbox]{margin:0;width:16px;height:16px;padding:0;accent-color:var(--o);flex:none}
+dd.ik-on .ik-ed .ik-multi .ik-mnew{flex:1 1 160px;min-width:120px;height:30px;border:1px dashed var(--li,#E6E3DE);border-radius:8px;padding:0 8px;background:#fff;font:inherit}
+dd.ik-on .ik-ed .ik-multi{height:auto}
