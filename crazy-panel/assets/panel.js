@@ -320,7 +320,7 @@
       '.cpx-ask .ao{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}.cpx-ask .ao label{display:flex;align-items:center;gap:9px;border:1.5px solid #E6E3DE;border-radius:10px;padding:9px 11px;cursor:pointer}.cpx-ask .ao label:has(input:checked){border-color:#2F5BD8;background:#EEF3FD}.cpx-ask .ao input{width:auto;margin:0}' +
       '.cpx-ask .ab{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}.cpx-ask .ab button{border-radius:999px;padding:9px 18px;font:600 14px Inter,sans-serif;cursor:pointer;border:1.5px solid #E6E3DE;background:#fff;color:#141C33}.cpx-ask .ab .ok{background:#141C33;border-color:#141C33;color:#fff}.cpx-ask .ab .ok.dg{background:#B42318;border-color:#B42318}.cpx-ask .ab .ok:disabled{opacity:.45;cursor:not-allowed}' +
       '@keyframes cpxaskf{from{opacity:0}to{opacity:1}}' +
-      '.cpx-undo{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10070;background:#141C33;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;font:14px Inter,sans-serif;box-shadow:0 12px 30px rgba(20,28,51,.3);overflow:hidden;max-width:calc(100vw - 24px)}' +
+      '.cpx-undo{width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10070;background:#141C33;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;font:14px Inter,sans-serif;box-shadow:0 12px 30px rgba(20,28,51,.3);overflow:hidden;max-width:calc(100vw - 24px)}' +
       '.cpx-undo button{background:#fff;color:#141C33;border:0;border-radius:999px;padding:6px 14px;font:700 13px Inter,sans-serif;cursor:pointer;flex:none}.cpx-undo i{position:absolute;left:0;bottom:0;height:3px;background:#F2A33A;animation:cpxundo linear forwards}' +
       '@keyframes cpxundo{from{width:100%}to{width:0}}@media (prefers-reduced-motion:reduce){.cpx-ask{animation:none}}';
     document.head.appendChild(st);
@@ -349,6 +349,9 @@
       w.addEventListener('mousedown', e => { if (e.target === w) done(opts || inp ? null : false); });
       setTimeout(() => (ty || ti || w.querySelector('input[name=cpxao]') || ok).focus(), 30);
     });
+    /* elvesztés oka – kötelező, listából (deal, tömeges művelet, levélből indított „Elvesztett”) */
+    const LOST_WHY = ['Ár – drágának találta', 'A dátumra nincs szabad gép', 'Nem válaszolt', 'Más szolgáltatót választott', 'Elmarad a rendezvény', 'Teszt / spam / duplikált'].map(x => [x, x]);
+    window.CPXLostWhy = name => window.CPXAsk({ title: 'Miért veszett el?', text: name, options: LOST_WHY, other: 'Egyéb (írd be)', required: true, ok: 'Elvesztett', danger: true });
     window.CPXConfirm = (text, o) => window.CPXAsk(Object.assign({ text: text }, o || {}));
     window.CPXUndo = (text, ms) => new Promise(res => {
       ms = ms || 5000;

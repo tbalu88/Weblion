@@ -764,7 +764,7 @@
 			});
 		}
 		if (act === 'del') {
-			return window.CPXAsk({ title: rows.length + ' deal törlése', text: 'A deal-ek a Salesmate-ből is törlődnek, velük az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük; a levélszálaik a Kukába kerülnek.\nA panel Lomtárából 30 napig visszaállíthatók (a Salesmate-be új deal-ként kerülnek vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true })
+			return window.CPXAsk({ title: rows.length + ' deal törlése', text: 'A deal-ek a Salesmate-ből is törlődnek, velük az ügyfélportáljuk (fájlokkal) és a naptárbejegyzésük; a levélszálaik a Kukába kerülnek.\nEz nem vonható vissza.', type: 'TÖRLÉS', ok: 'Törlés', danger: true })
 				.then(ok => ok ? runBulk(rows, 'törlés', r => post('cp_crm_delete', { id: r.id, ok: 'TÖRLÉS' })) : undefined);
 		}
 	}
@@ -967,9 +967,7 @@
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), bad ? 6000 : 3200);
 	}
 	/* v2.9.172: az elvesztés oka – választólista (kötelező), „Egyéb”-nél szabad szöveg */
-	const LOST_WHY = [['Ár – drágának találta', 'Ár – drágának találta'], ['A dátumra nincs szabad gép', 'A dátumra nincs szabad gép'], ['Nem válaszolt', 'Nem válaszolt'], ['Más szolgáltatót választott', 'Más szolgáltatót választott'], ['Elmarad a rendezvény', 'Elmarad a rendezvény'], ['Teszt / spam / duplikált', 'Teszt / spam / duplikált']];
-	const lostWhy = name => window.CPXAsk({ title: 'Miért veszett el?', text: name, options: LOST_WHY, other: 'Egyéb (írd be)', required: true, ok: 'Elvesztett', danger: true });
-	window.CPXLostWhy = lostWhy;
+	const lostWhy = name => window.CPXLostWhy(name); /* v2.9.179: a lista a panel.js-ben (a Levelezés is ezt használja) */
 	/* áthelyezés: p = { to: szakasz } vagy { st: 'Won' | 'Lost' | 'Open' }; a Salesmate-be is ír */
 	async function doMove(id, p, title) {
 		const rows = S.board ? S.board.rows : [];
@@ -1827,7 +1825,7 @@
 			try { inf = await post('cp_crm_del_info', { id: d.id }); } catch (e) { inf = null; }
 			d3d.disabled = false;
 			const also = inf ? [inf.portal ? '• az ügyfélportál' + (inf.files ? ' és ' + inf.files + ' fájlja (sablon, logó)' : '') + ', a link sem működik tovább' : '', inf.cal ? '• ' + inf.cal + ' naptárbejegyzés a Google Naptárból' : (inf.cal_err ? '• (a naptárat most nem érem el – onnan kézzel töröld)' : ''), inf.threads ? '• ' + inf.threads + ' levélszál a Kukába kerül' : ''].filter(Boolean) : [];
-			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\nA panel Lomtárából 30 napig visszaállítható (a Salesmate-be új deal-ként kerül vissza).', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
+			if (!(await window.CPXAsk({ title: 'Deal törlése', text: '„' + (d.title || '#' + d.id) + '” – a Salesmate-ből is törlődik.' + (also.length ? '\nVele együtt:\n' + also.join('\n') : '') + '\nEz nem vonható vissza.', type: 'TÖRLÉS', ok: 'Törlés', danger: true }))) return;
 			d3d.disabled = true;
 			try { const r = await post('cp_crm_delete', { id: d.id, ok: 'TÖRLÉS' }); toast('A deal törölve: ' + (d.title || '#' + d.id) + (r && r.clean && r.clean.length ? ' · vele együtt: ' + r.clean.join(', ') : '')); closePage(); hideModal(); load(); }
 			catch (e) { d3d.disabled = false; toast(e.message, true); }
