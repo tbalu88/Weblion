@@ -856,7 +856,11 @@
 	}
 	/* v2.9: Piszkozatok mappa – a saját, szerveren tárolt piszkozatok */
 	async function openDraft(id, thread) {
-		try { const r = await post('cp_mail_draft_get', id ? { id: id } : { thread: thread }); S.reply = r.d; S.draftId = r.id; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else view(S.main); } catch (e) { toast(e.message, true); }
+		try { const r = await post('cp_mail_draft_get', id ? { id: id } : { thread: thread });
+			/* v2.9.174: válasz-piszkozat a saját levélszálában folytatódik (látszik, mire megy a válasz, és hogy a szál dealjéhez kerül) */
+			const th = Number(r.d && r.d.thread) || 0;
+			if (th > 0) { S.folder = 'inbox'; S.sel.clear(); S.icPend = { th: th, kind: 'draft', d: r.d, id: r.id }; open(th); return; }
+			S.reply = r.d; S.draftId = r.id; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else view(S.main); } catch (e) { toast(e.message, true); }
 	}
 	async function drawDrafts(box) {
 		const it = box.querySelector('.ml-items'); if (!it) return;
@@ -864,12 +868,24 @@
 		let r; try { r = await post('cp_mail_draft_list', {}); } catch (e) { it.innerHTML = '<div class="ml-empty err">' + esc(e.message) + '</div>'; return; }
 		if (!it.isConnected || S.folder !== 'draft') return;
 		const rows = r.rows || [];
-		it.innerHTML = rows.length ? rows.map(d => '<div role="button" tabindex="0" class="ml-item ml-ditem" data-dr="' + esc(d.id) + '"><span class="ml-ib"><span class="ml-i1"><b>' + esc(d.to.length ? d.to.join(', ') : '(nincs címzett)') + '</b><small>' + esc(ago(d.at)) + '</small></span><span class="ml-i2"><span class="ml-drc">✎ Piszkozat</span>' + esc(d.subject || '(nincs tárgy)') + '</span><span class="ml-i3"><span>' + esc(d.snip || '') + '</span></span></span><button type="button" class="ml-ddel" data-drdel title="Piszkozat elvetése">🗑</button></div>').join('')
+		it.innerHTML = rows.length ? '<div class="ml-dbar"><label><input type="checkbox" data-dall> Mind</label><b data-dn></b><button type="button" class="cpx-btn ghost" data-ddels disabled>🗑 Kijelöltek elvetése</button></div>' + rows.map(d => '<div role="button" tabindex="0" class="ml-item ml-ditem" data-dr="' + esc(d.id) + '"><input type="checkbox" class="ml-dck" data-dck aria-label="Kijelölés"><span class="ml-ib"><span class="ml-i1"><b>' + esc(d.to.length ? d.to.join(', ') : '(nincs címzett)') + '</b><small>' + esc(ago(d.at)) + '</small></span><span class="ml-i2"><span class="ml-drc">✎ Piszkozat</span>' + esc(d.subject || '(nincs tárgy)') + '</span><span class="ml-i3"><span>' + esc(d.snip || '') + '</span></span></span><button type="button" class="ml-ddel" data-drdel title="Piszkozat elvetése">🗑</button></div>').join('')
 			: '<div class="ml-empty"><b>Nincs piszkozatod</b><span>A félbehagyott levelek maguktól ide kerülnek (gépelés közben a panel menti őket).</span></div>';
 		it.querySelectorAll('[data-dr]').forEach(el => el.addEventListener('click', e => {
 			if (e.target.closest('[data-drdel]')) { e.stopPropagation(); if (!window.confirm('Elveted ezt a piszkozatot?')) return; post('cp_mail_draft_del', { id: el.dataset.dr }).then(() => { el.remove(); toast('Piszkozat elvetve.'); }).catch(x => toast(x.message, true)); return; }
+			if (e.target.closest('[data-dck]')) { e.stopPropagation(); dsel(); return; }
 			openDraft(el.dataset.dr);
 		}));
+		/* v2.9.173: tömeges elvetés – kijelölés jelölőnégyzettel */
+		const all = it.querySelector('[data-dall]'), go = it.querySelector('[data-ddels]'), dn = it.querySelector('[data-dn]');
+		const cks = () => Array.from(it.querySelectorAll('[data-dck]'));
+		const dsel = () => { const n = cks().filter(c => c.checked).length; if (go) { go.disabled = !n; go.textContent = '🗑 ' + (n ? n + ' piszkozat elvetése' : 'Kijelöltek elvetése'); } if (all) { all.checked = n && n === cks().length; all.indeterminate = n > 0 && n < cks().length; } if (dn) dn.textContent = ''; };
+		if (all) all.addEventListener('change', () => { cks().forEach(c => { c.checked = all.checked; }); dsel(); });
+		if (go) go.addEventListener('click', async () => {
+			const ids = cks().filter(c => c.checked).map(c => c.closest('[data-dr]').dataset.dr);
+			if (!ids.length || !window.confirm(ids.length + ' piszkozatot elvetsz. Ez nem vonható vissza. Mehet?')) return;
+			go.disabled = true;
+			try { await post('cp_mail_draft_del', { ids: ids.join(',') }); toast(ids.length + ' piszkozat elvetve.'); drawDrafts(box); } catch (x) { toast(x.message, true); go.disabled = false; }
+		});
 	}
 	/* v2.8.2: szundi – időpont-választó */
 	const pad2 = n => String(n).padStart(2, '0');

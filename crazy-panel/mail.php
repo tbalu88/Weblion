@@ -1019,8 +1019,8 @@ add_action('wp_ajax_cp_mail_draft_del', 'cp_mail_ajax_draft_del');
 function cp_mail_ajax_draft_del() {
 	$me = cp_mail_draft_me();
 	$all = cp_mail_drafts_get($me);
-	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
-	unset($all[$id]);
+	/* v2.9.173: több piszkozat egyszerre (ids: vesszővel elválasztva) */
+	foreach (array_slice(explode(',', (string) ($_POST['ids'] ?? ($_POST['id'] ?? ''))), 0, 500) as $x) { unset($all[preg_replace('/[^a-z0-9]/', '', strtolower($x))]); }
 	cp_mail_drafts_put($me, $all);
 	wp_send_json_success(array('n' => count($all)));
 }
