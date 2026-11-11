@@ -97,9 +97,13 @@ function cp_dash_ajax_data() {
 				'svc' => (string) ($r['package'] !== '' ? $r['package'] : $r['service']), 'st' => (string) $r['status'], 'stage' => (string) $r['stage'], 'paid' => (string) $r['paid'], 'op' => (string) $r['operator'],
 				'p' => $p ? array('done' => (int) ($p['done'] ?? 0), 'total' => (int) ($p['total'] ?? 0), 'st' => (string) ($p['st'] ?? '')) : null);
 		}, $ev);
-		$rot = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.stage, d.owner_id, d.rotten_d, d.last_comm_at FROM $D d WHERE d.deleted_at IS NULL AND d.status = 'Open' AND d.rotten_d IS NOT NULL AND d.rotten_d <= %s AND (d.event_d IS NULL OR d.event_d >= %s) ORDER BY (d.owner_id = %d) DESC, d.rotten_d LIMIT 12", $today, $today, $sm), ARRAY_A);
-		$out['stale'] = array_map(function ($r) use ($loc) { return array('id' => (int) $r['id'], 't' => (string) $r['title'], 'st' => (string) $r['stage'], 'own' => (int) $r['owner_id'], 'on' => cp_crm_user_name($r['owner_id']), 'rot' => (string) $r['rotten_d'], 'lc' => $loc($r['last_comm_at'])); }, $rot);
-		$out['stale_n'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND status = 'Open' AND rotten_d IS NOT NULL AND rotten_d <= %s AND (event_d IS NULL OR event_d >= %s)", $today, $today));
+		/* v2.9.122: rohadás a panel szabályai szerint (cp_crm_rot) – a nyitott és a megnyert, de még „Rendezvény lement”-ben álló deal-ek közül */
+		$cand = (array) $wpdb->get_results("SELECT d.id, d.title, d.stage, d.status, d.owner_id, d.event_d, d.event_end_d, d.created_at, d.last_comm_at, (SELECT MAX(h.at) FROM " . cp_crm_t('history') . " h WHERE h.deal_id = d.id AND h.field = 'stage') stage_at, " . (function_exists('cp_crm_lastout_sql') ? cp_crm_lastout_sql() : 'NULL') . " last_out FROM $D d WHERE d.deleted_at IS NULL AND d.status = 'Open' LIMIT 3000", ARRAY_A);
+		$nowL = wp_date('Y-m-d H:i'); $rot = array();
+		foreach ($cand as $r) { list($ra, $rw) = function_exists('cp_crm_rot') ? cp_crm_rot($r) : array('', 0); if ($ra !== '' && $ra <= $nowL) { $r['_rot'] = $ra; $r['_rw'] = $rw; $rot[] = $r; } }
+		usort($rot, function ($a, $b) use ($sm) { return ((int) ($b['owner_id'] == $sm) - (int) ($a['owner_id'] == $sm)) ?: strcmp($a['_rot'], $b['_rot']); });
+		$out['stale_n'] = count($rot);
+		$out['stale'] = array_map(function ($r) use ($loc) { return array('id' => (int) $r['id'], 't' => (string) $r['title'], 'st' => (string) $r['stage'], 'own' => (int) $r['owner_id'], 'on' => cp_crm_user_name($r['owner_id']), 'rot' => (string) $r['_rot'], 'lc' => $loc($r['last_comm_at'])); }, array_slice($rot, 0, 12));
 		$m0 = (new DateTime(wp_date('Y-m-01') . ' 00:00:00', $tz))->getTimestamp();
 		$k = $wpdb->get_row($wpdb->prepare("SELECT
 			SUM(status = 'Open') o_n, SUM(IF(status = 'Open', value, 0)) o_v,

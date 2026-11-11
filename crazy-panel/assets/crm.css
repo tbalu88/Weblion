@@ -757,3 +757,10 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-mbar .crm-cbtn{width:40px;height:40px;padding:0;justify-content:center}
 	.crm-mbar .crm-fwrap{flex:none}
 }
+/* v2.9.122: rohadás-jelvény színskálával (halványsárga → narancs → piros) */
+.crm-rot.v2{border-radius:999px;padding:1px 8px 1px 6px;font-weight:700}
+.crm-rotsw{flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;border:1.5px solid var(--li);background:#fff;border-radius:999px;padding:0 12px;font:600 13px Inter,sans-serif;color:var(--mu);cursor:pointer}
+.crm-rotsw svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.crm-rotsw.on{background:linear-gradient(90deg,#FFF3C4,#FBC27A 55%,#F28B78);border-color:#E8A15A;color:#5A2A00}
+.crm-card.rotting .crm-ct{color:#141C33}
+@media (max-width:760px){.crm-mbar .crm-rotsw{width:40px;height:40px;padding:0;justify-content:center}.crm-mbar .crm-rotsw span{display:none}.crm-card.rotting{border-bottom-color:rgba(0,0,0,.06)}}

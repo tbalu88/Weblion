@@ -96,6 +96,11 @@
 	const estVat = e => e.v === 'ec' ? '<small class="crm-vat">+ ÁFA</small>' : (e.v === 'p' || e.v === 'pb') ? '<small class="crm-vat br">bruttó</small>' : '';
 	const valHtml = r => r.est ? '<span class="crm-est" title="' + esc('Becsült ár ' + estSrc(r.est) + (r.est.a ? ' (hiányos adatokból)' : '') + ':\n' + r.est.l.join('\n')) + '">~' + esc(money(r.est.p, 'HUF')) + (r.est.a ? '<sup>?</sup>' : '') + estVat(r.est) + '</span>' : '<span>' + esc(money(r.value, r.cur)) + '</span>';
 	/* a cím végén álló egynapos dátum („| 2026-11-27”) elhagyható, mert a rendezvény dátuma külön is látszik; a többnaposat („2026-10-29/30”) meghagyjuk */
+	/* v2.9.122: rohadás-jelvény: f = késés / a szakasz ideje (0 → halványsárga, 0,5 → narancs, 1+ → piros) */
+	const rotCol = f => { f = Math.max(0, Math.min(1, f)); const h = Math.round(52 - 52 * f), l = Math.round(88 - 40 * f); return { bg: 'hsl(' + h + ',95%,' + l + '%)', fg: f > 0.55 ? '#fff' : 'hsl(' + h + ',80%,24%)', card: 'hsl(' + h + ',95%,' + Math.round(93 - 13 * f) + '%)', bd: 'hsl(' + h + ',85%,' + Math.round(62 - 14 * f) + '%)' }; };
+	const rotOn = () => { try { return localStorage.getItem('cpx_crm_rot') !== '0'; } catch (e) { return true; } };
+	const rotTxt = m => m < 60 ? m + ' perce' : m < 1440 ? Math.floor(m / 60) + ' órája' : Math.floor(m / 1440) + ' napja';
+	const rotHtml = (r, m) => { const c = rotCol(m / Math.max(60, r.rw || 1440)); return '<span class="crm-rot v2" style="background:' + c.bg + ';color:' + c.fg + '" title="Rohad: ' + esc(rotTxt(m)) + ' lejárt (' + esc(r.stage) + ', határidő: ' + esc(r.rot) + ')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + esc(m < 1440 ? Math.max(1, Math.floor(m / 60)) + ' ó' : Math.floor(m / 1440) + ' nap') + '</span>'; };
 	const shortTitle = r => { const t = r.title || 'Deal #' + r.id; if (!r.ev) return t; const m = t.match(/\s*\|\s*(\d{4}-\d{2}-\d{2})\.?$/); return m && m[1] === r.ev && m.index > 0 ? t.slice(0, m.index) : t; };
 	const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
@@ -188,6 +193,7 @@
 				: '<select data-f="bso" aria-label="Rendezés">' + opts([['ev', 'Rendezvény dátuma'], ['val', 'Érték'], ['title', 'Név (A–Z)'], ['mod', 'Legutóbb módosított'], ['rot', 'Legrégebben rohadó']], S.bso) + '</select>';
 			f += '<label class="crm-sortc" title="Rendezés">' + IC.sort + so + '</label>';
 			if (S.mode === 'list') f += '<button type="button" class="crm-cbtn" data-cols aria-haspopup="dialog" aria-expanded="false" title="Oszlopok kiválasztása és sorrendje">' + IC.cols + '<span>Oszlopok</span></button>';
+			if (S.mode === 'board') f += '<button type="button" class="crm-rotsw' + (rotOn() ? ' on' : '') + '" data-rotsw aria-pressed="' + rotOn() + '" title="' + (rotOn() ? 'A rohadó csempék elszíneződése be van kapcsolva – kattintva kikapcsolod' : 'A rohadó csempék elszíneződése ki van kapcsolva – kattintva bekapcsolod') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Rohadás</span></button>';
 			if (S.mode === 'board') f += '<span class="crm-seg crm-dens" role="group" aria-label="Kártyák"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '" aria-pressed="' + !S.dense + '" title="Részletes kártyák" aria-label="Részletes kártyák">' + IC.cards + '</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '" aria-pressed="' + S.dense + '" title="Kompakt kártyák" aria-label="Kompakt kártyák">' + IC.dense + '</button></span>';
 		}
 		const inf = '<span class="crm-info" tabindex="0" role="note" aria-label="' + esc(info) + '" data-tip="' + esc(info) + '">' + IC.info + '</span>';
@@ -360,6 +366,7 @@
 	}
 	function bindHead(main) {
 		bindCfBtn(main);
+		const rs = main.querySelector('[data-rotsw]'); if (rs) rs.addEventListener('click', () => { try { localStorage.setItem('cpx_crm_rot', rotOn() ? '0' : '1'); } catch (e) { /* privát mód */ } view(S.main); });
 		main.querySelectorAll('[data-dense]').forEach(b => b.addEventListener('click', () => { S.dense = b.dataset.dense === '1'; main.querySelectorAll('[data-dense]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); save(); redrawBoard(); }));
 		const nb = main.querySelector('[data-new]');
 		if (nb) nb.addEventListener('click', newDeal);
@@ -837,11 +844,15 @@
 				pend.map(x => { const ev = x.f['Deal.dateCustomField1'] || '', sv = x.f['Deal.multiSelectCustomField3'] || ''; return '<article class="crm-card crm-pend" data-lead="' + x.id + '" tabindex="0"><div class="crm-ct"><span class="crm-lnew">új</span> ' + esc(x.n || x.e || 'Névtelen') + '</div><div class="crm-cl">' + (ev ? '<span>' + esc(shortD(ev)) + '</span><i>•</i>' : '') + '<span class="cpx-muted">' + esc(sv || x.form || 'weboldal') + '</span></div><div class="crm-pw">⏳ Salesmate-szinkronra vár · ' + esc(agoLead(x.at)) + '<button type="button" class="crm-px" data-pdel="' + x.id + '" title="Elvetés (spam / teszt)">×</button></div></article>'; }).join('');
 			l.forEach(r => {
 				const soon = r.ev && (evEnd(r) || r.ev) >= t && r.ev <= addDays(t, 14), past = r.ev && (evEnd(r) || r.ev) < t; /* v2.9.71: többnapos: az utolsó napig */
-				const rot = r.rot && r.rot <= t ? dayDiff(r.rot, t) : 0;
+				/* v2.9.122: rohadás – halványsárgától narancson át pirosig, aszerint, hogy a szakasz idejéhez képest mennyit késik */
+				const rotM = r.rot ? Math.round((Date.now() - new Date(r.rot.replace(' ', 'T')).getTime()) / 60000) : -1;
+				const rot = rotM > 0 ? rotM : 0;
 				const act = r.na ? (r.na < now ? '<span class="crm-na late" title="Lejárt teendő: ' + esc(huDT(r.na)) + '">⚑ lejárt</span>' : '<span class="crm-na" title="Következő teendő: ' + esc(huDT(r.na)) + '">⚑ ' + esc(shortD(r.na.slice(0, 10))) + '</span>') : '<span class="crm-na none" title="Nincs ütemezett teendő">⚑ nincs teendő</span>';
-				const rotB = rot ? '<span class="crm-rot' + (rot > 7 ? ' hot' : '') + '" title="' + rot + ' napja nem mozdult (rohad)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' + rot + ' nap</span>' : '';
+				const rotB = rot ? rotHtml(r, rot) : '';
 				const fresh = S.pend && S.pend.fresh && S.pend.fresh[r.id];
-				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
+				/* v2.9.122: a rohadó csempe egésze elszíneződik (halványsárga → narancs → piros); a felső sávban kikapcsolható */
+				const rotSt = rot && rotOn() ? (c => ' style="background:' + c.card + ';border-color:' + c.bd + ';box-shadow:inset 4px 0 0 ' + c.bd + '"')(rotCol(rot / Math.max(60, r.rw || 1440))) : '';
+				const open = '<article class="crm-card' + (fresh ? ' fresh' : '') + (r.status === 'Won' ? ' won' : '') + (r._busy ? ' busy' : '') + (rotSt ? ' rotting' : '') + '" data-id="' + r.id + '" tabindex="0"' + (W ? ' draggable="true"' : '') + rotSt + '><div class="crm-ct" title="' + esc(r.title) + '">' + (fresh ? '<span class="crm-lnew">új</span> ' : '') + (r.ret && r.ret.won ? '<span class="crm-ret" title="' + esc('Visszatérő ügyfél: ' + r.ret.won + ' megnyert rendezvény' + (r.ret.last_ev ? ', utoljára ' + huD(r.ret.last_ev) : '')) + '">🔁</span> ' : '') + esc(shortTitle(r)) + '</div>';
 				if (S.dense && !MOB) {
 					h += open + '<div class="crm-cl">' + (r.ev ? '<span class="' + (past ? 'crm-past' : soon ? 'crm-soon' : '') + '">' + esc(evShort(r)) + '</span>' : '<span class="cpx-muted">nincs dátum</span>') + '<i>•</i>' + valHtml(r) + (r.na && r.na < now ? '<span class="crm-na late" title="Lejárt teendő">⚑</span>' : '') + rotB + '</div></article>';
 					return;
@@ -1653,7 +1664,7 @@
 				(x.stage_since ? '<dt>Ebben a szakaszban</dt><dd>' + esc(agoTxt(x.stage_since)) + ' óta</dd>' : '') +
 				(d.last_comm_at ? '<dt>Utolsó kommunikáció</dt><dd>' + esc(huDT(d.last_comm_at)) + (d.last_comm_mode ? ' · ' + esc(d.last_comm_mode) : '') + '</dd>' : '') +
 				(lastIn ? '<dt>Ügyfél utoljára írt</dt><dd>' + esc(agoTxt(lastIn.at)) + '</dd>' : '') + (lastOut ? '<dt>Mi utoljára írtunk</dt><dd>' + esc(agoTxt(lastOut.at)) + '</dd>' : '') +
-				(Number(d.rotten_d) > 0 && d.status === 'Open' ? '<dt>Rohad</dt><dd class="d3-bad">' + Number(d.rotten_d) + ' napja nincs vele teendő</dd>' : '') + '</dl></section>' +
+				(() => { const m = d.rot ? Math.round((Date.now() - new Date(d.rot.replace(' ', 'T')).getTime()) / 60000) : 0; return m > 0 ? '<dt>Rohad</dt><dd>' + rotHtml(d, m) + ' <small>' + esc(rotTxt(m)) + ' lejárt a határidő (' + esc(d.rot) + ')</small></dd>' : (d.rot ? '<dt>Rohad</dt><dd class="cpx-muted">' + esc(d.rot) + '-tól, ha addig nem lép tovább</dd>' : ''); })() + '</dl></section>' +
 			'<section class="d3-c"><h4>Korábbi munkák – kontakt</h4>' + statLine(x.ct_stats) + (otherCt.length ? dealRows(otherCt, d.id) : '<p class="cpx-muted">' + (c ? 'Ez az első deal ezzel a kontakttal.' : 'Nincs kontakt.') + '</p>') + '</section>' +
 			(co ? '<section class="d3-c"><h4>Korábbi munkák – ' + esc(co.name) + '</h4>' + statLine(x.co_stats) + (otherCo.length ? dealRows(otherCo, d.id) : '<p class="cpx-muted">A cégnek nincs más (más kontakthoz tartozó) deal-je.</p>') + '</section>' : '') +
 			/* v2.9.117: beosztás (Kapacitás → Beosztás) */

@@ -125,7 +125,7 @@ function cp_crm_list_data($a) {
 
 /* v2.9.58: a lista, a pipeline-tábla és az egy sor (cp_crm_row_out) közös oszlopai és táblakapcsolatai */
 function cp_crm_list_cols() {
-	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.event_end_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
+	return 'd.id, d.title, d.stage, d.status, d.value, d.currency, d.event_d, d.event_end_d, d.venue, d.package, d.service, d.owner_id, d.modified_at, d.created_at, d.paid, d.rotten_d, (SELECT MAX(h.at) FROM ' . cp_crm_t('history') . " h WHERE h.deal_id = d.id AND h.field = 'stage') stage_at, " . cp_crm_lastout_sql() . " last_out, " . 'c.name cn, c.email ce, c.phone cp, c.mobile cm, co.name con';
 }
 function cp_crm_list_from() {
 	return cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id LEFT JOIN ' . cp_crm_t('companies') . ' co ON co.id = d.company_id';
@@ -138,14 +138,62 @@ function cp_crm_xcols($raw) {
 	return array($xs, $xk);
 }
 
+/* szakaszonként: Érdeklődő 24 óra · Ajánlat kiküldve 30 nap · Adatlap kiküldve: a rendezvény előtt 7 nappal (legalább 3 nap a szakaszban)
+   · Szerződés kiküldve: a rendezvény előtt 30 nappal (legalább 7 nap a szakaszban – az 1 évre előre foglalók nem rohadnak idő előtt)
+   · Szerződés aláírva, Rendezvény felkészül: nincs · Rendezvény lement: a rendezvény (utolsó napja) után 2 munkanappal.
+   Az elvesztett deal nem rohad. A szakasz kezdete: az utolsó szakaszváltás a panel történetében, ennek hiányában a létrehozás. */
+/* v2.9.123: a legutóbbi saját kommunikáció a deallel – kimenő levél (a deal levélszálaiban) vagy elvégzett tevékenység (hívás, teendő) */
+function cp_crm_lastout_sql() {
+	/* v2.9.123: + deal-jegyzet és levélszál-jegyzet (a hívást nem tudjuk naplózni, a jegyzet jelzi, hogy foglalkoztak vele) */
+	$q = array("(SELECT MAX(a.completed_at) FROM " . cp_crm_t('activities') . " a WHERE a.related_id = d.id AND a.completed = 1 AND a.deleted_at IS NULL)");
+	if (function_exists('cp_dact_t')) { $q[] = "(SELECT MAX(n.created_at) FROM " . cp_dact_t() . " n WHERE n.deal_id = d.id AND n.deleted_at IS NULL AND n.src <> 'smi')"; }
+	if (function_exists('cp_mail_t') && function_exists('cp_mail_db_ok') && cp_mail_db_ok()) {
+		$q[] = "(SELECT MAX(m.sent_at) FROM " . cp_mail_t('messages') . " m JOIN " . cp_mail_t('threads') . " t ON t.id = m.thread_id WHERE t.deal_id = d.id AND m.dir = 'out')";
+		$q[] = "(SELECT MAX(mn.created_at) FROM " . cp_mail_t('notes') . " mn JOIN " . cp_mail_t('threads') . " t2 ON t2.id = mn.thread_id WHERE t2.deal_id = d.id AND mn.deleted_at IS NULL)";
+	}
+	return 'GREATEST(' . implode(', ', array_map(function ($x) { return 'COALESCE(' . $x . ", '1970-01-01')"; }, $q)) . (count($q) === 1 ? ", '1970-01-01'" : '') . ')';
+}
+function cp_crm_rot($r) {
+	/* csak a nyitott deal rohad (a megnyert rendezvények örökre a „Rendezvény lement” szakaszban maradnak) */
+	if (($r['status'] ?? 'Open') !== 'Open') { return array('', 0); }
+	$st = cp_crm_stages(); $stage = (string) ($r['stage'] ?? '');
+	$tz = wp_timezone();
+	$since = !empty($r['stage_at']) ? $r['stage_at'] : ($r['created_at'] ?? '');
+	$sinceT = $since ? strtotime($since . ' UTC') : time();
+	$ev = (string) ($r['event_d'] ?? ''); $eve = (string) ($r['event_end_d'] ?? '') ?: $ev;
+	$evT = $ev ? (new DateTime($ev . ' 00:00:00', $tz))->getTimestamp() : null;
+	$at = null; $w = 0;
+	if ($stage === $st[0]) { $at = $sinceT + DAY_IN_SECONDS; $w = 24 * 60; }
+	elseif ($stage === $st[1]) { $at = $sinceT + 30 * DAY_IN_SECONDS; $w = 30 * 24 * 60; }
+	elseif ($stage === $st[2]) { $at = $evT ? max($evT - 7 * DAY_IN_SECONDS, $sinceT + 3 * DAY_IN_SECONDS) : $sinceT + 14 * DAY_IN_SECONDS; $w = 7 * 24 * 60; }
+	elseif ($stage === $st[3]) { $at = $evT ? max($evT - 30 * DAY_IN_SECONDS, $sinceT + 7 * DAY_IN_SECONDS) : $sinceT + 21 * DAY_IN_SECONDS; $w = 14 * 24 * 60; }
+	elseif ($stage === ($st[6] ?? '') && $eve) {
+		$d = new DateTime($eve . ' 00:00:00', $tz); $n = 0;
+		while ($n < 2) { $d->modify('+1 day'); if ((int) $d->format('N') <= 5) { $n++; } }
+		$d->modify('+1 day'); /* a 2. munkanap végéig */
+		$at = $d->getTimestamp(); $w = 5 * 24 * 60;
+	}
+	if ($at === null) { return array('', 0); }
+	/* v2.9.123: ha a mi oldalunkról nemrég volt kommunikáció (levél, hívás), a deal még nem rohad – a szakaszváltás nem rajtunk múlik.
+	   Türelmi idő a legutóbbi saját kommunikációtól: Érdeklődő 24 óra, Ajánlat kiküldve 7 nap, Adatlap 3 nap, Szerződés 7 nap, Lement 2 nap. */
+	$lo = (string) ($r['last_out'] ?? '');
+	if ($lo !== '' && $lo > '1971') {
+		$grace = array($st[0] => 1, $st[1] => 7, $st[2] => 3, $st[3] => 7);
+		$g = $grace[$stage] ?? 2;
+		$at = max($at, strtotime($lo . ' UTC') + $g * DAY_IN_SECONDS);
+	}
+	return array(wp_date('Y-m-d H:i', $at), $w);
+}
 function cp_crm_list_row($r, $xk = array()) {
 	$o = array(
 		'id' => (int) $r['id'], 'title' => (string) $r['title'], 'stage' => (string) $r['stage'], 'status' => (string) $r['status'],
 		'value' => $r['value'] === null ? null : (float) $r['value'], 'cur' => (string) $r['currency'],
 		'ev' => (string) $r['event_d'], 'eve' => isset($r['event_end_d']) ? (string) $r['event_end_d'] : '', /* v2.9.71: többnapos: utolsó nap */ 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
-		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'], 'rot' => isset($r['rotten_d']) ? (string) $r['rotten_d'] : '',
+		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'],
 		'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'cp' => (string) ($r['cm'] !== null && $r['cm'] !== '' ? $r['cm'] : $r['cp']), 'co' => (string) $r['con'],
 	);
+	/* v2.9.122: rohadás a panel szabályai szerint (a felhasználó döntése, 2026-11-11) – rot: mikortól rohad (helyi idő), rw: a színskála hossza percben */
+	list($o['rot'], $o['rw']) = cp_crm_rot($r);
 	if ($xk) { $o['x'] = array(); foreach ($xk as $al => $kt) { $v = $r[$al]; if ($kt[1] === 'dt' && $v) { $v = cp_crm_local($v); } $o['x'][$kt[0]] = $v === null ? null : (string) $v; } }
 	return $o;
 }
@@ -230,6 +278,8 @@ function cp_crm_deal_data($id) {
 	$deal = $id ? $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A) : null;
 	if (!$deal) { return null; }
 	unset($deal['raw']);
+	/* v2.9.122: rohadás a panel szabályai szerint (a helyi idő átírása előtt) */
+	list($deal['rot'], $deal['rw']) = cp_crm_rot($deal + array('stage_at' => $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage'", $id)), 'last_out' => $wpdb->get_var($wpdb->prepare('SELECT ' . cp_crm_lastout_sql() . ' FROM ' . cp_crm_t('deals') . ' d WHERE d.id = %d', $id))));
 	foreach (array('closed_at', 'last_note_at', 'last_comm_at', 'created_at', 'modified_at', 'start_at', 'synced_at', 'deleted_at') as $k) { $deal[$k] = cp_crm_local($deal[$k]); }
 	/* v1.83.2: ajánlat előtt (első szakasz, érték nélkül) becsült ár, mint a csempén */
 	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } } /* v2.9.77: beírt ár mellett is (az ajánlatlevél tételeihez) */
