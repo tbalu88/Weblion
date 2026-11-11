@@ -186,7 +186,7 @@
 		try { r = await post('cp_an_stats', { from: A.from, to: A.to, fresh: fresh ? 1 : '' }); } catch (e) { if (my !== A.seq) return; A.err = e.message; box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		if (my !== A.seq || !main.isConnected) return;
 		A.err = ''; A.d = r;
-		box.innerHTML = anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + anEff(r.eff) + anLost(r.lost) + anRot(r.rot) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
+		box.innerHTML = anWeek(r.week) + anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + anEff(r.eff) + anLost(r.lost) + anRot(r.rot) + anRep(r.rep) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
 	}
 	const card = (t, sub, body) => '<section class="an-c"><h3 class="au-h3">' + t + '</h3>' + (sub ? '<p class="an-sub">' + sub + '</p>' : '') + body + '</section>';
@@ -260,6 +260,20 @@
 			'<div class="au-tw"><table class="au-t an-t"><thead><tr><th>Szakasz</th><th class="r">Rohadó</th><th class="r">Átlagos késés</th></tr></thead><tbody>' + r.stage.map(x => '<tr><td>' + esc(x.k) + '</td><td class="r"><b>' + x.n + '</b></td><td class="r">' + String(x.d).replace('.', ',') + ' nap</td></tr>').join('') + '</tbody></table></div>' +
 			(r.own.length ? '<div class="an-own">' + r.own.map(o => '<span><b>' + esc(o.k) + '</b> ' + o.n + ' rohadó</span>').join('') + '</div>' : '') +
 			(H.length > 1 ? '<div class="an-two an-one"><div><b class="an-l">Rohadó deal-ek száma naponként</b><div class="an-cols an-sm">' + H.map((k, i) => '<div class="an-col" title="' + esc(k.replace(/-/g, '.') + ': ' + hv[i]) + '"><div class="an-cb"><i class="l" style="height:' + (hv[i] / mx * 100) + '%;width:70%;background:#D9534F"></i></div></div>').join('') + '</div></div></div>' : '<p class="an-note">A napi számot mostantól minden nap eltároljuk, így pár nap múlva itt látszik a trend is.</p>'));
+	}
+	/* v2.9.148: S11 heti összefoglaló, S3 ismétlődő szövegek */
+	function anWeek(w) {
+		if (!w) return '';
+		const c = w.cur, p = w.prev, d = (a, b, inv) => { if (a == null || b == null || a === b) return ''; const up = a > b; return '<i class="' + ((up !== !!inv) ? 'up' : 'dn') + '">' + (up ? '▲' : '▼') + '</i>'; };
+		const K = [['Új deal', c.new, p.new, nf], ['Megnyert', c.won, p.won, nf], ['Megnyert érték', c.won_v, p.won_v, v => nf(v) + ' Ft'], ['Elvesztett', c.lost, p.lost, nf, 1], ['Beérkező levél', c.in, p.in, nf], ['Kimenő levél', c.out, p.out, nf], ['Első válasz (medián)', c.resp_med, p.resp_med, mins, 1], ['Aktív panelidő', c.act, p.act, dur]];
+		return card('Ez a hét', 'Hétfőtől máig (' + esc(c.from.slice(5).replace('-', '.')) + '–' + esc(c.to.slice(5).replace('-', '.')) + '), összevetve az előző hét ugyanazon napjaival. A nyíl zöld, ha jó irányba változott.',
+			'<div class="an-kpi an-wk">' + K.map(k => '<div><b>' + k[3](k[1]) + d(k[1], k[2], k[4]) + '</b><span>' + k[0] + '</span><small>előző hét: ' + k[3](k[2]) + '</small></div>').join('') + '</div>');
+	}
+	function anRep(r) {
+		if (!r || !r.n) return '';
+		return card('Újra és újra begépelt szövegek', 'A legutóbbi ' + r.n + ' kimenő levél kézzel írt bekezdései közül azok, amelyek sok különböző levélben visszatérnek, de egyik sablonban sincsenek benne (a számokat # jelöli). Ezek sablon- vagy gyorsszöveg-jelöltek.',
+			(r.list.length ? '<div class="au-tw"><table class="au-t an-t"><thead><tr><th class="r">Levél</th><th>Szöveg</th></tr></thead><tbody>' + r.list.map(x => '<tr><td class="r"><b>' + x.n + '×</b></td><td>' + esc(x.t) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="cpx-muted">Nincs gyakran ismételt, sablonon kívüli szöveg.</p>') +
+			'<p class="an-note">' + r.tpl + ' bekezdés sablonból jött (ezek nem szerepelnek a listában).</p>');
 	}
 	/* S12 */
 	function anLoadH(l) {
@@ -387,7 +401,7 @@
 		'.an-bar .w,.an-lg .w{background:#1F9D55}.an-bar .l,.an-lg .l{background:#D9534F}.an-bar .o,.an-lg .o{background:#C9CFDA}.an-lg i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px}' +
 		'.an-own{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:12.5px}.an-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}.an-kpi div{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.an-kpi b{display:block;font:800 22px "Plus Jakarta Sans",sans-serif}.an-kpi span{font-size:12px;color:var(--mu)}.an-kpi .bad{border-color:#F3C2BF;background:#FDF1F0}.an-kpi .bad b{color:#B42318}' +
 		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
-		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}.an-hr{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}.an-hr span{overflow-wrap:anywhere}.an-hr small{color:var(--mu)}.an-lw{grid-template-columns:3fr 2fr}.an-lw>div:last-child .an-hr{grid-template-columns:minmax(0,1fr) auto auto}.an-sm{height:70px}' +
+		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}.an-hr{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}.an-hr span{overflow-wrap:anywhere}.an-hr small{color:var(--mu)}.an-lw{grid-template-columns:3fr 2fr}.an-lw>div:last-child .an-hr{grid-template-columns:minmax(0,1fr) auto auto}.an-sm{height:70px}.an-wk{grid-template-columns:repeat(4,minmax(0,1fr))}.an-wk b{font-size:19px}.an-wk b i{font-style:normal;font-size:11px;margin-left:6px;vertical-align:3px}.an-wk i.up{color:#1F9D55}.an-wk i.dn{color:#B42318}.an-wk small{display:block;font-size:11px;color:var(--mu);margin-top:2px}' +
 		'@media (max-width:760px){.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
 	document.head.appendChild(css);
 })();

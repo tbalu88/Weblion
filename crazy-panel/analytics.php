@@ -29,7 +29,7 @@ function cp_an_ajax_stats() {
 	if ($from > $to) { list($from, $to) = array($to, $from); }
 	$ck = 'cp_an_' . md5($from . '|' . $to);
 	if (empty($_REQUEST['fresh']) && ($c = get_transient($ck))) { wp_send_json_success($c); }
-	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'use' => cp_an_use($from, $to), 'eff' => cp_an_eff($from, $to), 'lost' => cp_an_lost($from, $to), 'rot' => cp_an_rot(), 'at' => wp_date('Y-m-d H:i'));
+	$out = array('from' => $from, 'to' => $to, 'funnel' => cp_an_funnel($from, $to), 'resp' => cp_an_resp($from, $to), 'load' => cp_an_load($from, $to), 'unans' => cp_an_unans(), 'use' => cp_an_use($from, $to), 'eff' => cp_an_eff($from, $to), 'lost' => cp_an_lost($from, $to), 'rot' => cp_an_rot(), 'rep' => cp_an_repeat($from, $to), 'week' => cp_an_week(), 'at' => wp_date('Y-m-d H:i'));
 	set_transient($ck, $out, 10 * MINUTE_IN_SECONDS);
 	wp_send_json_success($out);
 }
@@ -258,4 +258,63 @@ function cp_an_rot() {
 	$hist[wp_date('Y-m-d')] = $n; ksort($hist); $hist = array_slice($hist, -365, null, true);
 	update_option('cp_an_rot_hist', $hist, false);
 	return array('n' => $n, 'open' => count($rows), 'v' => round($v), 'med' => $late ? round($late[(int) floor((count($late) - 1) / 2)], 1) : null, 'stage' => array_values($st), 'own' => array_values($ow), 'hist' => $hist);
+}
+
+/* ------------------------------------------------------------ v2.9.148: S3 ismétlődő, kézzel írt bekezdések
+ * A legutóbbi (max. 600) kimenő levél saját része (az idézett előzmény nélkül) sorokra bontva; a sablonokban már meglévő sorok
+ * kimaradnak. Ami sok különböző levélben visszatér, az sablon- vagy gyorsszöveg-jelölt. */
+function cp_an_lines($html) {
+	$h = (string) $html;
+	foreach (array('<blockquote', 'gmail_quote', 'divRplyFwdMsg', 'id="appendonsend"', ' írta:', ' wrote:', '-----Original Message', 'Feladó:') as $cut) { $p = stripos($h, $cut); if ($p !== false) { $h = substr($h, 0, $p); } }
+	$h = preg_replace('#<(br|/p|/div|/li|/h\d|/tr)[^>]*>#i', "\n", $h);
+	$t = html_entity_decode(wp_strip_all_tags($h, false), ENT_QUOTES, 'UTF-8');
+	$out = array();
+	foreach (preg_split('/\n+/u', $t) as $l) { $l = trim(preg_replace('/[\s\x{a0}\x{200b}-\x{200d}]+/u', ' ', $l)); if (mb_strlen($l) >= 60 && mb_strlen($l) <= 600) { $out[] = $l; } }
+	return $out;
+}
+function cp_an_norm($l) { return preg_replace('/\d+/u', '#', preg_replace('/\{\{[^}]*\}\}/u', '@', mb_strtolower($l))); }
+function cp_an_repeat($from, $to) {
+	global $wpdb;
+	$M = cp_mail_t('messages');
+	$rows = (array) $wpdb->get_col($wpdb->prepare("SELECT LEFT(body, 12000) FROM $M WHERE dir = 'out' AND sent_at BETWEEN %s AND %s ORDER BY sent_at DESC LIMIT 600", cp_an_utc($from), cp_an_utc($to, true)));
+	if (!$rows) { return array('n' => 0, 'list' => array(), 'tpl' => 0); }
+	$tpl = array();
+	foreach ((array) $wpdb->get_col('SELECT body FROM ' . cp_mail_t() . ' WHERE deleted_at IS NULL') as $b) { foreach (cp_an_lines($b) as $l) { $tpl[cp_an_norm($l)] = 1; } }
+	$cnt = array(); $sample = array(); $inTpl = 0;
+	foreach ($rows as $b) {
+		$seen = array();
+		foreach (cp_an_lines($b) as $l) {
+			$k = cp_an_norm($l); if (isset($seen[$k])) { continue; } $seen[$k] = 1;
+			if (isset($tpl[$k])) { $inTpl++; continue; }
+			if (preg_match('/^(kedves|tisztelt|üdvözlettel|köszönettel|szia|hello|helló)\b/iu', $l)) { continue; }
+			if (preg_match('/@|www\.|https?:|\+36|06 ?\d0|eventcrazy\.hu|crazyphoto\.hu/iu', $l)) { continue; } /* aláírás, elérhetőség */
+			$cnt[$k] = ($cnt[$k] ?? 0) + 1; if (!isset($sample[$k])) { $sample[$k] = $l; }
+		}
+	}
+	arsort($cnt);
+	$L = array(); foreach ($cnt as $k => $n) { if ($n < 4) { break; } $L[] = array('n' => $n, 't' => mb_substr($sample[$k], 0, 260)); if (count($L) >= 12) { break; } }
+	return array('n' => count($rows), 'list' => $L, 'tpl' => $inTpl);
+}
+
+/* ------------------------------------------------------------ v2.9.148: S11 heti összefoglaló – ez a hét és az előző hét ugyanazon napjai */
+function cp_an_week() {
+	global $wpdb;
+	$D = cp_crm_t('deals'); $M = cp_mail_t('messages');
+	$mon = new DateTime('monday this week', wp_timezone()); if ((int) wp_date('N') === 1) { $mon = new DateTime('today', wp_timezone()); }
+	$cur = array($mon->format('Y-m-d'), wp_date('Y-m-d')); $pm = (clone $mon)->modify('-7 days'); $prev = array($pm->format('Y-m-d'), wp_date('Y-m-d', time() - 7 * DAY_IN_SECONDS)); /* az előző hét ugyanazon napjai (hétfőtől a mai nap párjáig) */
+	$one = function ($a, $b) use ($wpdb, $D, $M) {
+		$f = cp_an_utc($a); $t = cp_an_utc($b, true);
+		$x = array('from' => $a, 'to' => $b);
+		$x['new'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND created_at BETWEEN %s AND %s", $f, $t));
+		$w = $wpdb->get_row($wpdb->prepare("SELECT COUNT(*) n, COALESCE(SUM(value), 0) v FROM $D WHERE deleted_at IS NULL AND status = 'Won' AND closed_at BETWEEN %s AND %s", $f, $t), ARRAY_A);
+		$x['won'] = (int) $w['n']; $x['won_v'] = round((float) $w['v']);
+		$x['lost'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND status = 'Lost' AND closed_at BETWEEN %s AND %s", $f, $t));
+		$x['in'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE dir = 'in' AND sent_at BETWEEN %s AND %s", $f, $t));
+		$x['out'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE dir = 'out' AND status <> 'idézetből' AND sent_at BETWEEN %s AND %s", $f, $t));
+		$r = cp_an_resp($a, $b); $all = array(); foreach ($r['own'] as $o) { $all[] = $o['med']; }
+		$x['resp_med'] = $all ? round(array_sum($all) / count($all)) : null;
+		$x['act'] = function_exists('cp_us_t') ? (int) $wpdb->get_var($wpdb->prepare('SELECT COALESCE(SUM(act_m), 0) FROM ' . cp_us_t('day') . ' WHERE d BETWEEN %s AND %s', $a, $b)) : 0;
+		return $x;
+	};
+	return array('cur' => $one($cur[0], $cur[1]), 'prev' => $one($prev[0], $prev[1]));
 }
