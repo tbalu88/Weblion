@@ -18,15 +18,17 @@
 	/* v1.67: a mappák / fülek listája gyorsítótárban – váltáskor azonnal megjelenik, a friss adat a háttérben jön */
 	const RO = ['cp_mail_rcpt', 'cp_mail_threads', 'cp_mail_tags', 'cp_mail_att_zip', 'cp_mail_thread', 'cp_mail_html', 'cp_mail_tpls', 'cp_mail_deals', 'cp_mail_preview', 'cp_mail_presence', 'cp_mail_draft_list', 'cp_mail_draft_get', 'cp_mail_draft_save', 'cp_mail_fill', 'cp_ai_draft']; /* v2.9.58: a kitöltés és az AI-piszkozat sem módosít listát */
 	S.lc = {}; S.lcAt = {};
-	async function post(action, params) {
+	async function post(action, params, again) {
 		if (!RO.includes(action)) { S.lc = {}; S.lcAt = {}; } /* bármilyen módosítás után friss lista */
 		const fd = new FormData();
 		fd.append('action', action);
 		fd.append('t', C.t);
 		Object.keys(params || {}).forEach(k => fd.append(k, params[k]));
-		const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
+		let r = null;
+		try { r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' }); } catch (e) { if (RO.includes(action) && !again) { await new Promise(res => setTimeout(res, 1500)); return post(action, params, true); } throw e; }
 		let j = null;
-		try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); }
+		/* v2.9.224: ha a tárhely túlterhelés miatt hibaoldalt küld, az olvasó kérés egyszer magától újrapróbál */
+		try { j = await r.json(); } catch (e) { if (RO.includes(action) && !again) { await new Promise(res => setTimeout(res, 1500)); return post(action, params, true); } throw new Error('A szerver most nem válaszolt rendesen (' + r.status + ') – próbáld újra pár másodperc múlva.'); }
 		if (!j || !j.success) { const er = new Error((j && j.data && j.data.msg) === 'auth' ? 'Lejárt a belépés – töltsd újra az oldalt.' : ((j && j.data && j.data.msg) || 'Hiba')); er.code = j && j.data && j.data.code; throw er; }
 		return j.data;
 	}
