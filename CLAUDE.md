@@ -19,3 +19,4 @@
 - Tesztelt hibajavítás és már jóváhagyott funkció élesítése KÉRDEZÉS NÉLKÜL mehet (a `tools/cp-deploy.sh` szkripttel), utána rövid jelentés.
 - Csak ezekben kérdezz előtte: adatvesztés vagy törlés; ügyfélnek kimenő levél; pénz (számla); Salesmate-adat módosítása; új funkció tervének jóváhagyása.
 - Élesítés előtt mindig: élő sha = utolsó ismert verzió, helyi teszt; utána 200-as válasz és útmutató-frissítés.
+- Élesítés után az OPcache-t NEM kell üríteni (a szerver 2 mp-enként magától észleli a változást); a teljes ürítés ~4100 fájlt fordít újra és leállást okozhat (2026-11-12).
