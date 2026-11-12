@@ -1276,7 +1276,29 @@
 		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
 	/* v2.9.185: a levélszálra írt jegyzet a szálon belül, a levelek között (időrendben) */
-	const tnItem = n => '<div class="d3-ti note d3-tnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> <span class="d3-tmf">– ' + esc(n.by || '') + '</span><small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div></div></div>';
+	/* v2.9.214: a levélszál saját jegyzete itt is szerkeszthető (✎) */
+	const TN_MAP = new Map();
+	const tnEd = n => { if (!n.mine) return ''; TN_MAP.set(String(n.id), n); return '<button type="button" class="d3-x d3-ned" data-tnedit="' + n.id + '" title="Jegyzet szerkesztése">✎</button>'; };
+	const tnItem = n => '<div class="d3-ti note d3-tnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet</b> <span class="d3-tmf">– ' + esc(n.by || '') + '</span><small>' + esc(huDT(n.at)) + '</small>' + tnEd(n) + '</div><div class="d3-tx" data-tnbody="' + n.id + '">' + nl(n.b) + '</div></div></div>';
+	document.addEventListener('click', e => {
+		const b = e.target.closest && e.target.closest('[data-tnedit]'); if (!b) return;
+		e.preventDefault(); e.stopPropagation();
+		const id = b.dataset.tnedit, n = TN_MAP.get(id), tx = b.closest('.d3-ti') && b.closest('.d3-ti').querySelector('[data-tnbody]');
+		if (!n || !tx || tx.querySelector('textarea')) return;
+		const back = () => { tx.innerHTML = nl(n.b); };
+		tx.innerHTML = '<textarea class="d3-nta" rows="3"></textarea><div class="d3-nbar"><button type="button" class="cpx-btn sm" data-nok>Mentés</button><button type="button" class="cpx-btn ghost sm" data-nx>Mégse</button></div>';
+		const ta = tx.querySelector('textarea'); ta.value = n.full != null ? n.full : n.b; ta.style.height = Math.min(400, ta.scrollHeight + 4) + 'px'; ta.focus();
+		['click', 'keydown'].forEach(ev => tx.addEventListener(ev, z => z.stopPropagation()));
+		const save = async () => {
+			const v = ta.value.trim(); if (!v) { toast('Üres jegyzet – ha törölni szeretnéd, a Levelezésben teheted.', true); return; }
+			const ok = tx.querySelector('[data-nok]'); ok.disabled = true;
+			try { await post('cp_mail_note_edit', { nid: id, body: v }); n.full = v; n.b = v.slice(0, 1200); document.querySelectorAll('[data-tnbody="' + id + '"]').forEach(x => { x.innerHTML = nl(n.b); }); toast('Jegyzet mentve.'); }
+			catch (er) { ok.disabled = false; toast(er.message, true); }
+		};
+		tx.querySelector('[data-nok]').addEventListener('click', save);
+		tx.querySelector('[data-nx]').addEventListener('click', back);
+		ta.addEventListener('keydown', z => { if (z.key === 'Enter' && (z.ctrlKey || z.metaKey)) { z.preventDefault(); save(); } if (z.key === 'Escape') { z.preventDefault(); back(); } });
+	}, true);
 	const tgMoreTxt = n => '+' + n + ' korábbi levél';
 	/* v2.9.157: hány napja volt az utolsó kommunikáció (a csempe jobb alsó sarkában, a Salesmate mintájára) */
 	function lcH(r) {
@@ -1397,7 +1419,7 @@
 		(x.dnotes || []).forEach(n => it.push({ k: 'note', at: n.at, h: '<div class="d3-ti note dnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a dealen</b> – ' + esc(n.author || '') + (n.src === 'sm' || n.src === 'smi' ? ' <span class="d3-q" title="' + (n.src === 'smi' ? 'A Salesmate egyik levélszálán írták' : 'A Salesmate-ben írták') + '">Salesmate</span>' : '') + '<small>' + esc(huDT(n.at)) + '</small>' + (W && (n.mine || (C.au && C.au.on)) ? '<button type="button" class="d3-x d3-ned" data-nedit="' + n.id + '" title="Jegyzet szerkesztése (a Salesmate-ben is)">✎</button><button type="button" class="d3-x" data-ndel="' + n.id + '" title="Jegyzet törlése (a Salesmate-ből is)">×</button>' : '') + '</div><div class="d3-tx" data-nbody="' + n.id + '">' + nl(n.body) + '</div></div></div>' }));
 		/* v2.9.184: a levélszálra írt jegyzet jelölve (melyik szálé), kattintásra nem nyit meg semmit; a szálat a „Levélszál ›” link nyitja */
 		const thS = {}; (m.threads || []).forEach(t => { thS[t.id] = t.subj || ''; });
-		(m.notes || []).forEach(n => it.push({ k: 'note', tn: 1, at: n.at, h: '<div class="d3-ti note thnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a levélszálon</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small></div><div class="d3-tx">' + nl(n.b) + '</div><div class="d3-tnth">✉ <span>' + esc(thS[n.th] || 'levélszál') + '</span> <button type="button" class="d3-thl" data-th="' + n.th + '" data-ths="' + esc(thS[n.th] || '') + '">Levélszál ›</button></div></div></div>' }));
+		(m.notes || []).forEach(n => it.push({ k: 'note', tn: 1, at: n.at, h: '<div class="d3-ti note thnote"><i>' + I.note + '</i><div><div class="d3-tt"><b>Jegyzet a levélszálon</b> – ' + esc(n.by) + '<small>' + esc(huDT(n.at)) + '</small>' + tnEd(n) + '</div><div class="d3-tx" data-tnbody="' + n.id + '">' + nl(n.b) + '</div><div class="d3-tnth">✉ <span>' + esc(thS[n.th] || 'levélszál') + '</span> <button type="button" class="d3-thl" data-th="' + n.th + '" data-ths="' + esc(thS[n.th] || '') + '">Levélszál ›</button></div></div></div>' }));
 		(x.acts || []).filter(a => Number(a.completed)).forEach(a => it.push({ k: 'act', at: a.completed_at || a.due_at, h: '<div class="d3-ti act"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b> <span class="d3-q">kész</span><small>' + esc(huDT(a.completed_at || a.due_at)) + '</small>' + (W && Number(a.related_id) === d.id ? '<button type="button" class="d3-ab" data-aundo="' + a.id + '" title="Visszanyitás">↺</button>' : '') + '</div><div class="d3-ts">' + esc([a.type, a.owner].filter(Boolean).join(' · ')) + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>' }));
 		(x.cards || []).forEach(c => it.push({ k: 'card', at: c.at, h: '<div class="d3-ti card" data-card="' + c.id + '" role="button" tabindex="0"><i>' + I.card + '</i><div><div class="d3-tt"><b>Feladat</b> – ' + esc(c.by) + '<small>' + esc(huDT(c.at)) + '</small></div><div class="d3-ts">' + (c.done ? '✓ ' : '') + esc(c.title) + '</div><div class="d3-tx">' + esc([c.list, c.as.join(', '), c.due ? 'határidő: ' + huD(c.due) : ''].filter(Boolean).join(' · ')) + '</div></div></div>' }));
 		/* v2.9.109: az ügyfél megnyitotta a panelből küldött levelet (első valódi megnyitás) */

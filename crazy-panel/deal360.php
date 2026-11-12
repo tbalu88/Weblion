@@ -152,8 +152,10 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
 		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + cp_d360_file_extra((int) $m['id'], (int) $ai, $a); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
 	}
-	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);
-	foreach ($notes as $n) { $out['notes'][] = array('id' => (int) $n['id'], 'th' => (int) $n['thread_id'], 'b' => mb_substr((string) $n['body'], 0, 1200), 'by' => $n['author'], 'at' => cp_crm_local($n['created_at'])); }
+	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);
+	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
+	/* v2.9.214: a saját jegyzet szerkeszthető a deal idővonalán is ('mine' + a teljes szöveg a szerkesztéshez) */
+	foreach ($notes as $n) { $mine = $me && (int) $n['author_uid'] === $me; $out['notes'][] = array('id' => (int) $n['id'], 'th' => (int) $n['thread_id'], 'b' => mb_substr((string) $n['body'], 0, 1200), 'by' => $n['author'], 'at' => cp_crm_local($n['created_at'])) + ($mine ? array('mine' => 1, 'full' => (string) $n['body']) : array()); }
 	return $out;
 }
 
