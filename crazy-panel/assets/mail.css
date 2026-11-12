@@ -74,6 +74,9 @@
 /* v2.9.202: Salesmate-mintájú gombsor – alapsor + lenyíló A: / ¶: panel */
 .ml-tbw{position:relative}
 .ml-tbw .ml-pop{bottom:calc(100% + 6px)}
+/* v2.9.203: a gombsor mindig látszik – a görgető aljához (a válaszablakban a Küldés-sáv fölé) tapad */
+.ml-compose .ml-tbw{position:sticky;bottom:0;z-index:3;background:#fff;padding-bottom:4px}
+.ml-irc .ml-tbw{bottom:calc(var(--mlsh, 64px) - 8px)}
 .ml-tbp{display:flex;align-items:center;gap:2px;flex-wrap:wrap;background:#F5F4F2;border-radius:10px;padding:4px 6px;margin-top:8px}
 .ml-tbp[hidden]{display:none}
 .ml-tbp+.ml-tbp{margin-top:0}

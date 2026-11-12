@@ -343,7 +343,7 @@
 			const el = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode, cs = getComputedStyle(el), base = getComputedStyle(area);
 			const fam = cs.fontFamily === base.fontFamily ? '' : (FF.find(f => f[0] && f[0].split(',')[0].replace(/"/g, '').toLowerCase() === cs.fontFamily.split(',')[0].replace(/["']/g, '').trim().toLowerCase()) || [''])[0];
 			ffs.value = fam;
-			const px = String(Math.round(parseFloat(cs.fontSize))), fz = FS.find(f => f[1] === px);
+			const px = String(Math.round(parseFloat(cs.fontSize))), fz = cs.fontSize === base.fontSize ? FS.find(f => !f[0]) : FS.find(f => f[1] === px); /* az alapméret = „14” (a levélben 14 px) */
 			if (fz) fss.value = fz[0]; else fss.selectedIndex = -1;
 		};
 		area.addEventListener('keyup', sync); area.addEventListener('mouseup', sync); area.addEventListener('focus', () => setTimeout(sync, 0));
@@ -1967,6 +1967,8 @@
 		const SIG = M.sig ? '<div class="cp-sign">' + M.sig + '</div>' : '';
 		const withSig = b => { b = b || ''; if (!SIG || /cp-sign/.test(b)) return b; if (ctx.quote && b.indexOf(ctx.quote) >= 0) return b.replace(ctx.quote, SIG + ctx.quote); return b + SIG; };
 		const ed = editor(q('[data-ed]'), withSig(draft ? (draft.quote && draft.body === draft.quote ? '<p><br></p>' + draft.body : draft.body) : '<p><br></p>'));
+		/* v2.9.203: a formázó gombsor mindig látszik (a görgetőben a Küldés-sáv fölé tapad) – a sáv magassága CSS-változóban */
+		{ const sb = q('.ml-send'); if (sb) { const hostEl = sb.closest('.ml-compose') || box, sh = () => hostEl.style.setProperty('--mlsh', sb.offsetHeight + 'px'); sh(); if (window.ResizeObserver) new ResizeObserver(sh).observe(sb); } }
 		const to = chips(q('[data-to]'), draft ? draft.to : []), cc = chips(q('[data-ccv]'), draft && draft.cc ? draft.cc : []), bcc = chips(q('[data-bcc]'), draft && draft.bcc ? draft.bcc : []);
 		if (draft && ((draft.cc && draft.cc.length) || (draft.bcc && draft.bcc.length))) box.querySelectorAll('[data-ccrow]').forEach(r => { r.hidden = false; });
 		if (draft && draft.deal) deal = { id: Number(draft.deal), title: draft.dealTitle || ('Deal #' + draft.deal) };
