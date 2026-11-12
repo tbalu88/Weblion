@@ -63,6 +63,8 @@
 		if (h !== S.mode) { S.mode = h; view(S.main); }
 	});
 	async function view(main) {
+		/* v2.9.219: a Naplóra kattintva a Panelhasználat mindig a mai nappal nyílik (a fülön belüli váltás megtartja a választást) */
+		if (S.main !== main || !main.querySelector('.au')) { U.pre = 'ma'; U.from = ''; U.to = ''; }
 		S.main = main;
 		const h = S.force || auHash(); S.force = null;
 		if (h) S.mode = h;
@@ -106,7 +108,7 @@
 	const tabName = k => { if (!k) return 'Fül nélkül (frissítés előtt)'; const b = document.querySelector('.cpx-tabs [data-tab="' + k + '"] span'); return (b && b.textContent.trim()) || TABN[k] || k; };
 	const doingH = u => { const g = u.doing; if (!g) return ''; return '<span class="au-do">' + (g.st === 'reply' ? '✍ levelet ír · ' : '') + esc(tabName(g.tab)) + (g.o ? ' · ' + objA(g) : '') + '</span>'; };
 	const objA = g => { const m = /^(mail|deal):(\d+)$/.exec(g.o || ''); return m ? '<a href="#" class="au-go" data-k="' + m[1] + '" data-id="' + m[2] + '">' + esc(g.ol) + '</a>' : esc(g.ol || ''); };
-	const U = { pre: 'het', from: '', to: '', uid: 0, d: null, seq: 0, err: '', ms: [] };
+	const U = { pre: 'ma', from: '', to: '', uid: 0, d: null, seq: 0, err: '', ms: [] };
 	/* v2.9.135: több ember összevetése (a kijelölés megmarad ezen a gépen) */
 	try { U.ms = JSON.parse(localStorage.getItem('cpx_au_ms') || '[]').map(Number).filter(Boolean).slice(0, 8); } catch (e) { U.ms = []; }
 	const msSave = () => { try { localStorage.setItem('cpx_au_ms', JSON.stringify(U.ms)); } catch (e) { /* privát mód */ } };
