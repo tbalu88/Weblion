@@ -210,7 +210,15 @@
 		let range = null;
 		const keep = () => { const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode)) range = s.getRangeAt(0).cloneRange(); };
 		area.addEventListener('keyup', keep); area.addEventListener('mouseup', keep); area.addEventListener('blur', keep);
-		const restore = () => { area.focus(); if (range) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(range); } };
+		/* v2.9.211: a kijelölés minden változáskor megjegyezve – jobbról balra kijelölve az egér a szövegdobozon kívül enged fel, ilyenkor a mouseup nem jött */
+		const selCh = () => { if (!area.isConnected) { document.removeEventListener('selectionchange', selCh); return; } const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode) && area.contains(s.focusNode)) range = s.getRangeAt(0).cloneRange(); };
+		document.addEventListener('selectionchange', selCh);
+		const restore = () => {
+			const s = window.getSelection();
+			/* ha a kijelölés már a szövegben van (a gombok nem veszik el a fókuszt), az marad – nem írjuk felül egy régebbivel */
+			if (document.activeElement === area && s.rangeCount && area.contains(s.anchorNode) && area.contains(s.focusNode)) return;
+			area.focus(); if (range) { s.removeAllRanges(); s.addRange(range); }
+		};
 		const exec = (c, v) => { restore(); document.execCommand(c, false, v == null ? null : v); keep(); };
 		/* v2.9.96: alapos formázástörlés – a böngésző „removeFormat”-ja a máshonnan (pl. jegyzetből, Wordből) bemásolt szöveg
 		   stílusait (span style, font, osztály, címsor, háttérszín) bent hagyja. A kijelölésen (ha nincs, a kurzor bekezdésén)
