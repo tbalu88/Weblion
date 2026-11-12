@@ -183,3 +183,13 @@ add_filter('cp_crm_deal_data', function ($x) {
 	$x['svc'] = $s; $x['svc_opts'] = cp_svc_list();
 	return $x;
 }, 22);
+
+/* ------------------------------------------------------------ ügyfélportál: a „csomag / szolgáltatás” szöveg az egységes listából (v2.9.221) */
+function cp_svc_portal_pkg($deal_id, $fallback = '') {
+	if (!cp_svc_on() || !(int) $deal_id || !function_exists('cp_crm_t')) { return $fallback; }
+	global $wpdb;
+	$d = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $deal_id), ARRAY_A);
+	if (!$d) { return $fallback; }
+	$l = cp_deal_svc_label($d);
+	return $l !== '' ? $l : $fallback;
+}

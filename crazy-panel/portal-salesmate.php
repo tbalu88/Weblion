@@ -40,6 +40,7 @@ function cp_portal_sm_snapshot($deal_id) {
 	$svc2 = $e['f_svc2'] !== '' ? trim(cp_panel_str(cp_panel_get($d, $e['f_svc2'])), ' ,') : '';
 	$package = implode(' · ', array_values(array_unique(array_filter(array($svc, $svc2)))));
 	if ($package === '') { $package = implode(' + ', array_filter(array($sp, $spin))); }
+	if (function_exists('cp_svc_portal_pkg')) { $package = cp_svc_portal_pkg($deal_id, $package); } /* v2.9.221 */
 	$start = $e['f_start'] !== '' ? cp_el_time(cp_panel_get($d, $e['f_start'])) : '';
 	if ($start === '' && $p['f_time'] !== '') { $start = cp_panel_norm_time(cp_panel_get($d, $p['f_time'])); }
 	$hours = $e['f_hours'] !== '' ? cp_panel_get($d, $e['f_hours']) : null;

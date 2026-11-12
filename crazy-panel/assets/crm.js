@@ -2184,7 +2184,8 @@
 				const t = { date: 'date', time: 'time', int: 'number', num: 'number', email: 'email', tel: 'tel' }[type] || 'text';
 				inp = '<input type="' + t + '"' + (type === 'num' ? ' step="0.5"' : '') + nm + ' value="' + esc(cur) + '"' + (vals[k] && type === 'text' ? ' list="crm-l-' + k + '"' : '') + '>' + (vals[k] && type === 'text' ? '<datalist id="crm-l-' + k + '">' + vals[k].map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>' : '');
 			}
-			return '<label class="crm-ef"><span>' + esc(label) + '</span>' + inp + '</label>';
+			/* v2.9.221: jelölőnégyzet-csoport nem lehet <label>-ben – a csoport üres részére kattintva az első négyzetet kapcsolta */
+			return type === 'multi' ? '<div class="crm-ef"><span>' + esc(label) + '</span>' + inp + '</div>' : '<label class="crm-ef"><span>' + esc(label) + '</span>' + inp + '</label>';
 		};
 		let h = sheetHead('Szerkesztés: ' + esc(d.title || 'Deal #' + d.id)) + '<form class="crm-edit" novalidate>';
 		/* v2.9.218: egységes szolgáltatások – a régi öt mező (és a csomag) helyett egy „Szolgáltatás(ok)”; a panelben tárolódik, a Salesmate-be nem */
@@ -2238,9 +2239,9 @@
 			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefonszám', 'tel') + '<input type="hidden" data-k="c_id"></div><div class="crm-dupc" data-dupc hidden></div>' +
 			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül. Ha hasonló kontaktot találok, itt jelzem.</p>' +
 			'<h4>Rendezvény</h4><div class="crm-eg">' + inp('event_d', 'Rendezvény dátuma', 'date') + inp('start_at', 'Kezdés (óra:perc)', 'time') + inp('venue', 'Helyszín', 'text') + inp('guests', 'Tervezett létszám', 'number') + inp('hours', 'Rendelkezésre állás (óra)', 'number') +
-			(vals.svc ? '<label class="crm-ef"><span>Szolgáltatás(ok)</span>' + multi('svc') + '</label></div>' : /* v2.9.218: egységes szolgáltatások */
+			(vals.svc ? '<div class="crm-ef"><span>Szolgáltatás(ok)</span>' + multi('svc') + '</div></div>' : /* v2.9.218: egységes szolgáltatások */
 			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
-			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>') +
+			'<div class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</div></div>') +
 			'<h4>Deal</h4><div class="crm-eg">' + inp('title', 'Deal neve *', 'text', ' required') +
 			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), pre) + '</select></label>' +
 			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +

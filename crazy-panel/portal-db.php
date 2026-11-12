@@ -176,6 +176,8 @@ function cp_portal_prep($row) {
 	if (!$row) { return null; }
 	$row->sm = $row->sm ? json_decode($row->sm, true) : array();
 	if (!is_array($row->sm)) { $row->sm = array(); }
+	/* v2.9.221: a szolgáltatás-szöveg az egységes listából (a régi „Fotóautomata · Szelfigép” kettőzés helyett) */
+	if (!empty($row->deal_id) && function_exists('cp_svc_portal_pkg')) { $row->sm['package'] = cp_svc_portal_pkg($row->deal_id, (string) ($row->sm['package'] ?? '')); }
 	return $row;
 }
 
