@@ -883,3 +883,8 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 	.crm-mbar .crm-fbtn,.crm-mbar .crm-cbtn,.crm-mbar .crm-sortc{height:40px}
 	.crm-mbar{max-width:100%;min-width:0}
 }
+
+/* v2.9.209: hónap-fejlécek kapcsolója az idővonal szűrősorában */
+.d3-tabs .d3-monb{margin-left:auto;background:transparent;border-color:transparent;color:#656973}
+.d3-tabs .d3-monb:hover{background:#F5F3EF}
+.d3-tabs .d3-monb[aria-pressed=true]{background:#F1EDE7;color:#141C33;border-color:#E6E3DE}

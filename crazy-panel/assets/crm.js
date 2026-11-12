@@ -1168,7 +1168,7 @@
 	/* v2.9.68: az idővonal szűrője (Mind · Levelek · Jegyzetek · Portál · Változások) felhasználónként megjegyezve */
 	const TL_KEY = 'cpd3tl' + (C.user ? ':' + C.user : '');
 	const TL_TABS = [['all', 'Mind'], ['mail', 'Levelek'], ['note', 'Jegyzetek'], ['portal', 'Portál'], ['hist', 'Változások']];
-	const D3 = { tab: (() => { try { const v = localStorage.getItem(TL_KEY); return TL_TABS.some(t => t[0] === v) ? v : 'all'; } catch (e) { return 'all'; } })() };
+	const D3 = { mon: (() => { try { return localStorage.getItem('cp_d3_mon') !== '0'; } catch (e) { return true; } })(), tab: (() => { try { const v = localStorage.getItem(TL_KEY); return TL_TABS.some(t => t[0] === v) ? v : 'all'; } catch (e) { return 'all'; } })() };
 	const I = {
 		mail_in: '<svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>', mail_out: '<svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/><path d="M15 3l3 3-3 3" /></svg>',
 		note: '<svg viewBox="0 0 24 24"><path d="M5 4h14v12l-4 4H5z"/><path d="M15 20v-4h4"/></svg>', act: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
@@ -1423,14 +1423,18 @@
 		const up = (x.acts || []).filter(a => !Number(a.completed)).sort((a, b) => (a.due_at || '') < (b.due_at || '') ? -1 : 1);
 		const cardsOpen = (x.cards || []).filter(c => !c.done && c.due);
 		const list = all.filter(i => (D3.tab === 'all' && !i.tn) || TL_GRP[i.k] === D3.tab);
-		let h = '<div class="d3-tabs" role="group" aria-label="Idővonal szűrése">' + TL_TABS.map(t => '<button type="button" data-t3="' + t[0] + '" aria-pressed="' + (D3.tab === t[0]) + '" class="' + (D3.tab === t[0] ? 'on' : '') + '">' + t[1] + ' <small>' + cnt(t[0]) + '</small></button>').join('') + '</div>';
+		let h = '<div class="d3-tabs" role="group" aria-label="Idővonal szűrése">' + TL_TABS.map(t => '<button type="button" data-t3="' + t[0] + '" aria-pressed="' + (D3.tab === t[0]) + '" class="' + (D3.tab === t[0] ? 'on' : '') + '">' + t[1] + ' <small>' + cnt(t[0]) + '</small></button>').join('') + '<button type="button" class="d3-monb" data-mon aria-pressed="' + D3.mon + '" title="Hónap szerinti bontás be/ki">📅 Hónapok</button></div>'; /* v2.9.209: a hónap-fejlécek kikapcsolhatók */
 		if ((up.length || cardsOpen.length) && (D3.tab === 'all' || D3.tab === 'hist')) {
 			h += '<h5 class="d3-mh">Közelgő (' + (up.length + cardsOpen.length) + ')</h5>' + up.map(a => { const late = a.due_at && a.due_at < today(); const mine = W && Number(a.related_id) === x.deal.id; return '<div class="d3-ti act up' + (late ? ' late' : '') + '"><i>' + I.act + '</i><div><div class="d3-tt"><b>' + esc(a.title || a.type) + '</b>' + (a.owner ? ' – ' + esc(a.owner) : '') + '<small>' + esc(huDT(a.due_at)) + (late ? ' · lejárt' : '') + '</small>' + (mine ? '<button type="button" class="d3-ab ok" data-adone="' + a.id + '" title="Késznek jelölés (a Salesmate-ben is)">✓ Kész</button><button type="button" class="d3-ab" data-aedit="' + a.id + '" title="Szerkesztés">✎</button>' : '') + '</div><div class="d3-ts">' + esc(a.type || '') + '</div>' + (a.description ? '<div class="d3-tx">' + nl(a.description) + '</div>' : '') + '</div></div>'; }).join('') +
 				cardsOpen.map(c => '<div class="d3-ti card up" data-card="' + c.id + '" role="button" tabindex="0"><i>' + I.card + '</i><div><div class="d3-tt"><b>' + esc(c.title) + '</b>' + (c.as.length ? ' – ' + esc(c.as.join(', ')) : '') + '<small>határidő: ' + esc(huD(c.due)) + '</small></div><div class="d3-ts">' + esc(c.list) + '</div></div></div>').join('');
 		}
 		let mon = '';
-		h += list.map(i => { const k = i.at.slice(0, 7); const mh = k !== mon ? '<h5 class="d3-mh">' + k.slice(0, 4) + '. ' + HU_MF[Number(k.slice(5, 7)) - 1] + '</h5>' : ''; mon = k; return mh + i.h; }).join('') || '<p class="cpx-muted d3-tl0">' + (D3.tab === 'mail' && (x.mail || {}).off ? 'A Levelezés füled nincs bekapcsolva.' : TL_EMPTY[D3.tab]) + '</p>';
+		h += list.map(i => { const k = i.at.slice(0, 7); const mh = D3.mon && k !== mon ? '<h5 class="d3-mh">' + k.slice(0, 4) + '. ' + HU_MF[Number(k.slice(5, 7)) - 1] + '</h5>' : ''; mon = k; return mh + i.h; }).join('') || '<p class="cpx-muted d3-tl0">' + (D3.tab === 'mail' && (x.mail || {}).off ? 'A Levelezés füled nincs bekapcsolva.' : TL_EMPTY[D3.tab]) + '</p>';
 		box.innerHTML = h;
+		box.querySelector('[data-mon]').addEventListener('click', () => {
+			D3.mon = !D3.mon; try { localStorage.setItem('cp_d3_mon', D3.mon ? '1' : '0'); } catch (e) { /* privát mód */ }
+			drawTimeline(box, x); const f = box.querySelector('[data-mon]'); if (f) f.focus();
+		});
 		box.querySelectorAll('[data-t3]').forEach(b => b.addEventListener('click', () => {
 			D3.tab = b.dataset.t3; try { localStorage.setItem(TL_KEY, D3.tab); } catch (e) { /* privát mód */ }
 			drawTimeline(box, x); const f = box.querySelector('[data-t3="' + D3.tab + '"]'); if (f) f.focus();
