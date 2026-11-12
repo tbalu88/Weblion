@@ -113,7 +113,7 @@ function cp_portal_pumble_head($portal) {
 function cp_portal_pumble_overdue($portal, $missing) {
 	$t = '⚠️ Hiányos adatlap a határidő után – ' . cp_portal_pumble_head($portal) . "\n";
 	$t .= 'Hiányzik: ' . implode(', ', array_values($missing)) . "\n";
-	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal: ' . cp_portal_deal_url($portal->deal_id);
 	return cp_portal_pumble($t);
 }
 
@@ -129,7 +129,7 @@ function cp_portal_pumble_late_change($portal, $logs) {
 	$m = trim((string) $o['pumble_mention']);
 	$t = '✏️ Adatlap módosítva a határidő után – ' . cp_portal_pumble_head($portal) . ($m !== '' ? ' · ' . $m : '') . "\n";
 	$t .= implode("\n", array_values(array_unique($lines))) . "\n";
-	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal: ' . cp_portal_deal_url($portal->deal_id);
 	return cp_portal_pumble($t);
 }
 
@@ -137,7 +137,7 @@ function cp_portal_pumble_late_change($portal, $logs) {
 function cp_portal_pumble_guests($portal, $gi) {
 	$t = '👥 Létszám eltér az ajánlatkéréstől – ' . cp_portal_pumble_head($portal) . "\n";
 	$t .= 'Megadott: ' . $gi['chosen'] . ' fő · ajánlatkérésben: ' . $gi['orig'] . ' fő' . ($gi['diff'] > 0 ? ' → felár / új ajánlat?' : '') . "\n";
-	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal: ' . cp_portal_deal_url($portal->deal_id);
 	$r = cp_portal_pumble($t);
 	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: létszám', $r->get_error_message()); }
 	return $r;
@@ -147,7 +147,7 @@ function cp_portal_pumble_guests($portal, $gi) {
 function cp_portal_pumble_bg_diff($portal, $deal_bg, $chosen) {
 	$t = '🖼 Az ügyfél más hátteret választott – ' . cp_portal_pumble_head($portal) . "\n";
 	$t .= 'A dealen rögzítve: ' . $deal_bg . ' · az ügyfél választása: ' . $chosen . " – a deal nem változott, egyeztessetek, és ha kell, állítsátok át.\n";
-	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal: ' . cp_portal_deal_url($portal->deal_id);
 	$r = cp_portal_pumble($t);
 	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: háttér-eltérés', $r->get_error_message()); }
 	return $r;
@@ -159,7 +159,7 @@ function cp_portal_pumble_custom_tpl($portal) {
 	$ct = isset($a['client_type']) && is_string($a['client_type']) ? $a['client_type'] : '';
 	$t = '🎨 Egyedi fotósablont kér – ' . cp_portal_pumble_head($portal) . "\n";
 	$t .= 'Díj: ' . cp_portal_custom_tpl_fee($ct) . ' · a leírás és a logó a portál adatlapján' . "\n";
-	$t .= 'Portál: ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal: ' . cp_portal_deal_url($portal->deal_id);
 	$r = cp_portal_pumble($t);
 	if (is_wp_error($r)) { cp_portal_error_add($portal->deal_id, 'Pumble: egyedi sablon', $r->get_error_message()); }
 	return $r;
@@ -173,6 +173,6 @@ function cp_portal_pumble_contract($portal, $first = true) {
 	$t = ($first ? '📝 Mehet a szerződés – ' : '📝 Módosultak a szerződés adatai – ') . cp_portal_pumble_head($portal) . "\n";
 	$t .= ($cd['type'] === 'ceg' ? 'Cég: ' : ($cd['type'] === 'magan' ? 'Magánszemély: ' : '')) . $who . "\n";
 	if (!empty($cd['duration']['diff'])) { $t .= '⚠️ Időtartam eltér: ' . cp_portal_hours_text($cd['duration']['chosen']) . ' (a foglalt csomag ' . cp_portal_hours_adj($cd['duration']['pkg']) . ')' . "\n"; }
-	$t .= 'Szerződés adatai (másolás): ' . cp_portal_panel_url($portal->deal_id);
+	$t .= 'Deal (szerződés készítése): ' . cp_portal_deal_url($portal->deal_id);
 	return cp_portal_pumble($t);
 }

@@ -107,6 +107,11 @@ function cp_portal_url($sub = '') {
 	return $b['root'] . $sub;
 }
 
+/* v2.9.228: a Pumble-értesítések linkje a deal adatlapjára visz (a Követés helyett) – onnan az Ügyfélportál kártyán nyílik az adatlap */
+function cp_portal_deal_url($deal_id) {
+	$p = cp_panel_opts();
+	return home_url('/' . trim($p['slug'], '/') . '/#deals:' . rawurlencode((string) $deal_id));
+}
 function cp_portal_panel_url($deal_id = '') {
 	$p = cp_panel_opts();
 	return home_url('/' . trim($p['slug'], '/') . '/' . ($deal_id !== '' ? '?portal=' . rawurlencode($deal_id) : '') . '#kovetes');
