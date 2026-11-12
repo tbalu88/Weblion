@@ -1591,7 +1591,7 @@
 		const used = new Set(NOSHOW);
 		/* v2.9.165: az ügyfél-adatlap (portál) hasznos válaszai a Rendezvény csoport után – csak olvasható */
 		const pi = (pinfo || []).length ? '<details class="d3-g d3-pinfo" open><summary>Az ügyfél adatlapjáról</summary><dl class="crm-dl">' + pinfo.map(r => '<dt>' + esc(r.l) + '</dt><dd>' + esc(r.t) + '</dd>').join('') + '</dl></details>' : '';
-		const SV = d.svc !== undefined, OLD_SVC = ['service', 'package', 'services_cp', 'services_ec', 'services_more', 'pkg_v2', 'pkg_fix'];
+		const SV = d.svc !== undefined, OLD_SVC = ['service', 'services_cp', 'services_ec', 'services_more', 'pkg_v2', 'pkg_fix']; /* v2.9.227: a csomag („package”) látszik */
 		if (SV) OLD_SVC.forEach(k => used.add(k)); /* v2.9.218: a régi szolgáltatás-/csomagmezők helyett a „Szolgáltatás(ok)” sor (a választott extra az Egyéb alatt marad) */
 		const GR = SV ? GROUPS.map(g => g[0] === 'Rendezvény' ? [g[0], g[1].filter(k => !OLD_SVC.includes(k) && k !== 'extras').reduce((a, k) => a.concat(k === 'hours' ? [k, 'svc'] : [k]), [])] : g) : GROUPS;
 		let h = GR.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return (b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : '') + (g[0] === 'Rendezvény' ? pi : ''); }).join('');
@@ -2192,7 +2192,7 @@
 		};
 		let h = sheetHead('Szerkesztés: ' + esc(d.title || 'Deal #' + d.id)) + '<form class="crm-edit" novalidate>';
 		/* v2.9.218: egységes szolgáltatások – a régi öt mező (és a csomag) helyett egy „Szolgáltatás(ok)”; a panelben tárolódik, a Salesmate-be nem */
-		const OLD_E = ['service', 'pkg_fix', 'services_ec', 'services_cp', 'services_more', 'extras'];
+		const OLD_E = ['service', 'services_ec', 'services_cp', 'services_more', 'extras']; /* v2.9.227: a Választott csomag marad (korlátozott / korlátlan nyomtatás) */
 		const ED = x.svc ? EDIT.map(sec => sec[0] === 'Rendezvény' ? [sec[0], sec[1].filter(f => !OLD_E.includes(f[0])).reduce((a, f) => a.concat(f[0] === 'hours' ? [f, ['svc', 'Szolgáltatás(ok)', 'multi']] : [f]), [])] : sec) : EDIT;
 		if (x.svc) vals.svc = x.svc_opts || [];
 		const ev = (k) => k === 'svc' ? ((x.svc && x.svc.l) || []).join(' | ') : k === 'ym' ? (d.ym || '') : editVal(d, k);
