@@ -678,7 +678,7 @@ function cp_crm_save_data($id, $f, $c) {
 	$F = cp_crm_edit_fields();
 	$body = array(); $types = array();
 	/* v2.9.218: egységes szolgáltatások – a panel saját táblájába, a Salesmate-be nem */
-	if (isset($f['svc']) && is_scalar($f['svc']) && function_exists('cp_svc_on') && cp_svc_on()) { cp_svc_set($id, array_filter(explode(' | ', (string) $f['svc']))); }
+	$svcIn = isset($f['svc']) && is_scalar($f['svc']) && function_exists('cp_svc_on') && cp_svc_on() ? array_filter(explode(' | ', (string) $f['svc'])) : null; /* a többi mentés után írjuk (ha az elakad, ez sem) */
 	unset($f['svc']);
 	foreach ($f as $col => $v) {
 		if (!isset($F[$col]) || !is_scalar($v)) { continue; }
@@ -723,6 +723,7 @@ function cp_crm_save_data($id, $f, $c) {
 			}
 		}
 	}
+	if ($svcIn !== null) { cp_svc_set($id, $svcIn); } /* v2.9.220 */
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	/* v1.65: a rendezvény dátumának változása azonnal az ügyfélportálra is (határidő, lezárás / újranyitás) */
 	/* v1.93: bármely deal-mező mentésekor (háttér, csomag, óraszám, helyszín…) – nem csak dátumváltozáskor */

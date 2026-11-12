@@ -144,7 +144,7 @@ function cp_bil_items($d, $p) {
 	$svc = trim((string) ($d['pkg_v2'] ?: $d['pkg_fix'] ?: $d['service'] ?: ''));
 	$more = trim(str_replace(' | ', ', ', implode(', ', array_filter(array((string) ($d['services_ec'] ?? ''), (string) ($d['services_cp'] ?? ''))))), ', ');
 	$name = $svc !== '' ? $svc : ($more !== '' ? $more : 'Rendezvényszolgáltatás');
-	if (function_exists('cp_svc_on') && cp_svc_on() && cp_deal_svc_str($d) !== '') { $name = cp_deal_svc_str($d); } /* v2.9.218: az egységes szolgáltatáslista */
+	if (function_exists('cp_svc_on') && cp_svc_on() && cp_deal_svc_label($d) !== '') { $name = cp_deal_svc_label($d); } /* v2.9.218: az egységes szolgáltatáslista */
 	$cm = trim(($d['event_d'] ? 'Rendezvény: ' . str_replace('-', '.', $d['event_d']) . '.' : '') . ($d['venue'] ? ', ' . $d['venue'] : '') . ((int) $d['hours'] > 0 ? ', ' . (int) $d['hours'] . ' óra' : ''), ', ');
 	/* v2.9.71: többnapos rendezvény – minden nap (vagy a tartomány) a megjegyzésben; az óraszám csak ha minden nap azonos */
 	$md = !empty($d['id']) && !empty($d['event_d']) && function_exists('cp_mday_get') ? cp_mday_align(cp_mday_get((int) $d['id']), (string) $d['event_d']) : array();

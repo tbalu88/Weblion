@@ -1588,12 +1588,12 @@
 		const used = new Set(NOSHOW);
 		/* v2.9.165: az ügyfél-adatlap (portál) hasznos válaszai a Rendezvény csoport után – csak olvasható */
 		const pi = (pinfo || []).length ? '<details class="d3-g d3-pinfo" open><summary>Az ügyfél adatlapjáról</summary><dl class="crm-dl">' + pinfo.map(r => '<dt>' + esc(r.l) + '</dt><dd>' + esc(r.t) + '</dd>').join('') + '</dl></details>' : '';
-		const SV = d.svc !== undefined, OLD_SVC = ['service', 'package', 'services_cp', 'services_ec', 'services_more', 'pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'];
+		const SV = d.svc !== undefined, OLD_SVC = ['service', 'package', 'services_cp', 'services_ec', 'services_more', 'pkg_v2', 'pkg_fix'];
 		if (SV) OLD_SVC.forEach(k => used.add(k)); /* v2.9.218: a régi szolgáltatás-/csomagmezők helyett a „Szolgáltatás(ok)” sor (a választott extra az Egyéb alatt marad) */
 		const GR = SV ? GROUPS.map(g => g[0] === 'Rendezvény' ? [g[0], g[1].filter(k => !OLD_SVC.includes(k) && k !== 'extras').reduce((a, k) => a.concat(k === 'hours' ? [k, 'svc'] : [k]), [])] : g) : GROUPS;
 		let h = GR.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return (b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : '') + (g[0] === 'Rendezvény' ? pi : ''); }).join('');
 		const rest = Object.keys(d).filter(k => !used.has(k) && d[k] != null && d[k] !== '' && LBL[k]);
-		const pk = SV ? [] : ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'].filter(k => d[k]);
+		const pk = (SV ? ['spinner_pkg', 'melange_pkg', 'pkg_old'] : ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old']).filter(k => d[k]); /* v2.9.220: a spinner-/melange-csomag bekapcsolva is látszik */
 		if (rest.length || pk.length) h += '<details class="d3-g"><summary>Egyéb</summary>' + dl(d, rest.concat(pk)) + '</details>';
 		if (d.description) h += '<details class="d3-g"><summary>Leírás</summary><div class="crm-desc">' + nl(d.description) + '</div></details>';
 		return h;
@@ -2214,7 +2214,7 @@
 			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Mentés…'; msg.className = 'crm-emsg';
 			try {
 				const r = await post('cp_crm_save', { id: d.id, f: JSON.stringify(ch), c: JSON.stringify(cc) });
-				toast(r.warn ? 'Mentve, de: ' + r.warn : 'Mentve – a Salesmate-ben is.', !!r.warn);
+				toast(r.warn ? 'Mentve, de: ' + r.warn : (Object.keys(ch).every(k => k === 'svc') && !Object.keys(cc).length ? 'Mentve.' : 'Mentve – a Salesmate-ben is.'), !!r.warn);
 				if (S.mode === 'list') load(); else if (S.board) { const i = S.board.rows.findIndex(y => y.id === d.id); if (i >= 0 && r.row) { S.board.rows[i] = r.row; redrawBoard(); } }
 				openDeal(d.id);
 			} catch (err) { btn.disabled = false; msg.textContent = err.message; msg.className = 'crm-emsg err'; }

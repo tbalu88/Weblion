@@ -82,7 +82,7 @@ function cp_trv_calc($deal_id, $geocode = true) {
 	$place = $bp ? 'Budapest' : (string) ($geo['n'] ?? '');
 	/* a becslés ugyanazokkal a szabályokkal számol (csomag / szolgáltatás szerinti budapesti díj, magánszemélynél bruttó) */
 	$d['km_fee'] = 0;
-	$e = function_exists('cp_est_deal') ? cp_est_deal($d) : null;
+	$e = function_exists('cp_est_any') ? cp_est_any($d) : (function_exists('cp_est_deal') ? cp_est_deal($d) : null); /* v2.9.220 */
 	$fee = null; $vat = '';
 	if ($e) {
 		foreach ((array) $e['l'] as $l) {
@@ -137,7 +137,7 @@ function cp_rcl_tick($force = false) {
 	$catch = ($o['catch'] ?? '') === '1';
 	if ($catch) { $from = wp_date('Y-m-d', strtotime($today . ' +14 days -1 year')); }
 	$done = get_option('cp_rcl_done', array()); if (!is_array($done)) { $done = array(); }
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.event_d, d.value, d.service, d.services_ec, d.venue, d.owner_id, d.contact_id, d.company_id, c.name cn, c.email ce, co.name con FROM $D d LEFT JOIN $C c ON c.id = d.contact_id LEFT JOIN $CO co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND d.status = 'Won' AND d.event_d BETWEEN %s AND %s ORDER BY d.event_d", $from, $to), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.event_d, d.value, d.service, d.services_ec, d.services_cp, d.services_more, d.package, d.pkg_fix, d.pkg_v2, d.venue, d.owner_id, d.contact_id, d.company_id, c.name cn, c.email ce, co.name con FROM $D d LEFT JOIN $C c ON c.id = d.contact_id LEFT JOIN $CO co ON co.id = d.company_id WHERE d.deleted_at IS NULL AND d.status = 'Won' AND d.event_d BETWEEN %s AND %s ORDER BY d.event_d", $from, $to), ARRAY_A);
 	$board = (int) $wpdb->get_var('SELECT id FROM ' . cp_kb_t('boards') . " WHERE deleted_at IS NULL AND kind = 'team' ORDER BY pos, id LIMIT 1");
 	$list = $board ? (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_kb_t('lists') . ' WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id LIMIT 1', $board)) : 0;
 	if (!$list) { return array('skip' => 'nincs közös feladattábla'); }
@@ -159,7 +159,7 @@ function cp_rcl_tick($force = false) {
 		$newer = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND id <> %d AND (" . implode(' OR ', $or) . ") AND (status = 'Open' OR created_at >= %s OR event_d > %s)", $id, gmdate('Y-m-d H:i:s', time() - 180 * DAY_IN_SECONDS), $r['event_d']));
 		if ($newer) { $done[$id] = time(); $skip[] = $id; continue; }
 		$who = $r['con'] ?: ($r['cn'] ?: $r['ce']);
-		$svc = (function_exists('cp_svc_on') && cp_svc_on()) ? cp_deal_svc_str($r) : trim(implode(', ', array_filter(array((string) $r['service'], str_replace(' | ', ', ', (string) $r['services_ec']))))); /* v2.9.218 */
+		$svc = (function_exists('cp_svc_on') && cp_svc_on()) ? cp_deal_svc_label($r) : trim(implode(', ', array_filter(array((string) $r['service'], str_replace(' | ', ', ', (string) $r['services_ec']))))); /* v2.9.218 */
 		$ev = cp_rcl_hud($r['event_d'], true);
 		$next = cp_rcl_hud(wp_date('Y-m-d', strtotime($r['event_d'] . ' 12:00 +1 year')), false);
 		$title = mb_substr('🔁 Visszahívás: ' . $who . ' – egy éve: ' . $ev . ($svc !== '' ? ' (' . $svc . ')' : ''), 0, 250);
