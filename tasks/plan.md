@@ -1,6 +1,6 @@
 # Kidolgozási terv: háttér-foglaltság időablakkal (2 órás szabály)
 
-*2026-11-12 · Crazy panel · állapot: JÓVÁHAGYÁSRA VÁR*
+*2026-11-12 · Crazy panel · állapot: KÉSZ, élesítve (2.9.232)*
 
 ## Cél
 Egy háttér ugyanazon a napon két rendezvényre is kiadható, ha a korábbi rendezvény vége és a későbbi kezdése között **legalább 2 óra** van. A szabály mindenhol egyformán érvényes: portál háttérválasztó, portál mentés-ellenőrzés, panel Hátterek fül ütközésjelzése, deal szakaszváltáskor adott figyelmeztetés.
