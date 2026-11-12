@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.224');
+define('CP_PANEL_VER', '2.9.225');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -539,7 +539,7 @@ function cp_panel_normalize($rows) {
 			'selfie'  => $sp,
 			'spin'    => $spin,
 			'kind'    => ($spin !== '' && $sp === '') ? 'spin' : (($spin !== '' && $sp !== '') ? 'both' : 'selfie'),
-			'bg'      => cp_panel_str(cp_panel_get($r, $o['f_bg'])),
+			'bg'      => cp_panel_bg_recent($id, cp_panel_str(cp_panel_get($r, $o['f_bg']))),
 			'loc'     => cp_panel_str(cp_panel_get($r, $o['f_loc'])),
 			'guests'  => cp_panel_str(cp_panel_get($r, $o['f_guests'])),
 			'note'    => cp_panel_str(cp_panel_get($r, $o['f_note'])),
@@ -961,6 +961,15 @@ function cp_panel_parse_bgs($html) {
 	return array('list' => $list, 'dups' => array_values(array_unique($dups)));
 }
 
+/* v2.9.225: a frissen kiválasztott háttér 30 percig akkor is látszik, ha a Salesmate keresője még a régi értéket adja vissza
+   (a keresője a mentés után késve frissül; ilyenkor a Követés / Hátterek táblából „eltűnt” a választás) */
+function cp_panel_bg_recent($id, $bg, $set = null) {
+	$m = get_transient('cp_bg_recent'); if (!is_array($m)) { $m = array(); }
+	$id = (string) $id;
+	if ($set !== null) { $m[$id] = array('bg' => (string) $set, 't' => time()); foreach ($m as $k => $x) { if (time() - (int) $x['t'] > 30 * MINUTE_IN_SECONDS) { unset($m[$k]); } } set_transient('cp_bg_recent', $m, HOUR_IN_SECONDS); return $set; }
+	if (!isset($m[$id]) || time() - (int) $m[$id]['t'] > 30 * MINUTE_IN_SECONDS) { return $bg; }
+	return cp_panel_lc($m[$id]['bg']) === cp_panel_lc($bg) ? $bg : $m[$id]['bg'];
+}
 function cp_panel_flush_cache() {
 	global $wpdb;
 	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_cp\\_panel\\_d\\_%' OR option_name LIKE '\\_transient\\_timeout\\_cp\\_panel\\_d\\_%'");
@@ -1162,6 +1171,7 @@ function cp_panel_ajax_setbg() {
 		}
 	}
 	/* v1.93: a panel saját deal-táblája és az ügyfélportál is azonnal frissüljön – a deal-táblát a cp_sm_request utáni cp_crm_after_write már frissítette (v2.9.58: a dupla tárolás kivéve) */
+	cp_panel_bg_recent($id, '', $now !== null ? $now : $bg); /* v2.9.225 */
 	cp_panel_flush_cache();
 	if (function_exists('cp_portal_get_by_deal') && function_exists('cp_portal_sm_refresh') && function_exists('cp_portal_db_ready') && cp_portal_db_ready()) { $pp = cp_portal_get_by_deal((string) $id); if ($pp) { cp_portal_sm_refresh($pp, 0); } }
 	wp_send_json_success(array('id' => $id, 'bg' => $now !== null ? $now : $bg, 'verified' => $now !== null));
