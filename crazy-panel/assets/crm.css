@@ -874,3 +874,12 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 @media (hover:none){.d3-dfx{opacity:1}}
 [data-fsec].d3-drop{outline:2px dashed #2F5BD8;outline-offset:-4px}
 .d3-tgl .d3-tnote{background:#FFFBEA;border-color:#F3E6B5}
+/* v2.9.198: mobilon a 2.9.183-as egységesítés nem írja felül a mobil eszközsort (a „+ Cég / kontakt” rejtve, a Lomtár csak ikon) */
+@media (max-width:760px){
+	.crm-mbar .crm-qfb{display:none}
+	.crm-mbar .crm-binb{flex:none;width:40px;height:40px;padding:0;justify-content:center;font-size:16px}
+	.crm-mbar .crm-binb .crm-binl{display:none}
+	.crm-mbar .crm-srch input{height:40px}
+	.crm-mbar .crm-fbtn,.crm-mbar .crm-cbtn,.crm-mbar .crm-sortc{height:40px}
+	.crm-mbar{max-width:100%;min-width:0}
+}

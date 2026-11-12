@@ -249,8 +249,8 @@
 			if (S.mode === 'board') f += '<span class="crm-seg crm-dens" role="group" aria-label="Kártyák"><button type="button" data-dense="0" class="' + (S.dense ? '' : 'on') + '" aria-pressed="' + !S.dense + '" title="Részletes kártyák" aria-label="Részletes kártyák">' + IC.cards + '</button><button type="button" data-dense="1" class="' + (S.dense ? 'on' : '') + '" aria-pressed="' + S.dense + '" title="Kompakt kártyák" aria-label="Kompakt kártyák">' + IC.dense + '</button></span>';
 		}
 		const inf = '<span class="crm-info" tabindex="0" role="note" aria-label="' + esc(info) + '" data-tip="' + esc(info) + '">' + IC.info + '</span>';
-		if (MOBH && S.mode !== 'leads') return '<div class="crm-bar crm-mbar">' + seg + f + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑 Lomtár</button>' : '') + '</div>';
-		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑 Lomtár</button>' : '') + '</div>' + inf + '</div><div class="crm-bar">' + f + '</div>';
+		if (MOBH && S.mode !== 'leads') return '<div class="crm-bar crm-mbar">' + seg + f + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑<span class="crm-binl"> Lomtár</span></button>' : '') + '</div>';
+		return '<div class="crm-head"><div class="crm-hl">' + seg + (R.edit ? '<button class="cpx-btn" type="button" data-new>+ Új deal</button>' : '') + (C.role === 'admin' ? '<button class="cpx-btn ghost crm-binb" type="button" data-bin title="Törölt deal-ek – 30 napig visszaállíthatók">🗑<span class="crm-binl"> Lomtár</span></button>' : '') + '</div>' + inf + '</div><div class="crm-bar">' + f + '</div>';
 	}
 
 	/* ------------------------------------------------------------ v2.9.53: összetett szűrő (mint a Salesmate „View Settings → Filter”) */
