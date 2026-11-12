@@ -876,7 +876,7 @@
 	const demoOk = () => !(M.connected || M.sync);
 	async function drawInbox(box) {
 		if (!demoOk()) S.demo = false;
-		const F = [['inbox', 'Beérkezett'], ['follow', 'Követett'], ['snooze', 'Szundi'], ['promo', 'Promóciók'], ['outbox', 'Kimenő'], ['sent', 'Elküldött'], ['draft', 'Piszkozatok'], ['archive', 'Archív'], ['trash', 'Kuka'], ['spam', 'Spam']];
+		const F = [['inbox', 'Beérkezett'], ['follow', 'Követett'], ['snooze', 'Szundi'], ['promo', 'Promóciók'], ['system', 'Rendszerüzenetek'], ['outbox', 'Kimenő'], ['sent', 'Elküldött'], ['draft', 'Piszkozatok'], ['archive', 'Archív'], ['trash', 'Kuka'], ['spam', 'Spam']];
 		S.tab = S.tab || 'open';
 		let rows = [], counts = {}, un = {};
 		if (S.demo) { rows = (S.demoRows = S.demoRows || demoData()).filter(t => (S.folder === 'follow' ? t.fol.length : (t.folder || 'inbox') === S.folder) && (S.tab !== 'open' || t.st === 'open') && (S.tab !== 'unassigned' || !t.as) && (!S.unf || t.un) && (!(S.tg || []).length || tgList(t.tags).some(n => S.tg.some(x => x.toLowerCase() === n.toLowerCase())))); S.tags = demoTags(); un = { inbox: S.demoRows.filter(t => t.un && t.st === 'open' && (t.folder || 'inbox') === 'inbox').length }; counts = { inbox: S.demoRows.filter(t => t.st === 'open').length, follow: S.demoRows.filter(t => t.fol.length).length }; }
@@ -1015,13 +1015,13 @@
 		bar.querySelector('[data-sall]').addEventListener('click', () => { if (S.sel.size === S.rows.length) { S.sel.clear(); drawInbox(box); return; } S.rows.forEach(t => S.sel.add(t.id)); selUI(box); });
 		const rd = box.querySelector('[data-read]');
 		const sel = S.rows.filter(t => S.sel.has(t.id));
-		const inBin = ['trash', 'spam', 'archive', 'promo', 'snooze'].includes(S.folder);
+		const inBin = ['trash', 'spam', 'archive', 'promo', 'system', 'snooze'].includes(S.folder);
 		const B = (op, t, cls) => '<button type="button" class="ml-sb' + (cls ? ' ' + cls : '') + '" data-op="' + op + '">' + t + '</button>';
 		rd.innerHTML = '<div class="ml-selp"><div class="ml-selico">✉<i>✓</i></div><h3>' + n + ' levélszál kijelölve</h3>' +
 			'<div class="ml-sbs">' + B('read', '✉ Olvasottnak jelölés') + B('unread', '● Olvasatlannak jelölés') + B('tag', '🏷 Címke') +
 			(sel.some(t => t.st !== 'closed') ? B('close', '✓ Lezárás') : '') + (sel.some(t => t.st === 'closed') ? B('open', '↺ Újranyitás') : '') +
 			'<label class="ml-sb ml-sbas">👤 Kiosztás <select data-sas><option value="">– válassz –</option><option value="0">Kiosztatlan</option>' + PEOPLE.map(p => '<option value="' + p.id + '">' + esc(p.n) + '</option>').join('') + '</select></label>' +
-			B('snooze', '⏰ Szundi') + (inBin ? B('restore', S.folder === 'promo' ? '📥 Beérkezettbe' : '↩ Visszaállítás') : B('archive', '🗄 Archiválás')) + (S.folder !== 'spam' ? B('spam', '⚠ Spam') : '') + (S.folder !== 'trash' ? B('trash', '🗑 Kukába', 'bad') : '') + '</div>' +
+			B('snooze', '⏰ Szundi') + (inBin ? B('restore', S.folder === 'promo' || S.folder === 'system' ? '📥 Beérkezettbe' : '↩ Visszaállítás') : B('archive', '🗄 Archiválás')) + (S.folder !== 'spam' ? B('spam', '⚠ Spam') : '') + (S.folder !== 'trash' ? B('trash', '🗑 Kukába', 'bad') : '') + '</div>' +
 			'<p class="cpx-muted">Ezek csak a panelben hatnak: a postafiókban és a Salesmate-ben semmi nem változik, a Kukából bármikor visszaállítható.</p>' +
 			'<button type="button" class="ml-link" data-scancel>Mégse</button></div>';
 		rd.querySelector('[data-scancel]').addEventListener('click', () => { S.sel.clear(); drawInbox(box); });
@@ -1037,9 +1037,9 @@
 	function swipeRow(box, b) {
 		const id = Number(b.dataset.th), t = (S.rows || []).find(x => x.id === id);
 		if (!t) return;
-		const back = ['archive', 'trash', 'spam', 'promo', 'snooze'].includes(S.folder), LIM = 90;
+		const back = ['archive', 'trash', 'spam', 'promo', 'system', 'snooze'].includes(S.folder), LIM = 90;
 		let x0 = 0, y0 = 0, dx = 0, mode = 0, bg = null, swiped = 0;
-		const R = '<span>' + (t.un ? '✓ Olvasott' : '● Olvasatlan') + '</span>', Lt = '<span>' + (back ? (S.folder === 'promo' ? '📥 Beérkezettbe' : '↺ Visszaállítás') : '🗄 Archiválás') + '</span>';
+		const R = '<span>' + (t.un ? '✓ Olvasott' : '● Olvasatlan') + '</span>', Lt = '<span>' + (back ? (S.folder === 'promo' || S.folder === 'system' ? '📥 Beérkezettbe' : '↺ Visszaállítás') : '🗄 Archiválás') + '</span>';
 		const reset = () => { b.style.transition = 'transform .18s'; b.style.transform = ''; setTimeout(() => { if (bg) { bg.remove(); bg = null; } b.classList.remove('sw'); b.style.transition = ''; }, 190); };
 		b.addEventListener('touchstart', e => { if (e.touches.length !== 1) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; mode = 0; b.style.transition = 'none'; }, { passive: true });
 		b.addEventListener('touchmove', e => {

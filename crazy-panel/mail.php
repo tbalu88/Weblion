@@ -541,7 +541,7 @@ function cp_mail_ajax_threads() {
 	/* v2.9.42: címkére szűrve is minden levél között (a „Mind” fül szerint, minden mappából) */
 	$tg0 = json_decode((string) wp_unslash($_POST['tg'] ?? ''), true);
 	if (is_array($tg0) && array_filter(array_map('strval', $tg0), 'strlen')) { $qs = true; }
-	if ($qs && in_array($folder, array('inbox', 'archive', 'promo', 'sent', 'outbox', 'snooze'), true)) { $folder = 'all'; }
+	if ($qs && in_array($folder, array('inbox', 'archive', 'promo', 'system', 'sent', 'outbox', 'snooze'), true)) { $folder = 'all'; }
 	$me = function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0;
 	if ($folder === 'follow') { $w[] = $wpdb->prepare('FIND_IN_SET(%d, followers)', $me); }
 	/* v2.7.3: a beolvasáskor (postafiók, Salesmate) lezártként archivált régi levelezés a Beérkezettben látszik („Mind” fül);
@@ -821,7 +821,7 @@ function cp_mail_event_text($f, $set, $t) {
 /* ------------------------------------------------------------ v1.47: tömeges műveletek a kijelölt levélszálakon
  * Csak a panelben hat (olvasott, címke, felelős, lezárás, mappa) – a postafiókban és a Salesmate-ben semmi nem változik. */
 function cp_mail_folder_name($f) {
-	return array('inbox' => 'Beérkezett', 'snooze' => 'Szundi', 'archive' => 'Archív', 'trash' => 'Kuka', 'spam' => 'Spam', 'promo' => 'Promóciók', 'sent' => 'Elküldött', 'outbox' => 'Kimenő', 'draft' => 'Piszkozatok')[$f] ?? $f;
+	return array('inbox' => 'Beérkezett', 'snooze' => 'Szundi', 'archive' => 'Archív', 'trash' => 'Kuka', 'spam' => 'Spam', 'promo' => 'Promóciók', 'system' => 'Rendszerüzenetek', 'sent' => 'Elküldött', 'outbox' => 'Kimenő', 'draft' => 'Piszkozatok')[$f] ?? $f;
 }
 add_action('wp_ajax_nopriv_cp_mail_bulk', 'cp_mail_ajax_bulk');
 add_action('wp_ajax_cp_mail_bulk', 'cp_mail_ajax_bulk');
@@ -886,7 +886,7 @@ function cp_mail_ajax_bulk() {
 				break;
 			case 'restore':
 				unset($szm[(int) $t['id']]);
-				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive', 'snooze'), true) && !in_array($t['folder'], array('promo'), true) ? $t['prev_folder'] : 'inbox';
+				$to = $t['prev_folder'] !== '' && !in_array($t['prev_folder'], array('trash', 'spam', 'archive', 'snooze'), true) && !in_array($t['folder'], array('promo', 'system'), true) ? $t['prev_folder'] : 'inbox';
 				if ($t['folder'] !== $to) { $set['folder'] = $to; $set['prev_folder'] = ''; $set['status'] = 'open'; $ev = 'Visszaállítva: ' . cp_mail_folder_name($to); }
 				break;
 		}

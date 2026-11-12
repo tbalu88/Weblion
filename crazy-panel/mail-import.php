@@ -385,8 +385,10 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$kind = $out ? '' : cp_imp_kind($hraw, $f['e']);
 	/* v2.9.37: a „noreply” számlázóktól jövő számla nem rendszerüzenet – átvesszük */
 	if ($kind === 'skip' && function_exists('cp_mail_inv_subj') && cp_mail_inv_subj(cp_imp_hdr($h->subject ?? '')) && !preg_match('/mailer-daemon|postmaster/i', $f['e'])) { $kind = ''; }
-	if ($kind === 'skip') { return 'skip'; }
-	$promo = $kind === 'promo';
+	/* v2.9.226: a gépi rendszerüzenet (noreply, értesítő) nem vész el – a „Rendszerüzenetek” mappába kerül (értesítés és deal-kötés nélkül); a régi levelek importjánál továbbra is kimarad */
+	$sys = $kind === 'skip';
+	if ($sys && (!$live || preg_match('/mailer-daemon|postmaster/i', $f['e']))) { return 'skip'; }
+	$promo = $kind === 'promo' || $sys; /* a promóhoz hasonlóan: nem kerül a Beérkezettbe, nincs értesítés */
 	$blocked = !$out && function_exists('cp_mail_blocked') && cp_mail_blocked($f['e']); /* v2.9.188: tiltott feladó → Spam */
 	$other = $out ? ($to[0] ?? array('e' => '', 'n' => '')) : $f;
 	/* v1.98: kimenőnél az első nem saját címzett (a kollégák, saját címeink nem „ügyfelek”) */
@@ -428,18 +430,18 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	/* v2.9.58: a feldolgozás (IMAP-letöltés) közben nem került-e be mégis – még minden írás előtt (a zár mellett is ellenőrizve) */
 	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $mid))) { return 'dup'; }
-	if ($t && $live && !$out) { cp_imp_relink((int) $t['id'], $other['e'], $at, $subj); }
+	if ($t && $live && !$out && !$sys) { cp_imp_relink((int) $t['id'], $other['e'], $at, $subj); }
 	$dlx = null; $dld = null;
 	if (!$t) {
 		/* v2.9.73: új szál – a deal-link.php szabályai (deal-jel, dátum, további cím, SM-azonosító, céges domain) */
 		$dlx = cp_dl_ctx(array(array('id' => 0, 'deal_id' => 0, 'src' => 'imap', 'created_at' => $at, 'last_at' => $at, 'at' => $at, 'contact_email' => $other['e'], 'subject' => $subj, 'parts' => $parts)));
 		$dld = cp_dl_decide($dlx['ths'][0], $dlx);
-		$deal = $dld['act'] === 'link' ? (int) $dld['deal'] : 0;
+		$deal = $dld['act'] === 'link' && !$sys ? (int) $dld['deal'] : 0;
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,
-			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $blocked ? 'spam' : ($promo ? 'promo' : ($live ? 'inbox' : 'archive')), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
+			'followers' => '', 'tags' => $live ? '' : 'import', 'status' => $live ? 'open' : 'closed', 'folder' => $blocked ? 'spam' : ($sys ? 'system' : ($promo ? 'promo' : ($live ? 'inbox' : 'archive'))), 'snippet' => mb_substr(preg_replace('/\s+/u', ' ', $text), 0, 200), 'msg_count' => 0, 'has_attach' => 0,
 			'last_at' => $at, 'created_at' => $at, 'tkey' => $tkey, 'src' => 'imap'));
 		if (!$wpdb->insert_id) { throw new \Exception('A levélszál mentése nem sikerült: ' . $wpdb->last_error); }
-		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $blocked ? 'spam' : ($promo ? 'promo' : ($live ? 'inbox' : 'archive')), 'deal_id' => $deal ?: 0);
+		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $blocked ? 'spam' : ($sys ? 'system' : ($promo ? 'promo' : ($live ? 'inbox' : 'archive'))), 'deal_id' => $deal ?: 0);
 		if ($deal) { cp_dl_event((int) $t['id'], $dld, $dlx); } /* v2.9.73: az automatikus kötés oka a szál idővonalán */
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
