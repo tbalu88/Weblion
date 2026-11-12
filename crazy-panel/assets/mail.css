@@ -1061,3 +1061,26 @@ mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
 .ml-hlnav[hidden]{display:none}
 .ml-hlnav button{border:0;background:#fff;border-radius:999px;width:24px;height:24px;cursor:pointer;font-size:15px;line-height:1;color:#3A3F4B}
 .ml-hlnav button:hover{background:#FFE58A}
+
+/* v2.9.204: kompakt levélíró-fejléc – egy eszközsor (AI · új levélként · sablon · portál · deal), alacsonyabb mezősorok */
+@media (min-width:761px){
+.ml-ctop{gap:6px;padding-bottom:6px}
+.ml-ctop .ml-tbtn{font-size:13.5px;padding:5px 8px;border-radius:8px}
+.ml-ctop .ml-tbtn:hover{background:#F5F3EF}
+.ml-ctg{display:inline-flex;align-items:center;gap:8px;padding-right:8px;border-right:1px solid #EEEAE4}
+.ml-ctg .ml-aibtn{border:0;border-radius:8px;padding:5px 10px;font:600 12.5px Inter,sans-serif;cursor:pointer;background:linear-gradient(90deg,#FBEBDD,#EEE6FB);color:#4B2E83;white-space:nowrap}
+.ml-ctg .ml-aibtn[disabled]{opacity:.55;cursor:not-allowed}
+.ml-ctg .ml-link{font-size:12.5px}
+.ml-ctop .ml-grow{min-width:140px}
+.ml-chips input,.ml-irc .ml-chips input{min-width:80px}
+.ml-ctop .ml-pbtn small{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-ctop .ml-dp input{height:32px}
+.ml-row{min-height:38px;padding:2px 0;gap:10px}
+.ml-row>label{flex-basis:62px;font-size:13px}
+.ml-row>input,.ml-row>select{height:32px}
+.ml-chips{min-height:32px;gap:4px}
+.ml-chips input{height:28px}
+.ml-chip{padding:2px 6px 2px 3px}
+.ml-send [data-test]{display:none} /* v2.9.204: a Próbalevél gomb asztalon rejtve (mobilon a Továbbiak menüben marad) */
+}
+@media (max-width:760px){.ml-ctg{display:none!important}}

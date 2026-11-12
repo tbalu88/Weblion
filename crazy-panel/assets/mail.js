@@ -1776,7 +1776,7 @@
 
 	/* onClose: Esc-re vagy mellé kattintásra az egész választó bezárul (v2.9.87); nélküle csak a lista csukódik be */
 	function dealPicker(host, onPick, sugTh, onClose, opener, onNew) {
-		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
+		host.innerHTML = '<div class="ml-dp"><input type="search" placeholder="🔗 Deal keresése…" title="Deal keresése (név, e-mail, #szám) – kitölti a címzettet és a változókat" aria-label="Deal"><div class="ml-dp-l" hidden></div></div>';
 		const inp = host.querySelector('input'), list = host.querySelector('.ml-dp-l');
 		let t = null, sug = null, seq = 0;
 		const close = () => { clearTimeout(t); seq++; list.hidden = true; document.removeEventListener('pointerdown', outside, true); if (onClose) onClose(); };
@@ -1948,8 +1948,8 @@
 			(SON ? '<button type="button" data-mq="test">🧪 Próbalevél magamnak</button>' : '') + '<button type="button" data-mq="prev">👁 Előnézet</button><button type="button" data-mq="save">💾 Piszkozat mentése</button>' +
 			(ctx.thread ? '<button type="button" data-mq="unthread">✉ Új levélként küldöm</button>' : '') + '<button type="button" data-mq="clear">🗑 Új, üres levél</button>' + (SON ? '' : '<small>A panelből küldés neked még nincs bekapcsolva.</small>') + '</div></div>' +
 			(ctx.thread ? '<div class="ml-rctx">' + (ho && ho.inline ? '' : '↩ Válasz a levélszálra: <b>' + esc(ctx.subj || '#' + ctx.thread) + '</b>') + /* v2.9.83: a szálon belül a fejléc már mondja */ (M.ai ? '<button type="button" class="ml-aibtn" data-cai title="Válaszpiszkozat az AI-val a levélszál alapján">✨ AI válasz</button>' : '<button type="button" class="ml-aibtn" disabled title="Az AI-válasz az AI-kulcs megadása után érhető el (WordPress → Beállítások → Crazy AI)">✨ AI válasz</button>') + '<button type="button" class="ml-link" data-unthread>Új levélként küldöm</button></div><div data-caip hidden class="ml-aip"></div>' : '') +
-			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon beszúrása ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Ügyfélportál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
-			'<div class="ml-row"><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
+			'<div class="ml-ctop"><span class="ml-rel"><button type="button" class="ml-tbtn" data-tplbtn title="Sablon beszúrása"><i class="ml-tpli"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></i>🔖 Sablon ▾</button></span>' + (C.portal && C.portal.on ? '<span class="ml-rel ml-pbw" data-pbw hidden><button type="button" class="ml-tbtn ml-pbtn" data-pins title="A deal személyes ügyfélportál-linkjének beszúrása">📝 Portál<small data-pst></small></button><button type="button" class="ml-tbtn ml-pdd" data-pmode aria-label="Beszúrási mód" title="Beszúrási mód">▾</button><div class="ml-pop ml-ppop" data-ppop hidden></div></span>' : '') + '<div data-dp class="ml-grow"></div></div>' +
+			'<div class="ml-row" data-fromrow><label>Feladó</label><select data-from>' + BOXES.map(b => '<option value="' + esc(b.id) + '">' + esc(b.n + (b.e ? ' (' + b.e + ')' : '')) + '</option>').join('') + '</select></div>' +
 			'<div class="ml-row"><label>Címzett</label><div class="ml-chips" data-to></div><button type="button" class="ml-link" data-cc>Másolat / Rejtett</button></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Másolat</label><div class="ml-chips" data-ccv></div></div>' +
 			'<div class="ml-row" data-ccrow hidden><label>Rejtett</label><div class="ml-chips" data-bcc></div></div>' +
@@ -2002,6 +2002,10 @@
 		if (unt) unt.addEventListener('click', () => { ctx.thread = 0; unt.parentNode.remove(); });
 		const fromSel = q('[data-from]');
 		if ((M.send && M.send.on)) { Array.from(fromSel.options).forEach(o => { if (o.value !== M.send.box) o.disabled = true; }); fromSel.value = M.send.box; }
+		/* v2.9.204: kompakt fejléc – a Feladó sor csak akkor látszik, ha több postafiókból is küldhetsz */
+		{ const fr = q('[data-fromrow]'); if (fr && Array.from(fromSel.options).filter(o => !o.disabled).length <= 1) fr.hidden = true; }
+		/* v2.9.204: az AI válasz és az „Új levélként küldöm” a sablon / portál / deal sorába kerül (egy sor kettő helyett) */
+		{ const ct = q('.ml-ctop'), rc = q('.ml-rctx'); if (ct && rc) { const bs = Array.from(rc.querySelectorAll('.ml-aibtn, [data-unthread]')); if (bs.length) { const g = document.createElement('span'); g.className = 'ml-ctg'; bs.forEach(b => g.appendChild(b)); ct.prepend(g); } if (!rc.textContent.trim()) rc.hidden = true; } }
 		const sendBtn = q('[data-send]'), testBtn = q('[data-test]');
 		/* v1.54: mellékletek csatolása (feltöltés a szerverre, küldéskor a levélhez) */
 		const atts = [];
