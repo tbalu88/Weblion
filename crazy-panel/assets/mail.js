@@ -196,6 +196,52 @@
 		t[0] === 'FF' ? '<select class="ml-sel ml-ffsel" data-ffs title="Betűtípus" aria-label="Betűtípus">' + FF.map(f => '<option value="' + esc(f[0]) + '">' + esc(f[1]) + '</option>').join('') + '</select>' :
 		t[0] === 'FS' ? '<select class="ml-sel ml-fssel" data-fss title="Betűméret (px)" aria-label="Betűméret">' + FS.map(f => '<option value="' + f[0] + '"' + (f[0] ? '' : ' selected') + '>' + f[1] + '</option>').join('') + '</select>' :
 		'<button type="button" data-cmd="' + t[0] + '" title="' + esc(t[1]) + '" aria-label="' + esc(t[1]) + '"' + (t[0] === 'attach' ? ' disabled' : '') + (t[0] === 'pA' || t[0] === 'pP' ? ' aria-expanded="false"' : '') + '>' + (t[0] === 'var' ? '#' : ICON[t[0]]) + '</button>';
+	/* v2.9.212: beillesztett formázott szöveg – a forrás (Word, Pages, Jegyzetek, Google Docs, weboldal, levél) stíluslapjáról
+	   jövő formázás is a szövegre kerül (méret, betűtípus, szín, kiemelés, félkövér, dőlt, aláhúzás, igazítás); minden más kimarad */
+	const PASTE_CSS = ['color', 'background-color', 'font-size', 'font-family', 'font-weight', 'font-style', 'text-decoration-line', 'text-decoration', 'text-align', 'vertical-align'];
+	const FONT_SZ = { 1: '10px', 2: '13px', 3: '16px', 4: '18px', 5: '24px', 6: '32px', 7: '48px' };
+	function pasteClean(html) {
+		const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+		const els = Array.from(doc.body.querySelectorAll('*'));
+		/* az elemek saját (inline) stílusa elsőbbséget élvez a stíluslap szabályaival szemben */
+		const own = new Map(els.map(el => [el, new Set(Array.from(el.style || []))]));
+		const css = Array.from(doc.querySelectorAll('style')).map(x => x.textContent).join('\n');
+		if (css && window.CSSStyleSheet) {
+			try {
+				const sh = new CSSStyleSheet(); sh.replaceSync(css.replace(/@import[^;]+;/g, ''));
+				Array.from(sh.cssRules).forEach(r => {
+					if (!r.selectorText || !r.style) return;
+					let hit = []; try { hit = doc.body.querySelectorAll(r.selectorText); } catch (e) { return; }
+					hit.forEach(el => { Array.from(r.style).forEach(pr => { if (!own.get(el).has(pr)) el.style.setProperty(pr, r.style.getPropertyValue(pr)); }); });
+				});
+			} catch (e) { /* hibás stíluslap – marad az inline formázás */ }
+		}
+		/* <font> → span stílussal */
+		doc.body.querySelectorAll('font').forEach(f => {
+			const sp = doc.createElement('span'); sp.setAttribute('style', f.getAttribute('style') || '');
+			if (f.getAttribute('color')) sp.style.color = f.getAttribute('color');
+			if (f.getAttribute('face')) sp.style.fontFamily = f.getAttribute('face');
+			if (FONT_SZ[f.getAttribute('size')]) sp.style.fontSize = FONT_SZ[f.getAttribute('size')];
+			while (f.firstChild) sp.appendChild(f.firstChild); f.replaceWith(sp);
+		});
+		doc.body.querySelectorAll('script, style, meta, link, title, xml, iframe, object, embed, form, input, button, select, textarea').forEach(x => x.remove());
+		const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_COMMENT); const cm = []; while (walk.nextNode()) cm.push(walk.currentNode); cm.forEach(c => c.remove());
+		Array.from(doc.body.querySelectorAll('*')).forEach(el => {
+			if (el.tagName.indexOf(':') > 0) { el.replaceWith(...el.childNodes); return; } /* Word: <o:p> */
+			const keep = {};
+			PASTE_CSS.forEach(pr => { const v = el.style.getPropertyValue(pr); if (v && !/var\(|inherit|initial|unset/.test(v)) keep[pr] = v; });
+			if (keep['font-size'] && /pt$/.test(keep['font-size'])) keep['font-size'] = Math.round(parseFloat(keep['font-size']) * 4 / 3) + 'px';
+			if (keep['background-color'] && /^(transparent|#fff(fff)?|white|rgba?\(255,\s*255,\s*255(,\s*1)?\)|rgba\(0,\s*0,\s*0,\s*0\))$/i.test(keep['background-color'].trim())) delete keep['background-color'];
+			if (keep['text-decoration-line']) { keep['text-decoration'] = keep['text-decoration-line']; delete keep['text-decoration-line']; }
+			if (keep['text-decoration'] && !/underline|line-through/.test(keep['text-decoration'])) delete keep['text-decoration'];
+			const at = { a: ['href'], img: ['src', 'alt', 'width', 'height'], td: ['colspan', 'rowspan'], th: ['colspan', 'rowspan'], ol: ['start', 'type'] }[el.tagName.toLowerCase()] || [];
+			Array.from(el.attributes).forEach(a => { if (!at.includes(a.name.toLowerCase())) el.removeAttribute(a.name); });
+			if (el.tagName === 'A' && !/^(https?:|mailto:|tel:)/i.test(el.getAttribute('href') || '')) el.removeAttribute('href');
+			if (el.tagName === 'IMG' && !/^https:\/\//i.test(el.getAttribute('src') || '')) { el.remove(); return; }
+			const st = Object.keys(keep).map(k => k + ':' + keep[k]).join(';'); if (st) el.setAttribute('style', st);
+		});
+		return doc.body.innerHTML.trim();
+	}
 	function editor(host, html) {
 		const vopts = Object.keys(VARS).map(k => '<button type="button" data-vk="' + esc(k) + '"><b>{{' + esc(k) + '}}</b><small>' + esc(VARS[k][0]) + '</small></button>').join('');
 		host.innerHTML = '<div class="ml-ed"><div class="ml-area" contenteditable="true" spellcheck="true" data-ph="Kezdj el gépelni…"></div><textarea class="ml-code" hidden spellcheck="false"></textarea>' +
@@ -213,6 +259,18 @@
 		/* v2.9.211: a kijelölés minden változáskor megjegyezve – jobbról balra kijelölve az egér a szövegdobozon kívül enged fel, ilyenkor a mouseup nem jött */
 		const selCh = () => { if (!area.isConnected) { document.removeEventListener('selectionchange', selCh); return; } const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode) && area.contains(s.focusNode)) range = s.getRangeAt(0).cloneRange(); };
 		document.addEventListener('selectionchange', selCh);
+		/* v2.9.212: formázott szöveg beillesztése – a forrás formázása (méret, szín stb.) teljesen átjön */
+		area.addEventListener('paste', e => {
+			if (e.defaultPrevented || !code.hidden) return;
+			const cd = e.clipboardData, h = cd ? cd.getData('text/html') : '';
+			if (!h) return; /* sima szöveg: a böngésző kezeli */
+			const clean = pasteClean(h);
+			if (!clean) return;
+			e.preventDefault();
+			try { document.execCommand('styleWithCSS', false, true); } catch (x) { /* régi böngésző */ }
+			document.execCommand('insertHTML', false, clean); keep();
+			area.dispatchEvent(new Event('input', { bubbles: true }));
+		});
 		const restore = () => {
 			const s = window.getSelection();
 			/* ha a kijelölés már a szövegben van (a gombok nem veszik el a fókuszt), az marad – nem írjuk felül egy régebbivel */
@@ -2109,6 +2167,8 @@
 				cmp.addEventListener('paste', e => {
 					const fs = Array.from((e.clipboardData && e.clipboardData.items) || []).filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
 					if (!fs.length) return;
+					/* v2.9.212: a formázott szöveg (pl. Wordből) mellé a vágólapra kép is kerülhet – ilyenkor a szöveg a fontos */
+					{ const h = e.clipboardData.getData('text/html'); if (h) { const t = document.createElement('template'); t.innerHTML = h; if (t.content.textContent.trim()) return; } }
 					e.preventDefault();
 					const d = new Date(), p2 = n => String(n).padStart(2, '0'), stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
 					fs.forEach((f, i) => { const ext = (/\/(png|jpe?g|gif|webp)$/i.exec(f.type || '') || [])[1] || 'png'; const named = f.name && !/^image\.\w+$/i.test(f.name) ? f : new File([f], 'beillesztett-kep-' + stamp + (fs.length > 1 ? '-' + (i + 1) : '') + '.' + ext.replace('jpeg', 'jpg'), { type: f.type || 'image/png' }); upload(named); });
