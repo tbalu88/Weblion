@@ -1,6 +1,6 @@
 # Kidolgozási terv: Crazy Booth – saját szelfigép-szoftver (Windows, Nikon D5300)
 
-*2026-11-12 · új projekt · állapot: JÓVÁHAGYÁSRA VÁR*
+*2026-11-12 · új projekt · állapot: 1. fázis folyamatban (döntések 2026-11-12)*
 *(Az előző terv – háttér 2 órás szabály – kész, élesítve 2.9.232; git-történetben megvan.)*
 
 ## Cél
@@ -55,9 +55,12 @@ Első változat: **fotó + nyomtatás, AI-képek, QR-kód a letöltéshez, onlin
 | Galéria tárhely az eventcrazy.hu-n (OPcache / lemez) | közepes | képek átméretezve (~2000 px); javaslat: a galéria a tartalék VPS-en (tartalek.eventcrazy.hu) fusson |
 | Ügyfélfotók (személyes adat) | magas | link-alapú, nem kereshető galéria; automatikus törlés (pl. 60 nap); adatkezelési szöveg |
 
+## Döntések (2026-11-12)
+- AI-stílus: **karikatúra**.
+- Galéria: a **tartalék VPS-en** (tartalek.eventcrazy.hu); megőrzés 60 nap (javaslat, módosítható).
+- QR: **csak a képernyőn**.
+- Gépek: csúcsidőben **10** egyszerre (gépenkénti kulcs).
+
 ## Nyitott kérdések
-1. **AI-képek:** milyen legyen (karikatúra, festmény, mese, háttércsere…)? Van már szolgáltató, amit az „AI fotózás / AI karikatúra” szolgáltatásnál használtok? Mennyi lehet a költség képenként?
-2. **Galéria helye:** eventcrazy.hu vagy a tartalék VPS (javaslat: VPS, mert nem lassítja a panelt)? Meddig maradjanak fent a képek (javaslat: 60 nap)?
-3. **QR a nyomaton is** legyen, vagy csak a képernyőn?
-4. **Képernyő:** milyen felbontás, álló vagy fekvő? Kell kezdőképernyő-arculat rendezvényenként?
-5. **Gépek száma:** hány booth-gép fut egyszerre (gépenkénti kulcs)?
+- Képernyő felbontása / álló-fekvő (addig: fekvő, bármilyen felbontásra igazodik).
+- AI-karikatúra szolgáltatója és képenkénti költségkerete (a 4. fázis előtt kell).

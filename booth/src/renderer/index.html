@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'">
+<title>Crazy Booth</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <section class="scr on" data-s="start">
+    <div class="brand">Event<span>Crazy</span></div>
+    <div class="tap"><b>Érints meg!</b><span>és mosolyogj a kamerába</span></div>
+    <div class="mode" data-modeinfo></div>
+  </section>
+
+  <section class="scr" data-s="live">
+    <div class="lv"><video data-video autoplay muted playsinline></video><img data-lvimg alt=""></div>
+    <div class="cd" data-cd></div>
+    <div class="shotno" data-shotno></div>
+    <div class="flash" data-flash></div>
+  </section>
+
+  <section class="scr" data-s="review">
+    <div class="rv">
+      <div class="rv-img"><canvas data-out width="1200" height="1800"></canvas></div>
+      <div class="rv-side">
+        <h2>Kész is!</h2>
+        <button type="button" class="big pri" data-act="print">Nyomtatás</button>
+        <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div>
+        <button type="button" class="big" data-act="again">Újra</button>
+        <button type="button" class="big ghost" data-act="done">Kész</button>
+        <p class="rv-t" data-rvt></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Nyomtatás…</b></div></section>
+
+  <section class="scr" data-s="settings">
+    <div class="st">
+      <h2>Beállítások <small data-ver></small></h2>
+      <div class="st-pin" data-pinbox>
+        <p>PIN-kód</p><div class="pin" data-pin></div>
+        <div class="pad">1 2 3 4 5 6 7 8 9 ⌫ 0 ✓</div>
+      </div>
+      <form class="st-f" data-form hidden>
+        <label>Kamera <select name="camera"><option value="dcc">Nikon D5300 (digiCamControl)</option><option value="mock">Próbamód (webkamera / minta)</option></select></label>
+        <label>digiCamControl címe <input name="dccUrl"></label>
+        <label>Fotók száma <select name="shots"><option value="1">1 kép (4×6")</option><option value="3">3 képes csík (2×6", kétszer a lapon)</option></select></label>
+        <label>Visszaszámlálás (mp) <input name="countdown" type="number" min="1" max="10"></label>
+        <label>Nyomtató <select name="printer" data-printers></select></label>
+        <label>Példány alapból <input name="copies" type="number" min="1" max="10"></label>
+        <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
+        <label>Előnézet ideje (mp) <input name="reviewSec" type="number" min="5" max="120"></label>
+        <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
+        <div class="st-b"><button type="button" class="big pri" data-act="save">Mentés</button><button type="button" class="big ghost" data-act="close">Vissza</button><button type="button" class="big ghost" data-act="quit">Kilépés</button></div>
+        <p class="st-msg" data-stmsg></p>
+      </form>
+    </div>
+  </section>
+  <div class="corner" data-corner title="Beállítások (nyomd 3 mp-ig)"></div>
+  <div class="err" data-err hidden></div>
+</div>
+<script src="compose.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
