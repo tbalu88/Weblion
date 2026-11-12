@@ -1898,8 +1898,16 @@
 		});
 		const todo = sh.querySelector('[data-todo]');
 		if (todo) todo.addEventListener('click', () => window.CPKanban.quickForm(sh.querySelector('[data-kbq]'), { title: d.title || 'Deal #' + d.id, deal: d.id, onDone: () => window.CPKanban.linked(kbl, { deal: d.id }) }));
-		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); openDeal(id, back); };
-		sh.querySelectorAll('[data-stg]').forEach(b => b.addEventListener('click', async () => after(await doMove(id, { to: b.dataset.stg }, d.title))));
+		/* v2.9.200: a deal csak akkor nyílik újra, ha közben az adatlapján maradtál (eddig a visszavonási idő után máshonnan is visszarántott) */
+		const after = async ok => { if (!ok) return; if (S.mode === 'list') load(); if (sh.isConnected) openDeal(id, back); };
+		/* v2.9.200: a szakasz-sáv azonnal az új szakaszt mutatja (a mentés a visszavonási idő után fut); visszavonáskor / hibánál visszaáll */
+		const stgNow = to => {
+			const bs = Array.from(sh.querySelectorAll('[data-stg]')), k = bs.findIndex(x => x.dataset.stg === to);
+			const prev = bs.map(x => [x.className, x.disabled]);
+			if (k >= 0) bs.forEach((x, j) => { x.className = j < k ? 'done' : j === k ? 'cur' : ''; x.disabled = true; });
+			return () => { if (sh.isConnected) bs.forEach((x, j) => { x.className = prev[j][0]; x.disabled = prev[j][1]; }); };
+		};
+		sh.querySelectorAll('[data-stg]').forEach(b => b.addEventListener('click', async () => { const undo = stgNow(b.dataset.stg); const ok = await doMove(id, { to: b.dataset.stg }, d.title); if (!ok) undo(); after(ok); }));
 		sh.querySelectorAll('[data-mvst]').forEach(b => b.addEventListener('click', async () => after(await doMove(id, { st: b.dataset.mvst }, d.title))));
 	}
 
