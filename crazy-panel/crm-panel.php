@@ -765,7 +765,7 @@ function cp_crm_ajax_create() {
 	if (empty($o['stage_write'])) { cp_el_err('A Salesmate-be írás a panel beállításaiban ki van kapcsolva.'); }
 	$in = json_decode(isset($_POST['d']) ? (string) wp_unslash($_POST['d']) : '', true);
 	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
-	$g = function ($k) use ($in) { return isset($in[$k]) && is_scalar($in[$k]) ? trim(sanitize_textarea_field((string) $in[$k])) : ''; };
+	$g = function ($k) use (&$in) { return isset($in[$k]) && is_scalar($in[$k]) ? trim(sanitize_textarea_field((string) $in[$k])) : ''; }; /* v2.9.223: hivatkozással – a „csak hónap” dátum utólag kerül bele */
 	$name = $g('c_name'); $email = sanitize_email($g('c_email')); $phone = mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', $g('c_mobile')), 0, 40);
 	$title = $g('title'); $stage = $g('stage');
 	if ($name === '') { cp_el_err('Add meg a kontakt nevét.'); }
