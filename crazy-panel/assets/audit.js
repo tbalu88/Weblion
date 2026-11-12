@@ -47,9 +47,9 @@
 	/* v2.9.88: nézetváltó – Műveletek (a napló) | Panelhasználat (ki mennyi időt töltött a panelben, mikor) */
 	/* v2.9.89: saját címek – #naplo = Műveletek, #naplo:hasznalat = Panelhasználat (könyvjelzőzhető, küldhető) */
 	/* v2.9.145: #naplo:elemzes = Elemzés */
-	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : '#naplo';
-	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : 'log') : null; }
-	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a></nav>';
+	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : m === 'srv' ? '#naplo:szerver' : '#naplo';
+	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes|szerver))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : m[1] === 'szerver' ? 'srv' : 'log') : null; }
+	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' && S.mode !== 'srv' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a><a href="#naplo:szerver" data-mode="srv"' + (S.mode === 'srv' ? ' class="on" aria-current="page"' : '') + '>Szerver</a></nav>';
 	function nav(mode) {
 		S.mode = mode;
 		try { localStorage.setItem('cpx_au_mode', mode); } catch (e) { /* privát mód */ }
@@ -72,6 +72,7 @@
 		if (location.hash !== auUrl(S.mode) && /^#naplo(:|$)/.test(location.hash || '#naplo')) history.replaceState(history.state, '', auUrl(S.mode));
 		if (S.mode === 'use') { useView(main); return; }
 		if (S.mode === 'an') { anView(main); return; }
+		if (S.mode === 'srv') { srvView(main); return; }
 		main.innerHTML = '<div class="au"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Ki, mikor, mit csinált a panelben: deal-ek, levelezés, feladatok, elszámolás, tárca, be- és kilépés. Csak az adminok látják; a bejegyzéseket nem lehet módosítani, 2 év után törlődnek.</p></div>' +
 			'<div class="au-f"><select data-f="who"><option value="">Mindenki</option></select><select data-f="area">' + AREAS.map(a => '<option value="' + a[0] + '">' + a[1] + '</option>').join('') + '</select>' +
 			'<label>Ettől <input type="date" data-f="from"></label><label>Eddig <input type="date" data-f="to"></label><input type="search" data-f="q" placeholder="Keresés (pl. deal neve)…">' +
@@ -190,6 +191,42 @@
 		A.err = ''; A.d = r;
 		box.innerHTML = anWeek(r.week) + anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + anEff(r.eff) + anLost(r.lost) + anRot(r.rot) + anRep(r.rep) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
+	}
+	/* v2.9.236: Szerver – OPcache és terhelés (csak olvasás) */
+	function srvView(main) {
+		main.innerHTML = '<div class="au an"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>A szerver gyorsítótárának (OPcache) és terhelésének állapota. Ha az OPcache megtelik, a PHP-fájlok egy része minden kérésnél újrafordul, és a panel lelassul. Csak olvasható; ürítés innen nincs. Csak az adminok látják.</p></div>' +
+			'<div class="au-f"><button type="button" class="cpx-btn ghost sm" data-srvre>↻ Frissítés</button></div><div class="au-box"><div class="cpx-muted">Lekérdezés…</div></div></div>';
+		bindSeg(main);
+		main.querySelector('[data-srvre]').addEventListener('click', srvLoad);
+		srvLoad();
+	}
+	async function srvLoad() {
+		const main = S.main; if (!main || !main.isConnected || S.mode !== 'srv') return;
+		const box = main.querySelector('.au-box');
+		let r;
+		try { r = await post('cp_srv_stats', {}); } catch (e) { box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		if (!main.isConnected || S.mode !== 'srv') return;
+		const o = r.opc, n = v => v == null ? '–' : String(v).replace('.', ',');
+		let h = '';
+		if (!r.on || !o) h += '<p class="cpx-muted">Az OPcache ezen a szerveren nem érhető el (vagy ki van kapcsolva).</p>';
+		else {
+			const tot = o.used + o.free + o.wasted, pc = x => tot ? (x / tot * 100) : 0;
+			const st = o.full || o.free < 5 ? ['bad', 'Megtelt – lassulást okoz'] : o.hit < 98.5 ? ['mid', 'Figyelni kell'] : ['ok', 'Rendben'];
+			h += '<div class="srv-st ' + st[0] + '"><b>' + st[1] + '</b><span>' + (o.full ? 'A gyorsítótár tele van: az új / módosított fájlok nem férnek be, minden kérésnél újrafordulnak.' : o.free < 5 ? 'Kevés a szabad memória, hamarosan megtelik.' : 'Van szabad hely; a találati arány ' + n(o.hit) + '%.') + '</span></div>';
+			h += '<div class="an-kpi"><div><span class="an-l">Memória</span><b>' + n(o.used) + ' / ' + n(Math.round(tot)) + ' MB</b><small>szabad: ' + n(o.free) + ' MB · elpazarolt: ' + n(o.wasted) + ' MB</small></div>' +
+				'<div><span class="an-l">Találati arány</span><b>' + n(o.hit) + '%</b><small>egészséges: 99% fölött</small></div>' +
+				'<div><span class="an-l">Tárolt fájlok</span><b>' + o.scripts + '</b><small>kulcsok: ' + o.keys + ' / ' + o.max_keys + '</small></div>' +
+				'<div><span class="an-l">Szövegpuffer</span><b>' + n(o.is_used) + ' / ' + n(o.is_size) + ' MB</b><small>szabad: ' + n(o.is_free) + ' MB</small></div></div>';
+			h += '<div class="srv-bar" title="foglalt / elpazarolt / szabad"><i class="u" style="width:' + pc(o.used) + '%"></i><i class="w" style="width:' + pc(o.wasted) + '%"></i><i class="f" style="width:' + pc(o.free) + '%"></i></div>';
+			h += '<div class="srv-two"><div><h3 class="au-h3">Beállítások</h3><table class="au-t srv-t">' + Object.keys(r.cfg || {}).map(k => '<tr><td>' + esc(k.replace('opcache.', '')) + '</td><td class="r"><b>' + esc(String(r.cfg[k])) + '</b></td></tr>').join('') + '</table><p class="an-note">Javasolt: memory_consumption 256 MB, max_accelerated_files 20000, interned_strings_buffer 16.</p></div>' +
+				'<div><h3 class="au-h3">Újraindulások</h3><table class="au-t srv-t"><tr><td>Indult</td><td class="r">' + esc(o.start || '–') + '</td></tr><tr><td>Utolsó újraindulás</td><td class="r">' + esc(o.last_restart || '–') + '</td></tr><tr><td>Memóriahiány miatt</td><td class="r">' + o.oom + '</td></tr><tr><td>Kulcshiány miatt</td><td class="r">' + o.hash + '</td></tr><tr><td>Kézi ürítés</td><td class="r">' + o.manual + '</td></tr></table></div></div>';
+			h += '<h3 class="au-h3">A panel gyorsítótáron kívüli fájljai (' + (r.miss || []).length + ')</h3>' + ((r.miss || []).length ? '<p class="an-sub">Ezek nincsenek a gyorsítótárban – ha egy kérés betölti őket, újra kell fordítani (lassabb).</p><div class="an-pairs">' + r.miss.map(f => '<span>' + esc(f) + '</span>').join('') + '</div>' : '<p class="cpx-muted">Minden panelfájl a gyorsítótárban van.</p>');
+		}
+		h += '<h3 class="au-h3">Szerver</h3><div class="an-kpi"><div><span class="an-l">Terhelés (1 / 5 / 15 perc)</span><b>' + (r.load ? r.load.map(n).join(' · ') : '–') + '</b><small>' + (r.cpus ? r.cpus + ' processzormag (osztott tárhely)' : '') + '</small></div>' +
+			'<div><span class="an-l">WordPress betöltése</span><b>' + (r.boot_ms != null ? r.boot_ms + ' ms' : '–') + '</b><small>ennél a kérésnél · ' + r.files + ' PHP-fájl</small></div>' +
+			'<div><span class="an-l">PHP</span><b>' + esc(r.php) + '</b><small>memórialimit: ' + esc(r.mem_limit) + '</small></div>' +
+			'<div><span class="an-l">Lekérdezve</span><b>' + esc(r.at.slice(-8)) + '</b><small>' + esc(r.at.slice(0, 12)) + '</small></div></div>';
+		box.innerHTML = h;
 	}
 	const card = (t, sub, body) => '<section class="an-c"><h3 class="au-h3">' + t + '</h3>' + (sub ? '<p class="an-sub">' + sub + '</p>' : '') + body + '</section>';
 	/* S7 */
@@ -404,6 +441,9 @@
 		'.an-own{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:12.5px}.an-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}.an-kpi div{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px}.an-kpi b{display:block;font:800 22px "Plus Jakarta Sans",sans-serif}.an-kpi span{font-size:12px;color:var(--mu)}.an-kpi .bad{border-color:#F3C2BF;background:#FDF1F0}.an-kpi .bad b{color:#B42318}' +
 		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
 		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}.an-hr{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}.an-hr span{overflow-wrap:anywhere}.an-hr small{color:var(--mu)}.an-lw{grid-template-columns:3fr 2fr}.an-lw>div:last-child .an-hr{grid-template-columns:minmax(0,1fr) auto auto}.an-sm{height:70px}.cpx-main:has(.au-ut),.cpx-main:has(.au.an){max-width:none}.au:has(.au-ut),.au.an{max-width:min(1600px,100%)}.au-ut .au-dc{max-width:520px}.au-ut td.au-who small.au-dom{display:none}@media (max-width:760px){.au-ut td.au-who small.au-dom{display:block}}.an-wk{grid-template-columns:repeat(4,minmax(0,1fr))}.an-wk b{font-size:19px}.an-wk b i{font-style:normal;font-size:11px;margin-left:6px;vertical-align:3px}.an-wk i.up{color:#1F9D55}.an-wk i.dn{color:#B42318}.an-wk small{display:block;font-size:11px;color:var(--mu);margin-top:2px}' +
-		'@media (max-width:760px){.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
+		'.srv-st{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;border-radius:12px;padding:10px 14px;margin-bottom:8px;font-size:13px}.srv-st b{font:800 15px \"Plus Jakarta Sans\",sans-serif}.srv-st.ok{background:#E6F4EA;color:#1E5B34}.srv-st.mid{background:#FFF4DE;color:#7A4A0B}.srv-st.bad{background:#FBE3E1;color:#8E2A22}' +
+		'.srv-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#F5F3EF;margin:0 0 12px}.srv-bar i{display:block;height:100%}.srv-bar .u{background:#2F5BD8}.srv-bar .w{background:#D9534F}.srv-bar .f{background:#1F9D55}' +
+		'.srv-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.srv-t td{padding:4px 8px;font-size:12.5px;font-variant-numeric:tabular-nums}.an-kpi small{display:block;color:var(--mu);font-size:11.5px;margin-top:2px}' +
+		'@media (max-width:760px){.srv-two{grid-template-columns:1fr}.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
 	document.head.appendChild(css);
 })();

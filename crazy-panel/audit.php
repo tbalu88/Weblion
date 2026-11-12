@@ -272,3 +272,41 @@ function cp_audit_ajax_csv() {
 	fclose($o);
 	exit;
 }
+
+/* v2.9.236: Napló → Szerver: OPcache- és szerverállapot (csak olvasás, csak adminoknak; ürítés innen nincs – lásd a munkaszabályokat) */
+add_action('wp_ajax_nopriv_cp_srv_stats', 'cp_srv_ajax_stats');
+add_action('wp_ajax_cp_srv_stats', 'cp_srv_ajax_stats');
+function cp_srv_ajax_stats() {
+	cp_audit_auth();
+	$o = array('at' => wp_date('Y.m.d. H:i:s'), 'boot_ms' => isset($_SERVER['REQUEST_TIME_FLOAT']) ? round((microtime(true) - $_SERVER['REQUEST_TIME_FLOAT']) * 1000) : null);
+	$o['php'] = PHP_VERSION; $o['mem_limit'] = ini_get('memory_limit');
+	$o['load'] = function_exists('sys_getloadavg') ? array_map(function ($x) { return round($x, 2); }, (array) sys_getloadavg()) : null;
+	$ci = @file_get_contents('/proc/cpuinfo'); $o['cpus'] = $ci ? substr_count($ci, 'processor') : null;
+	$o['files'] = count(get_included_files());
+	$s = function_exists('opcache_get_status') ? @opcache_get_status(false) : false;
+	$o['on'] = (bool) $s;
+	if ($s) {
+		$m = $s['memory_usage']; $st = $s['opcache_statistics']; $is = isset($s['interned_strings_usage']) ? $s['interned_strings_usage'] : null;
+		$mb = function ($b) { return round($b / 1048576, 1); };
+		$o['opc'] = array(
+			'full' => !empty($s['cache_full']), 'used' => $mb($m['used_memory']), 'free' => $mb($m['free_memory']), 'wasted' => $mb($m['wasted_memory']),
+			'scripts' => (int) $st['num_cached_scripts'], 'keys' => (int) $st['num_cached_keys'], 'max_keys' => (int) $st['max_cached_keys'],
+			'hit' => round($st['opcache_hit_rate'], 2), 'hits' => (int) $st['hits'], 'misses' => (int) $st['misses'],
+			'oom' => (int) $st['oom_restarts'], 'hash' => (int) $st['hash_restarts'], 'manual' => (int) $st['manual_restarts'],
+			'start' => !empty($st['start_time']) ? wp_date('Y.m.d. H:i', $st['start_time']) : '', 'last_restart' => !empty($st['last_restart_time']) ? wp_date('Y.m.d. H:i', $st['last_restart_time']) : '',
+			'is_used' => $is ? $mb($is['used_memory']) : null, 'is_free' => $is ? $mb($is['free_memory']) : null, 'is_size' => $is ? $mb($is['buffer_size']) : null,
+		);
+		$c = function_exists('opcache_get_configuration') ? @opcache_get_configuration() : null;
+		$d = $c && isset($c['directives']) ? $c['directives'] : array();
+		$o['cfg'] = array();
+		foreach (array('opcache.memory_consumption', 'opcache.max_accelerated_files', 'opcache.interned_strings_buffer', 'opcache.validate_timestamps', 'opcache.revalidate_freq', 'opcache.max_wasted_percentage', 'opcache.jit_buffer_size') as $k) {
+			if (array_key_exists($k, $d)) { $v = $d[$k]; if ($k === 'opcache.memory_consumption' && $v > 4096) { $v = round($v / 1048576) . ' MB'; } elseif ($k === 'opcache.jit_buffer_size' && is_numeric($v) && $v > 4096) { $v = round($v / 1048576) . ' MB'; } elseif (is_bool($v)) { $v = $v ? 'be' : 'ki'; } $o['cfg'][$k] = $v; }
+		}
+		/* a panel fájljai közül, amelyek nincsenek a gyorsítótárban (minden kérésnél újrafordulnak, ha betöltődnek) */
+		$o['miss'] = array();
+		if (function_exists('opcache_is_script_cached')) {
+			foreach ((array) glob(__DIR__ . '/*.php') as $f) { if (!opcache_is_script_cached($f)) { $o['miss'][] = basename($f); } }
+		}
+	}
+	wp_send_json_success($o);
+}
