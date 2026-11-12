@@ -109,7 +109,7 @@ function cp_flow_cond($d, $c) {
 }
 function cp_flow_fill($tpl, $d) {
 	$svc = implode(' ', array_filter(array_map(function ($k) use ($d) { return str_replace(' | ', ', ', (string) ($d[$k] ?? '')); }, array('service', 'package', 'services_ec', 'services_cp', 'services_more'))));
-	if (function_exists('cp_svc_on') && cp_svc_on()) { $svc = cp_deal_svc_str($d); } /* v2.9.218 */
+	if (function_exists('cp_svc_on') && cp_svc_on()) { $svc = cp_deal_svc_str($d) ?: trim(implode(' ', array_filter(array((string) ($d['package'] ?? ''), (string) ($d['pkg_fix'] ?? ''))))); } /* v2.9.218; ha nincs szolgáltatás, a régi csomagszöveg (döntés 2026-11-12) */
 	$panel = function_exists('cp_pu_panel_url') ? cp_pu_panel_url() : home_url('/');
 	return strtr($tpl, array('{title}' => (string) $d['title'], '{source}' => (string) $d['source'], '{contact}' => (string) ($d['cn'] ?? ''), '{event_date}' => (string) $d['event_d'],
 		'{services}' => $svc, '{note}' => (string) ($d['note'] ?? ''), '{id}' => (string) $d['id'], '{link}' => $panel . '#deals:' . $d['id']));
