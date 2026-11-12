@@ -1,5 +1,5 @@
 /* Crazy panel – Levelezés fül */
-.cpx-main:has(.ml-inbox),.cpx-main:has(.ml-tpls){max-width:none;padding:12px 14px}
+.cpx-main:has(.ml-inbox),.cpx-main:has(.ml-tpls){max-width:none;padding:12px 14px 12px 8px} /* v2.9.208: a menü és a levélpanel közti sáv = a panelek közti távolság (8 px) */
 .ml-note{background:var(--pendb);color:#6E5600;border-radius:10px;padding:5px 11px;font-size:12.5px;margin:0 0 6px}
 .ml-head{margin-bottom:6px}
 .ml-seg{display:inline-flex}
