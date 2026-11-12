@@ -1084,3 +1084,7 @@ mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
 .ml-send [data-test]{display:none} /* v2.9.204: a Próbalevél gomb asztalon rejtve (mobilon a Továbbiak menüben marad) */
 }
 @media (max-width:760px){.ml-ctg{display:none!important}}
+
+/* v2.9.210: a deal idővonaláról megnyitott levél rövid kiemelése a gyorsnézetben */
+.ml-msg.mlp-hit{box-shadow:0 0 0 2px #E8894A;transition:box-shadow .6s}
+.ml-msg{scroll-margin-top:10px}

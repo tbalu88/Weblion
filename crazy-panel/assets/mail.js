@@ -2422,7 +2422,7 @@
 		if (id <= 0) return;
 		if (PK.el) peekTear();
 		o = o || {};
-		Object.assign(PK, { th: id, o: o, x: null, cmp: false, ch: null, xs: {}, def: null, pend: null, ret: o.from || document.activeElement });
+		Object.assign(PK, { th: id, o: o, x: null, cmp: false, ch: null, xs: {}, def: null, pend: null, ret: o.from || document.activeElement, midGo: Number(o.mid) || 0 });
 		const el = document.createElement('div');
 		el.className = 'mlp';
 		el.innerHTML = '<div class="mlp-d" role="dialog" aria-modal="true" aria-labelledby="mlp-t" tabindex="-1">' +
@@ -2468,6 +2468,10 @@
 		EXT.spam = t.folder === 'spam';
 		PR.known[t.id] = msgs.reduce((a, m) => Math.max(a, Number(m.id) || 0), 0);
 		const mk = m => String(m.id || m.sent_at || '');
+		/* v2.9.210: a deal idővonaláról egy adott levélre kattintva az a levél nyílik ki (a többi csukva), és oda görget */
+		const goMid = PK.midGo && msgs.some(m => Number(m.id) === PK.midGo) ? PK.midGo : 0;
+		if (goMid) { PK.def = false; PK.xs = {}; PK.xs[String(goMid)] = true; }
+		PK.midGo = 0;
 		const isOpen = m => msgs.length <= 1 || (Object.prototype.hasOwnProperty.call(PK.xs, mk(m)) ? PK.xs[mk(m)] : (PK.def !== null ? PK.def : m === newest));
 		const allOpen = () => msgs.every(isOpen);
 		const ppl = pkPeople(msgs), PMAX = 12;
@@ -2504,6 +2508,14 @@
 		ceMark(b, PK.th);
 		loadHtml(b);
 		setTimeout(presPing, 50);
+		if (goMid) {
+			const a = b.querySelector('.ml-msg[data-mk="' + goMid + '"]');
+			if (a) {
+				const go = () => { if (a.isConnected) a.scrollIntoView({ block: 'start' }); };
+				requestAnimationFrame(go); setTimeout(go, 350); /* a levél teljes nézete később töltődik be */
+				a.classList.add('mlp-hit'); setTimeout(() => a.classList.remove('mlp-hit'), 2600);
+			}
+		}
 	}
 	function peekFoot() {
 		const f = PK.el && PK.el.querySelector('[data-pkf]');

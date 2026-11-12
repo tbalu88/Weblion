@@ -1250,7 +1250,7 @@
 	};
 	/* v2.9.64: a levélszál a deal / kontakt / cég fölött felugró ablakban nyílik (fülváltás nélkül); az ablak
 	   „Megnyitás a Levelezésben” gombja a régi utat (goMail) hívja. Gyorsnézet nélkül (régi mail.js) marad a goMail. */
-	const openTh = (id, el) => { if (window.CPMail && window.CPMail.peek) window.CPMail.peek(id, { from: el, subj: el && el.dataset.ths ? el.dataset.ths : '', full: goMail }); else goMail(id); };
+	const openTh = (id, el) => { if (window.CPMail && window.CPMail.peek) window.CPMail.peek(id, { from: el, subj: el && el.dataset.ths ? el.dataset.ths : '', mid: el && el.dataset.mid ? Number(el.dataset.mid) : 0, full: goMail }); /* v2.9.210: a kattintott levélre ugrik */ else goMail(id); };
 	function dealRows(list, curId, back) {
 		if (!list.length) return '<p class="cpx-muted">Nincs.</p>';
 		const li = o => '<li class="' + (o.id === curId ? 'cur' : '') + '"><button type="button" data-open="' + o.id + '"><b>' + esc(o.title || 'Deal #' + o.id) + '</b><small>' +
@@ -1272,7 +1272,7 @@
 	const tcD = (s, yr) => { const p = s.slice(0, 10).split('-').map(Number); return (yr || p[0] !== new Date().getFullYear() ? p[0] + '. ' : '') + HU_MS[p[1] - 1] + ' ' + p[2] + '.'; };
 	const tcSpan = (f, l) => { if (!l) return ''; if (!f || f.slice(0, 10) === l.slice(0, 10)) return tcD(l); const yr = f.slice(0, 4) !== l.slice(0, 4); return tcD(f, yr) + ' – ' + tcD(l, yr); };
 	const TG = { open: new Set(), cache: new Map(), notes: new Map() }; /* kinyitott csoportok és a betöltött korábbi levelek (szűrőváltás / újrarajzolás után is) */
-	const tmItem = (t, g) => '<div class="d3-ti d3-tm ' + (g.dir === 'out' ? 'out' : 'in') + '" data-th="' + t.id + '" data-ths="' + esc(t.subj || '') + '" role="button" tabindex="0"><i>' + (g.dir === 'out' ? I.mail_out : I.mail_in) + '</i><div><div class="d3-tt"><b>' + (g.dir === 'out' ? 'Levél tőlünk' : 'Levél érkezett') + '</b> <span class="d3-tmf">– ' + esc(g.from || '?') + '</span>' +
+	const tmItem = (t, g) => '<div class="d3-ti d3-tm ' + (g.dir === 'out' ? 'out' : 'in') + '" data-th="' + t.id + '"' + (g.id ? ' data-mid="' + Number(g.id) + '"' : '') + ' data-ths="' + esc(t.subj || '') + '" role="button" tabindex="0"><i>' + (g.dir === 'out' ? I.mail_out : I.mail_in) + '</i><div><div class="d3-tt"><b>' + (g.dir === 'out' ? 'Levél tőlünk' : 'Levél érkezett') + '</b> <span class="d3-tmf">– ' + esc(g.from || '?') + '</span>' +
 		(g.q ? ' <span class="d3-q" title="A levél nincs meg az Elküldött mappában – az ügyfél válaszában idézett szövegből állította vissza a panel">visszaállított</span>' : '') + (g.att ? ' <span class="d3-q d3-tca" title="' + Number(g.att) + ' melléklet">' + CLIP_S + Number(g.att) + '</span>' : '') + '<small>' + esc(huDT(g.at)) + '</small></div>' +
 		'<div class="d3-tx d3-tmx">' + (g.sn ? esc(g.sn) : '<em class="d3-tce">(nincs szöveg)</em>') + '</div></div></div>';
 	/* v2.9.185: a levélszálra írt jegyzet a szálon belül, a levelek között (időrendben) */
