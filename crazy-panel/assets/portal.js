@@ -302,8 +302,9 @@
   function tplFee() {
     var p = form.querySelector('[data-tpl-fee]'), ct = byKey('client_type');
     if (!p || !C.fees) return;
-    var v = ct ? read(ct) : '';
+    var v = ct ? read(ct) : '', tm = byKey('template_mode');
     p.textContent = C.fees[v] || C.fees[''];
+    p.hidden = !(tm && read(tm) === 'custom');   // v2.9.229: csak az egyedi sablon választása után
   }
   /* logó feltöltése az egyedi sablonhoz (a szerver ellenőrzi és újrakódolja) */
   function logoUp(inp, remove) {
@@ -356,7 +357,7 @@
     if (!fd) return;
     if (e.target.hasAttribute('data-same-as-client')) { sameAsClient(fd, e.target); return; }
     if (e.target.type === 'file') { logoUp(e.target); return; }
-    if (fd.getAttribute('data-field') === 'client_type') tplFee();
+    if (fd.getAttribute('data-field') === 'client_type' || fd.getAttribute('data-field') === 'template_mode') tplFee();
     if (fd.getAttribute('data-field') === 'schedule' && e.target.closest('[data-part="start"]')) autoEnd(fd);
     if (fd.getAttribute('data-field') === 'schedule') duration(fd);
     showIf(fd);

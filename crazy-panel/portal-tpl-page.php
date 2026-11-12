@@ -215,7 +215,8 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 	}
 	if ($k === 'template_mode') {
 		$ct = isset($answers['client_type']) && is_string($answers['client_type']) ? $answers['client_type'] : '';
-		$h .= '<p class="cpp-note" data-tpl-fee>' . esc_html(cp_portal_tpl_fee_text($ct)) . '</p>';
+		/* v2.9.229: a díj csak az „Egyedi sablont szeretnék” választása után látszik */
+		$h .= '<p class="cpp-note" data-tpl-fee' . ($val === 'custom' ? '' : ' hidden') . '>' . esc_html(cp_portal_tpl_fee_text($ct)) . '</p>';
 	}
 	if ($k === 'template_custom') { $h .= cp_portal_tpl_logo_html($portal, $answers, $locked); }
 	if ($k === 'guests_type_dress') {
