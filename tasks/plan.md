@@ -1,6 +1,6 @@
 # Kidolgozási terv: egységes „Szolgáltatás(ok)” mező + új árazás + HIBRID
 
-*2026-11-12 · Crazy panel · állapot: jóváhagyva, 1. fázis folyamatban*
+*2026-11-12 · Crazy panel · állapot: KÉSZ, bekapcsolva 2026-11-12 (2.9.220)*
 
 ## Cél
 
@@ -66,25 +66,25 @@ Az átnevezés csak akkor ad hozzá értéket, ha az EventCrazy-mező üres **va
 ## Feladatok
 
 ### 1. fázis – alap (kikapcsolt kapcsolóval élesíthető, semmi nem látszik)
-- [ ] **1. Átnevezési tábla + `cp_deal_svc($d)`** (új fájl `services.php`): a deal érvényes szolgáltatáslistája (panel-tábla → különben származtatott). *Kész, ha:* a próba mind a 4356 dealre lefut hiba nélkül; nincs olyan deal, ahol eddig volt szolgáltatás és most üres lenne.
-- [ ] **2. Panel-tábla `crazy_deal_svc` + mentés végpont** (csak panel, Salesmate-írás nélkül). *Kész, ha:* mentés után a szinkron futása sem írja felül; a Salesmate-be nem megy kérés (naplóval ellenőrizve).
-- [ ] **3. Új árazó `cp_est_v2($d)`** (az EventCrazy-tábla + Hibrid). *Kész, ha:* a próbán a nyitott dealekre a régi és új becslés összevetése elkészül.
+- [x] **1. Átnevezési tábla + `cp_deal_svc($d)`** (új fájl `services.php`): a deal érvényes szolgáltatáslistája (panel-tábla → különben származtatott). *Kész, ha:* a próba mind a 4356 dealre lefut hiba nélkül; nincs olyan deal, ahol eddig volt szolgáltatás és most üres lenne.
+- [x] **2. Panel-tábla `crazy_deal_svc` + mentés végpont** (csak panel, Salesmate-írás nélkül). *Kész, ha:* mentés után a szinkron futása sem írja felül; a Salesmate-be nem megy kérés (naplóval ellenőrizve).
+- [x] **3. Új árazó `cp_est_v2($d)`** (az EventCrazy-tábla + Hibrid). *Kész, ha:* a próbán a nyitott dealekre a régi és új becslés összevetése elkészül.
 
 ### Ellenőrzőpont A – próbafuttatás (élesben, csak olvasás)
-- [ ] Riport mind a 359 nyitott dealre: régi szolgáltatás-szöveg → új lista; régi becslés → új becslés; szerződés-/díjbekérő-felismerés régi → új. Az eltéréseket kategorizálva elküldöm neked, **jóváhagyásig nem kapcsolok be semmit.**
+- [x] Riport mind a 359 nyitott dealre: régi szolgáltatás-szöveg → új lista; régi becslés → új becslés; szerződés-/díjbekérő-felismerés régi → új. Az eltéréseket kategorizálva elküldöm neked, **jóváhagyásig nem kapcsolok be semmit.**
 
 ### 2. fázis – bekötés (a kapcsoló mögött)
-- [ ] **4. Szerkesztő + adatlap + új deal + inline** (crm.js): egy mező; Hibrid a listában.
-- [ ] **5. Fogyasztók:** szerződés, díjbekérő, automatizmus, levélváltozó, visszatérő ügyfelek, szűrő, AI-kitöltés → `cp_deal_svc`.
-- [ ] **6. Árbecslés bekötése** (csempe, adatlap, Ajánlat küldése).
+- [x] **4. Szerkesztő + adatlap + új deal + inline** (crm.js): egy mező; Hibrid a listában.
+- [x] **5. Fogyasztók:** szerződés, díjbekérő, automatizmus, levélváltozó, visszatérő ügyfelek, szűrő, AI-kitöltés → `cp_deal_svc`.
+- [x] **6. Árbecslés bekötése** (csempe, adatlap, Ajánlat küldése).
 
 ### Ellenőrzőpont B – kettős ellenőrzés
-- [ ] **1. kör (gépi):** ugyanaz a riport a kapcsoló **bekapcsolt** állapotára, csak a próbán belül (élesen még ki van kapcsolva): szerződés-típus, díjbekérő-tétel, Pumble-szöveg és levélváltozó minden nyitott dealre régi vs. új; elvárt: csak a tervezett eltérések.
-- [ ] **2. kör (független):** egy külön ügynök, aki nem látja a terveimet, csak a kódot és a riportot, átnézi a változást és keres összekeveredést (duplikáció, elveszett érték, Salesmate-írás).
-- [ ] Helyi böngészőteszt: szerkesztő, mentés, adatlap, becslés, régi deal megnyitása, legrosszabb adatok (sok szolgáltatás, üres, csak régi mező).
+- [x] **1. kör (gépi):** ugyanaz a riport a kapcsoló **bekapcsolt** állapotára, csak a próbán belül (élesen még ki van kapcsolva): szerződés-típus, díjbekérő-tétel, Pumble-szöveg és levélváltozó minden nyitott dealre régi vs. új; elvárt: csak a tervezett eltérések.
+- [x] **2. kör (független):** egy külön ügynök, aki nem látja a terveimet, csak a kódot és a riportot, átnézi a változást és keres összekeveredést (duplikáció, elveszett érték, Salesmate-írás).
+- [x] Helyi böngészőteszt: szerkesztő, mentés, adatlap, becslés, régi deal megnyitása, legrosszabb adatok (sok szolgáltatás, üres, csak régi mező).
 
 ### 3. fázis – bekapcsolás
-- [ ] **7. Kapcsoló be**, utána: 200-as válasz, 5 véletlen nyitott deal kézi összevetése, útmutató frissítése. Egy hétig a kapcsoló ki is kapcsolható; utána a régi kód kivehető (külön kérésre).
+- [x] **7. Kapcsoló be**, utána: 200-as válasz, 5 véletlen nyitott deal kézi összevetése, útmutató frissítése. Egy hétig a kapcsoló ki is kapcsolható; utána a régi kód kivehető (külön kérésre).
 
 ## Kockázatok
 
@@ -101,6 +101,11 @@ Az átnevezés csak akkor ad hozzá értéket, ha az EventCrazy-mező üres **va
 - Hibrid: 130 / 150 ezer (3 / 4 óra), utána +20 ezer/óra, nettó.
 - Gmail / magánszemély: Crazyphoto-árak maradnak.
 - „Fotózás 2 fotóssal” külön opció.
+
+## Utómunka (külön kérésre)
+- Deal-ek lista szolgáltatás-szűrője és az automatizmus-feltételek még a régi mezőkből szűrnek.
+- Weboldal-űrlapok átírása (Hibrid is) – külön terv.
+- Egy hét után a régi kód kivehető.
 
 ## Nyitott kérdések
 - Weboldal-űrlapok átírása most vagy később (javaslat: később, külön tervvel).
