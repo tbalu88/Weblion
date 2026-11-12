@@ -240,6 +240,19 @@
 			if (el.tagName === 'IMG' && !/^https:\/\//i.test(el.getAttribute('src') || '')) { el.remove(); return; }
 			const st = Object.keys(keep).map(k => k + ':' + keep[k]).join(';'); if (st) el.setAttribute('style', st);
 		});
+		/* v2.9.213: méretigazítás a levél alapbetűjéhez (14 px), mint a Salesmate-ben – a beillesztett szöveg leggyakoribb (törzs-)mérete
+		   lesz 14 px (a méret lekerül, a levél alapbetűjét kapja), a többi (cím, apró betű) arányosan igazodik */
+		const BASE = 14, pxOf = el => { for (let x = el; x && x !== doc.body; x = x.parentElement) { const v = x.style && x.style.fontSize; if (v) return /px$/.test(v) ? parseFloat(v) : NaN; } return BASE; };
+		const tw = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), cnt = {};
+		while (tw.nextNode()) { const n = tw.currentNode, len = n.nodeValue.trim().length; if (!len) continue; const px = pxOf(n.parentElement); if (px > 0) cnt[px] = (cnt[px] || 0) + len; }
+		const dom = Number(Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x])[0]) || BASE;
+		const f = dom >= 10 && dom <= 17 ? BASE / dom : 1; /* csak szövegméretű törzsnél (egy bemásolt nagy cím marad nagy) */
+		Array.from(doc.body.querySelectorAll('[style]')).forEach(el => {
+			const v = el.style.fontSize; if (!v || !/px$/.test(v)) return;
+			const nv = parseFloat(v) * f;
+			if (Math.abs(nv - BASE) < 0.75) el.style.removeProperty('font-size'); else el.style.fontSize = Math.round(nv) + 'px';
+			if (!el.getAttribute('style').trim()) el.removeAttribute('style');
+		});
 		return doc.body.innerHTML.trim();
 	}
 	function editor(host, html) {
