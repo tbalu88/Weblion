@@ -81,9 +81,9 @@ function cp_portal_render_sablon_page($portal, $tok) {
 		$f = __DIR__ . '/assets/' . $c;
 		echo '<link rel="stylesheet" href="' . esc_url(plugins_url('assets/' . $c, CP_PORTAL_MAIN)) . '?v=' . $v . '.' . (is_file($f) ? filemtime($f) : 0) . '">';
 	}
-	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(true);
-	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><a href="' . esc_url($ps['back']) . '">← Vissza az adatlaphoz</a><h1>Fotósablon</h1>';
-	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, töltsd fel a logótokat. A „Sablon mentése” gombbal elküldöd nekünk – a végleges, nyomtatható változatot a csapatunk készíti el belőle.</p>';
+	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(false);   /* v2.9.230: a szerkesztőből nincs Kilépés, csak „Vissza az adatlaphoz” */
+	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><a href="' . esc_url($ps['back']) . '" data-sbback>← Vissza az adatlaphoz</a><h1>Fotósablon</h1>';
+	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, töltsd fel a logótokat. Amit beállítasz, folyamatosan megőrizzük (ebben a böngészőben), így bármikor visszatérhetsz hozzá. A „Sablon mentése” gombbal elküldöd nekünk – a végleges, nyomtatható változatot a csapatunk készíti el belőle.</p>';
 	if ($locked) { echo '<p class="cpp-lock">A határidő lejárt, a sablon már nem módosítható. Változás esetén írj nekünk.</p>'; }
 	echo '</div><div id="cpp-sbroot"></div></main>';
 	echo '<script>window.CPX=' . wp_json_encode($cfg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';window.CPPS=' . wp_json_encode($ps, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
@@ -106,6 +106,20 @@ function cp_portal_sb_dataurl($s, $types, $max) {
 	$b = base64_decode(substr($s, $c + 8), true);
 	if ($b === false || strlen($b) > $max || !cp_sb_is_img($b)) { return null; }
 	return array($m[1] === 'png' ? 'png' : 'jpg', $b);
+}
+
+/* v2.9.231: a deal Fájljai közé kerülő sablon neve: „2026.11.12. - Megrendelő neve.png” (rendezvény dátuma - megrendelő) */
+function cp_portal_sb_filename($portal, $answers, $ext) {
+	$d = isset($answers['event_date']) && is_string($answers['event_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $answers['event_date']) ? $answers['event_date'] : (string) $portal->event_date;
+	$date = preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $d, $m) ? $m[1] . '.' . $m[2] . '.' . $m[3] . '.' : '';
+	$type = isset($answers['client_type']) ? $answers['client_type'] : '';
+	$cp = isset($answers['client_private']) && is_array($answers['client_private']) ? $answers['client_private'] : array();
+	$cc = isset($answers['client_company']) && is_array($answers['client_company']) ? $answers['client_company'] : array();
+	$name = $type === 'ceg' ? (isset($cc['company']) ? $cc['company'] : '') : (isset($cp['name']) ? $cp['name'] : '');
+	if (trim((string) $name) === '') { $name = isset($portal->sm['who']) && $portal->sm['who'] !== '' ? $portal->sm['who'] : 'Deal ' . (int) $portal->deal_id; }
+	/* fájlnévben tiltott jelek nélkül, de az ékezetek és a szóközök maradnak */
+	$name = trim(preg_replace('/\s+/u', ' ', preg_replace('#[\\/:*?"<>|\x00-\x1F]+#u', ' ', (string) $name)));
+	return mb_substr(($date !== '' ? $date . ' - ' : '') . $name, 0, 180) . '.' . $ext;
 }
 
 function cp_portal_rest_sablon_save(WP_REST_Request $req) {
@@ -149,6 +163,11 @@ function cp_portal_rest_sablon_save(WP_REST_Request $req) {
 		cp_portal_answer_put($portal->id, 'photo_template_hist', array_slice($hist, 0, 5), 'ugyfel');
 	}
 	cp_portal_answer_put($portal->id, 'photo_template', $val, 'ugyfel');
+	/* v2.9.230: minden mentett változat másolata a deal Fájljai közé (a nyomtatható PNG, ha nincs, az előnézet) */
+	if (function_exists('cp_df_add_copy')) {
+		$cf = !empty($val['png']) ? $val['png'] : $val['preview'];
+		cp_df_add_copy((int) $portal->deal_id, $dir . '/' . $cf, cp_portal_sb_filename($portal, cp_portal_answers($portal->id), pathinfo($cf, PATHINFO_EXTENSION)), 'Ügyfélportál');
+	}
 	if (!isset($answers['template_mode'])) { cp_portal_answer_put($portal->id, 'template_mode', 'own', 'ugyfel'); }
 	cp_portal_log_add($portal->id, 'photo_template', $old ? $old['name'] : null, $val['name'], 'ugyfel');
 	$extra = array();

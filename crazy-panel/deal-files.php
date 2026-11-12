@@ -49,6 +49,31 @@ function cp_df_list($deal) {
 /* a deal adatlapjára */
 add_filter('cp_crm_deal_data', function ($x) { $x['dfiles'] = cp_df_list((int) $x['deal']['id']); return $x; }, 21);
 
+/* v2.9.230: egy szerveren már meglévő fájl másolata a deal Fájljai közé (pl. az ügyfélportálon mentett fotósablon) */
+function cp_df_add_copy($deal, $src, $name, $by) {
+	global $wpdb;
+	$deal = (int) $deal;
+	if (!$deal || !is_file($src) || !cp_df_db()) { return false; }
+	$name = mb_substr((string) $name, 0, 190);   /* a hívó adja a biztonságos nevet (ékezettel, szóközzel); a tárolt fájl neve véletlen */
+	$ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+	if (!cp_df_ext_ok($ext)) { return false; }
+	if ((int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_df_t() . ' WHERE deal_id = %d', $deal)) >= 200) { return false; }
+	$dir = cp_df_root() . gmdate('Y/m');
+	if (!is_dir($dir)) { wp_mkdir_p($dir); @chmod(cp_df_root(), 0700); }
+	$base = wp_generate_password(24, false, false);
+	$path = $dir . '/' . $base . '.' . $ext;
+	if (!@copy($src, $path)) { return false; }
+	@chmod($path, 0600);
+	$ft = wp_check_filetype($name);
+	$thumb = '';
+	if (in_array($ext, array('jpg', 'jpeg', 'png'), true)) {
+		$ed = wp_get_image_editor($path);
+		if (!is_wp_error($ed)) { $ed->resize(480, 480, false); $ed->set_quality(78); $tp = $dir . '/' . $base . '_t.jpg'; $sv = $ed->save($tp, 'image/jpeg'); if (!is_wp_error($sv)) { $thumb = $tp; @chmod($tp, 0600); } }
+	}
+	$wpdb->insert(cp_df_t(), array('deal_id' => $deal, 'name' => $name, 'mime' => $ft['type'] ?: 'application/octet-stream', 'size' => (int) filesize($path), 'path' => $path, 'thumb' => $thumb, 'uid' => 0, 'by_user' => mb_substr((string) $by, 0, 100), 'created_at' => gmdate('Y-m-d H:i:s')));
+	return (int) $wpdb->insert_id;
+}
+
 add_action('wp_ajax_nopriv_cp_crm_dfile_up', 'cp_df_ajax_up'); add_action('wp_ajax_cp_crm_dfile_up', 'cp_df_ajax_up');
 function cp_df_ajax_up() {
 	cp_crm_ajax_guard(array('deals'));

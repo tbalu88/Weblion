@@ -532,12 +532,13 @@ function restore(s) {
 }
 function saveLogo() {
 	if (!st.deal) return;
-	try { if (st.logo && st.logo.src) localStorage.setItem(LKEY(st.deal.id), st.logo.src); else localStorage.removeItem(LKEY(st.deal.id)); } catch (e) { /* túl nagy */ }
+	/* v2.9.230: törölt logónál 'none' jelölés (az ügyfél-mód piszkozata így nem tölti vissza a korábban elküldött logót) */
+	try { if (st.logo && st.logo.src) localStorage.setItem(LKEY(st.deal.id), st.logo.src); else localStorage.setItem(LKEY(st.deal.id), 'none'); } catch (e) { /* túl nagy */ }
 }
 function loadLogo(id) {
 	let u = null;
 	try { u = localStorage.getItem(LKEY(id)); } catch (e) { u = null; }
-	if (!u) return Promise.resolve(false);
+	if (!u || u === 'none') return Promise.resolve(false);
 	return new Promise(res => { const i = new Image(); i.onload = () => { st.logo = i; st.logoProc = st.lwhite ? whiteCut(i) : null; res(true); }; i.onerror = () => res(false); i.src = u; });
 }
 /* feltöltött logó: legfeljebb 1200 px, PNG adat-URL (így menthető és nem szennyezi a canvast) */
@@ -1260,18 +1261,28 @@ async function clientStart() {
 	const d = X.deal || null;
 	if (!d) return;
 	st.deal = { id: String(d.id), title: d.title || '', date: d.date || '', note: '', img: '', loading: false, parsed: null, src: '' };
-	if (X.saved && X.saved.d) { restore(X.saved); st.deal.src = 'saved'; }
+	/* v2.9.230: ha ebben a böngészőben van újabb, még el nem küldött szerkesztés, azt töltjük vissza (minden változás 0,5 mp-en belül elmentődik) */
+	const loc = loadSaved(st.deal.id), draft = !!(loc && loc.d && !X.locked && (!X.saved || !X.saved.d || (+loc.at || 0) > (+X.saved.at || 0) + 1000));
+	if (draft) { restore(loc); st.deal.src = 'saved'; }
+	else if (X.saved && X.saved.d) { restore(X.saved); st.deal.src = 'saved'; }
 	else {
 		const set = D[st.di].set;
 		st.vals[set] = ['', '', ''];
 		if (d.date) vals()[2] = dotDate(d.date);
 	}
 	st.textsFrom = st.deal.id;
-	if (X.logoUrl) {
+	let lk = null;
+	if (draft) { try { lk = localStorage.getItem(LKEY(st.deal.id)); } catch (e) { lk = null; } }
+	if (lk) { if (await loadLogo(st.deal.id)) st.logoDeal = st.deal.id; }
+	else if (X.logoUrl) {
 		await new Promise(res => { const i = new Image(); i.onload = () => { st.logo = i; st.logoProc = st.lwhite ? whiteCut(i) : null; st.logoDeal = st.deal.id; res(); }; i.onerror = () => res(); i.src = X.logoUrl; });
 	}
 	if (!inCat(D[st.di])) st.cat = 'all';
+	/* oldalelhagyáskor (Vissza, lapbezárás) a függő változás is mentődjön */
+	window.addEventListener('pagehide', flushSave);
+	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 	if (alive()) { drawAllUi(); schedule(); }
+	if (draft) msg('Visszatöltöttük a legutóbbi szerkesztésedet' + (X.saved && X.saved.d ? ' (még nem küldted el – a „Sablon mentése” gombbal küldheted).' : '. Ha kész, a „Sablon mentése” gombbal küldd el nekünk.'), 'ok');
 }
 async function clientSave() {
 	if (!X.save || X.locked) return;
