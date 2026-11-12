@@ -12,7 +12,9 @@ function cp_portal_page_head($title) {
 	echo '</head>';
 }
 
-function cp_portal_page_top($logout = false) {
+/* v2.9.233: $back = „Vissza” link a fejléc jobb oldalán (a Kilépés helyett) */
+function cp_portal_page_top($logout = false, $back = '') {
+	if ($back !== '') { return '<header class="cpp-top"><div class="cpp-logo">Event<span>Crazy</span></div><a class="cpp-back" href="' . esc_url($back) . '" data-sbback>← Vissza az adatlaphoz</a></header>'; }
 	return '<header class="cpp-top"><div class="cpp-logo">Event<span>Crazy</span></div>' . ($logout ? '<a class="cpp-out" href="' . esc_url(cp_portal_url('/kilepes')) . '">Kilépés</a>' : '') . '</header>';
 }
 
@@ -297,7 +299,7 @@ function cp_portal_tpl_fee_text($type) {
 /* logó az egyedi sablonhoz: feltöltés a szerverre (PNG/JPG/WebP, újrakódolva – lásd portal-sablon.php) */
 function cp_portal_tpl_logo_html($portal, $answers, $locked) {
 	$lg = isset($answers['template_logo']) && is_array($answers['template_logo']) ? $answers['template_logo'] : null;
-	$h = '<div class="cpp-logo" data-logo-up><span class="cpp-pl">Logó (ha van)</span><div class="cpp-logo-cur"' . ($lg ? '' : ' hidden') . '>';
+	$h = '<div class="cpp-tlogo" data-logo-up><span class="cpp-pl">Logó (ha van)</span><div class="cpp-logo-cur"' . ($lg ? '' : ' hidden') . '>';
 	$h .= '<img alt="A feltöltött logó" src="' . ($lg ? esc_url(cp_portal_sb_file_url($lg['file'])) : '') . '"><span>' . ($lg ? esc_html($lg['name']) : '') . '</span>';
 	if (!$locked) { $h .= '<button type="button" class="cpp-link" data-logo-del>Törlés</button>'; }
 	$h .= '</div>';

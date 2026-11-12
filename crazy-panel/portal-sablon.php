@@ -81,8 +81,8 @@ function cp_portal_render_sablon_page($portal, $tok) {
 		$f = __DIR__ . '/assets/' . $c;
 		echo '<link rel="stylesheet" href="' . esc_url(plugins_url('assets/' . $c, CP_PORTAL_MAIN)) . '?v=' . $v . '.' . (is_file($f) ? filemtime($f) : 0) . '">';
 	}
-	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(false);   /* v2.9.230: a szerkesztőből nincs Kilépés, csak „Vissza az adatlaphoz” */
-	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><a href="' . esc_url($ps['back']) . '" data-sbback>← Vissza az adatlaphoz</a><h1>Fotósablon</h1>';
+	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(false, $ps['back']);   /* v2.9.230: a szerkesztőből nincs Kilépés, csak „Vissza az adatlaphoz” */
+	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><h1>Fotósablon</h1>';
 	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, töltsd fel a logótokat. Amit beállítasz, folyamatosan megőrizzük (ebben a böngészőben), így bármikor visszatérhetsz hozzá. A „Sablon mentése” gombbal elküldöd nekünk – a végleges, nyomtatható változatot a csapatunk készíti el belőle.</p>';
 	if ($locked) { echo '<p class="cpp-lock">A határidő lejárt, a sablon már nem módosítható. Változás esetén írj nekünk.</p>'; }
 	echo '</div><div id="cpp-sbroot"></div></main>';

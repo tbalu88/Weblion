@@ -6,10 +6,13 @@
 .cpp *{box-sizing:border-box}
 .cpp [hidden]{display:none!important}
 .cpp a{color:#B85A1C}
-.cpp-top{background:var(--n);display:flex;align-items:center;justify-content:space-between;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top))}
+.cpp-top{background:var(--n);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top))}
 .cpp-logo{font:800 20px "Plus Jakarta Sans",sans-serif;color:#fff;letter-spacing:-.02em}
 .cpp-logo span{background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent}
 .cpp-out{color:rgba(255,255,255,.75)!important;font-size:14px;text-decoration:none}
+/* v2.9.233: „Vissza” a fejlécben (sablonkészítő) */
+.cpp-top .cpp-back{color:#fff!important;font:700 15px "Plus Jakarta Sans",sans-serif;text-decoration:none;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 4px}
+.cpp-top .cpp-back:hover{color:#F2B35B!important}
 .cpp-main{max-width:620px;margin:0 auto;padding:16px 16px 40px}
 .cpp-hero{padding:8px 2px 14px}
 .cpp-hero small{display:block;font:700 12px "Plus Jakarta Sans",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
@@ -145,13 +148,13 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-bgwarn{margin:10px 0 0;background:var(--warnb);color:#6E4A00;border-radius:10px;padding:8px 11px;font-size:14px}
 /* a kérdés folytatása (pl. 3.1.2 saját / egyedi sablon) */
 .cpp-field.sub{margin-top:-6px;border-top-left-radius:6px;border-top-right-radius:6px;border-left:4px solid var(--o)}
-.cpp-logo{margin-top:14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.cpp-logo .cpp-pl{margin:0}
+.cpp-tlogo{margin-top:14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.cpp-tlogo .cpp-pl{margin:0}
 .cpp-logo-cur{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cpp-logo-cur img{max-width:140px;max-height:90px;border-radius:8px;border:1px solid var(--li);background:repeating-conic-gradient(#F1EDE6 0 25%,#fff 0 50%) 0 0/14px 14px;padding:4px}
 .cpp-logo-cur span{font-size:14px;color:var(--mu);word-break:break-all}
 .cpp-logo-btn{cursor:pointer}
-.cpp-logo .cpp-note{margin:0}
+.cpp-tlogo .cpp-note{margin:0}
 .cpp-link{background:none;border:0;padding:0;color:var(--bad);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
 /* v2.9.71: többnapos rendezvény – a napok listája (csak megjelenítés) */
 .cpp-days h2{font:800 17px "Plus Jakarta Sans",sans-serif;margin:0 0 8px}
