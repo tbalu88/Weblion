@@ -93,8 +93,8 @@ function cp_est_for_rows($rows) {
 	global $wpdb;
 	$out = array();
 	/* v1.91.1: a rendezvény dátuma (szezon / nap) és a kapcsolattartó e-mail-címe (magánszemély-e) is kell */
-	foreach ((array) $wpdb->get_results('SELECT d.id, d.title, d.service, d.package, d.pkg_fix, d.spinner_pkg, d.services_cp, d.services_ec, d.hours, d.guests, d.venue, d.km_fee, d.event_d, d.contact_id, c.email ce FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id IN (' . implode(',', $ids) . ')', ARRAY_A) as $d) {
-		$e = cp_est_deal($d); if ($e) { $out[(int) $d['id']] = $e; }
+	foreach ((array) $wpdb->get_results('SELECT d.id, d.title, d.service, d.package, d.pkg_fix, d.pkg_v2, d.spinner_pkg, d.services_cp, d.services_ec, d.services_more, d.hours, d.guests, d.venue, d.km_fee, d.event_d, d.contact_id, c.email ce FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.id IN (' . implode(',', $ids) . ')', ARRAY_A) as $d) {
+		$e = function_exists('cp_est_any') ? cp_est_any($d) : cp_est_deal($d); if ($e) { $out[(int) $d['id']] = $e; }
 	}
 	return $out;
 }

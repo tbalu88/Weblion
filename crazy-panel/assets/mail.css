@@ -975,6 +975,9 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-tpls{grid-template-columns:260px minmax(0,1fr);gap:10px}
 .ml-tl{padding:10px;align-self:start;position:sticky;top:8px;max-height:calc(100vh - 90px);display:flex;flex-direction:column}
 .ml-tl .cpx-btn{height:34px;min-height:0;font-size:13px;padding:0 12px}
+/* v2.9.218: a gomb és a kereső nem nyomódik össze hosszú sablonlistánál – a lista görög */
+.ml-tl>.cpx-btn,.ml-tl>.ml-tq{flex:none}
+.ml-tl>.ml-tll{flex:1 1 auto;min-height:0;overflow:auto}
 .ml-tq{height:32px;font-size:13px;margin:8px 0 4px;padding:0 12px}
 .ml-tll{overflow:auto;min-height:0;margin:0 -4px;padding:0 4px}
 .ml-tcat{font-size:10.5px;margin:10px 6px 2px}

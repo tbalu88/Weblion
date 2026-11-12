@@ -159,7 +159,7 @@ function cp_rcl_tick($force = false) {
 		$newer = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $D WHERE deleted_at IS NULL AND id <> %d AND (" . implode(' OR ', $or) . ") AND (status = 'Open' OR created_at >= %s OR event_d > %s)", $id, gmdate('Y-m-d H:i:s', time() - 180 * DAY_IN_SECONDS), $r['event_d']));
 		if ($newer) { $done[$id] = time(); $skip[] = $id; continue; }
 		$who = $r['con'] ?: ($r['cn'] ?: $r['ce']);
-		$svc = trim(implode(', ', array_filter(array((string) $r['service'], str_replace(' | ', ', ', (string) $r['services_ec'])))));
+		$svc = (function_exists('cp_svc_on') && cp_svc_on()) ? cp_deal_svc_str($r) : trim(implode(', ', array_filter(array((string) $r['service'], str_replace(' | ', ', ', (string) $r['services_ec']))))); /* v2.9.218 */
 		$ev = cp_rcl_hud($r['event_d'], true);
 		$next = cp_rcl_hud(wp_date('Y-m-d', strtotime($r['event_d'] . ' 12:00 +1 year')), false);
 		$title = mb_substr('🔁 Visszahívás: ' . $who . ' – egy éve: ' . $ev . ($svc !== '' ? ' (' . $svc . ')' : ''), 0, 250);

@@ -67,6 +67,7 @@ function cp_ct_hudate($ymd) {
 /* ------------------------------------------------------------ előtöltés a dealből és az ügyfélportálból */
 function cp_ct_guess($d) {
 	$s = mb_strtolower(implode(' ', array_map(function ($k) use ($d) { return (string) ($d[$k] ?? ''); }, array('service', 'pkg_v2', 'pkg_fix', 'package', 'services_ec', 'services_cp', 'services_more', 'title'))));
+	if (function_exists('cp_svc_on') && cp_svc_on()) { $s .= ' ' . mb_strtolower(cp_deal_svc_str($d, ' ')); } /* v2.9.218: az egységes lista is (a régiek mellett) */
 	$out = array();
 	$has = function ($re) use ($s) { return (bool) preg_match($re, $s); };
 	if ($has('/selfie\s*\+\s*360|szelfi.*360|360.*szelfi/u')) { $out[] = 'selfie_360'; }

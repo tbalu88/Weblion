@@ -1125,7 +1125,7 @@
 		album: 'Fotóalbum', template_st: 'Template', ctype: 'Szerződés (EV/KFT)', cal_check: 'Naptár', service: 'Szolgáltatás', spinner_pkg: 'Spinner csomag',
 		template_paid: 'Fizetős template', melange_pkg: 'Melange csomag', pkg_v2: 'Választott csomag', pkg_fix: 'Választott csomag 2', template_link: 'Sablon kép',
 		portal_link: 'Ügyfélportál', guests: 'Tervezett létszám', km_fee: 'Kiszállási díj', hours: 'Rendelkezésre állás (óra)', extension: 'Hosszabbítás',
-		coupon: 'Kuponkód', services_more: 'További szolgáltatások', extras: 'Választott extra', services_ec: 'EventCrazy szolgáltatás(ok)', services_cp: 'Választott szolgáltatás',
+		coupon: 'Kuponkód', services_more: 'További szolgáltatások', extras: 'Választott extra', services_ec: 'EventCrazy szolgáltatás(ok)', services_cp: 'Választott szolgáltatás', svc: 'Szolgáltatás(ok)',
 		package: 'Csomag', event_days: 'Rendezvénynapok' /* v2.9.70 */
 	};
 	function fmtVal(k, v, d) {
@@ -1588,9 +1588,12 @@
 		const used = new Set(NOSHOW);
 		/* v2.9.165: az ügyfél-adatlap (portál) hasznos válaszai a Rendezvény csoport után – csak olvasható */
 		const pi = (pinfo || []).length ? '<details class="d3-g d3-pinfo" open><summary>Az ügyfél adatlapjáról</summary><dl class="crm-dl">' + pinfo.map(r => '<dt>' + esc(r.l) + '</dt><dd>' + esc(r.t) + '</dd>').join('') + '</dl></details>' : '';
-		let h = GROUPS.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return (b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : '') + (g[0] === 'Rendezvény' ? pi : ''); }).join('');
+		const SV = d.svc !== undefined, OLD_SVC = ['service', 'package', 'services_cp', 'services_ec', 'services_more', 'pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'];
+		if (SV) OLD_SVC.forEach(k => used.add(k)); /* v2.9.218: a régi szolgáltatás-/csomagmezők helyett a „Szolgáltatás(ok)” sor (a választott extra az Egyéb alatt marad) */
+		const GR = SV ? GROUPS.map(g => g[0] === 'Rendezvény' ? [g[0], g[1].filter(k => !OLD_SVC.includes(k) && k !== 'extras').reduce((a, k) => a.concat(k === 'hours' ? [k, 'svc'] : [k]), [])] : g) : GROUPS;
+		let h = GR.map(g => { g[1].forEach(k => used.add(k)); const b = dl(d, g[1], !d.deleted_at); return (b ? '<details class="d3-g" open><summary>' + esc(g[0]) + '</summary>' + b + '</details>' : '') + (g[0] === 'Rendezvény' ? pi : ''); }).join('');
 		const rest = Object.keys(d).filter(k => !used.has(k) && d[k] != null && d[k] !== '' && LBL[k]);
-		const pk = ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'].filter(k => d[k]);
+		const pk = SV ? [] : ['pkg_v2', 'pkg_fix', 'spinner_pkg', 'melange_pkg', 'pkg_old'].filter(k => d[k]);
 		if (rest.length || pk.length) h += '<details class="d3-g"><summary>Egyéb</summary>' + dl(d, rest.concat(pk)) + '</details>';
 		if (d.description) h += '<details class="d3-g"><summary>Leírás</summary><div class="crm-desc">' + nl(d.description) + '</div></details>';
 		return h;
@@ -1795,6 +1798,8 @@
 		catch (e) { if (sh.isConnected) { sh.innerHTML = head360('Deal #' + id, back, id) + '<div class="cpx-empty err">' + esc(e.message) + '</div>'; bindBack(sh, back); } return; }
 		if (!sh.isConnected) return;
 		const d = x.deal, c = x.contact, co = x.company, m = x.mail || { threads: [], msgs: [], notes: [], files: [] };
+		/* v2.9.218: egységes szolgáltatások (kapcsoló bekapcsolva) – egy sor a régi öt mező helyett */
+		if (x.svc) d.svc = (x.svc.l || []).join(', ') + ((x.svc.x || []).length ? ' (régi szöveg: ' + x.svc.x.join('; ') + ')' : '');
 		/* v2.8.8: bélyegkép csak a nyitott, illetve a jövőbeli rendezvényű dealeknél (visszamenőleg nem készül) */
 		D3T.on = !d.deleted_at && (d.status === 'Open' || (d.event_d && d.event_d >= today()));
 		const smUrl = C.sm ? C.sm + d.id : '';
@@ -2182,7 +2187,13 @@
 			return '<label class="crm-ef"><span>' + esc(label) + '</span>' + inp + '</label>';
 		};
 		let h = sheetHead('Szerkesztés: ' + esc(d.title || 'Deal #' + d.id)) + '<form class="crm-edit" novalidate>';
-		EDIT.forEach(sec => { h += '<h4>' + esc(sec[0]) + '</h4><div class="crm-eg">' + sec[1].map(f => field(f[0], f[1], f[2], editVal(d, f[0]))).join('') + '</div>'; });
+		/* v2.9.218: egységes szolgáltatások – a régi öt mező (és a csomag) helyett egy „Szolgáltatás(ok)”; a panelben tárolódik, a Salesmate-be nem */
+		const OLD_E = ['service', 'pkg_fix', 'services_ec', 'services_cp', 'services_more', 'extras'];
+		const ED = x.svc ? EDIT.map(sec => sec[0] === 'Rendezvény' ? [sec[0], sec[1].filter(f => !OLD_E.includes(f[0])).reduce((a, f) => a.concat(f[0] === 'hours' ? [f, ['svc', 'Szolgáltatás(ok)', 'multi']] : [f]), [])] : sec) : EDIT;
+		if (x.svc) vals.svc = x.svc_opts || [];
+		const ev = (k) => k === 'svc' ? ((x.svc && x.svc.l) || []).join(' | ') : editVal(d, k);
+		ED.forEach(sec => { h += '<h4>' + esc(sec[0]) + '</h4><div class="crm-eg">' + sec[1].map(f => field(f[0], f[1], f[2], ev(f[0]))).join('') + '</div>'; });
+		if (x.svc && (x.svc.x || []).length) h += '<p class="crm-ro">Régi szolgáltatás-szöveg a dealen: ' + esc(x.svc.x.join('; ')) + '</p>';
 		if (x.contact) h += '<h4>Kapcsolat</h4><div class="crm-eg" data-contact>' + CEDIT.map(f => field('c_' + f[0], f[1], f[2], (f[0] === 'mobile' ? c.mobile || c.phone : c[f[0]]) || '')).join('') + '</div>';
 		h += '<p class="crm-ro">Mentéskor csak a megváltozott mezők íródnak be, a Salesmate-be is (a Salesmate automatizmusai lefuthatnak). A változás a deal előzményeiben a neveddel jelenik meg.</p>';
 		h += '<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-cancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
@@ -2227,8 +2238,9 @@
 			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefonszám', 'tel') + '<input type="hidden" data-k="c_id"></div><div class="crm-dupc" data-dupc hidden></div>' +
 			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül. Ha hasonló kontaktot találok, itt jelzem.</p>' +
 			'<h4>Rendezvény</h4><div class="crm-eg">' + inp('event_d', 'Rendezvény dátuma', 'date') + inp('start_at', 'Kezdés (óra:perc)', 'time') + inp('venue', 'Helyszín', 'text') + inp('guests', 'Tervezett létszám', 'number') + inp('hours', 'Rendelkezésre állás (óra)', 'number') +
+			(vals.svc ? '<label class="crm-ef"><span>Szolgáltatás(ok)</span>' + multi('svc') + '</label></div>' : /* v2.9.218: egységes szolgáltatások */
 			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
-			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>' +
+			'<label class="crm-ef"><span>EventCrazy szolgáltatás(ok)</span>' + multi('services_ec') + '</label></div>') +
 			'<h4>Deal</h4><div class="crm-eg">' + inp('title', 'Deal neve *', 'text', ' required') +
 			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), pre) + '</select></label>' +
 			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +
@@ -2279,7 +2291,7 @@
 			const set = (k, v) => { const el = q(k); if (!el || v === '' || v == null || v === 0 || touched.has(k)) return; if (el.dataset.multi !== undefined) { const L = [].concat(v); el.querySelectorAll('input').forEach(i => { if (L.includes(i.value)) i.checked = true; }); } else if (!el.value) el.value = String(v); };
 			const st = form.querySelector('[data-aist]');
 			const load1 = async ai => {
-				const r = await post('cp_ai_deal', { thread: X.thread, msg: X.msg || 0, all: X.all ? 1 : '', ai: ai ? 1 : '', svc: (vals.services_ec || []).join('|') });
+				const r = await post('cp_ai_deal', { thread: X.thread, msg: X.msg || 0, all: X.all ? 1 : '', ai: ai ? 1 : '', svc: (vals.svc || vals.services_ec || []).join('|') });
 				const k = r.known;
 				if (!ai) {
 					if (k.brand) brand = k.brand;
@@ -2299,6 +2311,7 @@
 				const a = r.ai;
 				if (a) {
 					['event_d', 'start_at', 'venue', 'guests', 'hours', 'service', 'services_ec'].forEach(f => set(f, a[f]));
+					if (vals.svc) set('svc', a.services_ec); /* v2.9.218 */
 					if (!a.event_d && a.year) { yr = a.year + (a.month ? '-' + String(a.month).padStart(2, '0') : ''); }
 					const when = a.event_d ? '' : (a.year ? 'Időpont: ' + a.year + (a.month ? '. ' + ['január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december'][a.month - 1] : '') + ' (pontos dátum még nincs)' : 'Időpont: még nincs megadva');
 					set('note', [a.event_type ? 'Rendezvény: ' + a.event_type : '', when, a.summary, 'Forrás: levél – „' + r.known.subject + '”'].filter(Boolean).join('\n'));

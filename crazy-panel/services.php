@@ -129,6 +129,37 @@ function cp_est_v2($d) {
 	/* a régi csomag-/szövegmezők nem számítanak – a magánszemély (Crazyphoto-ár) ága az óraszámból számol */
 	$c['service'] = $c['package'] = $c['pkg_fix'] = $c['pkg_v2'] = $c['services_cp'] = $c['services_more'] = $c['spinner_pkg'] = '';
 	$r = cp_est_ec_deal($c, cp_est_private($d));
-	if ($r && $s['x']) { foreach ($s['x'] as $n) { $r['l'][] = 'Megjegyzés (régi szöveg): ' . $n; } }
+	if (!$r) { return null; }
+	/* döntés 2026-11-12 (C): minden bejelölt szolgáltatás összeadva; 3 vagy több szolgáltatásnál „közelítő” + egyeztetési jelzés */
+	$real = array_values(array_filter($s['l'], function ($x) { return !in_array($x, array('Egyéb', 'Visszahívást kérek'), true); }));
+	if (count($real) >= 3) { $r['a'] = 1; $r['m'] = 1; array_unshift($r['l'], 'Több szolgáltatás (' . count($real) . ') – egyeztetni, melyiket kérik ténylegesen'); }
+	if ($s['x']) { foreach ($s['x'] as $n) { $r['l'][] = 'Megjegyzés (régi szöveg): ' . $n; } }
 	return $r;
 }
+/* a becslés: kapcsoló szerint az új vagy a régi */
+function cp_est_any($d) { return cp_svc_on() ? cp_est_v2($d) : (function_exists('cp_est_deal') ? cp_est_deal($d) : null); }
+
+/* ------------------------------------------------------------ mentés a panel-táblába (a Salesmate-be nem ír) */
+function cp_svc_set($id, $list, $note = null) {
+	global $wpdb;
+	cp_svc_db();
+	$ok = cp_svc_list();
+	$l = array_values(array_unique(array_filter(array_map('strval', (array) $list), function ($v) use ($ok) { return in_array($v, $ok, true); })));
+	$ord = array_flip($ok); usort($l, function ($a, $b) use ($ord) { return $ord[$a] - $ord[$b]; });
+	$prev = cp_deal_svc(array('id' => (int) $id) + (array) $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_crm_t('deals') . ' WHERE id = %d', (int) $id), ARRAY_A));
+	if ($note === null) { $note = $prev['x'] ? implode('; ', $prev['x']) : ''; }
+	$wpdb->replace(cp_svc_t(), array('deal_id' => (int) $id, 'services' => wp_json_encode($l), 'note' => mb_substr((string) $note, 0, 255), 'uid' => function_exists('cp_pu_current_id') ? (int) cp_pu_current_id() : 0, 'by_user' => function_exists('cp_panel_who') ? mb_substr((string) cp_panel_who(), 0, 100) : '', 'updated_at' => gmdate('Y-m-d H:i:s')));
+	/* előzmény a deal változásai közé (a panel saját táblájába, a Salesmate-be nem) */
+	if ($prev['l'] !== $l && function_exists('cp_crm_t')) {
+		$wpdb->insert(cp_crm_t('history'), array('deal_id' => (int) $id, 'field' => 'svc', 'old_val' => implode(', ', $prev['l']), 'new_val' => implode(', ', $l), 'by_user' => function_exists('cp_panel_who') ? mb_substr((string) cp_panel_who(), 0, 100) : '', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'svc', 'Szolgáltatások módosítva', 'deal:' . (int) $id, implode(', ', $l)); }
+	return $l;
+}
+/* a deal adatlapjára (csak bekapcsolva) */
+add_filter('cp_crm_deal_data', function ($x) {
+	if (!cp_svc_on() || empty($x['deal']['id'])) { return $x; }
+	$s = cp_deal_svc($x['deal']);
+	$x['svc'] = $s; $x['svc_opts'] = cp_svc_list();
+	return $x;
+}, 22);

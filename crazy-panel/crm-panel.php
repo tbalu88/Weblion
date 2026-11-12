@@ -296,7 +296,7 @@ function cp_crm_deal_data($id) {
 	list($deal['rot'], $deal['rw']) = cp_crm_rot($deal + array('stage_at' => $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_crm_t('history') . " WHERE deal_id = %d AND field = 'stage'", $id)), 'last_out' => $wpdb->get_var($wpdb->prepare('SELECT ' . cp_crm_lastout_sql() . ' FROM ' . cp_crm_t('deals') . ' d WHERE d.id = %d', $id))));
 	foreach (array('closed_at', 'last_note_at', 'last_comm_at', 'created_at', 'modified_at', 'start_at', 'synced_at', 'deleted_at') as $k) { $deal[$k] = cp_crm_local($deal[$k]); }
 	/* v1.83.2: ajánlat előtt (első szakasz, érték nélkül) becsült ár, mint a csempén */
-	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = cp_est_deal($deal); if ($e) { $deal['est'] = $e; } } /* v2.9.77: beírt ár mellett is (az ajánlatlevél tételeihez) */
+	if (function_exists('cp_est_deal') && function_exists('cp_crm_stages') && $deal['status'] === 'Open' && $deal['stage'] === (cp_crm_stages()[0] ?? '')) { $e = function_exists('cp_est_any') ? cp_est_any($deal) : cp_est_deal($deal); if ($e) { $deal['est'] = $e; } } /* v2.9.77: beírt ár mellett is (az ajánlatlevél tételeihez) */
 	/* v2.9.70: többnapos rendezvény: a napok listája (az 1. nap igazítva az event_d-hez) és a tömör kiírás */
 	$mdays = function_exists('cp_mday_get') && !empty($deal['event_d']) ? cp_mday_align(cp_mday_get($id), (string) $deal['event_d']) : array();
 	if ($mdays) { $deal['days'] = $mdays; $deal['days_label'] = cp_mday_label(wp_list_pluck($mdays, 'day')); }
@@ -650,6 +650,7 @@ function cp_crm_ajax_opts() {
 		$kn = array_map('strval', (array) $wpdb->get_col('SELECT name FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host') AND name <> '' ORDER BY kind = 'host', name"));
 		$out['operator'] = array_values(array_unique(array_merge($kn, (array) ($out['operator'] ?? array()))));
 	}
+	if (function_exists('cp_svc_on') && cp_svc_on()) { $out['svc'] = cp_svc_list(); } /* v2.9.218 */
 	wp_send_json_success(array('vals' => $out));
 }
 
@@ -676,6 +677,9 @@ function cp_crm_save_data($id, $f, $c) {
 	if (!$row) { return new WP_Error('cp_crm', 'Nincs ilyen deal.', 404); }
 	$F = cp_crm_edit_fields();
 	$body = array(); $types = array();
+	/* v2.9.218: egységes szolgáltatások – a panel saját táblájába, a Salesmate-be nem */
+	if (isset($f['svc']) && is_scalar($f['svc']) && function_exists('cp_svc_on') && cp_svc_on()) { cp_svc_set($id, array_filter(explode(' | ', (string) $f['svc']))); }
+	unset($f['svc']);
 	foreach ($f as $col => $v) {
 		if (!isset($F[$col]) || !is_scalar($v)) { continue; }
 		$v = trim(sanitize_textarea_field((string) $v));
@@ -791,6 +795,8 @@ function cp_crm_ajax_create() {
 	if (!is_wp_error($cg)) { cp_crm_store('contact', array(isset($cg['Data']) ? $cg['Data'] : $cg), 'get'); }
 	if (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'created', 'old_val' => '', 'new_val' => 'létrehozva a panelben', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	/* v2.9.218: egységes szolgáltatások – a panel saját táblájába (a Salesmate-be nem) */
+	if (function_exists('cp_svc_on') && cp_svc_on() && $g('svc') !== '') { cp_svc_set($id, explode(' | ', $g('svc')), ''); }
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
 	wp_send_json_success(array('id' => $id, 'row' => cp_crm_row_out($id)));
 }

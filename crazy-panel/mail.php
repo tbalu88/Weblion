@@ -202,7 +202,7 @@ function cp_mail_values($deal_id) {
 		'rendezveny.helyszin' => (string) $d['venue'],
 		'rendezveny.letszam'  => $d['guests'] !== null ? (string) $d['guests'] : '',
 		'csomag'              => (string) $d['package'],
-		'szolgaltatas'        => implode(', ', array_filter(array((string) $d['service'], str_replace(' | ', ', ', (string) $d['services_ec'])))),
+		'szolgaltatas'        => (function_exists('cp_svc_on') && cp_svc_on()) ? cp_deal_svc_str($d) : implode(', ', array_filter(array((string) $d['service'], str_replace(' | ', ', ', (string) $d['services_ec'])))), /* v2.9.218 */
 		'ertek'               => $d['value'] !== null ? number_format((float) $d['value'], 0, ',', ' ') . ' Ft' : '',
 		'portal.link'         => (string) $d['portal_link'],
 		'felelos.nev'         => function_exists('cp_crm_user_name') ? cp_crm_user_name($d['owner_id']) : '',
