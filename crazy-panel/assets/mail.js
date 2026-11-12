@@ -165,15 +165,25 @@
 		clear: '<svg viewBox="0 0 24 24"><path d="M6 5h12M12 5l-4 14M5 19h6M16 14l5 5M21 14l-5 5"/></svg>',
 		code: '<svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>',
 		undo: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
-		redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>'
+		redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>',
+		/* v2.9.202: Salesmate-mintájú gombsor – panelkapcsolók, kiemelés, igazítás */
+		pA: '<span class="ml-pico">A<i>:</i></span>', pP: '<span class="ml-pico">¶<i>:</i></span>',
+		hilite: '<svg viewBox="0 0 24 24"><path d="M15 4l5 5-8.5 8.5H7v-4.5z"/><path d="M4 21h8" stroke-width="3"/></svg>',
+		jl: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg>',
+		jc: '<svg viewBox="0 0 24 24"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>',
+		jr: '<svg viewBox="0 0 24 24"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg>',
+		jf: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>'
 	};
-	const TOOLS = [['bold', 'Félkövér'], ['italic', 'Dőlt'], ['underline', 'Aláhúzott'], ['strike', 'Áthúzott'], ['font', 'Betűtípus és méret'], ['color', 'Betűszín és kiemelés'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['ul', 'Felsorolás'], ['ol', 'Számozott lista'], ['quote', 'Idézet'], ['|'],
-		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['portal', 'Ügyfélportál-link beszúrása (a dealhez)'], ['sign', 'Aláírás beszúrása'], ['clear', 'Formázás törlése'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
+	/* v2.9.202: alapsor + két lenyíló panel (A: szöveg, ¶: bekezdés), mint a Salesmate-ben */
+	const TOOLS = [['pA', 'Szövegformázás'], ['pP', 'Bekezdés'], ['|'],
+		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['portal', 'Ügyfélportál-link beszúrása (a dealhez)'], ['sign', 'Aláírás beszúrása'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
+	const TOOLS_A = [['bold', 'Félkövér (Ctrl/⌘+B)'], ['italic', 'Dőlt (Ctrl/⌘+I)'], ['underline', 'Aláhúzott (Ctrl/⌘+U)'], ['strike', 'Áthúzott'], ['|'], ['FF'], ['FS'], ['|'], ['color', 'Betűszín'], ['hilite', 'Kiemelés'], ['clear', 'Formázás törlése']];
+	const TOOLS_P = [['jl', 'Balra igazítás'], ['jc', 'Középre igazítás'], ['jr', 'Jobbra igazítás'], ['jf', 'Sorkizárt'], ['|'], ['ol', 'Számozott lista'], ['ul', 'Felsorolás'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['quote', 'Idézet']];
 	const FC = [['#141C33', 'Sötétkék'], ['#000000', 'Fekete'], ['#6B6F78', 'Szürke'], ['#C53A24', 'Piros'], ['#E07A1F', 'Narancs'], ['#B8860B', 'Arany'], ['#1F7A50', 'Zöld'], ['#2F5BD8', 'Kék'], ['#7B3FBF', 'Lila']];
 	const BC = [['#FFF1A8', 'Sárga'], ['#D9F2E3', 'Zöld'], ['#FDE2E1', 'Piros'], ['#E3ECFD', 'Kék'], ['#EFE6FB', 'Lila']];
 	/* v2.9.131: betűtípusok és méretek (levelezőprogramokban is biztonságos betűk); „Alap” = a levél alapbetűje (Arial 14 px) */
 	const FF = [['', 'Alap (Arial)'], ['Arial,Helvetica,sans-serif', 'Arial'], ['Verdana,Geneva,sans-serif', 'Verdana'], ['Tahoma,Geneva,sans-serif', 'Tahoma'], ['"Trebuchet MS",Helvetica,sans-serif', 'Trebuchet MS'], ['Georgia,serif', 'Georgia'], ['"Times New Roman",Times,serif', 'Times New Roman'], ['"Courier New",Courier,monospace', 'Courier New']];
-	const FS = [['12px', 'Kicsi'], ['', 'Normál'], ['18px', 'Nagy'], ['24px', 'Óriás']];
+	const FS = [['12px', '12'], ['13px', '13'], ['', '14'], ['16px', '16'], ['18px', '18'], ['20px', '20'], ['24px', '24'], ['28px', '28']]; /* v2.9.202: pontos méretek (14 = alap) */
 	/* a máshonnan jött (pl. Salesmate-sablon) betűtípus és -méret eltávolítása – a félkövér, dőlt, szín, linkek maradnak */
 	function normFont(html) {
 		const t = document.createElement('template'); t.innerHTML = html || '';
@@ -182,19 +192,20 @@
 		t.content.querySelectorAll('span:not([class]):not([style]):not([data-var])').forEach(el => { if (!el.attributes.length) el.replaceWith(...el.childNodes); });
 		return t.innerHTML;
 	}
+	const tbtn = t => t[0] === '|' ? '<span class="ml-sep"></span>' : t[0] === '|R' ? '<span class="ml-gap"></span>' :
+		t[0] === 'FF' ? '<select class="ml-sel ml-ffsel" data-ffs title="Betűtípus" aria-label="Betűtípus">' + FF.map(f => '<option value="' + esc(f[0]) + '">' + esc(f[1]) + '</option>').join('') + '</select>' :
+		t[0] === 'FS' ? '<select class="ml-sel ml-fssel" data-fss title="Betűméret (px)" aria-label="Betűméret">' + FS.map(f => '<option value="' + f[0] + '"' + (f[0] ? '' : ' selected') + '>' + f[1] + '</option>').join('') + '</select>' :
+		'<button type="button" data-cmd="' + t[0] + '" title="' + esc(t[1]) + '" aria-label="' + esc(t[1]) + '"' + (t[0] === 'attach' ? ' disabled' : '') + (t[0] === 'pA' || t[0] === 'pP' ? ' aria-expanded="false"' : '') + '>' + (t[0] === 'var' ? '#' : ICON[t[0]]) + '</button>';
 	function editor(host, html) {
 		const vopts = Object.keys(VARS).map(k => '<button type="button" data-vk="' + esc(k) + '"><b>{{' + esc(k) + '}}</b><small>' + esc(VARS[k][0]) + '</small></button>').join('');
 		host.innerHTML = '<div class="ml-ed"><div class="ml-area" contenteditable="true" spellcheck="true" data-ph="Kezdj el gépelni…"></div><textarea class="ml-code" hidden spellcheck="false"></textarea>' +
-			'<div class="ml-tb">' + TOOLS.map(t => t[0] === '|' ? '<span class="ml-sep"></span>' : t[0] === '|R' ? '<span class="ml-gap"></span>' : '<button type="button" data-cmd="' + t[0] + '" title="' + esc(t[1]) + '" aria-label="' + esc(t[1]) + '"' + (t[0] === 'attach' ? ' disabled' : '') + '>' + (t[0] === 'var' ? '#' : ICON[t[0]]) + '</button>').join('') + '</div>' +
+			'<div class="ml-tbw"><div class="ml-tbp" data-pnl="A" hidden>' + TOOLS_A.map(tbtn).join('') + '</div><div class="ml-tbp" data-pnl="P" hidden>' + TOOLS_P.map(tbtn).join('') + '</div>' +
+			'<div class="ml-tb">' + TOOLS.map(tbtn).join('') + '</div>' +
 			'<div class="ml-pop ml-vpop" hidden>' + vopts + '</div>' +
-			/* v2.9.82: betűszín és kiemelés (a levélben inline stílusként marad meg) */
-			'<div class="ml-pop ml-cpop" hidden role="dialog" aria-label="Betűszín és kiemelés"><b>Betűszín</b><div class="ml-cpal">' + FC.map(c => '<button type="button" data-fc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Betűszín: ' + esc(c[1]) + '"></button>').join('') + '</div>' +
-			'<b>Kiemelés</b><div class="ml-cpal">' + BC.map(c => '<button type="button" data-bc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Kiemelés: ' + esc(c[1]) + '"></button>').join('') + '</div>' +
-			'<button type="button" class="ml-creset" data-creset>Alapszín, kiemelés nélkül</button></div>' +
-			'<div class="ml-pop ml-cpop ml-fpop" hidden role="dialog" aria-label="Betűtípus és méret"><b>Betűtípus</b><div class="ml-flist">' + FF.map(f => '<button type="button" data-ff="' + esc(f[0]) + '"' + (f[0] ? ' style="font-family:' + esc(f[0]) + '"' : '') + '>' + esc(f[1]) + '</button>').join('') + '</div>' +
-			'<b>Méret</b><div class="ml-fsz">' + FS.map(f => '<button type="button" data-fs="' + f[0] + '"' + (f[0] ? ' style="font-size:' + f[0] + '"' : '') + '>' + esc(f[1]) + '</button>').join('') + '</div>' +
-			'<button type="button" class="ml-creset" data-freset>A kijelölés betűjének egységesítése (Alap, Normál)</button></div></div>';
-		const area = host.querySelector('.ml-area'), code = host.querySelector('.ml-code'), vpop = host.querySelector('.ml-vpop'), cpop = host.querySelector('.ml-cpop:not(.ml-fpop)'), fpop = host.querySelector('.ml-fpop');
+			/* v2.9.82: betűszín és kiemelés (a levélben inline stílusként marad meg); v2.9.202: két külön gomb, ugyanaz a buborék */
+			'<div class="ml-pop ml-cpop" hidden role="dialog" aria-label="Betűszín és kiemelés"><div class="ml-cpf"><b>Betűszín</b><div class="ml-cpal">' + FC.map(c => '<button type="button" data-fc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Betűszín: ' + esc(c[1]) + '"></button>').join('') + '</div><button type="button" class="ml-creset" data-creset>Alap betűszín</button></div>' +
+			'<div class="ml-cpb"><b>Kiemelés</b><div class="ml-cpal">' + BC.map(c => '<button type="button" data-bc="' + c[0] + '" style="--c:' + c[0] + '" title="' + esc(c[1]) + '" aria-label="Kiemelés: ' + esc(c[1]) + '"></button>').join('') + '</div><button type="button" class="ml-creset" data-breset>Kiemelés nélkül</button></div></div></div></div>';
+		const area = host.querySelector('.ml-area'), code = host.querySelector('.ml-code'), vpop = host.querySelector('.ml-vpop'), cpop = host.querySelector('.ml-cpop'), ffs = host.querySelector('[data-ffs]'), fss = host.querySelector('[data-fss]');
 		area.innerHTML = html || '';
 		let range = null;
 		const keep = () => { const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode)) range = s.getRangeAt(0).cloneRange(); };
@@ -233,14 +244,14 @@
 			if (c === 'attach' || c === 'portal') return; /* a levélíró kezeli (v1.54, v1.59) */
 			if (c === 'code') { const on = code.hidden; if (on) { code.value = area.innerHTML; } else { area.innerHTML = code.value; } code.hidden = !on; area.hidden = on; b.classList.toggle('on', on); return; }
 			if (!code.hidden) return;
+			if (c === 'pA' || c === 'pP') { const k = c.slice(1); showP(pnl === k ? '-' : k); return; }
 			if (c === 'var') { vpop.hidden = !vpop.hidden; cpop.hidden = true; return; }
-			if (c === 'color') { cpop.hidden = !cpop.hidden; vpop.hidden = true; fpop.hidden = true; return; }
-			if (c === 'font') { fpop.hidden = !fpop.hidden; vpop.hidden = true; cpop.hidden = true; return; }
-			const M2 = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList', undo: 'undo', redo: 'redo' };
-			if (c === 'clear') return clearFmt();
-			if (M2[c]) return exec(M2[c]);
-			if (c === 'h2' || c === 'p') return exec('formatBlock', c);
-			if (c === 'quote') return exec('formatBlock', 'blockquote');
+			if (c === 'color' || c === 'hilite') { const m = c === 'color' ? 'f' : 'b'; cpop.hidden = !cpop.hidden && cpop.dataset.m === m ? true : false; cpop.dataset.m = m; vpop.hidden = true; return; }
+			const M2 = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList', undo: 'undo', redo: 'redo', jl: 'justifyLeft', jc: 'justifyCenter', jr: 'justifyRight', jf: 'justifyFull' };
+			if (c === 'clear') { clearFmt(); return sync(); }
+			if (M2[c]) { exec(M2[c]); return sync(); }
+			if (c === 'h2' || c === 'p') { exec('formatBlock', c); return sync(); }
+			if (c === 'quote') { exec('formatBlock', 'blockquote'); return sync(); }
 			if (c === 'link') { const u = window.prompt('A link címe (https://…):', 'https://'); if (u && /^(https?:|mailto:|tel:)/i.test(u.trim())) exec('createLink', u.trim()); return; }
 			if (c === 'img') { const u = window.prompt('A kép webcíme (https://…):', 'https://'); if (u && /^https:\/\//i.test(u.trim())) exec('insertImage', u.trim()); return; }
 			if (c === 'table') return exec('insertHTML', '<table style="border-collapse:collapse;width:100%"><tbody><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr></tbody></table><p><br></p>');
@@ -258,8 +269,9 @@
 		cpop.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		cpop.querySelectorAll('[data-fc]').forEach(b => b.addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, b.dataset.fc); keep(); cpop.hidden = true; }));
 		cpop.querySelectorAll('[data-bc]').forEach(b => b.addEventListener('click', () => { restore(); css(); if (!document.execCommand('hiliteColor', false, b.dataset.bc)) document.execCommand('backColor', false, b.dataset.bc); keep(); cpop.hidden = true; }));
-		cpop.querySelector('[data-creset]').addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, '#141C33'); if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent'); keep(); cpop.hidden = true; });
-		document.addEventListener('click', e => { if (!cpop.hidden && e.target.isConnected && !e.target.closest('.ml-cpop') && !e.target.closest('[data-cmd="color"]')) cpop.hidden = true; });
+		cpop.querySelector('[data-creset]').addEventListener('click', () => { restore(); css(); document.execCommand('foreColor', false, '#141C33'); keep(); cpop.hidden = true; });
+		cpop.querySelector('[data-breset]').addEventListener('click', () => { restore(); css(); if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent'); keep(); cpop.hidden = true; });
+		document.addEventListener('click', e => { if (!cpop.hidden && e.target.isConnected && !e.target.closest('.ml-cpop') && !e.target.closest('[data-cmd="color"],[data-cmd="hilite"]')) cpop.hidden = true; });
 		cpop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cpop.hidden = true; area.focus(); } });
 		/* v2.9.139: link a szerkesztőben – kattintásra buborék (Megnyitás / Módosítás / Eltávolítás), Ctrl/⌘+kattintás: megnyitás */
 		let lpop = null;
@@ -304,12 +316,37 @@
 			try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* régi böngésző */ }
 			keep(); area.dispatchEvent(new Event('input', { bubbles: true }));
 		};
-		fpop.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
-		fpop.querySelectorAll('[data-ff]').forEach(b => b.addEventListener('click', () => { fontApply('family', b.dataset.ff); fpop.hidden = true; }));
-		fpop.querySelectorAll('[data-fs]').forEach(b => b.addEventListener('click', () => { fontApply('size', b.dataset.fs); fpop.hidden = true; }));
-		fpop.querySelector('[data-freset]').addEventListener('click', () => { fontApply('family', ''); fontApply('size', ''); fpop.hidden = true; });
-		document.addEventListener('click', e => { if (!fpop.hidden && e.target.isConnected && !e.target.closest('.ml-fpop') && !e.target.closest('[data-cmd="font"]')) fpop.hidden = true; });
-		fpop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fpop.hidden = true; area.focus(); } });
+		/* v2.9.202: betűtípus és méret legördülőből (a kijelölésre); a legördülő a kurzornál lévő szöveg betűjét mutatja */
+		ffs.addEventListener('change', () => { fontApply('family', ffs.value); sync(); });
+		fss.addEventListener('change', () => { fontApply('size', fss.value); sync(); });
+		/* a panelek: egyszerre egy nyitva, a gép megjegyzi az utoljára használtat ('-' = mindkettő csukva) */
+		const tbp = host.querySelectorAll('.ml-tbp');
+		let pnl = 'A'; try { pnl = localStorage.getItem('cpmail_pnl') || 'A'; } catch (e) { /* privát mód */ }
+		const showP = k => {
+			pnl = k === 'A' || k === 'P' ? k : '-';
+			tbp.forEach(x => { x.hidden = x.dataset.pnl !== pnl; });
+			host.querySelectorAll('[data-cmd="pA"],[data-cmd="pP"]').forEach(b => { const on = b.dataset.cmd === 'p' + pnl; b.classList.toggle('on', on); b.setAttribute('aria-expanded', on ? 'true' : 'false'); });
+			cpop.hidden = true; vpop.hidden = true;
+			try { localStorage.setItem('cpmail_pnl', pnl); } catch (e) { /* privát mód */ }
+		};
+		showP(pnl);
+		/* a gombok állapota a kurzor helyén (félkövér, igazítás, lista, betű) */
+		const sync = () => {
+			if (!code.hidden || !host.isConnected) return;
+			const st = c => { try { return document.queryCommandState(c); } catch (e) { return false; } };
+			const on = (k, v) => { const b = host.querySelector('[data-cmd="' + k + '"]'); if (b) b.classList.toggle('on', !!v); };
+			const sel = window.getSelection();
+			if (!sel.rangeCount || !area.contains(sel.anchorNode)) return;
+			[['bold', 'bold'], ['italic', 'italic'], ['underline', 'underline'], ['strike', 'strikeThrough'], ['ul', 'insertUnorderedList'], ['ol', 'insertOrderedList']].forEach(x => on(x[0], st(x[1])));
+			const jc = st('justifyCenter'), jr = st('justifyRight'), jf = st('justifyFull');
+			on('jc', jc); on('jr', jr); on('jf', jf); on('jl', !jc && !jr && !jf);
+			const el = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode, cs = getComputedStyle(el), base = getComputedStyle(area);
+			const fam = cs.fontFamily === base.fontFamily ? '' : (FF.find(f => f[0] && f[0].split(',')[0].replace(/"/g, '').toLowerCase() === cs.fontFamily.split(',')[0].replace(/["']/g, '').trim().toLowerCase()) || [''])[0];
+			ffs.value = fam;
+			const px = String(Math.round(parseFloat(cs.fontSize))), fz = FS.find(f => f[1] === px);
+			if (fz) fss.value = fz[0]; else fss.selectedIndex = -1;
+		};
+		area.addEventListener('keyup', sync); area.addEventListener('mouseup', sync); area.addEventListener('focus', () => setTimeout(sync, 0));
 		vpop.querySelectorAll('[data-vk]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		vpop.querySelectorAll('[data-vk]').forEach(b => b.addEventListener('click', () => { exec('insertText', '{{' + b.dataset.vk + '}}'); vpop.hidden = true; }));
 		document.addEventListener('click', e => { if (!vpop.hidden && e.target.isConnected && !e.target.closest('.ml-vpop') && !e.target.closest('[data-cmd="var"]')) vpop.hidden = true; });

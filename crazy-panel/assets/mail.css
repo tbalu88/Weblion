@@ -71,6 +71,23 @@
 .ml-tb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ml-sep{width:1px;height:20px;background:var(--li);margin:0 4px}
 .ml-gap{flex:1}
+/* v2.9.202: Salesmate-mintájú gombsor – alapsor + lenyíló A: / ¶: panel */
+.ml-tbw{position:relative}
+.ml-tbw .ml-pop{bottom:calc(100% + 6px)}
+.ml-tbp{display:flex;align-items:center;gap:2px;flex-wrap:wrap;background:#F5F4F2;border-radius:10px;padding:4px 6px;margin-top:8px}
+.ml-tbp[hidden]{display:none}
+.ml-tbp+.ml-tbp{margin-top:0}
+.ml-tbp~.ml-tb{border-top:0;padding-top:4px}
+.ml-tbp button{width:34px;height:32px;border:0;background:transparent;border-radius:8px;cursor:pointer;color:#4A5163;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+.ml-tbp button:hover,.ml-tbp button.on{background:#E9E5DF;color:var(--ink)}
+.ml-tbp svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ml-sel{height:30px;border:1px solid transparent;background:transparent;border-radius:8px;font:500 13.5px Inter,sans-serif;color:#4A5163;padding:0 6px;cursor:pointer}
+.ml-sel:hover,.ml-sel:focus{background:#fff;border-color:var(--li);outline:0}
+.ml-ffsel{width:140px}.ml-fssel{width:58px}
+.ml-pico{font:600 15px Inter,sans-serif;letter-spacing:-.02em}.ml-pico i{font-style:normal;opacity:.55;margin-left:1px}
+.ml-tb [data-cmd="pA"].on,.ml-tb [data-cmd="pP"].on{background:#E9E5DF}
+.ml-cpop[data-m="f"] .ml-cpb,.ml-cpop[data-m="b"] .ml-cpf{display:none}
+.ml-cpf,.ml-cpb{display:flex;flex-direction:column;gap:6px}
 .ml-pop{position:absolute;z-index:30;background:#fff;border:1px solid var(--li);border-radius:14px;box-shadow:0 18px 40px -16px rgba(20,28,51,.35);max-height:340px;overflow:auto}
 .ml-vpop{bottom:46px;left:0;width:320px;padding:6px}
 .ml-vpop button,.ml-tpop-l button{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:0;background:transparent;border-radius:8px;padding:7px 10px;cursor:pointer;text-align:left;font-size:14px}
@@ -398,7 +415,7 @@
   .ml-ctb svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   .ml-ctb .ml-ctb-send svg{fill:#2F6FDB;stroke:#2F6FDB}
   .ml-compose .ml-qa:not([hidden]){display:block;position:fixed;inset:0;z-index:60}
-  .ml-rctx,.ml-send,.ml-tb,.ml-row>label[for],.ml-srow>label{display:none!important}
+  .ml-rctx,.ml-send,.ml-tb,.ml-tbp,.ml-row>label[for],.ml-srow>label{display:none!important}
   .ml-ctop{margin:0 -12px;padding:0;border-bottom:1px solid #EEEAE4;background:#F7F8FA;display:block}
   .ml-ctop .ml-rel{display:block}
   .ml-ctop [data-tplbtn]{display:flex;align-items:center;gap:12px;width:100%;padding:14px 12px;font:500 16px Inter,sans-serif;color:#2F6FDB;background:transparent;border:0;font-size:0}
@@ -849,7 +866,7 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 .ml-cico{font-weight:800;border-bottom:3px solid #C53A24;line-height:1;padding:0 1px}
 .ml-cpop{bottom:46px;left:0;width:248px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .ml-cpop[hidden]{display:none}
-.ml-cpop>b{font:600 11.5px Inter,sans-serif;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.ml-cpop b{font:600 11.5px Inter,sans-serif;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
 .ml-cpal{display:flex;flex-wrap:wrap;gap:6px}
 .ml-cpal button{width:24px;height:24px;border-radius:50%;border:1px solid rgba(20,28,51,.18);background:var(--c);cursor:pointer;padding:0}
 .ml-cpal button:hover{transform:scale(1.08)}
