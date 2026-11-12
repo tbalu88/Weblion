@@ -42,6 +42,7 @@
 		clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('on'), ms || 7000);
 	}
 	/* v2.7.13: visszavonható küldés – a levél 20 mp múlva megy ki, addig visszavonható */
+	const SEND_UNDO = false; /* v2.9.201: küldés előtti visszaszámlálás (true = vissza a 20 mp-es visszavonás) */
 	function undoWait(sec, who) {
 		return new Promise(res => {
 			let d = document.getElementById('cpx-toast');
@@ -2104,7 +2105,8 @@
 			if (atts.some(a => !a.tok && !a.err)) { toast('Várd meg, amíg a mellékletek feltöltődnek.', true); return; }
 			if (atts.some(a => a.err)) { toast('Egy melléklet nem töltődött fel – vedd ki (×), vagy csatold újra.', true); return; }
 			const b = test ? testBtn : sendBtn; b.disabled = true; const old = b.textContent; b.textContent = 'Küldés…';
-			if (!test && !force) {
+			/* v2.9.201: a 20 mp-es küldés-visszaszámlálás alapból kikapcsolva (a felhasználó kérése) – a levél azonnal megy */
+			if (!test && !force && SEND_UNDO) {
 				/* v2.8.7: a levél tartalma a visszaszámlálás előtt félretéve – ha közben máshová lépsz a panelben, a visszavonás piszkozatként visszahozza a levélírót */
 				const snap = { to: tl, cc: cc.get(), bcc: bcc.get(), subject: sj, body: body, thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) };
 				await dsave(true);
