@@ -643,7 +643,38 @@ function inCat(d) { return st.cat === 'all' || (d.own ? d.ocat === st.cat : st.c
 function renderPicker() {
 	const p = st.deal && st.deal.parsed;
 	const none = st.cat === 'own' && !D.some(d => d.own && inCat(d));
-	q('[data-designs]').innerHTML = (none ? '<p class="cpx-muted sb-empty">Még nincs egyedi stílus – készíts egyet lent az AI-keretkészítővel, és mentsd el.</p>' : '') + D.map((d, i) => '<button type="button" class="sb-d' + (i === st.di ? ' on' : '') + '" data-di="' + i + '"' + (inCat(d) ? '' : ' hidden') + '><span class="i" style="background-image:url(' + esc(d.thumbUrl || IMG(d.thumb)) + ')"></span>' + esc(d.name) + (p && lc(p.design) === lc(d.name) ? ' <b class="sb-star" title="Ezt választotta az ügyfél">★</b>' : '') + '</button>').join('');
+	q('[data-designs]').innerHTML = (none ? '<p class="cpx-muted sb-empty">Még nincs egyedi stílus – készíts egyet lent az AI-keretkészítővel, és mentsd el.</p>' : '') + D.map((d, i) => '<button type="button" class="sb-d' + (i === st.di ? ' on' : '') + '" data-di="' + i + '"' + (inCat(d) ? '' : ' hidden') + '><span class="i" style="background-image:url(' + esc(d.thumbGen || d.thumbUrl || IMG(d.thumb)) + ')"></span>' + esc(d.name) + (p && lc(p.design) === lc(d.name) ? ' <b class="sb-star" title="Ezt választotta az ügyfél">★</b>' : '') + '</button>').join('');
+}
+/* v2.9.235: a beépített sablonok bélyegképe az egységes mintafotókkal, a böngészőben rajzolva (a régi, kész bélyegképek helyett) */
+let thumbsBusy = false;
+async function genThumbs() {
+	if (thumbsBusy) return; thumbsBusy = true;
+	try {
+		const phs = (await Promise.all(photos().map(img))).filter(Boolean);
+		if (!phs.length) return;
+		for (let i = 0; i < D.length; i++) {
+			const d = D[i];
+			if (d.own || d.thumbGen || !d.vars || !d.vars[0]) continue;
+			const V = d.vars[0], ov = await img(V.ov);
+			if (!ov || !alive()) continue;
+			let L; try { L = layout(V, ov); } catch (e) { continue; }
+			const k = 220 / Math.max(L.OW, L.OH), c = document.createElement('canvas');
+			c.width = Math.max(1, Math.round(L.OW * k)); c.height = Math.max(1, Math.round(L.OH * k));
+			const g = c.getContext('2d');
+			g.setTransform(L.sx * k, 0, 0, L.sy * k, 0, 0);
+			g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+			g.fillStyle = V.bg || '#fff'; g.fillRect(0, 0, L.NW, L.NH);
+			if (V.bw && 'filter' in g) g.filter = 'grayscale(1)';
+			L.holes.forEach((h, j) => cover(g, phs[j % phs.length], h));
+			g.filter = 'none';
+			g.drawImage(ov, 0, 0, L.W, L.H);
+			if (L.single) g.drawImage(ov, L.W, 0, L.W, L.H);
+			try { d.thumbGen = c.toDataURL('image/jpeg', 0.82); } catch (e) { continue; }
+			const sp = R && R.querySelector('[data-di="' + i + '"] .i');
+			if (sp) sp.style.backgroundImage = 'url(' + d.thumbGen + ')';
+			await new Promise(r => setTimeout(r, 0));   /* a felület ne akadjon meg */
+		}
+	} finally { thumbsBusy = false; }
 }
 function renderVars() {
 	const p = st.deal && st.deal.parsed && lc(st.deal.parsed.design) === lc(D[st.di].name) ? st.deal.parsed : null;
@@ -697,9 +728,17 @@ function render() {
 		const phs = st.own ? [st.own] : a.slice(1).filter(Boolean);
 		A = { V, ov, L, phs };
 		const cv = q('[data-cv]');
-		if (cv.width !== L.OW || cv.height !== L.OH) { cv.width = L.OW; cv.height = L.OH; }
+		/* v2.9.235: ügyfél-módban a kétszer nyomtatott csíkból csak az egyik fél látszik (a nyomtatáskor középen vágják); a PNG teljes marad */
+		A.half = CLIENT && L.strip;
+		const cw = A.half ? Math.round(L.OW / 2) : L.OW;
+		if (cv.width !== cw || cv.height !== L.OH) { cv.width = cw; cv.height = L.OH; }
 		const mode = st.mode === 'photo' ? 'photo' : 'punch';
-		compose(cv.getContext('2d'), A, mode);
+		if (A.half) {
+			const full = render.full || (render.full = document.createElement('canvas'));
+			if (full.width !== L.OW || full.height !== L.OH) { full.width = L.OW; full.height = L.OH; }
+			compose(full.getContext('2d'), A, mode);
+			const g2 = cv.getContext('2d'); g2.setTransform(1, 0, 0, 1, 0, 0); g2.clearRect(0, 0, cw, L.OH); g2.drawImage(full, 0, 0, cw, L.OH, 0, 0, cw, L.OH);
+		} else compose(cv.getContext('2d'), A, mode);
 		cv.classList.toggle('punch', mode === 'punch');
 		cv.classList.toggle('land', L.OW > L.OH);
 		q('[data-load]').hidden = true;
@@ -904,7 +943,7 @@ function onChange(ev) {
 }
 function toNative(ev) {
 	const r = ev.currentTarget.getBoundingClientRect();
-	return { x: (ev.clientX - r.left) / r.width * A.L.NW, y: (ev.clientY - r.top) / r.height * A.L.NH };
+	return { x: (ev.clientX - r.left) / r.width * (A.half ? A.L.NW / 2 : A.L.NW), y: (ev.clientY - r.top) / r.height * A.L.NH };
 }
 /* v2.9.58: a feliratok befoglaló téglalapjai (sablon-px) – érintésnél csak ezekre / a logóra kattintva indul húzás */
 function textRects(V, L) {
@@ -1250,7 +1289,7 @@ function view(main, ctx) {
 	const pend = X.take ? X.take() : '';
 	if (pend) loadDeal(pend);
 	if (CLIENT) clientStart();
-	fontsReady().then(() => { schedule(); lazyFonts(); });
+	fontsReady().then(() => { schedule(); lazyFonts(); setTimeout(genThumbs, 300); });
 }
 
 /* ------------------------------------------------------------ ügyfél-mód (ügyfélportál) */
