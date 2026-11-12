@@ -898,7 +898,7 @@
 			const go = () => { S.th = Number(b.dataset.th); box.querySelectorAll('.ml-item').forEach(x => x.classList.toggle('on', x === b)); b.classList.remove('un'); const r = S.rows.find(x => x.id === S.th); if (r) r.un = 0; if (S.sel.size) { S.sel.clear(); selUI(box); } openThread(box, S.th); };
 			const cl = b.querySelector('[data-cl]');
 			if (cl) cl.addEventListener('click', e => { e.stopPropagation(); copyLink(Number(b.dataset.th)); });
-			b.addEventListener('click', e => { if (e.target.closest('[data-ck]') || e.target.closest('[data-cl]')) return; if (e.ctrlKey || e.metaKey) { toggleSel(box, Number(b.dataset.th), false); return; } go(); });
+			b.addEventListener('click', e => { if (e.target.closest('[data-ck]') || e.target.closest('[data-cl]')) return; if (e.shiftKey) { e.preventDefault(); toggleSel(box, Number(b.dataset.th), true); return; } /* v2.9.206: Shift = kijelölés (a Cmd/Ctrl+kattintás új lapot nyit) */ go(); });
 			b.addEventListener('keydown', e => { if (e.target !== b) return; if (e.key === 'Enter') { e.preventDefault(); go(); } if (e.key === ' ') { e.preventDefault(); toggleSel(box, Number(b.dataset.th), e.shiftKey); } });
 			b.querySelector('[data-ck]').addEventListener('click', e => { e.stopPropagation(); toggleSel(box, Number(b.dataset.th), e.shiftKey); });
 		});
