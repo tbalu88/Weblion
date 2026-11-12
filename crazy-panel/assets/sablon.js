@@ -19,6 +19,8 @@
 'use strict';
 const C = window.CPX || {};
 const SB = C.sb || {};
+/* v2.9.234: egységes mintafotók – minden sablonhoz ugyanaz a 4 kép (a szerver a bővítményből adja: sablon-minta.php) */
+const PH_ALL = [1, 2, 3, 4].map(n => 'minta-crazy-' + n + '.webp');
 const CLIENT = !!SB.client;   /* ügyfélportál: csak választás + felirat + logó, mentés a portálra */
 const IMG = f => (SB.img || ((C.ajax || '/wp-admin/admin-ajax.php') + '?action=cp_sb_img&f=')) + encodeURIComponent(f);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -31,8 +33,6 @@ const DPI = 300;
 /* ------------------------------------------------------------ sablonok (a crazyphoto.hu oldal másolata) */
 function cat(a, b) { return a.concat(b); }
 const SERIF = '"Cormorant Garamond",Georgia,serif', SCRIPT = '"Parisienne",cursive', SANS = 'Montserrat,Arial,sans-serif', DSERIF = '"Cormorant Infant","Cormorant Garamond",Georgia,serif', CINZEL = 'Cinzel,Georgia,serif', SPOOK = 'Creepster,Impact,sans-serif';
-const PHOTOS = ['minta-foto-2.webp', 'minta-foto-8.webp', 'minta-foto-4.webp'];
-const PH_SET = { wed: ['eskuvo-1', 'eskuvo-2'], ny: ['party-1', 'party-2', 'party-3'], xmas: ['party-3', 'party-1', 'party-2'], corp: ['party-2', 'party-3', 'party-1'], bday: ['szulinap-1', 'szulinap-2'], hallo: ['halloween-1', 'halloween-2'] };
 const SETS = {
 	wed: { l: ['Első név', 'Második név', 'Dátum'], v: ['Anna', 'Péter', '2026.06.14.'] },
 	xmas: { l: ['Felirat', 'Második sor', 'Dátum'], v: ['Boldog Karácsonyt!', 'Crazy Kft. évzáró', '2026.12.18.'] },
@@ -191,10 +191,10 @@ const logoActive = () => logoOn() && !!st.logo;
 const cache = {}, holeCache = {};
 function img(f) {
 	if (cache[f]) return cache[f];
-	cache[f] = new Promise(res => { const i = new Image(); i.addEventListener('load', () => res(i)); i.addEventListener('error', () => { delete cache[f]; res(null); }); i.src = IMG(f); });
+	cache[f] = new Promise(res => { const i = new Image(); i.addEventListener('load', () => res(i)); i.addEventListener('error', () => { delete cache[f]; res(null); }); i.src = /^(https?:)?\/\//.test(f) || f.charAt(0) === '/' ? f : IMG(f); });
 	return cache[f];
 }
-function photos() { const l = PH_SET[D[st.di].set]; return l ? l.map(n => 'minta-' + n + '.webp') : PHOTOS; }
+function photos() { return PH_ALL; }   /* v2.9.234: a régi, sablononként eltérő mintaképek (PH_SET / PHOTOS) helyett */
 
 let fontsP = null;
 function fontsReady() {
@@ -1257,7 +1257,8 @@ function view(main, ctx) {
 async function clientStart() {
 	R.classList.add('sb-client');
 	st.mode = 'photo';   /* az ügyfél mintafotókkal látja, hogyan fog kinézni */
-	q('.sb-out').insertAdjacentHTML('afterbegin', '<div class="sb-save-wrap"><button type="button" class="cpx-btn sb-dl" data-sbsave' + (X.locked ? ' disabled' : '') + '>Sablon mentése</button><small class="sb-oinfo">A mentéssel elküldöd nekünk – a nyomtatható változatot a csapatunk készíti el.</small></div>');
+	/* v2.9.234: a mentés gomb az előnézet fejlécében (mindig látszik, nem kell görgetni) */
+	q('.sb-stage-top').insertAdjacentHTML('beforeend', '<div class="sb-save-wrap"><button type="button" class="cpx-btn sb-dl" data-sbsave title="A mentéssel elküldöd nekünk – a nyomtatható változatot a csapatunk készíti el."' + (X.locked ? ' disabled' : '') + '>Sablon mentése</button></div>');
 	const d = X.deal || null;
 	if (!d) return;
 	st.deal = { id: String(d.id), title: d.title || '', date: d.date || '', note: '', img: '', loading: false, parsed: null, src: '' };

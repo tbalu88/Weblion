@@ -83,7 +83,7 @@ function cp_portal_render_sablon_page($portal, $tok) {
 	}
 	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(false, $ps['back']);   /* v2.9.230: a szerkesztőből nincs Kilépés, csak „Vissza az adatlaphoz” */
 	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><h1>Fotósablon</h1>';
-	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, töltsd fel a logótokat. Amit beállítasz, folyamatosan megőrizzük (ebben a böngészőben), így bármikor visszatérhetsz hozzá. A „Sablon mentése” gombbal elküldöd nekünk – a végleges, nyomtatható változatot a csapatunk készíti el belőle.</p>';
+	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, tölts fel logót. Amit beállítasz, ebben a böngészőben megőrizzük. A „Sablon mentése” gombbal küldöd el nekünk.</p>';
 	if ($locked) { echo '<p class="cpp-lock">A határidő lejárt, a sablon már nem módosítható. Változás esetén írj nekünk.</p>'; }
 	echo '</div><div id="cpp-sbroot"></div></main>';
 	echo '<script>window.CPX=' . wp_json_encode($cfg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';window.CPPS=' . wp_json_encode($ps, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';

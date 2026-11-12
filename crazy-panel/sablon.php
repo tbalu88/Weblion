@@ -90,6 +90,16 @@ function cp_sb_ajax_img() {
 	if (!preg_match('/^(sablon|minta|egyedi)-[a-z0-9-]{1,80}\.(webp|png|jpe?g)$/', $f)) { status_header(400); exit; }
 	$path = cp_sb_dir() . '/' . $f;
 	$have = is_file($path) && filesize($path) > 100;
+	/* v2.9.234: az egységes mintafotók a bővítményben vannak (sablon-minta.php), nem a crazyphoto.hu-n */
+	if (preg_match('/^minta-crazy-([1-4])\.webp$/', $f, $mm)) {
+		if (!$have) {
+			require_once __DIR__ . '/sablon-minta.php';
+			$bin = base64_decode(cp_sb_minta_b64($mm[1]), true);
+			if ($bin && cp_sb_is_img($bin)) { @file_put_contents($path, $bin); $have = is_file($path); }
+		}
+		if ($have) { cp_sb_send($f, $path); }
+		status_header(404); exit;
+	}
 	if (strpos($f, 'egyedi-') === 0) { /* AI-val készült egyedi keret: csak helyben létezik */
 		if ($have) { cp_sb_send($f, $path); }
 		nocache_headers();

@@ -183,3 +183,45 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-day-dur:empty{display:none}
 .cpp-day-dur.diff{color:#6E4A00;background:var(--warnb);border-radius:8px;padding:6px 9px;font-weight:600}
 @media (min-width:700px){.cpp-day-g{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* v2.9.234: tömör sablonkészítő az ügyfélportálon – gépen egy képernyőre fér (sablonsor, beállítások, előnézet) */
+.cpp-sbpage .cpp-sbmain{padding-top:10px;padding-bottom:6px}
+.cpp-sbpage .cpp-sbhead{max-width:none;margin:0 0 8px;display:flex;align-items:baseline;gap:4px 14px;flex-wrap:wrap}
+.cpp-sbpage .cpp-sbhead h1{font-size:20px;margin:0}
+.cpp-sbpage .cpp-sbhead p{font-size:13px;line-height:1.4;flex:1 1 420px}
+.cpp-sbpage .cpp-sbhead .cpp-lock{flex-basis:100%}
+.cpp-sbpage .sb-card{padding:10px 14px;margin-bottom:10px;border-radius:14px}
+.cpp-sbpage .sb-pick-top{margin-bottom:8px;align-items:center}
+.cpp-sbpage .sb-pick-top .sb-lbl{margin:0}
+.cpp-sbpage .sb-seg button{height:30px;padding:0 11px;font-size:12.5px}
+.cpp-sbpage .sb-designs{display:flex;overflow-x:auto;gap:6px;padding-bottom:4px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.cpp-sbpage .sb-d{flex:0 0 74px;font-size:11.5px;padding:4px 4px 5px;border-radius:11px;scroll-snap-align:start}
+.cpp-sbpage .sb-d .i{margin-bottom:3px;border-radius:8px}
+.cpp-sbpage .sb-grid{gap:10px}
+.cpp-sbpage .sb-side,.cpp-sbpage .sb-stage{margin-bottom:0}
+.cpp-sbpage .sb-lbl{margin-bottom:6px}
+.cpp-sbpage .sb-vars{margin-bottom:8px}
+.cpp-sbpage .sb-v{padding:5px 11px;font-size:12.5px}
+.cpp-sbpage .sb-f{margin-bottom:7px}
+.cpp-sbpage .sb-f>span{font-size:12.5px;margin-bottom:3px}
+.cpp-sbpage .sb-f input{height:36px;border-radius:10px;font-size:14.5px}
+.cpp-sbpage .sb-seg[data-conn] button{min-width:48px;font-size:15px}
+.cpp-sbpage .sb-box{margin:8px 0;padding:8px 10px;border-radius:12px}
+.cpp-sbpage .sb-boxh{margin-bottom:2px;font-size:13px}
+.cpp-sbpage .sb-range{margin:2px 0 4px}
+.cpp-sbpage .sb-nudge button{width:30px;height:28px;font-size:14px}
+.cpp-sbpage .sb-out{margin-top:8px}
+.cpp-sbpage .sb-dl{height:44px}
+.cpp-sbpage .sb-oinfo{margin:4px 2px 0}
+.cpp-sbpage .sb-stage-top{margin-bottom:8px}
+.cpp-sbpage .sb-cvwrap{min-height:0;padding:8px;border-radius:10px}
+.cpp-sbpage .sb-hint{margin:6px 2px 0;font-size:12px}
+@media (min-width:1025px){
+.cpp-sbpage .sb-grid{grid-template-columns:330px minmax(0,1fr)}
+.cpp-sbpage .sb-side{max-height:calc(100vh - 286px);top:66px}
+.cpp-sbpage .sb-cvwrap canvas{max-height:calc(100vh - 404px)}
+}
+.cpp-sbpage .sb-stage-top .sb-save-wrap{margin-left:auto}
+.cpp-sbpage .sb-stage-top .sb-dl{width:auto;height:38px;padding:0 20px;font-size:14px}
+.cpp-sbpage .sb-stage-top{flex-wrap:wrap}
+@media (max-width:760px){.cpp-sbpage .sb-stage-top .sb-save-wrap{flex-basis:100%}.cpp-sbpage .sb-stage-top .sb-dl{width:100%}}
