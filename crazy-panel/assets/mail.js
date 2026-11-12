@@ -1969,13 +1969,29 @@
 		if (draft && Array.isArray(draft.atts)) draft.atts.filter(a => a && a.tok).forEach(a => atts.push({ n: a.n, size: a.size || 0, tok: a.tok, err: '' }));
 		const attBox = document.createElement('div'); attBox.className = 'ml-attl'; q('[data-ed]').after(attBox);
 		const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
-		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : 'feltöltés…') + '</small><button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); };
+		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : 'feltöltés…') + '</small>' + (a.err && a.file ? '<button type="button" class="ml-attr" data-aretry="' + i + '" title="Feltöltés újra">Újra</button>' : '') + '<button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); attBox.querySelectorAll('[data-aretry]').forEach(b => b.addEventListener('click', () => { const a = atts[Number(b.dataset.aretry)]; if (a) upSend(a); })); };
 		if (atts.length) setTimeout(drawAtt, 0); /* v2.8.7: visszavont küldésből megmaradt mellékletek */
 		const upload = async file => {
 			const a = { n: file.name, size: file.size, tok: '', err: '' }; atts.push(a); drawAtt();
 			if (file.size > 15 * 1048576) { a.err = 'túl nagy (max. 15 MB)'; drawAtt(); return; }
-			try { const fd = new FormData(); fd.append('action', 'cp_mail_upload'); fd.append('t', C.t); fd.append('f', file); const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' }); const j = await r.json(); if (!j || !j.success) throw new Error((j && j.data && j.data.msg) || 'hiba'); a.tok = j.data.tok; a.n = j.data.n; }
-			catch (e) { a.err = e.message || 'hiba'; }
+			a.file = file; upSend(a);
+		};
+		/* v2.9.199: ha a szerver nem JSON-t ad (tárhely-hibaoldal, átmeneti túlterhelés), kétszer újrapróbálja, utána érthető hiba + Újra gomb */
+		const upSend = async a => {
+			a.err = ''; a.tok = ''; drawAtt();
+			for (let k = 0; k < 3; k++) {
+				if (k) await new Promise(res => setTimeout(res, k * 2000));
+				let r = null, j = null;
+				try {
+					const fd = new FormData(); fd.append('action', 'cp_mail_upload'); fd.append('t', C.t); fd.append('f', a.file);
+					r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
+					const tx = await r.text(); try { j = JSON.parse(tx); } catch (e) { j = null; }
+				} catch (e) { a.err = navigator.onLine === false ? 'nincs internetkapcsolat' : 'megszakadt a feltöltés'; continue; }
+				if (j && j.success) { a.tok = j.data.tok; a.n = j.data.n; a.err = ''; a.file = null; drawAtt(); return; }
+				if (j) { a.err = (j.data && j.data.msg) || 'hiba'; break; } /* a panel válaszolt, de elutasította – nincs értelme újrapróbálni */
+				a.err = r.status === 413 ? 'túl nagy a tárhelynek' : 'a tárhely nem fogadta (HTTP ' + r.status + ')';
+				if (r.status === 413) break;
+			}
 			drawAtt();
 		};
 		/* v1.59 / v2.9.7: friss, személyes ügyfélportál-link a dealhez – gombként, mondatban vagy puszta linkként; a levélíró tetején látható gomb a portál állapotával */
