@@ -60,7 +60,7 @@ function cp_portal_sm_snapshot($deal_id) {
 		'name'     => $c['name'],
 		'email'    => sanitize_email($c['email']),
 		'phone'    => $c['phone'],
-		'date'     => cp_panel_norm_date(cp_panel_get($d, $p['f_date'])),
+		'date'     => function_exists('cp_dm_get') && cp_dm_get($deal_id) !== '' ? '' : cp_panel_norm_date(cp_panel_get($d, $p['f_date'])), /* v2.9.222: „csak hónap” – nincs pontos nap */
 		'start'    => cp_portal_time_ok($start) ? $start : '',
 		'hours'    => is_numeric($hours) ? (float) $hours : 0,
 		'package'  => $package,

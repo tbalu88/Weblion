@@ -199,7 +199,7 @@ function cp_crm_list_row($r, $xk = array()) {
 	$o = array(
 		'id' => (int) $r['id'], 'title' => (string) $r['title'], 'stage' => (string) $r['stage'], 'status' => (string) $r['status'],
 		'value' => $r['value'] === null ? null : (float) $r['value'], 'cur' => (string) $r['currency'],
-		'ev' => (string) $r['event_d'], 'eve' => isset($r['event_end_d']) ? (string) $r['event_end_d'] : '', /* v2.9.71: többnapos: utolsó nap */ 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
+		'ev' => (string) $r['event_d'], 'ym' => function_exists('cp_dm_get') && (string) $r['event_d'] === '' ? cp_dm_get((int) $r['id']) : '', 'eve' => isset($r['event_end_d']) ? (string) $r['event_end_d'] : '', /* v2.9.71: többnapos: utolsó nap */ 'venue' => (string) $r['venue'], 'pkg' => (string) $r['package'], 'svc' => (string) $r['service'],
 		'own' => (int) $r['owner_id'], 'mod' => cp_crm_local($r['modified_at']), 'cr' => cp_crm_local($r['created_at']), 'paid' => (string) $r['paid'],
 		'cn' => (string) $r['cn'], 'ce' => (string) $r['ce'], 'cp' => (string) ($r['cm'] !== null && $r['cm'] !== '' ? $r['cm'] : $r['cp']), 'co' => (string) $r['con'],
 	);
@@ -675,11 +675,19 @@ function cp_crm_save_data($id, $f, $c) {
 	global $wpdb;
 	$row = $wpdb->get_row($wpdb->prepare('SELECT event_d, start_at, contact_id FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A);
 	if (!$row) { return new WP_Error('cp_crm', 'Nincs ilyen deal.', 404); }
+	if (function_exists('cp_dm_get') && (string) $row['event_d'] === '' && ($ym0 = cp_dm_get($id)) !== '') { $row['event_d'] = $ym0 . '-01'; } /* a kezdési időhöz */
 	$F = cp_crm_edit_fields();
 	$body = array(); $types = array();
 	/* v2.9.218: egységes szolgáltatások – a panel saját táblájába, a Salesmate-be nem */
 	$svcIn = isset($f['svc']) && is_scalar($f['svc']) && function_exists('cp_svc_on') && cp_svc_on() ? array_filter(explode(' | ', (string) $f['svc'])) : null; /* a többi mentés után írjuk (ha az elakad, ez sem) */
 	unset($f['svc']);
+	/* v2.9.222: „csak hónap” – pontos dátum megadásakor megszűnik; csak hónap megadásakor a Salesmate-be a hónap 1. napja */
+	$ymIn = isset($f['ym']) && is_scalar($f['ym']) ? trim((string) $f['ym']) : null; unset($f['ym']);
+	if (function_exists('cp_dm_ok')) {
+		if (isset($f['event_d']) && trim((string) $f['event_d']) !== '') { cp_dm_clear($id); $ymIn = null; }
+		elseif ($ymIn !== null && cp_dm_ok($ymIn)) { $f['event_d'] = $ymIn . '-01'; }
+		elseif ($ymIn === '') { cp_dm_clear($id); $ymIn = null; }
+	}
 	foreach ($f as $col => $v) {
 		if (!isset($F[$col]) || !is_scalar($v)) { continue; }
 		$v = trim(sanitize_textarea_field((string) $v));
@@ -694,6 +702,7 @@ function cp_crm_save_data($id, $f, $c) {
 	foreach ($body as $k => $v) { $body[$k] = cp_crm_to_sm($types[$k], $v, $date); }
 	$warn = array();
 	if ($body) {
+		if ($ymIn !== null && function_exists('cp_dm_ok') && cp_dm_ok($ymIn)) { cp_dm_set($id, $ymIn); } /* v2.9.222: a visszaolvasás előtt */
 		$put = cp_sm_put_deal($id, $body);
 		if (is_wp_error($put)) { return new WP_Error('cp_crm', $put->get_error_message(), 502); }
 		$g = cp_sm_get_deal($id);
@@ -778,6 +787,9 @@ function cp_crm_ajax_create() {
 	}
 	if (!$cid) { $cid = cp_crm_contact_new($name, $email, $phone); }
 	$F = cp_crm_edit_fields();
+	/* v2.9.222: csak hónap ismert – a Salesmate-be a hónap 1. napja (ott kötelező), a panelben „csak hónap” */
+	$ym = $g('event_d') === '' && function_exists('cp_dm_ok') && cp_dm_ok($g('ym')) ? $g('ym') : '';
+	if ($ym !== '') { $in['event_d'] = $ym . '-01'; $in['start_at'] = ''; }
 	$date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $g('event_d')) ? $g('event_d') : '';
 	$body = array('title' => $title, 'pipeline' => $o['pipeline'], 'stage' => $stage, 'primaryContact' => $cid, 'currency' => 'HUF');
 	$own = $g('owner_id');
@@ -794,6 +806,7 @@ function cp_crm_ajax_create() {
 	/* saját tábla: azonnal (a kontakt is) */
 	$cg = cp_sm_request('GET', '/apis/contact/v4/' . $cid);
 	if (!is_wp_error($cg)) { cp_crm_store('contact', array(isset($cg['Data']) ? $cg['Data'] : $cg), 'get'); }
+	if ($ym !== '') { cp_dm_set($id, $ym); } /* a visszaolvasás előtt: a panel-táblába már üres dátummal kerül */
 	if (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
 	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'created', 'old_val' => '', 'new_val' => 'létrehozva a panelben', 'by_user' => function_exists('cp_panel_who') ? cp_panel_who() : 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
 	/* v2.9.218: egységes szolgáltatások – a panel saját táblájába (a Salesmate-be nem) */

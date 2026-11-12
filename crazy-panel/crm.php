@@ -248,6 +248,7 @@ function cp_crm_row($m, $r, $via) {
 		$pk = '';
 		foreach (array('pkg_fix', 'pkg_v2', 'pkg_old', 'spinner_pkg', 'melange_pkg') as $k) { if ($row[$k] !== '') { $pk = $row[$k]; break; } }
 		$row['package'] = mb_substr(trim(preg_replace('/\s*\|\s*[\d.\s]+Ft\s*$/u', '', $pk)), 0, 120);
+		if (function_exists('cp_dm_row')) { cp_dm_row($row); } /* v2.9.222: „csak hónap” dátum */
 	}
 	$row['raw'] = wp_json_encode($r, JSON_UNESCAPED_UNICODE);
 	$row['via'] = $via;
