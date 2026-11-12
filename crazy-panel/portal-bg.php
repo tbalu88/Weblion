@@ -17,16 +17,20 @@ function cp_portal_bg_enabled($portal) {
 	return !($spin !== '' && $selfie === '');
 }
 
-/* az adott nap foglalt hátterei: kisbetűs név => darab (foglalt szakaszú / megnyert dealek, a saját deal nélkül); null, ha a Salesmate nem érhető el */
-function cp_portal_bg_taken($date, $except_deal = '') {
+/* az adott nap foglalt hátterei: kisbetűs név => darab (foglalt szakaszú / megnyert dealek, a saját deal nélkül); null, ha a Salesmate nem érhető el
+   v2.9.232: $win = a saját rendezvény időablaka (cp_bgw_*): ha megadott, az a foglalás nem számít, amelyik legalább 2 órával elválik tőle */
+function cp_portal_bg_taken($date, $except_deal = '', $win = null) {
 	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $date)) { return array(); }
 	$p = cp_panel_opts();
 	if ($p['f_bg'] === '') { return array(); }
-	$ck = 'cp_portal_bgday_' . md5($date . '|' . $p['f_bg'] . '|' . $p['booked_stages']);
+	$ck = 'cp_portal_bgday_w' . md5($date . '|' . $p['f_bg'] . '|' . $p['booked_stages'] . '|' . implode(',', function_exists('cp_bgw_fields') ? cp_bgw_fields() : array()));
 	$rows = get_transient($ck);
 	if (!is_array($rows)) {
 		$info = null;
-		$raw = cp_sm_fetch_range($date, $date, $info, array('deal.id', 'deal.stage', 'deal.status', 'deal.pipeline', 'deal.' . $p['f_date'], 'deal.' . $p['f_bg']));
+		$flds = array('deal.id', 'deal.stage', 'deal.status', 'deal.pipeline', 'deal.' . $p['f_date'], 'deal.' . $p['f_bg']);
+		if ($p['f_time'] !== '') { $flds[] = 'deal.' . $p['f_time']; }
+		if (function_exists('cp_bgw_fields')) { $flds = array_merge($flds, cp_bgw_fields()); }
+		$raw = cp_sm_fetch_range($date, $date, $info, $flds);
 		if (is_wp_error($raw)) { return null; }
 		$booked = array_map('cp_panel_lc', cp_panel_lines($p['booked_stages']));  // a panel háttér-foglaltságával azonos (Szerződés kiküldve-től)
 		$pipeline = cp_panel_lc($p['pipeline']);
@@ -40,14 +44,17 @@ function cp_portal_bg_taken($date, $except_deal = '') {
 			$st = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'stage')));
 			if ($status === 'lost' || !($status === 'won' || in_array($st, $booked, true))) { continue; }
 			$bg = cp_panel_lc(cp_panel_str(cp_panel_get($r, $p['f_bg'])));
-			if ($bg !== '') { $rows[$id] = $bg; }
+			if ($bg !== '') { $rows[$id] = array('bg' => $bg, 'w' => function_exists('cp_bgw_row') ? cp_bgw_row($r) : null); }
 		}
 		set_transient($ck, $rows, 5 * MINUTE_IN_SECONDS);
 	}
 	/* kétoldalas háttér: a pár egyik oldalának foglalása a másikat is foglalja */
 	$out = array();
-	foreach ($rows as $id => $bg) {
+	$pmap = ($win !== null && function_exists('cp_bgw_portal_map')) ? cp_bgw_portal_map(array_keys($rows)) : array();
+	foreach ($rows as $id => $x) {
 		if ((function_exists('cp_mday_base') ? cp_mday_base($id) : (string) $id) === (string) $except_deal) { continue; } /* v2.9.70: a saját deal napi kulccsal is */
+		$bg = $x['bg'];
+		if ($win !== null && cp_bgw_fits($win, cp_bgw_pick($id, $x['w'], $pmap))) { continue; } /* v2.9.232: legalább 2 óra különbség → nem ütközik */
 		$out[$bg] = (isset($out[$bg]) ? $out[$bg] : 0) + 1;
 		$pk = function_exists('cp_panel_bg_partner') ? cp_panel_lc(cp_panel_bg_partner($bg)) : '';
 		if ($pk !== '') { $out[$pk] = (isset($out[$pk]) ? $out[$pk] : 0) + 1; }
@@ -65,11 +72,27 @@ function cp_portal_bg_taken_all($portal) {
 	}
 	$out = array();
 	foreach ($days as $d) {
-		$t = cp_portal_bg_taken($d, $portal->deal_id);
+		$t = cp_portal_bg_taken($d, $portal->deal_id, cp_portal_bg_win($portal, $d));
 		if ($t === null) { return null; }
 		foreach ($t as $k => $n) { $out[$k] = max($out[$k] ?? 0, $n); }
 	}
 	return $out;
+}
+
+/* v2.9.232: a portál saját rendezvényének időablaka egy adott napon: a kitöltött menetrend (a rendezvény napján),
+   különben a deal kezdése + óraszáma (többnapos rendezvénynél a nap saját értékei); array(0, 0) helyett null, ha nincs adat */
+function cp_portal_bg_win($portal, $day) {
+	if (!function_exists('cp_bgw_make')) { return null; }
+	if ($day === (string) $portal->event_date) {
+		$a = cp_portal_answers($portal->id);
+		$w = cp_bgw_sched(isset($a['schedule']) ? $a['schedule'] : null);
+		if ($w) { return $w; }
+	}
+	$sm = $portal->sm;
+	if (!empty($sm['days']) && is_array($sm['days'])) {
+		foreach ($sm['days'] as $x) { if (isset($x['d']) && $x['d'] === $day) { return cp_bgw_make((string) ($x['start'] ?? ''), $x['hours'] ?? 0); } }
+	}
+	return cp_bgw_make(isset($sm['start']) ? (string) $sm['start'] : '', isset($sm['hours']) ? $sm['hours'] : 0);
 }
 
 /* a panel háttérlistája a portálon nem választható hátterek nélkül (beállítás: bg_exclude, alapból Fehér, Zöld) */

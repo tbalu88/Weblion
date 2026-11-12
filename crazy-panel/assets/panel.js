@@ -106,6 +106,12 @@
   const viaTxt = x => x.via ? ' (a pár másik oldala: ' + x.via + ')' : '';
   /* ugyanazt a fizikai hátteret használja-e a két név */
   const sameBg = (a, b) => { const x = norm(a), y = norm(b); return x !== '' && (x === y || norm(PAIR[x] || '') === y); };
+  /* v2.9.232: időablak [kezdés perc, vége perc]; ugyanaz a háttér aznap két rendezvényre is mehet, ha legalább 2 óra van köztük (hiányzó idő = ütközik) */
+  const bgFits = (a, b) => !!(a && b) && (a[1] + 120 <= b[0] || b[1] + 120 <= a[0]);
+  const hmOf = m => pad(Math.floor((m % 1440) / 60)) + ':' + pad(m % 60);
+  const winTxt = w => w ? hmOf(w[0]) + '–' + hmOf(w[1]) : 'időpont nélkül';
+  /* aznap ugyanezt a fizikai hátteret használó, de időben 2 órával elváló foglalások */
+  const bgShare = e => { const c = S.cache[monthKey(e.date)]; return !c || !e.bg ? [] : c.events.filter(x => x.id !== e.id && x.state === 'booked' && x.date === e.date && sameBg(e.bg, x.bg) && bgFits(e.win, x.win)); };
 
   function bgStatus(m, date) {
     const c = S.cache[m];
@@ -933,7 +939,7 @@
       const taken = bs.list.filter(b => b.booked.length >= b.qty);
       const pend = bs.list.filter(b => b.booked.length < b.qty && b.pending.length);
       const free = bs.list.filter(b => b.booked.length < b.qty && !b.pending.length);
-      const who = arr => esc(arr.map(x => x.title + viaTxt(x)).join(', '));
+      const who = arr => esc(arr.map(x => x.title + ' (' + winTxt(x.win) + ')' + viaTxt(x)).join(', '));
       pick.querySelector('#cpx-bgchips').innerHTML =
         '<div class="bggroup"><h4>Foglalt (' + taken.length + ')</h4>' + (taken.length ? taken.map(b => '<div class="bgline"><span class="chip taken">' + esc(b.name) + '</span><span>' + who(b.booked) + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra nincs foglalt háttér.</p>') + '</div>' +
         (pend.length ? '<div class="bggroup"><h4>Csak ajánlatban – még kiadható (' + pend.length + ')</h4>' + pend.map(b => '<div class="bgline"><span class="chip pend">' + esc(b.name) + '</span><span>' + who(b.pending) + '</span></div>').join('') + '</div>' : '') +
@@ -961,7 +967,7 @@
         const pd = evs.filter(e => e.state !== 'booked');
         const own = bk.some(e => norm(e.bg) === norm(b.name));
         const cls = bk.length >= b.qty ? 'full' + (own ? '' : ' via') : pd.length || bk.length ? 'pend' : '';
-        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title + (e.dof ? ' (' + dayTxt(e) + ')' : '') + (norm(e.bg) !== norm(b.name) ? ' (a pár másik oldala: ' + e.bg + ')' : '')).join('\n');
+        const tip = evs.map(e => (e.state === 'booked' ? '✔ ' : '… ') + e.title + ' · ' + winTxt(e.win) + (e.dof ? ' (' + dayTxt(e) + ')' : '') + (norm(e.bg) !== norm(b.name) ? ' (a pár másik oldala: ' + e.bg + ')' : '')).join('\n');
         h += '<td class="' + cls + '" data-date="' + date + '" title="' + esc(tip) + '">' + (bk.length ? (own ? '●' : '◐') : pd.length ? '?' : '') + '</td>';
       }
       h += '</tr>';
@@ -1022,8 +1028,9 @@
     const unit = n => { const k = norm(n), p = norm(PAIR[k] || ''); return p ? [k, p].sort().join('+') : k; };
     const uq = {};
     Object.keys(qty).forEach(k => { const u = unit(k); uq[u] = uq[u] == null ? qty[k] : Math.min(uq[u], qty[k]); });
-    c.events.forEach(e => { if (e.state === 'booked' && qty[norm(e.bg)]) { const k = e.date + '|' + unit(e.bg); (cnt[k] = cnt[k] || []).push(e.id); } });
-    Object.keys(cnt).forEach(k => { if (cnt[k].length > uq[k.split('|')[1]]) cnt[k].forEach(id => out.add(id)); });
+    c.events.forEach(e => { if (e.state === 'booked' && qty[norm(e.bg)]) { const k = e.date + '|' + unit(e.bg); (cnt[k] = cnt[k] || []).push(e); } });
+    /* v2.9.232: ütközés csak a 2 órán belüli (vagy időpont nélküli) foglalások között */
+    Object.keys(cnt).forEach(k => { const L = cnt[k], q = uq[k.split('|')[1]]; L.forEach(e => { if (L.filter(x => x !== e && !bgFits(e.win, x.win)).length >= q) out.add(e.id); }); });
     return out;
   }
 
@@ -1161,12 +1168,13 @@
     const dn = pad(d.getMonth() + 1) + '.' + pad(d.getDate()) + '.';
     let bgCell;
     const bgName = esc(e.bg || '');
-    if (k.clash) bgCell = '<span class="bgn bad">' + bgName + '</span><small class="bad">⚠ ütközik egy másik foglalással</small>';
+    if (k.clash) bgCell = '<span class="bgn bad">' + bgName + '</span><small class="bad">⚠ ütközik egy másik foglalással' + (e.win ? '' : ' (nincs megadva kezdés / óraszám)') + '</small>';
     else if (k.bk === 'custom') bgCell = '<span class="bgn ' + (k.t.bg === '1' ? '' : 'bad') + '">' + bgName.toUpperCase() + '</span>' + '<button type="button" class="bgst ' + (k.t.bg === '1' ? 'on' : '') + '" data-f="bg">' + (k.t.bg === '1' ? '✓ elkészült' : 'gyártás alatt') + '</button>';
     else if (k.bk === 'client') bgCell = '<span class="bgn ' + (k.t.bg === '1' ? '' : 'bad') + '">' + bgName.toUpperCase() + '</span>' + '<button type="button" class="bgst ' + (k.t.bg === '1' ? 'on' : '') + '" data-f="bg">' + (k.t.bg === '1' ? '✓ megérkezett' : 'még nincs nálunk') + '</button>';
     else if (k.bk === 'missing') bgCell = (k.t.bg === '1' ? '<span class="bgn mu">– nem kell</span>' : '<span class="bgn bad">' + (e.bg ? bgName : 'Nincs választva') + '</span>') + '<button type="button" class="bgst ' + (k.t.bg === '1' ? 'on' : '') + '" data-f="bg">' + (k.t.bg === '1' ? 'visszaállít' : 'nem kell háttér') + '</button>';
     else if (k.bk === 'na') bgCell = '<span class="bgn mu">– (spinner)</span>';
     else bgCell = C.bgWrite ? '<button type="button" class="bgn bgname" data-pick title="Másik háttér választása – mentés a Salesmate-be">' + bgName + ' <i>✎</i></button>' : '<span class="bgn">' + bgName + '</span>';
+    if (!k.clash && (k.bk === 'ok' || k.bk === 'other')) { const sh = bgShare(e); if (sh.length) bgCell += '<small class="mu" title="Ugyanez a háttér aznap egy másik rendezvényen is szerepel – legalább 2 óra különbséggel, így nem ütközik.">◐ aznap még: ' + esc(sh.map(x => who(x) + ' ' + winTxt(x.win)).join(', ')) + '</small>'; }
     if (C.bgWrite && k.bk !== 'ok' && k.bk !== 'other') bgCell += '<button type="button" class="bgpick" data-pick title="Háttér kiválasztása – mentés a Salesmate-be">' + (k.bk === 'missing' || k.bk === 'na' ? 'Választ ✎' : '✎') + '</button>';
     const djSel = '<select class="tsel ' + (k.djOk ? 'ok' : '') + '" data-f="dj" aria-label="Díjbekérő">' + DJ.map(o => '<option value="' + o[0] + '"' + (k.dj === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' + (k.paidAuto && !k.dj ? '<small class="okt">utalás bejött (SM)</small>' : '');
     const stTxt = k.st === 'done' ? '✓ Kész' : (k.st === 'urgent' ? '⚠ ' : '') + k.miss.join(', ');
@@ -1236,9 +1244,12 @@
     const bs = bgStatus(m, e.date);
     const cur = norm(e.bg);
     const stOf = b => {
-      const others = b.booked.filter(x => x.id !== e.id), pend = b.pending.filter(x => x.id !== e.id);
-      const wv = x => who(x) + viaTxt(x);
-      return others.length >= b.qty ? { c: 'taken', t: 'Foglalt – ' + others.map(wv).join(', '), who: others } : pend.length ? { c: 'pend', t: 'Ajánlatban – ' + pend.map(wv).join(', ') } : { c: 'free', t: 'Szabad' + (b.partner ? ' (kétoldalas, a párja: ' + b.partner + ')' : '') };
+      /* v2.9.232: a 2 órával elváló foglalás nem foglalja (a deal saját időablakához mérve) */
+      const others = b.booked.filter(x => x.id !== e.id && !bgFits(e.win, x.win)), pend = b.pending.filter(x => x.id !== e.id && !bgFits(e.win, x.win));
+      const shared = b.booked.filter(x => x.id !== e.id && bgFits(e.win, x.win));
+      const wv = x => who(x) + ' (' + winTxt(x.win) + ')' + viaTxt(x);
+      const sh = shared.length ? ' · aznap még: ' + shared.map(wv).join(', ') + ' – legalább 2 óra különbséggel' : '';
+      return others.length >= b.qty ? { c: 'taken', t: 'Foglalt – ' + others.map(wv).join(', '), who: others } : pend.length ? { c: 'pend', t: 'Ajánlatban – ' + pend.map(wv).join(', ') + sh } : { c: 'free', t: 'Szabad' + (b.partner ? ' (kétoldalas, a párja: ' + b.partner + ')' : '') + sh };
     };
     const imgOf = {};
     (C.bgs || []).forEach(b => { imgOf[norm(b.name)] = b.img || ''; });

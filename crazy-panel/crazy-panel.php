@@ -321,6 +321,7 @@ function cp_sm_fields() {
 	foreach (cp_panel_extra_fields() as $key => $label) { $f[] = 'deal.' . $key; }
 	$e = cp_el_opts();
 	foreach (array('f_svc', 'f_svc2') as $k) { if ($e[$k] !== '') { $f[] = 'deal.' . $e[$k]; } }
+	if (function_exists('cp_bgw_fields')) { $f = array_merge($f, cp_bgw_fields()); } /* v2.9.232: háttér-időablak (kezdés + óraszám) */
 	return array_values(array_unique($f));
 }
 
@@ -536,6 +537,7 @@ function cp_panel_normalize($rows) {
 			'won'     => $status === 'won',
 			'date'    => $date,
 			'time'    => $o['f_time'] !== '' ? cp_panel_norm_time(cp_panel_get($r, $o['f_time'])) : '',
+			'win'     => function_exists('cp_bgw_row') ? cp_bgw_row($r) : null, /* v2.9.232: [kezdés perc, vége perc] | null */
 			'selfie'  => $sp,
 			'spin'    => $spin,
 			'kind'    => ($spin !== '' && $sp === '') ? 'spin' : (($spin !== '' && $sp !== '') ? 'both' : 'selfie'),
@@ -590,6 +592,12 @@ function cp_panel_ajax_data() {
 	if (!is_array($subs)) { $subs = array(); }
 	$sub_out = array();
 	foreach ($subs as $d => $n) { if ($d >= $from && $d <= $to) { $sub_out[$d] = (int) $n; } }
+	/* v2.9.232: a portálon kitöltött menetrend pontosabb, mint a deal kezdése + óraszáma (friss, nem a gyorsítótárból) */
+	if (function_exists('cp_bgw_portal_map')) {
+		$pmap = cp_bgw_portal_map(array_filter(wp_list_pluck($cached['events'], 'id'), function ($x) { return ctype_digit((string) $x); }));
+		foreach ($cached['events'] as &$ev) { $ev['win'] = cp_bgw_pick($ev['id'], isset($ev['win']) ? $ev['win'] : null, $pmap); }
+		unset($ev);
+	}
 	wp_send_json_success(array(
 		'events' => $cached['events'],
 		'at'     => $cached['at'],
@@ -3747,6 +3755,7 @@ function cp_el_img_route() {
 /* =====================================================================
  * ÜGYFÉLPORTÁL (v1.8) – portal.php és a portal-*.php fájlok
  * ===================================================================== */
+require_once __DIR__ . '/bg-window.php'; /* v2.9.232: háttér 2 órás időablak-szabály */
 require_once __DIR__ . '/portal.php';
 require_once __DIR__ . '/sablon.php';
 require_once __DIR__ . '/sudoku.php';

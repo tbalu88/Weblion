@@ -396,7 +396,9 @@ function cp_crm_ajax_move() {
 		$k = cp_panel_lc($bg);
 		if ($k !== '' && $k !== 'még nem tudom' && $day !== '') {
 			$qty = 0; foreach (cp_panel_bg_list() as $b) { if (cp_panel_lc($b['name']) === $k) { $qty = (int) $b['qty']; } }
-			$taken = cp_portal_bg_taken($day, (string) $id);
+			/* v2.9.232: a saját időablak (portál-menetrend, különben kezdés + óraszám): a 2 órával elváló foglalás nem ütközik */
+			$win = function_exists('cp_bgw_row') ? cp_bgw_pick((string) $id, cp_bgw_row($chk), cp_bgw_portal_map(array((string) $id))) : null;
+			$taken = cp_portal_bg_taken($day, (string) $id, $win);
 			if ($taken === null) { $warn = 'A háttér („' . $bg . '”) foglaltságát most nem sikerült ellenőrizni – nézd meg a Hátterek fülön.'; }
 			elseif ($qty > 0 && isset($taken[$k]) && $taken[$k] >= $qty) { $warn = '⚠ A(z) „' . $bg . '” háttér ' . $day . '-n már foglalt egy másik dealnél – egyeztessétek (Hátterek fül).'; }
 		}
