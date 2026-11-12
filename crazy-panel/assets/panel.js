@@ -434,6 +434,36 @@
       d.querySelector('button').addEventListener('click', () => end(false));
     });
   })();
+  /* v2.9.205: Cmd/Ctrl + kattintás (vagy középső gomb) új lapon nyitja meg, amire kattintasz: deal, levélszál, kontakt, cég, menüpont */
+  function cpxNewTabUrl(t) {
+    if (!t || !t.closest || t.closest('input, textarea, select, [contenteditable="true"], [data-ck], .pp-ck, .crm-cb, .crm-cbc, label, .ml-ed')) return '';
+    const base = location.pathname + location.search, num = v => (Number(v) > 0 ? Number(v) : 0);
+    const a = t.closest('a[href]'); const href = a ? a.getAttribute('href') || '' : '';
+    if (a && href && href !== '#' && !a.hasAttribute('data-opendeal')) return ''; /* valódi link: a böngésző maga kezeli */
+    let el;
+    if ((el = t.closest('[data-opendeal]')) && num(el.dataset.opendeal)) return base + '#deals:' + num(el.dataset.opendeal);
+    if ((el = t.closest('[data-ldeal]')) && num(el.dataset.ldeal)) return base + '#deals:' + num(el.dataset.ldeal);
+    if ((el = t.closest('.crm-360 [data-open]')) && num(el.dataset.open)) return base + '#deals:' + num(el.dataset.open);
+    if ((el = t.closest('.crm-card[data-id], .crm-row[data-id]')) && num(el.dataset.id)) return base + '#deals:' + num(el.dataset.id);
+    if ((el = t.closest('[data-th]')) && num(el.dataset.th) && !t.closest('[data-cl]')) return base + '#mail:' + num(el.dataset.th);
+    if ((el = t.closest('.crm-360 [data-ct], .crm-pg [data-ct]')) && num(el.dataset.ct)) return base + '#kapcsolatok:ct:' + num(el.dataset.ct);
+    if ((el = t.closest('[data-co]')) && num(el.dataset.co) && !t.closest('.ml-compose')) return base + '#kapcsolatok:co:' + num(el.dataset.co);
+    if ((el = t.closest('.pp-t tr[data-id]')) && num(el.dataset.id)) return base + '#kapcsolatok:' + (el.querySelector('.pp-av.sq') ? 'co' : 'ct') + ':' + num(el.dataset.id);
+    if ((el = t.closest('.cpx-tabs [data-tab], .mn-bar [data-tab]')) && el.dataset.tab) return base + '#' + el.dataset.tab;
+    return '';
+  }
+  document.addEventListener('click', e => {
+    if (e.button !== 0 || !(e.metaKey || e.ctrlKey)) return;
+    const u = cpxNewTabUrl(e.target); if (!u) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    window.open(u, '_blank', 'noopener');
+  }, true);
+  document.addEventListener('auxclick', e => {
+    if (e.button !== 1) return;
+    const u = cpxNewTabUrl(e.target); if (!u) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    window.open(u, '_blank', 'noopener');
+  }, true);
   function go(tab) {
     S.tab = tab;
     try { localStorage.setItem('cpx_last', JSON.stringify({ t: tab, at: Date.now() })); } catch (e) { /* privát mód */ }
