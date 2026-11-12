@@ -1,40 +1,63 @@
-# Kidolgozási terv: háttér-foglaltság időablakkal (2 órás szabály)
+# Kidolgozási terv: Crazy Booth – saját szelfigép-szoftver (Windows, Nikon D5300)
 
-*2026-11-12 · Crazy panel · állapot: KÉSZ, élesítve (2.9.232)*
+*2026-11-12 · új projekt · állapot: JÓVÁHAGYÁSRA VÁR*
+*(Az előző terv – háttér 2 órás szabály – kész, élesítve 2.9.232; git-történetben megvan.)*
 
 ## Cél
-Egy háttér ugyanazon a napon két rendezvényre is kiadható, ha a korábbi rendezvény vége és a későbbi kezdése között **legalább 2 óra** van. A szabály mindenhol egyformán érvényes: portál háttérválasztó, portál mentés-ellenőrzés, panel Hátterek fül ütközésjelzése, deal szakaszváltáskor adott figyelmeztetés.
+A dslrBooth kiváltása saját szoftverrel: Windows-gép + Nikon D5300 (USB) + DNP DS620 nyomtató.
+Első változat: **fotó + nyomtatás, AI-képek, QR-kód a letöltéshez, online galéria**, a sablonok **automatikusan a panelből** (az ügyfél által a portálon elkészített fotósablon).
 
-## Döntések (2026-11-12, a felhasználóval)
-- Időablak forrása: 1) a portálon kitöltött menetrend (kezdés–vége), ha van; 2) különben a deal „Kezdés” (dátum+idő) mezője + a foglalt óraszám.
-- Ha bármelyik rendezvénynél hiányzik a kezdés vagy az időtartam → **foglaltnak számít** (mint most).
-- Pontosan 2 óra különbség még elég. A sorrend mindegy (korábbi → későbbi és fordítva is).
-- Éjfél utánra nyúló rendezvény **nem** foglalja a másnapot (a hátterek éjjel visszakerülnek a raktárba).
-- Minden háttérből 1 darab van; a kétoldalas háttér egy foglalása mindkét oldalát foglalja (a szabály a párra együtt vonatkozik).
-- Többnapos rendezvény: napi időablak nincs megbízhatóan → az érintett napokon foglaltnak számít (mint most).
-
-## Felépítés
-- Egy közös PHP-függvény: `cp_bg_window($deal)` → [kezdés perc, vége perc] vagy null; `cp_bg_fits($a, $b)` → igaz, ha a két ablak között ≥ 120 perc van (null → hamis).
-- A napi foglaltság (`cp_portal_bg_taken`) a hátterek mellett az ablakokat is visszaadja; a darabszám helyett „ütközik-e a saját ablakkal” dönt.
-- A panel Hátterek füle az eseményekhez megkapja az ablakot; a JS ütközésvizsgálat páronként ugyanezt a szabályt alkalmazza.
-- Salesmate-be semmi nem íródik; csak olvasás.
+## Felépítés (döntési javaslatok)
+| Rész | Javaslat | Miért |
+| --- | --- | --- |
+| Alkalmazás | **Electron** (Windows-telepítővel), teljes képernyő, érintésre | A panel sablonrajzolója (sablon.js) újrahasznosítható, így a gépen pontosan az jelenik meg, amit az ügyfél a portálon látott |
+| Kamera | **digiCamControl** (ingyenes, nyílt forrású, támogatja a D5300-at) – a szoftver a helyi webes vezérlőjén keresztül exponál és kéri az élőképet | Bevált Windows-megoldás Nikonhoz; a Nikon SDK külön regisztrációt kér |
+| Nyomtatás | Windows-nyomtatás közvetlenül a DS620-ra (néma, párbeszéd nélkül), 4×6"; csíknál a meghajtó „2 inch cut” beállításával 2 db 2×6" | A DS620 ezt tudja; a sablon 4×6"-os PNG, a csík már most is kétszer van rajta |
+| Sablonok | A panelből: dátum / deal szerint a nap rendezvényei, a portálon mentett nyomtatható PNG + fotóablakok; offline gyorstár a gépen | Nincs kézi átrakás |
+| Online galéria | Rendezvényenkénti galéria-oldal (link alapján érhető el, nem kereshető), fotónként saját letöltő-oldal | QR → a vendég telefonján az adott kép |
+| QR | Fotózás után a képernyőn és opcionálisan a nyomaton | A QR-cím előre generált, a feltöltés a háttérben megy (internet-kimaradásnál sorban áll, később feltölt) |
+| AI-képek | A fotóból AI-stílusú változat (pl. karikatúra / festmény / mese) külső képgeneráló szolgáltatással | Internet kell hozzá a helyszínen; képenként díjas |
+| Eszköz-hozzáférés | A panelben „Booth-gépek” lista, gépenként saját kulccsal (visszavonható) | Ha egy gép elveszik, letiltható |
 
 ## Feladatok
-1. **Időablak + szabály (PHP)** – `cp_bg_window`, `cp_bg_fits`; a menetrend a portál válaszaiból (több deal egyszerre), különben SM kezdés + óraszám. *Kész, ha:* helyi PHP-teszt: 10:00–14:00 és 16:00 → szabad; 15:59 → foglalt; hiányzó idő → foglalt; éjfél utáni vég nem hat másnapra.
-2. **Portál** – háttérlista és mentés-ellenőrzés az új szabállyal (saját ablak: a portál menetrendje / SM). Ha az ügyfél később módosítja a menetrendet úgy, hogy ütközzön, a mentett háttér megmarad, de a panelben ütközésként jelenik meg. *Kész, ha:* próba élesben (csak olvasás): a következő 60 nap minden portáljára régi vs. új szabad hátterek listája.
-3. **Panel – szakaszváltási figyelmeztetés** (crm-panel.php) ugyanazzal a függvénnyel.
-4. **Panel – Hátterek fül** (panel.js + eseményadat): ütközés csak, ha az ablakok 2 órán belül vannak vagy valamelyik hiányzik; a dealnél jelzés: „ugyanez a háttér aznap: 10:00–14:00 (másik rendezvény)”. *Kész, ha:* helyi böngészőteszt legrosszabb adatokkal (hiányzó idő, éjfél, kétoldalas pár, 3 rendezvény egy nap).
 
-### Ellenőrzőpont
-- Riport élesből (csak olvasás): hol szűnik meg egy mostani ütközés, és miért (időpontokkal, név nélkül) → átnézed, utána élesítés.
-- Élesítés után: 200-as válasz, útmutató frissítése.
+### 1. fázis – alap (kamera nélkül is tesztelhető)
+1. **Electron-váz + képernyőfolyamat**: kezdőképernyő → érintés → visszaszámlálás → fotó → előnézet → nyomtatás / QR. Próbamód kamera nélkül (mintafotókkal). *Kész, ha:* a teljes folyamat végigkattintható próbamódban.
+2. **Kameravezérlés (digiCamControl)**: élőkép, exponálás, a kép átvétele, hibakezelés (kamera nincs bekapcsolva, akku, fókusz nem talál). *Kész, ha:* nálad a D5300-zal 50 egymás utáni fotó hiba nélkül; élőkép folyamatos.
+
+### Ellenőrzőpont A – próba nálad (D5300 + Windows)
+
+### 2. fázis – sablon + nyomtatás
+3. **Sablon a panelből**: panel-végpont (booth-kulccsal) – a nap rendezvényei, a portálon mentett sablon + fotóablakok; letöltés és offline tárolás. *Kész, ha:* deal kiválasztása után a gép a portál-sablonnal fotóz.
+4. **Nyomtatás DS620-ra**: 1 kép (4×6") és 3 képes csík (2×6" vágással); példányszám; papírfogyás-számláló. *Kész, ha:* nálad 10 nyomat hiba nélkül, pontos illeszkedéssel.
+
+### Ellenőrzőpont B – próba nálad nyomtatóval
+
+### 3. fázis – online galéria + QR
+5. **Feltöltés + galéria** (panel: tárolás, rendezvényenkénti galéria-oldal, fotónkénti letöltő-oldal; booth: háttérfeltöltés sorral). *Kész, ha:* internet nélkül készült képek a kapcsolat visszatérésekor feltöltődnek.
+6. **QR a képernyőn (és a nyomaton, ha kéred)**. *Kész, ha:* telefonnal beolvasva a kép letölthető.
+
+### 4. fázis – AI-képek
+7. **AI-változat** választható stílusokkal, várakozó-képernyővel; nyomtatható és a galériába is kerül. *Kész, ha:* 3 stílus működik, egy kép < 30 mp alatt elkészül.
+
+### 5. fázis – kiadás
+8. **Windows-telepítő + beállító képernyő** (booth-kulcs, nyomtató, kamera, alapértelmezett mód), naplózás hibakereséshez.
+
+### Ellenőrzőpont C – éles próba egy belső eseményen, a dslrBooth mellett párhuzamosan
 
 ## Kockázatok
 | Kockázat | Hatás | Kezelés |
 | --- | --- | --- |
-| Rossz/elavult kezdési idő a dealen | magas (dupla foglalás) | hiányzó adat = foglalt; a panelben a megosztott háttér jelölve, időpontokkal |
-| Az ügyfél a portálon később átírja a menetrendet | közepes | panel-ütközésjelzés a friss menetrendből; Pumble-jelzés lehetséges (külön kérésre) |
-| Gyorsítótár (5 perc) | alacsony | a kulcsba bekerülnek az új mezők; mentéskor ürül, mint most |
+| A kamerát itt nem tudom fizikailag tesztelni | magas | próbamód; részletes napló a gépen; minden kamerás lépés után próba nálad |
+| digiCamControl élőkép lassú / akad | közepes | élőkép-frissítés hangolása; tartalék: a Nikon SDK (regisztráció kell) |
+| Internet-kimaradás a helyszínen | közepes | fotó és nyomtatás offline is megy; feltöltés sorban; AI csak nettel |
+| AI-költség | közepes | képenkénti díj; rendezvényenként ki-be kapcsolható; napi limit |
+| Galéria tárhely az eventcrazy.hu-n (OPcache / lemez) | közepes | képek átméretezve (~2000 px); javaslat: a galéria a tartalék VPS-en (tartalek.eventcrazy.hu) fusson |
+| Ügyfélfotók (személyes adat) | magas | link-alapú, nem kereshető galéria; automatikus törlés (pl. 60 nap); adatkezelési szöveg |
 
 ## Nyitott kérdések
-- Nincs.
+1. **AI-képek:** milyen legyen (karikatúra, festmény, mese, háttércsere…)? Van már szolgáltató, amit az „AI fotózás / AI karikatúra” szolgáltatásnál használtok? Mennyi lehet a költség képenként?
+2. **Galéria helye:** eventcrazy.hu vagy a tartalék VPS (javaslat: VPS, mert nem lassítja a panelt)? Meddig maradjanak fent a képek (javaslat: 60 nap)?
+3. **QR a nyomaton is** legyen, vagy csak a képernyőn?
+4. **Képernyő:** milyen felbontás, álló vagy fekvő? Kell kezdőképernyő-arculat rendezvényenként?
+5. **Gépek száma:** hány booth-gép fut egyszerre (gépenkénti kulcs)?

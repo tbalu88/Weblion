@@ -1,6 +1,12 @@
-# Teendők: háttér 2 órás szabály
-- [x] 1. Időablak + szabály (PHP) – helyi teszttel
-- [x] 2. Portál háttérlista + mentés-ellenőrzés
-- [x] 3. Panel szakaszváltási figyelmeztetés
-- [x] 4. Panel Hátterek fül ütközésjelzés + „megosztott háttér” jelölés
-- [x] Ellenőrzőpont: élő riport (régi vs. új) → jóváhagyás → élesítés, útmutató
+# Teendők: Crazy Booth (jóváhagyásra vár)
+- [ ] 1. Electron-váz + képernyőfolyamat (próbamód)
+- [ ] 2. Kameravezérlés (digiCamControl, D5300)
+- [ ] Ellenőrzőpont A – próba a D5300-zal
+- [ ] 3. Sablon a panelből (booth-kulcs, offline gyorstár)
+- [ ] 4. Nyomtatás DS620 (4×6", 2×6" vágás)
+- [ ] Ellenőrzőpont B – próba nyomtatóval
+- [ ] 5. Feltöltés + online galéria
+- [ ] 6. QR-kód
+- [ ] 7. AI-képek
+- [ ] 8. Windows-telepítő + beállítások
+- [ ] Ellenőrzőpont C – éles próba a dslrBooth mellett
