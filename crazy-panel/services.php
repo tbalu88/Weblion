@@ -1,0 +1,134 @@
+<?php
+/**
+ * Crazy panel – egységes „Szolgáltatás(ok)” (v2.9.216).
+ *
+ * A deal szolgáltatásai egy listában. Forrás:
+ *   1) ha a panelben valaki beállította: a saját panel-tábla (crazy_deal_svc) – ezt a Salesmate-szinkron nem írja felül;
+ *   2) különben a régi Salesmate-mezőkből SZÁMOLVA, olvasáskor (EventCrazy szolgáltatás(ok), Választott szolgáltatás,
+ *      További szolgáltatások, Szolgáltatás) egy átnevezési táblával. A régi mezők NEM módosulnak, a Salesmate-be nem írunk.
+ * A bekapcsolás kapcsolóval: cp_svc_on() (cp_svc_v2 beállítás) – kikapcsolva minden a régi módon működik.
+ * Terv: tasks/plan.md
+ */
+if (!defined('ABSPATH')) { exit; }
+
+function cp_svc_on() { return get_option('cp_svc_v2') === '1'; }
+
+/* a választható szolgáltatások (az EventCrazy-lista + Hibrid + Fotózás 2 fotóssal) – a sorrend a szerkesztőé */
+function cp_svc_list() {
+	return array('Szelfigép', 'Hibrid (Szelfigép + AI karikatúra)', 'Digitális Karikatúra', 'AI Karikatúra', 'AI fotózás', 'SpinnerClassic', 'OverheadSpinner', 'VIP Spinner',
+		'VR Élmény', 'Greenbox', 'SzelfiRobot', 'SelfieLight', 'Selfie Tükör', 'Rendezvényfotó', 'Fotózás 2 fotóssal', 'Rendezvény videó', 'Drón',
+		'LED Tánctér', 'Élőzene', 'DJ', 'Karaoke', 'TattooPrinting', 'Hashtag Printing', 'Mindflex', 'CrazyCatch', 'CrazyLight', 'Crazy Beauty',
+		'Csocsó / Foosball', 'XXL csocsó / XXL Foosball', 'Ülőfoci / Seated Football', 'Visszahívást kérek', 'Egyéb');
+}
+function cp_svc_key($v) { return preg_replace('/[^a-z0-9]+/', '', strtolower(remove_accents(trim((string) $v)))); }
+
+/* régi érték → új érték(ek); a kulcs a normalizált (kisbetűs, ékezet és írásjel nélküli) szöveg */
+function cp_svc_alias() {
+	return array(
+		'360spinner' => array('SpinnerClassic'), 'spinner' => array('SpinnerClassic'), 'spinnerclassic' => array('SpinnerClassic'),
+		'overhead360' => array('OverheadSpinner'), 'oveerheadspinner' => array('OverheadSpinner'), 'overheadspinner' => array('OverheadSpinner'),
+		'miniszelfitukor' => array('Selfie Tükör'), 'selfietukor' => array('Selfie Tükör'),
+		'rendezvenyfotovideo' => array('Rendezvényfotó', 'Rendezvény videó'),
+		'karikatura' => array('Digitális Karikatúra'), 'digitaliskarikatura' => array('Digitális Karikatúra'),
+		'selfielight' => array('SelfieLight'), 'foto' => array('Rendezvényfotó'), 'video' => array('Rendezvény videó'),
+		'dancefloor' => array('LED Tánctér'), 'ledtancter' => array('LED Tánctér'),
+		'fotoautomata' => array('Szelfigép'), 'fotoautomataspinner' => array('Szelfigép', 'SpinnerClassic'),
+		'vr' => array('VR Élmény'), 'vrelmeny' => array('VR Élmény'), 'crazycathc' => array('CrazyCatch'),
+		'fotozas2fotossal' => array('Fotózás 2 fotóssal'), 'aikarikatura' => array('AI Karikatúra'),
+		'nemnevezettmegkonkretszolgaltatast' => array(), /* nem szolgáltatás – kimarad */
+	);
+}
+/* egy régi érték leképezése: array(lista, megjegyzés-e) */
+function cp_svc_map_one($v) {
+	static $canon = null; if ($canon === null) { $canon = array(); foreach (cp_svc_list() as $c) { $canon[cp_svc_key($c)] = $c; } }
+	$k = cp_svc_key($v);
+	if ($k === '') { return array(array(), ''); }
+	$A = cp_svc_alias();
+	if (isset($A[$k])) { return array($A[$k], ''); }
+	if (isset($canon[$k])) { return array(array($canon[$k]), ''); }
+	/* szabad szöveg: a felismerhető szolgáltatás (pl. „Selfi box (tavaly is volt)” → Szelfigép), különben Egyéb + az eredeti szöveg */
+	if (preg_match('/szelfi|selfi|fotoautomata|photobooth/', $k)) { return array(array('Szelfigép'), ''); }
+	return array(array('Egyéb'), trim((string) $v));
+}
+/* a régi mezőkből számolt lista (a régi mezők nem módosulnak) */
+function cp_svc_derive($d) {
+	$out = array(); $notes = array();
+	foreach (array('services_ec', 'services_cp', 'services_more', 'service') as $f) {
+		$raw = (string) ($d[$f] ?? '');
+		if (trim($raw) === '') { continue; }
+		foreach (explode(' | ', $raw) as $v) {
+			list($l, $n) = cp_svc_map_one($v);
+			foreach ($l as $x) { if (!in_array($x, $out, true)) { $out[] = $x; } }
+			if ($n !== '' && !in_array($n, $notes, true)) { $notes[] = $n; }
+		}
+	}
+	/* csak csomagnév van (Crazyphoto szelfigép-csomag: Mini / Medium / Mega / Carneval), vagy a deal-név „[Crazyphoto] …” – szelfigép (mint a régi becslésnél) */
+	if (!$out) {
+		$pk = implode(' ', array(($d['package'] ?? ''), ($d['pkg_fix'] ?? ''), ($d['pkg_v2'] ?? '')));
+		if (preg_match('/\b(mini|medium|mega|carneval)\b/i', $pk) || preg_match('/^\[crazyphoto(\.hu)?\]/i', (string) ($d['title'] ?? ''))) { $out[] = 'Szelfigép'; }
+	}
+	/* a választható lista sorrendjében */
+	$ord = array_flip(cp_svc_list());
+	usort($out, function ($a, $b) use ($ord) { return ($ord[$a] ?? 999) - ($ord[$b] ?? 999); });
+	return array('l' => $out, 'x' => $notes, 'src' => 'sm');
+}
+
+/* ------------------------------------------------------------ a panel saját táblája (csak a panelben módosított dealek) */
+function cp_svc_t() { global $wpdb; return $wpdb->prefix . 'crazy_deal_svc'; }
+function cp_svc_db() {
+	static $ok = null;
+	if ($ok !== null) { return $ok; }
+	if (get_option('cp_svc_db') !== '1') {
+		global $wpdb;
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta('CREATE TABLE ' . cp_svc_t() . " (
+  deal_id bigint(20) unsigned NOT NULL,
+  services text NOT NULL,
+  note varchar(255) NOT NULL DEFAULT '',
+  uid int(11) NOT NULL DEFAULT 0,
+  by_user varchar(100) NOT NULL DEFAULT '',
+  updated_at datetime NULL,
+  PRIMARY KEY  (deal_id)
+) " . $wpdb->get_charset_collate() . ';');
+		update_option('cp_svc_db', '1', false);
+	}
+	return $ok = true;
+}
+/* több deal panel-sora egyszerre (a listákhoz) – gyorsítótárral */
+function cp_svc_rows($ids) {
+	static $cache = array();
+	$ids = array_values(array_unique(array_filter(array_map('intval', (array) $ids))));
+	$need = array_values(array_diff($ids, array_keys($cache)));
+	if ($need && get_option('cp_svc_db') === '1') {
+		global $wpdb;
+		foreach ($need as $i) { $cache[$i] = null; }
+		foreach (array_chunk($need, 500) as $ch) {
+			foreach ((array) $wpdb->get_results('SELECT deal_id, services, note FROM ' . cp_svc_t() . ' WHERE deal_id IN (' . implode(',', $ch) . ')', ARRAY_A) as $r) {
+				$l = json_decode((string) $r['services'], true);
+				$cache[(int) $r['deal_id']] = array('l' => is_array($l) ? array_values(array_map('strval', $l)) : array(), 'x' => $r['note'] !== '' ? array($r['note']) : array(), 'src' => 'panel');
+			}
+		}
+	}
+	$o = array(); foreach ($ids as $i) { $o[$i] = $cache[$i] ?? null; } return $o;
+}
+/* a deal érvényes szolgáltatásai: array('l' => [...], 'x' => [megjegyzések], 'src' => 'panel'|'sm') */
+function cp_deal_svc($d) {
+	$id = (int) ($d['id'] ?? 0);
+	if ($id) { $r = cp_svc_rows(array($id)); if (!empty($r[$id])) { return $r[$id]; } }
+	return cp_svc_derive($d);
+}
+function cp_deal_svc_str($d, $sep = ', ') { $s = cp_deal_svc($d); return implode($sep, $s['l']); }
+
+/* ------------------------------------------------------------ új árbecslés: a szolgáltatásokból + óraszámból (a csomagnév nem számít) */
+function cp_est_v2($d) {
+	if (!function_exists('cp_est_ec_deal')) { return null; }
+	$s = cp_deal_svc($d);
+	if (!$s['l']) { return null; }
+	$c = $d;
+	$c['services_ec'] = implode(' | ', $s['l']);
+	/* a régi csomag-/szövegmezők nem számítanak – a magánszemély (Crazyphoto-ár) ága az óraszámból számol */
+	$c['service'] = $c['package'] = $c['pkg_fix'] = $c['pkg_v2'] = $c['services_cp'] = $c['services_more'] = $c['spinner_pkg'] = '';
+	$r = cp_est_ec_deal($c, cp_est_private($d));
+	if ($r && $s['x']) { foreach ($s['x'] as $n) { $r['l'][] = 'Megjegyzés (régi szöveg): ' . $n; } }
+	return $r;
+}

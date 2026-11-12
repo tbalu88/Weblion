@@ -11,6 +11,8 @@ if (!defined('ABSPATH')) { exit; }
 function cp_est_ec_prices() {
 	$t = function ($rows) { $o = array(); $h = 3; foreach ($rows as $r) { $o[$h++] = $r; } return $o; };
 	return array(
+		/* v2.9.216: Hibrid (szelfigép + AI karikatúra, 1 gép 2 szolgáltatással) – 3 óra 130 000, 4 óra 150 000, utána +20 000 Ft/óra, nettó, szezontól függetlenül */
+		'hibrid' => array('n' => 'Hibrid (Szelfigép + AI karikatúra)', 'bp' => 5000, 't' => $t(array_map(function ($p) { return array($p, $p, $p, $p); }, array(130000, 150000, 170000, 190000, 210000, 230000, 250000, 270000)))),
 		'szelfigep' => array('n' => 'Szelfigép', 'bp' => 5000, 't' => $t(array(array(120000, 130000, 130000, 140000), array(135000, 140000, 145000, 155000), array(150000, 160000, 165000, 170000), array(165000, 175000, 185000, 195000), array(180000, 190000, 202500, 210000), array(195000, 205000, 221000, 228000), array(210000, 225000, 239500, 246000), array(225000, 240000, 258000, 264000)))),
 		'greenbox' => array('n' => 'Greenbox', 'bp' => 5000, 't' => $t(array(array(150000, 170000, 170000, 190000), array(165000, 180000, 175000, 205000), array(180000, 200000, 195000, 220000), array(195000, 215000, 225000, 245000), array(220000, 230000, 242500, 260000), array(225000, 245000, 261000, 278000), array(240000, 265000, 279500, 296000), array(255000, 280000, 298000, 314000)))),
 		'aifoto' => array('n' => 'AI fotózás', 'bp' => 5000, 't' => $t(array(array(155000, 175000, 175000, 195000), array(170000, 185000, 190000, 210000), array(185000, 205000, 210000, 225000), array(200000, 220000, 230000, 250000), array(215000, 235000, 247500, 265000), array(230000, 250000, 266000, 283000), array(245000, 270000, 284500, 301000), array(260000, 285000, 303000, 319000)))),
@@ -30,7 +32,7 @@ function cp_est_ec_prices() {
 /* a deal EventCrazy-szolgáltatásmezőjének értékei → árlista-kulcs (null: egyedi árazású / nincs az árlistában) */
 function cp_est_ec_key($v) {
 	$v = mb_strtolower(remove_accents(trim((string) $v)));
-	$map = array('/^szelfigep|^photobooth/' => 'szelfigep', '/greenbox/' => 'greenbox', '/^ai foto/' => 'aifoto', '/^ai karikatura/' => 'aikarikatura', '/tukor|mirror/' => 'tukor', '/robot|droid/' => 'robot',
+	$map = array('/^hibrid/' => 'hibrid', '/^szelfigep|^photobooth/' => 'szelfigep', '/greenbox/' => 'greenbox', '/^ai foto/' => 'aifoto', '/^ai karikatura/' => 'aikarikatura', '/tukor|mirror/' => 'tukor', '/robot|droid/' => 'robot',
 		'/cockpit/' => 'vrcockpit', '/^vr/' => 'vr', '/vip ?spinner/' => 'vip', '/overhead/' => 'overhead', '/spinnerclassic|^360|^spinner/' => 'spinner', '/crazycatch|catch ?it/' => 'catchit', '/led tanc|dancefloor|tancter/' => 'dancefloor');
 	foreach ($map as $re => $k) { if (preg_match($re, $v)) { return $k; } }
 	return null;

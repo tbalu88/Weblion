@@ -37,7 +37,7 @@ function cp_d360_txt($body) {
 /* v2.9.69: egy levél az idővonal-csoportban (szöveg csak kezdetként, HTML soha) */
 function cp_d360_msg_row($r, $sn) {
 	$att = json_decode((string) $r['attachments'], true) ?: array();
-	return array('id' => (int) $r['id'], 'dir' => $r['dir'] === 'out' ? 'out' : 'in', 'from' => $r['from_name'] !== '' ? $r['from_name'] : $r['from_email'], 'at' => cp_crm_local($r['sent_at']), 'sn' => (string) $sn,
+	return array('id' => (int) $r['id'], 'dir' => $r['dir'] === 'out' ? 'out' : 'in', 'from' => $r['from_name'] !== '' ? (function_exists('cp_hu_name') ? cp_hu_name($r['from_name']) : $r['from_name']) : $r['from_email'], 'at' => cp_crm_local($r['sent_at']), 'sn' => (string) $sn,
 		'att' => count(array_filter($att, function ($a) { return !empty($a['n']) && !(!empty($a['cid']) && cp_d360_is_emb((string) $a['n'])); })), 'q' => $r['status'] === 'idézetből' ? 1 : 0);
 }
 /* v2.9.69: egy szál korábbi levelei az idővonal „+N korábbi levél” sorához – csak olvas (NEM jelöli olvasottnak), csak szövegkezdetet ad.
@@ -149,7 +149,7 @@ function cp_d360_mail($thread_where, $msg_limit = 80) {
 		if (isset($hide[(int) $m['id']])) { continue; }
 		if (++$k > $msg_limit) { break; }
 		$att = json_decode((string) $m['attachments'], true) ?: array();
-		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'], 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
+		$out['msgs'][] = array('id' => (int) $m['id'], 'th' => (int) $m['thread_id'], 'dir' => $m['dir'], 'from' => $m['from_name'] !== '' ? (function_exists('cp_hu_name') ? cp_hu_name($m['from_name']) : $m['from_name']) : $m['from_email'], 'att' => count($att), 'q' => $m['status'] === 'idézetből' ? 1 : 0, 'at' => cp_crm_local($m['sent_at']));
 		foreach ($att as $ai => $a) { if (count($out['files']) < 60 && !empty($a['n'])) { $out['files'][] = array('n' => function_exists('cp_mail_fname') ? cp_mail_fname((string) $a['n']) : (string) $a['n'], 'th' => (int) $m['thread_id'], 'm' => (int) $m['id'], 'i' => (int) $ai, 'at' => cp_crm_local($m['sent_at']), 'from' => $m['from_name']) + cp_d360_file_extra((int) $m['id'], (int) $ai, $a); } } /* v2.9.20: emb = a levélbe ágyazott kép (aláírás-logó stb.); v2.9.23: csak tipikus nevű kép, dokumentum soha */
 	}
 	$notes = (array) $wpdb->get_results('SELECT id, thread_id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . " WHERE deleted_at IS NULL AND thread_id IN ($in) ORDER BY id DESC LIMIT 60", ARRAY_A);

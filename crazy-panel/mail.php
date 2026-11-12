@@ -8,6 +8,19 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+/* v2.9.216: név magyar sorrendben, vessző nélkül – az Outlook „Vezetéknév, Keresztnév” alakja („Pozsgai, Krisztina” → „Pozsgai Krisztina”).
+   Csak megjelenítés; a tárolt adat nem változik. Cégnevet, számot tartalmazót, kettőnél több vesszőst nem bánt. */
+if (!function_exists('cp_hu_name')) {
+	function cp_hu_name($n) {
+		$n = (string) $n;
+		if (strpos($n, ',') === false) { return $n; }
+		if (!preg_match('/^\s*(\p{L}[\p{L}.\'’\- ]{0,40}?)\s*,\s*(\p{L}[\p{L}.\'’\- ]{0,40}?)\s*$/u', $n, $m)) { return $n; }
+		if (count(preg_split('/\s+/u', trim($m[1]))) > 3 || count(preg_split('/\s+/u', trim($m[2]))) > 3) { return $n; }
+		if (preg_match('/\b(kft|bt|zrt|nyrt|kkt|ltd|gmbh|inc|llc)\b\.?/iu', $n)) { return $n; }
+		return trim($m[1]) . ' ' . trim($m[2]);
+	}
+}
+
 define('CP_MAIL_DB_VER', '9');
 
 function cp_mail_t($name = 'templates') {
@@ -504,7 +517,7 @@ function cp_mail_thread_row($t, $notes = null) {
 		if (!empty($out) && (string) $out >= (string) $n['created_at']) { $n = null; } /* v2.9.180: a jegyzet óta már válaszoltunk – nem releváns */
 	}
 	return array(
-		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => $t['contact_name'], 'ce' => $t['contact_email'],
+		'id' => (int) $t['id'], 'box' => $t['mailbox'], 'subj' => $t['subject'], 'cn' => cp_hu_name($t['contact_name']), 'ce' => $t['contact_email'],
 		'deal' => $t['deal_id'] ? (int) $t['deal_id'] : 0, 'as' => $t['assignee_uid'] ? (int) $t['assignee_uid'] : 0, 'sz' => $t['folder'] === 'snooze' ? (int) ((get_option('cp_mail_snooze', array())[(int) $t['id']]['ts'] ?? 0)) : 0, 'st' => $t['status'], 'folder' => ($t['folder'] === 'archive' && $t['prev_folder'] === '' && in_array(trim(explode(',', (string) $t['tags'])[0]), array('import', 'salesmate'), true)) ? 'inbox' : $t['folder'],
 		'un' => empty($t['seen_at']) || (!empty($t['last_at']) && $t['seen_at'] < $t['last_at']) ? 1 : 0,
 		'snip' => html_entity_decode((string) $t['snippet'], ENT_QUOTES | ENT_HTML5, 'UTF-8'), 'cnt' => (int) $t['msg_count'], 'att' => (int) $t['has_attach'], 'at' => cp_mail_local($t['last_at']),
@@ -625,7 +638,7 @@ function cp_mail_thread_full($id) {
 	/* v2.9.68: a szálon belül a visszaállított másolat rejtve, ha az eredeti kimenő levél is megvan (az adat marad) */
 	$qh = cp_mail_qd_hide(array_map(function ($m) { return array('id' => $m['id'], 'dir' => $m['dir'], 'q' => $m['status'] === 'idézetből', 'ts' => strtotime($m['sent_at'] . ' UTC'), 'body' => $m['body']); }, (array) $msgs));
 	if ($qh) { $msgs = array_values(array_filter($msgs, function ($m) use ($qh) { return !isset($qh[(int) $m['id']]); })); }
-	foreach ($msgs as &$m) { $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
+	foreach ($msgs as &$m) { $m['from_name'] = cp_hu_name($m['from_name']); $m['hh'] = (int) $m['hh']; $m['sent_at'] = cp_mail_local($m['sent_at']); $m['attachments'] = json_decode((string) $m['attachments'], true) ?: array(); if (function_exists('cp_mail_fname')) { foreach ($m['attachments'] as &$at) { if (isset($at['n'])) { $at['n'] = cp_mail_fname($at['n']); } } unset($at); } }
 	unset($m);
 	$notes = $wpdb->get_results($wpdb->prepare('SELECT id, body, author, author_uid, created_at FROM ' . cp_mail_t('notes') . ' WHERE thread_id = %d AND deleted_at IS NULL ORDER BY created_at, id', $id), ARRAY_A);
 	foreach ($notes as &$n) { $n['id'] = (int) $n['id']; $n['author_uid'] = (int) $n['author_uid']; $n['created_at'] = cp_mail_local($n['created_at']); }

@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.215');
+define('CP_PANEL_VER', '2.9.217');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3782,6 +3782,7 @@ require_once __DIR__ . '/estimate.php';
 require_once __DIR__ . '/estimate-ec.php';
 require_once __DIR__ . '/company-suggest.php';
 require_once __DIR__ . '/deal-files.php'; /* v2.9.184: fájlfeltöltés a dealhez */
+require_once __DIR__ . '/services.php'; /* v2.9.216: egységes Szolgáltatás(ok) – kapcsoló mögött (cp_svc_v2), terv: tasks/plan.md */
 require_once __DIR__ . '/people-new.php'; /* v2.9.184: új kontakt / új cég a Kapcsolatok oldalon */
 require_once __DIR__ . '/watchdog.php';
 require_once __DIR__ . '/sm-local.php';
