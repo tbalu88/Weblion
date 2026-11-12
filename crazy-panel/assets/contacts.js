@@ -33,7 +33,7 @@
 	/* v2.9.184: új kontakt / új cég – a Salesmate-ben jön létre; azonos e-mail-cím / cégnév esetén a meglévő nyílik meg */
 	function newPerson(kind) {
 		const ct = kind === 'ct';
-		const F = ct ? [['name', 'Név', 'pl. Kiss Anna', 1], ['email', 'E-mail', 'nev@ceg.hu', 0, 'email'], ['phone', 'Telefon', '+36 30 123 4567', 0, 'tel'], ['company', 'Cég (nem kötelező)', 'pl. Gála Kft. – ha nincs még ilyen, létrehozom', 0]] : [['name', 'Cégnév', 'pl. Gála Eseményszervező Kft.', 1], ['web', 'Weboldal (nem kötelező)', 'https://…', 0, 'url']];
+		const F = ct ? [['name', 'Név', 'pl. Kiss Anna', 1], ['email', 'E-mail', 'nev@ceg.hu', 0, 'email'], ['phone', 'Telefonszám', '+36 30 123 4567', 0, 'tel'], ['company', 'Cég (nem kötelező)', 'pl. Gála Kft. – ha nincs még ilyen, létrehozom', 0]] : [['name', 'Cégnév', 'pl. Gála Eseményszervező Kft.', 1], ['web', 'Weboldal (nem kötelező)', 'https://…', 0, 'url']];
 		const w = document.createElement('div'); w.className = 'cpx-ask pp-new'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true');
 		w.innerHTML = '<div><form><h3>' + (ct ? 'Új kontakt' : 'Új cég') + '</h3>' + F.map(f => '<label><span>' + esc(f[1]) + (f[3] ? ' <b aria-hidden="true">*</b>' : '') + '</span><input name="' + f[0] + '" type="' + (f[4] || 'text') + '" placeholder="' + esc(f[2]) + '"' + (f[3] ? ' required' : '') + ' autocomplete="off"></label>').join('') +
 			'<p class="pp-newn">A Salesmate-ben is létrejön.' + (ct ? ' Ha már van kontakt ezzel az e-mail-címmel, azt nyitom meg.' : ' Ha már van ilyen nevű cég, azt nyitom meg.') + '</p><p class="pp-newe" data-err hidden></p>' +

@@ -1962,7 +1962,7 @@
 	function bindEntityEdit(sh, fn) { const b = sh.querySelector('[data-eedit]'); if (b) b.addEventListener('click', fn); }
 	function editEntity(sh, k, id, back, cur, coName) {
 		const ct = k === 'ct';
-		const F = ct ? [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Mobil', 'tel'], ['phone', 'Telefon', 'tel'], ['city', 'Város', 'text'], ['company_id', 'Cég', 'co'], ['description', 'Leírás / megjegyzés', 'area']]
+		const F = ct ? [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Telefonszám', 'tel'], ['city', 'Város', 'text'], ['company_id', 'Cég', 'co'], ['description', 'Leírás / megjegyzés', 'area']]
 			: [['name', 'Cégnév', 'text'], ['website', 'Weboldal', 'text'], ['phone', 'Telefon', 'tel'], ['description', 'Leírás / megjegyzés', 'area']];
 		const field = f => {
 			const nm = ' data-k="' + f[0] + '"', v = cur[f[0]] || '';
@@ -2031,7 +2031,7 @@
 			(c.description ? '<div class="crm-desc">' + nl(c.description) + '</div>' : '') + EDB;
 		entityView(sh, esc(c.name || c.email), back, info, x, 'ct', id, c.name || c.email, '');
 		ceList(sh, id); /* v2.9.73: a kontakt további e-mail-címei */
-		bindEntityEdit(sh, () => editEntity(sh, 'ct', id, back, { name: c.name || '', email: c.email || '', mobile: c.mobile || '', phone: c.phone || '', city: c.city || '', company_id: co ? String(co.id) : '', description: c.description || '' }, co ? co.name : ''));
+		bindEntityEdit(sh, () => editEntity(sh, 'ct', id, back, { name: c.name || '', email: c.email || '', mobile: c.mobile || c.phone || '', city: c.city || '', company_id: co ? String(co.id) : '', description: c.description || '' }, co ? co.name : ''));
 	}
 	/* v2.9.73: további e-mail-címek (a levelezés ajánlatából felvett, csak a panelé) – az E-mail sor után, törlés gombbal */
 	async function ceList(sh, cid) {
@@ -2093,7 +2093,7 @@
 		['Pénzügy és szerződés', [['pay_method', 'Fizetési mód', 'text'], ['paid', 'Bejött az utalás?', 'text'], ['ctype', 'Szerződés EV/KFT', 'text']]],
 		['Megjegyzés', [['note', 'Megjegyzés', 'area']]]
 	];
-	const CEDIT = [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Mobil', 'tel'], ['phone', 'Telefon', 'tel']];
+	const CEDIT = [['name', 'Név', 'text'], ['email', 'E-mail', 'email'], ['mobile', 'Telefonszám', 'tel']]; /* v2.9.215: egy telefonszám-mező (a Salesmate „Mobile” mezője; ha üres, a régi „Phone” értéke látszik) */
 	const timeOf = v => (v && /\d{2}:\d{2}/.test(v) ? v.match(/\d{2}:\d{2}/)[0] : '');
 	/* v1.84: helyben szerkesztés – az adatlapon az értékre kattintva (egy mező, ugyanaz a mentés, mint a Szerkesztés ablaké) */
 	const EDIT_T = {}; EDIT.forEach(sec => sec[1].forEach(f => { EDIT_T[f[0]] = f; }));
@@ -2183,7 +2183,7 @@
 		};
 		let h = sheetHead('Szerkesztés: ' + esc(d.title || 'Deal #' + d.id)) + '<form class="crm-edit" novalidate>';
 		EDIT.forEach(sec => { h += '<h4>' + esc(sec[0]) + '</h4><div class="crm-eg">' + sec[1].map(f => field(f[0], f[1], f[2], editVal(d, f[0]))).join('') + '</div>'; });
-		if (x.contact) h += '<h4>Kapcsolat</h4><div class="crm-eg" data-contact>' + CEDIT.map(f => field('c_' + f[0], f[1], f[2], c[f[0]] || '')).join('') + '</div>';
+		if (x.contact) h += '<h4>Kapcsolat</h4><div class="crm-eg" data-contact>' + CEDIT.map(f => field('c_' + f[0], f[1], f[2], (f[0] === 'mobile' ? c.mobile || c.phone : c[f[0]]) || '')).join('') + '</div>';
 		h += '<p class="crm-ro">Mentéskor csak a megváltozott mezők íródnak be, a Salesmate-be is (a Salesmate automatizmusai lefuthatnak). A változás a deal előzményeiben a neveddel jelenik meg.</p>';
 		h += '<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-cancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
 		sh.innerHTML = h;
@@ -2224,7 +2224,7 @@
 		const inp = (k, label, type, extra) => '<label class="crm-ef"><span>' + esc(label) + '</span>' + (type === 'area' ? '<textarea rows="3" data-k="' + k + '"></textarea>' : '<input type="' + type + '" data-k="' + k + '"' + (extra || '') + '>') + '</label>';
 		const multi = k => '<span class="crm-multi" data-k="' + k + '" data-multi>' + (vals[k] || []).map(v => '<label><input type="checkbox" value="' + esc(v) + '"> ' + esc(v) + '</label>').join('') + '</span>';
 		let h = sheetHead('Új deal') + '<form class="crm-edit" novalidate>' +
-			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefon', 'tel') + '<input type="hidden" data-k="c_id"></div><div class="crm-dupc" data-dupc hidden></div>' +
+			'<h4>Kapcsolat</h4><div class="crm-eg">' + inp('c_name', 'Név *', 'text', ' required') + inp('c_email', 'E-mail', 'email') + inp('c_mobile', 'Telefonszám', 'tel') + '<input type="hidden" data-k="c_id"></div><div class="crm-dupc" data-dupc hidden></div>' +
 			'<p class="crm-ro" style="margin-top:6px">Ha az e-mail-cím már szerepel egy kontaktnál, a deal ahhoz kerül. Ha hasonló kontaktot találok, itt jelzem.</p>' +
 			'<h4>Rendezvény</h4><div class="crm-eg">' + inp('event_d', 'Rendezvény dátuma', 'date') + inp('start_at', 'Kezdés (óra:perc)', 'time') + inp('venue', 'Helyszín', 'text') + inp('guests', 'Tervezett létszám', 'number') + inp('hours', 'Rendelkezésre állás (óra)', 'number') +
 			'<label class="crm-ef"><span>Szolgáltatás</span><input type="text" data-k="service" list="crm-n-svc"><datalist id="crm-n-svc">' + (vals.service || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
