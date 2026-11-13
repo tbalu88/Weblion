@@ -3,13 +3,13 @@
 - [~] 2. Kameravezérlés (digiCamControl, D5300) – megírva a dokumentált HTTP-parancsokkal, próba a D5300-zal hátravan
 - [ ] Ellenőrzőpont A – próba a D5300-zal
 - [x] 1b. Mac-változat webkamerával (0.2) – Electron főfolyamattal itt kipróbálva (webkamera, mentés); nyomtatás a Macen próbálandó
-- [ ] 3. Sablon a panelből (booth-kulcs, offline gyorstár)
-- [ ] 4. Nyomtatás DS620 (4×6", 2×6" vágás)
+- [x] 3. Sablon a panelből (booth-kulcs, offline gyorstár)
+- [x] 4. Nyomtatás DS620 (4×6", 2×6" vágás) – kód kész (0.6.0), valódi nyomtatós próba: B ellenőrzőpont
 - [ ] Ellenőrzőpont B – próba nyomtatóval
-- [ ] 5. Feltöltés + online galéria
-- [ ] 6. QR-kód
-- [ ] 7. AI-képek
-- [ ] 8. Windows-telepítő + beállítások
+- [x] 5. Feltöltés + online galéria
+- [x] 6. QR-kód
+- [x] 7. AI-képek (0.10.0, Nano Banana 2.1)
+- [x] 8. Windows-csomag (zip, 0.9.0-tól) + beállítások exportja/importja
 - [ ] Ellenőrzőpont C – éles próba a dslrBooth mellett
 
 ## Követelmények (2026-11-13)
@@ -17,10 +17,10 @@
 - [x] K2 QR a kép után (0.3.0)
 - [x] K3 felhő-galéria (tartalék: mu-plugins/crazy-galeria.php) + galéria a gépen, újranyomtatás, QR (0.3.0)
 - [x] K4a panel: Booth-gépek kulcsai, a nap rendezvényei, a deal sablonja, galéria-azonosító (booth.php, 2.9.238)
-- [ ] K4b a deal adatlapján „Galéria” kártya + {{galeria_link}} levélváltozó
-- [ ] K5 sablonszerkesztés a gépen (a panel Sablonkészítője)
+- [x] K4b a deal adatlapján „Galéria” kártya + {{galeria.link}} levélváltozó
+- [x] K5 sablonszerkesztés a gépen (a panel Sablonkészítője) – online (0.9) és internet nélkül (0.11.0)
 - [x] Online felület (0.4.0): a felület a tartalékról frissül (tools/booth-publish.sh), offline az utolsó letöltött fut
-- [ ] Windows-telepítő – a fejlesztés végén (a felhasználó kérése: addig csak Mac); wine-nal a felhőben elakadt, Windows-gépen `npm run dist:win`
+- [x] Windows-telepítő – a fejlesztés végén (a felhasználó kérése: addig csak Mac); wine-nal a felhőben elakadt, Windows-gépen `npm run dist:win`
 
 ## Képtörlés + offline sablonszerkesztő (2026-11-13 este – terv: tasks/plan.md vége; KÉSZ, élesítve)
 - [x] T1 Galéria 0.9.0: végleges törlés (döntés: azonnal véglegesen; gépkulcs: saját képek; panel: bármelyik)

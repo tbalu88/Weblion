@@ -7,22 +7,22 @@ fotózási módok, majd az AI, végül a nagy, külön hardvert vagy külön alk
 Minden fázis végén próba a Macen; a felület online frissül, a „keret” (kamera/nyomtató/fájl) változásnál új telepítő kell.
 
 ## 1. fázis – galéria, kiküldés, alapok (a meglévő folytatása)
-- g7 Galéria-link a deal adatlapján + `{{galeria_link}}` levélváltozó (később kiküldés)
-- g10 Összes kép letöltése egyben (ZIP)
-- g4 Arculatos galéria (logó, színek; saját domain később)
-- g5 Galéria jelszóval / „csak a saját képeim”
-- g6 Képek elrejtése, moderálás (a panelből)
-- d6 Személyes adatok automatikus törlése (a 60 napos törléssel együtt)
-- v11 Figyelmeztetések (óra, kamera, papír, net)
-- v12 Beállítások exportja / importja másik gépre
-- s10 Rendezvény mentése újrahasználható sablonként
+- g7 Galéria-link a deal adatlapján + `{{galeria_link}}` levélváltozó (később kiküldés) ✅
+- g10 Összes kép letöltése egyben (ZIP) ✅ (javítva: galéria 0.8.1)
+- g4 Arculatos galéria (logó, színek; saját domain később) – HÁTRA
+- g5 Galéria jelszóval / „csak a saját képeim” ✅ (jelszó; „csak a saját képeim” = QR)
+- g6 Képek elrejtése, moderálás (a panelből) ✅ (+ végleges törlés: panel 2.9.253, gép 0.11.0)
+- d6 Személyes adatok automatikus törlése (a 60 napos törléssel együtt) ✅
+- v11 Figyelmeztetések (óra, kamera, papír, net) ✅
+- v12 Beállítások exportja / importja másik gépre ✅
+- s10 Rendezvény mentése újrahasználható sablonként ✅
 
 ## 2. fázis – sablon és képernyők (panel 1:1)
 - s2 Sablonszerkesztő a gépen (a panel Sablonkészítője) ✅ online (panel-ablak, 0.9) és internet nélkül (0.11.0: Kezelő → Rendezvény → „Szerkesztés internet nélkül”, sima fehér keret 1/2/3/fekvő)
-- s4 Dinamikus szöveg a sablonon (dátum, vendég neve, kérdőív-válasz)
-- s5 Képernyők testreszabása rendezvényenként (szín, betű, háttér, gombok)
-- s6 Kezdőképernyő ismétlődő videóval
-- z8 Animált rátétek és hátterek
+- s4 Dinamikus szöveg a sablonon (dátum, vendég neve, kérdőív-válasz) – HÁTRA
+- s5 Képernyők testreszabása rendezvényenként (szín, betű, háttér, gombok) – részben (feliratok, szín; betű, háttér, gombok hátra)
+- s6 Kezdőképernyő ismétlődő videóval – HÁTRA
+- z8 Animált rátétek és hátterek – HÁTRA
 
 ## 3. fázis – fotózási módok ✅ (0.5.0, 2026-11-13)
 - m11 Módválasztó a kezdőképernyőn (fotó / GIF / csík / videó)
