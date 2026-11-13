@@ -84,7 +84,7 @@ function make(o) {
     },
     readImage: f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64'),
     /* v0.3.1: a QR mátrixa (a felület rajzolja ki vászonra – nincs képbetöltés) */
-    qr: url => { const q = QR.create(url, { errorCorrectionLevel: 'M' }); const m = q.modules; let s = ''; for (let i = 0; i < m.size * m.size; i++) s += m.data[i] ? '1' : '0'; return { n: m.size, bits: s }; },
+    qr: url => { const q = QR.create(url, { errorCorrectionLevel: 'M' }); const m = q.modules; let s = '', k = 0; for (let i = 0; i < m.size * m.size; i++) { const on = m.data[i] ? 1 : 0; k += on; s += on ? '1' : '0'; } o.log('QR: ' + m.size + '×' + m.size + ', ' + k + ' sötét modul'); return { n: m.size, bits: s }; },
     status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err }),
     pump
   };

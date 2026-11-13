@@ -204,14 +204,19 @@
   });
   $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) run(); });
 
-  /* QR kirajzolása vászonra (fehér margóval) */
-  function drawQr(cv, q) {
-    const px = 10, m = 2, size = (q.n + m * 2) * px; cv.width = size; cv.height = size;
-    const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
-    for (let y = 0; y < q.n; y++) for (let x = 0; x < q.n; x++) if (q.bits[y * q.n + x] === '1') g.fillRect((x + m) * px, (y + m) * px, px, px);
+  /* v0.3.2: QR inline SVG-ként (sem képbetöltés, sem vászon); hibánál kivétel – a csempe nem jelenik meg */
+  function drawQr(el, q) {
+    if (!q || !q.n || typeof q.bits !== 'string' || q.bits.length !== q.n * q.n) throw new Error('hibás QR-adat (' + (q && q.n) + '/' + (q && q.bits && q.bits.length) + ')');
+    let d = '', ones = 0;
+    for (let y = 0; y < q.n; y++) for (let x = 0; x < q.n; x++) if (q.bits.charCodeAt(y * q.n + x) === 49) { d += 'M' + (x + 2) + ' ' + (y + 2) + 'h1v1h-1z'; ones++; }
+    if (!ones) throw new Error('üres QR');
+    const s = q.n + 4;
+    el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + s + ' ' + s + '" shape-rendering="crispEdges"><rect width="' + s + '" height="' + s + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
   }
-  async function showQr(box, cv, ev, photo) {
-    try { const u = await call(B.urls, ev, photo); drawQr(cv, await call(B.qr, u.photo)); box.hidden = false; } catch (e) { box.hidden = true; B.log('QR hiba: ' + e.message); }
+  async function showQr(box, el, ev, photo) {
+    box.hidden = true;
+    try { const u = await call(B.urls, ev, photo); drawQr(el, await call(B.qr, u.photo)); box.hidden = false; }
+    catch (e) { box.hidden = true; B.log('QR hiba: ' + e.message); }
   }
   /* ---------- rendezvény (a panelből) + sablon */
   async function ensureEvent() {
@@ -257,7 +262,7 @@
     grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '" style="background-image:url(\'' + encodeURI('file://' + p.file.replace(/\\/g, '/')).replace(/'/g, '%27') + '\')"></button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
     grid.querySelectorAll('[data-ph]').forEach(b => { const i = new Image(); i.onload = () => b.classList.toggle('land', i.naturalWidth > i.naturalHeight); i.src = b.style.backgroundImage.slice(5, -2); });
     const q = $('[data-glqr]'); q.innerHTML = '';
-    if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<canvas></canvas><span>Az összes fotó<br>a telefonodon</span>'; drawQr(q.querySelector('canvas'), await call(B.qr, u.event)); } catch (e) { /* */ } }
+    if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<div class="qrc"></div><span>Az összes fotó<br>a telefonodon</span>'; drawQr(q.querySelector('.qrc'), await call(B.qr, u.event)); } catch (e) { /* */ } }
   }
   async function openPhoto(photo, file) {
     const src = await call(B.readImage, file);
