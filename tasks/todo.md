@@ -11,3 +11,11 @@
 - [ ] 7. AI-képek
 - [ ] 8. Windows-telepítő + beállítások
 - [ ] Ellenőrzőpont C – éles próba a dslrBooth mellett
+
+## Követelmények (2026-11-13)
+- [x] K1 kilépés a teljes képernyőből (0.2.1)
+- [x] K2 QR a kép után (0.3.0)
+- [x] K3 felhő-galéria (tartalék: mu-plugins/crazy-galeria.php) + galéria a gépen, újranyomtatás, QR (0.3.0)
+- [x] K4a panel: Booth-gépek kulcsai, a nap rendezvényei, a deal sablonja, galéria-azonosító (booth.php, 2.9.238)
+- [ ] K4b a deal adatlapján „Galéria” kártya + {{galeria_link}} levélváltozó
+- [ ] K5 sablonszerkesztés a gépen (a panel Sablonkészítője)

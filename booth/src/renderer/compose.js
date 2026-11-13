@@ -14,10 +14,37 @@
     g.font = '700 ' + fs + 'px "Segoe UI",sans-serif'; g.fillText(line1, x + w / 2, y + h * .42, w * .86);
     if (line2) { g.font = '400 ' + Math.round(fs * .55) + 'px "Segoe UI",sans-serif'; g.fillStyle = '#5B6275'; g.fillText(line2, x + w / 2, y + h * .42 + fs * .95, w * .86); }
   }
-  /* shots: Image/Canvas lista; opts: { title, date } – visszaad: canvas */
+  /* a panelből jött sablon (4×6" PNG, átlátszó fotóablakokkal): az ablakok felismerése.
+   * Kétszer nyomtatott csíknál (bal és jobb fél ugyanannyi ablakkal) a két fél ugyanazokat a fotókat kapja. */
+  function holes(img) {
+    const W0 = img.naturalWidth, H0 = img.naturalHeight, k = Math.max(1, Math.round(Math.max(W0, H0) / 400));
+    const w = Math.ceil(W0 / k), h = Math.ceil(H0 / k), c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+    const a = g.getImageData(0, 0, w, h).data, seen = new Uint8Array(w * h), out = [];
+    const clear = i => a[i * 4 + 3] < 40;
+    for (let i = 0; i < w * h; i++) {
+      if (seen[i] || !clear(i)) continue;
+      let x0 = w, y0 = h, x1 = 0, y1 = 0, n = 0; const st = [i]; seen[i] = 1;
+      while (st.length) { const p = st.pop(), x = p % w, y = (p - x) / w; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (const q of [p - 1, p + 1, p - w, p + w]) { if (q < 0 || q >= w * h || seen[q] || Math.abs((q % w) - x) > 1 || !clear(q)) continue; seen[q] = 1; st.push(q); } }
+      if (n > w * h * 0.01) out.push([x0 * k, y0 * k, (x1 - x0 + 1) * k, (y1 - y0 + 1) * k]);
+    }
+    const L = out.filter(r => r[0] + r[2] / 2 < W0 / 2).sort((p, q) => p[1] - q[1]), R = out.filter(r => r[0] + r[2] / 2 >= W0 / 2).sort((p, q) => p[1] - q[1]);
+    if (L.length && L.length === R.length) return { holes: L.concat(R), map: L.map((_, i) => i).concat(R.map((_, i) => i)), shots: L.length };
+    const all = out.sort((p, q) => p[1] - q[1] || p[0] - q[0]);
+    return { holes: all, map: all.map((_, i) => i), shots: Math.max(1, Math.min(4, all.length)) };
+  }
+  /* shots: Image/Canvas lista; opts: { title, date, tpl: { img, holes, map } } – visszaad: canvas */
   function compose(cv, shots, opts) {
     opts = opts || {};
     const g = cv.getContext('2d');
+    if (opts.tpl) {
+      const t = opts.tpl; cv.width = t.img.naturalWidth; cv.height = t.img.naturalHeight;
+      g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+      t.holes.forEach((r, i) => { const s = shots[t.map[i] % shots.length]; if (s) cover(g, s, r[0] - 2, r[1] - 2, r[2] + 4, r[3] + 4); });
+      g.drawImage(t.img, 0, 0);
+      return cv;
+    }
     if (shots.length >= 3) {
       /* 3 képes csík kétszer a lapon (a nyomtató középen vágja: 2 db 2×6") */
       cv.width = W; cv.height = H;
@@ -45,5 +72,5 @@
     const g = p.getContext('2d'); g.translate(p.width, 0); g.rotate(Math.PI / 2); g.drawImage(cv, 0, 0);
     return p.toDataURL('image/jpeg', 0.95);
   }
-  window.BoothCompose = { compose, toPrint };
+  window.BoothCompose = { compose, toPrint, holes };
 })();

@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'">
 <title>Crazy Booth</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,6 +12,7 @@
     <div class="brand">Event<span>Crazy</span></div>
     <div class="tap"><b>Érints meg!</b><span>és mosolyogj a kamerába</span></div>
     <div class="mode" data-modeinfo></div>
+    <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
     <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
   </section>
 
@@ -27,11 +28,27 @@
       <div class="rv-img"><canvas data-out width="1200" height="1800"></canvas></div>
       <div class="rv-side">
         <h2>Kész is!</h2>
+        <div class="qr" data-qrbox hidden><img data-qr alt="QR-kód a letöltéshez"><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
         <button type="button" class="big pri" data-act="print">Nyomtatás</button>
         <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div>
         <button type="button" class="big" data-act="again">Újra</button>
         <button type="button" class="big ghost" data-act="done">Kész</button>
         <p class="rv-t" data-rvt></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="scr" data-s="gallery">
+    <div class="gl-h"><button type="button" class="big ghost sm" data-act="back">← Vissza</button><h2>Galéria <small data-glinfo></small></h2><div class="gl-qr" data-glqr></div></div>
+    <div class="gl-grid" data-glgrid></div>
+  </section>
+  <section class="scr" data-s="photo">
+    <div class="rv">
+      <div class="rv-img"><img class="ph-big" data-phbig alt=""></div>
+      <div class="rv-side">
+        <div class="qr" data-phqrbox><img data-phqr alt="QR-kód"><span>Olvasd be a telefonoddal,<br>és töltsd le!</span></div>
+        <button type="button" class="big pri" data-act="reprint">Nyomtatás</button>
+        <button type="button" class="big ghost" data-act="gallery">← Galéria</button>
       </div>
     </div>
   </section>
@@ -58,6 +75,14 @@
         <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
         <label>Előnézet ideje (mp) <input name="reviewSec" type="number" min="5" max="120"></label>
         <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
+        <h3 class="st-h">Panel és galéria</h3>
+        <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
+        <div class="st-ev">
+          <div class="st-evh"><span>Rendezvény</span><input type="date" data-evdate><button type="button" class="big ghost sm" data-act="evload">Rendezvények betöltése</button></div>
+          <div class="st-evl" data-evlist></div>
+          <p class="st-msg" data-evmsg></p>
+        </div>
+        <p class="st-up" data-upst></p>
         <div class="st-b"><button type="button" class="big pri" data-act="save">Mentés</button><button type="button" class="big ghost" data-act="close">Vissza</button><button type="button" class="big ghost" data-act="quit">Kilépés</button></div>
         <p class="st-msg" data-stmsg></p>
       </form>

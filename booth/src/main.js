@@ -19,11 +19,14 @@ const DEF = {
   copies: 1,
   printer: '',                        /* üres = az alapértelmezett nyomtató */
   autoPrint: false,
-  reviewSec: 25                       /* ennyi mp után vissza a kezdőképernyőre */
+  reviewSec: 25,                      /* ennyi mp után vissza a kezdőképernyőre */
+  boothKey: '',                       /* a panelben (Beállítások → Crazy Booth gépek) kapott gépkulcs */
+  event: null                         /* a kiválasztott rendezvény: { deal, title, date, ev, template } – null = kézi */
 };
 let cfg = Object.assign({}, DEF);
 let cam = null;
 let win = null;
+let cloud = null;
 
 function log(m) {
   const line = new Date().toISOString() + ' ' + String(m).replace(/\s+/g, ' ').slice(0, 2000) + '\n';
@@ -82,6 +85,16 @@ ipcMain.handle('print:do', wrap(async (dataUrl, o) => {
   return true;
 }));
 ipcMain.handle('log', wrap(async m => log('felület: ' + m)));
+/* panel + galéria */
+ipcMain.handle('cloud:events', wrap(async date => cloud.events(date)));
+ipcMain.handle('cloud:template', wrap(async deal => cloud.template(deal)));
+ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl) => cloud.keep(ev, deal, date, photo, dataUrl)));
+ipcMain.handle('cloud:list', wrap(async ev => cloud.list(ev)));
+ipcMain.handle('cloud:read', wrap(async f => cloud.readImage(f)));
+ipcMain.handle('cloud:qr', wrap(async url => cloud.qr(url)));
+ipcMain.handle('cloud:status', wrap(async () => cloud.status()));
+ipcMain.handle('cloud:tok', wrap(async n => cloud.newTok(n || 10)));
+ipcMain.handle('cloud:urls', wrap(async (ev, ph) => ({ photo: ph ? cloud.photoUrl(ev, ph) : '', event: cloud.eventUrl(ev) })));
 ipcMain.handle('app:quit', wrap(async () => app.quit()));
 /* teljes képernyő ki / be (a kezdőképernyő sarokgombja) */
 ipcMain.handle('win:isFull', wrap(async () => win.isFullScreen() || win.isKiosk()));
@@ -89,7 +102,9 @@ ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win
 
 /* ---------- ablak */
 app.whenReady().then(() => {
-  loadCfg(); makeCam(); log('indítás ' + app.getVersion() + ' ' + process.platform + (MOCK ? ' (próbamód)' : ''));
+  loadCfg(); makeCam();
+  cloud = require('./cloud').make({ dataDir: app.getPath('userData'), picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), key: () => cfg.boothKey, log });
+  log('indítás ' + app.getVersion() + ' ' + process.platform + (MOCK ? ' (próbamód)' : ''));
   /* webkamera: Macen a rendszer engedélyt kér (Adatvédelem → Kamera); a felületnek a kamera / mikrofon kérését engedjük */
   if (MAC && systemPreferences.askForMediaAccess) { systemPreferences.askForMediaAccess('camera').then(ok => log('kamera-engedély: ' + ok)).catch(() => {}); }
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'media'));

@@ -73,7 +73,7 @@
   /* ---------- fotózás */
   async function run() {
     if (S.busy) return; S.busy = true; S.shots = [];
-    const n = Number(S.cfg.shots) >= 3 ? 3 : 1;
+    const n = S.tpl ? S.tpl.shots : (Number(S.cfg.shots) >= 3 ? 3 : 1);
     try {
       show('live'); await liveOn();
       for (let i = 0; i < n; i++) {
@@ -93,12 +93,18 @@
       show('start'); err(e.message);
     } finally { S.busy = false; }
   }
-  function review() {
+  async function review() {
     const cv = $('[data-out]');
-    BoothCompose.compose(cv, S.shots, { title: S.cfg.title || 'EventCrazy', date: today() });
+    BoothCompose.compose(cv, S.shots, { title: S.cfg.title || 'EventCrazy', date: today(), tpl: S.tpl });
     S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
+    $('[data-qrbox]').hidden = true;
     show('review');
-    B.saveShot(cv.toDataURL('image/jpeg', 0.92));
+    /* a kész kép: a rendezvény galériájába (helyben + háttérfeltöltés); QR a letöltő-oldalra */
+    const ev = S.cfg.event, photo = (await call(B.newTok, 10));
+    S.lastPhoto = photo;
+    const data = cv.toDataURL('image/jpeg', 0.92);
+    try { await call(B.keep, ev.ev, ev.deal || 0, ev.date || '', photo, data); } catch (e) { err('A kép mentése nem sikerült: ' + e.message); }
+    if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, photo);
     if (S.cfg.autoPrint) { print(); return; }
     idle();
   }
@@ -130,6 +136,11 @@
     try { if (WEB()) await webStream().catch(() => null); cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch (e) { cams = []; }
     f.elements.camId.innerHTML = '<option value="">(az első / beépített kamera)</option>' + cams.map((d, i) => '<option value="' + d.deviceId.replace(/"/g, '&quot;') + '"' + (d.deviceId === c.camId ? ' selected' : '') + '>' + (d.label || ('Kamera ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('');
     camRows();
+    f.elements.boothKey.value = c.boothKey || '';
+    const d0 = (c.event && c.event.date) || new Date().toISOString().slice(0, 10);
+    $('[data-evdate]').value = d0; S.evList = null;
+    $('[data-evlist]').innerHTML = '<p class="st-msg">' + esc(c.event ? 'Most: ' + c.event.title : '') + '</p>';
+    $('[data-upst]').textContent = await upStatus();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
     $('[data-ver]').textContent = 'v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
@@ -150,15 +161,26 @@
     else if (act === 'done') { clearTimeout(S.idleT); show('start'); }
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
+    else if (act === 'gallery') { gallery(); }
+    else if (act === 'back') { show('start'); }
+    else if (act === 'reprint') { reprint(); }
+    else if (act === 'evload') { evLoad(); }
     else if (act === 'fs') { e.stopPropagation(); const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
       ['camera', 'dccUrl', 'printer', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
       o.mirror = f.elements.mirror.checked;
+      o.boothKey = f.elements.boothKey.value.trim();
+      const pick = f.querySelector('input[name=evpick]:checked');
+      if (pick && S.evList) {
+        const e = Number(pick.value) >= 0 ? S.evList[Number(pick.value)] : null;
+        if (e) o.event = { deal: e.deal, title: e.title, date: e.date, ev: e.ev, template: !!e.template };
+        else if (S.cfg.event && S.cfg.event.deal) o.event = null;
+      }
       ['shots', 'countdown', 'copies', 'reviewSec'].forEach(k => { o[k] = Number(f.elements[k].value) || S.cfg[k]; });
       o.autoPrint = f.elements.autoPrint.checked;
       if (f.elements.pin.value.trim()) o.pin = f.elements.pin.value.trim();
-      try { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); $('[data-stmsg]').textContent = 'Mentve.'; await initCam(); modeInfo(); }
+      try { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); await ensureEvent(); await loadTemplate(); $('[data-stmsg]').textContent = 'Mentve.' + (S.tpl ? ' Sablon betöltve (' + S.tpl.shots + ' fotó).' : ''); await initCam(); modeInfo(); }
       catch (x) { $('[data-stmsg]').textContent = x.message; }
     }
   });
@@ -170,9 +192,73 @@
   document.addEventListener('keydown', e => { if (e.key === 'F2') openSettings(); if (e.key === 'Escape' && S.scr === 'settings') show('start'); });
   $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) run(); });
 
+  async function showQr(box, img, ev, photo) {
+    try { const u = await call(B.urls, ev, photo); img.src = await call(B.qr, u.photo); box.hidden = false; } catch (e) { box.hidden = true; }
+  }
+  /* ---------- rendezvény (a panelből) + sablon */
+  async function ensureEvent() {
+    if (!S.cfg.event || !S.cfg.event.ev) {
+      const d = new Date(), p = n => String(n).padStart(2, '0');
+      S.cfg.event = { deal: 0, title: 'Kézi (rendezvény nélkül)', date: d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), ev: 'k' + (await call(B.newTok, 12)), template: false };
+      await call(B.saveConfig, { event: S.cfg.event });
+    }
+  }
+  async function loadTemplate() {
+    S.tpl = null;
+    const e = S.cfg.event;
+    if (!e || !e.deal || !e.template) return;
+    try {
+      const t = await call(B.template, e.deal);
+      if (!t) return;
+      const img = await loadImg(t.png);
+      const h = BoothCompose.holes(img);
+      if (!h.holes.length) { err('A sablonban nem találtam fotóablakot – alap keret marad.'); return; }
+      S.tpl = Object.assign({ img }, h);
+    } catch (x) { err('Sablon: ' + x.message); }
+  }
+  async function evLoad() {
+    const box = $('[data-evlist]'), msg = $('[data-evmsg]'), date = $('[data-evdate]').value;
+    msg.textContent = 'Betöltés…'; box.innerHTML = '';
+    try {
+      const list = await call(B.events, date);
+      const cur = S.cfg.event || {};
+      box.innerHTML = list.map((e, i) => '<label><input type="radio" name="evpick" value="' + i + '"' + (cur.deal === e.deal ? ' checked' : '') + '> <span>' + (e.time ? '<b>' + e.time + '</b> ' : '') + esc(e.title) + ' <small>' + esc(e.loc || '') + (e.template ? ' · sablon ✓' : ' · nincs sablon') + '</small></span></label>').join('') +
+        '<label><input type="radio" name="evpick" value="-1"' + (!cur.deal ? ' checked' : '') + '> <span>Kézi (rendezvény nélkül)</span></label>';
+      S.evList = list.map(e => Object.assign({ date }, e));
+      msg.textContent = list.length ? '' : 'Erre a napra nincs foglalt rendezvény.';
+    } catch (x) { msg.textContent = x.message; S.evList = []; box.innerHTML = '<label><input type="radio" name="evpick" value="-1" checked> <span>Kézi (rendezvény nélkül)</span></label>'; }
+  }
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  /* ---------- galéria a gépen */
+  async function gallery() {
+    clearTimeout(S.idleT);
+    const ev = S.cfg.event; show('gallery');
+    $('[data-glinfo]').textContent = ev.title || '';
+    const grid = $('[data-glgrid]');
+    const L = (await B.list(ev.ev)).v || [];
+    grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '" style="background-image:url(\'' + encodeURI('file://' + p.file.replace(/\\/g, '/')).replace(/'/g, '%27') + '\')"></button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
+    grid.querySelectorAll('[data-ph]').forEach(b => { const i = new Image(); i.onload = () => b.classList.toggle('land', i.naturalWidth > i.naturalHeight); i.src = b.style.backgroundImage.slice(5, -2); });
+    const q = $('[data-glqr]'); q.innerHTML = '';
+    if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<img src="' + (await call(B.qr, u.event)) + '" alt=""><span>Az összes fotó<br>a telefonodon</span>'; } catch (e) { /* */ } }
+  }
+  async function openPhoto(photo, file) {
+    const src = await call(B.readImage, file);
+    $('[data-phbig]').src = src; S.photoSrc = src; S.lastPhoto = photo;
+    $('[data-phqrbox]').hidden = true;
+    show('photo');
+    if (S.cfg.boothKey) showQr($('[data-phqrbox]'), $('[data-phqr]'), S.cfg.event.ev, photo);
+  }
+  async function reprint() {
+    const img = await loadImg(S.photoSrc), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+    show('busy'); $('[data-busyt]').textContent = 'Nyomtatás…';
+    try { await call(B.print, BoothCompose.toPrint(c), { copies: 1 }); $('[data-busyt]').textContent = 'Kész!'; await sleep(1800); show('photo'); }
+    catch (e) { show('photo'); err(e.message); }
+  }
+  $('[data-glgrid]').addEventListener('click', e => { const b = e.target.closest('[data-ph]'); if (b) openPhoto(b.dataset.ph, b.dataset.f); });
+  async function upStatus() { const r = await B.cloudStatus(); if (!r || !r.ok) return ''; const s = r.v; return s.queued ? 'Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : '') : (S.cfg.boothKey ? 'Minden kép feltöltve' + (s.sent ? ' (' + s.sent + ')' : '') : 'Nincs gépkulcs – a képek csak a gépen vannak'); }
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
-  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép'); }
+  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : ''); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); modeInfo(); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); await ensureEvent(); await loadTemplate(); modeInfo(); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

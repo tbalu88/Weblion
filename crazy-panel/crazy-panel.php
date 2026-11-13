@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.237');
+define('CP_PANEL_VER', '2.9.238');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3756,6 +3756,7 @@ function cp_el_img_route() {
  * ÜGYFÉLPORTÁL (v1.8) – portal.php és a portal-*.php fájlok
  * ===================================================================== */
 require_once __DIR__ . '/bg-window.php'; /* v2.9.232: háttér 2 órás időablak-szabály */
+require_once __DIR__ . '/booth.php'; /* v2.9.238: Crazy Booth szelfigépek */
 require_once __DIR__ . '/portal.php';
 require_once __DIR__ . '/sablon.php';
 require_once __DIR__ . '/sudoku.php';
