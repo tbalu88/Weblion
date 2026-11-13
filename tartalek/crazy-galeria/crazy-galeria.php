@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.8.1');
+define('CG_VER', '0.9.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -270,13 +270,45 @@ function cg_page($kind, $ev, $data) {
 
 /* ---------- 60 napnál régebbi képek törlése (naponta) */
 add_action('init', function () { if (!wp_next_scheduled('cg_cleanup')) { wp_schedule_event(time() + 600, 'daily', 'cg_cleanup'); } });
+/* egy kép végleges törlése: a fájl (kép / videó), a bélyegkép, a borítókép és a sor */
+function cg_del_row($r) {
+	global $wpdb; $d = cg_dir() . '/' . $r->ev . '/';
+	if ((string) $r->file !== '' && strpos((string) $r->file, '/') === false) { @unlink($d . $r->file); }
+	@unlink($d . $r->photo . '_t.jpg'); @unlink($d . $r->photo . '.jpg');
+	$wpdb->delete(cg_t(), array('id' => (int) $r->id));
+}
 add_action('cg_cleanup', function () {
 	global $wpdb;
 	$old = $wpdb->get_results($wpdb->prepare('SELECT id, ev, photo, file FROM ' . cg_t() . ' WHERE created_at < %s LIMIT 5000', gmdate('Y-m-d H:i:s', time() - CG_KEEP_DAYS * DAY_IN_SECONDS)));
-	foreach ((array) $old as $r) {
-		@unlink(cg_dir() . '/' . $r->ev . '/' . $r->file); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '_t.jpg'); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '.jpg');
-		$wpdb->delete(cg_t(), array('id' => (int) $r->id));
-	}
+	foreach ((array) $old as $r) { cg_del_row($r); }
+});
+/* v0.9.0: végleges törlés (tömegesen is) – a gép csak a saját maga által feltöltött képeit törölheti, a panel bármelyiket.
+ * ev + photos (tömb vagy vesszős lista, max. 500). Ami már nincs meg, az „missing” (a gép sora így újrapróbálható). */
+add_action('rest_api_init', function () {
+	register_rest_route('crazy-galeria/v1', '/delete', array('methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function (WP_REST_Request $r) {
+		global $wpdb; $dev = cg_device();
+		if (!$dev) { return new WP_REST_Response(array('ok' => false, 'code' => 'key', 'message' => 'Ismeretlen vagy letiltott gépkulcs.'), 401); }
+		$ev = (string) $r->get_param('ev');
+		$L = $r->get_param('photos'); $L = is_array($L) ? $L : explode(',', (string) $L);
+		$L = array_values(array_unique(array_filter(array_map(function ($x) { return trim((string) $x); }, $L), 'cg_tok_ok')));
+		if (!cg_tok_ok($ev) || !$L) { return new WP_REST_Response(array('ok' => false, 'code' => 'bad', 'message' => 'Hibás azonosító.'), 400); }
+		if (count($L) > 500) { return new WP_REST_Response(array('ok' => false, 'code' => 'bad', 'message' => 'Egyszerre legfeljebb 500 kép törölhető.'), 400); }
+		$in = implode(',', array_fill(0, count($L), '%s'));
+		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT id, ev, photo, file, device, kind, cost FROM ' . cg_t() . " WHERE ev = %s AND photo IN ($in)", array_merge(array($ev), $L)));
+		$panel = $dev === 'Panel'; $me = mb_substr($dev, 0, 60); $done = array(); $denied = array(); $ain = 0; $aic = 0.0;
+		foreach ($rows as $x) {
+			if (!$panel && (string) $x->device !== $me) { $denied[] = (string) $x->photo; continue; }
+			if ((string) $x->kind === 'ai') { $ain++; $aic += (float) $x->cost; }
+			cg_del_row($x); $done[] = (string) $x->photo;
+		}
+		/* az AI-keret és -költség a törlés után is a valós fogyást mutassa */
+		if ($ain) { $s = cg_evset($ev); $s['ai']['del_n'] = (int) ($s['ai']['del_n'] ?? 0) + $ain; $s['ai']['del_cost'] = round((float) ($s['ai']['del_cost'] ?? 0) + $aic, 4); cg_evset_put($ev, $s); }
+		/* a törölt képek még ki nem nyomtatott nyomtatási feladatai is törlődnek */
+		if ($done) { $in2 = implode(',', array_fill(0, count($done), '%s')); $wpdb->query($wpdb->prepare('DELETE FROM ' . cg_pt() . " WHERE ev = %s AND status = 'new' AND photo IN ($in2)", array_merge(array($ev), $done))); }
+		$found = array_map(function ($x) { return (string) $x->photo; }, $rows);
+		if ($done || $denied) { $G = get_option('cg_del_log', array()); if (!is_array($G)) { $G = array(); } array_unshift($G, array('t' => gmdate('Y-m-d H:i:s'), 'ev' => $ev, 'dev' => $me, 'n' => count($done), 'denied' => count($denied))); update_option('cg_del_log', array_slice($G, 0, 300), false); }
+		return array('ok' => true, 'deleted' => $done, 'denied' => $denied, 'missing' => array_values(array_diff($L, $found)));
+	}));
 });
 
 
@@ -441,7 +473,7 @@ function cg_ai_model() { $o = cg_ai_opts(); $m = (string) ($o['model'] ?? ''); r
 function cg_ai_ev_info($ev) {
 	global $wpdb; $s = cg_evset($ev); $a = isset($s['ai']) && is_array($s['ai']) ? $s['ai'] : array();
 	$row = $wpdb->get_row($wpdb->prepare('SELECT COUNT(*) n, COALESCE(SUM(cost),0) c FROM ' . cg_t() . " WHERE ev = %s AND kind = 'ai'", $ev));
-	return array('on' => !empty($a['on']), 'limit' => (int) ($a['limit'] ?? 300), 'used' => (int) ($row ? $row->n : 0), 'cost' => round((float) ($row ? $row->c : 0), 3));
+	return array('on' => !empty($a['on']), 'limit' => (int) ($a['limit'] ?? 300), 'used' => (int) ($row ? $row->n : 0) + (int) ($a['del_n'] ?? 0), 'cost' => round((float) ($row ? $row->c : 0) + (float) ($a['del_cost'] ?? 0), 3));
 }
 function cg_ai_log($e) { $L = get_option('cg_ai_log', array()); if (!is_array($L)) { $L = array(); } array_unshift($L, $e); update_option('cg_ai_log', array_slice($L, 0, 300), false); }
 function cg_ai_ratio($w, $h) { $r = $h ? $w / $h : 1; foreach (array(array(1.6, '16:9'), array(1.4, '3:2'), array(1.15, '4:3'), array(0.87, '1:1'), array(0.72, '3:4'), array(0.6, '2:3')) as $x) { if ($r >= $x[0]) { return $x[1]; } } return '9:16'; }
