@@ -5,7 +5,7 @@
  * szolgáltatásfiókjával. Védőkorlátok:
  *  – jelszó nélkül nem tölt fel (titkosítatlan mentés soha nem megy ki a szerverről)
  *  – ha a mappa nyilvános („bárki, aki rendelkezik a linkkel”), nem tölt fel, és riaszt
- * Megőrzés a Drive-on: 7 napig minden mentés, 60 napig napi egy, egy évig havi egy.
+ * Megőrzés a Drive-on (v2.9.240, weboldalanként kb. 10 fájl): a legutolsó 2, 7 napig napi egy, 3 hónapig havi egy.
  */
 if (!defined('ABSPATH')) { exit; }
 
@@ -109,21 +109,23 @@ function cp_gdb_upload_one($key, $file) {
 	return array('id' => $j['id'], 'name' => $name, 'mb' => round($size / 1048576, 1));
 }
 
-/* megőrzés a Drive-on: 7 napig minden, 60 napig napi egy, 365 napig havi egy (weboldalanként) */
+/* megőrzés a Drive-on (weboldalanként): a legutolsó 2; 7 napig naponta a nap utolsója; 92 napig havonta a hónap utolsója */
 function cp_gdb_prune() {
 	$o = cp_gdb_opts();
 	$q = rawurlencode("'" . $o['folder'] . "' in parents and trashed = false");
 	$r = cp_gdb_api('GET', 'https://www.googleapis.com/drive/v3/files?q=' . $q . '&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000&orderBy=name&fields=files(id,name,createdTime)');
 	if (is_wp_error($r)) { return $r; }
 	$files = (array) (json_decode(wp_remote_retrieve_body($r), true)['files'] ?? array());
-	$seenDay = array(); $seenMon = array(); $del = 0;
+	usort($files, function ($a, $b) { return strcmp((string) $b['name'], (string) $a['name']); }); /* legújabb elöl */
+	$seenDay = array(); $seenMon = array(); $nth = array(); $del = 0;
 	foreach ($files as $f) {
 		if (!preg_match('/^(.+?)_.*-(\d{4})-(\d{2})-(\d{2})(?:-\d{2})?\.zip$/', (string) $f['name'], $m)) { continue; } /* csak a saját mentéseink */
 		$age = (time() - strtotime((string) $f['createdTime'])) / DAY_IN_SECONDS;
 		$dk = $m[1] . $m[2] . $m[3] . $m[4]; $mk = $m[1] . $m[2] . $m[3];
 		$firstDay = !isset($seenDay[$dk]); $seenDay[$dk] = 1;
 		$firstMon = !isset($seenMon[$mk]); $seenMon[$mk] = 1;
-		if ($age <= 7 || ($firstDay && $age <= 60) || ($firstMon && $age <= 365)) { continue; }
+		$nth[$m[1]] = ($nth[$m[1]] ?? 0) + 1;
+		if ($nth[$m[1]] <= 2 || ($firstDay && $age <= 7) || ($firstMon && $age <= 92)) { continue; }
 		$x = cp_gdb_api('DELETE', 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($f['id']) . '?supportsAllDrives=true');
 		/* v2.9.38: a közös meghajtón a szolgáltatásfiók csak kukába tehet (végleges törlés: 404) – a kuka 30 nap után magától ürül */
 		if (is_wp_error($x)) { $x = cp_gdb_api('PATCH', 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($f['id']) . '?supportsAllDrives=true&fields=id', wp_json_encode(array('trashed' => true)), array('Content-Type' => 'application/json')); }
