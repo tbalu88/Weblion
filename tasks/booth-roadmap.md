@@ -1,6 +1,6 @@
 # Crazy Booth – fejlesztési ütemterv a kiválasztott funkciókból
 
-*2026-11-13 · 66 kiválasztott funkció (https://claude.ai/artifact/6UeZhzJmL49DiFpNq3g7Em) · állapot: JÓVÁHAGYÁSRA VÁR*
+*2026-11-13 · 66 kiválasztott funkció (https://claude.ai/artifact/6UeZhzJmL49DiFpNq3g7Em) · állapot: jóváhagyva, 3. fázis kész (0.5.0)*
 
 A sorrend elve: előbb ami minden rendezvényen kell és a meglévőre épül (galéria, sablon, megosztás), utána a látványos
 fotózási módok, majd az AI, végül a nagy, külön hardvert vagy külön alkalmazást igénylő tételek.
@@ -24,7 +24,7 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - s6 Kezdőképernyő ismétlődő videóval
 - z8 Animált rátétek és hátterek
 
-## 3. fázis – fotózási módok
+## 3. fázis – fotózási módok ✅ (0.5.0, 2026-11-13)
 - m11 Módválasztó a kezdőképernyőn (fotó / GIF / csík / videó)
 - m3 Animált GIF · m4 Boomerang · m5 Videó rátéttel · m6 Lassított videó · m7 Gyorsítás/lassítás + zene
 - m12 Egy kép újrafotózása, „3 pózból a legjobb”
@@ -73,6 +73,23 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - m18 Fényfestés
 - p12 Hashtages Instagram-nyomtatás (az Instagram-hozzáférés korlátai miatt bizonytalan)
 - w10 iPad / Android változat (külön alkalmazás)
+
+## Versenytársak felületi mintái (kutatás 2026-11-13: dslrBooth, Snappic, Simple Booth HALO, Fotomaster, Darkroom, Breeze, Touchpix)
+Beépítve (0.5.0):
+- Beállítások a vendég útja szerinti fülekben (Áttekintés · Rendezvény · Kezdés · Fotózás · Utána · Gép) – HALO, Fotomaster
+- Indulás előtti ellenőrzés (kamera, videó, nyomtató, net, gépkulcs, feltöltési sor, rendezvény, sablon, óra) – HALO PreFlight
+- PIN után kezelőpult („Fotózás indítása”, szünet, galéria) – HALO Mission Control, Snappic
+- Szünet-képernyő üzenettel és automatikus folytatással, kamera ki – Snappic, dslrBooth
+- Keresés a beállításokban (egyik versenytársnál sincs)
+- Mód szerinti „Készülj!” felirat; külön visszaszámlálás az első és a további képeknél – HALO, Snappic
+- Egy kép újrafotózása a csíkban; „3 pózból a legjobb” – Snappic, Breeze
+- Alapértékek visszaállítása; sarok 3 mp + PIN – Breeze, Fotomaster
+Még hátra (beosztva):
+- Élőkép a nyomat képarányára vágva + keret az élőképen (2. fázis kiegészítés, következő felület-frissítés)
+- Új rendezvény varázsló 3 lépésben (módok → kinézet → nyomat) – Breeze (7. fázis, v8 mellé)
+- Hozzájárulás / adatbekérés a megosztás előtt – HALO (5. fázis, d1/d2)
+- „Később érkezik” üzenet net nélkül; QR azonnal – Touchpix (5. fázis)
+- Állandó állapotsor a kezelőnek: DNP papír, kamera-akku, feltöltés (4. fázis p5 – egyik versenytársnál sincs)
 
 ## Döntést igényel
 - AI-szolgáltató és képenkénti költségkeret (6. fázis előtt).
