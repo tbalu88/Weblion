@@ -89,5 +89,14 @@ button{font:inherit;cursor:pointer}
 .st-evl small{color:var(--mu)}
 .st-evl input{height:auto!important;width:20px;flex:none}
 .st-up{color:var(--mu);font-size:14px}
+.warn{position:absolute;top:2vh;left:50%;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;gap:6px;align-items:center;max-width:80vw}
+.warn span{background:rgba(194,57,47,.92);color:#fff;border-radius:999px;padding:6px 16px;font-size:15px;font-weight:600}
+.warn span.mid{background:rgba(154,100,0,.92)}
+.st-pre{display:flex;gap:8px;flex-wrap:wrap}.st-pre input{flex:1;min-width:200px;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#0E1220;color:#fff;font-size:16px;padding:0 12px}
+.st-prel{display:flex;flex-direction:column;gap:6px}
+.st-prel div{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border-radius:10px;padding:8px 12px}
+.st-prel b{flex:1;font-weight:600}.st-prel small{color:var(--mu)}
+.st-prel button{height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;padding:0 12px;cursor:pointer}
+.st-imp{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .corner{position:fixed;left:0;top:0;width:70px;height:70px;z-index:9}
 .err{position:fixed;left:50%;bottom:4vh;transform:translateX(-50%);background:#C2392F;color:#fff;border-radius:14px;padding:2vh 3vh;font-size:2.6vh;max-width:80vw;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.4)}

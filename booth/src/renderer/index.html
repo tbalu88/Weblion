@@ -13,6 +13,7 @@
     <div class="tap"><b>Érints meg!</b><span>és mosolyogj a kamerába</span></div>
     <div class="mode" data-modeinfo></div>
     <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
+    <div class="warn" data-warn hidden></div>
     <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
   </section>
 
@@ -84,6 +85,12 @@
           <p class="st-msg" data-evmsg></p>
         </div>
         <p class="st-up" data-upst></p>
+        <h3 class="st-h">Mentett beállítások (sablonok)</h3>
+        <div class="st-pre"><input id="pre-name" placeholder="pl. Esküvő – 3 képes csík" maxlength="60"><button type="button" class="big ghost sm" data-act="presave">Mentés sablonként</button></div>
+        <div class="st-prel" data-prelist></div>
+        <h3 class="st-h">Átvitel másik gépre</h3>
+        <div class="st-b"><button type="button" class="big ghost sm" data-act="export">Beállítások exportja</button><label class="big ghost sm st-imp">Importálás<input type="file" accept="application/json,.json" data-import hidden></label></div>
+        <p class="st-up">Az export a gépkulcsot és a PIN-t nem tartalmazza – azt minden gépen külön kell megadni.</p>
         <div class="st-b"><button type="button" class="big pri" data-act="save">Mentés</button><button type="button" class="big ghost" data-act="close">Vissza</button><button type="button" class="big ghost" data-act="quit">Kilépés</button></div>
         <p class="st-msg" data-stmsg></p>
       </form>

@@ -152,6 +152,7 @@
     $('[data-evdate]').value = d0; S.evList = null;
     $('[data-evlist]').innerHTML = '<p class="st-msg">' + esc(c.event ? 'Most: ' + c.event.title : '') + '</p>';
     $('[data-upst]').textContent = await upStatus();
+    preDraw();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
     $('[data-ver]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
@@ -174,6 +175,8 @@
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
     else if (act === 'cancel') { cancelRun(); }
+    else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
+    else if (act === 'export') { const cfg = {}; EXP_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const blob = new Blob([JSON.stringify({ crazyBooth: 1, at: new Date().toISOString(), cfg, presets: preLoad() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crazy-booth-beallitasok.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); $('[data-stmsg]').textContent = 'Exportálva.'; }
     else if (act === 'gallery') { gallery(); }
     else if (act === 'back') { show('start'); }
     else if (act === 'reprint') { reprint(); }
@@ -293,9 +296,40 @@
   }
   $('[data-glgrid]').addEventListener('click', e => { const b = e.target.closest('[data-ph]'); if (b) openPhoto(b.dataset.ph, b.dataset.f); });
   async function upStatus() { const r = await B.cloudStatus(); if (!r || !r.ok) return ''; const s = r.v; return s.queued ? 'Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : '') : (S.cfg.boothKey ? 'Minden kép feltöltve' + (s.sent ? ' (' + s.sent + ')' : '') : 'Nincs gépkulcs – a képek csak a gépen vannak'); }
+  /* ---------- v11: figyelmeztetések a kezdőképernyőn (net, feltöltési sor, gépkulcs, kamera) */
+  async function warnings() {
+    const L = [];
+    if (!navigator.onLine) L.push(['Nincs internet – a képek a gépen várnak, a QR később is működik', 'mid']);
+    try { const r = await B.cloudStatus(); if (r && r.ok) { const s = r.v; if (s.queued > 0 && (s.err || !navigator.onLine)) L.push(['Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : ''), 'mid']); if (s.err && /kulcs/.test(s.err)) L.push(['A gépkulcsot a galéria elutasította – F2 → Gépkulcs', '']); } } catch (e) { /* */ }
+    if (WEB() && S.stream && !S.stream.getVideoTracks().some(t => t.readyState === 'live')) L.push(['A kamera kapcsolata megszakadt – húzd ki és dugd vissza, vagy indítsd újra a programot', '']);
+    const d = new Date(); if (d.getFullYear() < 2026) L.push(['A gép órája rossz (' + d.toLocaleDateString('hu-HU') + ') – a képek dátuma hibás lesz', '']);
+    const w = $('[data-warn]'); w.innerHTML = L.map(x => '<span class="' + x[1] + '">⚠ ' + esc(x[0]) + '</span>').join(''); w.hidden = !L.length;
+  }
+  setInterval(() => { if (S.scr === 'start') warnings(); }, 20000);
+  window.addEventListener('online', warnings); window.addEventListener('offline', warnings);
+  /* ---------- s10: mentett beállítások (rendezvény-sablonok) – ezen a gépen */
+  const PRE_KEYS = ['shots', 'countdown', 'copies', 'autoPrint', 'reviewSec', 'mirror', 'camRes', 'camera'];
+  const preLoad = () => { try { return JSON.parse(localStorage.getItem('cb_presets') || '[]'); } catch (e) { return []; } };
+  const preStore = L => { try { localStorage.setItem('cb_presets', JSON.stringify(L)); } catch (e) { err('A sablon nem menthető'); } };
+  function preDraw() {
+    const L = preLoad(), box = $('[data-prelist]');
+    box.innerHTML = L.length ? L.map((p, i) => '<div><b>' + esc(p.name) + '</b><small>' + (Number(p.cfg.shots) >= 3 ? '3 képes csík' : '1 kép') + ' · ' + p.cfg.countdown + ' mp' + (p.event && p.event.deal ? ' · ' + esc(p.event.title) : '') + '</small><button type="button" data-preuse="' + i + '">Betöltés</button><button type="button" data-predel="' + i + '">Törlés</button></div>').join('') : '<small style="color:var(--mu)">Még nincs mentett beállítás.</small>';
+  }
+  $('[data-prelist]').addEventListener('click', async e => {
+    const u = e.target.closest('[data-preuse]'), d = e.target.closest('[data-predel]'); const L = preLoad();
+    if (d) { L.splice(Number(d.dataset.predel), 1); preStore(L); preDraw(); return; }
+    if (u) { const p = L[Number(u.dataset.preuse)]; if (!p) return; const o = Object.assign({}, p.cfg); if (p.event && p.event.deal) o.event = p.event; S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); await ensureEvent(); await loadTemplate(); await fillForm(); modeInfo(); $('[data-stmsg]').textContent = '„' + p.name + '” betöltve.'; }
+  });
+  /* ---------- v12: beállítások exportja / importja (gépkulcs és PIN nélkül) */
+  const EXP_KEYS = ['camera', 'camId', 'camRes', 'mirror', 'shots', 'countdown', 'copies', 'printer', 'autoPrint', 'reviewSec', 'dccUrl'];
+  $('[data-import]').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const j = JSON.parse(await f.text()); if (!j || j.crazyBooth !== 1) throw new Error('Ez nem Crazy Booth beállításfájl'); const o = {}; EXP_KEYS.forEach(k => { if (j.cfg && j.cfg[k] !== undefined) o[k] = j.cfg[k]; }); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); if (Array.isArray(j.presets)) preStore(j.presets); await fillForm(); modeInfo(); $('[data-stmsg]').textContent = 'Beállítások betöltve.'; }
+    catch (x) { $('[data-stmsg]').textContent = 'Importálás: ' + x.message; }
+  });
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
   function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); await ensureEvent(); await loadTemplate(); modeInfo(); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); await ensureEvent(); await loadTemplate(); modeInfo(); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();
