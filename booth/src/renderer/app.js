@@ -227,8 +227,14 @@
   }
   async function showQr(box, el, ev, photo) {
     box.hidden = true;
+    if (box.dataset.err) { box.classList.remove('err'); delete box.dataset.err; const sp = box.querySelector('span'); if (sp) sp.innerHTML = 'Olvasd be a telefonoddal,<br>és töltsd le' + (box.hasAttribute('data-qrbox') ? ' a fotódat!' : '!'); }
     try { const u = await call(B.urls, ev, photo); drawQr(el, await call(B.qr, u.photo)); box.hidden = false; }
-    catch (e) { box.hidden = true; B.log('QR hiba: ' + e.message); }
+    catch (e) {
+      B.log('QR hiba: ' + e.message);
+      /* ideiglenes hibakeresés: a hiba szövege a csempe helyén (a javítás után csak rejtve marad) */
+      box.hidden = false; box.classList.add('err'); box.dataset.err = '1';
+      el.innerHTML = ''; const sp = box.querySelector('span'); if (sp) sp.textContent = 'QR-hiba: ' + e.message;
+    }
   }
   /* ---------- rendezvény (a panelből) + sablon */
   async function ensureEvent() {
@@ -293,7 +299,7 @@
   async function upStatus() { const r = await B.cloudStatus(); if (!r || !r.ok) return ''; const s = r.v; return s.queued ? 'Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : '') : (S.cfg.boothKey ? 'Minden kép feltöltve' + (s.sent ? ' (' + s.sent + ')' : '') : 'Nincs gépkulcs – a képek csak a gépen vannak'); }
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
-  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : ''); }
+  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
   (async () => { S.cfg = await call(B.config); await ensureEvent(); await loadTemplate(); modeInfo(); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

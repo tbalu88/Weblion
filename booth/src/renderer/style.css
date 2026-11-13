@@ -66,6 +66,8 @@ button{font:inherit;cursor:pointer}
 .fsbtn:hover{color:#fff;border-color:rgba(255,255,255,.35)}
 .galbtn{position:absolute;bottom:2vh;left:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:17px}
 .qr{display:flex;align-items:center;gap:14px;background:#fff;color:#141C33;border-radius:16px;padding:10px 14px}
+.qr[hidden],.gl-qr[hidden]{display:none!important}   /* a .qr display:flex különben felülírná a hidden-t */
+.qr.err{display:block!important;background:#FBE3E1;color:#8E2A22;font-size:13px;padding:10px 14px}
 .qr .qrc{width:15vh;height:15vh;min-width:110px;min-height:110px;flex:none}
 .qrc svg{display:block;width:100%;height:100%}
 .gl-qr .qrc{width:90px;height:90px;background:#fff;padding:4px;border-radius:8px}
