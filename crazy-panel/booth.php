@@ -49,8 +49,8 @@ add_action('rest_api_init', function () {
 			if ($e['date'] !== $date || $e['state'] !== 'booked') { continue; }
 			$deal = function_exists('cp_mday_base') ? cp_mday_base($e['id']) : $e['id'];
 			$p = function_exists('cp_portal_get_by_deal') ? cp_portal_get_by_deal($deal) : null;
-			$tpl = false;
-			if ($p) { $a = cp_portal_answers($p->id); $tpl = !empty($a['photo_template']['png']) || !empty($a['photo_template']['preview']); }
+			$tpl = (bool) cp_booth_tpl_get((int) $deal);
+			if (!$tpl && $p) { $a = cp_portal_answers($p->id); $tpl = !empty($a['photo_template']['png']); }
 			$out[] = array('deal' => (int) $deal, 'title' => $e['title'], 'time' => $e['time'] ?: (is_array($e['win'] ?? null) ? sprintf('%02d:%02d', intdiv($e['win'][0], 60), $e['win'][0] % 60) : ''), 'kind' => $e['kind'], 'loc' => $e['loc'], 'template' => $tpl, 'ev' => cp_booth_gal_tok($deal), 'gallery' => cp_booth_gal_url($deal));
 		}
 		return array('ok' => true, 'date' => $date, 'events' => $out);
@@ -61,6 +61,11 @@ add_action('rest_api_init', function () {
 		$p = $deal && function_exists('cp_portal_get_by_deal') ? cp_portal_get_by_deal($deal) : null;
 		$a = $p ? cp_portal_answers($p->id) : array();
 		$t = isset($a['photo_template']) && is_array($a['photo_template']) ? $a['photo_template'] : null;
+		/* v2.9.243: a panel Sablonkészítőjéből a szelfigépnek mentett sablon – ha az újabb, az a nyerő */
+		$bt = cp_booth_tpl_get($deal);
+		if ($bt && (!$t || empty($t['png']) || (int) $bt['at'] >= (int) ($t['at'] ?? 0))) {
+			return array('ok' => true, 'template' => array('name' => (string) $bt['name'], 'at' => (int) $bt['at'], 'src' => 'panel', 'png' => 'data:image/png;base64,' . base64_encode((string) file_get_contents($bt['path']))));
+		}
 		if (!$t) { return array('ok' => true, 'template' => null); }
 		$f = !empty($t['png']) ? $t['png'] : '';
 		$path = $f !== '' ? cp_portal_sb_dir() . '/' . $f : '';
@@ -68,6 +73,33 @@ add_action('rest_api_init', function () {
 		return array('ok' => true, 'template' => array('name' => (string) ($t['name'] ?? ''), 'at' => (int) ($t['at'] ?? 0), 'png' => 'data:image/png;base64,' . base64_encode((string) file_get_contents($path))));
 	}));
 });
+
+/* v2.9.243: a panel Sablonkészítőjéből a szelfigépnek mentett sablon (dealenként egy, a legutóbbi) */
+function cp_booth_tpl_get($deal) {
+	$m = get_option('cp_booth_tpl', array()); $x = is_array($m) && isset($m[(string) (int) $deal]) ? $m[(string) (int) $deal] : null;
+	if (!$x || empty($x['f']) || !function_exists('cp_sb_dir')) { return null; }
+	$x['path'] = cp_sb_dir() . '/' . basename($x['f']);
+	return is_file($x['path']) ? $x : null;
+}
+add_action('wp_ajax_nopriv_cp_booth_tpl_save', 'cp_booth_ajax_tpl_save'); add_action('wp_ajax_cp_booth_tpl_save', 'cp_booth_ajax_tpl_save');
+function cp_booth_ajax_tpl_save() {
+	cp_el_auth();
+	cp_tab_need(array('sablon'));
+	$deal = (int) ($_POST['deal'] ?? 0);
+	$png = (string) wp_unslash($_POST['png'] ?? '');
+	if (!$deal || strncmp($png, 'data:image/png;base64,', 22) !== 0) { cp_el_err('Hibás kérés.'); }
+	$bin = base64_decode(substr($png, 22), true);
+	if (!$bin || strlen($bin) > 15 * MB_IN_BYTES || substr($bin, 0, 8) !== "\x89PNG\r\n\x1a\n") { cp_el_err('A sablon képe hibás vagy túl nagy.'); }
+	$m = get_option('cp_booth_tpl', array()); if (!is_array($m)) { $m = array(); }
+	$old = $m[(string) $deal] ?? null;
+	$f = 'booth-' . $deal . '-' . strtolower(wp_generate_password(10, false, false)) . '.png';
+	if (@file_put_contents(cp_sb_dir() . '/' . $f, $bin) === false) { cp_el_err('A sablont nem sikerült menteni.', 500); }
+	if ($old && !empty($old['f'])) { @unlink(cp_sb_dir() . '/' . basename($old['f'])); }
+	$m[(string) $deal] = array('f' => $f, 'at' => time(), 'name' => mb_substr(sanitize_text_field(wp_unslash((string) ($_POST['name'] ?? ''))), 0, 80), 'by' => function_exists('cp_panel_who') ? cp_panel_who() : '');
+	update_option('cp_booth_tpl', $m, false);
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_tpl', 'Sablon mentve a szelfigéphez', 'deal:' . $deal, $m[(string) $deal]['name']); }
+	wp_send_json_success(array('ok' => true));
+}
 
 /* v2.9.241: a deal adatlapjára – a galéria linkje és a képek száma (a tartalék galériából, 10 percig tárolva) */
 function cp_booth_gal_count($deal) {

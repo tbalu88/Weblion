@@ -628,7 +628,7 @@ const TPL = '<div class="sb">' +
 	'<label class="sb-chk" data-keepwrap hidden><input type="checkbox" data-keep> A cégnév felirat is maradjon a logó mellett</label>' +
 	'<button type="button" class="sb-link danger" data-logodel>Logó eltávolítása</button></div></div>' +
 	'<div class="sb-out"><button type="button" class="cpx-btn sb-dl" data-png>PNG letöltése (lyukasztott)</button><small class="sb-oinfo" data-oinfo></small>' +
-	'<div class="sb-out2"><button type="button" class="cpx-btn ghost sm" data-jpg title="Mintafotókkal, JPG – jóváhagyásra küldhető">Előnézet JPG</button><button type="button" class="cpx-btn ghost sm" data-tp hidden>✓ Template pipa a Követésben</button></div>' +
+	'<div class="sb-out2"><button type="button" class="cpx-btn ghost sm" data-jpg title="Mintafotókkal, JPG – jóváhagyásra küldhető">Előnézet JPG</button><button type="button" class="cpx-btn ghost sm" data-tp hidden>✓ Template pipa a Követésben</button><button type="button" class="cpx-btn ghost sm" data-booth hidden title="A nyomtatható sablon a szelfigépre kerül (Crazy Booth): a gép ezt használja ennél a rendezvénynél">⤓ Mentés a szelfigéphez</button></div>' +
 	'<p class="sb-msg" data-msg role="status" aria-live="polite" hidden></p></div>' +
 	'</div><div class="sb-card sb-stage"><div class="sb-stage-top"><div class="sb-seg" data-mode>' + segBtns('data-m', [['punch', 'Lyukasztva'], ['photo', 'Mintafotóval']]) + '</div>' +
 	'<label class="sb-up sm"><input type="file" accept="image/*" data-photo hidden><span data-photolbl>Saját fotó kipróbálása</span></label></div>' +
@@ -777,6 +777,7 @@ async function loadMonths() {
 function drawDeal() {
 	if (!alive()) return;
 	const box = q('[data-dinfo]'), d = st.deal, tp = q('[data-tp]');
+	const bb = q('[data-booth]'); if (bb) bb.hidden = !d || !X.saveBooth || CLIENT;
 	if (!d) { box.hidden = true; box.innerHTML = ''; tp.hidden = true; return; }
 	box.hidden = false;
 	let h = '<div class="sb-dh"><b>' + esc(d.title) + '</b>' + (d.date ? ' · ' + esc(X.huDate ? X.huDate(d.date) : dotDate(d.date)) : '') +
@@ -905,6 +906,7 @@ function onClick(ev) {
 	if (aiClick(t)) return;
 	if (t.closest('[data-sbsave]')) { clientSave(); return; }
 	if (t.closest('[data-png]')) { exportPng(); return; }
+	if (t.closest('[data-booth]')) { boothSave(); return; }
 	if (t.closest('[data-jpg]')) { exportJpg(); return; }
 	if (t.closest('[data-tp]')) { markTp(); return; }
 	if (t.closest('[data-dealgo]')) { const v = q('[data-dealid]').value.replace(/\D/g, ''); if (v) loadDeal(v); return; }
@@ -1018,6 +1020,24 @@ async function exportPng() {
 	} catch (e) {
 		msg('Nem sikerült: ' + e.message, 'err');
 	} finally { b.disabled = false; b.textContent = label; }
+}
+/* v2.9.243: a lyukasztott, nyomtatható PNG mentése a szelfigépnek (a dealhez) */
+async function boothSave() {
+	if (!st.deal || !X.saveBooth) return;
+	const b = q('[data-booth]'), label = b.textContent;
+	b.disabled = true; b.textContent = 'Mentés…';
+	try {
+		await fontsReady();
+		const B = await build();
+		const c = document.createElement('canvas'); c.width = B.L.OW; c.height = B.L.OH;
+		compose(c.getContext('2d'), B, 'punch');
+		const blob = await new Promise((res, rej) => c.toBlob(x => (x ? res(x) : rej(new Error('A PNG nem készült el.'))), 'image/png'));
+		const png = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => res(''); fr.readAsDataURL(blob); });
+		await X.saveBooth(st.deal.id, png, D[st.di].name + ' – ' + cur().label);
+		saveSoon();
+		msg('✓ Elmentve a szelfigépnek – a gép a következő fotózásnál (vagy a beállítások mentésekor) ezt használja.', 'ok');
+	} catch (e) { msg('Nem sikerült: ' + e.message, 'err'); }
+	finally { b.disabled = false; b.textContent = label; }
 }
 async function exportJpg() {
 	try {

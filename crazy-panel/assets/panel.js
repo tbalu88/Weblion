@@ -513,6 +513,8 @@
     who: e => who(e),
     huDate: d => huDate(d),
     tp: id => (S.track[id] || {}).tp === '1',
+    /* v2.9.243: a sablon mentése a szelfigépnek (Crazy Booth) */
+    saveBooth: async (id, png, name) => { const fd = new FormData(); fd.append('action', 'cp_booth_tpl_save'); fd.append('t', C.t); fd.append('deal', String(id).split('_')[0]); fd.append('png', png); fd.append('name', name || ''); const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' }); let j = null; try { j = await r.json(); } catch (e) { throw new Error('Szerverhiba (' + r.status + ')'); } if (!j || !j.success) throw new Error((j && j.data && j.data.msg) || 'Nem sikerült menteni'); return true; },
     markTp: async id => { let ev = null; eachEv(id, x => { if (!ev) ev = x; }); if (!ev) throw new Error('Ez a rendezvény nincs betöltve a panelen – pipáld a Követés fülön.'); await setTrack(ev, 'tp', '1'); return (S.track[id] || {}).tp === '1'; },
     toast: t => toast(t)
   };
@@ -3032,6 +3034,8 @@ function elCsv() {
   shell();
   render();
   /* v2.9.104: kontakt / cég saját linkje (#kapcsolatok:ct:<id>) */
+  /* v2.9.243: #sablon:<deal> – a Sablonkészítő rögtön a deallel nyílik (a szelfigép „Sablon szerkesztése” gombja) */
+  if (DEEP && S.tab === 'sablon' && /^\d+$/.test(DEEP)) { S.sbDeal = DEEP; }
   if (DEEP && S.tab === 'kapcsolatok' && /^(ct|co):\d+$/.test(DEEP)) {
     const dp = DEEP; setTimeout(() => { if (window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(dp); }, 400);
   }

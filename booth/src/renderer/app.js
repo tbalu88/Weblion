@@ -152,7 +152,7 @@
     $('[data-evdate]').value = d0; S.evList = null;
     $('[data-evlist]').innerHTML = '<p class="st-msg">' + esc(c.event ? 'Most: ' + c.event.title : '') + '</p>';
     $('[data-upst]').textContent = await upStatus();
-    preDraw();
+    preDraw(); tplInfo();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
     $('[data-ver]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
@@ -175,6 +175,8 @@
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
     else if (act === 'cancel') { cancelRun(); }
+    else if (act === 'tpledit') { const e = S.cfg.event; if (!e || !e.deal) { $('[data-stmsg]').textContent = 'Előbb válassz rendezvényt (deal), és mentsd el.'; return; } window.open('https://eventcrazy.hu/crazy-panel/#sablon:' + e.deal, '_blank', 'width=1400,height=900'); S.tplEditing = true; $('[data-stmsg]').textContent = 'A panel Sablonkészítője új ablakban nyílt meg. Ott a „Mentés a szelfigéphez” gombbal mentsd el, majd gyere vissza ide.'; }
+    else if (act === 'tplreload') { S.cfg.event && (S.cfg.event.template = true); await loadTemplate(); tplInfo(); modeInfo(); $('[data-stmsg]').textContent = S.tpl ? 'Sablon frissítve (' + S.tpl.shots + ' fotó).' : 'Ehhez a rendezvényhez nincs sablon – az alap keret marad.'; }
     else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
     else if (act === 'export') { const cfg = {}; EXP_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const blob = new Blob([JSON.stringify({ crazyBooth: 1, at: new Date().toISOString(), cfg, presets: preLoad() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crazy-booth-beallitasok.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); $('[data-stmsg]').textContent = 'Exportálva.'; }
     else if (act === 'gallery') { gallery(); }
@@ -246,10 +248,11 @@
   async function loadTemplate() {
     S.tpl = null;
     const e = S.cfg.event;
-    if (!e || !e.deal || !e.template) return;
+    if (!e || !e.deal) return;   /* v: a sablon a panelből később is jöhet – mindig megkérdezzük */
     try {
       const t = await call(B.template, e.deal);
       if (!t) return;
+      S.tplName = (t.src === 'panel' ? 'panelből mentett' : 'ügyfélportálon mentett') + (t.name ? ': ' + t.name : '') + (t.cached ? ' (offline másolat)' : '');
       const img = await loadImg(t.png);
       const h = BoothCompose.holes(img);
       if (!h.holes.length) { err('A sablonban nem találtam fotóablakot – alap keret marad.'); return; }
@@ -327,6 +330,9 @@
     try { const j = JSON.parse(await f.text()); if (!j || j.crazyBooth !== 1) throw new Error('Ez nem Crazy Booth beállításfájl'); const o = {}; EXP_KEYS.forEach(k => { if (j.cfg && j.cfg[k] !== undefined) o[k] = j.cfg[k]; }); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); if (Array.isArray(j.presets)) preStore(j.presets); await fillForm(); modeInfo(); $('[data-stmsg]').textContent = 'Beállítások betöltve.'; }
     catch (x) { $('[data-stmsg]').textContent = 'Importálás: ' + x.message; }
   });
+  function tplInfo() { const el = $('[data-tplinfo]'); if (el) el.textContent = 'Sablon: ' + (S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : (S.cfg.event && S.cfg.event.deal ? 'nincs – alap keret' : 'nincs rendezvény kiválasztva – alap keret')); }
+  /* a panelből visszatérve a sablon újratöltődik */
+  window.addEventListener('focus', async () => { if (!S.tplEditing || S.busy) return; S.tplEditing = false; if (S.cfg.event) S.cfg.event.template = true; await loadTemplate(); tplInfo(); modeInfo(); });
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
   function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
