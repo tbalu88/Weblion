@@ -76,6 +76,83 @@
 		};
 		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
+	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
+	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['guestbook', 'Videóüzenet']];
+	function boothCard(x, toEv) {
+		const b = x.booth; if (!b) return '';
+		if (!(x.gal || b.machines.length || b.cfg || (toEv != null && toEv >= -1))) return '';
+		const now = Date.now() / 1000;
+		const ml = b.machines.map(z => {
+			const live = z.ago < 180, err = z.err && now - z.err_at < 900, low = Object.values(z.paper || {}).some(v => v !== null && v <= 30);
+			const pp = Object.entries(z.paper || {}).filter(e => e[1] !== null).map(e => (Object.keys(z.paper).length > 1 ? e[0] + ': ' : '') + e[1] + ' lap').join(', ');
+			const st = [live ? 'működik' : Math.round(z.ago / 60) + ' perce nem jelentkezett', z.station ? 'nyomtatóállomás' : '', pp ? 'papír: ' + pp : '', z.queue ? 'feltöltésre vár: ' + z.queue : '', z.prints ? z.prints + ' nyomat' : '', !z.net ? 'nincs internet' : '', z.cam === false && !z.station ? 'kamera nem ad képet' : '', err ? 'hiba: ' + z.err : ''].filter(Boolean).join(' · ');
+			return '<li><i class="bt-' + (!live ? 'off' : err || (z.cam === false && !z.station) ? 'bad' : low || z.queue > 5 || !z.net ? 'mid' : 'ok') + '"></i><b>' + esc(z.name) + '</b><span>' + esc(st) + '</span></li>';
+		}).join('');
+		const s = b.stats, hrs = s ? Object.entries(s.hours || {}) : [], mx = Math.max(1, ...hrs.map(h => h[1]));
+		const stat = s ? '<div class="bt-st"><span><b>' + s.photos + '</b> fotó</span>' + (s.videos ? '<span><b>' + s.videos + '</b> videó</span>' : '') + (s.guestbook ? '<span><b>' + s.guestbook + '</b> videóüzenet</span>' : '') + (b.prints ? '<span><b>' + b.prints + '</b> nyomat</span>' : '') + (x.guests && x.guests.mailed ? '<span><b>' + x.guests.mailed + '</b> e-mail</span>' : '') + '</div>' +
+			(hrs.length > 1 ? '<div class="bt-h" aria-label="Fotók óránként">' + hrs.map(h => '<div title="' + esc(h[0] + ': ' + h[1]) + '"><i style="height:' + Math.max(4, Math.round(h[1] / mx * 100)) + '%"></i><small>' + esc(h[0].slice(0, 2)) + '</small></div>').join('') + '</div>' : '') : '';
+		return '<section class="d3-c"><h4>Szelfigép' + (b.machines.length ? ' <small>' + b.machines.length + ' gép</small>' : '') + '</h4>' +
+			(ml ? '<ul class="bt-ml">' + ml + '</ul>' : '<p class="cpx-muted">' + (toEv != null && toEv > 0 ? 'A rendezvény napján itt látszik a gépek állapota (papír, feltöltés, hibák).' : 'Most egy gép sem jelentkezik ennél a rendezvénynél.') + '</p>') + stat +
+			'<p class="bt-b"><button type="button" class="d3-galcp" data-bcfg="' + Number(x.deal.id) + '">Beállítások a gépekre' + (b.cfg ? ' ✓' : '') + '</button>' +
+			(s ? '<button type="button" class="d3-galcp" data-brep="' + Number(x.deal.id) + '">Ügyfélriport</button>' : '') +
+			(x.guests ? '<button type="button" class="d3-galcp" data-bdraw="' + Number(x.deal.id) + '">Sorsolás</button>' : '') +
+			(b.show ? '<a class="d3-galcp" href="' + esc(b.show) + '" target="_blank" rel="noopener" title="TV-n / projektoron: a fotók élőben">Diavetítés ↗</a>' : '') + '</p>' +
+			(b.cfg ? '<p class="cpx-muted bt-cf">A gépek a panelből kapják a beállításokat' + (b.cfg_by ? ' (' + esc(b.cfg_by) + ')' : '') + ' – a rendezvényre állított gépek legfeljebb egy percen belül átveszik.</p>' : '') + '</section>';
+	}
+	async function boothCfg(deal, cur) {
+		const c = cur || {}, u = c.ui || {}, sc = c.screen || {}, on = u.modes || ['photo'];
+		const v = (k, d) => (c[k] != null ? c[k] : u[k] != null ? u[k] : d);
+		const chk = (id, val, txt) => '<label class="bt-ck"><input type="checkbox" id="' + id + '"' + (val ? ' checked' : '') + '> ' + txt + '</label>';
+		const num = (id, val, txt, a, b) => '<label>' + txt + '<input type="number" id="' + id + '" min="' + a + '" max="' + b + '" value="' + esc(val) + '"></label>';
+		const box = sheet(sheetHead('Szelfigép-beállítások erre a rendezvényre') + '<div class="bt-cfg">' +
+			'<p class="cpx-muted">A rendezvényre állított gépek legfeljebb egy percen belül átveszik (a gépen a kezelő utána módosíthat, amíg itt újra nem mentesz). A nyomtató, a kamera és a gépkulcs gépenként marad.</p>' +
+			'<h5>Választható módok</h5><div class="bt-mo">' + BOOTH_MODES.map(m => chk('bc-m-' + m[0], on.includes(m[0]), m[1])).join('') + '</div>' +
+			'<h5>Fotózás</h5><div class="bt-g"><label>Fotók száma (sablon nélkül)<select id="bc-shots"><option value="1"' + (v('shots', 1) < 3 ? ' selected' : '') + '>1 kép</option><option value="3"' + (v('shots', 1) >= 3 ? ' selected' : '') + '>3 képes csík</option></select></label>' +
+			num('bc-countdown', v('countdown', 3), 'Visszaszámlálás (mp)', 1, 10) + num('bc-cdNext', v('cdNext', 2), 'A további képeknél (mp)', 1, 10) + num('bc-copies', v('copies', 1), 'Példány alapból', 1, 10) + '</div>' +
+			chk('bc-bestOf', v('bestOf', false), '„3 pózból a legjobb”') + chk('bc-retake', v('retake', true), 'Egy kép újrafotózása a csíkban') + chk('bc-autoPrint', v('autoPrint', false), 'Automatikus nyomtatás') +
+			'<div class="bt-g">' + num('bc-limitPhoto', v('limitPhoto', 0), 'Nyomat képenként (0 = korlátlan)', 0, 20) + num('bc-limitEvent', v('limitEvent', 0), 'Nyomat összesen (0 = korlátlan)', 0, 5000) + '</div>' +
+			'<h5>Megosztás</h5>' + chk('bc-shareEmail', v('shareEmail', false), '„Küldés e-mailben” gomb') +
+			'<label>Név bekérése<select id="bc-askName">' + [['off', 'Nem kérjük'], ['opt', 'Nem kötelező'], ['req', 'Kötelező']].map(o => '<option value="' + o[0] + '"' + (v('askName', 'opt') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
+			chk('bc-formBefore', v('formBefore', false), 'Kérdőív a fotózás előtt') + '<label>A kérdőív saját kérdései (soronként egy, max. 3)<textarea id="bc-questions" rows="3" maxlength="300">' + esc(v('questions', '')) + '</textarea></label>' +
+			'<h5>Kezdőképernyő</h5><div class="bt-g"><label>Felirat<input id="bc-t1" maxlength="60" placeholder="Érints meg!" value="' + esc(sc.t1 || '') + '"></label><label>Alcím<input id="bc-t2" maxlength="80" placeholder="és mosolyogj a kamerába" value="' + esc(sc.t2 || '') + '"></label><label>Felső felirat<input id="bc-brand" maxlength="60" placeholder="EventCrazy logó" value="' + esc(sc.brand || '') + '"></label><label>Kiemelő szín<input type="color" id="bc-color" value="' + esc(sc.color || '#E8894A') + '"></label></div>' +
+			'<div class="gm-b"><button type="button" class="cpx-btn sm" data-bcsave>Mentés a gépekre</button>' + (cur ? '<button type="button" class="cpx-btn ghost sm" data-bcclear>Panel-beállítás törlése</button>' : '') + '</div></div>');
+		if (!box) return;
+		box.querySelector('[data-close]').addEventListener('click', hideModal);
+		const g = id => box.querySelector('#' + id);
+		box.querySelector('[data-bcsave]').addEventListener('click', async () => {
+			const modes = BOOTH_MODES.map(m => m[0]).filter(k => g('bc-m-' + k).checked);
+			const o = { modes: modes.length ? modes : ['photo'], shots: Number(g('bc-shots').value), autoPrint: g('bc-autoPrint').checked, bestOf: g('bc-bestOf').checked, retake: g('bc-retake').checked, shareEmail: g('bc-shareEmail').checked, formBefore: g('bc-formBefore').checked, askName: g('bc-askName').value, questions: g('bc-questions').value, t1: g('bc-t1').value.trim(), t2: g('bc-t2').value.trim(), brand: g('bc-brand').value.trim(), color: g('bc-color').value };
+			['countdown', 'cdNext', 'copies', 'limitPhoto', 'limitEvent'].forEach(k => { o[k] = Number(g('bc-' + k).value) || 0; });
+			try { await post('cp_booth_dcfg', { deal, cfg: JSON.stringify(o) }); toast('Mentve – a gépek egy percen belül átveszik.'); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); }
+		});
+		const cl = box.querySelector('[data-bcclear]');
+		if (cl) cl.addEventListener('click', async () => { try { await post('cp_booth_dcfg', { deal, clear: 1 }); toast('A panel-beállítás törölve (a gépeken a mostani beállítás marad).'); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); } });
+	}
+	/* ügyfélriport: nyomtatható oldal (PDF-be menthető), a deal statisztikájából */
+	function boothReport(x) {
+		const b = x.booth, s = b.stats, d = x.deal, hrs = Object.entries(s.hours || {}), mx = Math.max(1, ...hrs.map(h => h[1]));
+		const w = window.open('', '_blank'); if (!w) { toast('A böngésző letiltotta az új ablakot.', true); return; }
+		const n = (v, t) => v ? '<div class="k"><b>' + v + '</b><span>' + t + '</span></div>' : '';
+		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Szelfigép-riport – ' + esc(d.title || '') + '</title><style>body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1A1F2B;max-width:820px;margin:32px auto;padding:0 20px}h1{font-size:26px;margin:0 0 4px}.mu{color:#5B6275}.ks{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}.k{flex:1 1 130px;border:1px solid #E7E2DA;border-radius:12px;padding:14px 16px}.k b{display:block;font-size:30px;font-variant-numeric:tabular-nums}.k span{color:#5B6275}' +
+			'.h{display:flex;align-items:flex-end;gap:6px;height:160px;border-bottom:1px solid #E7E2DA;margin:10px 0 4px}.h div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}.h i{display:block;width:100%;background:#E8894A;border-radius:4px 4px 0 0}.h small{color:#5B6275;font-size:12px;margin-top:4px}.br{font:800 20px system-ui,sans-serif;color:#141C33}.br span{color:#E8894A}a{color:#B85A1C}button{margin-top:24px;padding:10px 18px;border-radius:999px;border:1.5px solid #E8894A;background:#fff;font:600 15px system-ui;cursor:pointer}@media print{button{display:none}}</style></head><body>' +
+			'<p class="br">Event<span>Crazy</span></p><h1>Szelfigép-riport</h1><p class="mu">' + esc(d.title || '') + (d.event_d ? ' · ' + esc(d.event_d.replace(/-/g, '.') + '.') : '') + (s.first ? ' · ' + esc(s.first.slice(11)) + '–' + esc(s.last.slice(11)) : '') + '</p>' +
+			'<div class="ks">' + n(s.photos, 'fotó') + n(s.videos, 'videó') + n(s.guestbook, 'videóüzenet') + n(b.prints, 'nyomtatott kép') + n(x.guests && x.guests.mailed, 'e-mailben elküldve') + n(x.guests && x.guests.n, 'vendég adta meg az adatait') + '</div>' +
+			(hrs.length > 1 ? '<h3>Fotók óránként</h3><div class="h">' + hrs.map(h => '<div><i style="height:' + Math.max(3, Math.round(h[1] / mx * 100)) + '%"></i><small>' + esc(h[0]) + '</small></div>').join('') + '</div>' : '') +
+			(x.gal ? '<p>Az összes fotó online: <a href="' + esc(x.gal.url) + '">' + esc(x.gal.url.replace(/^https?:\/\//, '')) + '</a> (60 napig érhető el).</p>' : '') +
+			'<p class="mu">Köszönjük, hogy minket választottatok!</p><button onclick="window.print()">Nyomtatás / mentés PDF-be</button></body></html>');
+		w.document.close();
+	}
+	async function boothDraw(deal) {
+		const box = sheet(sheetHead('Sorsolás a szelfigép vendégei közül') + '<div class="bt-dr" data-bdr><p class="cpx-muted">Akik a gépen megadták a nevüket vagy az e-mail-címüket. Egy vendég egyszer nyerhet.</p><div class="bt-win" data-bwin></div><div class="gm-b"><button type="button" class="cpx-btn sm" data-bgo>Sorsolás</button><button type="button" class="cpx-btn ghost sm" data-breset>Újrakezdés</button></div></div>');
+		if (!box) return;
+		box.querySelector('[data-close]').addEventListener('click', hideModal);
+		const win = box.querySelector('[data-bwin]');
+		box.querySelector('[data-bgo]').addEventListener('click', async () => {
+			try { const r = await post('cp_booth_draw', { deal }); win.innerHTML = '<p class="bt-n">' + r.round + '. nyertes</p><p class="bt-w">' + esc(r.name || '(név nélkül)') + '</p><p class="cpx-muted">' + esc(r.email || '') + '</p><p class="cpx-muted">Még ' + r.left + ' vendég van a sorsolásban (összesen ' + r.n + ').</p>'; }
+			catch (e) { win.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
+		});
+		box.querySelector('[data-breset]').addEventListener('click', async () => { try { await post('cp_booth_draw', { deal, reset: 1 }); win.innerHTML = '<p class="cpx-muted">Újrakezdve – mindenki újra benne van.</p>'; } catch (e) { toast(e.message, true); } });
+	}
 	function d3UpBind(sh, dealId) {
 		const re = () => { if (D3.ctx && D3.ctx.id === dealId) openDeal(dealId, D3.ctx.back, true); };
 		const C0 = window.CPX || {};
@@ -96,6 +173,10 @@
 		const inp = sh.querySelector('[data-dfup]'); if (inp) inp.addEventListener('change', () => { send(inp.files); inp.value = ''; });
 		/* v2.9.242: galéria kezelése – cím, jelszó, képek elrejtése */
 		sh.querySelectorAll('[data-galman]').forEach(b => b.addEventListener('click', () => galManage(Number(b.dataset.galman))));
+		/* v2.9.246: szelfigép – beállítások a gépekre, ügyfélriport, sorsolás */
+		sh.querySelectorAll('[data-bcfg]').forEach(b => b.addEventListener('click', () => boothCfg(Number(b.dataset.bcfg), D3.ctx && D3.ctx.x && D3.ctx.x.booth ? D3.ctx.x.booth.cfg : null)));
+		sh.querySelectorAll('[data-brep]').forEach(b => b.addEventListener('click', () => { if (D3.ctx && D3.ctx.x) boothReport(D3.ctx.x); }));
+		sh.querySelectorAll('[data-bdraw]').forEach(b => b.addEventListener('click', () => boothDraw(Number(b.dataset.bdraw))));
 		/* v2.9.244: vendégadatok letöltése (CSV, Excelben nyitható) */
 		sh.querySelectorAll('[data-guestcsv]').forEach(b => b.addEventListener('click', async () => {
 			try { const r = await post('cp_booth_guests', { deal: Number(b.dataset.guestcsv) }); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' })); a.download = 'vendegek-' + b.dataset.guestcsv + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast(r.n + ' vendég letöltve.'); }
@@ -1894,6 +1975,7 @@
 			/* v2.9.241: szelfigép-galéria (Crazy Booth) – link, képek száma, másolás */
 			(x.gal ? '<section class="d3-c"><h4>Fotógaléria <small>' + (x.gal.n >= 0 ? x.gal.n + ' kép' : '') + '</small></h4><p class="d3-gal"><a href="' + esc(x.gal.url) + '" target="_blank" rel="noopener">' + esc(x.gal.url.replace(/^https?:\/\//, '')) + ' ↗</a> <button type="button" class="d3-galcp" data-galcp="' + esc(x.gal.url) + '">Link másolása</button></p><p class="d3-galh">Levélben: <code>{{galeria.link}}</code> · <button type="button" class="d3-galcp" data-galman="' + Number(x.deal.id) + '">Kezelés</button></p></section>' : '') 
 			(x.guests ? '<section class="d3-c"><h4>Vendégadatok <small>' + x.guests.n + ' vendég' + (x.guests.mailed ? ' · ' + x.guests.mailed + ' levél elküldve' : '') + '</small></h4><p class="d3-galh">A szelfigépen megadott adatok (csak itt, a Salesmate-be nem kerülnek; 60 nap után törlődnek). <button type="button" class="d3-galcp" data-guestcsv="' + Number(x.deal.id) + '">Letöltés (CSV)</button></p></section>' : '') +
+			boothCard(x, toEv) +
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
 			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; const up = x.dfiles || []; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length + up.length) + '</small>' + (R.edit ? '<label class="d3-upb" title="Fájl feltöltése a dealhez (PDF, kép, Office, zip – max. 25 MB) – vagy húzd ide"><input type="file" multiple hidden data-dfup>＋ Feltöltés</label>' : '') + '</h4>' + d3FiltBar(fl.concat(up.map(f => ({ n: f.n }))), sbf) + d3UpHtml(up) +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */
@@ -1903,7 +1985,7 @@
 		sh.innerHTML = h;
 		d3FilesBind(sh, d3Files(m.files || []));
 		d3UpBind(sh, d.id);
-		D3.ctx = { id: id, back: back };
+		D3.ctx = { id: id, back: back, x: x };
 		const cmp = sh.querySelector('[data-comp]');
 		if (cmp) compose(cmp, x, 'note');
 		drawTimeline(sh.querySelector('[data-tl]'), x);

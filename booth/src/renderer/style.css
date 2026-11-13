@@ -221,3 +221,10 @@ button{font:inherit;cursor:pointer}
 .osk button{flex:1;max-width:8vh;height:6.4vh;min-height:44px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:2.6vh;font-weight:600;touch-action:manipulation}
 .osk button.w{max-width:14vh;font-size:2vh}.osk button.sp{max-width:none;flex:4}.osk button.on{background:var(--o);color:var(--n2)}
 .osk button:active{background:rgba(255,255,255,.25)}
+/* ---------- 7. fázis: kivetítés / megosztó állomás a Kezelőben */
+.st-proj{display:flex;flex-direction:column;gap:10px}
+.pj{display:grid;grid-template-columns:110px minmax(0,1fr);gap:14px;align-items:center;padding:12px;border-radius:12px;background:rgba(255,255,255,.04)}
+.pj .qrc{width:110px;height:110px;background:#fff;border-radius:8px;padding:6px}
+.pj div:last-child{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0}
+.pj b{font-size:16px}.pj span{color:var(--mu);font-size:14px}.pj code{font-size:13px;color:#F2B35B;overflow-wrap:anywhere}
+.pj .big.sm{height:40px;min-height:40px;font-size:14px;padding:0 14px;margin-top:4px}

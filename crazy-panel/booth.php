@@ -284,3 +284,104 @@ function cp_booth_ajax_guests() {
 	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_guests_csv', 'Vendégadatok letöltve (' . count($rows) . ' sor)', 'deal:' . $deal, ''); }
 	wp_send_json_success(array('csv' => "\xEF\xBB\xBF" . implode("\r\n", $out), 'n' => count($rows)));
 }
+
+/* ---------- v2.9.246 (Crazy Booth 7. fázis): gépállapot (v7), távoli beállítások (v8), statisztika + ügyfélriport (v10), sorsolás (d4).
+ * A gépek percenként jelentkeznek (állapot); a válaszban kapják a deal panelből mentett beállításait. Salesmate-be semmi nem megy. */
+const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'guestbook');
+function cp_booth_beat_get($id) { $b = get_transient('cp_bb_' . $id); return is_array($b) ? $b : null; }
+function cp_booth_dcfg_all() { $a = get_option('cp_booth_dcfg', array()); return is_array($a) ? $a : array(); }
+function cp_booth_dcfg_get($deal) { $a = cp_booth_dcfg_all(); return isset($a[(string) (int) $deal]) && is_array($a[(string) (int) $deal]) ? $a[(string) (int) $deal] : null; }
+/* a panelből a gépre küldhető beállítások (fehérlista + korlátok) */
+function cp_booth_dcfg_clean($in) {
+	$in = is_array($in) ? $in : array(); $o = array(); $ui = array(); $sc = array();
+	$num = function ($v, $a, $b) { $v = (int) $v; return max($a, min($b, $v)); };
+	if (isset($in['shots'])) { $o['shots'] = (int) $in['shots'] >= 3 ? 3 : 1; }
+	foreach (array('countdown' => array(1, 10), 'copies' => array(1, 10), 'reviewSec' => array(5, 120)) as $k => $r) { if (isset($in[$k]) && $in[$k] !== '') { $o[$k] = $num($in[$k], $r[0], $r[1]); } }
+	if (isset($in['autoPrint'])) { $o['autoPrint'] = (bool) $in['autoPrint']; }
+	if (isset($in['modes']) && is_array($in['modes'])) { $m = array_values(array_intersect(CP_BOOTH_MODES, array_map('strval', $in['modes']))); if ($m) { $ui['modes'] = $m; } }
+	foreach (array('cdNext' => array(1, 10), 'groupCd' => array(3, 15), 'videoSec' => array(3, 30), 'gbSec' => array(10, 90), 'limitPhoto' => array(0, 20), 'limitEvent' => array(0, 5000)) as $k => $r) { if (isset($in[$k]) && $in[$k] !== '') { $ui[$k] = $num($in[$k], $r[0], $r[1]); } }
+	foreach (array('bestOf', 'retake', 'shareEmail', 'formBefore') as $k) { if (isset($in[$k])) { $ui[$k] = (bool) $in[$k]; } }
+	if (isset($in['askName']) && in_array($in['askName'], array('off', 'opt', 'req'), true)) { $ui['askName'] = $in['askName']; }
+	if (isset($in['questions'])) { $ui['questions'] = mb_substr(implode("\n", array_slice(array_filter(array_map('trim', explode("\n", sanitize_textarea_field((string) $in['questions'])))), 0, 3)), 0, 300); }
+	foreach (array('t1' => 60, 't2' => 80, 'brand' => 60) as $k => $n) { if (isset($in[$k])) { $sc[$k] = mb_substr(sanitize_text_field((string) $in[$k]), 0, $n); } }
+	if (isset($in['color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $in['color'])) { $sc['color'] = (string) $in['color']; }
+	if ($ui) { $o['ui'] = $ui; } if ($sc) { $o['screen'] = $sc; }
+	return $o;
+}
+add_action('rest_api_init', function () {
+	register_rest_route('crazy/v1', '/booth/beat', array('methods' => 'POST', 'permission_callback' => function () { return (bool) cp_booth_auth(); }, 'callback' => function (WP_REST_Request $r) {
+		$d = cp_booth_auth(); $j = $r->get_json_params(); $j = is_array($j) ? $j : array();
+		$deal = (int) ($j['deal'] ?? 0); $paper = array();
+		if (isset($j['paper']) && is_array($j['paper'])) { foreach (array_slice($j['paper'], 0, 4, true) as $k => $v) { $paper[mb_substr(sanitize_text_field((string) $k), 0, 60)] = $v === null ? null : max(0, (int) $v); } }
+		$b = array('t' => time(), 'name' => (string) $d['name'], 'deal' => $deal, 'title' => mb_substr(sanitize_text_field((string) ($j['title'] ?? '')), 0, 120),
+			'ver' => mb_substr(sanitize_text_field((string) ($j['ver'] ?? '')), 0, 40), 'scr' => mb_substr(sanitize_key((string) ($j['scr'] ?? '')), 0, 12),
+			'paper' => $paper, 'queue' => max(0, (int) ($j['queue'] ?? 0)), 'guests' => max(0, (int) ($j['guests'] ?? 0)), 'prints' => max(0, (int) ($j['prints'] ?? 0)),
+			'err' => mb_substr(sanitize_text_field((string) ($j['err'] ?? '')), 0, 160), 'err_at' => max(0, (int) ($j['err_at'] ?? 0)), 'cam' => array_key_exists('cam', $j) && $j['cam'] !== null ? (bool) $j['cam'] : null, 'net' => !empty($j['net']), 'station' => !empty($j['station']));
+		set_transient('cp_bb_' . $d['id'], $b, 3 * DAY_IN_SECONDS);
+		/* a nyomatok száma dealenként és gépenként (a riporthoz: a legnagyobb jelentett érték marad meg) */
+		if ($deal && $b['prints']) { $p = get_option('cp_booth_prints', array()); if (!is_array($p)) { $p = array(); } $k = (string) $deal; if ((int) ($p[$k][$d['id']] ?? 0) < $b['prints']) { $p[$k][$d['id']] = $b['prints']; update_option('cp_booth_prints', $p, false); } }
+		$c = $deal ? cp_booth_dcfg_get($deal) : null;
+		return array('ok' => true, 'cfg' => $c ? $c['cfg'] : null, 'at' => $c ? (int) $c['at'] : 0);
+	}));
+});
+/* a deal statisztikája a galériából (5 percig tárolva) */
+function cp_booth_stats($deal) {
+	if (!cp_booth_gal_has($deal)) { return null; }
+	$ev = cp_booth_gal_tok($deal); $ck = 'cp_booth_st_' . $ev; $s = get_transient($ck);
+	if (is_array($s)) { return $s; }
+	$g = cp_booth_gal_api('GET', $ev);
+	if (is_wp_error($g)) { return null; }
+	$s = array('photos' => 0, 'videos' => 0, 'guestbook' => 0, 'hidden' => 0, 'hours' => array(), 'devices' => array(), 'first' => '', 'last' => '');
+	foreach ((array) ($g['photos'] ?? array()) as $x) {
+		$k = (string) ($x['kind'] ?? 'photo'); if ($k === 'guestbook') { $s['guestbook']++; } elseif ($k === 'video') { $s['videos']++; } else { $s['photos']++; }
+		if (!empty($x['hidden'])) { $s['hidden']++; }
+		$loc = get_date_from_gmt((string) $x['created_at'], 'Y-m-d H:i'); $h = substr($loc, 11, 2) . ':00';
+		$s['hours'][$h] = ($s['hours'][$h] ?? 0) + 1; $dv = (string) ($x['device'] ?? ''); if ($dv !== '') { $s['devices'][$dv] = ($s['devices'][$dv] ?? 0) + 1; }
+		if ($s['first'] === '' || $loc < $s['first']) { $s['first'] = $loc; } if ($loc > $s['last']) { $s['last'] = $loc; }
+	}
+	ksort($s['hours']);
+	set_transient($ck, $s, 5 * MINUTE_IN_SECONDS);
+	return $s;
+}
+add_filter('cp_crm_deal_data', function ($x) {
+	$id = isset($x['deal']['id']) ? (int) $x['deal']['id'] : 0; if (!$id) { return $x; }
+	$m = array();
+	foreach (cp_booth_devs() as $did => $dv) { if ($did === 'panel') { continue; } $b = cp_booth_beat_get($did); if ($b && (int) $b['deal'] === $id && time() - (int) $b['t'] < 12 * HOUR_IN_SECONDS) { $b['ago'] = time() - (int) $b['t']; $m[] = $b; } }
+	$p = get_option('cp_booth_prints', array()); $prints = is_array($p) && isset($p[(string) $id]) ? array_sum(array_map('intval', $p[(string) $id])) : 0;
+	$c = cp_booth_dcfg_get($id);
+	$x['booth'] = array('machines' => $m, 'cfg' => $c ? $c['cfg'] : null, 'cfg_at' => $c ? (int) $c['at'] : 0, 'cfg_by' => $c ? (string) ($c['by'] ?? '') : '', 'prints' => $prints, 'stats' => cp_booth_stats($id),
+		'show' => cp_booth_gal_has($id) ? cp_booth_gal_url($id) . '?vetites=1' : '', 'station' => cp_booth_gal_has($id) ? cp_booth_gal_url($id) . '?allomas=1' : '');
+	return $x;
+}, 24);
+/* beállítások mentése a deal szelfigépeire (a gépek a következő jelentkezéskor, legfeljebb 1 percen belül átveszik) */
+add_action('wp_ajax_nopriv_cp_booth_dcfg', 'cp_booth_ajax_dcfg'); add_action('wp_ajax_cp_booth_dcfg', 'cp_booth_ajax_dcfg');
+function cp_booth_ajax_dcfg() {
+	cp_crm_ajax_guard(array('deals'));
+	$deal = (int) ($_POST['deal'] ?? 0); if (!$deal) { cp_el_err('Hiányzó deal.', 400); }
+	$a = cp_booth_dcfg_all(); $k = (string) $deal;
+	if (!empty($_POST['clear'])) { unset($a[$k]); update_option('cp_booth_dcfg', $a, false); wp_send_json_success(array('cfg' => null)); }
+	$in = json_decode(wp_unslash((string) ($_POST['cfg'] ?? '')), true);
+	$c = cp_booth_dcfg_clean($in);
+	$cu = function_exists('cp_pu_current') ? cp_pu_current() : null; $who = is_array($cu) ? (string) ($cu['name'] ?? '') : '';
+	$a[$k] = array('at' => time(), 'by' => $who, 'cfg' => $c); update_option('cp_booth_dcfg', $a, false);
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_cfg', 'Szelfigép-beállítások mentve', 'deal:' . $deal, ''); }
+	wp_send_json_success(array('cfg' => $c, 'at' => $a[$k]['at']));
+}
+/* sorsolás a vendégek közül (akik adatot adtak meg); egy vendég egyszer nyerhet */
+add_action('wp_ajax_nopriv_cp_booth_draw', 'cp_booth_ajax_draw'); add_action('wp_ajax_cp_booth_draw', 'cp_booth_ajax_draw');
+function cp_booth_ajax_draw() {
+	cp_crm_ajax_guard(array('deals'));
+	global $wpdb; $deal = (int) ($_POST['deal'] ?? 0);
+	if (!$deal || get_option('cp_bg_db') !== '1') { cp_el_err('Nincs vendégadat.', 404); }
+	$dr = get_option('cp_booth_drawn', array()); if (!is_array($dr)) { $dr = array(); } $k = (string) $deal; $done = array_map('intval', (array) ($dr[$k] ?? array()));
+	if (!empty($_POST['reset'])) { unset($dr[$k]); update_option('cp_booth_drawn', $dr, false); wp_send_json_success(array('reset' => true)); }
+	$rows = $wpdb->get_results($wpdb->prepare('SELECT id, name, email FROM ' . cp_bg_t() . " WHERE deal = %d AND (name <> '' OR email <> '')", $deal), ARRAY_A);
+	$seen = array(); $pool = array();
+	foreach ($rows as $x) { $key = strtolower($x['email'] !== '' ? $x['email'] : $x['name']); if (isset($seen[$key])) { continue; } $seen[$key] = 1; if (!in_array((int) $x['id'], $done, true)) { $pool[] = $x; } }
+	if (!$pool) { cp_el_err($rows ? 'Már mindenki nyert, akit lehetett.' : 'Még nincs vendég, aki megadta az adatait.', 404); }
+	$w = $pool[random_int(0, count($pool) - 1)];
+	$done[] = (int) $w['id']; $dr[$k] = $done; update_option('cp_booth_drawn', $dr, false);
+	$em = $w['email']; if ($em !== '') { $p = explode('@', $em); $em = mb_substr($p[0], 0, 2) . str_repeat('•', max(1, min(6, mb_strlen($p[0]) - 2))) . '@' . ($p[1] ?? ''); }
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_draw', 'Sorsolás a szelfigép vendégei közül', 'deal:' . $deal, ''); }
+	wp_send_json_success(array('name' => $w['name'], 'email' => $em, 'left' => count($pool) - 1, 'n' => count($seen), 'round' => count($done)));
+}

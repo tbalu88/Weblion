@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.5.0');
+define('CG_VER', '0.6.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -105,9 +105,9 @@ add_action('rest_api_init', function () {
 	register_rest_route('crazy-galeria/v1', '/admin/(?P<ev>[a-z0-9]{6,32})', array(
 		array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			global $wpdb; $ev = $r['ev']; $s = cg_evset($ev);
-			$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, hidden, device, created_at FROM ' . cg_t() . ' WHERE ev = %s ORDER BY id DESC LIMIT 3000', $ev), ARRAY_A);
+			$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, hidden, device, kind, created_at FROM ' . cg_t() . ' WHERE ev = %s ORDER BY id DESC LIMIT 3000', $ev), ARRAY_A);
 			foreach ($rows as &$x) { $x['thumb'] = cg_url() . '/' . $ev . '/' . $x['photo'] . '_t.jpg'; $x['hidden'] = (int) $x['hidden']; } unset($x);
-			return array('ev' => $ev, 'title' => (string) ($s['title'] ?? ''), 'hook' => (string) ($s['hook'] ?? ''), 'station' => home_url('/galeria/' . $ev . '/?allomas=1'), 'has_pw' => !empty($s['pw']), 'photos' => $rows, 'url' => home_url('/galeria/' . $ev . '/'));
+			return array('ev' => $ev, 'title' => (string) ($s['title'] ?? ''), 'hook' => (string) ($s['hook'] ?? ''), 'station' => home_url('/galeria/' . $ev . '/?allomas=1'), 'show' => home_url('/galeria/' . $ev . '/?vetites=1'), 'has_pw' => !empty($s['pw']), 'photos' => $rows, 'url' => home_url('/galeria/' . $ev . '/'));
 		}),
 		array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			global $wpdb; $ev = $r['ev']; $s = cg_evset($ev);
@@ -211,6 +211,7 @@ add_action('init', function () {
 	}
 	if (!cg_unlocked($ev)) { cg_page('pw', $ev, array()); exit; }
 	if (isset($_GET['allomas'])) { cg_station($ev); exit; }
+	if (isset($_GET['vetites'])) { cg_show($ev); exit; }
 	$rows = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0 ORDER BY id DESC LIMIT 2000', $ev));
 	cg_page($rows ? 'event' : 'empty', $ev, $rows); exit;
 }, 1);
@@ -344,4 +345,42 @@ function cg_station($ev) {
 		. 'document.querySelector(".g").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var m=document.getElementById("m");m.innerHTML=b.dataset.v==="1"?"<video autoplay muted loop playsinline></video>":"<img alt=\"\">";m.firstChild.src=b.dataset.src;'
 		. 'var q=document.getElementById("qr");q.innerHTML="";try{var c=qrcode(0,"M");c.addData(b.dataset.u);c.make();q.innerHTML=c.createSvgTag({cellSize:7,margin:0});}catch(x){q.textContent=b.dataset.u;}ov.classList.add("on");clearTimeout(t);t=setTimeout(close,45000);});'
 		. 'document.getElementById("x").addEventListener("click",close);ov.addEventListener("click",function(e){if(e.target===ov)close();});})();</script></body></html>';
+}
+
+/* ---------- v0.6 élő diavetítés (TV / projektor): /galeria/<ev>/?vetites=1 – a legfrissebb képek váltakozva,
+ * az újonnan feltöltött kép azonnal nagyban („Friss!”), sarokban QR a galériához. A jelszó itt is érvényes. */
+add_action('rest_api_init', function () {
+	register_rest_route('crazy-galeria/v1', '/latest/(?P<ev>[a-z0-9]{6,32})', array('methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function ($r) {
+		global $wpdb; $ev = $r['ev'];
+		if (!cg_unlocked($ev)) { return new WP_REST_Response(array('ok' => false), 403); }
+		return array('ok' => true, 'photos' => cg_latest($ev, (int) $r->get_param('after')));
+	}));
+});
+function cg_latest($ev, $after = 0) {
+	global $wpdb; $u = cg_url() . '/' . $ev . '/';
+	$rows = $wpdb->get_results($wpdb->prepare('SELECT id, photo, file, kind FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0 AND id > %d ORDER BY id DESC LIMIT 40', $ev, $after));
+	$out = array();
+	foreach ($rows as $x) { $out[] = array('id' => (int) $x->id, 'v' => preg_match('/\.(mp4|webm)$/', $x->file) ? 1 : 0, 'src' => $u . $x->file, 'poster' => $u . $x->photo . '.jpg'); }
+	return $out;
+}
+function cg_show($ev) {
+	$st = cg_evset($ev); $title = (string) ($st['title'] ?? '');
+	nocache_headers();
+	$init = wp_json_encode(cg_latest($ev));
+	echo '<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Diavetítés</title>';
+	echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>';
+	echo '<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;font-family:system-ui,-apple-system,sans-serif;color:#fff}.s{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .9s ease}.s.on{opacity:1}.s img,.s video{max-width:100%;max-height:100%;object-fit:contain}'
+		. '.bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:2.4vh 2.6vw;background:linear-gradient(transparent,rgba(0,0,0,.65))}.bar b{font-size:3.4vh;font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.5)}.bar small{display:block;font-size:2vh;opacity:.8;font-weight:400}'
+		. '.q{display:flex;align-items:center;gap:1.4vw;font-size:2vh}.q div{background:#fff;padding:.8vh;border-radius:1vh;width:14vh;height:14vh}.q svg{display:block;width:100%;height:100%}'
+		. '.new{position:absolute;top:3vh;left:50%;transform:translateX(-50%);background:linear-gradient(120deg,#E8894A,#F2B35B);color:#141C33;font-weight:800;font-size:3vh;padding:1vh 3vh;border-radius:999px;opacity:0;transition:opacity .4s}.new.on{opacity:1}'
+		. '.e{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:4vh;opacity:.7}@media (prefers-reduced-motion:reduce){.s{transition:none}}</style></head><body>';
+	echo '<div id="st"></div><div class="e" id="e">Itt jelennek meg a fotók…</div><div class="new" id="nw">Friss fotó!</div>';
+	echo '<div class="bar"><b>' . esc_html($title !== '' ? $title : 'EventCrazy') . '<small>Az összes fotó a telefonodon →</small></b><div class="q"><div id="qr"></div></div></div>';
+	echo '<script>(function(){var L=' . $init . ',api=' . wp_json_encode(rest_url('crazy-galeria/v1/latest/' . $ev)) . ',gal=' . wp_json_encode(home_url('/galeria/' . $ev . '/')) . ',i=0,cur=null,t=0,max=0,fresh=[];'
+		. 'L.forEach(function(p){if(p.id>max)max=p.id;});try{var c=qrcode(0,"M");c.addData(gal);c.make();document.getElementById("qr").innerHTML=c.createSvgTag({cellSize:6,margin:0});}catch(x){}'
+		. 'function el(p){var d=document.createElement("div");d.className="s";var m=document.createElement(p.v?"video":"img");if(p.v){m.muted=true;m.loop=true;m.playsInline=true;m.autoplay=true;m.poster=p.poster;}m.src=p.src;d.appendChild(m);return d;}'
+		. 'function show(p,isNew){var st=document.getElementById("st"),d=el(p);st.appendChild(d);requestAnimationFrame(function(){requestAnimationFrame(function(){d.classList.add("on");});});if(cur){var o=cur;o.classList.remove("on");setTimeout(function(){o.remove();},1000);}cur=d;document.getElementById("e").style.display="none";var n=document.getElementById("nw");n.classList.toggle("on",!!isNew);}'
+		. 'function next(){clearTimeout(t);if(fresh.length){show(fresh.shift(),true);t=setTimeout(next,9000);return;}if(!L.length){t=setTimeout(next,3000);return;}i=(i+1)%Math.min(L.length,40);show(L[i],false);t=setTimeout(next,L[i].v?10000:6000);}'
+		. 'function poll(){fetch(api+"?after="+max,{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.json();}).then(function(j){if(!j||!j.photos||!j.photos.length)return;var a=j.photos.slice().reverse();a.forEach(function(p){if(p.id>max)max=p.id;L.unshift(p);fresh.push(p);});L=L.slice(0,40);if(fresh.length&&!cur)next();}).catch(function(){});}'
+		. 'if(L.length){i=-1;next();}setInterval(poll,8000);if(navigator.wakeLock){navigator.wakeLock.request("screen").catch(function(){});}})();</script></body></html>';
 }

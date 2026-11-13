@@ -907,3 +907,21 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .gm-grid button:hover{border-color:#2F5BD8}
 .gm-grid button.off{opacity:.35;border-color:#C2392F}
 .gm-grid i{position:absolute;left:4px;bottom:4px;background:#C2392F;color:#fff;font:600 11px Inter,sans-serif;font-style:normal;border-radius:6px;padding:1px 6px}
+/* v2.9.246: szelfigép kártya – gépállapot, statisztika, beállítások, sorsolás */
+.bt-ml{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+.bt-ml li{display:grid;grid-template-columns:10px minmax(0,1fr);column-gap:8px;row-gap:1px;font-size:13px}
+.bt-ml i{grid-row:1;width:9px;height:9px;border-radius:50%;background:#B8BCC6;align-self:center}.bt-ml i.bt-ok{background:#30A46C}.bt-ml i.bt-mid{background:#E5A000}.bt-ml i.bt-bad{background:#E5484D}
+.bt-ml b{font-weight:600;overflow-wrap:anywhere}.bt-ml span{grid-column:2;color:#5B6275;overflow-wrap:anywhere}
+.bt-st{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0;font-size:13px;color:#5B6275}.bt-st b{color:#141C33;font-size:16px;font-variant-numeric:tabular-nums;margin-right:3px}
+.bt-h{display:flex;align-items:flex-end;gap:3px;height:56px;margin:6px 0 2px}.bt-h div{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.bt-h i{display:block;width:100%;background:#E8894A;border-radius:3px 3px 0 0}.bt-h small{font-size:10px;color:#8A90A0;margin-top:2px;font-variant-numeric:tabular-nums}
+.bt-b{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}.bt-b a.d3-galcp{display:inline-flex;align-items:center;text-decoration:none}
+.bt-cf{font-size:12px;margin:6px 0 0}
+.bt-cfg{display:flex;flex-direction:column;gap:10px}.bt-cfg h5{margin:8px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#5B6275}
+.bt-cfg label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#5B6275}.bt-cfg label.bt-ck{flex-direction:row;align-items:center;gap:8px;color:#1A1F2B}
+.bt-cfg input:not([type=checkbox]):not([type=color]),.bt-cfg select,.bt-cfg textarea{height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:14px Inter,sans-serif;color:#1A1F2B;background:#fff;min-width:0}
+.bt-cfg textarea{height:auto;padding:8px 10px;resize:vertical}.bt-cfg input[type=color]{width:56px;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:2px;background:#fff}
+.bt-mo{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.bt-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.bt-dr{display:flex;flex-direction:column;gap:12px}.bt-win{min-height:90px;text-align:center}.bt-n{margin:0;color:#B85A1C;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.bt-w{margin:4px 0;font-size:26px;font-weight:800;color:#141C33;overflow-wrap:anywhere}

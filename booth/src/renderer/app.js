@@ -8,6 +8,7 @@
   const call = async (fn, ...a) => { const r = await fn(...a); if (!r || !r.ok) throw new Error((r && r.err) || 'ismeretlen hiba'); return r.v; };
 
   function show(s) {
+    if (s === 'start' && S.remotePending) { const rp = S.remotePending; S.remotePending = null; setTimeout(() => remoteApply(rp), 300); }
     if (s === 'start' && isStation()) { s = 'station'; $('[data-stev]').textContent = (S.cfg.event && S.cfg.event.title) || 'nincs rendezvény'; clearTimeout(S.stT); setTimeout(stationLoop, 50); }
     if (S.scr === 'review' && s !== 'review' && s !== 'live' && S.pending) commit();
     document.querySelectorAll('.scr').forEach(x => x.classList.toggle('on', x.dataset.s === s)); S.scr = s; if (s === 'start' && S.uiNew) uiSwap();
@@ -15,7 +16,7 @@
   /* online felület: ha új változat jött, a kezdőképernyőn (tétlenül) töltjük újra */
   function uiSwap() { if (S.busy || S.scr !== 'start' || !B.reloadUi) return; S.uiNew = false; setTimeout(() => { if (!S.busy && S.scr === 'start') B.reloadUi(); else S.uiNew = true; }, 1500); }
   if (B.onUiReady) B.onUiReady(() => { S.uiNew = true; uiSwap(); });
-  function err(m) { const e = $('[data-err]'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
+  function err(m) { S.lastErr = { m: String(m), t: Date.now() }; const e = $('[data-err]'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
   const today = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + '.'; };
 
   /* ---------- élőkép */
@@ -293,6 +294,7 @@
     preDraw(); tplInfo(); screenForm(); uiForm(); musicInfo();
     await prForm();
     $('[data-ver2]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
+    projForm(); keyInfo();
     if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok) $('[data-ver2]').textContent += ' · felület ' + r.v.v + (r.v.online ? ' (online)' : ''); });
   }
   document.querySelector('.pad').innerHTML = '1 2 3 4 5 6 7 8 9 ⌫ 0 ✓'.split(' ').map(k => '<button type="button" data-k="' + k + '">' + k + '</button>').join('');
@@ -309,6 +311,9 @@
     if (act === 'print') print();
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
     else if (act === 'recstop') { S.recStop = true; }
+    else if (act === 'keycap') { S.keyCap = true; keyInfo(); }
+    else if (act === 'keyclear') { try { const u = Object.assign({}, U()); delete u.startKey; S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: u })); keyInfo(); $('[data-stmsg]').textContent = 'Indítógomb: alapértelmezés (szóköz / Enter).'; } catch (x) { $('[data-stmsg]').textContent = x.message; } }
+    else if (act === 'pjopen') { window.open(a.dataset.url, '_blank'); }
     else if (act === 'email') { emailFlow(); }
     else if (act === 'airdrop') { airdrop(); }
     else if (act === 'gfsend') { if (GF) gfSend(); }
@@ -360,6 +365,8 @@
   $('[data-corner]').addEventListener('pointerdown', () => { hold = setTimeout(openSettings, 3000); });
   ['pointerup', 'pointerleave'].forEach(ev => $('[data-corner]').addEventListener(ev, () => clearTimeout(hold)));
   document.addEventListener('keydown', e => {
+    if (S.keyCap) { e.preventDefault(); S.keyCap = false; if (e.code !== 'Escape') { call(B.saveConfig, { ui: Object.assign({}, U(), { startKey: e.code }) }).then(c => { S.cfg = Object.assign(S.cfg, c); keyInfo(); $('[data-stmsg]').textContent = 'Indítógomb mentve: ' + e.code; }).catch(x => { $('[data-stmsg]').textContent = x.message; }); } else keyInfo(); return; }
+    if (S.scr === 'start' && !S.busy && !isStation() && startKeyOk(e.code)) { e.preventDefault(); startTap(); return; }
     if (e.key === 'F2') openSettings();
     if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery' || S.scr === 'modes') show('start'); else if (S.scr === 'photo') gallery(); }
   });
@@ -634,6 +641,7 @@
     const ev = S.cfg.event; add(ev && ev.deal ? 'ok' : 'mid', 'Rendezvény', ev && ev.deal ? ev.title + ' · ' + (ev.date || '') : 'nincs kiválasztva (Rendezvény fül)');
     add(S.tpl ? 'ok' : 'mid', 'Sablon', S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : 'alap keret');
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
+    if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;
     box.innerHTML = '<p class="pf-sum ' + (bad ? 'bad' : mid ? 'mid' : 'ok') + '">' + (bad ? bad + ' hiba – javítsd indulás előtt' : mid ? 'Indulhat, ' + mid + ' figyelmeztetéssel' : 'Minden rendben – indulhat a fotózás') + '</p>' +
@@ -877,6 +885,49 @@
   $('[data-gform]').addEventListener('focusin', e => { if (e.target.matches('input[name]:not([type=checkbox])')) OSK.t = e.target; });
   $('[data-gform]').addEventListener('input', () => { if (GF) GF.bump(); });
   $('[data-gform]').addEventListener('submit', e => { e.preventDefault(); gfSend(); });
+  /* ---------- 7. fázis: állapotjelentés a panelnek (percenként) + a panelből kapott beállítások (a deal adatlapján) */
+  async function beat() {
+    if (!B.beat || !S.cfg || !S.cfg.boothKey) return;
+    const ev = S.cfg.event || {}, pc = counts()[ev.ev || '-'];
+    let st = {}; try { const r = await B.cloudStatus(); if (r && r.ok) st = r.v || {}; } catch (e) { st = {}; }
+    const cam = isStation() ? null : WEB() ? (S.stream ? S.stream.getVideoTracks().some(t => t.readyState === 'live') : null) : true;
+    const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
+    const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
+      err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
+    try { const r = await call(B.beat, body); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ }
+  }
+  setInterval(beat, 60000); setTimeout(beat, 6000);
+  /* a panelből (deal adatlap → Szelfigép → Beállítások a gépekre) mentett beállítások: csak a kezdőképernyőn, fotózás közben soha */
+  async function remoteApply(r) {
+    if (!r || !r.cfg || !r.at || r.at <= (Number(U().remoteAt) || 0)) return;
+    if (S.busy || (S.scr !== 'start' && S.scr !== 'station')) { S.remotePending = r; return; }
+    const c = r.cfg, o = {};
+    ['shots', 'countdown', 'copies', 'reviewSec', 'autoPrint'].forEach(k => { if (c[k] !== undefined) o[k] = c[k]; });
+    o.ui = Object.assign({}, U(), c.ui || {}, { remoteAt: r.at });
+    try {
+      S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o));
+      if (c.screen) {
+        const sc = (await kvGet('screen')) || {};
+        ['t1', 't2', 'brand', 'color'].forEach(k => { if (c.screen[k] !== undefined) sc[k] = c.screen[k]; });
+        if (/^#e8894a$/i.test(sc.color || '')) delete sc.color;   /* az alapszín = az eredeti színátmenet */
+        await kvSet('screen', sc); await screenApply();
+      }
+      modeInfo(); B.log('a panelből kapott beállítások alkalmazva (' + new Date(r.at * 1000).toLocaleString('hu-HU') + ')');
+    } catch (e) { B.log('távoli beállítás hiba: ' + e.message); }
+  }
+  /* indítógomb (USB / arcade): alapból a szóköz és az Enter; a Kezelőben bármelyik gomb beállítható */
+  const startKeyOk = code => U().startKey ? code === U().startKey : (code === 'Space' || code === 'Enter' || code === 'NumpadEnter');
+  function keyInfo() { const k = U().startKey; $('[data-keyinfo]').textContent = S.keyCap ? 'Nyomd meg most a gombot…' : k ? 'Beállított gomb: ' + k : 'Alapból: szóköz vagy Enter (a legtöbb USB-s arcade gomb ezt küldi).'; }
+  /* kivetítés (TV / projektor) és megosztó állomás (tablet): a rendezvény címei + QR */
+  async function projForm() {
+    const box = $('[data-proj]'), ev = S.cfg.event;
+    if (!ev || !ev.ev || !S.cfg.boothKey) { box.innerHTML = '<p class="st-up">Előbb válassz rendezvényt (és add meg a gépkulcsot).</p>'; return; }
+    let base = ''; try { base = (await call(B.urls, ev.ev)).event; } catch (e) { base = ''; }
+    if (!base) { box.innerHTML = ''; return; }
+    const L = [['Diavetítés TV-re / projektorra', base + '?vetites=1', 'A friss fotók azonnal megjelennek; a sarokban QR az összes képhez.'], ['Megosztó állomás tabletre', base + '?allomas=1', 'A sorban állók a legfrissebb képek közül QR-ral töltik le a sajátjukat.']];
+    box.innerHTML = L.map((x, i) => '<div class="pj"><div class="qrc" data-pjqr="' + i + '"></div><div><b>' + esc(x[0]) + '</b><span>' + esc(x[2]) + '</span><code>' + esc(x[1].replace(/^https?:\/\//, '')) + '</code><button type="button" class="big ghost sm" data-act="pjopen" data-url="' + esc(x[1]) + '">Megnyitás ezen a gépen</button></div></div>').join('');
+    for (let i = 0; i < L.length; i++) { try { drawQr(box.querySelector('[data-pjqr="' + i + '"]'), await call(B.qr, L[i][1])); } catch (e) { /* QR nélkül is ott a cím */ } }
+  }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

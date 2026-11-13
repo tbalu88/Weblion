@@ -91,6 +91,17 @@ function make(o) {
   return {
     newTok: tok,
     printq,
+    /* v0.8: állapotjelentés a panelnek (percenként); a válaszban a deal panelből mentett beállításai */
+    async beat(d) {
+      if (!o.key()) return null;
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+      try {
+        const r = await fetch(PANEL + '/beat', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr()), body: JSON.stringify(d || {}), signal: ctl.signal });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false) throw new Error(j.message || ('Panel-hiba (' + r.status + ')'));
+        return j;
+      } catch (e) { if (e.name === 'AbortError') throw new Error('A panel nem válaszol'); throw e; } finally { clearTimeout(t); }
+    },
     guest(d) { fs.writeFileSync(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), JSON.stringify(d)); setTimeout(pumpGuests, 200); return true; },
     photoUrl: (ev, ph) => GALLERY + '/galeria/' + ev + '/' + ph,
     eventUrl: ev => GALLERY + '/galeria/' + ev + '/',
