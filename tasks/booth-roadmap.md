@@ -31,7 +31,7 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - m13 Csoportkép-mód · m14 Fekete-fehér glam bőrsimítással
 - m9 Videós vendégkönyv
 
-## 4. fázis – nyomtatás
+## 4. fázis – nyomtatás ✅ (0.6.0, 2026-11-13; galéria 0.4.0: nyomtatási sor)
 - p5 Papírszámláló, figyelmeztetés fogyáskor
 - p6 Nyomtatási korlát vendégenként / rendezvényenként
 - p11 Színprofil a nyomtatóhoz
@@ -84,12 +84,12 @@ Beépítve (0.5.0):
 - Mód szerinti „Készülj!” felirat; külön visszaszámlálás az első és a további képeknél – HALO, Snappic
 - Egy kép újrafotózása a csíkban; „3 pózból a legjobb” – Snappic, Breeze
 - Alapértékek visszaállítása; sarok 3 mp + PIN – Breeze, Fotomaster
+- (0.6.0) Élőkép-keret a nyomat képarányára – Breeze; papír- és nyomtató-állapot az ellenőrzésben és a kezdőképernyőn
 Még hátra (beosztva):
-- Élőkép a nyomat képarányára vágva + keret az élőképen (2. fázis kiegészítés, következő felület-frissítés)
 - Új rendezvény varázsló 3 lépésben (módok → kinézet → nyomat) – Breeze (7. fázis, v8 mellé)
 - Hozzájárulás / adatbekérés a megosztás előtt – HALO (5. fázis, d1/d2)
 - „Később érkezik” üzenet net nélkül; QR azonnal – Touchpix (5. fázis)
-- Állandó állapotsor a kezelőnek: DNP papír, kamera-akku, feltöltés (4. fázis p5 – egyik versenytársnál sincs)
+- Kamera-akku kijelzése (a D5300-hoz, 8. fázis); papír és nyomtató-állapot kész (0.6.0)
 
 ## Döntést igényel
 - AI-szolgáltató és képenkénti költségkeret (6. fázis előtt).
