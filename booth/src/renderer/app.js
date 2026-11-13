@@ -217,7 +217,13 @@
     const s = q.n + 4;
     el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ' + s + ' ' + s + '" shape-rendering="crispEdges" style="display:block"><rect width="' + s + '" height="' + s + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
     /* napló: mekkora lett a QR a képernyőn (hibakereséshez) */
-    requestAnimationFrame(() => { const sv = el.querySelector('svg'), r = sv ? sv.getBoundingClientRect() : null; B.log('QR kirajzolva: ' + q.n + '×' + q.n + ', ' + ones + ' modul, doboz ' + (r ? Math.round(r.width) + '×' + Math.round(r.height) : 'nincs') + ', felület ' + (document.documentElement.dataset.ui || '?')); });
+    requestAnimationFrame(() => {
+      const sv = el.querySelector('svg'), r = sv ? sv.getBoundingClientRect() : null, pr = el.getBoundingClientRect();
+      const info = 'QR ' + q.n + '×' + q.n + ' · ' + ones + ' modul · svg ' + (r ? Math.round(r.width) + '×' + Math.round(r.height) : 'nincs') + ' · doboz ' + Math.round(pr.width) + '×' + Math.round(pr.height) + ' · d ' + d.length;
+      B.log('QR kirajzolva: ' + info);
+      /* ideiglenes: a csempén is látszik (hibakereséshez, a javítás után kivesszük) */
+      const box = el.closest('.qr'); if (box) { let t = box.querySelector('.qrdbg'); if (!t) { t = document.createElement('small'); t.className = 'qrdbg'; t.style.cssText = 'position:absolute;left:8px;bottom:4px;font-size:10px;color:#888'; box.style.position = 'relative'; box.appendChild(t); } t.textContent = info; }
+    });
   }
   async function showQr(box, el, ev, photo) {
     box.hidden = true;
