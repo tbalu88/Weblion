@@ -97,6 +97,8 @@ ipcMain.handle('cloud:events', wrap(async date => cloud.events(date)));
 ipcMain.handle('cloud:template', wrap(async deal => cloud.template(deal)));
 ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl, meta) => cloud.keep(ev, deal, date, photo, dataUrl, meta)));
 ipcMain.handle('cloud:list', wrap(async ev => cloud.list(ev)));
+/* v0.11: képek törlése (gépen: Kuka; kérésre az online galériából is) */
+ipcMain.handle('gal:del', wrap(async (ev, photos, both) => cloud.del(ev, photos, !!both, f => require('electron').shell.trashItem(f))));
 ipcMain.handle('cloud:guest', wrap(async d => cloud.guest(d)));
 ipcMain.handle('cloud:beat', wrap(async d => cloud.beat(d)));
 ipcMain.handle('cloud:ai', wrap(async d => cloud.ai(d)));

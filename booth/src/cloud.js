@@ -74,6 +74,30 @@ function make(o) {
   }
   setInterval(pumpGuests, 20000);
 
+  /* v0.11: törlés az online galériából – sorban, net nélkül is (a gép csak a saját maga által feltöltött képeket törölheti) */
+  const ddir = path.join(o.dataDir, 'deletes'); fs.mkdirSync(ddir, { recursive: true });
+  let dbusy = false, dlast = '';
+  async function pumpDel() {
+    if (dbusy || !o.key()) return { left: fs.readdirSync(ddir).filter(x => x.endsWith('.json')).length, denied: [] };
+    dbusy = true; const denied = [];
+    try {
+      for (const f of fs.readdirSync(ddir).filter(x => x.endsWith('.json')).sort()) {
+        const j = JSON.parse(fs.readFileSync(path.join(ddir, f), 'utf8'));
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+        let r;
+        try { r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1/delete', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, hdr()), body: new URLSearchParams({ ev: j.ev, photos: j.photos.join(',') }).toString(), signal: ctl.signal }); }
+        catch (e) { dlast = 'nincs kapcsolat'; break; } finally { clearTimeout(t); }
+        const b = await r.json().catch(() => ({}));
+        if (r.ok && b.ok) { fs.unlinkSync(path.join(ddir, f)); dlast = ''; (b.denied || []).forEach(x => denied.push(x)); o.log('online galériából törölve: ' + j.ev + ' – ' + (b.deleted || []).length + ' kép' + ((b.denied || []).length ? ', ' + b.denied.length + ' nem ennek a gépnek a képe' : '')); }
+        else if (r.status === 401) { dlast = 'gépkulcs elutasítva'; break; }
+        else if (r.status >= 400 && r.status < 500) { o.log('online törlés elutasítva (' + r.status + '): ' + (b.message || '')); fs.renameSync(path.join(ddir, f), path.join(ddir, f + '.hibas')); }
+        else { dlast = 'szerverhiba ' + r.status; break; }
+      }
+    } catch (e) { dlast = String(e.message || e); } finally { dbusy = false; }
+    return { left: fs.readdirSync(ddir).filter(x => x.endsWith('.json')).length, denied };
+  }
+  setInterval(pumpDel, 30000);
+
   /* v0.6: nyomtatási sor a galérián (nyomtatóállomás) – csak a /print végpontok */
   async function printq(method, p, body) {
     if (!o.key()) throw new Error('Nincs megadva gépkulcs.');
@@ -159,7 +183,29 @@ function make(o) {
     readImage: f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64'),
     /* v0.3.1: a QR mátrixa (a felület rajzolja ki vászonra – nincs képbetöltés) */
     qr: url => { const q = QR.create(url, { errorCorrectionLevel: 'M' }); const m = q.modules; let s = '', k = 0; for (let i = 0; i < m.size * m.size; i++) { const on = m.data[i] ? 1 : 0; k += on; s += on ? '1' : '0'; } o.log('QR: ' + m.size + '×' + m.size + ', ' + k + ' sötét modul'); return { n: m.size, bits: s }; },
-    status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err, guests: fs.readdirSync(gdir).filter(x => x.endsWith('.json')).length, gerr: glast }),
+    status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err, guests: fs.readdirSync(gdir).filter(x => x.endsWith('.json')).length, gerr: glast, dels: fs.readdirSync(ddir).filter(x => x.endsWith('.json')).length, derr: dlast }),
+    /* v0.11: képek törlése a gépről (a rendszer Kukájába – visszaállítható) és kérésre az online galériából (véglegesen).
+     * trash: a fő folyamat shell.trashItem-je. A Kukába nem tehető kép marad (nem törlődik véglegesen helyben). */
+    async del(ev, photos, cloudToo, trash) {
+      const ok = x => /^[a-z0-9]{6,32}$/.test(String(x || ''));
+      if (!ok(ev)) throw new Error('Hibás rendezvény.');
+      const L = [...new Set((photos || []).map(String))].filter(ok).slice(0, 3000);
+      const dir = path.join(o.picDir(), 'galeria-' + ev), done = [], failed = [];
+      for (const ph of L) {
+        const files = [ph + '.jpg', ph + '.mp4', ph + '.webm', ph + '_p.jpg'].map(x => path.join(dir, x)).filter(f => fs.existsSync(f));
+        try { for (const f of files) await trash(f); done.push(ph); } catch (e) { failed.push(ph); o.log('Kukába tétel nem sikerült: ' + ph + ' – ' + e.message); }
+      }
+      /* a még fel nem töltött példány se menjen fel utólag */
+      for (const f of fs.readdirSync(qdir).filter(x => x.endsWith('.json'))) { try { const j = JSON.parse(fs.readFileSync(path.join(qdir, f), 'utf8')); if (j.ev === ev && done.includes(j.photo)) fs.unlinkSync(path.join(qdir, f)); } catch (e) { /* sérült sorfájl: a feltöltő kezeli */ } }
+      let cloud = 'off', denied = [];
+      if (cloudToo && done.length && o.key()) {
+        for (let i = 0; i < done.length; i += 500) fs.writeFileSync(path.join(ddir, Date.now() + '-' + i + '-' + ev + '.json'), JSON.stringify({ ev, photos: done.slice(i, i + 500) }));
+        const r = await Promise.race([pumpDel(), new Promise(res => setTimeout(() => res(null), 20000))]);
+        cloud = r && !r.left ? 'done' : 'queued'; denied = (r && r.denied) || [];
+      }
+      o.log('törlés a gépről: ' + done.length + ' kép' + (failed.length ? ', ' + failed.length + ' nem sikerült' : '') + (cloudToo ? ' · online: ' + cloud : ''));
+      return { trashed: done.length, failed, cloud, denied };
+    },
     pump
   };
 }

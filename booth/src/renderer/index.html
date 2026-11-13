@@ -92,7 +92,7 @@
   </section>
 
   <section class="scr" data-s="gallery">
-    <div class="gl-h"><button type="button" class="big ghost sm" data-act="back">← Vissza</button><h2>Galéria <small data-glinfo></small></h2><div class="gl-qr" data-glqr></div></div>
+    <div class="gl-h"><button type="button" class="big ghost sm" data-act="back">← Vissza</button><h2>Galéria <small data-glinfo></small></h2><div class="gl-tb" data-gltb></div><div class="gl-qr" data-glqr></div></div>
     <div class="gl-grid" data-glgrid></div>
   </section>
   <section class="scr" data-s="photo">
@@ -102,6 +102,7 @@
         <div class="qr" data-phqrbox><div class="qrc" data-phqr role="img" aria-label="QR-kód"></div><span>Olvasd be a telefonoddal,<br>és töltsd le!</span></div>
         <button type="button" class="big pri" data-act="reprint" data-reprint>Nyomtatás</button>
         <button type="button" class="big ghost" data-act="gallery">← Galéria</button>
+        <button type="button" class="big ghost del" data-act="phdel" data-phdel hidden>Törlés</button>
       </div>
     </div>
   </section>
@@ -255,6 +256,8 @@
     </div>
   </section>
   <div class="corner" data-corner title="Beállítások (nyomd 3 mp-ig)"></div>
+  <!-- v0.11: megerősítő ablak (pl. képek törlése) -->
+  <div class="ask" data-ask hidden role="dialog" aria-modal="true" aria-labelledby="ask-t"><div class="ask-c"><h3 id="ask-t" data-askt></h3><p data-askp></p><div class="ask-b" data-askb></div></div></div>
   <div class="err" data-err hidden></div>
 </div>
 <script src="compose.js"></script>

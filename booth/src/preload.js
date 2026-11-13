@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('booth', {
   template: deal => ipcRenderer.invoke('cloud:template', deal),
   keep: (ev, deal, date, photo, dataUrl, meta) => ipcRenderer.invoke('cloud:keep', ev, deal, date, photo, dataUrl, meta),
   list: ev => ipcRenderer.invoke('cloud:list', ev),
+  galDel: (ev, photos, both) => ipcRenderer.invoke('gal:del', ev, photos, both),
   printq: (method, p, body) => ipcRenderer.invoke('cloud:printq', method, p, body),
   guest: d => ipcRenderer.invoke('cloud:guest', d),
   beat: d => ipcRenderer.invoke('cloud:beat', d),

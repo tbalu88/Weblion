@@ -16,7 +16,23 @@
   /* online felület: ha új változat jött, a kezdőképernyőn (tétlenül) töltjük újra */
   function uiSwap() { if (S.busy || S.scr !== 'start' || !B.reloadUi) return; S.uiNew = false; setTimeout(() => { if (!S.busy && S.scr === 'start') B.reloadUi(); else S.uiNew = true; }, 1500); }
   if (B.onUiReady) B.onUiReady(() => { S.uiNew = true; uiSwap(); });
-  function err(m) { S.lastErr = { m: String(m), t: Date.now() }; const e = $('[data-err]'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
+  function err(m) { S.lastErr = { m: String(m), t: Date.now() }; const e = $('[data-err]'); e.classList.remove('ok'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
+  /* v0.11: semleges (nem hiba) visszajelzés ugyanott */
+  function note(m) { const e = $('[data-err]'); e.classList.add('ok'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; e.classList.remove('ok'); }, 7000); B.log(m); }
+  /* v0.11: megerősítő ablak nagy gombokkal; btns: [[érték, felirat, osztály]] → a választott érték, vagy null (Mégse, Esc, háttér) */
+  function ask(title, text, btns) {
+    const box = $('[data-ask]');
+    $('[data-askt]').textContent = title; $('[data-askp]').textContent = text;
+    $('[data-askb]').innerHTML = btns.map((b, i) => '<button type="button" class="big' + (b[2] ? ' ' + b[2] : '') + '" data-askv="' + i + '">' + esc(b[1]) + '</button>').join('');
+    box.hidden = false;
+    return new Promise(res => {
+      const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } };
+      const done = v => { box.hidden = true; box.onclick = null; document.removeEventListener('keydown', key, true); res(v); };
+      document.addEventListener('keydown', key, true);
+      box.onclick = e => { const b = e.target.closest('[data-askv]'); if (b) done(btns[Number(b.dataset.askv)][0] || null); else if (e.target === box) done(null); };
+      const f = box.querySelector('[data-askv]'); if (f) f.focus();
+    });
+  }
   const today = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + '.'; };
 
   /* ---------- élőkép */
@@ -372,6 +388,11 @@
     else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
     else if (act === 'export') { const cfg = {}; EXP_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const blob = new Blob([JSON.stringify({ crazyBooth: 1, at: new Date().toISOString(), cfg, presets: preLoad() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crazy-booth-beallitasok.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); $('[data-stmsg]').textContent = 'Exportálva.'; }
     else if (act === 'gallery') { gallery(); }
+    else if (act === 'glsel') { S.gsel = new Set(); glMark(); glTb(); }
+    else if (act === 'glall') { if (!S.gsel) return; const all = glTiles().map(b => b.dataset.ph); if (S.gsel.size === all.length) S.gsel.clear(); else all.forEach(x => S.gsel.add(x)); glMark(); glTb(); }
+    else if (act === 'glselx') { S.gsel = null; glMark(); glTb(); }
+    else if (act === 'gldel') { if (S.gsel && S.gsel.size) delPhotos([...S.gsel]); }
+    else if (act === 'phdel') { if (S.lastPhoto) delPhotos([S.lastPhoto]); }
     else if (act === 'back') { clearTimeout(S.idleT); show('start'); }
     else if (act === 'reprint') { reprint(); }
     else if (act === 'evload') { evLoad(); }
@@ -480,8 +501,8 @@
   }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   /* ---------- galéria a gépen */
-  async function gallery() {
-    clearTimeout(S.idleT);
+  async function gallery(keepSel) {
+    clearTimeout(S.idleT); if (!keepSel) S.gsel = null;
     const ev = S.cfg.event; show('gallery');
     $('[data-glinfo]').textContent = ev.title || '';
     const grid = $('[data-glgrid]');
@@ -489,6 +510,8 @@
     const fu = f => encodeURI('file://' + f.replace(/\\/g, '/')).replace(/'/g, '%27');
     grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '"' + (p.video ? ' data-v="1" class="vid"' : '') + ' style="background-image:url(\'' + fu(p.video ? (p.poster || '') : p.file) + '\')"></button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
     grid.querySelectorAll('[data-ph]').forEach(b => { const i = new Image(); i.onload = () => b.classList.toggle('land', i.naturalWidth > i.naturalHeight); i.src = b.style.backgroundImage.slice(5, -2); });
+    if (S.gsel) { const have = new Set(L.map(p => p.photo)); [...S.gsel].forEach(x => { if (!have.has(x)) S.gsel.delete(x); }); }
+    glMark(); glTb();
     const q = $('[data-glqr]'); q.innerHTML = '';
     if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<div class="qrc"></div><span>Az összes fotó<br>a telefonodon</span>'; drawQr(q.querySelector('.qrc'), await call(B.qr, u.event)); } catch (e) { /* */ } }
   }
@@ -497,12 +520,46 @@
     im.hidden = !!vid; vv.hidden = !vid; $('[data-reprint]').hidden = !!vid; vv.pause();
     if (vid) { vv.src = encodeURI('file://' + file.replace(/\\/g, '/')); vv.play().catch(() => {}); S.photoSrc = ''; }
     else { const src = await call(B.readImage, file); im.src = src; S.photoSrc = src; }
-    S.lastPhoto = photo;
+    S.lastPhoto = photo; $('[data-phdel]').hidden = !B.galDel;
     $('[data-phqrbox]').hidden = true;
     show('photo');
     if (S.cfg.boothKey) showQr($('[data-phqrbox]'), $('[data-phqr]'), S.cfg.event.ev, photo);
   }
-  $('[data-glgrid]').addEventListener('click', e => { const b = e.target.closest('[data-ph]'); if (b) openPhoto(b.dataset.ph, b.dataset.f, !!b.dataset.v); });
+  $('[data-glgrid]').addEventListener('click', e => {
+    const b = e.target.closest('[data-ph]'); if (!b) return;
+    if (S.gsel) { const ph = b.dataset.ph; if (S.gsel.has(ph)) S.gsel.delete(ph); else S.gsel.add(ph); glMark(); glTb(); return; }
+    openPhoto(b.dataset.ph, b.dataset.f, !!b.dataset.v);
+  });
+  /* ---------- v0.11: képek törlése – kijelölés a galériában (tömegesen is) vagy egy kép nézetéből */
+  const glTiles = () => [...$('[data-glgrid]').querySelectorAll('[data-ph]')];
+  function glMark() {
+    $('[data-glgrid]').classList.toggle('selm', !!S.gsel);
+    glTiles().forEach(b => { const on = !!S.gsel && S.gsel.has(b.dataset.ph); b.classList.toggle('sel', on); if (S.gsel) b.setAttribute('aria-pressed', on ? 'true' : 'false'); else b.removeAttribute('aria-pressed'); });
+  }
+  function glTb() {
+    const tb = $('[data-gltb]'), n = glTiles().length;
+    $('[data-glqr]').hidden = !!S.gsel;
+    if (!B.galDel || !n) { tb.innerHTML = ''; return; }
+    if (!S.gsel) { tb.innerHTML = '<button type="button" class="big ghost sm" data-act="glsel">Kijelölés</button>'; return; }
+    const k = S.gsel.size;
+    tb.innerHTML = '<b>' + k + ' kijelölve</b><button type="button" class="big ghost sm" data-act="glall">' + (k === n ? 'Egyik sem' : 'Mind (' + n + ')') + '</button>' +
+      '<button type="button" class="big sm del" data-act="gldel"' + (k ? '' : ' disabled') + '>Törlés' + (k ? ' (' + k + ')' : '') + '</button><button type="button" class="big ghost sm" data-act="glselx">Kész</button>';
+  }
+  async function delPhotos(L) {
+    const ev = S.cfg.event || {}; if (!ev.ev || !L.length || !B.galDel) return;
+    const n = L.length, online = !!S.cfg.boothKey;
+    const v = await ask(n === 1 ? 'Kép törlése' : n + ' kép törlése',
+      (n === 1 ? 'A kép' : 'A ' + n + ' kép') + ' a gép Kukájába kerül, onnan visszaállítható.' + (online ? ' Az online galériából viszont véglegesen törlődik: a vendégek QR-kódja már nem nyitja meg.' : ''),
+      online ? [['both', 'Törlés a gépről és az online galériából', 'del'], ['local', 'Csak erről a gépről', 'ghost'], ['', 'Mégse', 'ghost']] : [['local', 'Törlés', 'del'], ['', 'Mégse', 'ghost']]);
+    if (!v) return;
+    let r; try { r = await call(B.galDel, ev.ev, L, v === 'both'); } catch (e) { err('A törlés nem sikerült: ' + e.message); return; }
+    await gallery();
+    const parts = [r.trashed + ' kép a Kukába került'];
+    if (v === 'both' && r.trashed) parts.push(r.cloud === 'done' ? 'az online galériából is törölve' : 'az online galériából az internet visszatérése után törlődik');
+    if (r.denied && r.denied.length) parts.push(r.denied.length + ' képet másik gép töltötte fel – azt a panelből törölheted');
+    if (r.failed && r.failed.length) { err(r.failed.length + ' képet nem sikerült a Kukába tenni (lehet, hogy egy másik program épp használja). ' + parts.join(', ') + '.'); return; }
+    note(parts.join(', ') + '.');
+  }
   async function upStatus() { const r = await B.cloudStatus(); if (!r || !r.ok) return ''; const s = r.v; return s.queued ? 'Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : '') : (S.cfg.boothKey ? 'Minden kép feltöltve' + (s.sent ? ' (' + s.sent + ')' : '') : 'Nincs gépkulcs – a képek csak a gépen vannak'); }
   /* ---------- v11: figyelmeztetések a kezdőképernyőn (net, feltöltési sor, gépkulcs, kamera) */
   async function warnings() {
