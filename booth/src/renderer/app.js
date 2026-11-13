@@ -388,6 +388,14 @@
     else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
     else if (act === 'export') { const cfg = {}; EXP_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const blob = new Blob([JSON.stringify({ crazyBooth: 1, at: new Date().toISOString(), cfg, presets: preLoad() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crazy-booth-beallitasok.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); $('[data-stmsg]').textContent = 'Exportálva.'; }
     else if (act === 'gallery') { gallery(); }
+    else if (act === 'sboff') { sbOffline(); }
+    else if (act === 'sbclose') { show('settings'); tplInfo(); }
+    else if (act === 'sbreset') {
+      const ok = await ask('Vissza a panel sablonjára?', 'A gépen szerkesztett sablon törlődik erről a gépről, és újra a panelben mentett sablon lesz érvényes (ha van).', [['y', 'Igen, vissza a panel sablonjára', 'del'], ['', 'Mégse', 'ghost']]);
+      if (!ok) return;
+      await kvSet(sbKey(), undefined); await loadTemplate(); tplInfo(); modeInfo(); $('[data-sbreset]').hidden = true; sbInfo(null);
+      note(S.tpl ? 'Újra a panel sablonja érvényes (' + S.tpl.shots + ' fotó).' : 'A gépen mentett sablon törölve; ennél a rendezvénynél nincs panelsablon – alap keret.');
+    }
     else if (act === 'glsel') { S.gsel = new Set(); glMark(); glTb(); }
     else if (act === 'glall') { if (!S.gsel) return; const all = glTiles().map(b => b.dataset.ph); if (S.gsel.size === all.length) S.gsel.clear(); else all.forEach(x => S.gsel.add(x)); glMark(); glTb(); }
     else if (act === 'glselx') { S.gsel = null; glMark(); glTb(); }
@@ -430,7 +438,7 @@
       const k = np ? np[1] : /^[0-9]$/.test(e.key) ? e.key : e.key === 'Backspace' ? '⌫' : (e.key === 'Enter' || e.code === 'NumpadEnter') ? '✓' : '';
       if (k) { e.preventDefault(); pinKey(k); return; }
     }
-    if (e.key === 'F2') openSettings();
+    if (e.key === 'F2' && S.scr !== 'sbed') openSettings();
     if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery' || S.scr === 'modes') show('start'); else if (S.scr === 'photo') gallery(); }
   });
   $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) startTap(); });
@@ -476,6 +484,11 @@
   async function loadTemplate() {
     S.tpl = null;
     const e = S.cfg.event;
+    /* v0.11: a gépen (internet nélkül is) szerkesztett sablon elsőbbséget kap ennél a rendezvénynél */
+    const loc = e && e.ev ? await kvGet('sbloc:' + e.ev).catch(() => null) : null;
+    if (loc && loc.png) {
+      try { const img = await loadImg(loc.png), h = BoothCompose.holes(img); if (h.holes.length) { S.tpl = Object.assign({ img }, h); S.tplName = 'a gépen szerkesztett'; return; } } catch (x) { B.log('a gépen mentett sablon nem tölthető be: ' + x.message); }
+    }
     if (!e || !e.deal) return;   /* v: a sablon a panelből később is jöhet – mindig megkérdezzük */
     try {
       const t = await call(B.template, e.deal);
@@ -530,6 +543,38 @@
     if (S.gsel) { const ph = b.dataset.ph; if (S.gsel.has(ph)) S.gsel.delete(ph); else S.gsel.add(ph); glMark(); glTb(); return; }
     openPhoto(b.dataset.ph, b.dataset.f, !!b.dataset.v);
   });
+  /* ---------- v0.11: offline sablonszerkesztő – a panel Sablonkészítője a gépen; a mintaképek és a betűk a helyi
+   * adatcsomagból (sablon-adat.js) jönnek, így internet nélkül is működik. A mentett, lyukasztott PNG azonnal a rendezvény sablonja. */
+  const sbKey = () => 'sbloc:' + ((S.cfg.event && S.cfg.event.ev) || 'nincs');
+  const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('A szerkesztő része nem tölthető be (' + src + ').')); document.head.appendChild(s); });
+  function sbInfo(loc) { const ev = S.cfg.event || {}; $('[data-sbinfo]').textContent = (ev.deal ? ev.title : 'Kézi rendezvény') + (loc && loc.png ? ' · a gépen mentett sablon van használatban' + (S.tpl ? ' (' + S.tpl.shots + ' fotó)' : '') : ' · mentés után a gép azonnal ezt használja'); }
+  async function sbOffline() {
+    await ensureEvent();
+    const main = $('[data-sbmain]'); clearTimeout(S.idleT); show('sbed');
+    main.innerHTML = '<p class="sbed-load">A szerkesztő betöltése…</p>';
+    try {
+      if (!document.getElementById('cb-sbcss')) { const l = document.createElement('link'); l.id = 'cb-sbcss'; l.rel = 'stylesheet'; l.href = 'sablon.css'; document.head.appendChild(l); }
+      if (!window.CB_SB_ASSETS) await loadScript('sablon-adat.js');
+      if (!window.CPSablon) { window.CPX = Object.assign(window.CPX || {}, { sb: { client: 1, booth: 1, imgMap: window.CB_SB_ASSETS.img, fontsCss: window.CB_SB_ASSETS.css } }); await loadScript('sablon.js'); }
+    } catch (e) { main.innerHTML = '<p class="sbed-load">' + esc(e.message) + '</p>'; return; }
+    const ev = S.cfg.event || {}, loc = await kvGet(sbKey()).catch(() => null);
+    $('[data-sbreset]').hidden = !(loc && loc.png); sbInfo(loc);
+    window.CPSablon.view(main, {
+      deal: { id: 'gep-' + (ev.ev || 'x'), title: ev.title || '', date: ev.date || '' },
+      saved: loc && loc.snap ? loc.snap : null,
+      logoUrl: loc && /^data:/.test(loc.logo || '') ? loc.logo : '',
+      take: () => '', toast: m => note(m),
+      save: async o => {
+        if (!o.png) throw new Error('A nyomtatható PNG nem készült el.');
+        const prev = await kvGet(sbKey()).catch(() => null), logo = o.logo === 'keep' ? ((prev && prev.logo) || '') : (o.logo || '');
+        await kvSet(sbKey(), { png: o.png, snap: o.snap, logo, at: Date.now() });
+        await loadTemplate(); tplInfo(); modeInfo();
+        if (!S.tpl) throw new Error('A mentett sablonban nem találtam fotóablakot.');
+        $('[data-sbreset]').hidden = false; sbInfo({ png: 1 });
+        B.log('sablon a gépen mentve (' + S.tpl.shots + ' fotó)');
+      }
+    });
+  }
   /* ---------- v0.11: képek törlése – kijelölés a galériában (tömegesen is) vagy egy kép nézetéből */
   const glTiles = () => [...$('[data-glgrid]').querySelectorAll('[data-ph]')];
   function glMark() {

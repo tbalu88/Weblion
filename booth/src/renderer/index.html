@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: mediastream: file:; style-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: mediastream: file:; style-src 'self' 'unsafe-inline'; font-src 'self' data:">
 <title>Crazy Booth</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -107,6 +107,12 @@
     </div>
   </section>
 
+  <!-- v0.11: offline sablonszerkesztő (a panel Sablonkészítője; mintaképek és betűk a gépen) -->
+  <section class="scr" data-s="sbed">
+    <div class="sbed-h"><button type="button" class="big ghost sm" data-act="sbclose">← Vissza a Kezelőbe</button><div class="sbed-t"><b>Sablon szerkesztése – internet nélkül is</b><small data-sbinfo></small></div><button type="button" class="big ghost sm" data-act="sbreset" data-sbreset hidden>Vissza a panel sablonjára</button></div>
+    <div class="sbed-main" data-sbmain></div>
+  </section>
+
   <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Nyomtatás…</b><div class="busybar" data-busybar hidden><div></div></div></div></section>
 
   <section class="scr" data-s="settings">
@@ -146,7 +152,7 @@
               <div class="st-evh"><span>Rendezvény</span><input type="date" data-evdate><button type="button" class="big ghost sm" data-act="evload">Rendezvények betöltése</button></div>
               <div class="st-evl" data-evlist></div>
               <p class="st-msg" data-evmsg></p>
-              <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
+              <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="sboff">Szerkesztés internet nélkül</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
             </div>
             <h3 class="st-h">Kivetítés és megosztó állomás</h3>
             <div class="st-proj" data-proj></div>

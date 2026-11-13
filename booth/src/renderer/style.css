@@ -126,6 +126,30 @@ button{font:inherit;cursor:pointer}
 .ask-c p{margin:0 0 22px;color:var(--mu);font-size:17px;line-height:1.45}
 .ask-b{display:flex;flex-direction:column;gap:12px}
 .ask-b .big{width:100%;height:60px;min-height:60px;font-size:18px;flex:none}
+/* ---------- v0.11: offline sablonszerkesztő (a panel Sablonkészítője, világos felületen, mint a panelben) */
+[data-s=sbed]{background:#F6F3EE;color:#1A1F2B;overflow:auto}
+[data-s=sbed].on{flex-direction:column}
+.sbed-h{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--n2);color:#fff;flex:none}
+.sbed-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sbed-t b{font-size:18px}
+.sbed-t small{color:var(--mu);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbed-main{flex:1;padding:16px 20px 40px;font:14px/1.45 Inter,"Segoe UI",system-ui,sans-serif;user-select:text;-webkit-user-select:text;cursor:auto;color:var(--ink);
+  /* a panel színváltozói (a sablon.css ezekre épül; a gép sötét --mu / --ink értéke itt olvashatatlan lenne) */
+  --n:#141C33;--n2:#1D2747;--o:#E8894A;--ink:#1A1F2B;--mu:#5B6275;--li:#E7E2DA;--bg:#F6F3EE;--ok:#2E9E6A;--okb:#E3F4EB;--mid:#D9902A;--midb:#FCF0DC;--full:#D2463C;--fullb:#FBE3E1}
+.sbed-main button,.sbed-main input,.sbed-main select,.sbed-main textarea{font:inherit;color:inherit}
+.sbed-main [hidden]{display:none!important}   /* mint a panelben: a sablon.css display-szabályai ne írják felül a rejtést */
+.sbed-load{color:#5B6275;font-size:16px}
+.sbed-main .cpx-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 16px;border-radius:999px;border:1px solid #141C33;background:#141C33;color:#fff;font:600 14px Inter,"Segoe UI",system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.sbed-main .cpx-btn.ghost{background:#fff;border-color:#DCD6CC;color:#1A1F2B}
+.sbed-main .cpx-btn.sm{height:32px;padding:0 12px;font-size:13px}
+.sbed-main .cpx-btn[disabled]{background:#9AA0AE;border-color:#9AA0AE;cursor:default}
+.sbed-main .cpx-btn:focus-visible{outline:2px solid #E8894A;outline-offset:2px}
+.sbed-main .cpx-muted{color:#5B6275}
+.sbed-main input,.sbed-main select,.sbed-main textarea{font:inherit;color:#1A1F2B}
+/* az ügyfélportál „ügyfél-módja” szerint: nincs dealválasztó, AI, letöltés (portal.css 132–133. sor) */
+.sbed-main .sb-save-wrap{display:flex;flex-direction:column;gap:6px}
+.sbed-main .sb-client .sb-deal,.sbed-main .sb-client .sb-ai,.sbed-main .sb-client [data-png],.sbed-main .sb-client [data-jpg],.sbed-main .sb-client [data-tp],.sbed-main .sb-client [data-oinfo],.sbed-main .sb-client .sb-holes,.sbed-main .sb-client .sb-pick-top small{display:none!important}
+.sbed-main .sb-client .sb-save-wrap .sb-oinfo{display:block}
 /* ---------- 3. fázis: módválasztó, felvétel, videós előnézet, újrafotózás */
 [data-s=modes]{flex-direction:column;align-items:center;justify-content:center;gap:5vh;background:radial-gradient(circle at 50% 40%,#1E2848 0%,var(--n) 70%);padding:4vh}
 .md-h{font:800 6vh "Segoe UI",sans-serif;margin:0}

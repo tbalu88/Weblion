@@ -22,7 +22,8 @@ const SB = C.sb || {};
 /* v2.9.234: egységes mintafotók – minden sablonhoz ugyanaz a 4 kép (a szerver a bővítményből adja: sablon-minta.php) */
 const PH_ALL = [1, 2, 3, 4].map(n => 'minta-crazy-' + n + '.webp');
 const CLIENT = !!SB.client;   /* ügyfélportál: csak választás + felirat + logó, mentés a portálra */
-const IMG = f => (SB.img || ((C.ajax || '/wp-admin/admin-ajax.php') + '?action=cp_sb_img&f=')) + encodeURIComponent(f);
+/* v2.9.254: a szelfigép offline szerkesztője a képeket a gép adatcsomagjából kapja (data-URL: nincs hálózat, a vászon nem „szennyeződik”) */
+const IMG = f => (SB.imgMap && SB.imgMap[f]) || ((SB.img || ((C.ajax || '/wp-admin/admin-ajax.php') + '?action=cp_sb_img&f=')) + encodeURIComponent(f));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => (n < 10 ? '0' : '') + n;
 const ymdToday = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
@@ -98,6 +99,16 @@ const D = [
 		{ label: 'Álló, 2 kép', ov: 'sablon-ceges-allo-2x.webp', logo: [180, 1560, 840, 150], text: corpT(600, 1665, 96, 950, 1755, 28) },
 		{ label: 'Álló, 1 kép', ov: 'sablon-ceges-allo-1x.webp', logo: [150, 1200, 900, 380], text: corpT(600, 1420, 120, 950, 1660, 34) }] }
 ];
+/* v2.9.254: sima fehér keret (1 kép, 2 kép, 3 képes csík, fekvő) – csak a szelfigép offline szerkesztőjében; az ablakok a „Zöld levél” sablonokéi */
+function plainT(cx, y1, y2, yD, s1, s2, sD, maxW) { return [{ t: 'a', x: cx, y: y1, s: s1, f: SANS, w: '600', c: '#2B2F3A', m: maxW }, { t: 'b', x: cx, y: y2, s: s2, f: SANS, w: '400', c: '#4A5060', m: maxW }, { t: 'c', x: cx, y: yD, s: sD, f: SANS, w: '500', c: '#6B7180', m: maxW }]; }
+if (SB.booth) {
+	SETS.plain = { l: ['Felirat', 'Második sor', 'Dátum'], v: ['Crazy Booth', 'Fotózás', '2026.12.18.'] };
+	D.unshift({ name: 'Sima fehér', set: 'plain', thumb: 'sablon-feher-thumb.png', vars: [
+		{ label: '1 kép', ov: 'sablon-feher-1x.png', text: plainT(590, 1500, 1578, 1668, 72, 46, 36, 960) },
+		{ label: '2 kép', ov: 'sablon-feher-2x.png', text: plainT(590, 1512, 1588, 1676, 68, 44, 34, 960) },
+		{ label: '3 képes csík', ov: 'sablon-feher-csik-3x.png', order: 'col', half: 1, text: cat(plainT(294, 1360, 1424, 1494, 54, 36, 28, 470), plainT(890, 1360, 1424, 1494, 54, 36, 28, 470)) },
+		{ label: 'Fekvő', ov: 'sablon-feher-fekvo.png', text: plainT(900, 990, 1050, 1110, 58, 38, 30, 1500) }] });
+}
 
 /* ------------------------------------------------------------ egyedi (AI-val készült) keretek
  * Álló 1200×1800-as vagy fekvő 1800×1200-as lap (or: 'p' / 'l'), rögzített fotóablakokkal (slots) és felirat-zónával (tz).
@@ -199,6 +210,8 @@ function photos() { return PH_ALL; }   /* v2.9.234: a régi, sablononként elté
 let fontsP = null;
 function fontsReady() {
 	if (fontsP) return fontsP;
+	/* v2.9.254: a gépen a betűk is a helyi adatcsomagból jönnek (internet nélkül is) */
+	if (SB.fontsCss && !document.getElementById('cpsb-font')) { const st2 = document.createElement('style'); st2.id = 'cpsb-font'; st2.textContent = SB.fontsCss; document.head.appendChild(st2); }
 	if (!document.getElementById('cpsb-font')) {
 		const l = document.createElement('link'); l.id = 'cpsb-font'; l.rel = 'stylesheet';
 		l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Cormorant+Infant:wght@500&family=Parisienne&family=Montserrat:wght@400;600;700&family=Cinzel:wght@700&family=Creepster&display=swap';
@@ -1319,7 +1332,7 @@ async function clientStart() {
 	R.classList.add('sb-client');
 	st.mode = 'photo';   /* az ügyfél mintafotókkal látja, hogyan fog kinézni */
 	/* v2.9.234: a mentés gomb az előnézet fejlécében (mindig látszik, nem kell görgetni) */
-	q('.sb-stage-top').insertAdjacentHTML('beforeend', '<div class="sb-save-wrap"><button type="button" class="cpx-btn sb-dl" data-sbsave title="A mentéssel elküldöd nekünk – a nyomtatható változatot a csapatunk készíti el."' + (X.locked ? ' disabled' : '') + '>Sablon mentése</button></div>');
+	q('.sb-stage-top').insertAdjacentHTML('beforeend', '<div class="sb-save-wrap"><button type="button" class="cpx-btn sb-dl" data-sbsave title="' + (SB.booth ? 'Mentés után a gép azonnal ezt a sablont használja ennél a rendezvénynél.' : 'A mentéssel elküldöd nekünk – a nyomtatható változatot a csapatunk készíti el.') + '"' + (X.locked ? ' disabled' : '') + '>' + (SB.booth ? 'Mentés a gépre' : 'Sablon mentése') + '</button></div>');
 	const d = X.deal || null;
 	if (!d) return;
 	st.deal = { id: String(d.id), title: d.title || '', date: d.date || '', note: '', img: '', loading: false, parsed: null, src: '' };
@@ -1344,7 +1357,7 @@ async function clientStart() {
 	window.addEventListener('pagehide', flushSave);
 	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 	if (alive()) { drawAllUi(); schedule(); }
-	if (draft) msg('Visszatöltöttük a legutóbbi szerkesztésedet' + (X.saved && X.saved.d ? ' (még nem küldted el – a „Sablon mentése” gombbal küldheted).' : '. Ha kész, a „Sablon mentése” gombbal küldd el nekünk.'), 'ok');
+	if (draft) msg(SB.booth ? 'Visszatöltöttem a legutóbbi, még nem mentett szerkesztést. Ha kész, nyomd meg a „Mentés a gépre” gombot.' : 'Visszatöltöttük a legutóbbi szerkesztésedet' + (X.saved && X.saved.d ? ' (még nem küldted el – a „Sablon mentése” gombbal küldheted).' : '. Ha kész, a „Sablon mentése” gombbal küldd el nekünk.'), 'ok');
 }
 async function clientSave() {
 	if (!X.save || X.locked) return;
@@ -1370,7 +1383,7 @@ async function clientSave() {
 			png = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => res(''); fr.readAsDataURL(pd); });
 		} catch (e) { png = ''; /* a PNG nélkül is menthető: a panel Sablonkészítőjéből letölthető */ }
 		await X.save({ snap: snapshot(), logo: src === '' ? '' : (/^data:/.test(src) ? src : 'keep'), preview: c2.toDataURL('image/jpeg', 0.85), png: png });
-		msg('✓ Elmentve – megkaptuk a sablonodat. Később is módosíthatod a határidőig.', 'ok');
+		msg(SB.booth ? '✓ Mentve – a gép mostantól ezt a sablont használja ennél a rendezvénynél.' : '✓ Elmentve – megkaptuk a sablonodat. Később is módosíthatod a határidőig.', 'ok');
 	} catch (e) {
 		msg('Nem sikerült menteni: ' + e.message, 'err');
 	} finally { b.disabled = false; b.textContent = label; }

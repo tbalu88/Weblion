@@ -32,7 +32,10 @@ function make(o) {
     try {
       for (const [f, sha] of Object.entries(man.files)) {
         if (!/^[a-z0-9._-]+$/i.test(f)) throw new Error('hibás fájlnév');
-        const b = await get(BASE + encodeURIComponent(f), 30000);
+        /* v0.11: a változatlan fájlt (pl. a sablonszerkesztő 3 MB-os adatcsomagja) nem töltjük le újra */
+        let b = null; const of = path.join(cur, f);
+        if (have && have.files && have.files[f] === sha && fs.existsSync(of)) { const x = fs.readFileSync(of); if (crypto.createHash('sha256').update(x).digest('hex') === sha) b = x; }
+        if (!b) b = await get(BASE + encodeURIComponent(f), 120000);
         if (crypto.createHash('sha256').update(b).digest('hex') !== sha) throw new Error('ellenőrzőösszeg-hiba: ' + f);
         fs.writeFileSync(path.join(tmp, f), b);
       }
