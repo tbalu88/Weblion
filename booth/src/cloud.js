@@ -52,8 +52,23 @@ function make(o) {
   }
   setInterval(pump, 15000);
 
+  /* v0.6: nyomtatási sor a galérián (nyomtatóállomás) – csak a /print végpontok */
+  async function printq(method, p, body) {
+    if (!o.key()) throw new Error('Nincs megadva gépkulcs.');
+    if (!/^\/print(\/(next|status|\d+))?(\?[a-z0-9=&]*)?$/.test(p)) throw new Error('tiltott kérés');
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1' + p, { method, headers: Object.assign({ 'Content-Type': 'application/json' }, hdr()), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 401) throw new Error('A galéria nem fogadja el a gépkulcsot.');
+      if (!r.ok || j.ok === false) throw new Error(j.message || ('Galéria-hiba (' + r.status + ')'));
+      return j;
+    } catch (e) { if (e.name === 'AbortError') throw new Error('A galéria nem válaszol (nincs internet?)'); throw e; } finally { clearTimeout(t); }
+  }
+
   return {
     newTok: tok,
+    printq,
     photoUrl: (ev, ph) => GALLERY + '/galeria/' + ev + '/' + ph,
     eventUrl: ev => GALLERY + '/galeria/' + ev + '/',
     async events(date) { return (await api('/events?date=' + encodeURIComponent(date || ''))).events || []; },

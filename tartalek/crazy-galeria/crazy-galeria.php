@@ -5,11 +5,12 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.3.0');
+define('CG_VER', '0.4.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
 function cg_t() { global $wpdb; return $wpdb->prefix . 'crazy_galeria'; }
+function cg_pt() { global $wpdb; return $wpdb->prefix . 'crazy_print'; }
 function cg_dir() { $u = wp_upload_dir(null, false); return trailingslashit($u['basedir']) . 'crazy-galeria'; }
 function cg_url() { $u = wp_upload_dir(null, false); return trailingslashit($u['baseurl']) . 'crazy-galeria'; }
 function cg_tok_ok($s) { return is_string($s) && preg_match('/^[a-z0-9]{6,32}$/', $s); }
@@ -36,6 +37,22 @@ function cg_install() {
   PRIMARY KEY  (id),
   UNIQUE KEY evphoto (ev, photo),
   KEY ev (ev),
+  KEY created_at (created_at)
+) " . $wpdb->get_charset_collate() . ';');
+	/* v0.4: nyomtatási sor (nyomtatóállomás: a képet egy másik gép nyomtatja) */
+	dbDelta('CREATE TABLE ' . cg_pt() . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  ev varchar(32) NOT NULL,
+  photo varchar(32) NOT NULL,
+  copies tinyint(3) unsigned NOT NULL DEFAULT 1,
+  src varchar(60) NOT NULL DEFAULT '',
+  station varchar(60) NOT NULL DEFAULT '',
+  status varchar(8) NOT NULL DEFAULT 'new',
+  msg varchar(190) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  KEY evst (ev, status),
   KEY created_at (created_at)
 ) " . $wpdb->get_charset_collate() . ';');
 	wp_mkdir_p(cg_dir());
@@ -239,4 +256,52 @@ add_action('cg_cleanup', function () {
 		@unlink(cg_dir() . '/' . $r->ev . '/' . $r->file); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '_t.jpg'); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '.jpg');
 		$wpdb->delete(cg_t(), array('id' => (int) $r->id));
 	}
+});
+
+
+/* ---------- v0.4 nyomtatási sor: a fotózó gép feladja, a nyomtatóállomás (ugyanarra a rendezvényre állított másik gép) kinyomtatja.
+ * Minden hívás gépkulccsal (X-Booth-Key). A kép a galériából jön (a feltöltés után), base64-ben. */
+add_action('rest_api_init', function () {
+	$dev = function () { return cg_device() ? true : new WP_Error('cg_key', 'Ismeretlen vagy letiltott gépkulcs.', array('status' => 401)); };
+	register_rest_route('crazy-galeria/v1', '/print', array('methods' => 'POST', 'permission_callback' => $dev, 'callback' => function ($r) {
+		global $wpdb; $ev = (string) $r->get_param('ev'); $ph = (string) $r->get_param('photo');
+		if (!cg_tok_ok($ev) || !cg_tok_ok($ph)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás azonosító.'), 400); }
+		$now = current_time('mysql', true);
+		$wpdb->insert(cg_pt(), array('ev' => $ev, 'photo' => $ph, 'copies' => max(1, min(10, (int) $r->get_param('copies'))), 'src' => mb_substr((string) cg_device(), 0, 60), 'status' => 'new', 'created_at' => $now, 'updated_at' => $now));
+		$ahead = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cg_pt() . " WHERE ev = %s AND status IN ('new','taken') AND id < %d", $ev, $wpdb->insert_id));
+		return array('ok' => true, 'id' => (int) $wpdb->insert_id, 'ahead' => $ahead);
+	}));
+	register_rest_route('crazy-galeria/v1', '/print/next', array('methods' => 'GET', 'permission_callback' => $dev, 'callback' => function ($r) {
+		global $wpdb; $ev = (string) $r->get_param('ev'); $st = mb_substr((string) cg_device(), 0, 60);
+		if (!cg_tok_ok($ev)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás azonosító.'), 400); }
+		$now = current_time('mysql', true); $pt = cg_pt();
+		/* 3 percnél régebben felvett, de le nem zárt feladat visszakerül a sorba; 3 napnál régebbi lezártak törlése */
+		$wpdb->query($wpdb->prepare("UPDATE $pt SET status = 'new', station = '' WHERE status = 'taken' AND updated_at < %s", gmdate('Y-m-d H:i:s', time() - 180)));
+		$wpdb->query($wpdb->prepare("DELETE FROM $pt WHERE status IN ('done','err') AND updated_at < %s", gmdate('Y-m-d H:i:s', time() - 3 * 86400)));
+		$waiting = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $pt WHERE ev = %s AND status = 'new'", $ev));
+		/* csak a már feltöltött képek */
+		$job = $wpdb->get_row($wpdb->prepare("SELECT p.id, p.photo, p.copies, p.src, g.file FROM $pt p JOIN " . cg_t() . " g ON g.ev = p.ev AND g.photo = p.photo WHERE p.ev = %s AND p.status = 'new' ORDER BY p.id LIMIT 1", $ev));
+		if (!$job) { return array('ok' => true, 'job' => null, 'waiting' => $waiting); }
+		$ok = $wpdb->query($wpdb->prepare("UPDATE $pt SET status = 'taken', station = %s, updated_at = %s WHERE id = %d AND status = 'new'", $st, $now, $job->id));
+		if (!$ok) { return array('ok' => true, 'job' => null, 'waiting' => $waiting); }
+		$f = cg_dir() . '/' . $ev . '/' . $job->file;
+		if (!is_file($f) || !preg_match('/\.jpg$/', $job->file)) { $wpdb->update($pt, array('status' => 'err', 'msg' => 'nincs nyomtatható kép', 'updated_at' => $now), array('id' => $job->id)); return array('ok' => true, 'job' => null, 'waiting' => $waiting - 1); }
+		return array('ok' => true, 'waiting' => $waiting - 1, 'job' => array('id' => (int) $job->id, 'photo' => $job->photo, 'copies' => (int) $job->copies, 'src' => $job->src, 'img' => 'data:image/jpeg;base64,' . base64_encode(file_get_contents($f))));
+	}));
+	register_rest_route('crazy-galeria/v1', '/print/(?P<id>\d+)', array('methods' => 'POST', 'permission_callback' => $dev, 'callback' => function ($r) {
+		global $wpdb; $s = $r->get_param('status') === 'done' ? 'done' : ($r->get_param('status') === 'new' ? 'new' : 'err');
+		$wpdb->update(cg_pt(), array('status' => $s, 'msg' => mb_substr(sanitize_text_field((string) $r->get_param('msg')), 0, 190), 'updated_at' => current_time('mysql', true)), array('id' => (int) $r['id']));
+		return array('ok' => true);
+	}));
+	/* a sor állapota (a fotózó gép és az állomás kijelzőjéhez) */
+	register_rest_route('crazy-galeria/v1', '/print/status', array('methods' => 'GET', 'permission_callback' => $dev, 'callback' => function ($r) {
+		global $wpdb; $ev = (string) $r->get_param('ev'); $pt = cg_pt();
+		if (!cg_tok_ok($ev)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás azonosító.'), 400); }
+		$rows = $wpdb->get_results($wpdb->prepare("SELECT status, COUNT(*) n, SUM(copies) c FROM $pt WHERE ev = %s GROUP BY status", $ev), ARRAY_A);
+		$o = array('new' => 0, 'taken' => 0, 'done' => 0, 'err' => 0, 'copies' => 0);
+		foreach ($rows as $x) { $o[$x['status']] = (int) $x['n']; if ($x['status'] === 'done') { $o['copies'] = (int) $x['c']; } }
+		$o['stations'] = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT station FROM $pt WHERE ev = %s AND station <> '' AND updated_at > %s", $ev, gmdate('Y-m-d H:i:s', time() - 600)));
+		$o['last_err'] = (string) $wpdb->get_var($wpdb->prepare("SELECT msg FROM $pt WHERE ev = %s AND status = 'err' ORDER BY updated_at DESC LIMIT 1", $ev));
+		return array('ok' => true) + $o;
+	}));
 });

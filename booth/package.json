@@ -1,7 +1,7 @@
 {
   "name": "crazy-booth",
   "productName": "Crazy Booth",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "EventCrazy szelfigép-szoftver (Mac: webkamera; Windows: Nikon D5300 vagy webkamera) + DNP DS620",
   "main": "src/main.js",
   "private": true,

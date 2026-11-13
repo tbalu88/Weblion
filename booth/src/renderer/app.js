@@ -8,6 +8,7 @@
   const call = async (fn, ...a) => { const r = await fn(...a); if (!r || !r.ok) throw new Error((r && r.err) || 'ismeretlen hiba'); return r.v; };
 
   function show(s) {
+    if (s === 'start' && isStation()) { s = 'station'; $('[data-stev]').textContent = (S.cfg.event && S.cfg.event.title) || 'nincs rendezvény'; clearTimeout(S.stT); setTimeout(stationLoop, 50); }
     if (S.scr === 'review' && s !== 'review' && s !== 'live' && S.pending) commit();
     document.querySelectorAll('.scr').forEach(x => x.classList.toggle('on', x.dataset.s === s)); S.scr = s; if (s === 'start' && S.uiNew) uiSwap();
   }
@@ -44,7 +45,7 @@
       im.hidden = true; v.hidden = false;
       let st = null;
       try { st = await webStream(); } catch (e) { if (!S.cfg.mock) throw e; }
-      if (st) { if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); }
+      if (st) { if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); const fg = !(MODES[S.mode] && MODES[S.mode].clip); requestAnimationFrame(() => frameGuide(fg)); }
       else { v.hidden = true; im.hidden = false; im.src = mockFrame(); }
       return;
     }
@@ -58,7 +59,7 @@
     };
     tick();
   }
-  async function liveOff() { clearTimeout(S.lvT); if (!WEB()) await B.liveStop(); }
+  async function liveOff() { clearTimeout(S.lvT); frameGuide(false); if (!WEB()) await B.liveStop(); }
   function mockFrame() {
     const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d');
     const gr = g.createLinearGradient(0, 0, 1500, 1000); gr.addColorStop(0, '#2F4A7A'); gr.addColorStop(1, '#E8894A'); g.fillStyle = gr; g.fillRect(0, 0, 1500, 1000);
@@ -262,13 +263,6 @@
     const t = () => { if (S.scr !== 'review') return; $('[data-rvt]').textContent = 'Vissza a kezdéshez ' + left + ' mp múlva'; if (left-- <= 0) { show('start'); return; } S.idleT = setTimeout(t, 1000); };
     t();
   }
-  async function print() {
-    clearTimeout(S.idleT);
-    show('busy'); $('[data-busyt]').textContent = 'Nyomtatás…';
-    try { await call(B.print, BoothCompose.toPrint($('[data-out]')), { copies: S.copies }); $('[data-busyt]').textContent = 'Kész! Vedd ki a fotót a nyomtatóból.'; await sleep(2500); show('start'); }
-    catch (e) { show('review'); err(e.message); idle(); }
-  }
-
   /* ---------- beállítások (PIN) */
   let pinBuf = '';
   function openSettings() {
@@ -291,8 +285,7 @@
     $('[data-evlist]').innerHTML = '<p class="st-msg">' + esc(c.event ? 'Most: ' + c.event.title : '') + '</p>';
     $('[data-upst]').textContent = await upStatus();
     preDraw(); tplInfo(); screenForm(); uiForm(); musicInfo();
-    const pr = await B.printers(); const sel = $('[data-printers]');
-    sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
+    await prForm();
     $('[data-ver2]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
     if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok) $('[data-ver2]').textContent += ' · felület ' + r.v.v + (r.v.online ? ' (online)' : ''); });
   }
@@ -310,6 +303,9 @@
     if (act === 'print') print();
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
     else if (act === 'recstop') { S.recStop = true; }
+    else if (act === 'roll') { paperSet(a.dataset.name, Number($('#u-paperRoll').value) || ROLL()); await prForm(); $('[data-stmsg]').textContent = 'Új tekercs: ' + a.dataset.name + ' – ' + (Number($('#u-paperRoll').value) || ROLL()) + ' lap.'; }
+    else if (act === 'testprint') { const keep = S.cfg.ui; S.cfg.ui = uiCollect(); $('[data-stmsg]').textContent = 'Próbanyomat indul…'; try { await testPrint(a.dataset.name); $('[data-stmsg]').textContent = 'Próbanyomat elküldve: ' + a.dataset.name + '.'; await prForm(); } catch (x) { $('[data-stmsg]').textContent = x.message; } finally { S.cfg.ui = keep; } }
+    else if (act === 'clrreset') { Object.values(CLR).forEach(id => { $('#' + id).value = 0; }); clrLbl(); }
     else if (act === 'pfre') { preflight(); }
     else if (act === 'standby') { standby(); }
     else if (act === 'musicclear') { await kvSet('music', null); musicInfo(); $('[data-stmsg]').textContent = 'Zene törölve.'; }
@@ -331,7 +327,7 @@
     else if (act === 'fs') { e.stopPropagation(); const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
-      ['camera', 'dccUrl', 'printer', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
+      ['camera', 'dccUrl', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
       o.mirror = f.elements.mirror.checked;
       o.boothKey = f.elements.boothKey.value.trim();
       const pick = f.querySelector('input[name=evpick]:checked');
@@ -342,7 +338,7 @@
       }
       ['shots', 'countdown', 'copies', 'reviewSec'].forEach(k => { o[k] = Number(f.elements[k].value) || S.cfg[k]; });
       o.autoPrint = f.elements.autoPrint.checked;
-      o.ui = uiCollect();
+      o.ui = uiCollect(); o.printer = (o.ui.printers && o.ui.printers[0]) || '';
       if (f.elements.pin.value.trim()) o.pin = f.elements.pin.value.trim();
       try { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); await ensureEvent(); await loadTemplate(); $('[data-stmsg]').textContent = 'Mentve.' + (S.tpl ? ' Sablon betöltve (' + S.tpl.shots + ' fotó).' : ''); await initCam(); modeInfo(); }
       catch (x) { $('[data-stmsg]').textContent = x.message; }
@@ -442,12 +438,6 @@
     show('photo');
     if (S.cfg.boothKey) showQr($('[data-phqrbox]'), $('[data-phqr]'), S.cfg.event.ev, photo);
   }
-  async function reprint() {
-    const img = await loadImg(S.photoSrc), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
-    show('busy'); $('[data-busyt]').textContent = 'Nyomtatás…';
-    try { await call(B.print, BoothCompose.toPrint(c), { copies: 1 }); $('[data-busyt]').textContent = 'Kész!'; await sleep(1800); show('photo'); }
-    catch (e) { show('photo'); err(e.message); }
-  }
   $('[data-glgrid]').addEventListener('click', e => { const b = e.target.closest('[data-ph]'); if (b) openPhoto(b.dataset.ph, b.dataset.f, !!b.dataset.v); });
   async function upStatus() { const r = await B.cloudStatus(); if (!r || !r.ok) return ''; const s = r.v; return s.queued ? 'Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : '') : (S.cfg.boothKey ? 'Minden kép feltöltve' + (s.sent ? ' (' + s.sent + ')' : '') : 'Nincs gépkulcs – a képek csak a gépen vannak'); }
   /* ---------- v11: figyelmeztetések a kezdőképernyőn (net, feltöltési sor, gépkulcs, kamera) */
@@ -456,6 +446,7 @@
     if (!navigator.onLine) L.push(['Nincs internet – a képek a gépen várnak, a QR később is működik', 'mid']);
     try { const r = await B.cloudStatus(); if (r && r.ok) { const s = r.v; if (s.queued > 0 && (s.err || !navigator.onLine)) L.push(['Feltöltésre vár: ' + s.queued + ' kép' + (s.err ? ' (' + s.err + ')' : ''), 'mid']); if (s.err && /kulcs/.test(s.err)) L.push(['A gépkulcsot a galéria elutasította – F2 → Gépkulcs', '']); } } catch (e) { /* */ }
     if (WEB() && S.stream && !S.stream.getVideoTracks().some(t => t.readyState === 'live')) L.push(['A kamera kapcsolata megszakadt – húzd ki és dugd vissza, vagy indítsd újra a programot', '']);
+    if (!remote() && !isStation()) printList().forEach(n => { const l = paperLeft(n); if (l === 0) L.push(['Elfogyott a papír' + (printList().length > 1 ? ' (' + pName(n) + ')' : '') + ' – szólj a kezelőnek', '']); else if (l !== null && l <= 30) L.push(['Kevés a papír: ' + l + ' lap' + (printList().length > 1 ? ' (' + pName(n) + ')' : ''), 'mid']); });
     const d = new Date(); if (d.getFullYear() < 2026) L.push(['A gép órája rossz (' + d.toLocaleDateString('hu-HU') + ') – a képek dátuma hibás lesz', '']);
     const w = $('[data-warn]'); w.innerHTML = L.map(x => '<span class="' + x[1] + '">⚠ ' + esc(x[0]) + '</span>').join(''); w.hidden = !L.length;
   }
@@ -539,12 +530,20 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, bestOf: false, retake: true, music: false, getReady: true };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station'], UI_SEL = ['printMode', 'printWhere'], UI_LIM = ['limitPhoto', 'limitEvent'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0 };
+  const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
+  const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
     const u = Object.assign({}, UI_DEF, U()), on = modeList();
     UI_NUM.forEach(k => { $('#u-' + k).value = u[k]; });
     UI_CHK.forEach(k => { $('#u-' + k).checked = !!u[k]; });
+    UI_SEL.concat(UI_LIM).forEach(k => { $('#u-' + k).value = u[k]; });
+    const cl = colorAdj(); Object.keys(CLR).forEach(k => { $('#' + CLR[k]).value = cl[k]; }); clrLbl();
+    const st = $('#u-station'); st.disabled = !B.printq; $('#u-printWhere').querySelector('option[value=station]').disabled = !B.printq;
+    $('[data-stinfo]').textContent = B.printq ? 'A fotózó gépeken a „Hol nyomtasson?” legyen „Nyomtatóállomáson”, és mindegyik ugyanarra a rendezvényre legyen állítva.' : 'A nyomtatóállomáshoz a program 0.6.0-s vagy újabb változata kell.';
+    const ev = (S.cfg.event && S.cfg.event.ev) || '-', pc = counts()[ev];
+    $('[data-prcount]').textContent = 'Ezen a gépen ezen a rendezvényen eddig: ' + ((pc && pc.total) || 0) + ' nyomat.';
     const rec = !!(window.MediaRecorder && window.BoothClips);
     $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => '<label class="mchk' + (MODES[k].clip && !rec ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (MODES[k].clip && !rec ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + MODES[k].sub + '</small></label>').join('');
   }
@@ -552,6 +551,11 @@
     const u = Object.assign({}, U());
     UI_NUM.forEach(k => { const v = Number($('#u-' + k).value); if (v > 0) u[k] = v; });
     UI_CHK.forEach(k => { u[k] = $('#u-' + k).checked; });
+    UI_SEL.forEach(k => { u[k] = $('#u-' + k).value; });
+    UI_LIM.forEach(k => { u[k] = Math.max(0, Number($('#u-' + k).value) || 0); });
+    u.color = {}; Object.keys(CLR).forEach(k => { u.color[k] = Number($('#' + CLR[k]).value) || 0; });
+    const pr = [...document.querySelectorAll('[data-prn]:checked')].map(x => x.dataset.prn); u.printers = pr;
+    if (u.printWhere === 'station' && u.station) u.printWhere = 'local';
     const m = [...document.querySelectorAll('[data-m]:checked')].map(x => x.dataset.m); u.modes = m.length ? m : ['photo'];
     return u;
   }
@@ -561,6 +565,20 @@
     if (f.size > 15 * 1024 * 1024) { $('[data-stmsg]').textContent = 'A zenefájl túl nagy (max. 15 MB).'; return; }
     try { await kvSet('music', { name: f.name, blob: f }); await musicInfo(); $('#u-music').checked = true; $('[data-stmsg]').textContent = 'Zene beállítva – a Mentés gombbal véglegesítsd.'; } catch (x) { $('[data-stmsg]').textContent = 'A zene nem menthető: ' + x.message; }
   });
+
+  /* nyomtatók: kiválasztás, papír (lap), új tekercs, próbanyomat, a rendszer szerinti állapot */
+  const prState = p => { const r = String(p.reasons || ''); if (/media-empty|media-needed/.test(r)) return ['bad', 'kifogyott a papír / szalag']; if (/offline|connecting/.test(r) || p.state === '5') return ['bad', 'nem elérhető (ki van kapcsolva?)']; if (/media-low|marker-supply-low/.test(r)) return ['mid', 'fogy a papír / szalag']; if (p.state === '4') return ['ok', 'nyomtat']; return ['ok', p.state ? 'kész' : '']; };
+  async function prForm() {
+    let L = []; try { L = (await call(B.printers)) || []; } catch (e) { L = []; }
+    S.prSys = L; const sel = printList().filter(Boolean), box = $('[data-prlist]');
+    if (!L.length) { box.innerHTML = '<p class="st-up">Nincs telepített nyomtató ezen a gépen.</p>'; return; }
+    box.innerHTML = L.map(p => { const on = sel.includes(p.name) || (!sel.length && p.def), left = paperLeft(p.name), st = prState(p);
+      return '<div class="pr-i"><label class="chk"><input type="checkbox" data-prn="' + esc(p.name) + '"' + (on ? ' checked' : '') + '> <b>' + esc(p.name) + '</b>' + (p.def ? ' <small>(alapértelmezett)</small>' : '') + (st[1] ? ' <small class="pr-' + st[0] + '">· ' + esc(st[1]) + '</small>' : '') + '</label>' +
+        '<span class="pr-pp">Papír: <input type="number" min="0" max="5000" data-paper="' + esc(p.name) + '" value="' + (left === null ? '' : left) + '" placeholder="–"> lap</span>' +
+        '<button type="button" class="big ghost sm" data-act="roll" data-name="' + esc(p.name) + '">Új tekercs</button><button type="button" class="big ghost sm" data-act="testprint" data-name="' + esc(p.name) + '">Próbanyomat</button></div>'; }).join('');
+  }
+  $('[data-prlist]').addEventListener('change', e => { const i = e.target.closest('[data-paper]'); if (i) { if (i.value === '') { const p = paper(); delete p[i.dataset.paper]; lsSet('cb_paper', p); } else paperSet(i.dataset.paper, i.value); $('[data-stmsg]').textContent = 'Papír: ' + i.dataset.paper + ' – ' + (i.value || 'nincs számolva'); } });
+  Object.values(CLR).forEach(id => $('#' + id).addEventListener('input', clrLbl));
 
   /* indulás előtti ellenőrzés */
   async function preflight() {
@@ -574,8 +592,20 @@
     const ms = modeList(), clips = ms.filter(k => MODES[k].clip);
     if (clips.length) add(window.MediaRecorder ? 'ok' : 'bad', 'Videó', window.MediaRecorder ? (window.BoothClips.pickMime().indexOf('mp4') >= 0 ? 'MP4' : 'WebM') + ' formátumban' : 'ezen a gépen nem készíthető videó');
     if (ms.some(k => !MODES[k].clip)) {
-      try { const pr = ((await B.printers()).v) || []; const name = S.cfg.printer; const p = name ? pr.find(x => x.name === name) : (pr.find(x => x.isDefault) || pr[0]); add(p ? 'ok' : 'bad', 'Nyomtató', p ? p.name + (name ? '' : ' (alapértelmezett)') : (name ? '„' + name + '” nem található' : 'nincs nyomtató')); }
-      catch (e) { add('bad', 'Nyomtató', e.message); }
+      if (remote()) {
+        try { const q = await call(B.printq, 'GET', '/print/status?ev=' + (S.cfg.event && S.cfg.event.ev)); add(q.stations && q.stations.length ? 'ok' : 'mid', 'Nyomtatás', 'nyomtatóállomáson' + (q.stations && q.stations.length ? ' (' + q.stations.join(', ') + ')' : ' – az elmúlt 10 percben nem jelentkezett állomás') + (q.new ? ' · sorban: ' + q.new : '')); }
+        catch (e) { add('bad', 'Nyomtatás', 'nyomtatóállomás: ' + e.message); }
+      } else {
+        try {
+          const pr = ((await B.printers()).v) || [];
+          printList().forEach(name => {
+            const p = name ? pr.find(x => x.name === name) : (pr.find(x => x.def || x.isDefault) || pr[0]);
+            if (!p) { add('bad', 'Nyomtató', name ? '„' + name + '” nem található' : 'nincs nyomtató'); return; }
+            const st = prState(p), left = paperLeft(p.name), lp = left === null ? '' : ' · papír: ' + left + ' lap';
+            add(left === 0 ? 'bad' : st[0] === 'bad' ? 'bad' : (st[0] === 'mid' || (left !== null && left <= 30)) ? 'mid' : 'ok', 'Nyomtató', p.name + (name ? '' : ' (alapértelmezett)') + (st[1] ? ' · ' + st[1] : '') + lp + (left === null ? ' · a papír nincs számolva (Utána fül)' : ''));
+          });
+        } catch (e) { add('bad', 'Nyomtató', e.message); }
+      }
     }
     add(navigator.onLine ? 'ok' : 'mid', 'Internet', navigator.onLine ? 'van kapcsolat' : 'nincs – a képek a gépen várnak, később feltöltődnek');
     add(S.cfg.boothKey ? 'ok' : 'mid', 'Gépkulcs', S.cfg.boothKey ? 'megadva' : 'nincs – QR és online galéria kikapcsolva (Gép fül)');
@@ -602,6 +632,138 @@
     const d = new Date(), now = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     if (now >= S.sbUntil) { S.sbUntil = ''; show('start'); initCam(); }
   }, 15000);
+  /* ---------- 4. fázis: nyomtatás – több nyomtató (felváltva / tartalék), papírszámláló, korlátok, színkorrekció, nyomtatóállomás */
+  const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || d; } catch (e) { return d; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
+  const ROLL = () => Number(U().paperRoll) || 400;   /* DNP DS620 4×6": 400 lap / tekercs */
+  const paper = () => lsGet('cb_paper', {});
+  const paperLeft = name => { const p = paper(); return p[name || ''] == null ? null : Number(p[name || '']); };
+  const paperUse = (name, n) => { const p = paper(), k = name || ''; if (p[k] != null) { p[k] = Math.max(0, p[k] - n); lsSet('cb_paper', p); } };
+  const paperSet = (name, n) => { const p = paper(); p[name || ''] = Math.max(0, Number(n) || 0); lsSet('cb_paper', p); };
+  const printList = () => { const L = (U().printers || []).filter(Boolean); return L.length ? L : [S.cfg.printer || '']; };
+  const pName = n => n || 'alapértelmezett nyomtató';
+  /* nyomtatási korlát: képenként / rendezvényenként (ezen a gépen számolva) */
+  const counts = () => lsGet('cb_prints', {});
+  function allowed(photo, want) {
+    const ev = (S.cfg.event && S.cfg.event.ev) || '-', c = counts()[ev] || { total: 0, ph: {} };
+    let n = want; const lp = Number(U().limitPhoto) || 0, le = Number(U().limitEvent) || 0;
+    if (lp && photo) n = Math.min(n, lp - (c.ph[photo] || 0));
+    if (le) n = Math.min(n, le - c.total);
+    return { n: Math.max(0, n), why: le && c.total >= le ? 'Elértük a rendezvény nyomtatási keretét – a képet QR-ral letöltheted.' : 'Ebből a képből már nem nyomtatható több – QR-ral letöltheted.' };
+  }
+  function counted(photo, n) {
+    const ev = (S.cfg.event && S.cfg.event.ev) || '-', all = counts(), c = all[ev] || { total: 0, ph: {} };
+    c.total += n; if (photo) c.ph[photo] = (c.ph[photo] || 0) + n; all[ev] = c; lsSet('cb_prints', all);
+  }
+  /* színkorrekció (a nyomtató „színprofilja”): fényerő, kontraszt, telítettség, melegség – -10…+10 */
+  const colorAdj = () => Object.assign({ b: 0, c: 0, s: 0, w: 0 }, U().color || {});
+  /* nyomtatás a helyi nyomtató(k)on: sorrend a mód szerint, hiba / papírhiány esetén a következő */
+  async function printLocal(dataUrl, copies) {
+    const L = printList(), mode = U().printMode || 'one';
+    let order = L.slice();
+    if (mode === 'rr' && L.length > 1) { const i = (lsGet('cb_rr', 0) || 0) % L.length; order = L.slice(i).concat(L.slice(0, i)); lsSet('cb_rr', i + 1); }
+    if (mode === 'one') order = [L[0]];
+    let last = null;
+    for (const name of order) {
+      const left = paperLeft(name);
+      if (left !== null && left < copies && order.length > 1) { last = new Error(pName(name) + ': kevés a papír'); continue; }
+      try {
+        await call(B.print, dataUrl, { copies, printer: name || undefined });
+        paperUse(name, copies); B.log('nyomtatva: ' + pName(name) + ' ×' + copies + (left !== null ? ' (papír: ' + Math.max(0, left - copies) + ')' : ''));
+        return name;
+      } catch (e) { last = e; B.log('nyomtatási hiba (' + pName(name) + '): ' + e.message); if (mode === 'one') break; }
+    }
+    throw last || new Error('Nincs elérhető nyomtató');
+  }
+  const remote = () => U().printWhere === 'station' && !!B.printq;
+  /* a vendég nyomtatása: korlát → helyben vagy a nyomtatóállomásra */
+  async function doPrint(canvas, copies, photo) {
+    const a = allowed(photo, copies);
+    if (!a.n) throw new Error(a.why);
+    if (remote()) {
+      const ev = S.cfg.event;
+      await commit();
+      const r = await call(B.printq, 'POST', '/print', { ev: ev.ev, photo, copies: a.n });
+      counted(photo, a.n);
+      return { remote: true, ahead: r.ahead || 0, n: a.n };
+    }
+    const name = await printLocal(BoothCompose.toPrint(canvas, colorAdj()), a.n);
+    counted(photo, a.n);
+    return { name, n: a.n };
+  }
+  async function print() {
+    clearTimeout(S.idleT);
+    show('busy'); $('[data-busyt]').textContent = remote() ? 'Küldés a nyomtatóra…' : 'Nyomtatás…';
+    try {
+      const r = await doPrint($('[data-out]'), S.copies, S.lastPhoto);
+      $('[data-busyt]').textContent = r.remote ? 'Elküldve! A fotót a nyomtatónál veheted át' + (r.ahead ? ' (előtted ' + r.ahead + ' kép).' : '.') : 'Kész! Vedd ki a fotót a nyomtatóból.' + (r.n < S.copies ? ' (' + r.n + ' példány – elérted a keretet)' : '');
+      await sleep(r.remote ? 3500 : 2500); show('start'); warnings();
+    } catch (e) { show('review'); err(e.message); idle(); }
+  }
+  async function reprint() {
+    const img = await loadImg(S.photoSrc), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+    show('busy'); $('[data-busyt]').textContent = 'Nyomtatás…';
+    try { const r = await doPrint(c, 1, S.lastPhoto); $('[data-busyt]').textContent = r.remote ? 'Elküldve a nyomtatóra!' : 'Kész!'; await sleep(1800); show('photo'); }
+    catch (e) { show('photo'); err(e.message); }
+  }
+  /* próbanyomat: színsáv, szürkeskála, bőrtónusok + az utolsó fotó – a színkorrekció beállításához */
+  async function testPrint(name) {
+    const c = document.createElement('canvas'); c.width = 1800; c.height = 1200; const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 1800, 1200);
+    const sw = ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#00FFFF', '#FF00FF', '#FFFF00', '#8D5524', '#C68642', '#E0AC69', '#F1C27D', '#FFDBAC', '#E8894A'];
+    sw.forEach((col, i) => { g.fillStyle = col; g.fillRect(60 + (i % 9) * 186, 60 + Math.floor(i / 9) * 200, 170, 180); g.strokeStyle = '#999'; g.strokeRect(60 + (i % 9) * 186, 60 + Math.floor(i / 9) * 200, 170, 180); });
+    const gr = g.createLinearGradient(60, 0, 1740, 0); gr.addColorStop(0, '#000'); gr.addColorStop(1, '#fff'); g.fillStyle = gr; g.fillRect(60, 480, 1680, 90);
+    const ph = S.shots && S.shots[0];
+    if (ph) { const iw = ph.naturalWidth, ih = ph.naturalHeight, k = Math.min(1000 / iw, 520 / ih); g.drawImage(ph, 60, 610, iw * k, ih * k); }
+    const a = colorAdj();
+    g.fillStyle = '#141C33'; g.font = '700 46px "Segoe UI",sans-serif'; g.fillText('Crazy Booth – próbanyomat', 1100, 680);
+    g.font = '400 32px "Segoe UI",sans-serif'; ['Nyomtató: ' + pName(name), 'Fényerő ' + a.b + ' · Kontraszt ' + a.c, 'Telítettség ' + a.s + ' · Melegség ' + a.w, new Date().toLocaleString('hu-HU')].forEach((t, i) => g.fillText(t, 1100, 750 + i * 50, 660));
+    await call(B.print, BoothCompose.toPrint(c, a), { copies: 1, printer: name || undefined }); paperUse(name, 1);
+  }
+
+  /* ---------- nyomtatóállomás: ez a gép a rendezvény nyomtatási sorát nyomtatja (a fotózó gépek „a nyomtatónál vedd át” módban) */
+  const isStation = () => !!U().station && !!B.printq;
+  async function stationLoop() {
+    if (S.scr !== 'station' || S.stBusy) return;
+    S.stBusy = true; clearTimeout(S.stT);
+    const st = $('[data-ststate]'), ev = S.cfg.event;
+    try {
+      if (!ev || !ev.ev) throw new Error('Válassz rendezvényt (Kezelő → Rendezvény).');
+      const L = printList(), out = L.every(n => paperLeft(n) === 0);
+      if (out) { st.textContent = 'Elfogyott a papír – tölts be új tekercset, majd a Kezelőben: Utána → Új tekercs'; st.className = 'st-state bad'; return; }
+      const r = await call(B.printq, 'GET', '/print/next?ev=' + ev.ev);
+      $('[data-stwait]').textContent = r.waiting || 0;
+      if (r.job) {
+        const j = r.job; st.textContent = 'Nyomtatás: ' + j.copies + ' példány (' + (j.src || 'fotógép') + ')'; st.className = 'st-state';
+        $('[data-stlast]').src = j.img;
+        try {
+          const img = await loadImg(j.img), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+          const name = await printLocal(BoothCompose.toPrint(c, colorAdj()), j.copies);
+          await call(B.printq, 'POST', '/print/' + j.id, { status: 'done', msg: pName(name) });
+          S.stDone = (S.stDone || 0) + j.copies; $('[data-stdone]').textContent = S.stDone;
+          st.textContent = 'Kinyomtatva – várom a következőt'; st.className = 'st-state ok';
+        } catch (e) { await call(B.printq, 'POST', '/print/' + j.id, { status: 'new', msg: e.message }).catch(() => {}); throw e; }
+      } else { st.textContent = 'Várom a képeket…'; st.className = 'st-state ok'; }
+      $('[data-stpaper]').textContent = L.map(n => pName(n) + ': ' + (paperLeft(n) === null ? '–' : paperLeft(n) + ' lap')).join(' · ');
+    } catch (e) { st.textContent = e.message; st.className = 'st-state bad'; B.log('állomás: ' + e.message); }
+    finally { S.stBusy = false; if (S.scr === 'station') S.stT = setTimeout(stationLoop, 4000); }
+  }
+
+  /* ---------- élőkép-keret: a nyomaton látszó rész (a sablon első ablaka / az alap elrendezés képaránya) */
+  function shotAspect() {
+    if (S.tpl && S.tpl.holes && S.tpl.holes[0]) { const h = S.tpl.holes[0]; return h[2] / h[3]; }
+    return Number(S.cfg.shots) >= 3 ? 3 / 2 : 1720 / 950;
+  }
+  function frameGuide(on) {
+    const f = $('[data-lvframe]'), v = $('[data-video]');
+    if (!on || U().frameGuide === false || !v.videoWidth) { f.hidden = true; return; }
+    const box = v.getBoundingClientRect(), va = v.videoWidth / v.videoHeight;
+    let w = box.width, h = box.height; if (w / h > va) w = h * va; else h = w / va;   /* a videó látható része (contain) */
+    const a = shotAspect(); let fw = w, fh = h; if (w / h > a) fw = h * a; else fh = w / a;
+    Object.assign(f.style, { width: fw + 'px', height: fh + 'px', left: (box.left + (box.width - fw) / 2) + 'px', top: (box.top + (box.height - fh) / 2) + 'px' });
+    f.hidden = false;
+  }
+  window.addEventListener('resize', () => { if (S.scr === 'live' && !$('[data-lvframe]').hidden) frameGuide(true); });
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

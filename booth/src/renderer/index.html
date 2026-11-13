@@ -28,8 +28,20 @@
     <div class="sb"><b data-sbmsg>Hamarosan folytatjuk!</b><span data-sbuntil></span></div>
   </section>
 
+  <section class="scr" data-s="station">
+    <div class="sta">
+      <p class="sta-k">Nyomtatóállomás</p>
+      <h2 data-stev>–</h2>
+      <div class="sta-row"><div><b data-stwait>0</b><span>vár a sorban</span></div><div><b data-stdone>0</b><span>kinyomtatva</span></div></div>
+      <p class="st-state" data-ststate>Indul…</p>
+      <img class="sta-img" data-stlast alt="">
+      <p class="sta-p" data-stpaper></p>
+    </div>
+  </section>
+
   <section class="scr" data-s="live">
     <div class="lv"><video data-video autoplay muted playsinline></video><img data-lvimg alt=""></div>
+    <div class="lvframe" data-lvframe hidden></div>
     <div class="cd" data-cd></div>
     <div class="shotno" data-shotno></div>
     <div class="pose" data-pose hidden></div>
@@ -138,14 +150,33 @@
             <label class="chk"><input id="u-music" type="checkbox"> Zene a GIF-hez, boomeranghoz, videóhoz</label>
             <div class="st-b"><label class="big ghost sm st-imp">Zene kiválasztása (mp3, m4a, wav)<input type="file" accept="audio/*" data-musicfile hidden></label><button type="button" class="big ghost sm" data-act="musicclear">Zene törlése</button></div>
             <p class="st-up" data-musicinfo></p>
+            <label class="chk"><input id="u-frameGuide" type="checkbox"> Keret az élőképen: a nyomatra kerülő rész kiemelve</label>
             <label class="chk"><input id="u-getReady" type="checkbox"> „Készülj!” felirat a mód szerint (pl. „3 fotó jön”, „Mozogj!”)</label>
           </div>
 
           <div class="st-pane" data-pane="af">
             <label>Előnézet ideje (mp) – utána vissza a kezdéshez <input name="reviewSec" type="number" min="5" max="120"></label>
-            <label>Nyomtató <select name="printer" data-printers></select></label>
             <label>Példány alapból <input name="copies" type="number" min="1" max="10"></label>
             <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
+            <h3 class="st-h">Nyomtatók és papír</h3>
+            <label>Hol nyomtasson? <select id="u-printWhere"><option value="local">Ezen a gépen (a csatlakoztatott nyomtató)</option><option value="station">Nyomtatóállomáson (másik gép, „a nyomtatónál vedd át”)</option></select></label>
+            <div class="prl" data-prlist></div>
+            <div class="st-row"><label>Több nyomtató esetén <select id="u-printMode"><option value="one">Csak az első</option><option value="rr">Felváltva (terhelés elosztása)</option><option value="backup">Tartalék: ha az első hibás vagy kifogyott, a következő</option></select></label><label>Lap / tekercs (DS620 4×6": 400) <input id="u-paperRoll" type="number" min="10" max="2000"></label></div>
+            <h3 class="st-h">Nyomtatási korlát <small>(0 = nincs korlát)</small></h3>
+            <div class="st-row"><label>Képenként legfeljebb (példány) <input id="u-limitPhoto" type="number" min="0" max="20"></label><label>Rendezvényenként összesen <input id="u-limitEvent" type="number" min="0" max="5000"></label></div>
+            <p class="st-up" data-prcount></p>
+            <h3 class="st-h">Színkorrekció (a nyomtató színprofilja)</h3>
+            <div class="st-row clr">
+              <label>Fényerő <span data-cv="b"></span><input id="u-cb" type="range" min="-10" max="10" step="1"></label>
+              <label>Kontraszt <span data-cv="c"></span><input id="u-cc" type="range" min="-10" max="10" step="1"></label>
+              <label>Telítettség <span data-cv="s"></span><input id="u-cs" type="range" min="-10" max="10" step="1"></label>
+              <label>Melegség <span data-cv="w"></span><input id="u-cw" type="range" min="-10" max="10" step="1"></label>
+            </div>
+            <div class="st-b"><button type="button" class="big ghost sm" data-act="clrreset">Színek alaphelyzetbe</button></div>
+            <p class="st-up">A próbanyomatot a nyomtató sorában indítod; a korrekció a mentés után a vendégek nyomataira is érvényes.</p>
+            <h3 class="st-h">Nyomtatóállomás</h3>
+            <label class="chk"><input id="u-station" type="checkbox"> Ez a gép nyomtatóállomás: a kiválasztott rendezvény nyomtatási sorát nyomtatja (fotózás nélkül)</label>
+            <p class="st-up" data-stinfo></p>
             <p class="st-up" data-upst></p>
           </div>
 

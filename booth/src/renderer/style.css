@@ -177,3 +177,27 @@ button{font:inherit;cursor:pointer}
 .pf-i.mid i{background:#E5A000}.pf-i.bad i{background:#E5484D}
 .pf-i span{color:var(--mu);overflow-wrap:anywhere}
 .st-f.srch .pf{display:none}
+/* ---------- 4. fázis: nyomtatók, állomás, élőkép-keret */
+.lvframe{position:fixed;z-index:1;pointer-events:none;border:2px solid rgba(255,255,255,.85);border-radius:4px;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)}
+.lvframe[hidden]{display:none}
+.prl{display:flex;flex-direction:column;gap:8px}
+.pr-i{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04)}
+.pr-i label.chk{flex:1 1 260px;min-width:0}
+.pr-i label.chk b{overflow-wrap:anywhere}
+.pr-i small{color:var(--mu)}.pr-i small.pr-bad{color:#FF9B92}.pr-i small.pr-mid{color:#F2C46B}
+.pr-pp{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--mu)}
+.pr-pp input{width:84px;height:40px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#0E1220;color:#fff;font-size:16px;padding:0 8px;font-variant-numeric:tabular-nums}
+.pr-i .big.sm{height:40px;min-height:40px;font-size:14px;padding:0 14px}
+.clr label span{color:#fff;font-weight:700;font-variant-numeric:tabular-nums}
+.clr input[type=range]{width:100%;accent-color:var(--o)}
+[data-s=station]{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,#1E2848 0%,var(--n) 70%);padding:4vh}
+.sta{display:flex;flex-direction:column;align-items:center;gap:2vh;text-align:center;max-width:90vw}
+.sta-k{margin:0;color:var(--o);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:2.2vh}
+.sta h2{margin:0;font-size:5vh;overflow-wrap:anywhere}
+.sta-row{display:flex;gap:6vh}.sta-row div{display:flex;flex-direction:column;align-items:center}
+.sta-row b{font-size:9vh;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}.sta-row span{color:var(--mu);font-size:2.2vh}
+.st-state{margin:0;font-size:2.8vh;font-weight:600;padding:1vh 3vh;border-radius:999px;background:rgba(255,255,255,.08)}
+.st-state.ok{background:rgba(48,164,108,.18);color:#7CE0A8}.st-state.bad{background:rgba(194,57,47,.25);color:#FF9B92}
+.sta-img{max-height:34vh;max-width:60vw;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.sta-img:not([src]),.sta-img[src=""]{display:none}
+.sta-p{margin:0;color:var(--mu);font-size:2vh}

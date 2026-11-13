@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('booth', {
   template: deal => ipcRenderer.invoke('cloud:template', deal),
   keep: (ev, deal, date, photo, dataUrl, meta) => ipcRenderer.invoke('cloud:keep', ev, deal, date, photo, dataUrl, meta),
   list: ev => ipcRenderer.invoke('cloud:list', ev),
+  printq: (method, p, body) => ipcRenderer.invoke('cloud:printq', method, p, body),
   readImage: f => ipcRenderer.invoke('cloud:read', f),
   qr: url => ipcRenderer.invoke('cloud:qr', url),
   cloudStatus: () => ipcRenderer.invoke('cloud:status'),

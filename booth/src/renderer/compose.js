@@ -65,11 +65,17 @@
     }
     return cv;
   }
-  /* a nyomtatóra mindig álló 4×6" megy: a fekvő képet elforgatjuk */
-  function toPrint(cv) {
-    if (cv.width <= cv.height) return cv.toDataURL('image/jpeg', 0.95);
-    const p = document.createElement('canvas'); p.width = cv.height; p.height = cv.width;
-    const g = p.getContext('2d'); g.translate(p.width, 0); g.rotate(Math.PI / 2); g.drawImage(cv, 0, 0);
+  /* a nyomtatóra mindig álló 4×6" megy: a fekvő képet elforgatjuk.
+   * adj (v0.6): színkorrekció a nyomtatóhoz – { b fényerő, c kontraszt, s telítettség, w melegség }, mind -10…+10 */
+  function toPrint(cv, adj) {
+    const a = adj || {}, b = Number(a.b) || 0, c = Number(a.c) || 0, s = Number(a.s) || 0, w = Number(a.w) || 0, land = cv.width > cv.height;
+    if (!land && !b && !c && !s && !w) return cv.toDataURL('image/jpeg', 0.95);
+    const p = document.createElement('canvas'); p.width = land ? cv.height : cv.width; p.height = land ? cv.width : cv.height;
+    const g = p.getContext('2d');
+    if (land) { g.translate(p.width, 0); g.rotate(Math.PI / 2); }
+    if (b || c || s) g.filter = 'brightness(' + (1 + b * 0.03) + ') contrast(' + (1 + c * 0.04) + ') saturate(' + (1 + s * 0.06) + ')';
+    g.drawImage(cv, 0, 0); g.filter = 'none';
+    if (w) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'soft-light'; g.fillStyle = w > 0 ? 'rgba(255,138,30,' + (w * 0.035) + ')' : 'rgba(40,120,255,' + (-w * 0.035) + ')'; g.fillRect(0, 0, p.width, p.height); g.globalCompositeOperation = 'source-over'; }
     return p.toDataURL('image/jpeg', 0.95);
   }
   window.BoothCompose = { compose, toPrint, holes };

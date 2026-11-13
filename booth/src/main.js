@@ -72,7 +72,8 @@ ipcMain.handle('shot:save', wrap(async dataUrl => {
   const f = path.join(dir, 'crazy_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '_' + Math.random().toString(36).slice(2, 6) + (mime === 'image/png' ? '.png' : '.jpg'));
   fs.writeFileSync(f, buf); log('mentve: ' + f); return f;
 }));
-ipcMain.handle('print:list', wrap(async () => (await win.webContents.getPrintersAsync()).map(p => ({ name: p.name, def: !!p.isDefault }))));
+/* v0.6: a nyomtató állapota is (Mac/CUPS: printer-state 3 tétlen, 4 nyomtat, 5 leállt; printer-state-reasons pl. media-empty, offline-report) */
+ipcMain.handle('print:list', wrap(async () => (await win.webContents.getPrintersAsync()).map(p => { const op = p.options || {}; return { name: p.name, def: !!p.isDefault, status: p.status, state: op['printer-state'] || '', reasons: op['printer-state-reasons'] || '' }; })));
 /* nyomtatás: 4×6" (DNP DS620); a 2×6"-os csíkvágást a nyomtató-meghajtó papírmérete adja („PR (4x6) 2inch cut”) */
 ipcMain.handle('print:do', wrap(async (dataUrl, o) => {
   o = o || {};
@@ -92,6 +93,7 @@ ipcMain.handle('cloud:events', wrap(async date => cloud.events(date)));
 ipcMain.handle('cloud:template', wrap(async deal => cloud.template(deal)));
 ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl, meta) => cloud.keep(ev, deal, date, photo, dataUrl, meta)));
 ipcMain.handle('cloud:list', wrap(async ev => cloud.list(ev)));
+ipcMain.handle('cloud:printq', wrap(async (method, p, body) => cloud.printq(method, p, body)));
 ipcMain.handle('cloud:read', wrap(async f => cloud.readImage(f)));
 ipcMain.handle('cloud:qr', wrap(async url => cloud.qr(url)));
 ipcMain.handle('cloud:status', wrap(async () => cloud.status()));
