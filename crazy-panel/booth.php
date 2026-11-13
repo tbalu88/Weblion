@@ -178,3 +178,109 @@ function cp_booth_admin() {
 	if (!$devs) { echo '<tr><td colspan="5">Még nincs gép.</td></tr>'; }
 	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form></div>';
 }
+
+/* ---------- v2.9.244: vendégadatok a szelfigépről (név, e-mail, telefon, kérdőív) – CSAK a panelben, a dealhez kötve,
+ * 60 nap után törlődnek; a Salesmate-be nem kerülnek. Ha a vendég kéri, a panel levélküldője elküldi neki a fotója linkjét. */
+function cp_bg_t() { global $wpdb; return $wpdb->prefix . 'cp_booth_guest'; }
+add_action('plugins_loaded', function () {
+	if (get_option('cp_bg_db') === '1') { return; }
+	global $wpdb; require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+	dbDelta('CREATE TABLE ' . cp_bg_t() . " (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  deal bigint(20) unsigned NOT NULL DEFAULT 0,
+  ev varchar(32) NOT NULL DEFAULT '',
+  photo varchar(32) NOT NULL DEFAULT '',
+  name varchar(120) NOT NULL DEFAULT '',
+  email varchar(190) NOT NULL DEFAULT '',
+  phone varchar(40) NOT NULL DEFAULT '',
+  answers text NULL,
+  consent tinyint(1) NOT NULL DEFAULT 0,
+  mail varchar(20) NOT NULL DEFAULT '',
+  device varchar(60) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  KEY deal (deal),
+  KEY created_at (created_at)
+) " . $wpdb->get_charset_collate() . ';');
+	update_option('cp_bg_db', '1', false);
+}, 30);
+/* 60 napos törlés (naponta egyszer) */
+add_action('init', function () {
+	if (get_option('cp_bg_db') !== '1' || get_transient('cp_bg_purge')) { return; }
+	set_transient('cp_bg_purge', 1, DAY_IN_SECONDS);
+	global $wpdb; $wpdb->query($wpdb->prepare('DELETE FROM ' . cp_bg_t() . ' WHERE created_at < %s', gmdate('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS)));
+});
+function cp_bg_mail($row, $title) {
+	$url = 'https://tartalek.eventcrazy.hu/galeria/' . $row['ev'] . '/' . $row['photo'];
+	$gal = 'https://tartalek.eventcrazy.hu/galeria/' . $row['ev'] . '/';
+	$hi = $row['name'] !== '' ? 'Kedves ' . esc_html($row['name']) . '!' : 'Szia!';
+	$t = $title !== '' ? esc_html($title) : 'a rendezvényen';
+	$body = '<p>' . $hi . '</p><p>Itt a fotód, ami ' . ($title !== '' ? 'a(z) <b>' . $t . '</b> rendezvényen' : 'a rendezvényen') . ' készült a szelfigépünkkel:</p>' .
+		'<p style="margin:22px 0"><a href="' . esc_url($url) . '" style="background:#E8894A;color:#141C33;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:bold">A fotóm megnyitása és letöltése</a></p>' .
+		'<p>A rendezvény többi fotója: <a href="' . esc_url($gal) . '">' . esc_html(preg_replace('#^https?://#', '', $gal)) . '</a></p>' .
+		'<p style="color:#666;font-size:13px">A képeket 60 napig őrizzük, utána automatikusan töröljük – addig töltsd le, amit szeretnél megtartani. Ezt a levelet azért kaptad, mert a szelfigépen megadtad az e-mail-címedet.</p>';
+	$doc = '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1A1F2B">' . $body . '<p style="color:#999;font-size:12px">EventCrazy · eventcrazy.hu</p></body></html>';
+	try {
+		$m = cp_send_mailer();
+		$m->addAddress($row['email'], $row['name']);
+		$m->Subject = 'A fotód' . ($title !== '' ? ' – ' . $title : '') . ' 📸';
+		$m->isHTML(true); $m->Body = $doc;
+		$m->AltBody = ($row['name'] !== '' ? 'Kedves ' . $row['name'] . "!\n\n" : '') . "Itt a fotód: " . $url . "\nA rendezvény többi fotója: " . $gal . "\n\nA képeket 60 napig őrizzük.\nEventCrazy";
+		$m->XMailer = 'Crazy panel';
+		$m->send();
+		return 'sent';
+	} catch (\Throwable $ex) { return 'err'; }
+}
+add_action('rest_api_init', function () {
+	register_rest_route('crazy/v1', '/booth/guest', array('methods' => 'POST', 'permission_callback' => function () { return (bool) cp_booth_auth(); }, 'callback' => function (WP_REST_Request $r) {
+		global $wpdb;
+		if (get_option('cp_bg_db') !== '1') { return new WP_REST_Response(array('ok' => false, 'message' => 'A vendégtábla még nem jött létre.'), 503); }
+		$dev = cp_booth_auth(); $deal = (int) $r->get_param('deal'); $ev = (string) $r->get_param('ev'); $ph = (string) $r->get_param('photo');
+		if (!$deal || !preg_match('/^[a-z0-9]{6,32}$/', $ev) || $ev !== cp_booth_gal_tok($deal)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Ismeretlen rendezvény.'), 400); }
+		if ($ph !== '' && !preg_match('/^[a-z0-9]{6,32}$/', $ph)) { $ph = ''; }
+		if (!$r->get_param('consent')) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hozzájárulás nélkül nem tárolunk adatot.'), 400); }
+		$email = sanitize_email((string) $r->get_param('email')); if ($email !== '' && !is_email($email)) { $email = ''; }
+		$row = array('deal' => $deal, 'ev' => $ev, 'photo' => $ph, 'name' => mb_substr(sanitize_text_field((string) $r->get_param('name')), 0, 120), 'email' => mb_substr($email, 0, 190), 'phone' => mb_substr(preg_replace('/[^0-9+ ()\/-]/', '', (string) $r->get_param('phone')), 0, 40), 'consent' => 1, 'mail' => '', 'device' => mb_substr((string) $dev['name'], 0, 60), 'created_at' => current_time('mysql', true));
+		$ans = $r->get_param('answers'); $clean = array();
+		if (is_array($ans)) { foreach (array_slice($ans, 0, 6, true) as $q => $a) { $clean[mb_substr(sanitize_text_field((string) $q), 0, 120)] = mb_substr(sanitize_text_field((string) $a), 0, 300); } }
+		$row['answers'] = $clean ? wp_json_encode($clean, JSON_UNESCAPED_UNICODE) : '';
+		if ($row['name'] === '' && $row['email'] === '' && $row['phone'] === '' && !$clean) { return array('ok' => true, 'skipped' => true); }
+		/* ugyanaz a vendég + kép újraküldése (a gép offline sora) ne duplikáljon és ne küldjön kétszer */
+		$dup = $wpdb->get_row($wpdb->prepare('SELECT id, mail FROM ' . cp_bg_t() . ' WHERE ev = %s AND photo = %s AND email = %s AND name = %s', $ev, $ph, $row['email'], $row['name']), ARRAY_A);
+		if ($dup) { return array('ok' => true, 'id' => (int) $dup['id'], 'mail' => $dup['mail'], 'dup' => true); }
+		$wpdb->insert(cp_bg_t(), $row); $id = (int) $wpdb->insert_id;
+		if ($r->get_param('send') && $row['email'] !== '' && $ph !== '' && function_exists('cp_send_mailer') && cp_send_ready()) {
+			/* visszaélés ellen: gépenként óránként legfeljebb 300 levél */
+			$ck = 'cp_bg_rate_' . md5($row['device']); $n = (int) get_transient($ck);
+			if ($n < 300) { set_transient($ck, $n + 1, HOUR_IN_SECONDS); $row['mail'] = cp_bg_mail($row, mb_substr(sanitize_text_field((string) $r->get_param('title')), 0, 120)); }
+			else { $row['mail'] = 'limit'; }
+			$wpdb->update(cp_bg_t(), array('mail' => $row['mail']), array('id' => $id));
+		}
+		return array('ok' => true, 'id' => $id, 'mail' => $row['mail']);
+	}));
+});
+/* a deal adatlapjára: a vendégadatok száma (a lista CSV-ben tölthető le) */
+add_filter('cp_crm_deal_data', function ($x) {
+	$id = isset($x['deal']['id']) ? (int) $x['deal']['id'] : 0;
+	if ($id && get_option('cp_bg_db') === '1') { global $wpdb; $n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_bg_t() . ' WHERE deal = %d', $id)); if ($n) { $x['guests'] = array('n' => $n, 'mailed' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM " . cp_bg_t() . " WHERE deal = %d AND mail = 'sent'", $id))); } }
+	return $x;
+}, 23);
+add_action('wp_ajax_nopriv_cp_booth_guests', 'cp_booth_ajax_guests'); add_action('wp_ajax_cp_booth_guests', 'cp_booth_ajax_guests');
+function cp_booth_ajax_guests() {
+	cp_crm_ajax_guard(array('deals'));
+	global $wpdb; $deal = (int) ($_POST['deal'] ?? 0);
+	$rows = $deal ? $wpdb->get_results($wpdb->prepare('SELECT name, email, phone, answers, mail, photo, created_at FROM ' . cp_bg_t() . ' WHERE deal = %d ORDER BY id', $deal), ARRAY_A) : array();
+	$qs = array(); foreach ($rows as $x) { $a = json_decode((string) $x['answers'], true); if (is_array($a)) { foreach ($a as $q => $_) { $qs[$q] = 1; } } }
+	$qs = array_keys($qs);
+	$esc = function ($v) { $v = (string) $v; if ($v !== '' && strpos('=+-@', $v[0]) !== false) { $v = "'" . $v; } return '"' . str_replace('"', '""', $v) . '"'; };
+	$out = array(implode(';', array_map($esc, array_merge(array('Időpont', 'Név', 'E-mail', 'Telefon'), $qs, array('Levél', 'Fotó')))));
+	foreach ($rows as $x) {
+		$a = json_decode((string) $x['answers'], true); $a = is_array($a) ? $a : array();
+		$line = array(get_date_from_gmt($x['created_at'], 'Y.m.d. H:i'), $x['name'], $x['email'], $x['phone']);
+		foreach ($qs as $q) { $line[] = $a[$q] ?? ''; }
+		$line[] = $x['mail'] === 'sent' ? 'elküldve' : ($x['mail'] === 'err' ? 'hiba' : ($x['mail'] === 'limit' ? 'korlát' : '')); $line[] = $x['photo'];
+		$out[] = implode(';', array_map($esc, $line));
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_guests_csv', 'Vendégadatok letöltve (' . count($rows) . ' sor)', 'deal:' . $deal, ''); }
+	wp_send_json_success(array('csv' => "\xEF\xBB\xBF" . implode("\r\n", $out), 'n' => count($rows)));
+}

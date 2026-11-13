@@ -95,6 +95,11 @@
 		const inp = sh.querySelector('[data-dfup]'); if (inp) inp.addEventListener('change', () => { send(inp.files); inp.value = ''; });
 		/* v2.9.242: galéria kezelése – cím, jelszó, képek elrejtése */
 		sh.querySelectorAll('[data-galman]').forEach(b => b.addEventListener('click', () => galManage(Number(b.dataset.galman))));
+		/* v2.9.244: vendégadatok letöltése (CSV, Excelben nyitható) */
+		sh.querySelectorAll('[data-guestcsv]').forEach(b => b.addEventListener('click', async () => {
+			try { const r = await post('cp_booth_guests', { deal: Number(b.dataset.guestcsv) }); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' })); a.download = 'vendegek-' + b.dataset.guestcsv + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast(r.n + ' vendég letöltve.'); }
+			catch (e) { toast(e.message, true); }
+		}));
 		/* v2.9.241: galéria-link másolása */
 		sh.querySelectorAll('[data-galcp]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.galcp); b.textContent = '✓ Másolva'; } catch (e) { b.textContent = 'Nem sikerült'; } setTimeout(() => { b.textContent = 'Link másolása'; }, 1800); }));
 		const sec = sh.querySelector('[data-fsec]');
@@ -1886,7 +1891,8 @@
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
 			/* v2.9.241: szelfigép-galéria (Crazy Booth) – link, képek száma, másolás */
-			(x.gal ? '<section class="d3-c"><h4>Fotógaléria <small>' + (x.gal.n >= 0 ? x.gal.n + ' kép' : '') + '</small></h4><p class="d3-gal"><a href="' + esc(x.gal.url) + '" target="_blank" rel="noopener">' + esc(x.gal.url.replace(/^https?:\/\//, '')) + ' ↗</a> <button type="button" class="d3-galcp" data-galcp="' + esc(x.gal.url) + '">Link másolása</button></p><p class="d3-galh">Levélben: <code>{{galeria.link}}</code> · <button type="button" class="d3-galcp" data-galman="' + Number(x.deal.id) + '">Kezelés</button></p></section>' : '') +
+			(x.gal ? '<section class="d3-c"><h4>Fotógaléria <small>' + (x.gal.n >= 0 ? x.gal.n + ' kép' : '') + '</small></h4><p class="d3-gal"><a href="' + esc(x.gal.url) + '" target="_blank" rel="noopener">' + esc(x.gal.url.replace(/^https?:\/\//, '')) + ' ↗</a> <button type="button" class="d3-galcp" data-galcp="' + esc(x.gal.url) + '">Link másolása</button></p><p class="d3-galh">Levélben: <code>{{galeria.link}}</code> · <button type="button" class="d3-galcp" data-galman="' + Number(x.deal.id) + '">Kezelés</button></p></section>' : '') 
+			(x.guests ? '<section class="d3-c"><h4>Vendégadatok <small>' + x.guests.n + ' vendég' + (x.guests.mailed ? ' · ' + x.guests.mailed + ' levél elküldve' : '') + '</small></h4><p class="d3-galh">A szelfigépen megadott adatok (csak itt, a Salesmate-be nem kerülnek; 60 nap után törlődnek). <button type="button" class="d3-galcp" data-guestcsv="' + Number(x.deal.id) + '">Letöltés (CSV)</button></p></section>' : '') +
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
 			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; const up = x.dfiles || []; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length + up.length) + '</small>' + (R.edit ? '<label class="d3-upb" title="Fájl feltöltése a dealhez (PDF, kép, Office, zip – max. 25 MB) – vagy húzd ide"><input type="file" multiple hidden data-dfup>＋ Feltöltés</label>' : '') + '</h4>' + d3FiltBar(fl.concat(up.map(f => ({ n: f.n }))), sbf) + d3UpHtml(up) +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */
