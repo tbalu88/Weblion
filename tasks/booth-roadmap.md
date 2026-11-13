@@ -38,7 +38,8 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - p8 Több nyomtató, terhelés elosztása / tartalék
 - p9 Nyomtatás külön gépről (print szerver), távoli figyelés
 
-## 5. fázis – megosztás és adatgyűjtés
+## 5. fázis – megosztás és adatgyűjtés ✅ (0.7.0, panel 2.9.245, galéria 0.5.0 – 2026-11-13)
+*Döntések: e-mail a panel levélküldőjéről; vendégadat csak a panelbe, a dealhez (Salesmate-be nem); webhook csak linket küld.*
 - h3 E-mail küldése (arculatos) – a panel levélküldőjén át
 - d1 Hozzájárulás / adatkezelési képernyő
 - d2 Kérdőív (név, e-mail, telefon, saját kérdések) – s4 és a4 ezt használja
@@ -84,15 +85,13 @@ Beépítve (0.5.0):
 - Mód szerinti „Készülj!” felirat; külön visszaszámlálás az első és a további képeknél – HALO, Snappic
 - Egy kép újrafotózása a csíkban; „3 pózból a legjobb” – Snappic, Breeze
 - Alapértékek visszaállítása; sarok 3 mp + PIN – Breeze, Fotomaster
+- (0.7.0) Hozzájárulás + adatbekérés, „Rögzítettük, amint lesz internet, elküldjük” – HALO, Touchpix; érintős magyar billentyűzet
 - (0.6.0) Élőkép-keret a nyomat képarányára – Breeze; papír- és nyomtató-állapot az ellenőrzésben és a kezdőképernyőn
 Még hátra (beosztva):
 - Új rendezvény varázsló 3 lépésben (módok → kinézet → nyomat) – Breeze (7. fázis, v8 mellé)
-- Hozzájárulás / adatbekérés a megosztás előtt – HALO (5. fázis, d1/d2)
-- „Később érkezik” üzenet net nélkül; QR azonnal – Touchpix (5. fázis)
 - Kamera-akku kijelzése (a D5300-hoz, 8. fázis); papír és nyomtató-állapot kész (0.6.0)
 
 ## Döntést igényel
 - AI-szolgáltató és képenkénti költségkeret (6. fázis előtt).
-- E-mail: a panel levélküldőjéről menjen (javaslat), feladó és sablon.
 - Galéria saját domainje (pl. galeria.eventcrazy.hu) – DNS-beállítás.
 - 8. fázis tételei: melyik kell valóban, milyen hardverrel.
