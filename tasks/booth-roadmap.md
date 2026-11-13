@@ -49,7 +49,8 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - h5 AirDrop (Mac)
 - h7 Külön megosztó állomás (második eszköz a sornak)
 
-## 6. fázis – AI (a szolgáltató kiválasztása után)
+## 6. fázis – AI ✅ nagyrészt (0.10.0, galéria 0.8.0, panel 2.9.251 – 2026-11-13; modell: Nano Banana 2.1 a felhasználó döntése)
+*Kész: a1 karikatúra, a3 saját prompt rendezvényenként, a4 {nev}/{rendezveny}/{datum} a promptban, a5 stílusválasztás fotózás után, a6 kimenet (AI / AI + eredeti), a11 céges portré, a12 magazinborító/filmplakát/gyűjtőkártya, a15 keret + napló + havi összesítő, a16 AI nélkül is fut (visszaesés az eredeti fotóra). Hátra: a13 arcellenőrzés, a7 AI-háttércsere (saját stílussal már kérhető), z1 zöld háttér, a8 offline háttérkivágás.*
 - a1 AI-karikatúra (elsőként)
 - a3 Saját prompt rendezvényenként · a4 Vendégadat a képben · a5 Stílusválasztás fotózás után · a6 Kimenet választása
 - a12 Magazinborító, filmplakát, gyűjtőkártya · a11 Céges portré
