@@ -225,3 +225,5 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-sbpage .sb-stage-top .sb-dl{width:auto;height:38px;padding:0 20px;font-size:14px}
 .cpp-sbpage .sb-stage-top{flex-wrap:wrap}
 @media (max-width:760px){.cpp-sbpage .sb-stage-top .sb-save-wrap{flex-basis:100%}.cpp-sbpage .sb-stage-top .sb-dl{width:100%}}
+/* 2.2.6: asztali gépen szélesebb tartalom (a felhasználó kérésére); a bevezető szöveg sorhossza olvasható marad */
+@media (min-width:960px){.cpp-main{max-width:880px;padding:24px 24px 48px}.cpp-hero .cpp-lead{max-width:68ch}}
