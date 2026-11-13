@@ -105,7 +105,10 @@
     show('modes');
     clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === 'modes') show('start'); }, 25000);
   }
-  function startTap() { const L = modeList(); if (L.length > 1) modesScreen(); else run(L[0]); }
+  async function startTap() {
+    if (U().formBefore && B.guest && S.cfg.event && S.cfg.event.deal && !S.busy) { const d = await guestForm('before'); if (!d) { show('start'); return; } S.guestPre = d; }
+    const L = modeList(); if (L.length > 1) modesScreen(); else run(L[0]);
+  }
 
   /* glam: fekete-fehér, kontraszt, lágy bőr (elmosott réteg ráúsztatva) */
   async function glamify(img) {
@@ -150,7 +153,7 @@
     } catch (e) {
       await liveOff().catch(() => {});
       $('[data-cd]').textContent = ''; $('[data-shotno]').textContent = ''; pose('');
-      show('start');
+      show('start'); S.guestPre = null;
       if (!(e instanceof Cancel)) err(e.message);
     } finally { S.busy = false; S.cancel = false; }
   }
@@ -180,7 +183,9 @@
   /* a kész kép mentése (helyben + háttérfeltöltés). Ha még cserélhető (választás / újrafotózás), csak kilépéskor vagy 12 mp nyugalom után. */
   async function commit() {
     clearTimeout(S.saveT); const p = S.pending; if (!p) return; S.pending = null;
-    try { await call(B.keep, p.ev.ev, p.ev.deal || 0, p.ev.date || '', p.photo, p.data, p.meta); } catch (e) { err('A kép mentése nem sikerült: ' + e.message); }
+    try { S.lastFile = await call(B.keep, p.ev.ev, p.ev.deal || 0, p.ev.date || '', p.photo, p.data, p.meta); } catch (e) { err('A kép mentése nem sikerült: ' + e.message); return; }
+    /* kérdőív a fotózás előtt: most küldjük be, a kész fotóhoz kötve */
+    if (S.guestPre) { const d = S.guestPre; S.guestPre = null; submitGuest(d, p.photo, !!d.email && !!U().shareEmail).catch(e => B.log('vendégadat: ' + e.message)); }
   }
   async function review(again) {
     const cv = $('[data-out]'), vo = $('[data-outv]');
@@ -191,10 +196,11 @@
     $('[data-cpn]').textContent = S.copies;
     thumbs(); show('review');
     const ev = S.cfg.event;
-    if (!again) { S.lastPhoto = await call(B.newTok, 10); $('[data-qrbox]').hidden = true; if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto); }
+    shareButtons();
+    if (!again) { S.lastPhoto = await call(B.newTok, 10); $('[data-qrbox]').hidden = true; if (S.cfg.boothKey || lanActive()) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto); }
     S.pending = { ev, photo: S.lastPhoto, data: cv.toDataURL('image/jpeg', 0.92), meta: {} };
     const changeable = S.pick || (S.pool && S.pool.length > 1);
-    if (changeable) { clearTimeout(S.saveT); S.saveT = setTimeout(commit, 12000); } else await commit();
+    if (changeable && !lanActive()) { clearTimeout(S.saveT); S.saveT = setTimeout(commit, 12000); } else await commit();
     if (S.cfg.autoPrint && !again && !changeable) { print(); return; }
     idle();
   }
@@ -241,7 +247,7 @@
     } catch (e) {
       await liveOff().catch(() => {});
       rec.hidden = true; stopB.hidden = true; $('[data-cd]').textContent = ''; $('[data-shotno]').textContent = ''; pose('');
-      show('start');
+      show('start'); S.guestPre = null;
       if (!(e instanceof Cancel)) err(e.message);
     } finally { S.busy = false; S.cancel = false; }
   }
@@ -250,10 +256,10 @@
   async function reviewClip(mode) {
     const cv = $('[data-out]'), vo = $('[data-outv]');
     cv.hidden = true; vo.hidden = false; vo.src = URL.createObjectURL(S.clip.blob); vo.muted = mode !== 'guestbook'; vo.play().catch(() => {});
-    $('[data-printui]').hidden = true; $('[data-thumbs]').hidden = true; S.pool = null; S.pick = false;
+    $('[data-printui]').hidden = true; $('[data-thumbs]').hidden = true; S.pool = null; S.pick = false; shareButtons();
     $('[data-qrbox]').hidden = true; show('review');
     const ev = S.cfg.event; S.lastPhoto = await call(B.newTok, 10);
-    if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto);
+    if (S.cfg.boothKey || lanActive()) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto);
     S.pending = { ev, photo: S.lastPhoto, data: await window.BoothClips.blobToDataUrl(S.clip.blob), meta: { poster: S.clip.poster, kind: mode === 'guestbook' ? 'guestbook' : 'video' } };
     await commit();
     idle();
@@ -303,6 +309,10 @@
     if (act === 'print') print();
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
     else if (act === 'recstop') { S.recStop = true; }
+    else if (act === 'email') { emailFlow(); }
+    else if (act === 'airdrop') { airdrop(); }
+    else if (act === 'gfsend') { if (GF) gfSend(); }
+    else if (act === 'gfcancel') { gfDone(null); }
     else if (act === 'roll') { paperSet(a.dataset.name, Number($('#u-paperRoll').value) || ROLL()); await prForm(); $('[data-stmsg]').textContent = 'Új tekercs: ' + a.dataset.name + ' – ' + (Number($('#u-paperRoll').value) || ROLL()) + ' lap.'; }
     else if (act === 'testprint') { const keep = S.cfg.ui; S.cfg.ui = uiCollect(); $('[data-stmsg]').textContent = 'Próbanyomat indul…'; try { await testPrint(a.dataset.name); $('[data-stmsg]').textContent = 'Próbanyomat elküldve: ' + a.dataset.name + '.'; await prForm(); } catch (x) { $('[data-stmsg]').textContent = x.message; } finally { S.cfg.ui = keep; } }
     else if (act === 'clrreset') { Object.values(CLR).forEach(id => { $('#' + id).value = 0; }); clrLbl(); }
@@ -373,8 +383,13 @@
   }
   async function showQr(box, el, ev, photo) {
     box.hidden = true;
-    if (box.dataset.err) { box.classList.remove('err'); delete box.dataset.err; const sp = box.querySelector('span'); if (sp) sp.innerHTML = 'Olvasd be a telefonoddal,<br>és töltsd le' + (box.hasAttribute('data-qrbox') ? ' a fotódat!' : '!'); }
-    try { const u = await call(B.urls, ev, photo); drawQr(el, await call(B.qr, u.photo)); box.hidden = false; }
+    if (box.dataset.err || box.dataset.lan) { box.classList.remove('err'); delete box.dataset.err; delete box.dataset.lan; const sp = box.querySelector('span'); if (sp) sp.innerHTML = 'Olvasd be a telefonoddal,<br>és töltsd le' + (box.hasAttribute('data-qrbox') ? ' a fotódat!' : '!'); }
+    try {
+      const lu = await lanUrl(ev, photo).catch(e => { B.log('helyi QR: ' + e.message); return ''; });
+      if (lu) { drawQr(el, await call(B.qr, lu)); const sp = box.querySelector('span'); if (sp) sp.innerHTML = 'Csatlakozz a(z) <b>' + esc(U().lanSsid || 'gép') + '</b> Wi-Fi-hez,<br>majd olvasd be!'; box.dataset.lan = '1'; box.hidden = false; return; }
+      if (!S.cfg.boothKey) return;
+      const u = await call(B.urls, ev, photo); drawQr(el, await call(B.qr, u.photo)); box.hidden = false;
+    }
     catch (e) {
       B.log('QR hiba: ' + e.message);
       box.hidden = true;   /* hiba esetén nincs csempe (a hiba a naplóban) */
@@ -530,15 +545,20 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station'], UI_SEL = ['printMode', 'printWhere'], UI_LIM = ['limitPhoto', 'limitEvent'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0 };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk'], UI_SEL = ['printMode', 'printWhere', 'askName', 'askPhone', 'lanQr'], UI_LIM = ['limitPhoto', 'limitEvent'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', askPhone: 'off', lanQr: 'off', questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
     const u = Object.assign({}, UI_DEF, U()), on = modeList();
     UI_NUM.forEach(k => { $('#u-' + k).value = u[k]; });
     UI_CHK.forEach(k => { $('#u-' + k).checked = !!u[k]; });
-    UI_SEL.concat(UI_LIM).forEach(k => { $('#u-' + k).value = u[k]; });
+    UI_SEL.concat(UI_LIM, UI_TXT).forEach(k => { $('#u-' + k).value = u[k]; });
+    if (!$('#u-consentText').value) $('#u-consentText').value = CONSENT_DEF;
+    document.querySelectorAll('[data-maconly]').forEach(x => { x.hidden = !S.cfg.mac; });
+    $('#u-shareEmail').disabled = !B.guest; $('#u-formBefore').disabled = !B.guest; $('#u-lanQr').disabled = !B.lanStart;
+    $('[data-laninfo]').textContent = !B.lanStart ? 'Ehhez a program 0.7.0-s vagy újabb változata kell.' : 'A vendég telefonja ugyanazon a Wi-Fi-n legyen, mint a gép (pl. a gép internetmegosztása / hotspotja).';
+    if (B.lanInfo) B.lanInfo().then(r => { if (r && r.ok && r.v.ip) $('[data-laninfo]').textContent += ' A gép címe: ' + r.v.ip + (r.v.on ? ':' + r.v.port + ' (fut)' : ''); });
     const cl = colorAdj(); Object.keys(CLR).forEach(k => { $('#' + CLR[k]).value = cl[k]; }); clrLbl();
     const st = $('#u-station'); st.disabled = !B.printq; $('#u-printWhere').querySelector('option[value=station]').disabled = !B.printq;
     $('[data-stinfo]').textContent = B.printq ? 'A fotózó gépeken a „Hol nyomtasson?” legyen „Nyomtatóállomáson”, és mindegyik ugyanarra a rendezvényre legyen állítva.' : 'A nyomtatóállomáshoz a program 0.6.0-s vagy újabb változata kell.';
@@ -552,6 +572,7 @@
     UI_NUM.forEach(k => { const v = Number($('#u-' + k).value); if (v > 0) u[k] = v; });
     UI_CHK.forEach(k => { u[k] = $('#u-' + k).checked; });
     UI_SEL.forEach(k => { u[k] = $('#u-' + k).value; });
+    UI_TXT.forEach(k => { u[k] = $('#u-' + k).value.trim(); }); if (u.consentText === CONSENT_DEF) u.consentText = '';
     UI_LIM.forEach(k => { u[k] = Math.max(0, Number($('#u-' + k).value) || 0); });
     u.color = {}; Object.keys(CLR).forEach(k => { u.color[k] = Number($('#' + CLR[k]).value) || 0; });
     const pr = [...document.querySelectorAll('[data-prn]:checked')].map(x => x.dataset.prn); u.printers = pr;
@@ -764,6 +785,91 @@
     f.hidden = false;
   }
   window.addEventListener('resize', () => { if (S.scr === 'live' && !$('[data-lvframe]').hidden) frameGuide(true); });
+  /* ---------- 5. fázis: megosztás és adatgyűjtés (e-mail a panel levélküldőjén, vendégadat csak a panelbe, AirDrop, helyi Wi-Fi-s QR) */
+  const CONSENT_DEF = 'Hozzájárulok, hogy az EventCrazy a megadott adataimat a fotó elküldéséhez és a rendezvény szervezőjének átadásához kezelje. Az adatokat 60 nap után töröljük.';
+  const canEmail = () => !!(U().shareEmail && B.guest && S.cfg.boothKey && S.cfg.event && S.cfg.event.deal);
+  const canAir = () => !!(U().airdrop && S.cfg.mac && B.shareMac);
+  const questions = () => String(U().questions || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 3);
+  function shareButtons() { const e = canEmail(), a = canAir(); $('[data-shemail]').hidden = !e; $('[data-shair]').hidden = !a; $('[data-shr]').hidden = !e && !a; }
+  const lanActive = () => !!B.lanStart && (U().lanQr === 'always' || (U().lanQr === 'auto' && !navigator.onLine));
+  async function lanUrl(ev, photo) {
+    if (!lanActive()) return '';
+    const i = await call(B.lanStart, 8787); if (!i || !i.ip) return '';
+    return 'http://' + i.ip + ':' + i.port + '/p/' + ev + '/' + photo;
+  }
+  /* a vendég adatainak beküldése (a gép sorba teszi, net nélkül később megy) */
+  async function submitGuest(d, photo, send) {
+    const ev = S.cfg.event; if (!ev || !ev.deal || !B.guest) return;
+    await call(B.guest, { deal: ev.deal, ev: ev.ev, photo: photo || '', title: ev.title || '', name: d.name || '', email: d.email || '', phone: d.phone || '', answers: d.answers || {}, consent: true, send: !!send });
+    B.log('vendégadat sorba téve' + (send ? ' (e-mail)' : ''));
+  }
+
+  /* űrlap: e-mail / név / telefon / saját kérdések + hozzájárulás; érintős billentyűzettel */
+  let GF = null;
+  function guestForm(mode) {
+    const u = U(), F = [];
+    if (mode === 'send') F.push(['email', 'E-mail-címed', 'email', true]);
+    if (u.askName && u.askName !== 'off') F.push(['name', 'Neved', 'text', u.askName === 'req']);
+    if (mode === 'before' && u.shareEmail) F.push(['email', 'E-mail-címed (ide küldjük a fotót – nem kötelező)', 'email', false]);
+    if (u.askPhone && u.askPhone !== 'off') F.push(['phone', 'Telefonszámod', 'tel', u.askPhone === 'req']);
+    questions().forEach((t, i) => F.push(['q' + i, t, 'text', false]));
+    const osk = u.osk !== false;
+    $('[data-gfh]').textContent = mode === 'send' ? 'Küldés e-mailben' : 'Mielőtt fotózunk…';
+    $('[data-gfsend]').textContent = mode === 'send' ? 'Küldés' : 'Tovább';
+    $('[data-gform]').innerHTML = F.map(f => '<label>' + esc(f[1]) + (f[3] ? ' *' : '') + '<input name="' + f[0] + '" type="' + (f[2] === 'email' ? 'email' : f[2] === 'tel' ? 'tel' : 'text') + '"' + (osk ? ' inputmode="none"' : '') + ' maxlength="' + (f[2] === 'email' ? 190 : 120) + '" spellcheck="false" autocapitalize="off"></label>').join('') +
+      '<label class="gf-c"><input type="checkbox" name="consent"> <span>' + esc(u.consentText || CONSENT_DEF) + '</span></label>';
+    $('[data-gferr]').textContent = ''; $('[data-osk]').hidden = !osk;
+    show('form'); oskDraw();
+    const first = $('[data-gform] input[name]'); if (first) { first.focus(); OSK.t = first; }
+    clearTimeout(S.idleT); const bump = () => { clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === 'form' && GF) gfDone(null); }, 90000); }; bump(); GF && GF.res(null);
+    return new Promise(res => { GF = { mode, res, F, bump }; });
+  }
+  function gfDone(v) { const g = GF; GF = null; clearTimeout(S.idleT); if (g) g.res(v); }
+  function gfSend() {
+    const f = $('[data-gform]'), d = { answers: {} }, E = $('[data-gferr]');
+    for (const x of GF.F) {
+      const v = f.elements[x[0]].value.trim();
+      if (x[3] && !v) { E.textContent = 'Kérjük, add meg: ' + x[1].replace(/ \(.*/, '') + '.'; f.elements[x[0]].focus(); return; }
+      if (x[2] === 'email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { E.textContent = 'Ez az e-mail-cím nem tűnik helyesnek.'; f.elements[x[0]].focus(); return; }
+      if (x[0][0] === 'q') { if (v) d.answers[x[1]] = v; } else d[x[0]] = v;
+    }
+    if (!f.elements.consent.checked) { E.textContent = 'A küldéshez fogadd el a hozzájárulást (lent).'; f.elements.consent.closest('label').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    gfDone(d);
+  }
+  async function emailFlow() {
+    clearTimeout(S.idleT);
+    const d = await guestForm('send');
+    if (!d) { show('review'); idle(); return; }
+    show('busy'); $('[data-busyt]').textContent = 'Küldés…';
+    try { await commit(); await submitGuest(d, S.lastPhoto, true); $('[data-busyt]').textContent = navigator.onLine ? 'Elküldtük! Pár percen belül megérkezik (nézd meg a Promóciók mappát is).' : 'Rögzítettük! Amint lesz internet, elküldjük.'; await sleep(2800); }
+    catch (e) { err(e.message); }
+    show('review'); idle();
+  }
+  async function airdrop() {
+    clearTimeout(S.idleT);
+    try { await commit(); if (!S.lastFile) throw new Error('A kép még nincs mentve'); await call(B.shareMac, S.lastFile); } catch (e) { err(e.message); }
+    idle();
+  }
+  /* érintős billentyűzet (magyar QWERTZ) */
+  const OSK = { t: null, sh: false };
+  const OSK_ROWS = [['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'ö', 'ü', 'ó'], ['q', 'w', 'e', 'r', 't', 'z', 'u', 'i', 'o', 'p', 'ő', 'ú'], ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'é', 'á', 'ű'], ['⇧', 'y', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '-', '⌫'], ['@', '.hu', '.com', '_', '␣', '⏎']];
+  function oskDraw() { $('[data-osk]').innerHTML = OSK_ROWS.map(r => '<div>' + r.map(k => '<button type="button" data-ok="' + esc(k) + '" class="' + (k.length > 1 && k !== '.hu' ? 'w' : '') + (k === '␣' ? ' sp' : '') + (k === '⇧' && OSK.sh ? ' on' : '') + '">' + esc(OSK.sh && k.length === 1 ? k.toUpperCase() : k === '␣' ? 'szóköz' : k) + '</button>').join('') + '</div>').join(''); }
+  $('[data-osk]').addEventListener('pointerdown', e => {
+    const b = e.target.closest('[data-ok]'); if (!b) return; e.preventDefault();
+    const t = OSK.t || $('[data-gform] input[name]'); if (!t) return; if (GF) GF.bump();
+    const k = b.dataset.ok;
+    if (k === '⇧') { OSK.sh = !OSK.sh; oskDraw(); return; }
+    if (k === '⏎') { const L = [...document.querySelectorAll('[data-gform] input[name]:not([type=checkbox])')], i = L.indexOf(t); if (L[i + 1]) { L[i + 1].focus(); OSK.t = L[i + 1]; } else gfSend(); return; }
+    const v = t.value, s0 = t.selectionStart == null ? v.length : t.selectionStart, s1 = t.selectionEnd == null ? v.length : t.selectionEnd;
+    let ins = k === '␣' ? ' ' : k;
+    if (k === '⌫') { const a = s0 === s1 ? Math.max(0, s0 - 1) : s0; t.value = v.slice(0, a) + v.slice(s1); try { t.setSelectionRange(a, a); } catch (x) { /* email mező */ } return; }
+    if (OSK.sh && ins.length === 1) { ins = ins.toUpperCase(); OSK.sh = false; oskDraw(); }
+    if (t.value.length + ins.length > (Number(t.maxLength) > 0 ? t.maxLength : 999)) return;
+    t.value = v.slice(0, s0) + ins + v.slice(s1); try { t.setSelectionRange(s0 + ins.length, s0 + ins.length); } catch (x) { /* email mező */ }
+  });
+  $('[data-gform]').addEventListener('focusin', e => { if (e.target.matches('input[name]:not([type=checkbox])')) OSK.t = e.target; });
+  $('[data-gform]').addEventListener('input', () => { if (GF) GF.bump(); });
+  $('[data-gform]').addEventListener('submit', e => { e.preventDefault(); gfSend(); });
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
   (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

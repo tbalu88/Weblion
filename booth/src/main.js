@@ -29,6 +29,7 @@ let cam = null;
 let win = null;
 let cloud = null;
 let ui = null, uiPending = false;
+let lan = null;
 
 function log(m) {
   const line = new Date().toISOString() + ' ' + String(m).replace(/\s+/g, ' ').slice(0, 2000) + '\n';
@@ -93,6 +94,11 @@ ipcMain.handle('cloud:events', wrap(async date => cloud.events(date)));
 ipcMain.handle('cloud:template', wrap(async deal => cloud.template(deal)));
 ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl, meta) => cloud.keep(ev, deal, date, photo, dataUrl, meta)));
 ipcMain.handle('cloud:list', wrap(async ev => cloud.list(ev)));
+ipcMain.handle('cloud:guest', wrap(async d => cloud.guest(d)));
+/* v0.7: AirDrop / megosztás (Mac: a rendszer megosztás-menüje); helyi Wi-Fi-s QR-szerver */
+ipcMain.handle('share:mac', wrap(async f => { if (!MAC) throw new Error('Csak Macen'); const { ShareMenu } = require('electron'); if (!fs.existsSync(f)) throw new Error('A fájl nem található'); new ShareMenu({ filePaths: [f] }).popup({ window: win }); return true; }));
+ipcMain.handle('lan:start', wrap(async port => lan.start(port)));
+ipcMain.handle('lan:info', wrap(async () => lan.info()));
 ipcMain.handle('cloud:printq', wrap(async (method, p, body) => cloud.printq(method, p, body)));
 ipcMain.handle('cloud:read', wrap(async f => cloud.readImage(f)));
 ipcMain.handle('cloud:qr', wrap(async url => cloud.qr(url)));
@@ -110,6 +116,7 @@ ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win
 /* ---------- ablak */
 app.whenReady().then(() => {
   loadCfg(); makeCam();
+  lan = require('./lan').make({ picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), log });
   cloud = require('./cloud').make({ dataDir: app.getPath('userData'), picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), key: () => cfg.boothKey, log });
   log('indítás ' + app.getVersion() + ' ' + process.platform + (MOCK ? ' (próbamód)' : ''));
   /* webkamera: Macen a rendszer engedélyt kér (Adatvédelem → Kamera); a felületnek a kamera / mikrofon kérését engedjük */

@@ -52,6 +52,28 @@ function make(o) {
   }
   setInterval(pump, 15000);
 
+  /* v0.7: vendégadatok (név, e-mail, kérdőív) a panelbe – sorban, net nélkül is; a panel küldi a fotó-levelet */
+  const gdir = path.join(o.dataDir, 'guests'); fs.mkdirSync(gdir, { recursive: true });
+  let gbusy = false, glast = '';
+  async function pumpGuests() {
+    if (gbusy || !o.key()) return; gbusy = true;
+    try {
+      for (const f of fs.readdirSync(gdir).filter(x => x.endsWith('.json')).sort()) {
+        const body = fs.readFileSync(path.join(gdir, f), 'utf8');
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 45000);
+        let r;
+        try { r = await fetch(PANEL + '/guest', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr()), body, signal: ctl.signal }); }
+        catch (e) { glast = 'nincs kapcsolat'; break; } finally { clearTimeout(t); }
+        const b = await r.json().catch(() => ({}));
+        if (r.ok && b.ok) { fs.unlinkSync(path.join(gdir, f)); glast = ''; o.log('vendégadat elküldve' + (b.mail ? ' (levél: ' + b.mail + ')' : '')); }
+        else if (r.status === 401 || r.status === 403) { glast = 'gépkulcs elutasítva'; break; }
+        else if (r.status >= 400 && r.status < 500) { o.log('vendégadat elutasítva (' + r.status + '): ' + (b.message || '')); fs.renameSync(path.join(gdir, f), path.join(gdir, f + '.hibas')); }
+        else { glast = 'szerverhiba ' + r.status; break; }
+      }
+    } catch (e) { glast = String(e.message || e); } finally { gbusy = false; }
+  }
+  setInterval(pumpGuests, 20000);
+
   /* v0.6: nyomtatási sor a galérián (nyomtatóállomás) – csak a /print végpontok */
   async function printq(method, p, body) {
     if (!o.key()) throw new Error('Nincs megadva gépkulcs.');
@@ -69,6 +91,7 @@ function make(o) {
   return {
     newTok: tok,
     printq,
+    guest(d) { fs.writeFileSync(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), JSON.stringify(d)); setTimeout(pumpGuests, 200); return true; },
     photoUrl: (ev, ph) => GALLERY + '/galeria/' + ev + '/' + ph,
     eventUrl: ev => GALLERY + '/galeria/' + ev + '/',
     async events(date) { return (await api('/events?date=' + encodeURIComponent(date || ''))).events || []; },
@@ -109,7 +132,7 @@ function make(o) {
     readImage: f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64'),
     /* v0.3.1: a QR mátrixa (a felület rajzolja ki vászonra – nincs képbetöltés) */
     qr: url => { const q = QR.create(url, { errorCorrectionLevel: 'M' }); const m = q.modules; let s = '', k = 0; for (let i = 0; i < m.size * m.size; i++) { const on = m.data[i] ? 1 : 0; k += on; s += on ? '1' : '0'; } o.log('QR: ' + m.size + '×' + m.size + ', ' + k + ' sötét modul'); return { n: m.size, bits: s }; },
-    status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err }),
+    status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err, guests: fs.readdirSync(gdir).filter(x => x.endsWith('.json')).length, gerr: glast }),
     pump
   };
 }

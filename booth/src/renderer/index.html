@@ -39,6 +39,15 @@
     </div>
   </section>
 
+  <section class="scr" data-s="form">
+    <div class="gf">
+      <div class="gf-h"><h2 data-gfh>Küldés e-mailben</h2><div class="gf-b"><button type="button" class="big ghost" data-act="gfcancel">Mégse</button><button type="button" class="big pri" data-act="gfsend" data-gfsend>Küldés</button></div></div>
+      <p class="gf-err" data-gferr></p>
+      <form class="gf-f" data-gform autocomplete="off"></form>
+    </div>
+    <div class="osk" data-osk hidden></div>
+  </section>
+
   <section class="scr" data-s="live">
     <div class="lv"><video data-video autoplay muted playsinline></video><img data-lvimg alt=""></div>
     <div class="lvframe" data-lvframe hidden></div>
@@ -60,6 +69,7 @@
         <div class="thumbs" data-thumbs hidden></div>
         <div class="printui" data-printui><button type="button" class="big pri" data-act="print">Nyomtatás</button>
         <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div></div>
+        <div class="shr" data-shr hidden><button type="button" class="big" data-act="email" data-shemail hidden>✉ E-mailben</button><button type="button" class="big" data-act="airdrop" data-shair hidden>AirDrop</button></div>
         <button type="button" class="big" data-act="again">Újra</button>
         <button type="button" class="big ghost" data-act="done">Kész</button>
         <p class="rv-t" data-rvt></p>
@@ -174,6 +184,18 @@
             </div>
             <div class="st-b"><button type="button" class="big ghost sm" data-act="clrreset">Színek alaphelyzetbe</button></div>
             <p class="st-up">A próbanyomatot a nyomtató sorában indítod; a korrekció a mentés után a vendégek nyomataira is érvényes.</p>
+            <h3 class="st-h">Megosztás és adatgyűjtés</h3>
+            <label class="chk"><input id="u-shareEmail" type="checkbox"> „Küldés e-mailben” gomb – a panel levélküldője küldi a fotó linkjét</label>
+            <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop gomb (Mac: a vendég iPhone-jára)</label>
+            <div class="st-row"><label>Név bekérése <select id="u-askName"><option value="off">Nem kérjük</option><option value="opt">Nem kötelező</option><option value="req">Kötelező</option></select></label><label>Telefonszám bekérése <select id="u-askPhone"><option value="off">Nem kérjük</option><option value="opt">Nem kötelező</option><option value="req">Kötelező</option></select></label></div>
+            <label>Saját kérdések (soronként egy, legfeljebb 3) <textarea id="u-questions" rows="3" maxlength="300" placeholder="pl. Honnan ismered az ifjú párt?"></textarea></label>
+            <label class="chk"><input id="u-formBefore" type="checkbox"> Adatbekérés már a fotózás előtt (kérdőív)</label>
+            <label>Hozzájárulás szövege <textarea id="u-consentText" rows="3" maxlength="400"></textarea></label>
+            <label class="chk"><input id="u-osk" type="checkbox"> Képernyő-billentyűzet az űrlapon (érintőképernyőhöz)</label>
+            <p class="st-up">A vendégadat csak a panelbe kerül, a dealhez (Salesmate-be nem), és 60 nap után törlődik. Letöltés: a deal adatlapján, „Vendégadatok”.</p>
+            <h3 class="st-h">Internet nélküli QR</h3>
+            <div class="st-row"><label>QR a helyi Wi-Fi-ről <select id="u-lanQr"><option value="off">Ki</option><option value="auto">Csak ha nincs internet</option><option value="always">Mindig</option></select></label><label>A Wi-Fi neve a vendégeknek <input id="u-lanSsid" maxlength="40" placeholder="pl. EventCrazy-Foto"></label></div>
+            <p class="st-up" data-laninfo></p>
             <h3 class="st-h">Nyomtatóállomás</h3>
             <label class="chk"><input id="u-station" type="checkbox"> Ez a gép nyomtatóállomás: a kiválasztott rendezvény nyomtatási sorát nyomtatja (fotózás nélkül)</label>
             <p class="st-up" data-stinfo></p>

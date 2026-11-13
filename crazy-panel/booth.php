@@ -145,7 +145,7 @@ function cp_booth_ajax_gal() {
 	if (!$deal || !cp_booth_gal_has($deal)) { cp_el_err('Ennek a dealnek még nincs galériája.', 404); }
 	$ev = cp_booth_gal_tok($deal);
 	$body = null;
-	foreach (array('title', 'password', 'photo', 'hidden') as $k) { if (isset($_POST[$k])) { $body[$k] = sanitize_text_field(wp_unslash((string) $_POST[$k])); } }
+	foreach (array('title', 'password', 'photo', 'hidden', 'hook') as $k) { if (isset($_POST[$k])) { $body[$k] = sanitize_text_field(wp_unslash((string) $_POST[$k])); } }
 	if ($body && isset($body['password']) && function_exists('cp_audit_add')) { cp_audit_add('deal', 'gal_pw', $body['password'] === '' ? 'Galéria jelszava törölve' : 'Galéria jelszava beállítva', 'deal:' . $deal, ''); }
 	$r = cp_booth_gal_api($body ? 'POST' : 'GET', $ev, $body);
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 502); }
