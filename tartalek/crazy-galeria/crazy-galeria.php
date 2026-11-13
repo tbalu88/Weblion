@@ -2,10 +2,10 @@
 /**
  * Plugin Name: Crazy galéria (szelfigépek)
  * Description: A Crazy Booth szelfigépek felhő-galériája: a gépek ide töltik fel a képeket (gépkulccsal, amit az eventcrazy.hu panel ellenőriz), a vendégek a QR-kóddal a /galeria/<rendezvény>/<kép> oldalon töltik le. A képek 60 nap után törlődnek.
- * Version: 0.1.0
+ * Version: 0.2.0 (ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.1.0');
+define('CG_VER', '0.2.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -30,6 +30,7 @@ function cg_install() {
   w int(10) unsigned NOT NULL DEFAULT 0,
   h int(10) unsigned NOT NULL DEFAULT 0,
   bytes int(10) unsigned NOT NULL DEFAULT 0,
+  hidden tinyint(1) NOT NULL DEFAULT 0,
   created_at datetime NOT NULL,
   PRIMARY KEY  (id),
   UNIQUE KEY evphoto (ev, photo),
@@ -62,14 +63,44 @@ function cg_device() {
 	return null;
 }
 
+/* ---------- rendezvény-beállítások (a panelből): cím, jelszó (hash) */
+function cg_evset($ev) { $a = get_option('cg_events', array()); return is_array($a) && isset($a[$ev]) && is_array($a[$ev]) ? $a[$ev] : array(); }
+function cg_evset_put($ev, $v) { $a = get_option('cg_events', array()); if (!is_array($a)) { $a = array(); } $a[$ev] = $v; update_option('cg_events', $a, false); }
+/* a panel kulcsa (a panelben „Panel” nevű gép) – csak az kezelheti a galériát */
+function cg_is_panel() { $d = cg_device(); return $d === 'Panel'; }
+/* jelszavas galéria: süti a helyes jelszó után (30 nap) */
+function cg_unlocked($ev) {
+	$s = cg_evset($ev); if (empty($s['pw'])) { return true; }
+	$c = isset($_COOKIE['cg_' . $ev]) ? (string) $_COOKIE['cg_' . $ev] : '';
+	return $c !== '' && hash_equals(hash_hmac('sha256', $ev . '|' . $s['pw'], wp_salt('auth')), $c);
+}
+
 /* ---------- feltöltés: POST /wp-json/crazy-galeria/v1/upload (multipart: ev, photo, deal, date, file) */
 add_action('rest_api_init', function () {
 	register_rest_route('crazy-galeria/v1', '/upload', array('methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => 'cg_upload'));
 	register_rest_route('crazy-galeria/v1', '/event/(?P<ev>[a-z0-9]{6,32})', array('methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function ($r) {
 		global $wpdb;
-		$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, created_at FROM ' . cg_t() . ' WHERE ev = %s ORDER BY id DESC LIMIT 2000', $r['ev']), ARRAY_A);
-		return array('ev' => $r['ev'], 'n' => count($rows), 'url' => home_url('/galeria/' . $r['ev'] . '/'), 'photos' => array_column($rows, 'photo'));
+		$n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0', $r['ev']));
+		return array('ev' => $r['ev'], 'n' => $n, 'url' => home_url('/galeria/' . $r['ev'] . '/'));
 	}));
+	/* kezelés a panelből (csak a panel kulcsával): képek listája + beállítások; beállítás; elrejtés */
+	register_rest_route('crazy-galeria/v1', '/admin/(?P<ev>[a-z0-9]{6,32})', array(
+		array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
+			global $wpdb; $ev = $r['ev']; $s = cg_evset($ev);
+			$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, hidden, device, created_at FROM ' . cg_t() . ' WHERE ev = %s ORDER BY id DESC LIMIT 3000', $ev), ARRAY_A);
+			foreach ($rows as &$x) { $x['thumb'] = cg_url() . '/' . $ev . '/' . $x['photo'] . '_t.jpg'; $x['hidden'] = (int) $x['hidden']; } unset($x);
+			return array('ev' => $ev, 'title' => (string) ($s['title'] ?? ''), 'has_pw' => !empty($s['pw']), 'photos' => $rows, 'url' => home_url('/galeria/' . $ev . '/'));
+		}),
+		array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
+			global $wpdb; $ev = $r['ev']; $s = cg_evset($ev);
+			if ($r->get_param('title') !== null) { $s['title'] = mb_substr(sanitize_text_field((string) $r->get_param('title')), 0, 120); }
+			if ($r->get_param('password') !== null) { $pw = trim((string) $r->get_param('password')); if ($pw === '') { unset($s['pw']); } else { $s['pw'] = wp_hash_password($pw); } }
+			cg_evset_put($ev, $s);
+			$ph = (string) $r->get_param('photo');
+			if ($ph !== '' && cg_tok_ok($ph) && $r->get_param('hidden') !== null) { $wpdb->update(cg_t(), array('hidden' => $r->get_param('hidden') ? 1 : 0), array('ev' => $ev, 'photo' => $ph)); }
+			return array('ok' => true, 'has_pw' => !empty($s['pw']), 'title' => (string) ($s['title'] ?? ''));
+		}),
+	));
 });
 function cg_upload(WP_REST_Request $req) {
 	global $wpdb;
@@ -101,12 +132,34 @@ function cg_upload(WP_REST_Request $req) {
 /* ---------- nyilvános oldalak: /galeria/<ev>/ és /galeria/<ev>/<kép> (?dl=1 letöltés) */
 add_action('init', function () {
 	$p = (string) parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '', PHP_URL_PATH);
-	if (!preg_match('#^/galeria/([a-z0-9]{6,32})(?:/([a-z0-9]{6,32}))?/?$#', $p, $m)) { return; }
+	if (!preg_match('#^/galeria/([a-z0-9]{6,32})(?:/([a-z0-9]{6,32}|zip))?/?$#', $p, $m)) { return; }
 	nocache_headers(); header('X-Robots-Tag: noindex, nofollow', true);
 	global $wpdb;
 	$ev = $m[1]; $ph = isset($m[2]) ? $m[2] : '';
+	/* jelszó beküldése */
+	if ($ph === '' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pw'])) {
+		$s = cg_evset($ev);
+		if (!empty($s['pw']) && wp_check_password(wp_unslash((string) $_POST['pw']), $s['pw'])) {
+			setcookie('cg_' . $ev, hash_hmac('sha256', $ev . '|' . $s['pw'], wp_salt('auth')), array('expires' => time() + 30 * DAY_IN_SECONDS, 'path' => '/galeria/' . $ev . '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax'));
+			wp_safe_redirect(home_url('/galeria/' . $ev . '/')); exit;
+		}
+		cg_page('pw', $ev, array('bad' => 1)); exit;
+	}
+	/* összes kép ZIP-ben */
+	if ($ph === 'zip') {
+		if (!cg_unlocked($ev)) { cg_page('pw', $ev, array()); exit; }
+		$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, file FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0 ORDER BY id', $ev));
+		if (!$rows || !class_exists('ZipArchive')) { cg_page('empty', $ev, null); exit; }
+		@set_time_limit(120);
+		$tmp = wp_tempnam('cg-zip'); $z = new ZipArchive();
+		if ($z->open($tmp, ZipArchive::OVERWRITE) !== true) { status_header(500); exit; }
+		$i = 0; foreach ($rows as $r) { $f = cg_dir() . '/' . $ev . '/' . $r->file; if (is_file($f)) { $z->addFile($f, sprintf('eventcrazy-%03d.jpg', ++$i)); } }
+		$z->close();
+		header('Content-Type: application/zip'); header('Content-Length: ' . filesize($tmp)); header('Content-Disposition: attachment; filename="eventcrazy-fotok.zip"');
+		readfile($tmp); @unlink($tmp); exit;
+	}
 	if ($ph !== '') {
-		$row = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s', $ev, $ph));
+		$row = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s AND hidden = 0', $ev, $ph));
 		if ($row && isset($_GET['dl'])) {
 			$path = cg_dir() . '/' . $ev . '/' . $row->file;
 			if (!is_file($path)) { status_header(404); exit; }
@@ -116,7 +169,8 @@ add_action('init', function () {
 		}
 		cg_page($row ? 'photo' : 'wait', $ev, $row); exit;
 	}
-	$rows = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cg_t() . ' WHERE ev = %s ORDER BY id DESC LIMIT 2000', $ev));
+	if (!cg_unlocked($ev)) { cg_page('pw', $ev, array()); exit; }
+	$rows = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0 ORDER BY id DESC LIMIT 2000', $ev));
 	cg_page($rows ? 'event' : 'empty', $ev, $rows); exit;
 }, 1);
 
@@ -130,14 +184,22 @@ function cg_page($kind, $ev, $data) {
 		. 'footer{text-align:center;color:#5B6275;font-size:13px;padding:20px}';
 	$refresh = $kind === 'wait' ? '<meta http-equiv="refresh" content="15">' : '';
 	echo '<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">' . $refresh . '<title>EventCrazy fotók</title><style>' . $css . '</style></head><body><header>Event<span>Crazy</span></header><main>';
-	if ($kind === 'photo') {
+	$st = cg_evset($ev); $title = isset($st['title']) ? (string) $st['title'] : '';
+	if ($title !== '') { echo '<h1>' . esc_html($title) . '</h1>'; }
+	if ($kind === 'pw') {
+		echo '<h1>' . ($title !== '' ? 'A galéria jelszóval védett' : 'Jelszóval védett galéria') . '</h1><p class="mu">Az összes fotó megtekintéséhez add meg a jelszót, amit a szervezőtől kaptál.</p>';
+		echo '<form method="post" style="max-width:420px;margin:0 auto"><input type="password" name="pw" required autofocus placeholder="Jelszó" style="width:100%;height:50px;border-radius:12px;border:1.5px solid #E7E2DA;padding:0 14px;font-size:16px;margin-bottom:10px">';
+		if (!empty($data['bad'])) { echo '<p class="mu" style="color:#C2392F">Hibás jelszó – próbáld újra.</p>'; }
+		echo '<button class="btn" style="width:100%;border:0;cursor:pointer">Megnyitás</button></form>';
+	} elseif ($kind === 'photo') {
 		echo '<img class="big" src="' . esc_url($u . $data->file) . '" alt="A fotód">';
 		echo '<a class="btn" href="?dl=1">Letöltés</a><a class="btn ghost" href="' . esc_url(home_url('/galeria/' . $ev . '/')) . '">A rendezvény összes fotója</a>';
 		echo '<p class="mu">Tipp: telefonon a képet hosszan nyomva is elmentheted.</p>';
 	} elseif ($kind === 'wait') {
 		echo '<h1>A fotód úton van…</h1><p class="mu">A kép feltöltése folyamatban – ez az oldal magától frissül. Ha a helyszínen gyenge a net, pár perc is lehet.</p>';
 	} elseif ($kind === 'event') {
-		echo '<h1>A rendezvény fotói <small class="mu">(' . count($data) . ')</small></h1><div class="grid">';
+		echo '<h1>' . ($title !== '' ? 'Fotók' : 'A rendezvény fotói') . ' <small class="mu">(' . count($data) . ')</small></h1>';
+		echo '<a class="btn ghost" href="' . esc_url(home_url('/galeria/' . $ev . '/zip')) . '" style="margin-bottom:14px">Összes letöltése (ZIP)</a><div class="grid">';
 		foreach ($data as $r) { echo '<a href="' . esc_url(home_url('/galeria/' . $ev . '/' . $r->photo)) . '" style="background-image:url(' . esc_url($u . $r->photo . '_t.jpg') . ')" aria-label="Fotó"></a>'; }
 		echo '</div>';
 	} else {

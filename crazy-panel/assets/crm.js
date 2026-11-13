@@ -56,6 +56,25 @@
 			(f.img ? '<span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(dfUrl(f.id, 1)) + '"><i>' + esc(d3Ext(f.n) || 'KÉP') + '</i></span>' : d3Thumb({ n: f.n })) +
 			'<b>' + esc(f.n) + '</b><small>' + esc([f.by, f.s ? d3Size(f.s) : '', huDT(f.at)].filter(Boolean).join(' · ')) + '</small></a>' + (f.del ? '<button type="button" class="d3-dfx" data-dfdel="' + f.id + '" title="Fájl törlése" aria-label="' + esc(f.n) + ' törlése">×</button>' : '') + '</li>').join('') + '</ul>';
 	}
+	async function galManage(deal) {
+		const box = sheet(sheetHead('Fotógaléria kezelése') + '<div class="gm" data-gm><p class="cpx-muted">Betöltés…</p></div>');
+		if (!box) return;
+		box.querySelector('[data-close]').addEventListener('click', hideModal);
+		const body = box.querySelector('[data-gm]');
+		const draw = g => {
+			const n = g.photos.length, h = g.photos.filter(p => p.hidden).length;
+			body.innerHTML = '<div class="gm-set"><label>Galéria címe (a galéria tetején látszik)<input type="text" id="gm-title" maxlength="120" placeholder="pl. Anna & Péter esküvője · 2026.11.29." value="' + esc(g.title || '') + '"></label>' +
+				'<label>Jelszó az összes fotóhoz ' + (g.has_pw ? '<b class="gm-pw">beállítva</b>' : '<span class="cpx-muted">(nincs – bárki láthatja, akinél a link van)</span>') + '<input type="text" id="gm-pw" autocomplete="off" placeholder="' + (g.has_pw ? 'új jelszó – vagy hagyd üresen és kattints a Jelszó törlésére' : 'pl. annapeter2026') + '"></label>' +
+				'<div class="gm-b"><button type="button" class="cpx-btn sm" data-gmsave>Mentés</button>' + (g.has_pw ? '<button type="button" class="cpx-btn ghost sm" data-gmnopw>Jelszó törlése</button>' : '') + '<a class="cpx-btn ghost sm" href="' + esc(g.url) + '" target="_blank" rel="noopener">Galéria megnyitása ↗</a></div>' +
+				'<p class="cpx-muted gm-n">' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + '. A QR-kóddal minden vendég a saját képét mindig látja; a jelszó az összes képre vonatkozik. Kattints egy képre az elrejtéshez / visszaállításhoz.</p></div>' +
+				'<div class="gm-grid">' + g.photos.map(p => '<button type="button" class="' + (p.hidden ? 'off' : '') + '" data-gmph="' + esc(p.photo) + '" style="background-image:url(\'' + esc(p.thumb) + '\')" title="' + (p.hidden ? 'Elrejtve – kattints a visszaállításhoz' : 'Kattints az elrejtéshez') + '">' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + '</div>';
+			const save = async extra => { try { draw(await post('cp_booth_gal', Object.assign({ deal }, extra))); toast('Mentve.'); } catch (e) { toast(e.message, true); } };
+			body.querySelector('[data-gmsave]').addEventListener('click', () => { const o = { title: body.querySelector('#gm-title').value.trim() }; const pw = body.querySelector('#gm-pw').value.trim(); if (pw) o.password = pw; save(o); });
+			const np = body.querySelector('[data-gmnopw]'); if (np) np.addEventListener('click', () => save({ password: '' }));
+			body.querySelectorAll('[data-gmph]').forEach(b => b.addEventListener('click', () => save({ photo: b.dataset.gmph, hidden: b.classList.contains('off') ? 0 : 1 })));
+		};
+		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
+	}
 	function d3UpBind(sh, dealId) {
 		const re = () => { if (D3.ctx && D3.ctx.id === dealId) openDeal(dealId, D3.ctx.back, true); };
 		const C0 = window.CPX || {};
@@ -74,6 +93,10 @@
 			if (ok) { toast(ok > 1 ? ok + ' fájl feltöltve.' : 'Fájl feltöltve.'); re(); }
 		};
 		const inp = sh.querySelector('[data-dfup]'); if (inp) inp.addEventListener('change', () => { send(inp.files); inp.value = ''; });
+		/* v2.9.242: galéria kezelése – cím, jelszó, képek elrejtése */
+		sh.querySelectorAll('[data-galman]').forEach(b => b.addEventListener('click', () => galManage(Number(b.dataset.galman))));
+		/* v2.9.241: galéria-link másolása */
+		sh.querySelectorAll('[data-galcp]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.galcp); b.textContent = '✓ Másolva'; } catch (e) { b.textContent = 'Nem sikerült'; } setTimeout(() => { b.textContent = 'Link másolása'; }, 1800); }));
 		const sec = sh.querySelector('[data-fsec]');
 		if (sec && inp) {
 			sec.addEventListener('dragover', e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); sec.classList.add('d3-drop'); } });
@@ -1862,6 +1885,8 @@
 				'<button type="button" class="d3-crgo" data-crgo="' + esc(c.d) + '" title="A nap beosztásának megnyitása (Kapacitás → Beosztás)">' + esc(huD(c.d) + ' · ' + c.g + ' · ' + c.sl) + ' ↗</button></span></li>').join('') + '</ul></section>' : '') +
 			'<section class="d3-c"><h4>Csapat</h4>' + (team.size ? '<ul class="d3-team">' + Array.from(team).map(p => '<li><span class="d3-av" style="background:' + avColor(p[0].length) + '">' + esc(initials(p[0])) + '</span>' + esc(p[0]) + '<small>' + esc(p[1]) + '</small></li>').join('') + '</ul>' : '<p class="cpx-muted">Nincs.</p>') + '</section>' +
 			/* v2.9.68: a „Levélszálak” blokk megszűnt – a szálak kártyaként az idővonalon vannak (Levelek szűrő) */
+			/* v2.9.241: szelfigép-galéria (Crazy Booth) – link, képek száma, másolás */
+			(x.gal ? '<section class="d3-c"><h4>Fotógaléria <small>' + (x.gal.n >= 0 ? x.gal.n + ' kép' : '') + '</small></h4><p class="d3-gal"><a href="' + esc(x.gal.url) + '" target="_blank" rel="noopener">' + esc(x.gal.url.replace(/^https?:\/\//, '')) + ' ↗</a> <button type="button" class="d3-galcp" data-galcp="' + esc(x.gal.url) + '">Link másolása</button></p><p class="d3-galh">Levélben: <code>{{galeria.link}}</code> · <button type="button" class="d3-galcp" data-galman="' + Number(x.deal.id) + '">Kezelés</button></p></section>' : '') +
 			/* v2.8.8: Fájlok – bélyegképes rács, az ismétlődő fájl egyszer (×N), képeknél nagyító előnézet */
 			(() => { const fl = d3Files(m.files || []), sbf = x.sbf || [], embN = fl.filter(f => f.emb).length; const up = x.dfiles || []; return '<section class="d3-c" data-fsec><h4>Fájlok <small>' + (fl.length - embN + sbf.length + up.length) + '</small>' + (R.edit ? '<label class="d3-upb" title="Fájl feltöltése a dealhez (PDF, kép, Office, zip – max. 25 MB) – vagy húzd ide"><input type="file" multiple hidden data-dfup>＋ Feltöltés</label>' : '') + '</h4>' + d3FiltBar(fl.concat(up.map(f => ({ n: f.n }))), sbf) + d3UpHtml(up) +
 				/* v2.9.5: az ügyfél online fotósablonjai – lyukasztott PNG letöltése */

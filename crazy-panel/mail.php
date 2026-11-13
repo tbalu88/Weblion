@@ -171,6 +171,7 @@ function cp_mail_vars() {
 		'kiszallasi.dij'      => array('Kiszállási díj (Ft nélkül)', '10 000'),
 		'kontakt.azonosito'   => array('Kontakt azonosító', '12345'),
 		'deal.azonosito'      => array('Deal azonosító', '23456'),
+		'galeria.link'        => array('Fotógaléria linkje (szelfigép)', 'https://tartalek.eventcrazy.hu/galeria/…'), /* v2.9.241 */
 	);
 }
 
@@ -212,6 +213,7 @@ function cp_mail_values($deal_id) {
 		'kiszallasi.dij'      => $d['km_fee'] !== null && $d['km_fee'] !== '' ? number_format((float) $d['km_fee'], 0, ',', ' ') : '',
 		'kontakt.azonosito'   => $d['contact_id'] ? (string) $d['contact_id'] : '',
 		'deal.azonosito'      => (string) $d['id'],
+		'galeria.link'        => function_exists('cp_booth_gal_url') ? cp_booth_gal_url((int) $d['id']) : '',
 	));
 	/* v1.43: a Salesmate-ből átvett sablonok változói ({{Deal.…}}, {{Contact.…}}) – a nyers értékek, a szűrőket a renderelés alkalmazza */
 	if (function_exists('cp_crm_spec')) {
