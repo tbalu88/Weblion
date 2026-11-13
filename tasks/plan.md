@@ -78,3 +78,45 @@ Sorrend: K4 sablon-letöltés → K2+K3 feltöltés, QR, felhő-galéria → K3 
 ## Nyitott kérdések
 - Képernyő felbontása / álló-fekvő (addig: fekvő, bármilyen felbontásra igazodik).
 - AI-karikatúra szolgáltatója és képenkénti költségkerete (a 4. fázis előtt kell).
+
+---
+
+# Kiegészítés (2026-11-13 este): képtörlés + offline sablonszerkesztő – JÓVÁHAGYÁSRA VÁR
+
+## Áttekintés
+1. **Képtörlés, tömegesen is** – a gépen (Kezelő → Galéria) és a felhő-galériából; a panel Fotógaléria → Kezelés ablakából is.
+2. **Offline sablonszerkesztő** – a programon belül, internet nélkül is, vészhelyzetre (a mostani „Sablon szerkesztése” a panel webes ablakát nyitja, az csak nettel megy).
+
+## Döntések (javaslat – a felhasználó dönt)
+- Felhő-törlés: **lomtárba 7 napra** (a galériából azonnal eltűnik: QR, ZIP, vetítés, megosztó állomás; a panelből visszaállítható), utána a napi takarító véglegesen törli. Alternatíva: azonnal véglegesen.
+- Gépen: a fájlok a **rendszer Kukájába** kerülnek (visszaállítható), a még fel nem töltött példány kikerül a feltöltési sorból.
+- A gép a felhőből **csak a saját maga által feltöltött** képeket törölheti (gépkulcs); a panel bármelyiket.
+- Offline szerkesztő: **A)** a panel Sablonkészítője a gépen (ugyanazok a crazyphoto-minták, felirat, logó; a mintaképek és a betűk a felülettel együtt a gépre kerülnek) – javasolt; **B)** egyszerű vész-szerkesztő (elrendezés, háttérszín/kép pendrive-ról, felirat, dátum, logó).
+- A gépen készült vész-sablon az adott rendezvénynél elsőbbséget kap a panel sablonjával szemben, amíg a kezelő vissza nem vált.
+- A törlés és az offline szerkesztő is érinti a programkeretet (main/preload/cloud) → **új telepítő: 0.11.0** (Mac + Windows).
+
+## Feladatok
+### 1. rész – képtörlés
+- [ ] T1 (S) Galéria 0.9.0: `deleted_at` oszlop, `/delete` (gépkulcs: saját képek; panel: bármelyik) + `/restore`; a törölt kép minden listából, QR-ból, ZIP-ből kimarad; a napi takarító 7 nap után végleg töröl.
+  - Elfogadás: saját kép törölhető, másik gépé nem (403); a galériaoldal / ZIP / vetítés nem mutatja; visszaállítás után újra látszik; 7 nap után a fájl és a sor eltűnik.
+  - Ellenőrzés: helyi teszt-váz (wp_tempnam-mentes), élesítés után 200 + tiszta hibanapló.
+- [ ] T2 (M) Booth 0.11.0: Galéria → „Kijelölés” (koppintás, „Mind”), „Törlés (N)” → megerősítés: „Törlés a gépről és az online galériából” / „Csak erről a gépről”; egy kép nézetében is „Törlés”. Fájlok a Kukába, a feltöltési sor takarítása, felhő-törlés (net nélkül sorba áll).
+  - Elfogadás: 1 és több kép törlése; net nélkül később lefut; a törölt kép nem töltődik fel utólag.
+  - Ellenőrzés: böngészős mock-teszt + Electron-próba; m3/m4/m5/m7/m10 regresszió.
+- [ ] T3 (S) Panel: Fotógaléria → Kezelés: jelölőnégyzetek, „Törlés (N)”, „Lomtár” fül „Visszaállítás” gombbal.
+  - Ellenőrzés: deal-megnyitási teszt (kötelező crm.js után) + böngészős próba.
+- [ ] Ellenőrzőpont: törlés gépről + panelből végig, visszaállítás.
+
+### 2. rész – offline sablonszerkesztő (A változat esetén)
+- [ ] T4 (M) A Sablonkészítő (sablon.js/css), a ~50 mintakép és a 6 betűcsalád a felülettel együtt kerül a gépre, és helyben marad (net nélkül is).
+- [ ] T5 (M) Kezelő → Rendezvény → „Sablon szerkesztése (internet nélkül is)”: a beépített szerkesztő „gép-módban” (deal-betöltés és AI-keret csak nettel); mentéskor a lyukasztott PNG azonnal a rendezvény sablonja; „Vissza a panel sablonjára” gomb.
+  - Elfogadás: hálózat nélkül elkészül és nyomtatható a sablon; újraindítás után is megmarad.
+  - Ellenőrzés: böngészős teszt hálózat nélkül + Electron-próba; regresszió.
+- [ ] Ellenőrzőpont: offline próba (Wi-Fi ki) Macen és Windowson.
+
+## Kockázatok
+| Kockázat | Hatás | Kezelés |
+|---|---|---|
+| A sablon.js három helyen fut (panel, portál, gép) | Közepes | Egy forrás: a booth-publish a panel fájlját másolja, nincs külön példány |
+| file:// képek a vásznon („szennyezett” canvas) | Közepes | A mintaképek data-URL-ként töltődnek |
+| Tömeges törlés véletlenül | Magas | Megerősítés + felhőben 7 napos lomtár + gépen Kuka |
