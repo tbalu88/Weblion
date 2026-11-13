@@ -221,8 +221,6 @@
       const sv = el.querySelector('svg'), r = sv ? sv.getBoundingClientRect() : null, pr = el.getBoundingClientRect();
       const info = 'QR ' + q.n + '×' + q.n + ' · ' + ones + ' modul · svg ' + (r ? Math.round(r.width) + '×' + Math.round(r.height) : 'nincs') + ' · doboz ' + Math.round(pr.width) + '×' + Math.round(pr.height) + ' · d ' + d.length;
       B.log('QR kirajzolva: ' + info);
-      /* ideiglenes: a csempén is látszik (hibakereséshez, a javítás után kivesszük) */
-      const box = el.closest('.qr'); if (box) { let t = box.querySelector('.qrdbg'); if (!t) { t = document.createElement('small'); t.className = 'qrdbg'; t.style.cssText = 'position:absolute;left:8px;bottom:4px;font-size:10px;color:#888'; box.style.position = 'relative'; box.appendChild(t); } t.textContent = info; }
     });
   }
   async function showQr(box, el, ev, photo) {
@@ -231,9 +229,7 @@
     try { const u = await call(B.urls, ev, photo); drawQr(el, await call(B.qr, u.photo)); box.hidden = false; }
     catch (e) {
       B.log('QR hiba: ' + e.message);
-      /* ideiglenes hibakeresés: a hiba szövege a csempe helyén (a javítás után csak rejtve marad) */
-      box.hidden = false; box.classList.add('err'); box.dataset.err = '1';
-      el.innerHTML = ''; const sp = box.querySelector('span'); if (sp) sp.textContent = 'QR-hiba: ' + e.message;
+      box.hidden = true;   /* hiba esetén nincs csempe (a hiba a naplóban) */
     }
   }
   /* ---------- rendezvény (a panelből) + sablon */
