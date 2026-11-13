@@ -22,5 +22,8 @@ contextBridge.exposeInMainWorld('booth', {
   urls: (ev, ph) => ipcRenderer.invoke('cloud:urls', ev, ph),
   quit: () => ipcRenderer.invoke('app:quit'),
   fullscreen: on => ipcRenderer.invoke('win:full', on),
-  isFullscreen: () => ipcRenderer.invoke('win:isFull')
+  isFullscreen: () => ipcRenderer.invoke('win:isFull'),
+  reloadUi: () => ipcRenderer.invoke('ui:reload'),
+  uiInfo: () => ipcRenderer.invoke('ui:info'),
+  onUiReady: cb => ipcRenderer.on('ui:ready', () => cb())
 });

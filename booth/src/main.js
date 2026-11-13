@@ -27,6 +27,7 @@ let cfg = Object.assign({}, DEF);
 let cam = null;
 let win = null;
 let cloud = null;
+let ui = null, uiPending = false;
 
 function log(m) {
   const line = new Date().toISOString() + ' ' + String(m).replace(/\s+/g, ' ').slice(0, 2000) + '\n';
@@ -97,6 +98,9 @@ ipcMain.handle('cloud:tok', wrap(async n => cloud.newTok(n || 10)));
 ipcMain.handle('cloud:urls', wrap(async (ev, ph) => ({ photo: ph ? cloud.photoUrl(ev, ph) : '', event: cloud.eventUrl(ev) })));
 ipcMain.handle('app:quit', wrap(async () => app.quit()));
 /* teljes képernyő ki / be (a kezdőképernyő sarokgombja) */
+/* online felület: újratöltés, ha közben új változat érkezett (a felület hívja, amikor a kezdőképernyőn tétlen) */
+ipcMain.handle('ui:reload', wrap(async () => { const e = ui.entry(); uiPending = false; log('felület betöltése: ' + e.v); await win.loadFile(e.file); return e.v; }));
+ipcMain.handle('ui:info', wrap(async () => Object.assign(ui.entry(), { pending: uiPending, shell: app.getVersion() })));
 ipcMain.handle('win:isFull', wrap(async () => win.isFullScreen() || win.isKiosk()));
 ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win.isFullScreen() || win.isKiosk()) : !!on; win.setKiosk(f); win.setFullScreen(f); return f; }));
 
@@ -113,7 +117,11 @@ app.whenReady().then(() => {
     fullscreen: !MOCK, kiosk: !MOCK, width: 1280, height: 800, backgroundColor: '#0E1220', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  /* online felület: induláskor rövid (4 mp) frissítés-próba, utána a legfrissebb elérhető felület; 15 percenként újra */
+  ui = require('./ui-update').make({ dataDir: app.getPath('userData'), bundled: path.join(__dirname, 'renderer', 'index.html'), shellVersion: app.getVersion(), log });
+  const boot = async () => { if (!MOCK || process.argv.includes('--online')) { try { await ui.check(4000); } catch (e) { /* */ } } const e = (MOCK && !process.argv.includes('--online')) ? { file: path.join(__dirname, 'renderer', 'index.html'), v: 'helyi (fejlesztői)' } : ui.entry(); log('felület: ' + e.v); win.loadFile(e.file); };
+  boot();
+  setInterval(async () => { if (MOCK && !process.argv.includes('--online')) return; if (await ui.check(15000)) { uiPending = true; win.webContents.send('ui:ready'); } }, 15 * 60 * 1000);
   globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
   /* a kijelző ne aludjon el rendezvény közben */
   require('electron').powerSaveBlocker.start('prevent-display-sleep');

@@ -19,3 +19,5 @@
 - [x] K4a panel: Booth-gépek kulcsai, a nap rendezvényei, a deal sablonja, galéria-azonosító (booth.php, 2.9.238)
 - [ ] K4b a deal adatlapján „Galéria” kártya + {{galeria_link}} levélváltozó
 - [ ] K5 sablonszerkesztés a gépen (a panel Sablonkészítője)
+- [x] Online felület (0.4.0): a felület a tartalékról frissül (tools/booth-publish.sh), offline az utolsó letöltött fut
+- [ ] Windows-telepítő – a fejlesztés végén (a felhasználó kérése: addig csak Mac); wine-nal a felhőben elakadt, Windows-gépen `npm run dist:win`

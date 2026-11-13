@@ -27,3 +27,11 @@ EventCrazy szelfigép-szoftver.
 ## Mappák
 - Fotók: Képek / CrazyBooth / <dátum> (a nyers fotók és a kész nyomatok is)
 - Beállítások és napló (`booth.log`): Mac: `~/Library/Application Support/Crazy Booth/`, Windows: `%APPDATA%\Crazy Booth\`
+
+## Online felület (0.4.0-tól)
+A gépre telepített program csak a „keret” (kamera, nyomtató, fájlok, feltöltés). A felület a tartalék szerverről frissül:
+`https://tartalek.eventcrazy.hu/wp-content/plugins/crazy-booth-ui/` (manifest.json + fájlok, sha256-tal ellenőrizve).
+- A gép induláskor és 15 percenként megnézi; az új felületet letölti, és a kezdőképernyőn tétlenül átvált rá.
+- Internet nélkül az utoljára letöltött felület fut (Beállítások fejlécében látszik a változata).
+- Közzététel (fejlesztő): `bash tools/booth-publish.sh "mi változott"`
+- A programot (keretet) csak akkor kell újratelepíteni, ha a kamera / nyomtatás / fájlkezelés változik; a manifest `shell` mezője jelzi, milyen keret kell.

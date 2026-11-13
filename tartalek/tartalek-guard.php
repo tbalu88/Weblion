@@ -26,6 +26,9 @@ if (!get_option('cp_tartalek_cache_purged')) {
 	update_option('cp_tartalek_cache_purged', time(), false);
 }
 
+/* a Crazy Booth szelfigépek online felülete: wp-content/plugins/crazy-booth-ui/ (a híd ide tölti fel; a gépek innen frissülnek) */
+if (!is_dir(WP_PLUGIN_DIR . '/crazy-booth-ui')) { @wp_mkdir_p(WP_PLUGIN_DIR . '/crazy-booth-ui'); @file_put_contents(WP_PLUGIN_DIR . '/crazy-booth-ui/index.php', "<?php // Silence is golden.\n"); }
+
 /* minden válaszra: ne indexeljék */
 if (!headers_sent()) { header('X-Robots-Tag: noindex, nofollow', true); }
 add_filter('wp_robots', function ($r) { $r['noindex'] = true; $r['nofollow'] = true; return $r; }, 99);

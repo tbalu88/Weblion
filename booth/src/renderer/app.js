@@ -7,7 +7,10 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const call = async (fn, ...a) => { const r = await fn(...a); if (!r || !r.ok) throw new Error((r && r.err) || 'ismeretlen hiba'); return r.v; };
 
-  function show(s) { document.querySelectorAll('.scr').forEach(x => x.classList.toggle('on', x.dataset.s === s)); S.scr = s; }
+  function show(s) { document.querySelectorAll('.scr').forEach(x => x.classList.toggle('on', x.dataset.s === s)); S.scr = s; if (s === 'start' && S.uiNew) uiSwap(); }
+  /* online felület: ha új változat jött, a kezdőképernyőn (tétlenül) töltjük újra */
+  function uiSwap() { if (S.busy || S.scr !== 'start' || !B.reloadUi) return; S.uiNew = false; setTimeout(() => { if (!S.busy && S.scr === 'start') B.reloadUi(); else S.uiNew = true; }, 1500); }
+  if (B.onUiReady) B.onUiReady(() => { S.uiNew = true; uiSwap(); });
   function err(m) { const e = $('[data-err]'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
   const today = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + '.'; };
 
@@ -151,7 +154,8 @@
     $('[data-upst]').textContent = await upStatus();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
-    $('[data-ver]').textContent = 'v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
+    $('[data-ver]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
+    if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok) $('[data-ver]').textContent += ' · felület ' + r.v.v + (r.v.online ? ' (online)' : ''); });
   }
   document.querySelector('.pad').innerHTML = '1 2 3 4 5 6 7 8 9 ⌫ 0 ✓'.split(' ').map(k => '<button type="button" data-k="' + k + '">' + k + '</button>').join('');
   document.querySelector('.pad').addEventListener('click', async e => {
