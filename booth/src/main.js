@@ -1,14 +1,18 @@
 /* Crazy Booth – főfolyamat: ablak (teljes képernyő), beállítások, kamera, mentés, nyomtatás, napló. */
-const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, systemPreferences, session } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
 const MOCK = process.argv.includes('--mock');
+const MAC = process.platform === 'darwin';
 const CFG_FILE = () => path.join(app.getPath('userData'), 'config.json');
 const LOG_FILE = () => path.join(app.getPath('userData'), 'booth.log');
 const DEF = {
   pin: '2580',
-  camera: MOCK ? 'mock' : 'dcc',      /* dcc = digiCamControl (D5300), mock = próbamód */
+  camera: MOCK || MAC ? 'webcam' : 'dcc',   /* dcc = Nikon D5300 digiCamControllal (Windows), webcam = webkamera (Mac / PC) */
+  camId: '',                          /* a választott webkamera (üres = az első) */
+  camRes: '1080',                     /* 720 | 1080 | 2160 */
+  mirror: true,                       /* az élőkép tükrözve (mint egy tükör); a mentett kép sosem tükrözött */
   dccUrl: 'http://127.0.0.1:5513',
   countdown: 3,                       /* mp */
   shots: 1,                           /* 1 kép vagy 3 képes csík */
@@ -27,7 +31,8 @@ function log(m) {
 }
 function loadCfg() {
   try { cfg = Object.assign({}, DEF, JSON.parse(fs.readFileSync(CFG_FILE(), 'utf8'))); } catch (e) { cfg = Object.assign({}, DEF); }
-  if (MOCK) cfg.camera = 'mock';
+  if (cfg.camera === 'mock') cfg.camera = 'webcam';            /* a 0.1-es próbamód neve */
+  if (MOCK || (MAC && cfg.camera === 'dcc')) cfg.camera = 'webcam'; /* a digiCamControl csak Windowson fut */
 }
 function saveCfg() { fs.mkdirSync(path.dirname(CFG_FILE()), { recursive: true }); fs.writeFileSync(CFG_FILE(), JSON.stringify(cfg, null, 2)); }
 function dayDir() {
@@ -36,14 +41,15 @@ function dayDir() {
 }
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
-  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/mock')).make({ url: cfg.dccUrl, folder });
+  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder });
 }
 const toDataUrl = (buf, mime) => 'data:' + (mime || 'image/jpeg') + ';base64,' + buf.toString('base64');
 const fromDataUrl = s => { const m = /^data:([^;]+);base64,(.*)$/s.exec(String(s || '')); if (!m) throw new Error('hibás kép'); return { mime: m[1], buf: Buffer.from(m[2], 'base64') }; };
-const wrap = fn => async (...a) => { try { return { ok: true, v: await fn(...a) }; } catch (e) { log('HIBA ' + (e && e.stack || e)); return { ok: false, err: String(e && e.message || e) }; } };
+/* az ipcMain.handle első paramétere az esemény – a felület adatai utána jönnek */
+const wrap = fn => async (ev, ...a) => { try { return { ok: true, v: await fn(...a) }; } catch (e) { log('HIBA ' + (e && e.stack || e)); return { ok: false, err: String(e && e.message || e) }; } };
 
 /* ---------- IPC */
-ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, version: app.getVersion() })));
+ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, mac: MAC, version: app.getVersion() })));
 ipcMain.handle('cfg:set', wrap(async c => {
   const keep = Object.keys(DEF);
   keep.forEach(k => { if (c && c[k] !== undefined) cfg[k] = c[k]; });
@@ -80,7 +86,11 @@ ipcMain.handle('app:quit', wrap(async () => app.quit()));
 
 /* ---------- ablak */
 app.whenReady().then(() => {
-  loadCfg(); makeCam(); log('indítás ' + app.getVersion() + (MOCK ? ' (próbamód)' : ''));
+  loadCfg(); makeCam(); log('indítás ' + app.getVersion() + ' ' + process.platform + (MOCK ? ' (próbamód)' : ''));
+  /* webkamera: Macen a rendszer engedélyt kér (Adatvédelem → Kamera); a felületnek a kamera / mikrofon kérését engedjük */
+  if (MAC && systemPreferences.askForMediaAccess) { systemPreferences.askForMediaAccess('camera').then(ok => log('kamera-engedély: ' + ok)).catch(() => {}); }
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'media'));
+  session.defaultSession.setPermissionCheckHandler((wc, perm) => perm === 'media');
   win = new BrowserWindow({
     fullscreen: !MOCK, kiosk: !MOCK, width: 1280, height: 800, backgroundColor: '#0E1220', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }

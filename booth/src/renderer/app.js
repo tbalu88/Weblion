@@ -12,12 +12,33 @@
   const today = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + '.'; };
 
   /* ---------- élőkép */
+  const WEB = () => S.cfg.camera !== 'dcc';
+  /* webkamera (Mac / PC): a választott kamera, a kért felbontásban; a folyam nyitva marad a fotózások között (gyorsabb indulás) */
+  async function webStream() {
+    const h = Number(S.cfg.camRes) || 1080, w = Math.round(h * 16 / 9);
+    const key = (S.cfg.camId || '') + '|' + h;
+    if (S.stream && S.streamKey === key && S.stream.getVideoTracks().some(t => t.readyState === 'live')) return S.stream;
+    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+    S.stream = null;
+    const v = { width: { ideal: w }, height: { ideal: h } };
+    if (S.cfg.camId) v.deviceId = { exact: S.cfg.camId };
+    try { S.stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false }); }
+    catch (e) {
+      if (S.cfg.camId && e.name === 'OverconstrainedError') { delete v.deviceId; S.stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false }).catch(() => null); }
+      if (!S.stream) throw new Error(e.name === 'NotAllowedError' ? 'Nincs engedély a kamerához – Macen: Rendszerbeállítások → Adatvédelem és biztonság → Kamera → Crazy Booth bekapcsolása.' : 'A webkamera nem indul (' + (e.message || e.name) + ').');
+    }
+    S.streamKey = key;
+    const st = S.stream.getVideoTracks()[0].getSettings(); B.log('webkamera: ' + (st.width || '?') + '×' + (st.height || '?'));
+    return S.stream;
+  }
   async function liveOn() {
     const v = $('[data-video]'), im = $('[data-lvimg]');
-    if (S.cfg.camera === 'mock') {
+    document.querySelector('.lv').classList.toggle('mir', S.cfg.mirror !== false);
+    if (WEB()) {
       im.hidden = true; v.hidden = false;
-      if (!S.stream) { try { S.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1920, height: 1080 } }); } catch (e) { S.stream = null; } }
-      if (S.stream) { v.srcObject = S.stream; await v.play().catch(() => {}); }
+      let st = null;
+      try { st = await webStream(); } catch (e) { if (!S.cfg.mock) throw e; }
+      if (st) { if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); }
       else { v.hidden = true; im.hidden = false; im.src = mockFrame(); }
       return;
     }
@@ -31,7 +52,7 @@
     };
     tick();
   }
-  async function liveOff() { clearTimeout(S.lvT); if (S.cfg.camera !== 'mock') await B.liveStop(); }
+  async function liveOff() { clearTimeout(S.lvT); if (!WEB()) await B.liveStop(); }
   function mockFrame() {
     const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d');
     const gr = g.createLinearGradient(0, 0, 1500, 1000); gr.addColorStop(0, '#2F4A7A'); gr.addColorStop(1, '#E8894A'); g.fillStyle = gr; g.fillRect(0, 0, 1500, 1000);
@@ -40,7 +61,7 @@
   }
   /* egy fotó: D5300 → teljes felbontású JPG; próbamód → a webkamera / minta képkockája */
   async function snap() {
-    if (S.cfg.camera === 'mock') {
+    if (WEB()) {
       const v = $('[data-video]'), c = document.createElement('canvas');
       if (S.stream && v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; const g = c.getContext('2d'); g.drawImage(v, 0, 0);   /* a mentett kép nem tükrözött (csak az élőkép) */ return c.toDataURL('image/jpeg', 0.92); }
       return mockFrame();
@@ -100,11 +121,18 @@
   }
   async function fillForm() {
     const f = $('[data-form]'), c = S.cfg;
-    ['camera', 'dccUrl', 'shots', 'countdown', 'copies', 'reviewSec'].forEach(k => { f.elements[k].value = c[k]; });
-    f.elements.autoPrint.checked = !!c.autoPrint; f.elements.pin.value = '';
+    ['camera', 'dccUrl', 'shots', 'countdown', 'copies', 'reviewSec', 'camRes'].forEach(k => { f.elements[k].value = c[k]; });
+    f.elements.autoPrint.checked = !!c.autoPrint; f.elements.mirror.checked = c.mirror !== false; f.elements.pin.value = '';
+    /* a D5300 (digiCamControl) csak Windowson; Macen csak a webkamera választható */
+    f.elements.camera.querySelector('option[value=dcc]').disabled = !!c.mac;
+    /* webkamerák listája (a nevek csak engedély után látszanak) */
+    let cams = [];
+    try { if (WEB()) await webStream().catch(() => null); cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch (e) { cams = []; }
+    f.elements.camId.innerHTML = '<option value="">(az első / beépített kamera)</option>' + cams.map((d, i) => '<option value="' + d.deviceId.replace(/"/g, '&quot;') + '"' + (d.deviceId === c.camId ? ' selected' : '') + '>' + (d.label || ('Kamera ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('');
+    camRows();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
-    $('[data-ver]').textContent = 'v' + c.version + (c.mock ? ' · próbamód' : '');
+    $('[data-ver]').textContent = 'v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
   }
   document.querySelector('.pad').innerHTML = '1 2 3 4 5 6 7 8 9 ⌫ 0 ✓'.split(' ').map(k => '<button type="button" data-k="' + k + '">' + k + '</button>').join('');
   document.querySelector('.pad').addEventListener('click', async e => {
@@ -124,7 +152,8 @@
     else if (act === 'quit') { B.quit(); }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
-      ['camera', 'dccUrl', 'printer'].forEach(k => { o[k] = f.elements[k].value; });
+      ['camera', 'dccUrl', 'printer', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
+      o.mirror = f.elements.mirror.checked;
       ['shots', 'countdown', 'copies', 'reviewSec'].forEach(k => { o[k] = Number(f.elements[k].value) || S.cfg[k]; });
       o.autoPrint = f.elements.autoPrint.checked;
       if (f.elements.pin.value.trim()) o.pin = f.elements.pin.value.trim();
@@ -140,7 +169,9 @@
   document.addEventListener('keydown', e => { if (e.key === 'F2') openSettings(); if (e.key === 'Escape' && S.scr === 'settings') show('start'); });
   $('[data-s=start]').addEventListener('click', () => run());
 
-  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.camera === 'mock' ? 'Próbamód · ' : 'Nikon D5300 · ') + (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép'); }
+  function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
+  $('[data-form]').elements.camera.addEventListener('change', camRows);
+  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép'); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
   (async () => { S.cfg = await call(B.config); modeInfo(); await initCam(); })().catch(e => err(e.message));
 })();

@@ -45,8 +45,11 @@
         <div class="pad">1 2 3 4 5 6 7 8 9 ⌫ 0 ✓</div>
       </div>
       <form class="st-f" data-form hidden>
-        <label>Kamera <select name="camera"><option value="dcc">Nikon D5300 (digiCamControl)</option><option value="mock">Próbamód (webkamera / minta)</option></select></label>
-        <label>digiCamControl címe <input name="dccUrl"></label>
+        <label>Kamera <select name="camera"><option value="webcam">Webkamera (Mac / PC)</option><option value="dcc">Nikon D5300 (digiCamControl, csak Windows)</option></select></label>
+        <label data-web>Webkamera <select name="camId"></select></label>
+        <label data-web>Felbontás <select name="camRes"><option value="720">HD (1280×720)</option><option value="1080">Full HD (1920×1080)</option><option value="2160">4K (3840×2160), ha a kamera tudja</option></select></label>
+        <label class="chk" data-web><input name="mirror" type="checkbox"> Tükrözött élőkép (a nyomat nem tükrözött)</label>
+        <label data-dcc>digiCamControl címe <input name="dccUrl"></label>
         <label>Fotók száma <select name="shots"><option value="1">1 kép (4×6")</option><option value="3">3 képes csík (2×6", kétszer a lapon)</option></select></label>
         <label>Visszaszámlálás (mp) <input name="countdown" type="number" min="1" max="10"></label>
         <label>Nyomtató <select name="printer" data-printers></select></label>

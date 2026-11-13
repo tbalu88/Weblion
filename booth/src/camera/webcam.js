@@ -1,9 +1,9 @@
-/* Próbamód kamera nélkül: az élőképet és a fotót a felület adja (webkamera vagy mintakép), itt csak a mentés van. */
+/* Webkamera (Mac / PC) és próbamód: az élőképet és a fotót a felület adja (getUserMedia), itt csak a mappa készül. */
 const fs = require('fs');
 const path = require('path');
 function make(opts) {
   return {
-    kind: 'mock',
+    kind: 'webcam',
     async init() { fs.mkdirSync(opts.folder, { recursive: true }); return true; },
     async liveStart() {}, async liveStop() {},
     async liveFrame() { return null; },   /* a felület a webkamerát / mintaképet mutatja */

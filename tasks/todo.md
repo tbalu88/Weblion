@@ -2,6 +2,7 @@
 - [x] 1. Electron-váz + képernyőfolyamat (próbamód) – felület böngészőben tesztelve; az Electron-futtatás a Windows-gépen
 - [~] 2. Kameravezérlés (digiCamControl, D5300) – megírva a dokumentált HTTP-parancsokkal, próba a D5300-zal hátravan
 - [ ] Ellenőrzőpont A – próba a D5300-zal
+- [x] 1b. Mac-változat webkamerával (0.2) – Electron főfolyamattal itt kipróbálva (webkamera, mentés); nyomtatás a Macen próbálandó
 - [ ] 3. Sablon a panelből (booth-kulcs, offline gyorstár)
 - [ ] 4. Nyomtatás DS620 (4×6", 2×6" vágás)
 - [ ] Ellenőrzőpont B – próba nyomtatóval
