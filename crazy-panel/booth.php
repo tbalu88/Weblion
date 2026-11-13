@@ -128,8 +128,8 @@ function cp_booth_panel_key() {
 	if (empty($d['panel']) || $d['panel']['h'] !== $h || !empty($d['panel']['off'])) { $d['panel'] = array('name' => 'Panel', 'h' => $h, 'at' => time(), 'seen' => 0, 'off' => 0); update_option('cp_booth_devices', $d, false); }
 	return $k;
 }
-function cp_booth_gal_api($method, $ev, $body = null) {
-	$args = array('method' => $method, 'timeout' => 15, 'headers' => array('X-Booth-Key' => cp_booth_panel_key()));
+function cp_booth_gal_api($method, $ev, $body = null, $timeout = 15) {
+	$args = array('method' => $method, 'timeout' => $timeout, 'headers' => array('X-Booth-Key' => cp_booth_panel_key()));
 	if ($body !== null) { $args['body'] = $body; }
 	$r = wp_remote_request('https://tartalek.eventcrazy.hu/wp-json/crazy-galeria/v1/admin/' . rawurlencode($ev), $args);
 	if (is_wp_error($r)) { return new WP_Error('gal', 'A galéria most nem érhető el.'); }
@@ -328,9 +328,10 @@ add_action('rest_api_init', function () {
 function cp_booth_stats($deal) {
 	if (!cp_booth_gal_has($deal)) { return null; }
 	$ev = cp_booth_gal_tok($deal); $ck = 'cp_booth_st_' . $ev; $s = get_transient($ck);
-	if (is_array($s)) { return $s; }
-	$g = cp_booth_gal_api('GET', $ev);
-	if (is_wp_error($g)) { return null; }
+	if (is_array($s)) { return empty($s['err']) ? $s : null; }
+	/* rövid időkorlát: a deal megnyitását nem tarthatja fel a galéria; hiba után 2 percig nem próbálkozunk */
+	$g = cp_booth_gal_api('GET', $ev, null, 5);
+	if (is_wp_error($g)) { set_transient($ck, array('err' => 1), 2 * MINUTE_IN_SECONDS); return null; }
 	$s = array('photos' => 0, 'videos' => 0, 'guestbook' => 0, 'hidden' => 0, 'hours' => array(), 'devices' => array(), 'first' => '', 'last' => '');
 	foreach ((array) ($g['photos'] ?? array()) as $x) {
 		$k = (string) ($x['kind'] ?? 'photo'); if ($k === 'guestbook') { $s['guestbook']++; } elseif ($k === 'video') { $s['videos']++; } else { $s['photos']++; }
