@@ -152,7 +152,7 @@
     $('[data-evdate]').value = d0; S.evList = null;
     $('[data-evlist]').innerHTML = '<p class="st-msg">' + esc(c.event ? 'Most: ' + c.event.title : '') + '</p>';
     $('[data-upst]').textContent = await upStatus();
-    preDraw(); tplInfo();
+    preDraw(); tplInfo(); screenForm();
     const pr = await B.printers(); const sel = $('[data-printers]');
     sel.innerHTML = '<option value="">(alapértelmezett nyomtató)</option>' + ((pr.ok && pr.v) || []).map(p => '<option' + (p.name === c.printer ? ' selected' : '') + '>' + p.name.replace(/</g, '&lt;') + '</option>').join('');
     $('[data-ver]').textContent = 'program v' + c.version + (c.mac ? ' · Mac' : '') + (c.mock ? ' · próbamód' : '');
@@ -175,6 +175,8 @@
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
     else if (act === 'cancel') { cancelRun(); }
+    else if (act === 'scsave') { const sc = (await kvGet('screen')) || {}; sc.t1 = $('#sc-t1').value.trim(); sc.t2 = $('#sc-t2').value.trim(); sc.brand = $('#sc-brand').value.trim(); sc.color = $('#sc-color').value; await kvSet('screen', sc); await screenForm(); $('[data-stmsg]').textContent = 'Kezdőképernyő mentve.'; }
+    else if (act === 'bgclear') { const sc = (await kvGet('screen')) || {}; delete sc.bg; await kvSet('screen', sc); await screenForm(); $('[data-stmsg]').textContent = 'Háttér törölve.'; }
     else if (act === 'tpledit') { const e = S.cfg.event; if (!e || !e.deal) { $('[data-stmsg]').textContent = 'Előbb válassz rendezvényt (deal), és mentsd el.'; return; } window.open('https://eventcrazy.hu/crazy-panel/#sablon:' + e.deal, '_blank', 'width=1400,height=900'); S.tplEditing = true; $('[data-stmsg]').textContent = 'A panel Sablonkészítője új ablakban nyílt meg. Ott a „Mentés a szelfigéphez” gombbal mentsd el, majd gyere vissza ide.'; }
     else if (act === 'tplreload') { S.cfg.event && (S.cfg.event.template = true); await loadTemplate(); tplInfo(); modeInfo(); $('[data-stmsg]').textContent = S.tpl ? 'Sablon frissítve (' + S.tpl.shots + ' fotó).' : 'Ehhez a rendezvényhez nincs sablon – az alap keret marad.'; }
     else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
@@ -333,9 +335,35 @@
   function tplInfo() { const el = $('[data-tplinfo]'); if (el) el.textContent = 'Sablon: ' + (S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : (S.cfg.event && S.cfg.event.deal ? 'nincs – alap keret' : 'nincs rendezvény kiválasztva – alap keret')); }
   /* a panelből visszatérve a sablon újratöltődik */
   window.addEventListener('focus', async () => { if (!S.tplEditing || S.busy) return; S.tplEditing = false; if (S.cfg.event) S.cfg.event.template = true; await loadTemplate(); tplInfo(); modeInfo(); });
+  /* ---------- s5/s6: kezdőképernyő testreszabása (felirat, szín, háttérkép vagy ismétlődő videó) – IndexedDB-ben, a gépen */
+  const idb = () => new Promise((res, rej) => { const r = indexedDB.open('crazybooth', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const kvGet = async k => { const d = await idb(); return new Promise(res => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); };
+  const kvSet = async (k, v) => { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); if (v === undefined) t.objectStore('kv').delete(k); else t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); };
+  let bgUrl = '';
+  async function screenApply() {
+    let sc = {}; try { sc = (await kvGet('screen')) || {}; } catch (e) { sc = {}; }
+    $('[data-st1]').textContent = sc.t1 || 'Érints meg!';
+    $('[data-st2]').textContent = sc.t2 || 'és mosolyogj a kamerába';
+    const br = $('[data-brand]'); if (sc.brand) br.textContent = sc.brand; else br.innerHTML = 'Event<span>Crazy</span>';
+    document.documentElement.style.setProperty('--o', sc.color || '#E8894A');
+    document.documentElement.style.setProperty('--g', sc.color ? 'linear-gradient(120deg,' + sc.color + ' 0%,' + sc.color + ' 100%)' : 'linear-gradient(120deg,#E8894A 0%,#F2B35B 100%)');
+    const box = $('[data-bgm]'); if (bgUrl) { URL.revokeObjectURL(bgUrl); bgUrl = ''; } box.innerHTML = '';
+    if (sc.bg instanceof Blob) { bgUrl = URL.createObjectURL(sc.bg); box.innerHTML = /^video\//.test(sc.bg.type) ? '<video autoplay muted loop playsinline src="' + bgUrl + '"></video>' : '<img alt="" src="' + bgUrl + '">'; }
+    return sc;
+  }
+  async function screenForm() {
+    const sc = await screenApply();
+    $('#sc-t1').value = sc.t1 || ''; $('#sc-t2').value = sc.t2 || ''; $('#sc-brand').value = sc.brand || ''; $('#sc-color').value = sc.color || '#E8894A';
+    $('[data-bginfo]').textContent = sc.bg instanceof Blob ? 'Háttér: ' + (/^video/.test(sc.bg.type) ? 'videó' : 'kép') + ' (' + Math.round(sc.bg.size / 1048576 * 10) / 10 + ' MB)' : 'Háttér: alap (sötétkék)';
+  }
+  $('[data-bgfile]').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (f.size > 300 * 1048576) { $('[data-stmsg]').textContent = 'A fájl túl nagy (legfeljebb 300 MB).'; return; }
+    try { const sc = (await kvGet('screen')) || {}; sc.bg = f; await kvSet('screen', sc); await screenForm(); $('[data-stmsg]').textContent = 'Háttér beállítva.'; } catch (x) { $('[data-stmsg]').textContent = 'A háttér nem menthető: ' + x.message; }
+  });
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
   function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); await ensureEvent(); await loadTemplate(); modeInfo(); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); setTimeout(warnings, 3000); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

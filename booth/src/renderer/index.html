@@ -9,8 +9,9 @@
 <body>
 <div id="app">
   <section class="scr on" data-s="start">
-    <div class="brand">Event<span>Crazy</span></div>
-    <div class="tap"><b>Érints meg!</b><span>és mosolyogj a kamerába</span></div>
+    <div class="bgm" data-bgm aria-hidden="true"></div>
+    <div class="brand" data-brand>Event<span>Crazy</span></div>
+    <div class="tap"><b data-st1>Érints meg!</b><span data-st2>és mosolyogj a kamerába</span></div>
     <div class="mode" data-modeinfo></div>
     <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
     <div class="warn" data-warn hidden></div>
@@ -86,6 +87,13 @@
           <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
         </div>
         <p class="st-up" data-upst></p>
+        <h3 class="st-h">Kezdőképernyő</h3>
+        <label>Felirat <input id="sc-t1" maxlength="60" placeholder="Érints meg!"></label>
+        <label>Alcím <input id="sc-t2" maxlength="80" placeholder="és mosolyogj a kamerába"></label>
+        <label>Felső felirat (üresen: EventCrazy logó) <input id="sc-brand" maxlength="60" placeholder="pl. Anna & Péter · 2026.11.29."></label>
+        <label>Kiemelő szín <input id="sc-color" type="color" value="#E8894A"></label>
+        <div class="st-b"><label class="big ghost sm st-imp">Háttérkép vagy -videó<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-bgfile hidden></label><button type="button" class="big ghost sm" data-act="bgclear">Háttér törlése</button><button type="button" class="big ghost sm" data-act="scsave">Kezdőképernyő mentése</button></div>
+        <p class="st-up" data-bginfo></p>
         <h3 class="st-h">Mentett beállítások (sablonok)</h3>
         <div class="st-pre"><input id="pre-name" placeholder="pl. Esküvő – 3 képes csík" maxlength="60"><button type="button" class="big ghost sm" data-act="presave">Mentés sablonként</button></div>
         <div class="st-prel" data-prelist></div>
