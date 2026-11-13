@@ -106,7 +106,7 @@
     clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === 'modes') show('start'); }, 25000);
   }
   async function startTap() {
-    if (U().formBefore && B.guest && S.cfg.event && S.cfg.event.deal && !S.busy) { const d = await guestForm('before'); if (!d) { show('start'); return; } S.guestPre = d; }
+    if (U().formBefore && B.guest && S.cfg.event && S.cfg.event.deal && !S.busy && formFields('before').length) { const d = await guestForm('before'); if (!d) { show('start'); return; } S.guestPre = d; }
     const L = modeList(); if (L.length > 1) modesScreen(); else run(L[0]);
   }
 
@@ -545,8 +545,8 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk'], UI_SEL = ['printMode', 'printWhere', 'askName', 'askPhone', 'lanQr'], UI_LIM = ['limitPhoto', 'limitEvent'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', askPhone: 'off', lanQr: 'off', questions: '', consentText: '', lanSsid: '' };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr'], UI_LIM = ['limitPhoto', 'limitEvent'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -800,23 +800,30 @@
   /* a vendég adatainak beküldése (a gép sorba teszi, net nélkül később megy) */
   async function submitGuest(d, photo, send) {
     const ev = S.cfg.event; if (!ev || !ev.deal || !B.guest) return;
-    await call(B.guest, { deal: ev.deal, ev: ev.ev, photo: photo || '', title: ev.title || '', name: d.name || '', email: d.email || '', phone: d.phone || '', answers: d.answers || {}, consent: true, send: !!send });
+    await call(B.guest, { deal: ev.deal, ev: ev.ev, photo: photo || '', title: ev.title || '', name: d.name || '', email: d.email || '', answers: d.answers || {}, consent: true, send: !!send });
     B.log('vendégadat sorba téve' + (send ? ' (e-mail)' : ''));
   }
 
   /* űrlap: e-mail / név / telefon / saját kérdések + hozzájárulás; érintős billentyűzettel */
   let GF = null;
-  function guestForm(mode) {
-    const u = U(), F = [];
+  /* az űrlap mezői: e-mailes küldésnél csak e-mail (+ név); a saját kérdések csak a fotózás előtti kérdőívben.
+   * Telefonszámot nem kérünk (döntés 2026-11-13). */
+  function formFields(mode) {
+    const u = U(), F = [], nm = u.askName || 'opt';
     if (mode === 'send') F.push(['email', 'E-mail-címed', 'email', true]);
-    if (u.askName && u.askName !== 'off') F.push(['name', 'Neved', 'text', u.askName === 'req']);
-    if (mode === 'before' && u.shareEmail) F.push(['email', 'E-mail-címed (ide küldjük a fotót – nem kötelező)', 'email', false]);
-    if (u.askPhone && u.askPhone !== 'off') F.push(['phone', 'Telefonszámod', 'tel', u.askPhone === 'req']);
-    questions().forEach((t, i) => F.push(['q' + i, t, 'text', false]));
+    if (nm !== 'off') F.push(['name', 'Neved', 'text', nm === 'req']);
+    if (mode === 'before') {
+      if (u.shareEmail) F.push(['email', 'E-mail-címed (ide küldjük a fotót – nem kötelező)', 'email', false]);
+      questions().forEach((t, i) => F.push(['q' + i, t, 'text', false]));
+    }
+    return F;
+  }
+  function guestForm(mode) {
+    const u = U(), F = formFields(mode);
     const osk = u.osk !== false;
     $('[data-gfh]').textContent = mode === 'send' ? 'Küldés e-mailben' : 'Mielőtt fotózunk…';
     $('[data-gfsend]').textContent = mode === 'send' ? 'Küldés' : 'Tovább';
-    $('[data-gform]').innerHTML = F.map(f => '<label>' + esc(f[1]) + (f[3] ? ' *' : '') + '<input name="' + f[0] + '" type="' + (f[2] === 'email' ? 'email' : f[2] === 'tel' ? 'tel' : 'text') + '"' + (osk ? ' inputmode="none"' : '') + ' maxlength="' + (f[2] === 'email' ? 190 : 120) + '" spellcheck="false" autocapitalize="off"></label>').join('') +
+    $('[data-gform]').innerHTML = F.map(f => '<label>' + esc(f[1]) + (f[3] ? ' *' : '') + '<input name="' + f[0] + '" type="' + (f[2] === 'email' ? 'email' : 'text') + '"' + (osk ? ' inputmode="none"' : '') + ' maxlength="' + (f[2] === 'email' ? 190 : 120) + '" spellcheck="false" autocapitalize="off"></label>').join('') +
       '<label class="gf-c"><input type="checkbox" name="consent"> <span>' + esc(u.consentText || CONSENT_DEF) + '</span></label>';
     $('[data-gferr]').textContent = ''; $('[data-osk]').hidden = !osk;
     show('form'); oskDraw();

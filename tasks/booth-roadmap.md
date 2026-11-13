@@ -42,7 +42,7 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 *Döntések: e-mail a panel levélküldőjéről; vendégadat csak a panelbe, a dealhez (Salesmate-be nem); webhook csak linket küld.*
 - h3 E-mail küldése (arculatos) – a panel levélküldőjén át
 - d1 Hozzájárulás / adatkezelési képernyő
-- d2 Kérdőív (név, e-mail, telefon, saját kérdések) – s4 és a4 ezt használja
+- d2 Kérdőív (név, e-mail, saját kérdések) – s4 és a4 ezt használja. *2026-11-13: telefonszám nem kell; az e-mailes küldésnél csak e-mail + név, a saját kérdések csak a fotózás előtti kérdőívben.*
 - d5 Adatok exportja, CRM-szinkron (a panel kontaktjaiba)
 - h9 Webhook (ügyfélrendszerekbe)
 - h2 Internet nélküli QR (helyi Wi-Fi-ről)
