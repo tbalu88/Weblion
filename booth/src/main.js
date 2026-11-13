@@ -21,7 +21,8 @@ const DEF = {
   autoPrint: false,
   reviewSec: 25,                      /* ennyi mp után vissza a kezdőképernyőre */
   boothKey: '',                       /* a panelben (Beállítások → Crazy Booth gépek) kapott gépkulcs */
-  event: null                         /* a kiválasztott rendezvény: { deal, title, date, ev, template } – null = kézi */
+  event: null,                        /* a kiválasztott rendezvény: { deal, title, date, ev, template } – null = kézi */
+  ui: {}                              /* a felület saját beállításai (módok, időzítések…) – az online felület bővítheti új program nélkül */
 };
 let cfg = Object.assign({}, DEF);
 let cam = null;
@@ -89,7 +90,7 @@ ipcMain.handle('log', wrap(async m => log('felület: ' + m)));
 /* panel + galéria */
 ipcMain.handle('cloud:events', wrap(async date => cloud.events(date)));
 ipcMain.handle('cloud:template', wrap(async deal => cloud.template(deal)));
-ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl) => cloud.keep(ev, deal, date, photo, dataUrl)));
+ipcMain.handle('cloud:keep', wrap(async (ev, deal, date, photo, dataUrl, meta) => cloud.keep(ev, deal, date, photo, dataUrl, meta)));
 ipcMain.handle('cloud:list', wrap(async ev => cloud.list(ev)));
 ipcMain.handle('cloud:read', wrap(async f => cloud.readImage(f)));
 ipcMain.handle('cloud:qr', wrap(async url => cloud.qr(url)));

@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: mediastream: file:; style-src 'self' 'unsafe-inline'">
 <title>Crazy Booth</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -18,22 +18,36 @@
     <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
   </section>
 
+  <section class="scr" data-s="modes">
+    <h2 class="md-h">Mit készítsünk?</h2>
+    <div class="md" data-modes></div>
+    <button type="button" class="xbtn" data-act="back" title="Vissza (ESC)" aria-label="Vissza">✕</button>
+  </section>
+
+  <section class="scr" data-s="standby">
+    <div class="sb"><b data-sbmsg>Hamarosan folytatjuk!</b><span data-sbuntil></span></div>
+  </section>
+
   <section class="scr" data-s="live">
     <div class="lv"><video data-video autoplay muted playsinline></video><img data-lvimg alt=""></div>
     <div class="cd" data-cd></div>
     <div class="shotno" data-shotno></div>
+    <div class="pose" data-pose hidden></div>
+    <div class="rec" data-rec hidden><i></i>FELVÉTEL<div class="recbar"><div data-recbar></div></div></div>
+    <button type="button" class="big pri recstop" data-act="recstop" hidden>Kész, befejeztem</button>
     <div class="flash" data-flash></div>
     <button type="button" class="xbtn" data-act="cancel" title="Megszakítás (ESC)" aria-label="Megszakítás">✕</button>
   </section>
 
   <section class="scr" data-s="review">
     <div class="rv">
-      <div class="rv-img"><canvas data-out width="1200" height="1800"></canvas></div>
+      <div class="rv-img"><canvas data-out width="1200" height="1800"></canvas><video data-outv loop playsinline hidden></video></div>
       <div class="rv-side">
         <h2>Kész is!</h2>
         <div class="qr" data-qrbox hidden><div class="qrc" data-qr role="img" aria-label="QR-kód a letöltéshez"></div><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
-        <button type="button" class="big pri" data-act="print">Nyomtatás</button>
-        <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div>
+        <div class="thumbs" data-thumbs hidden></div>
+        <div class="printui" data-printui><button type="button" class="big pri" data-act="print">Nyomtatás</button>
+        <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div></div>
         <button type="button" class="big" data-act="again">Újra</button>
         <button type="button" class="big ghost" data-act="done">Kész</button>
         <p class="rv-t" data-rvt></p>
@@ -47,61 +61,110 @@
   </section>
   <section class="scr" data-s="photo">
     <div class="rv">
-      <div class="rv-img"><img class="ph-big" data-phbig alt=""></div>
+      <div class="rv-img"><img class="ph-big" data-phbig alt=""><video class="ph-big" data-phvid loop playsinline controls hidden></video></div>
       <div class="rv-side">
         <div class="qr" data-phqrbox><div class="qrc" data-phqr role="img" aria-label="QR-kód"></div><span>Olvasd be a telefonoddal,<br>és töltsd le!</span></div>
-        <button type="button" class="big pri" data-act="reprint">Nyomtatás</button>
+        <button type="button" class="big pri" data-act="reprint" data-reprint>Nyomtatás</button>
         <button type="button" class="big ghost" data-act="gallery">← Galéria</button>
       </div>
     </div>
   </section>
 
-  <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Nyomtatás…</b></div></section>
+  <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Nyomtatás…</b><div class="busybar" data-busybar hidden><div></div></div></div></section>
 
   <section class="scr" data-s="settings">
     <div class="st">
-      <h2>Beállítások <small data-ver></small></h2>
       <div class="st-pin" data-pinbox>
+        <h2>Kezelő <small data-ver></small></h2>
         <p>PIN-kód</p><div class="pin" data-pin></div>
         <div class="pad">1 2 3 4 5 6 7 8 9 ⌫ 0 ✓</div>
+        <button type="button" class="big ghost sm" data-act="close">Mégse</button>
       </div>
       <form class="st-f" data-form hidden>
-        <label>Kamera <select name="camera"><option value="webcam">Webkamera (Mac / PC)</option><option value="dcc">Nikon D5300 (digiCamControl, csak Windows)</option></select></label>
-        <label data-web>Webkamera <select name="camId"></select></label>
-        <label data-web>Felbontás <select name="camRes"><option value="720">HD (1280×720)</option><option value="1080">Full HD (1920×1080)</option><option value="2160">4K (3840×2160), ha a kamera tudja</option></select></label>
-        <label class="chk" data-web><input name="mirror" type="checkbox"> Tükrözött élőkép (a nyomat nem tükrözött)</label>
-        <label data-dcc>digiCamControl címe <input name="dccUrl"></label>
-        <label>Fotók száma <select name="shots"><option value="1">1 kép (4×6")</option><option value="3">3 képes csík (2×6", kétszer a lapon)</option></select></label>
-        <label>Visszaszámlálás (mp) <input name="countdown" type="number" min="1" max="10"></label>
-        <label>Nyomtató <select name="printer" data-printers></select></label>
-        <label>Példány alapból <input name="copies" type="number" min="1" max="10"></label>
-        <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
-        <label>Előnézet ideje (mp) <input name="reviewSec" type="number" min="5" max="120"></label>
-        <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
-        <h3 class="st-h">Panel és galéria</h3>
-        <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
-        <div class="st-ev">
-          <div class="st-evh"><span>Rendezvény</span><input type="date" data-evdate><button type="button" class="big ghost sm" data-act="evload">Rendezvények betöltése</button></div>
-          <div class="st-evl" data-evlist></div>
-          <p class="st-msg" data-evmsg></p>
-          <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
+        <div class="st-top">
+          <h2>Kezelő <small data-ver2></small></h2>
+          <input type="search" class="st-q" data-stq placeholder="Keresés a beállításokban…" aria-label="Keresés a beállításokban">
         </div>
-        <p class="st-up" data-upst></p>
-        <h3 class="st-h">Kezdőképernyő</h3>
-        <label>Felirat <input id="sc-t1" maxlength="60" placeholder="Érints meg!"></label>
-        <label>Alcím <input id="sc-t2" maxlength="80" placeholder="és mosolyogj a kamerába"></label>
-        <label>Felső felirat (üresen: EventCrazy logó) <input id="sc-brand" maxlength="60" placeholder="pl. Anna & Péter · 2026.11.29."></label>
-        <label>Kiemelő szín <input id="sc-color" type="color" value="#E8894A"></label>
-        <div class="st-b"><label class="big ghost sm st-imp">Háttérkép vagy -videó<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-bgfile hidden></label><button type="button" class="big ghost sm" data-act="bgclear">Háttér törlése</button><button type="button" class="big ghost sm" data-act="scsave">Kezdőképernyő mentése</button></div>
-        <p class="st-up" data-bginfo></p>
-        <h3 class="st-h">Mentett beállítások (sablonok)</h3>
-        <div class="st-pre"><input id="pre-name" placeholder="pl. Esküvő – 3 képes csík" maxlength="60"><button type="button" class="big ghost sm" data-act="presave">Mentés sablonként</button></div>
-        <div class="st-prel" data-prelist></div>
-        <h3 class="st-h">Átvitel másik gépre</h3>
-        <div class="st-b"><button type="button" class="big ghost sm" data-act="export">Beállítások exportja</button><label class="big ghost sm st-imp">Importálás<input type="file" accept="application/json,.json" data-import hidden></label></div>
-        <p class="st-up">Az export a gépkulcsot és a PIN-t nem tartalmazza – azt minden gépen külön kell megadni.</p>
-        <div class="st-b"><button type="button" class="big pri" data-act="save">Mentés</button><button type="button" class="big ghost" data-act="close">Vissza</button><button type="button" class="big ghost" data-act="quit">Kilépés</button></div>
-        <p class="st-msg" data-stmsg></p>
+        <nav class="st-tabs" data-tabs>
+          <button type="button" data-tab="ov" class="on">Áttekintés</button>
+          <button type="button" data-tab="ev">Rendezvény</button>
+          <button type="button" data-tab="st">Kezdés</button>
+          <button type="button" data-tab="sh">Fotózás</button>
+          <button type="button" data-tab="af">Utána</button>
+          <button type="button" data-tab="hw">Gép</button>
+        </nav>
+        <div class="st-panes">
+          <!-- Áttekintés: indulás előtti ellenőrzés + gyors műveletek (kezelőpult) -->
+          <div class="st-pane on" data-pane="ov">
+            <div class="pf" data-preflight></div>
+            <div class="st-b"><button type="button" class="big pri" data-act="close">▶ Fotózás indítása</button><button type="button" class="big ghost sm" data-act="pfre">Újraellenőrzés</button><button type="button" class="big ghost sm" data-act="gallery">Galéria</button></div>
+            <h3 class="st-h">Szünet</h3>
+            <div class="st-row"><label>Üzenet a képernyőn <input id="sb-msg" maxlength="80" placeholder="Hamarosan folytatjuk!"></label><label>Folytatás ekkor (üresen: kézzel) <input id="sb-until" type="time"></label></div>
+            <div class="st-b"><button type="button" class="big ghost sm" data-act="standby">Szünet indítása</button></div>
+            <p class="st-up">Szünetben a kamera kikapcsol. Folytatás: bal felső sarok 3 mp-ig vagy F2, vagy a megadott időpontban magától.</p>
+          </div>
+
+          <div class="st-pane" data-pane="ev">
+            <div class="st-ev">
+              <div class="st-evh"><span>Rendezvény</span><input type="date" data-evdate><button type="button" class="big ghost sm" data-act="evload">Rendezvények betöltése</button></div>
+              <div class="st-evl" data-evlist></div>
+              <p class="st-msg" data-evmsg></p>
+              <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
+            </div>
+            <h3 class="st-h">Mentett beállítások (sablonok)</h3>
+            <div class="st-pre"><input id="pre-name" placeholder="pl. Esküvő – 3 képes csík" maxlength="60"><button type="button" class="big ghost sm" data-act="presave">Mentés sablonként</button></div>
+            <div class="st-prel" data-prelist></div>
+          </div>
+
+          <div class="st-pane" data-pane="st">
+            <h3 class="st-h">Választható módok <small>(egy mód: érintésre azonnal indul; több: a vendég választ)</small></h3>
+            <div class="st-modes" data-modecheck></div>
+            <h3 class="st-h">Kezdőképernyő</h3>
+            <label>Felirat <input id="sc-t1" maxlength="60" placeholder="Érints meg!"></label>
+            <label>Alcím <input id="sc-t2" maxlength="80" placeholder="és mosolyogj a kamerába"></label>
+            <label>Felső felirat (üresen: EventCrazy logó) <input id="sc-brand" maxlength="60" placeholder="pl. Anna & Péter · 2026.11.29."></label>
+            <label>Kiemelő szín <input id="sc-color" type="color" value="#E8894A"></label>
+            <div class="st-b"><label class="big ghost sm st-imp">Háttérkép vagy -videó<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-bgfile hidden></label><button type="button" class="big ghost sm" data-act="bgclear">Háttér törlése</button><button type="button" class="big ghost sm" data-act="scsave">Kezdőképernyő mentése</button></div>
+            <p class="st-up" data-bginfo></p>
+          </div>
+
+          <div class="st-pane" data-pane="sh">
+            <label>Fotók száma (sablon nélkül) <select name="shots"><option value="1">1 kép (4×6")</option><option value="3">3 képes csík (2×6", kétszer a lapon)</option></select></label>
+            <div class="st-row"><label>Visszaszámlálás az első képnél (mp) <input name="countdown" type="number" min="1" max="10"></label><label>A további képeknél (mp) <input id="u-cdNext" type="number" min="1" max="10"></label></div>
+            <label class="chk"><input id="u-bestOf" type="checkbox"> „3 pózból a legjobb” – egyképes módban 3 fotó, a vendég választ</label>
+            <label class="chk"><input id="u-retake" type="checkbox"> Egy kép újrafotózása a csíkban (koppintás a képre)</label>
+            <label>Csoportkép: visszaszámlálás (mp) <input id="u-groupCd" type="number" min="3" max="15"></label>
+            <div class="st-row"><label>Videó hossza (mp) <input id="u-videoSec" type="number" min="3" max="30"></label><label>Videóüzenet hossza (mp) <input id="u-gbSec" type="number" min="10" max="90"></label></div>
+            <label class="chk"><input id="u-music" type="checkbox"> Zene a GIF-hez, boomeranghoz, videóhoz</label>
+            <div class="st-b"><label class="big ghost sm st-imp">Zene kiválasztása (mp3, m4a, wav)<input type="file" accept="audio/*" data-musicfile hidden></label><button type="button" class="big ghost sm" data-act="musicclear">Zene törlése</button></div>
+            <p class="st-up" data-musicinfo></p>
+            <label class="chk"><input id="u-getReady" type="checkbox"> „Készülj!” felirat a mód szerint (pl. „3 fotó jön”, „Mozogj!”)</label>
+          </div>
+
+          <div class="st-pane" data-pane="af">
+            <label>Előnézet ideje (mp) – utána vissza a kezdéshez <input name="reviewSec" type="number" min="5" max="120"></label>
+            <label>Nyomtató <select name="printer" data-printers></select></label>
+            <label>Példány alapból <input name="copies" type="number" min="1" max="10"></label>
+            <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
+            <p class="st-up" data-upst></p>
+          </div>
+
+          <div class="st-pane" data-pane="hw">
+            <label>Kamera <select name="camera"><option value="webcam">Webkamera (Mac / PC)</option><option value="dcc">Nikon D5300 (digiCamControl, csak Windows)</option></select></label>
+            <label data-web>Webkamera <select name="camId"></select></label>
+            <label data-web>Felbontás <select name="camRes"><option value="720">HD (1280×720)</option><option value="1080">Full HD (1920×1080)</option><option value="2160">4K (3840×2160), ha a kamera tudja</option></select></label>
+            <label class="chk" data-web><input name="mirror" type="checkbox"> Tükrözött élőkép (a nyomat nem tükrözött)</label>
+            <label data-dcc>digiCamControl címe <input name="dccUrl"></label>
+            <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
+            <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
+            <h3 class="st-h">Átvitel másik gépre</h3>
+            <div class="st-b"><button type="button" class="big ghost sm" data-act="export">Beállítások exportja</button><label class="big ghost sm st-imp">Importálás<input type="file" accept="application/json,.json" data-import hidden></label><button type="button" class="big ghost sm" data-act="defaults">Alapértékek visszaállítása</button></div>
+            <p class="st-up">Az export a gépkulcsot és a PIN-t nem tartalmazza – azt minden gépen külön kell megadni.</p>
+            <div class="st-b"><button type="button" class="big ghost sm" data-act="quit">Kilépés a programból</button></div>
+          </div>
+          <p class="st-none" data-stnone hidden>Nincs ilyen beállítás.</p>
+        </div>
+        <div class="st-foot"><p class="st-msg" data-stmsg></p><button type="button" class="big ghost" data-act="close">Vissza</button><button type="button" class="big pri" data-act="save">Mentés</button></div>
       </form>
     </div>
   </section>
@@ -109,6 +172,7 @@
   <div class="err" data-err hidden></div>
 </div>
 <script src="compose.js"></script>
+<script src="clips.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

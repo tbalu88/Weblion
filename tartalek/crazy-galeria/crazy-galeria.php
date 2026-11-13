@@ -2,10 +2,10 @@
 /**
  * Plugin Name: Crazy galéria (szelfigépek)
  * Description: A Crazy Booth szelfigépek felhő-galériája: a gépek ide töltik fel a képeket (gépkulccsal, amit az eventcrazy.hu panel ellenőriz), a vendégek a QR-kóddal a /galeria/<rendezvény>/<kép> oldalon töltik le. A képek 60 nap után törlődnek.
- * Version: 0.2.0 (ZIP, jelszó, cím, elrejtés – a panelből kezelve)
+ * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.2.0');
+define('CG_VER', '0.3.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -31,6 +31,7 @@ function cg_install() {
   h int(10) unsigned NOT NULL DEFAULT 0,
   bytes int(10) unsigned NOT NULL DEFAULT 0,
   hidden tinyint(1) NOT NULL DEFAULT 0,
+  kind varchar(12) NOT NULL DEFAULT 'photo',
   created_at datetime NOT NULL,
   PRIMARY KEY  (id),
   UNIQUE KEY evphoto (ev, photo),
@@ -109,8 +110,26 @@ function cg_upload(WP_REST_Request $req) {
 	$ev = (string) $req->get_param('ev'); $ph = (string) $req->get_param('photo');
 	if (!cg_tok_ok($ev) || !cg_tok_ok($ph)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás azonosító.'), 400); }
 	if ($wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s', $ev, $ph))) { return array('ok' => true, 'dup' => true, 'url' => home_url('/galeria/' . $ev . '/' . $ph)); }
-	$f = $req->get_file_params(); $f = isset($f['file']) ? $f['file'] : null;
+	$fp = $req->get_file_params(); $f = isset($fp['file']) ? $fp['file'] : null;
 	if (!$f || !empty($f['error']) || !is_uploaded_file($f['tmp_name'])) { return new WP_REST_Response(array('ok' => false, 'message' => 'Nincs fájl.'), 400); }
+	/* v0.3: videó (MP4 / WebM) – a fájl tartalma alapján ellenőrizve, eredeti formában tárolva; a borítókép külön („poster”) */
+	$head = (string) @file_get_contents($f['tmp_name'], false, null, 0, 16);
+	$vext = substr($head, 4, 4) === 'ftyp' ? 'mp4' : (strncmp($head, "\x1A\x45\xDF\xA3", 4) === 0 ? 'webm' : '');
+	if ($vext !== '') {
+		if ((int) $f['size'] > 80 * MB_IN_BYTES) { return new WP_REST_Response(array('ok' => false, 'message' => 'Túl nagy videó.'), 413); }
+		$kind = in_array((string) $req->get_param('kind'), array('video', 'guestbook'), true) ? (string) $req->get_param('kind') : 'video';
+		$dir = cg_dir() . '/' . $ev; wp_mkdir_p($dir);
+		if (!is_file($dir . '/index.php')) { @file_put_contents($dir . '/index.php', "<?php // Silence is golden.\n"); }
+		if (!@move_uploaded_file($f['tmp_name'], $dir . '/' . $ph . '.' . $vext)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Mentési hiba.'), 500); }
+		$po = isset($fp['poster']) ? $fp['poster'] : null; $w = 0; $h = 0;
+		if ($po && empty($po['error']) && is_uploaded_file($po['tmp_name']) && @getimagesize($po['tmp_name'])) {
+			$ed = wp_get_image_editor($po['tmp_name']);
+			if (!is_wp_error($ed)) { $ed->resize(1600, 1600, false); $ed->set_quality(84); $sv = $ed->save($dir . '/' . $ph . '.jpg', 'image/jpeg'); if (!is_wp_error($sv)) { $w = (int) $sv['width']; $h = (int) $sv['height']; $th = wp_get_image_editor($sv['path']); if (!is_wp_error($th)) { $th->resize(480, 480, false); $th->set_quality(78); $th->save($dir . '/' . $ph . '_t.jpg', 'image/jpeg'); } } }
+		}
+		$d = (string) $req->get_param('date');
+		$wpdb->insert(cg_t(), array('ev' => $ev, 'photo' => $ph, 'deal' => (int) $req->get_param('deal'), 'evdate' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) ? $d : null, 'device' => mb_substr($dev, 0, 60), 'file' => $ph . '.' . $vext, 'w' => $w, 'h' => $h, 'bytes' => (int) @filesize($dir . '/' . $ph . '.' . $vext), 'kind' => $kind, 'created_at' => current_time('mysql', true)));
+		return array('ok' => true, 'url' => home_url('/galeria/' . $ev . '/' . $ph));
+	}
 	if ((int) $f['size'] > 25 * MB_IN_BYTES) { return new WP_REST_Response(array('ok' => false, 'message' => 'Túl nagy fájl.'), 413); }
 	$info = @getimagesize($f['tmp_name']);
 	if (!$info || !in_array($info[2], array(IMAGETYPE_JPEG, IMAGETYPE_PNG), true)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Csak JPG / PNG.'), 415); }
@@ -153,7 +172,7 @@ add_action('init', function () {
 		@set_time_limit(120);
 		$tmp = wp_tempnam('cg-zip'); $z = new ZipArchive();
 		if ($z->open($tmp, ZipArchive::OVERWRITE) !== true) { status_header(500); exit; }
-		$i = 0; foreach ($rows as $r) { $f = cg_dir() . '/' . $ev . '/' . $r->file; if (is_file($f)) { $z->addFile($f, sprintf('eventcrazy-%03d.jpg', ++$i)); } }
+		$i = 0; foreach ($rows as $r) { $f = cg_dir() . '/' . $ev . '/' . $r->file; if (is_file($f)) { $z->addFile($f, sprintf('eventcrazy-%03d.', ++$i) . strtolower(pathinfo($r->file, PATHINFO_EXTENSION))); } }
 		$z->close();
 		header('Content-Type: application/zip'); header('Content-Length: ' . filesize($tmp)); header('Content-Disposition: attachment; filename="eventcrazy-fotok.zip"');
 		readfile($tmp); @unlink($tmp); exit;
@@ -163,8 +182,9 @@ add_action('init', function () {
 		if ($row && isset($_GET['dl'])) {
 			$path = cg_dir() . '/' . $ev . '/' . $row->file;
 			if (!is_file($path)) { status_header(404); exit; }
-			header('Content-Type: image/jpeg'); header('Content-Length: ' . filesize($path));
-			header('Content-Disposition: attachment; filename="eventcrazy-' . $ph . '.jpg"');
+			$ext = strtolower(pathinfo($row->file, PATHINFO_EXTENSION));
+			header('Content-Type: ' . ($ext === 'mp4' ? 'video/mp4' : ($ext === 'webm' ? 'video/webm' : 'image/jpeg'))); header('Content-Length: ' . filesize($path));
+			header('Content-Disposition: attachment; filename="eventcrazy-' . $ph . '.' . $ext . '"');
 			readfile($path); exit;
 		}
 		cg_page($row ? 'photo' : 'wait', $ev, $row); exit;
@@ -180,7 +200,7 @@ function cg_page($kind, $ev, $data) {
 		. 'header{background:var(--n);color:#fff;padding:12px 16px;font:800 20px system-ui,sans-serif}header span{background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent}'
 		. 'main{max-width:1100px;margin:0 auto;padding:16px}h1{font-size:22px;margin:4px 0 12px}.big{display:block;max-width:100%;max-height:72vh;margin:0 auto 14px;border-radius:10px;box-shadow:0 10px 30px rgba(20,28,51,.18);background:#fff}'
 		. '.btn{display:flex;align-items:center;justify-content:center;max-width:420px;margin:0 auto 10px;height:52px;border-radius:999px;background:var(--g);color:#141C33;font-weight:800;text-decoration:none;font-size:17px}.btn.ghost{background:#fff;border:1.5px solid var(--o);color:#B85A1C}'
-		. '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.grid a{display:block;aspect-ratio:2/3;background:#e9e4dc center/cover no-repeat;border-radius:8px}.mu{color:#5B6275;text-align:center}'
+		. '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.grid a{position:relative;display:block;aspect-ratio:2/3;background:#e9e4dc center/cover no-repeat;border-radius:8px}.grid .pl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:18px}.mu{color:#5B6275;text-align:center}'
 		. 'footer{text-align:center;color:#5B6275;font-size:13px;padding:20px}';
 	$refresh = $kind === 'wait' ? '<meta http-equiv="refresh" content="15">' : '';
 	echo '<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">' . $refresh . '<title>EventCrazy fotók</title><style>' . $css . '</style></head><body><header>Event<span>Crazy</span></header><main>';
@@ -192,7 +212,8 @@ function cg_page($kind, $ev, $data) {
 		if (!empty($data['bad'])) { echo '<p class="mu" style="color:#C2392F">Hibás jelszó – próbáld újra.</p>'; }
 		echo '<button class="btn" style="width:100%;border:0;cursor:pointer">Megnyitás</button></form>';
 	} elseif ($kind === 'photo') {
-		echo '<img class="big" src="' . esc_url($u . $data->file) . '" alt="A fotód">';
+		if (preg_match('/\.(mp4|webm)$/', $data->file)) { echo '<video class="big" src="' . esc_url($u . $data->file) . '"' . (is_file(cg_dir() . '/' . $ev . '/' . $data->photo . '.jpg') ? ' poster="' . esc_url($u . $data->photo . '.jpg') . '"' : '') . ' controls autoplay muted loop playsinline></video>'; }
+		else { echo '<img class="big" src="' . esc_url($u . $data->file) . '" alt="A fotód">'; }
 		echo '<a class="btn" href="?dl=1">Letöltés</a><a class="btn ghost" href="' . esc_url(home_url('/galeria/' . $ev . '/')) . '">A rendezvény összes fotója</a>';
 		echo '<p class="mu">Tipp: telefonon a képet hosszan nyomva is elmentheted.</p>';
 	} elseif ($kind === 'wait') {
@@ -200,7 +221,7 @@ function cg_page($kind, $ev, $data) {
 	} elseif ($kind === 'event') {
 		echo '<h1>' . ($title !== '' ? 'Fotók' : 'A rendezvény fotói') . ' <small class="mu">(' . count($data) . ')</small></h1>';
 		echo '<a class="btn ghost" href="' . esc_url(home_url('/galeria/' . $ev . '/zip')) . '" style="margin-bottom:14px">Összes letöltése (ZIP)</a><div class="grid">';
-		foreach ($data as $r) { echo '<a href="' . esc_url(home_url('/galeria/' . $ev . '/' . $r->photo)) . '" style="background-image:url(' . esc_url($u . $r->photo . '_t.jpg') . ')" aria-label="Fotó"></a>'; }
+		foreach ($data as $r) { $vid = preg_match('/\.(mp4|webm)$/', $r->file); echo '<a href="' . esc_url(home_url('/galeria/' . $ev . '/' . $r->photo)) . '" style="background-image:url(' . esc_url($u . $r->photo . '_t.jpg') . ')" aria-label="' . ($vid ? 'Videó' : 'Fotó') . '">' . ($vid ? '<i class="pl">▶</i>' : '') . '</a>'; }
 		echo '</div>';
 	} else {
 		status_header(404);
@@ -215,7 +236,7 @@ add_action('cg_cleanup', function () {
 	global $wpdb;
 	$old = $wpdb->get_results($wpdb->prepare('SELECT id, ev, photo, file FROM ' . cg_t() . ' WHERE created_at < %s LIMIT 5000', gmdate('Y-m-d H:i:s', time() - CG_KEEP_DAYS * DAY_IN_SECONDS)));
 	foreach ((array) $old as $r) {
-		@unlink(cg_dir() . '/' . $r->ev . '/' . $r->file); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '_t.jpg');
+		@unlink(cg_dir() . '/' . $r->ev . '/' . $r->file); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '_t.jpg'); @unlink(cg_dir() . '/' . $r->ev . '/' . $r->photo . '.jpg');
 		$wpdb->delete(cg_t(), array('id' => (int) $r->id));
 	}
 });

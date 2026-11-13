@@ -34,7 +34,10 @@ function make(o) {
         const fd = new FormData();
         ['ev', 'photo', 'date'].forEach(k => fd.append(k, String(j[k] || '')));
         fd.append('deal', String(j.deal || 0));
-        fd.append('file', new Blob([fs.readFileSync(j.file)], { type: 'image/jpeg' }), j.photo + '.jpg');
+        const ext = path.extname(j.file).slice(1).toLowerCase(), mime = ext === 'mp4' ? 'video/mp4' : ext === 'webm' ? 'video/webm' : 'image/jpeg';
+        fd.append('file', new Blob([fs.readFileSync(j.file)], { type: mime }), j.photo + '.' + (ext || 'jpg'));
+        if (j.poster && fs.existsSync(j.poster)) fd.append('poster', new Blob([fs.readFileSync(j.poster)], { type: 'image/jpeg' }), j.photo + '.jpg');
+        if (j.kind) fd.append('kind', j.kind);
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 60000);
         let r;
         try { r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1/upload', { method: 'POST', headers: hdr(), body: fd, signal: ctl.signal }); }
@@ -68,11 +71,17 @@ function make(o) {
       }
     },
     /* a kész kép mentése a rendezvény mappájába + sorba állítás feltöltésre */
-    async keep(ev, deal, date, photo, dataUrl) {
+    /* v0.5: kép (JPG) vagy videó (MP4/WebM, borítóképpel); meta: { poster (JPG data URL), kind: photo|video|guestbook } */
+    async keep(ev, deal, date, photo, dataUrl, meta) {
+      meta = meta || {};
       const dir = path.join(o.picDir(), 'galeria-' + ev); fs.mkdirSync(dir, { recursive: true });
-      const file = path.join(dir, photo + '.jpg');
+      const mime = (/^data:([^;]+);/.exec(String(dataUrl)) || [])[1] || 'image/jpeg';
+      const ext = /mp4/.test(mime) ? 'mp4' : /webm/.test(mime) ? 'webm' : 'jpg';
+      const file = path.join(dir, photo + '.' + ext);
       fs.writeFileSync(file, Buffer.from(String(dataUrl).split(',')[1], 'base64'));
-      fs.writeFileSync(path.join(qdir, Date.now() + '-' + photo + '.json'), JSON.stringify({ ev, deal, date, photo, file }));
+      let poster = '';
+      if (meta.poster) { poster = path.join(dir, photo + '_p.jpg'); fs.writeFileSync(poster, Buffer.from(String(meta.poster).split(',')[1], 'base64')); }
+      fs.writeFileSync(path.join(qdir, Date.now() + '-' + photo + '.json'), JSON.stringify({ ev, deal, date, photo, file, poster, kind: meta.kind || (ext === 'jpg' ? 'photo' : 'video') }));
       setTimeout(pump, 200);
       return file;
     },
@@ -80,7 +89,7 @@ function make(o) {
     list(ev) {
       const dir = path.join(o.picDir(), 'galeria-' + ev);
       if (!fs.existsSync(dir)) return [];
-      return fs.readdirSync(dir).filter(x => x.endsWith('.jpg')).map(x => ({ photo: x.slice(0, -4), file: path.join(dir, x), t: fs.statSync(path.join(dir, x)).mtimeMs })).sort((a, b) => b.t - a.t);
+      return fs.readdirSync(dir).filter(x => /\.(jpg|mp4|webm)$/.test(x) && !/_p\.jpg$/.test(x)).map(x => { const ph = x.replace(/\.[a-z0-9]+$/, ''), vid = !/\.jpg$/.test(x), po = path.join(dir, ph + '_p.jpg'); return { photo: ph, file: path.join(dir, x), video: vid, poster: vid && fs.existsSync(po) ? po : '', t: fs.statSync(path.join(dir, x)).mtimeMs }; }).sort((a, b) => b.t - a.t);
     },
     readImage: f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64'),
     /* v0.3.1: a QR mátrixa (a felület rajzolja ki vászonra – nincs képbetöltés) */
