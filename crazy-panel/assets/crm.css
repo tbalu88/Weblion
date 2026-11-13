@@ -907,6 +907,15 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .gm-grid button:hover{border-color:#2F5BD8}
 .gm-grid button.off{opacity:.35;border-color:#C2392F}
 .gm-grid i{position:absolute;left:4px;bottom:4px;background:#C2392F;color:#fff;font:600 11px Inter,sans-serif;font-style:normal;border-radius:6px;padding:1px 6px}
+/* v2.9.253: kijelölés törléshez */
+.gm-tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gm-tb:empty{display:none}
+.gm-tb b{font-size:13px;font-variant-numeric:tabular-nums;margin-right:2px}
+.gm-tb .cpx-btn[disabled]{opacity:.45;cursor:not-allowed}
+.gm-grid.selm button::after{content:'';position:absolute;top:6px;right:6px;width:22px;height:22px;box-sizing:border-box;border-radius:50%;border:2px solid #fff;background:rgba(20,28,51,.3);box-shadow:0 1px 3px rgba(20,28,51,.35)}
+.gm-grid.selm button:hover{border-color:#C2392F}
+.gm-grid.selm button.sel{border-color:#C2392F}
+.gm-grid.selm button.sel::after{background:#C2392F url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
 /* v2.9.246: szelfigép kártya – gépállapot, statisztika, beállítások, sorsolás */
 .bt-ml{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
 .bt-ml li{display:grid;grid-template-columns:10px minmax(0,1fr);column-gap:8px;row-gap:1px;font-size:13px}

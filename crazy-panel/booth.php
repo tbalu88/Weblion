@@ -144,6 +144,22 @@ function cp_booth_ajax_gal() {
 	$deal = (int) ($_POST['deal'] ?? 0);
 	if (!$deal || !cp_booth_gal_has($deal)) { cp_el_err('Ennek a dealnek még nincs galériája.', 404); }
 	$ev = cp_booth_gal_tok($deal);
+	/* v2.9.253: végleges törlés (tömegesen is) – a galériából és a szerverről, 500-as darabokban */
+	if (isset($_POST['del'])) {
+		$L = array_values(array_unique(array_filter(array_map('trim', explode(',', sanitize_text_field(wp_unslash((string) $_POST['del'])))), function ($x) { return (bool) preg_match('/^[a-z0-9]{6,32}$/', $x); })));
+		if (!$L) { cp_el_err('Nincs kijelölt kép.', 400); }
+		$n = 0;
+		foreach (array_chunk(array_slice($L, 0, 3000), 500) as $ch) {
+			$r = cp_booth_gal_req('POST', '/delete', array('ev' => $ev, 'photos' => implode(',', $ch)), 40);
+			if (is_wp_error($r)) { if ($n && function_exists('cp_audit_add')) { cp_audit_add('deal', 'gal_del', $n . ' kép törölve a fotógalériából (a többi hibára futott)', 'deal:' . $deal, ''); } cp_el_err($r->get_error_message() . ($n ? ' (' . $n . ' kép már törlődött)' : ''), 502); }
+			$n += count((array) ($r['deleted'] ?? array()));
+		}
+		if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'gal_del', $n . ' kép törölve a fotógalériából', 'deal:' . $deal, ''); }
+		delete_transient('cp_booth_galn_' . $ev);
+		$g = cp_booth_gal_api('GET', $ev); if (is_wp_error($g)) { cp_el_err($g->get_error_message(), 502); }
+		$g['deleted_n'] = $n;
+		wp_send_json_success($g);
+	}
 	$body = null;
 	foreach (array('title', 'password', 'photo', 'hidden', 'hook') as $k) { if (isset($_POST[$k])) { $body[$k] = sanitize_text_field(wp_unslash((string) $_POST[$k])); } }
 	if ($body && isset($body['password']) && function_exists('cp_audit_add')) { cp_audit_add('deal', 'gal_pw', $body['password'] === '' ? 'Galéria jelszava törölve' : 'Galéria jelszava beállítva', 'deal:' . $deal, ''); }

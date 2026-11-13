@@ -61,18 +61,45 @@
 		if (!box) return;
 		box.querySelector('[data-close]').addEventListener('click', hideModal);
 		const body = box.querySelector('[data-gm]');
+		let sel = null;   /* v2.9.253: kijelölés törléshez (null = normál mód: kattintás = elrejtés) */
 		const draw = g => {
 			const n = g.photos.length, h = g.photos.filter(p => p.hidden).length;
 			body.innerHTML = '<div class="gm-set"><label>Galéria címe (a galéria tetején látszik)<input type="text" id="gm-title" maxlength="120" placeholder="pl. Anna & Péter esküvője · 2026.11.29." value="' + esc(g.title || '') + '"></label>' +
 				'<label>Jelszó az összes fotóhoz ' + (g.has_pw ? '<b class="gm-pw">beállítva</b>' : '<span class="cpx-muted">(nincs – bárki láthatja, akinél a link van)</span>') + '<input type="text" id="gm-pw" autocomplete="off" placeholder="' + (g.has_pw ? 'új jelszó – vagy hagyd üresen és kattints a Jelszó törlésére' : 'pl. annapeter2026') + '"></label>' +
 				'<label>Webhook <span class="cpx-muted">(nem kötelező: minden új képnél értesítés az ügyfél rendszerébe – csak a kép linkje megy, személyes adat nem)</span><input type="url" id="gm-hook" autocomplete="off" placeholder="https://…" value="' + esc(g.hook || '') + '"></label>' +
 				'<div class="gm-b"><button type="button" class="cpx-btn sm" data-gmsave>Mentés</button>' + (g.has_pw ? '<button type="button" class="cpx-btn ghost sm" data-gmnopw>Jelszó törlése</button>' : '') + '<a class="cpx-btn ghost sm" href="' + esc(g.url) + '" target="_blank" rel="noopener">Galéria megnyitása ↗</a>' + (g.station ? '<a class="cpx-btn ghost sm" href="' + esc(g.station) + '" target="_blank" rel="noopener" title="Tabletre a helyszínen: a legfrissebb képek, QR-ral letölthetők">Megosztó állomás ↗</a>' : '') + '</div>' +
-				'<p class="cpx-muted gm-n">' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + '. A QR-kóddal minden vendég a saját képét mindig látja; a jelszó az összes képre vonatkozik. Kattints egy képre az elrejtéshez / visszaállításhoz.</p></div>' +
-				'<div class="gm-grid">' + g.photos.map(p => '<button type="button" class="' + (p.hidden ? 'off' : '') + '" data-gmph="' + esc(p.photo) + '" style="background-image:url(\'' + esc(p.thumb) + '\')" title="' + (p.hidden ? 'Elrejtve – kattints a visszaállításhoz' : 'Kattints az elrejtéshez') + '">' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + '</div>';
+				'<p class="cpx-muted gm-n">' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + '. A QR-kóddal minden vendég a saját képét mindig látja; a jelszó az összes képre vonatkozik. ' + (sel ? 'Kattints a törlendő képekre.' : 'Kattints egy képre az elrejtéshez / visszaállításhoz.') + '</p>' +
+				'<div class="gm-tb" data-gmtb></div></div>' +
+				'<div class="gm-grid' + (sel ? ' selm' : '') + '">' + g.photos.map(p => '<button type="button" class="' + (p.hidden ? 'off' : '') + (sel && sel.has(p.photo) ? ' sel' : '') + '" data-gmph="' + esc(p.photo) + '" style="background-image:url(\'' + esc(p.thumb) + '\')"' + (sel ? ' aria-pressed="' + (sel.has(p.photo) ? 'true' : 'false') + '" title="Kattints a kijelöléshez"' : ' title="' + (p.hidden ? 'Elrejtve – kattints a visszaállításhoz' : 'Kattints az elrejtéshez') + '"') + '>' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + '</div>';
 			const save = async extra => { try { draw(await post('cp_booth_gal', Object.assign({ deal }, extra))); toast('Mentve.'); } catch (e) { toast(e.message, true); } };
 			body.querySelector('[data-gmsave]').addEventListener('click', () => { const o = { title: body.querySelector('#gm-title').value.trim(), hook: body.querySelector('#gm-hook').value.trim() }; if (o.hook && !/^https:\/\/\S+$/.test(o.hook)) { toast('A webhook címe https://-sel kezdődjön.', true); return; } const pw = body.querySelector('#gm-pw').value.trim(); if (pw) o.password = pw; save(o); });
 			const np = body.querySelector('[data-gmnopw]'); if (np) np.addEventListener('click', () => save({ password: '' }));
-			body.querySelectorAll('[data-gmph]').forEach(b => b.addEventListener('click', () => save({ photo: b.dataset.gmph, hidden: b.classList.contains('off') ? 0 : 1 })));
+			/* v2.9.253: végleges törlés (tömegesen is) – a galériából és a szerverről; a szelfigépen lévő példányt nem érinti */
+			const tb = body.querySelector('[data-gmtb]');
+			const mark = () => body.querySelectorAll('[data-gmph]').forEach(b => { const on = !!sel && sel.has(b.dataset.gmph); b.classList.toggle('sel', on); if (sel) b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+			const tbDraw = () => {
+				if (!n) { tb.innerHTML = ''; return; }
+				if (!sel) { tb.innerHTML = '<button type="button" class="cpx-btn ghost sm" data-gmsel>Képek törlése…</button>'; tb.querySelector('[data-gmsel]').addEventListener('click', () => { sel = new Set(); draw(g); }); return; }
+				const k = sel.size;
+				tb.innerHTML = '<b>' + k + ' kijelölve</b><button type="button" class="cpx-btn ghost sm" data-gmall>' + (k === n ? 'Egyik sem' : 'Mind (' + n + ')') + '</button>' +
+					'<button type="button" class="cpx-btn danger sm" data-gmdel' + (k ? '' : ' disabled') + '>Törlés véglegesen' + (k ? ' (' + k + ')' : '') + '</button><button type="button" class="cpx-btn ghost sm" data-gmselx>Mégse</button>';
+				tb.querySelector('[data-gmall]').addEventListener('click', () => { if (sel.size === n) sel.clear(); else g.photos.forEach(p => sel.add(p.photo)); mark(); tbDraw(); });
+				tb.querySelector('[data-gmselx]').addEventListener('click', () => { sel = null; draw(g); });
+				tb.querySelector('[data-gmdel]').addEventListener('click', async () => {
+					const L = [...sel]; if (!L.length) return;
+					const txt = 'A kijelölt ' + L.length + ' kép törlődik a galériából és a szerverről. Nem vonható vissza, és a vendégek QR-kódja ezekre a képekre már nem működik. A szelfigépen lévő példányt ez nem törli.';
+					const ok = window.CPXAsk ? await window.CPXAsk({ title: L.length + ' kép végleges törlése', text: txt, ok: 'Törlés véglegesen', cancel: 'Mégse', danger: true }) : window.confirm(txt);
+					if (!ok) return;
+					const btn = tb.querySelector('[data-gmdel]'); btn.disabled = true; btn.textContent = 'Törlés…';
+					try { const r = await post('cp_booth_gal', { deal, del: L.join(',') }); sel = null; draw(r); toast((r.deleted_n || 0) + ' kép törölve.'); }
+					catch (e) { btn.disabled = false; btn.textContent = 'Törlés véglegesen (' + L.length + ')'; toast(e.message, true); }
+				});
+			};
+			tbDraw();
+			body.querySelectorAll('[data-gmph]').forEach(b => b.addEventListener('click', () => {
+				if (sel) { const ph = b.dataset.gmph; if (sel.has(ph)) sel.delete(ph); else sel.add(ph); mark(); tbDraw(); return; }
+				save({ photo: b.dataset.gmph, hidden: b.classList.contains('off') ? 0 : 1 });
+			}));
 		};
 		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
