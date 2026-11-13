@@ -88,5 +88,15 @@
     for (let r = 0; r < L[1]; r++) for (let q = 0; q < L[0]; q++) cover(g, imgs[k++ % imgs.length], b + q * (cw + 2 * b), b + r * (ch + 2 * b), cw, ch);
     return c;
   }
-  window.BoothCompose = { compose, toPrint, holes, stickerSheet };
+  /* v0.10 AI-kép + eredeti egymás mellett (fekvő 6×4"), alul a felirat */
+  function pair(cv, a, b, opts) {
+    opts = opts || {};
+    cv.width = H; cv.height = W; const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, H, W);
+    const pad = 40, fh = 150, cw = (H - pad * 3) / 2, ch = W - pad * 2 - fh;
+    cover(g, a, pad, pad, cw, ch); cover(g, b, pad * 2 + cw, pad, cw, ch);
+    footer(g, 0, W - pad - fh, H, fh, opts.title || 'EventCrazy', opts.date || '');
+    return cv;
+  }
+  window.BoothCompose = { compose, toPrint, holes, stickerSheet, pair };
 })();

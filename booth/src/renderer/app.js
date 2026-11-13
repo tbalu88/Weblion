@@ -94,10 +94,11 @@
     video: { name: 'Videó', sub: 'rövid klip zenével', clip: true, ico: '<rect x="5" y="12" width="28" height="24" rx="5"/><path d="M33 21l10-6v18l-10-6z"/>' },
     slow: { name: 'Lassított', sub: 'slow motion', clip: true, ico: '<circle cx="24" cy="24" r="17"/><path d="M24 14v10l7 5"/>' },
     spin: { name: '360°', sub: 'forgó platform, lassítva', clip: true, ico: '<ellipse cx="24" cy="36" rx="17" ry="5"/><path d="M24 8v20M17 15l7-7 7 7"/><path d="M38 24a14 14 0 0 1-3 8"/>' },
+    ai: { name: 'AI-kép', sub: 'rajzolt, stílusos változat', ico: '<path d="M10 38l4-12 18-18 8 8-18 18z"/><path d="M28 12l8 8"/><path d="M36 30l2 4 4 2-4 2-2 4-2-4-4-2 4-2z"/>' },
     guestbook: { name: 'Videóüzenet', sub: 'jókívánság hanggal', clip: true, ico: '<rect x="18" y="6" width="12" height="22" rx="6"/><path d="M11 22c0 7 6 12 13 12s13-5 13-12M24 34v8M17 42h14"/>' }
   };
   const U = () => (S.cfg && S.cfg.ui) || {};
-  const modeList = () => { const m = (U().modes || ['photo']).filter(k => MODES[k]); return m.length ? m : ['photo']; };
+  const modeList = () => { const m = (U().modes || ['photo']).filter(k => MODES[k] && (k !== 'ai' || aiReady())); return m.length ? m : ['photo']; };
   const POSES = ['Mosolyt!', 'Most egy vicceset!', 'És egy utolsót – a legjobbat!', 'Még egyet!'];
   const svgIco = p => '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
   function modesScreen() {
@@ -137,6 +138,7 @@
   async function run(mode) {
     if (S.busy) return; S.busy = true; S.shots = []; S.cancel = false; clearTimeout(S.idleT);
     mode = MODES[mode] ? mode : modeList()[0]; S.mode = mode;
+    if (mode === 'ai') { S.busy = false; return runAi(); }
     if (MODES[mode].clip) { S.busy = false; return runClip(mode); }
     const n = S.tpl ? S.tpl.shots : (Number(S.cfg.shots) >= 3 ? 3 : 1), take = n === 1 && U().bestOf ? 3 : n;
     try {
@@ -333,6 +335,8 @@
     else if (act === 'recstop') { S.recStop = true; }
     else if (act === 'keycap') { S.keyCap = true; keyInfo(); }
     else if (act === 'camread') { camRead(); }
+    else if (act === 'aiyes') { aiDone(true); }
+    else if (act === 'aino') { aiDone(false); }
     else if (act === 'sticker') { stickerPrint(); }
     else if (act === 'stickertest') { const keep = S.cfg.ui; S.cfg.ui = uiCollect(); $('[data-stmsg]').textContent = 'Próba-ív indul…'; try { await stickerOut(S.shots && S.shots.length ? S.shots : [await loadImg(mockFrame())]); $('[data-stmsg]').textContent = 'Próba-ív elküldve.'; await prForm(); } catch (x) { $('[data-stmsg]').textContent = x.message; } finally { S.cfg.ui = keep; } }
     else if (act === 'camapply') {
@@ -605,7 +609,7 @@
     const ev = (S.cfg.event && S.cfg.event.ev) || '-', pc = counts()[ev];
     $('[data-prcount]').textContent = 'Ezen a gépen ezen a rendezvényen eddig: ' + ((pc && pc.total) || 0) + ' nyomat.';
     const rec = !!(window.MediaRecorder && window.BoothClips);
-    $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => '<label class="mchk' + (MODES[k].clip && !rec ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (MODES[k].clip && !rec ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + MODES[k].sub + '</small></label>').join('');
+    $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => { const dis = (MODES[k].clip && !rec) || (k === 'ai' && !aiReady()); return '<label class="mchk' + (dis ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + (k === 'ai' && !aiReady() ? 'a panelből kapcsolható' : MODES[k].sub) + '</small></label>'; }).join('');
   }
   function uiCollect() {
     const u = Object.assign({}, U());
@@ -676,6 +680,7 @@
     const ev = S.cfg.event; add(ev && ev.deal ? 'ok' : 'mid', 'Rendezvény', ev && ev.deal ? ev.title + ' · ' + (ev.date || '') : 'nincs kiválasztva (Rendezvény fül)');
     add(S.tpl ? 'ok' : 'mid', 'Sablon', S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : 'alap keret');
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
+    if ((U().modes || []).includes('ai')) add(!B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', 'AI-kép', !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs');
     if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;
@@ -978,6 +983,84 @@
     box.innerHTML = L.map((x, i) => '<div class="pj"><div class="qrc" data-pjqr="' + i + '"></div><div><b>' + esc(x[0]) + '</b><span>' + esc(x[2]) + '</span><code>' + esc(x[1].replace(/^https?:\/\//, '')) + '</code><button type="button" class="big ghost sm" data-act="pjopen" data-url="' + esc(x[1]) + '">Megnyitás ezen a gépen</button></div></div>').join('');
     for (let i = 0; i < L.length; i++) { try { drawQr(box.querySelector('[data-pjqr="' + i + '"]'), await call(B.qr, L[i][1])); } catch (e) { /* QR nélkül is ott a cím */ } }
   }
+  /* ---------- 6. fázis: AI-kép (a panelből kapcsolható rendezvényenként; a szerver hívja a modellt – alap: Nano Banana 2.1) */
+  const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && U().ai && (U().ai.styles || []).length && S.cfg.event && S.cfg.event.ev);
+  const aiWait = (scr, ms) => new Promise(res => { S.aiRes = res; clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === scr && S.aiRes) { const r = S.aiRes; S.aiRes = null; r(null); } }, ms); });
+  const aiDone = v => { clearTimeout(S.idleT); const r = S.aiRes; S.aiRes = null; if (r) r(v); };
+  function fillPrompt(p) {
+    const ev = S.cfg.event || {}, d = (ev.date || '').replace(/-/g, '.'), ttl = ev.deal ? ev.title : 'EventCrazy';
+    const nm = (S.guestPre && S.guestPre.name) || (S.aiName || '') || 'EventCrazy';
+    return String(p || '').replace(/\{nev\}|\{név\}/gi, nm).replace(/\{rendezveny\}|\{rendezvény\}/gi, ttl || 'EventCrazy').replace(/\{datum\}|\{dátum\}/gi, d ? d + '.' : today());
+  }
+  async function runAi() {
+    if (S.busy || S.scr === 'aiok') return;
+    /* hozzájárulás: külső feldolgozó + 18 év (a modell szolgáltatójának feltétele) – még a foglaltság előtt dől el */
+    show('aiok');
+    const ok = await aiWait('aiok', 30000);
+    if (ok === false) return run(modeList().find(k => !MODES[k].clip && k !== 'ai') || 'photo');
+    if (!ok) { show('start'); return; }
+    if (S.busy) return;
+    S.busy = true; S.cancel = false; S.mode = 'ai';
+    let img = null;
+    try {
+      show('live'); await liveOn();
+      pose('Mosolyt! Ebből rajzolunk.'); await countdown(cdSec('ai')); pose('');
+      img = await shoot('photo'); await liveOff();
+      const L = U().ai.styles; let st = L[0];
+      if (L.length > 1) {
+        $('[data-aistyles]').innerHTML = L.map((x, i) => '<button type="button" class="mt" data-ais="' + i + '"><b>' + esc(x.label) + '</b></button>').join('');
+        $('[data-aistyles]').style.setProperty('--n', Math.min(3, L.length));
+        show('aistyle');
+        const i = await aiWait('aistyle', 25000);
+        st = L[i == null ? 0 : i];
+      }
+      await aiMake(img, st);
+    } catch (e) {
+      await liveOff().catch(() => {}); pose(''); $('[data-cd]').textContent = '';
+      if (e instanceof Cancel) { show('start'); }
+      else if (img) aiFallback(e.message, img);
+      else { show('start'); err(e.message); }
+    } finally { S.busy = false; S.cancel = false; clearInterval(S.aiT); }
+  }
+  async function aiMake(img, st) {
+    busy('Pillanat, rajzolunk… (kb. 20–30 mp)');
+    const t0 = Date.now(); clearInterval(S.aiT); S.aiT = setInterval(() => busyBar(Math.min(0.95, 1 - Math.exp(-(Date.now() - t0) / 12000))), 250);
+    const ev = S.cfg.event, src = await call(B.newTok, 10), aiId = await call(B.newTok, 10);
+    const w0 = img.naturalWidth, h0 = img.naturalHeight, k = Math.min(1, 1600 / Math.max(w0, h0)), c = document.createElement('canvas');
+    c.width = Math.round(w0 * k); c.height = Math.round(h0 * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const r = await call(B.ai, { ev: ev.ev, deal: ev.deal || 0, date: ev.date || '', src, photo: aiId, prompt: fillPrompt(st.prompt), jpeg: c.toDataURL('image/jpeg', 0.9) });
+    clearInterval(S.aiT); busyBar(1);
+    const ai = await loadImg(r.img);
+    S.lastPhoto = r.photo || aiId; S.aiInfo = { left: r.left, style: st.label };
+    /* az eredeti is a galériába kerül (sima fotóként), az AI-kép helyben is megmarad (újranyomtatáshoz) */
+    call(B.keep, ev.ev, ev.deal || 0, ev.date || '', src, img.src, {}).catch(() => {});
+    call(B.keep, ev.ev, ev.deal || 0, ev.date || '', S.lastPhoto, r.img, { kind: 'ai' }).catch(() => {});
+    if (S.guestPre) { const d = S.guestPre; S.guestPre = null; submitGuest(d, S.lastPhoto, !!d.email && !!U().shareEmail).catch(() => {}); }
+    reviewAi(img, ai);
+  }
+  function reviewAi(orig, ai) {
+    const cv = $('[data-out]'), vo = $('[data-outv]'); vo.hidden = true; vo.removeAttribute('src'); cv.hidden = false;
+    const o = { title: (S.cfg.event && S.cfg.event.deal && S.cfg.event.title) || S.cfg.title || 'EventCrazy', date: today() };
+    if (U().ai.out === 'both') BoothCompose.pair(cv, orig, ai, o);
+    else BoothCompose.compose(cv, [ai], Object.assign({ tpl: S.tpl && S.tpl.shots === 1 ? S.tpl : null }, o));
+    S.shots = [ai]; S.pool = null; S.pick = false; S.pending = null; S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
+    $('[data-printui]').hidden = false; $('[data-stickerbtn]').hidden = !U().sticker; $('[data-thumbs]').hidden = true; shareButtons();
+    $('[data-qrbox]').hidden = true; show('review');
+    if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), S.cfg.event.ev, S.lastPhoto);
+    if (S.cfg.autoPrint) { print(); return; }
+    idle();
+  }
+  /* ha az AI nem sikerül (nincs net, elfogyott a keret, a szolgáltató elutasította): az eredeti fotó a szokásos módon */
+  function aiFallback(msg, img) {
+    clearInterval(S.aiT);
+    const code = (/\[([a-z0-9]+)\]\s*$/i.exec(msg || '') || [])[1] || '';
+    const why = code === 'limit' ? 'Elfogyott a rendezvény AI-kerete.' : code === 'refused' ? 'Ezt a képet a rajzoló nem tudta feldolgozni.' : code === 'off' ? 'Az AI ezen a rendezvényen nincs bekapcsolva.' : 'A rajzoló most nem elérhető.';
+    B.log('AI-hiba: ' + msg);
+    S.shots = [img]; S.pool = [img]; S.pick = false;
+    review();
+    err(why + ' Itt az eredeti fotód.');
+  }
+  $('[data-aistyles]').addEventListener('click', e => { const b = e.target.closest('[data-ais]'); if (b) aiDone(Number(b.dataset.ais)); });
   async function initCam() {
     try { await call(B.camInit); } catch (e) { err(e.message); return; }
     /* v0.9: a mentett DSLR-beállítások visszaállítása (ISO, rekesz, záridő…) */

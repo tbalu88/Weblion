@@ -102,6 +102,22 @@ function make(o) {
         return j;
       } catch (e) { if (e.name === 'AbortError') throw new Error('A panel nem válaszol'); throw e; } finally { clearTimeout(t); }
     },
+    /* v0.10: AI-kép a galérián át (a szerver hívja a modellt, menti a galériába és visszaküldi). A hibakód a szövegben: […] */
+    async ai(d) {
+      if (!o.key()) throw new Error('Nincs gépkulcs. [key]');
+      const m = /^data:([^;]+);base64,(.*)$/s.exec(String(d.jpeg || '')); if (!m) throw new Error('Hibás kép. [bad]');
+      const fd = new FormData();
+      ['ev', 'deal', 'date', 'src', 'photo', 'prompt'].forEach(k => fd.append(k, String(d[k] == null ? '' : d[k])));
+      fd.append('file', new Blob([Buffer.from(m[2], 'base64')], { type: m[1] }), 'foto.jpg');
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 120000);
+      try {
+        const r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1/ai', { method: 'POST', headers: hdr(), body: fd, signal: ctl.signal });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error((j.message || ('AI-hiba (' + r.status + ')')) + ' [' + (j.code || r.status) + ']');
+        o.log('AI-kép kész: ' + j.photo + ' (' + j.sec + ' mp, ' + j.cost + ' $)');
+        return j;
+      } catch (e) { if (e.name === 'AbortError') throw new Error('Az AI nem válaszolt időben. [timeout]'); throw e; } finally { clearTimeout(t); }
+    },
     guest(d) { fs.writeFileSync(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), JSON.stringify(d)); setTimeout(pumpGuests, 200); return true; },
     photoUrl: (ev, ph) => GALLERY + '/galeria/' + ev + '/' + ph,
     eventUrl: ev => GALLERY + '/galeria/' + ev + '/',

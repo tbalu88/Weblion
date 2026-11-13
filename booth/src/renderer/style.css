@@ -230,3 +230,11 @@ button{font:inherit;cursor:pointer}
 .pj .big.sm{height:40px;min-height:40px;font-size:14px;padding:0 14px;margin-top:4px}
 /* v0.9 matrica-ív gomb a nyomtatás mellett */
 .prrow{display:flex;gap:1.2vh}.prrow .big{flex:1;min-width:0}.prrow .big[hidden]{display:none}
+/* ---------- 6. fázis: AI-kép */
+[data-s=aiok]{align-items:center;justify-content:center;padding:4vh;background:radial-gradient(circle at 50% 40%,#1E2848 0%,var(--n) 70%)}
+.aiok{width:min(860px,100%);display:flex;flex-direction:column;gap:2.4vh;text-align:center}
+.aiok h2{margin:0;font-size:6vh}.aiok p{margin:0;font-size:2.6vh;color:var(--mu);line-height:1.45}
+.aiok .aiok-q{color:#fff;font-size:3.4vh;font-weight:700}
+.aiok-b{display:flex;gap:2vh;justify-content:center;flex-wrap:wrap}.aiok-b .big{flex:1 1 30vh;padding:0 3vh}
+[data-s=aistyle]{flex-direction:column;align-items:center;justify-content:center;gap:5vh;background:radial-gradient(circle at 50% 40%,#1E2848 0%,var(--n) 70%);padding:4vh}
+[data-s=aistyle] .mt{aspect-ratio:auto;min-height:16vh}
