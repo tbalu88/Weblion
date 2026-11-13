@@ -160,7 +160,9 @@
 		return '<h3 class="au-h3">Összevetés – ' + M.map(p => esc(p.n)).join(', ') + ' <button type="button" class="au-cmpx" data-cmpx>Kijelölés törlése</button></h3>' +
 			'<div class="au-tl au-cmp"><div class="au-tlh"><span></span>' + axH(RC) + '<span></span></div>' +
 			(dd.length ? dd.map(day => '<div class="au-cday">' + dLabel(day) + '</div>' + M.map(p => { const d = p.days.find(x => x.d === day); return '<div class="au-tlr au-cr' + (d ? '' : ' nil') + '"><span class="au-dl">' + esc(p.n) + '<small>' + (d ? hm(d.first) + '–' + hm(d.last) : 'nem dolgozott') + '</small></span>' + (d ? barH(d, RC) : '<div class="au-bar" style="--hw:' + (6000 / (RC.b - RC.a)) + '%"></div>') + '<span class="au-tn">' + (d ? '<b>' + dur(d.act) + '</b><small>' + dur(d.open) + ' nyitva</small>' : '') + '</span></div>'; }).join('')).join('') : '<p class="cpx-muted">Ebben az időszakban egyikük sem használta a panelt.</p>') +
-			'<div class="au-csum">' + M.map(p => '<span><b>' + esc(p.n) + '</b> ' + dur(tot(p)) + ' aktív · ' + p.days.length + ' nap</span>').join('') + '</div>' +
+			/* v2.9.252: a kijelöltek összesített munkaideje (aktív + nyitva), a nevenkénti sorok előtt */
+			'<div class="au-csum"><span class="au-ctot"><b>Összesen (' + M.length + ' fő)</b> ' + dur(M.reduce((a, p) => a + tot(p), 0)) + ' aktív · ' + dur(M.reduce((a, p) => a + p.days.reduce((b, d) => b + (Number(d.open) || 0), 0), 0)) + ' nyitva</span>' +
+			M.map(p => '<span><b>' + esc(p.n) + '</b> ' + dur(tot(p)) + ' aktív · ' + p.days.length + ' nap</span>').join('') + '</div>' +
 			'<div class="au-lg"><span><i class="a2"></i>aktív</span><span><i class="a1"></i>nyitva, de nem dolgozott benne</span><span class="au-lgh">Vidd az egeret a sávra: mikor, mit csinált</span></div></div>';
 	}
 	/* ------------------------------------------------------------ v2.9.145: Elemzés – üzleti és működési számok */
@@ -428,6 +430,7 @@
 		'.au-cmpx{border:1px solid var(--li);background:#fff;border-radius:999px;padding:2px 10px;font:500 12px Inter,sans-serif;color:var(--mu);cursor:pointer;margin-left:8px;vertical-align:2px}.au-cmpx:hover{color:var(--ink)}' +
 		'.au-cday{font:700 12.5px Inter,sans-serif;margin:10px 0 2px;padding-top:8px;border-top:2px solid #E6E3DE;font-variant-numeric:tabular-nums}.au-cmp .au-tlh + .au-cday{border-top:0;padding-top:2px}.au-cmp .au-cr{border-top:0;padding:3px 0}.au-cmp .au-cr .au-dl{font-weight:600;overflow-wrap:anywhere}.au-cmp .au-cr.nil .au-dl{color:var(--mu);font-weight:400}' +
 		'.au-csum{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;padding-top:8px;border-top:1px solid #F0ECE6;font-size:12.5px;font-variant-numeric:tabular-nums}' +
+		'.au-ctot{flex-basis:100%;font-size:13.5px}.au-ctot b{margin-right:4px}' +
 		'@media (max-width:760px){.au-ck{width:18px;height:18px}}' +
 		/* v2.9.140: nagyobb, egérrel bejárható idővonal */
 		'.au-bar{height:30px;border-radius:6px;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(var(--hw,25%) - 1px),#E6E3DE calc(var(--hw,25%) - 1px),#E6E3DE var(--hw,25%)),#F5F3EF;cursor:crosshair}.au-bar i{border-radius:3px}.au-tlr{padding:7px 0}.au-cmp .au-cr{padding:5px 0}' +
