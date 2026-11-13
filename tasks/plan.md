@@ -55,6 +55,20 @@ Első változat: **fotó + nyomtatás, AI-képek, QR-kód a letöltéshez, onlin
 | Galéria tárhely az eventcrazy.hu-n (OPcache / lemez) | közepes | képek átméretezve (~2000 px); javaslat: a galéria a tartalék VPS-en (tartalek.eventcrazy.hu) fusson |
 | Ügyfélfotók (személyes adat) | magas | link-alapú, nem kereshető galéria; automatikus törlés (pl. 60 nap); adatkezelési szöveg |
 
+## Követelmények (2026-11-13, a felhasználó listája) → feladatok
+
+| # | Kérés | Megoldás | Hol |
+| --- | --- | --- | --- |
+| K1 | Kilépés a teljes képernyőből | ✅ kész (0.2.1): gomb a kezdőképernyő jobb felső sarkában | booth |
+| K2 | QR-kód a kép elkészülte után | A fotó azonosítót kap a gépen; a QR a fotó letöltő-oldalára mutat; a feltöltés a háttérben megy (net nélkül sorban áll, a QR addig is ugyanaz marad) | booth + panel |
+| K3 | Galéria a felhőben + galéria nézet a gépen, újranyomtatással és QR-ral | Felhő: rendezvényenkénti galéria-oldal (linkkel, nem kereshető; letöltés képenként és egyben). A gépen: „Galéria” gomb → a rendezvény képei rácsban → egy kép: Nyomtatás / QR | booth + panel |
+| K4 | Szinkron a panellel: a deal sablonja, a galéria visszatöltése későbbi kiküldésre | A gépen rendezvényválasztó (a nap dealjei a panelből) → a portálon mentett sablon (nyomtatható PNG + fotóablakok) jön le; a képek a dealhez kötve töltődnek fel; a deal adatlapján „Galéria” kártya (link, darabszám), levélben kiküldhető (`{{galeria_link}}` változó) | booth + panel |
+| K5 | Sablonszerkesztés a gépen, a panel 1:1-ben | A gépen „Sablon szerkesztése” → a panel Sablonkészítője nyílik meg a gépen (ugyanaz a kód, bejelentkezve); mentés után a gép újra lehúzza a sablont | booth (a panel kódja változatlan) |
+
+Gép-azonosítás: a panelben „Booth-gépek” (Beállítások), gépenként kulcs; a gép csak a saját rendezvénylistáját, a sablont és a feltöltést éri el.
+
+Sorrend: K4 sablon-letöltés → K2+K3 feltöltés, QR, felhő-galéria → K3 gépi galéria → K4 galéria a dealen + kiküldés → K5.
+
 ## Döntések (2026-11-12)
 - AI-stílus: **karikatúra**.
 - Galéria: a **tartalék VPS-en** (tartalek.eventcrazy.hu); megőrzés 60 nap (javaslat, módosítható).
