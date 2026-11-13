@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('booth', {
   printq: (method, p, body) => ipcRenderer.invoke('cloud:printq', method, p, body),
   guest: d => ipcRenderer.invoke('cloud:guest', d),
   beat: d => ipcRenderer.invoke('cloud:beat', d),
+  camProps: () => ipcRenderer.invoke('cam:props'),
+  camSet: (p, v) => ipcRenderer.invoke('cam:set', p, v),
   shareMac: f => ipcRenderer.invoke('share:mac', f),
   lanStart: port => ipcRenderer.invoke('lan:start', port),
   lanInfo: () => ipcRenderer.invoke('lan:info'),

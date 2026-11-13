@@ -78,5 +78,15 @@
     if (w) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'soft-light'; g.fillStyle = w > 0 ? 'rgba(255,138,30,' + (w * 0.035) + ')' : 'rgba(40,120,255,' + (-w * 0.035) + ')'; g.fillRect(0, 0, p.width, p.height); g.globalCompositeOperation = 'source-over'; }
     return p.toDataURL('image/jpeg', 0.95);
   }
-  window.BoothCompose = { compose, toPrint, holes };
+  /* v0.9 matrica-ív (4×6", 300 dpi): n kép rácsban (2 / 4 / 6 / 8 / 16), vágási ráhagyással; a fotók váltakoznak */
+  function stickerSheet(imgs, n, bleedMm) {
+    const L = { 2: [1, 2], 4: [2, 2], 6: [2, 3], 8: [2, 4], 16: [4, 4] }[n] || [2, 2];
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    const b = Math.round((Number(bleedMm) || 0) / 25.4 * 300), cw = (W - b * 2 * L[0]) / L[0], ch = (H - b * 2 * L[1]) / L[1];
+    let k = 0;
+    for (let r = 0; r < L[1]; r++) for (let q = 0; q < L[0]; q++) cover(g, imgs[k++ % imgs.length], b + q * (cw + 2 * b), b + r * (ch + 2 * b), cw, ch);
+    return c;
+  }
+  window.BoothCompose = { compose, toPrint, holes, stickerSheet };
 })();

@@ -46,7 +46,7 @@
       im.hidden = true; v.hidden = false;
       let st = null;
       try { st = await webStream(); } catch (e) { if (!S.cfg.mock) throw e; }
-      if (st) { if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); const fg = !(MODES[S.mode] && MODES[S.mode].clip); requestAnimationFrame(() => frameGuide(fg)); }
+      if (st) { if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); const fg = !(MODES[S.mode] && MODES[S.mode].clip) || S.mode === 'spin'; requestAnimationFrame(() => frameGuide(fg)); }
       else { v.hidden = true; im.hidden = false; im.src = mockFrame(); }
       return;
     }
@@ -93,6 +93,7 @@
     boom: { name: 'Boomerang', sub: 'oda-vissza mozdulat', clip: true, ico: '<path d="M8 24c0-8 6-12 12-12 8 0 8 24 16 24 6 0 8-6 8-12"/><path d="M40 16l4 8-8 1"/>' },
     video: { name: 'Videó', sub: 'rövid klip zenével', clip: true, ico: '<rect x="5" y="12" width="28" height="24" rx="5"/><path d="M33 21l10-6v18l-10-6z"/>' },
     slow: { name: 'Lassított', sub: 'slow motion', clip: true, ico: '<circle cx="24" cy="24" r="17"/><path d="M24 14v10l7 5"/>' },
+    spin: { name: '360°', sub: 'forgó platform, lassítva', clip: true, ico: '<ellipse cx="24" cy="36" rx="17" ry="5"/><path d="M24 8v20M17 15l7-7 7 7"/><path d="M38 24a14 14 0 0 1-3 8"/>' },
     guestbook: { name: 'Videóüzenet', sub: 'jókívánság hanggal', clip: true, ico: '<rect x="18" y="6" width="12" height="22" rx="6"/><path d="M11 22c0 7 6 12 13 12s13-5 13-12M24 34v8M17 42h14"/>' }
   };
   const U = () => (S.cfg && S.cfg.ui) || {};
@@ -127,7 +128,7 @@
   }
   const pose = t => { const p = $('[data-pose]'); if (U().getReady === false) t = ''; p.textContent = t || ''; p.hidden = !t; };
   const cdNext = () => Number(U().cdNext) || Number(S.cfg.countdown) || 3;
-  const cdSec = mode => { const b = Number(S.cfg.countdown) || 3; return mode === 'group' ? Math.max(b, Number(U().groupCd) || 6) : b; };
+  const cdSec = mode => { const b = Number(S.cfg.countdown) || 3; return mode === 'group' ? Math.max(b, Number(U().groupCd) || 6) : mode === 'spin' ? Math.max(b, Number(U().spinCd) || 5) : b; };
   async function shoot(mode) {
     const img = await loadImg(await snap()); chk();
     B.saveShot(img.src);
@@ -192,7 +193,7 @@
     const cv = $('[data-out]'), vo = $('[data-outv]');
     vo.hidden = true; vo.removeAttribute('src'); cv.hidden = false;
     BoothCompose.compose(cv, S.shots, { title: S.cfg.title || 'EventCrazy', date: today(), tpl: S.tpl });
-    $('[data-printui]').hidden = false;
+    $('[data-printui]').hidden = false; $('[data-stickerbtn]').hidden = !U().sticker;
     if (!again) { S.copies = Number(S.cfg.copies) || 1; S.retakes = 0; }
     $('[data-cpn]').textContent = S.copies;
     thumbs(); show('review');
@@ -236,6 +237,23 @@
         rec.hidden = true;
         busy(mode === 'boom' ? 'Készül a boomerang…' : 'Készül a lassított videó…');
         out = await C.render(fr, mode === 'boom' ? C.seqBoom(fr.length, 2) : C.seqRamp(fr.length), mode === 'boom' ? 24 : 30, Object.assign({ onTick: busyBar }, opt));
+      } else if (mode === 'spin') {
+        /* 360°: külön kamera is lehet (a karon); álló 9:16; normál → lassítva → visszatekerés */
+        const sid = U().spinCam, vert = U().spinVertical !== false;
+        if (sid && sid !== S.cfg.camId) {
+          try { S.spinStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: sid }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+          catch (e) { throw new Error('A 360° kamera nem indul (' + (e.message || e.name) + ').'); }
+          v.srcObject = S.spinStream; await v.play().catch(() => {}); await sleep(300); frameGuide(true);
+        }
+        const sec = Math.max(4, Math.min(20, Number(U().spinSec) || 8));
+        pose('Mindenki fel a platformra – indulunk!'); await countdown(cdSec(mode)); pose('');
+        rec.hidden = false;
+        const fr = await C.captureJpeg(v, sec * 1000, 30, { vertical: vert }, p => tick(p)); chk();
+        rec.hidden = true;
+        if (S.spinStream) { S.spinStream.getTracks().forEach(t => t.stop()); S.spinStream = null; v.srcObject = S.stream; }
+        if (!fr.blobs.length) throw new Error('A kamera nem adott képet.');
+        busy('Készül a 360°-os videó…');
+        out = await C.renderJpeg(fr.blobs, C.seqSpin(fr.blobs.length), 30, Object.assign({ onTick: busyBar, w: fr.w, h: fr.h }, opt));
       } else {
         const gb = mode === 'guestbook', sec = gb ? (Number(U().gbSec) || 30) : (Number(U().videoSec) || 10);
         pose(gb ? 'Mondd el a jókívánságaidat! (' + sec + ' mp)' : 'Indul a felvétel – ' + sec + ' mp'); await countdown(cdSec(mode)); pose('');
@@ -248,6 +266,7 @@
     } catch (e) {
       await liveOff().catch(() => {});
       rec.hidden = true; stopB.hidden = true; $('[data-cd]').textContent = ''; $('[data-shotno]').textContent = ''; pose('');
+      if (S.spinStream) { S.spinStream.getTracks().forEach(t => t.stop()); S.spinStream = null; v.srcObject = S.stream; }
       show('start'); S.guestPre = null;
       if (!(e instanceof Cancel)) err(e.message);
     } finally { S.busy = false; S.cancel = false; }
@@ -284,6 +303,7 @@
     /* webkamerák listája (a nevek csak engedély után látszanak) */
     let cams = [];
     try { if (WEB()) await webStream().catch(() => null); cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch (e) { cams = []; }
+    $('[data-spincam]').innerHTML = '<option value="">(ugyanaz, mint a fotózásnál)</option>' + cams.map((d, i) => '<option value="' + d.deviceId.replace(/"/g, '&quot;') + '">' + (d.label || ('Kamera ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('');
     f.elements.camId.innerHTML = '<option value="">(az első / beépített kamera)</option>' + cams.map((d, i) => '<option value="' + d.deviceId.replace(/"/g, '&quot;') + '"' + (d.deviceId === c.camId ? ' selected' : '') + '>' + (d.label || ('Kamera ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('');
     camRows();
     f.elements.boothKey.value = c.boothKey || '';
@@ -312,6 +332,17 @@
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
     else if (act === 'recstop') { S.recStop = true; }
     else if (act === 'keycap') { S.keyCap = true; keyInfo(); }
+    else if (act === 'camread') { camRead(); }
+    else if (act === 'sticker') { stickerPrint(); }
+    else if (act === 'stickertest') { const keep = S.cfg.ui; S.cfg.ui = uiCollect(); $('[data-stmsg]').textContent = 'Próba-ív indul…'; try { await stickerOut(S.shots && S.shots.length ? S.shots : [await loadImg(mockFrame())]); $('[data-stmsg]').textContent = 'Próba-ív elküldve.'; await prForm(); } catch (x) { $('[data-stmsg]').textContent = x.message; } finally { S.cfg.ui = keep; } }
+    else if (act === 'camapply') {
+      const vals = {}; document.querySelectorAll('[data-cp]').forEach(x => { if (x.value.trim()) vals[x.dataset.cp] = x.value.trim(); });
+      if (!Object.keys(vals).length) { $('[data-stmsg]').textContent = 'Előbb olvasd be a kamerát, és válassz értéket.'; return; }
+      const r = await camApply(vals);
+      /* csak a kamera által elfogadott értékeket mentjük – ezeket állítja vissza induláskor */
+      try { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { camProps: Object.assign({}, U().camProps || {}, r.good) }) })); } catch (x) { $('[data-stmsg]').textContent = x.message; return; }
+      $('[data-stmsg]').textContent = r.errs.length ? r.errs.join(' · ') + (Object.keys(r.good).length ? ' – a többi beállítás mentve.' : '') : 'Kamerabeállítások alkalmazva és mentve.';
+    }
     else if (act === 'keyclear') { try { const u = Object.assign({}, U()); delete u.startKey; S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: u })); keyInfo(); $('[data-stmsg]').textContent = 'Indítógomb: alapértelmezés (szóköz / Enter).'; } catch (x) { $('[data-stmsg]').textContent = x.message; } }
     else if (act === 'pjopen') { window.open(a.dataset.url, '_blank'); }
     else if (act === 'email') { emailFlow(); }
@@ -552,8 +583,8 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr'], UI_LIM = ['limitPhoto', 'limitEvent'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', questions: '', consentText: '', lanSsid: '' };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -581,6 +612,7 @@
     UI_SEL.forEach(k => { u[k] = $('#u-' + k).value; });
     UI_TXT.forEach(k => { u[k] = $('#u-' + k).value.trim(); }); if (u.consentText === CONSENT_DEF) u.consentText = '';
     UI_LIM.forEach(k => { u[k] = Math.max(0, Number($('#u-' + k).value) || 0); });
+    u.stickerBleed = Math.min(5, u.stickerBleed);
     u.color = {}; Object.keys(CLR).forEach(k => { u.color[k] = Number($('#' + CLR[k]).value) || 0; });
     const pr = [...document.querySelectorAll('[data-prn]:checked')].map(x => x.dataset.prn); u.printers = pr;
     if (u.printWhere === 'station' && u.station) u.printWhere = 'local';
@@ -599,6 +631,7 @@
   async function prForm() {
     let L = []; try { L = (await call(B.printers)) || []; } catch (e) { L = []; }
     S.prSys = L; const sel = printList().filter(Boolean), box = $('[data-prlist]');
+    const sp = $('[data-stprn]'); sp.innerHTML = '<option value="">(az első nyomtató)</option>' + L.map(p => '<option' + (p.name === U().stickerPrinter ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
     if (!L.length) { box.innerHTML = '<p class="st-up">Nincs telepített nyomtató ezen a gépen.</p>'; return; }
     box.innerHTML = L.map(p => { const on = sel.includes(p.name) || (!sel.length && p.def), left = paperLeft(p.name), st = prState(p);
       return '<div class="pr-i"><label class="chk"><input type="checkbox" data-prn="' + esc(p.name) + '"' + (on ? ' checked' : '') + '> <b>' + esc(p.name) + '</b>' + (p.def ? ' <small>(alapértelmezett)</small>' : '') + (st[1] ? ' <small class="pr-' + st[0] + '">· ' + esc(st[1]) + '</small>' : '') + '</label>' +
@@ -735,6 +768,20 @@
     try { const r = await doPrint(c, 1, S.lastPhoto); $('[data-busyt]').textContent = r.remote ? 'Elküldve a nyomtatóra!' : 'Kész!'; await sleep(1800); show('photo'); }
     catch (e) { show('photo'); err(e.message); }
   }
+  /* matrica-ív: a vendég fotói (csíknál váltakozva) egy íven, a matricanyomtatóra; nyomatnak számít (korlát, papír) */
+  async function stickerOut(imgs) {
+    const name = U().stickerPrinter || printList()[0] || '';
+    const sheet = BoothCompose.stickerSheet(imgs, Number(U().stickerGrid) || 4, U().stickerBleed != null ? U().stickerBleed : 1.5);
+    await call(B.print, BoothCompose.toPrint(sheet, colorAdj()), { copies: 1, printer: name || undefined });
+    paperUse(name, 1); B.log('matrica-ív: ' + pName(name));
+  }
+  async function stickerPrint() {
+    clearTimeout(S.idleT);
+    const a = allowed(S.lastPhoto, 1); if (!a.n) { err(a.why); idle(); return; }
+    show('busy'); $('[data-busyt]').textContent = 'Matrica-ív nyomtatása…';
+    try { await stickerOut(S.pick ? S.shots : (S.pool || S.shots)); counted(S.lastPhoto, 1); $('[data-busyt]').textContent = 'Kész! Vedd ki a matricákat a nyomtatóból.'; await sleep(2500); show('start'); }
+    catch (e) { show('review'); err(e.message); idle(); }
+  }
   /* próbanyomat: színsáv, szürkeskála, bőrtónusok + az utolsó fotó – a színkorrekció beállításához */
   async function testPrint(name) {
     const c = document.createElement('canvas'); c.width = 1800; c.height = 1200; const g = c.getContext('2d');
@@ -780,6 +827,7 @@
 
   /* ---------- élőkép-keret: a nyomaton látszó rész (a sablon első ablaka / az alap elrendezés képaránya) */
   function shotAspect() {
+    if (S.mode === 'spin') return U().spinVertical === false ? 16 / 9 : 9 / 16;
     if (S.tpl && S.tpl.holes && S.tpl.holes[0]) { const h = S.tpl.holes[0]; return h[2] / h[3]; }
     return Number(S.cfg.shots) >= 3 ? 3 / 2 : 1720 / 950;
   }
@@ -928,6 +976,28 @@
     box.innerHTML = L.map((x, i) => '<div class="pj"><div class="qrc" data-pjqr="' + i + '"></div><div><b>' + esc(x[0]) + '</b><span>' + esc(x[2]) + '</span><code>' + esc(x[1].replace(/^https?:\/\//, '')) + '</code><button type="button" class="big ghost sm" data-act="pjopen" data-url="' + esc(x[1]) + '">Megnyitás ezen a gépen</button></div></div>').join('');
     for (let i = 0; i < L.length; i++) { try { drawQr(box.querySelector('[data-pjqr="' + i + '"]'), await call(B.qr, L[i][1])); } catch (e) { /* QR nélkül is ott a cím */ } }
   }
-  async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
+  async function initCam() {
+    try { await call(B.camInit); } catch (e) { err(e.message); return; }
+    /* v0.9: a mentett DSLR-beállítások visszaállítása (ISO, rekesz, záridő…) */
+    if (!WEB() && B.camSet && U().camProps) { const r = await camApply(U().camProps); if (r.errs.length) B.log('kamerabeállítás: ' + r.errs.join(' · ')); }
+  }
+  const CAMP = [['iso', 'ISO', 'pl. 200'], ['aperture', 'Rekesz (f)', 'pl. 5.6'], ['shutterspeed', 'Záridő', 'pl. 1/125'], ['exposurecompensation', 'Expozíció-korrekció', 'pl. +0.3'], ['whitebalance', 'Fehéregyensúly', 'pl. Auto']];
+  async function camRead() {
+    const box = $('[data-camprops]');
+    if (!B.camProps) { box.innerHTML = '<p class="st-up">Ehhez a program 0.9.0-s vagy újabb változata kell.</p>'; return; }
+    box.innerHTML = '<p class="st-up">Beolvasás a kamerából…</p>';
+    let P = {}; try { P = await call(B.camProps); } catch (e) { box.innerHTML = '<p class="st-up">' + esc(e.message) + '</p>'; return; }
+    const saved = U().camProps || {};
+    box.innerHTML = CAMP.map(([k, n, ph]) => {
+      const x = P[k] || {}, L = x.list || [], v = saved[k] || '';
+      const lbl = n + (x.cur ? ' <small>(most: ' + esc(x.cur) + ')</small>' : '');
+      return '<label>' + lbl + (L.length ? '<select data-cp="' + k + '"><option value="">– nem állítjuk –</option>' + L.map(o => '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>' : '<input data-cp="' + k + '" value="' + esc(v) + '" placeholder="' + esc(ph) + '">') + '</label>';
+    }).join('');
+  }
+  async function camApply(vals) {
+    const errs = [], good = {};
+    for (const [k, v] of Object.entries(vals || {})) { if (!v) continue; try { await call(B.camSet, k, v); good[k] = v; } catch (e) { errs.push(e.message); } }
+    return { errs, good };
+  }
   (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();

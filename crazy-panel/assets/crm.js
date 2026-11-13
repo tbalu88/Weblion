@@ -77,7 +77,7 @@
 		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
 	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
-	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['guestbook', 'Videóüzenet']];
+	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet']];
 	function boothCard(x, toEv) {
 		const b = x.booth; if (!b) return '';
 		if (!(x.gal || b.machines.length || b.cfg || (toEv != null && toEv >= -1))) return '';

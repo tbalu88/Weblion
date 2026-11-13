@@ -1,7 +1,7 @@
 {
   "name": "crazy-booth",
   "productName": "Crazy Booth",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "EventCrazy szelfigép-szoftver (Mac: webkamera; Windows: Nikon D5300 vagy webkamera) + DNP DS620",
   "main": "src/main.js",
   "private": true,
@@ -10,7 +10,7 @@
     "mock": "electron . --mock",
     "dist": "electron-builder --win nsis",
     "dist:mac": "electron-builder --mac dmg",
-    "dist:win": "electron-builder --win nsis --x64"
+    "dist:win": "electron-builder --win zip --x64"
   },
   "devDependencies": {
     "electron": "^38.8.6",
@@ -26,12 +26,13 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "zip",
           "arch": [
             "x64"
           ]
         }
-      ]
+      ],
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

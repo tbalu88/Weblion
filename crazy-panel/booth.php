@@ -287,7 +287,7 @@ function cp_booth_ajax_guests() {
 
 /* ---------- v2.9.246 (Crazy Booth 7. fázis): gépállapot (v7), távoli beállítások (v8), statisztika + ügyfélriport (v10), sorsolás (d4).
  * A gépek percenként jelentkeznek (állapot); a válaszban kapják a deal panelből mentett beállításait. Salesmate-be semmi nem megy. */
-const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'guestbook');
+const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'spin', 'guestbook');
 function cp_booth_beat_get($id) { $b = get_transient('cp_bb_' . $id); return is_array($b) ? $b : null; }
 function cp_booth_dcfg_all() { $a = get_option('cp_booth_dcfg', array()); return is_array($a) ? $a : array(); }
 function cp_booth_dcfg_get($deal) { $a = cp_booth_dcfg_all(); return isset($a[(string) (int) $deal]) && is_array($a[(string) (int) $deal]) ? $a[(string) (int) $deal] : null; }

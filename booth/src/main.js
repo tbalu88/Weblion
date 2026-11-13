@@ -62,6 +62,9 @@ ipcMain.handle('cfg:set', wrap(async c => {
   saveCfg(); makeCam(); return cfg;
 }));
 ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); return cam.init(); }));
+/* v0.9: DSLR-beállítások (ISO, rekesz, záridő, expozíció-korrekció, fehéregyensúly) – digiCamControl */
+ipcMain.handle('cam:props', wrap(async () => { if (!cam) makeCam(); if (!cam.props) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.props(); }));
+ipcMain.handle('cam:set', wrap(async (p, v) => { if (!cam) makeCam(); if (!cam.setProp) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.setProp(p, v); }));
 ipcMain.handle('cam:liveStart', wrap(async () => cam.liveStart()));
 ipcMain.handle('cam:liveStop', wrap(async () => cam.liveStop()));
 ipcMain.handle('cam:liveFrame', wrap(async () => { const b = await cam.liveFrame(); return b ? toDataUrl(b) : null; }));

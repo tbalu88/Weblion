@@ -67,7 +67,7 @@
         <h2>Kész is!</h2>
         <div class="qr" data-qrbox hidden><div class="qrc" data-qr role="img" aria-label="QR-kód a letöltéshez"></div><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
         <div class="thumbs" data-thumbs hidden></div>
-        <div class="printui" data-printui><button type="button" class="big pri" data-act="print">Nyomtatás</button>
+        <div class="printui" data-printui><div class="prrow"><button type="button" class="big pri" data-act="print">Nyomtatás</button><button type="button" class="big" data-act="sticker" data-stickerbtn hidden>Matrica</button></div>
         <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div></div>
         <div class="shr" data-shr hidden><button type="button" class="big" data-act="email" data-shemail hidden>✉ E-mailben</button><button type="button" class="big" data-act="airdrop" data-shair hidden>AirDrop</button></div>
         <button type="button" class="big" data-act="again">Újra</button>
@@ -162,6 +162,11 @@
             <label class="chk"><input id="u-retake" type="checkbox"> Egy kép újrafotózása a csíkban (koppintás a képre)</label>
             <label>Csoportkép: visszaszámlálás (mp) <input id="u-groupCd" type="number" min="3" max="15"></label>
             <div class="st-row"><label>Videó hossza (mp) <input id="u-videoSec" type="number" min="3" max="30"></label><label>Videóüzenet hossza (mp) <input id="u-gbSec" type="number" min="10" max="90"></label></div>
+            <h3 class="st-h">360°-os mód</h3>
+            <div class="st-row"><label>Felvétel hossza (mp) <input id="u-spinSec" type="number" min="4" max="20"></label><label>Visszaszámlálás (mp) – a platform indításához <input id="u-spinCd" type="number" min="3" max="15"></label></div>
+            <label>360° kamera (pl. a karra szerelt webkamera) <select id="u-spinCam" data-spincam></select></label>
+            <label class="chk"><input id="u-spinVertical" type="checkbox"> Álló videó (9:16, telefonra)</label>
+            <p class="st-up">A platformot egyelőre a saját távirányítójával indítsd a visszaszámlálás alatt. A kész videó: normál sebesség → lassítva → visszatekerés, zenével és felirattal.</p>
             <label class="chk"><input id="u-music" type="checkbox"> Zene a GIF-hez, boomeranghoz, videóhoz</label>
             <div class="st-b"><label class="big ghost sm st-imp">Zene kiválasztása (mp3, m4a, wav)<input type="file" accept="audio/*" data-musicfile hidden></label><button type="button" class="big ghost sm" data-act="musicclear">Zene törlése</button></div>
             <p class="st-up" data-musicinfo></p>
@@ -189,6 +194,11 @@
             </div>
             <div class="st-b"><button type="button" class="big ghost sm" data-act="clrreset">Színek alaphelyzetbe</button></div>
             <p class="st-up">A próbanyomatot a nyomtató sorában indítod; a korrekció a mentés után a vendégek nyomataira is érvényes.</p>
+            <h3 class="st-h">Matrica-ív</h3>
+            <label class="chk"><input id="u-sticker" type="checkbox"> „Matrica” gomb a nyomtatás mellett (a vendég fotóiból egy íven több matrica)</label>
+            <div class="st-row"><label>Képek egy íven <select id="u-stickerGrid"><option value="2">2</option><option value="4">4 (2×2)</option><option value="6">6 (2×3)</option><option value="8">8 (2×4)</option><option value="16">16 (4×4)</option></select></label><label>Matricanyomtató <select id="u-stickerPrinter" data-stprn></select></label></div>
+            <label>Vágási ráhagyás (mm) – a matricapapír vágásához igazítsd <input id="u-stickerBleed" type="number" min="0" max="5" step="0.5"></label>
+            <div class="st-b"><button type="button" class="big ghost sm" data-act="stickertest">Próba-ív nyomtatása</button></div>
             <h3 class="st-h">Megosztás és adatgyűjtés</h3>
             <label class="chk"><input id="u-shareEmail" type="checkbox"> „Küldés e-mailben” gomb – a panel levélküldője küldi a fotó linkjét</label>
             <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop gomb (Mac: a vendég iPhone-jára)</label>
@@ -208,11 +218,15 @@
           </div>
 
           <div class="st-pane" data-pane="hw">
-            <label>Kamera <select name="camera"><option value="webcam">Webkamera (Mac / PC)</option><option value="dcc">Nikon D5300 (digiCamControl, csak Windows)</option></select></label>
+            <label>Kamera <select name="camera"><option value="webcam">Webkamera (Mac / PC)</option><option value="dcc">DSLR – Nikon / Canon (digiCamControl, csak Windows)</option></select></label>
             <label data-web>Webkamera <select name="camId"></select></label>
             <label data-web>Felbontás <select name="camRes"><option value="720">HD (1280×720)</option><option value="1080">Full HD (1920×1080)</option><option value="2160">4K (3840×2160), ha a kamera tudja</option></select></label>
             <label class="chk" data-web><input name="mirror" type="checkbox"> Tükrözött élőkép (a nyomat nem tükrözött)</label>
             <label data-dcc>digiCamControl címe <input name="dccUrl"></label>
+            <h3 class="st-h" data-dcc>Kamerabeállítások (DSLR)</h3>
+            <div class="st-row" data-dcc data-camprops></div>
+            <div class="st-b" data-dcc><button type="button" class="big ghost sm" data-act="camread">Beolvasás a kamerából</button><button type="button" class="big ghost sm" data-act="camapply">Alkalmazás a kamerán</button></div>
+            <p class="st-up" data-dcc>Az itt alkalmazott értékeket a program minden induláskor visszaállítja. Kézi (M) módban minden állítható; automatikus módban a kamera felülírhatja.</p>
             <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
             <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
             <h3 class="st-h">Átvitel másik gépre</h3>

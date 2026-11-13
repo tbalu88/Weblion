@@ -3,6 +3,15 @@
  * ?CMD=LiveViewWnd_Show / _Hide, /liveview.jpg, ?slc=set&param1=session.folder&param2=<mappa>. */
 const fs = require('fs');
 const path = require('path');
+/* v0.9 kamerabeállítások – a digiCamControl dokumentált tulajdonságnevei (slc get / set / list) */
+const PROPS = ['iso', 'aperture', 'shutterspeed', 'exposurecompensation', 'whitebalance'];
+/* a válasz formátuma nincs dokumentálva: JSON-tömböt és soronkénti / vesszős szöveget is elfogadunk */
+const clean = s => String(s == null ? '' : s).replace(/^\uFEFF/, '').trim().replace(/^"(.*)"$/, '$1');
+function parseList(t) {
+  const s = clean(t); if (!s || /^ok$/i.test(s)) return [];
+  try { const j = JSON.parse(s); if (Array.isArray(j)) return [...new Set(j.map(clean).filter(Boolean))]; } catch (e) { /* nem JSON */ }
+  return [...new Set(s.split(/\r?\n|;|,/).map(clean).filter(x => x && !/^ok$/i.test(x)))];
+}
 
 function make(opts) {
   const base = (opts.url || 'http://127.0.0.1:5513').replace(/\/+$/, '');
@@ -34,6 +43,23 @@ function make(opts) {
     async liveStop() { if (lvOn) { lvOn = false; try { await get('/?CMD=LiveViewWnd_Hide'); } catch (e) { /* mindegy */ } } },
     /* egy élőkép-képkocka JPG-ként (Buffer) */
     async liveFrame() { return get('/liveview.jpg?t=' + Date.now(), true); },
+    /* kamerabeállítások: a lehetséges értékek és a mostani érték */
+    async props() {
+      const out = {};
+      for (const p of PROPS) {
+        let list = [], cur = '';
+        try { list = parseList(await get('/?slc=list&param1=' + p + '&param2=')); } catch (e) { list = []; }
+        try { cur = clean(await get('/?slc=get&param1=' + p + '&param2=')); if (/^ok$/i.test(cur)) cur = ''; } catch (e) { cur = ''; }
+        out[p] = { cur, list };
+      }
+      return out;
+    },
+    async setProp(p, v) {
+      if (!PROPS.includes(p)) throw new Error('Ismeretlen kamerabeállítás: ' + p);
+      const r = clean(await get('/?slc=set&param1=' + p + '&param2=' + enc(String(v))));
+      if (r && !/^ok\b/i.test(r)) throw new Error('A kamera nem fogadta el (' + p + ' = ' + v + '): ' + r.slice(0, 120));
+      return true;
+    },
     /* exponálás → a kész JPG útvonala a gépen */
     async capture() {
       const before = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '');

@@ -95,5 +95,50 @@
 
   const blobToDataUrl = b => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(fr.error); fr.readAsDataURL(b); });
 
-  window.BoothClips = { frames, render, live, seqBoom, seqRamp, seqStills, blobToDataUrl, pickMime };
+  /* ---------- v0.9 360°-os mód: hosszabb felvétel memóriakímélően (képkockák JPEG-ként), álló (9:16) vágással */
+  async function captureJpeg(video, ms, fps, opt, onTick) {
+    opt = opt || {};
+    const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+    let sx = 0, sy = 0, sw = vw, sh = vh, ow, oh;
+    if (opt.vertical) { sw = Math.min(vw, Math.round(vh * 9 / 16)); sx = Math.round((vw - sw) / 2); ow = 540; oh = 960; }
+    else { const k = Math.min(1, 960 / vw); ow = Math.round(vw * k); oh = Math.round(vh * k); }
+    const c = document.createElement('canvas'); c.width = ow; c.height = oh; const g = c.getContext('2d');
+    const blobs = [], pend = [], step = 1000 / fps, t0 = performance.now();
+    let n = 0;
+    while (performance.now() - t0 < ms) {
+      g.drawImage(video, sx, sy, sw, sh, 0, 0, ow, oh);
+      const i = n++; pend.push(new Promise(r => c.toBlob(b => { blobs[i] = b; r(); }, 'image/jpeg', 0.86)));
+      if (onTick) onTick((performance.now() - t0) / ms);
+      await sleep(Math.max(0, t0 + n * step - performance.now()));
+    }
+    await Promise.all(pend);
+    return { blobs: blobs.filter(Boolean), w: ow, h: oh };
+  }
+  /* sorrend: normál sebesség → a végén lassítva (2×) → gyors visszatekerés */
+  const seqSpin = n => { const s = [], a = Math.floor(n * 0.6); for (let i = 0; i < a; i++) s.push(i); for (let i = a; i < n; i++) s.push(i, i); for (let i = n - 1; i >= 0; i -= 2) s.push(i); return s; };
+  async function renderJpeg(blobs, seq, fps, opt) {
+    opt = opt || {};
+    const w = opt.w, h = opt.h, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), stream = c.captureStream(fps);
+    const mu = await musicTrack(opt.music, seq.length / fps);
+    if (mu && mu.track) stream.addTrack(mu.track);
+    const mime = pickMime(), rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6e6 }), chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise(r => { rec.onstop = r; });
+    const cache = new Map();
+    const bmp = async i => { if (cache.has(i)) return cache.get(i); const b = await createImageBitmap(blobs[i]); cache.set(i, b); if (cache.size > 8) { const k = cache.keys().next().value; const o = cache.get(k); cache.delete(k); if (o && o.close) o.close(); } return b; };
+    const draw = async i => { g.drawImage(await bmp(i), 0, 0, w, h); overlay(g, w, h, opt.text, opt.sub); };
+    await draw(seq[0]); rec.start(); if (mu) mu.start();
+    const t0 = performance.now();
+    for (let n = 0; n < seq.length; n++) {
+      await draw(seq[n]); if (opt.onTick) opt.onTick(n / seq.length);
+      await sleep(Math.max(0, t0 + (n + 1) * 1000 / fps - performance.now()));
+    }
+    rec.stop(); if (mu) mu.stop(); await done;
+    await draw(seq[Math.floor(seq.length * 0.45)]); const poster = c.toDataURL('image/jpeg', 0.88);
+    cache.forEach(b => { if (b && b.close) b.close(); });
+    return { blob: new Blob(chunks, { type: mime.split(';')[0] }), mime: mime.split(';')[0], poster };
+  }
+
+  window.BoothClips = { frames, render, live, seqBoom, seqRamp, seqStills, blobToDataUrl, pickMime, captureJpeg, renderJpeg, seqSpin };
 })();

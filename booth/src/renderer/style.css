@@ -228,3 +228,5 @@ button{font:inherit;cursor:pointer}
 .pj div:last-child{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0}
 .pj b{font-size:16px}.pj span{color:var(--mu);font-size:14px}.pj code{font-size:13px;color:#F2B35B;overflow-wrap:anywhere}
 .pj .big.sm{height:40px;min-height:40px;font-size:14px;padding:0 14px;margin-top:4px}
+/* v0.9 matrica-ív gomb a nyomtatás mellett */
+.prrow{display:flex;gap:1.2vh}.prrow .big{flex:1;min-width:0}.prrow .big[hidden]{display:none}
