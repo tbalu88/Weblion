@@ -131,6 +131,15 @@ app.whenReady().then(() => {
     fullscreen: !MOCK, kiosk: !MOCK, width: 1280, height: 800, backgroundColor: '#0E1220', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
+  /* v0.9.1: a panel (pl. a sablonszerkesztő) a program fölött, keretes ablakban nyílik – bezárva vissza a programba; más címet a böngésző nyit meg */
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (!/^https:\/\/(eventcrazy\.hu|tartalek\.eventcrazy\.hu)\//.test(url)) { require('electron').shell.openExternal(url).catch(() => {}); return { action: 'deny' }; }
+    const wa = require('electron').screen.getDisplayMatching(win.getBounds()).workArea;
+    return { action: 'allow', overrideBrowserWindowOptions: { parent: win, modal: false, fullscreenable: false, autoHideMenuBar: true, title: 'Crazy panel', backgroundColor: '#F5F3EF',
+      x: wa.x + Math.round(wa.width * 0.03), y: wa.y + Math.round(wa.height * 0.04), width: Math.round(wa.width * 0.94), height: Math.round(wa.height * 0.92),
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } } };
+  });
+  win.webContents.on('did-create-window', child => { child.on('closed', () => { if (!win.isDestroyed()) win.webContents.send('child:closed'); }); });
   /* online felület: induláskor rövid (4 mp) frissítés-próba, utána a legfrissebb elérhető felület; 15 percenként újra */
   ui = require('./ui-update').make({ dataDir: app.getPath('userData'), bundled: path.join(__dirname, 'renderer', 'index.html'), shellVersion: app.getVersion(), log });
   const boot = async () => { if (!MOCK || process.argv.includes('--online')) { try { await ui.check(4000); } catch (e) { /* */ } } const e = (MOCK && !process.argv.includes('--online')) ? { file: path.join(__dirname, 'renderer', 'index.html'), v: 'helyi (fejlesztői)' } : ui.entry(); log('felület: ' + e.v); win.loadFile(e.file); };

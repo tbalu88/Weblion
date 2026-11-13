@@ -527,6 +527,8 @@
   });
   function tplInfo() { const el = $('[data-tplinfo]'); if (el) el.textContent = 'Sablon: ' + (S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : (S.cfg.event && S.cfg.event.deal ? 'nincs – alap keret' : 'nincs rendezvény kiválasztva – alap keret')); }
   /* a panelből visszatérve a sablon újratöltődik */
+  /* v0.9.1: a panel-ablak bezárásakor (sablonszerkesztő) azonnal újratöltjük a sablont */
+  if (B.onChildClosed) B.onChildClosed(() => { if (S.tplEditing) window.dispatchEvent(new Event('focus')); });
   window.addEventListener('focus', async () => { if (!S.tplEditing || S.busy) return; S.tplEditing = false; if (S.cfg.event) S.cfg.event.template = true; await loadTemplate(); tplInfo(); modeInfo(); });
   /* ---------- s5/s6: kezdőképernyő testreszabása (felirat, szín, háttérkép vagy ismétlődő videó) – IndexedDB-ben, a gépen */
   const idb = () => new Promise((res, rej) => { const r = indexedDB.open('crazybooth', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });

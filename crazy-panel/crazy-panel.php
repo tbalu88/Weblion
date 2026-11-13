@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.248');
+define('CP_PANEL_VER', '2.9.249');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -755,7 +755,9 @@ function cp_panel_render_login($err) {
 	echo '<input type="password" name="cp_pw" placeholder="Jelszó" required autocomplete="current-password">';
 	echo '<button type="submit">Belépés</button>';
 	/* v1.36: a linkben kért kártya / levél (#feladatok:12) a belépés után is megnyíljon */
-	echo '<script>try{if(location.hash)sessionStorage.setItem("cp_after",location.hash)}catch(e){}</script>';
+	echo '<script>try{if(location.hash)sessionStorage.setItem("cp_after",location.hash);if(/[?&]szelfigep=1\\b/.test(location.search))sessionStorage.setItem("cp_booth","1")}catch(e){}</script>';
+	/* v2.9.249: a szelfigépből (Crazy Booth) nyitott ablakban belépés nélkül is vissza lehet térni a programba */
+	if (!empty($_GET['szelfigep'])) { echo '<button type="button" onclick="window.close();var b=this;setTimeout(function(){b.textContent=\'Zárd be ezt az ablakot (⌘W / Ctrl+W)\'},500)" style="margin-top:10px;background:transparent;border:1.5px solid #E8894A;color:#F2B35B">← Vissza a szelfigéphez</button>'; }
 	if (function_exists('cp_pu_panel_url')) { echo '<p class="cpx-muted" style="margin:4px 0 0;text-align:center"><a href="' . esc_url(cp_pu_panel_url('elfelejtett=1')) . '" style="color:#F2B35B">Elfelejtett jelszó</a></p>'; }
 	echo '</form></body></html>';
 }

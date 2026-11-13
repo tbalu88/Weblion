@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141C33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crazy Booth">
+<meta name="robots" content="noindex,nofollow">
+<title>Crazy Booth mobil</title>
+<link rel="manifest" href="mobil-manifest.json">
+<link rel="apple-touch-icon" href="/galeria/app/icon-192.png">
+<link rel="icon" href="/galeria/app/icon-192.png">
+<link rel="stylesheet" href="mobil.css">
+</head>
+<body>
+<div id="app">
+  <!-- beállítás: gépkulcs, PIN, opciók -->
+  <section class="scr" data-s="setup">
+    <div class="pad">
+      <h1>Event<span>Crazy</span> <small>mobil</small></h1>
+      <p class="mu">Telefonon a járkálós fotózáshoz, iPaden / Android-tableten szelfigépként. A gépkulcsot a panelben kapod (Beállítások → Crazy Booth gépek).</p>
+      <form class="f" data-setup autocomplete="off">
+        <label>Gépkulcs <input name="key" type="password" spellcheck="false" autocapitalize="off" placeholder="cb_…"></label>
+        <label>Kezelő PIN (a szelfigép módból kilépéshez) <input name="pin" inputmode="numeric" maxlength="8" placeholder="2580"></label>
+        <h3>Fotós mód</h3>
+        <label class="ck"><input name="frame" type="checkbox"> Keret (a rendezvény sablonja) a fotókon</label>
+        <h3>Szelfigép mód</h3>
+        <label>Fotók száma (sablon nélkül) <select name="shots"><option value="1">1 kép</option><option value="3">3 képes csík</option></select></label>
+        <label>Visszaszámlálás (mp) <input name="cd" type="number" min="1" max="10"></label>
+        <h3>A vendég képernyőjén</h3>
+        <label class="ck"><input name="print" type="checkbox"> „Nyomtatás” gomb (a nyomtatóállomás nyomtat)</label>
+        <label class="ck"><input name="email" type="checkbox"> „E-mailben” gomb (a panel küldi a linket)</label>
+        <div class="b"><button class="btn pri" type="submit">Mentés</button><button class="btn ghost" type="button" data-act="home" data-ifkey>Vissza</button></div>
+        <p class="err" data-setuperr></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- kezdő: rendezvény + mód választás -->
+  <section class="scr" data-s="home">
+    <div class="pad">
+      <h1>Event<span>Crazy</span> <small>mobil</small></h1>
+      <button class="evcard" type="button" data-act="events"><small>Rendezvény</small><b data-evtitle>Válassz rendezvényt</b><span data-evsub></span></button>
+      <div class="modes">
+        <button class="mode" type="button" data-act="photog"><b>Fotós mód</b><span>A telefon kamerájával fotózol, a vendég QR-ral kapja meg</span></button>
+        <button class="mode" type="button" data-act="kiosk"><b>Szelfigép mód</b><span>Tablet állványon: érintésre visszaszámol és fotóz</span></button>
+      </div>
+      <button class="btn ghost" type="button" data-act="recent">Mai fotók</button>
+      <p class="mu" data-q></p>
+      <button class="lnk" type="button" data-act="setup">Beállítások</button>
+    </div>
+  </section>
+
+  <!-- rendezvényválasztó -->
+  <section class="scr" data-s="events">
+    <div class="pad">
+      <h2>Rendezvény</h2>
+      <div class="row"><input type="date" data-evdate><button class="btn sm" type="button" data-act="evload">Betöltés</button></div>
+      <div class="evl" data-evlist></div>
+      <button class="btn ghost" type="button" data-act="evnone">Rendezvény nélkül</button>
+      <button class="btn ghost" type="button" data-act="home">Vissza</button>
+    </div>
+  </section>
+
+  <!-- fotós mód -->
+  <section class="scr" data-s="photog">
+    <div class="pad center">
+      <p class="mu" data-pgev></p>
+      <label class="shutter" aria-label="Fotó készítése"><input type="file" accept="image/*" capture="environment" data-shot hidden><i></i></label>
+      <p class="mu">Koppints a fotózáshoz</p>
+      <p class="mu" data-q></p>
+      <div class="b"><button class="btn ghost sm" type="button" data-act="recent">Mai fotók</button><button class="btn ghost sm" type="button" data-act="home">Kilépés</button></div>
+    </div>
+  </section>
+
+  <!-- szelfigép mód -->
+  <section class="scr" data-s="kiosk">
+    <video data-kv autoplay muted playsinline></video>
+    <div class="kstart" data-kstart><b>Érints meg!</b><span>és mosolyogj a kamerába</span></div>
+    <div class="cd" data-kcd></div>
+    <div class="kno" data-kno></div>
+    <div class="flash" data-flash></div>
+    <div class="corner" data-corner></div>
+  </section>
+
+  <!-- eredmény: kép + QR -->
+  <section class="scr" data-s="result">
+    <div class="res">
+      <div class="rimg"><img data-rimg alt="A fotó"></div>
+      <div class="rside">
+        <div class="qr"><div data-rqr></div><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
+        <div class="b col">
+          <button class="btn" type="button" data-act="rprint" data-rprint hidden>Nyomtatás</button>
+          <button class="btn" type="button" data-act="remail" data-remail hidden>✉ E-mailben</button>
+          <button class="btn pri" type="button" data-act="next" data-rnext>Következő fotó</button>
+        </div>
+        <p class="mu" data-rt></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- e-mail -->
+  <section class="scr" data-s="mail">
+    <div class="pad">
+      <h2>Küldés e-mailben</h2>
+      <form class="f" data-mail autocomplete="off">
+        <label>E-mail-címed * <input name="email" type="email" spellcheck="false" autocapitalize="off" maxlength="190"></label>
+        <label>Neved <input name="name" maxlength="120"></label>
+        <label class="ck"><input name="consent" type="checkbox"> <span>Hozzájárulok, hogy az EventCrazy a megadott adataimat a fotó elküldéséhez és a rendezvény szervezőjének átadásához kezelje. Az adatokat 60 nap után töröljük.</span></label>
+        <div class="b"><button class="btn ghost" type="button" data-act="mailback">Mégse</button><button class="btn pri" type="submit">Küldés</button></div>
+        <p class="err" data-mailerr></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- mai fotók -->
+  <section class="scr" data-s="recent">
+    <div class="pad">
+      <h2>Mai fotók <small class="mu" data-rcn></small></h2>
+      <div class="grid" data-rgrid></div>
+      <button class="btn ghost" type="button" data-act="back">Vissza</button>
+    </div>
+  </section>
+
+  <!-- PIN (kilépés a szelfigép módból) -->
+  <section class="scr" data-s="pin">
+    <div class="pad center">
+      <h2>Kezelő</h2>
+      <input class="pinin" type="password" inputmode="numeric" maxlength="8" data-pin placeholder="PIN">
+      <div class="b"><button class="btn ghost" type="button" data-act="pinno">Mégse</button><button class="btn pri" type="button" data-act="pinok">Kilépés</button></div>
+    </div>
+  </section>
+
+  <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Pillanat…</b></div></section>
+  <div class="toast" data-toast hidden></div>
+</div>
+<script src="qrcode.min.js"></script>
+<script src="compose.js"></script>
+<script src="mobil.js"></script>
+</body>
+</html>
