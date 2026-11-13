@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.8.0');
+define('CG_VER', '0.8.1');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -14,6 +14,12 @@ function cg_pt() { global $wpdb; return $wpdb->prefix . 'crazy_print'; }
 function cg_dir() { $u = wp_upload_dir(null, false); return trailingslashit($u['basedir']) . 'crazy-galeria'; }
 function cg_url() { $u = wp_upload_dir(null, false); return trailingslashit($u['baseurl']) . 'crazy-galeria'; }
 function cg_tok_ok($s) { return is_string($s) && preg_match('/^[a-z0-9]{6,32}$/', $s); }
+/* v0.8.1: ideiglenes fájl – a WP saját tempnam-függvénye csak az admin-oldalon töltődik be, REST- és galéria-kérésben végzetes hiba lenne */
+function cg_tmp($ext) {
+	$d = trailingslashit(get_temp_dir()); $b = @tempnam($d, 'cg');
+	if ($b === false) { $b = $d . 'cg' . strtolower(wp_generate_password(12, false, false)); } else { @unlink($b); }
+	return $b . '.' . $ext;
+}
 
 register_activation_hook(__FILE__, 'cg_install');
 add_action('plugins_loaded', function () { if (get_option('cg_db') !== CG_VER) { cg_install(); } });
@@ -200,8 +206,8 @@ add_action('init', function () {
 		$rows = $wpdb->get_results($wpdb->prepare('SELECT photo, file FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0 ORDER BY id', $ev));
 		if (!$rows || !class_exists('ZipArchive')) { cg_page('empty', $ev, null); exit; }
 		@set_time_limit(120);
-		$tmp = wp_tempnam('cg-zip'); $z = new ZipArchive();
-		if ($z->open($tmp, ZipArchive::OVERWRITE) !== true) { status_header(500); exit; }
+		$tmp = cg_tmp('zip'); $z = new ZipArchive();
+		if ($z->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) { status_header(500); exit; }
 		$i = 0; foreach ($rows as $r) { $f = cg_dir() . '/' . $ev . '/' . $r->file; if (is_file($f)) { $z->addFile($f, sprintf('eventcrazy-%03d.', ++$i) . strtolower(pathinfo($r->file, PATHINFO_EXTENSION))); } }
 		$z->close();
 		header('Content-Type: application/zip'); header('Content-Length: ' . filesize($tmp)); header('Content-Disposition: attachment; filename="eventcrazy-fotok.zip"');
@@ -510,7 +516,7 @@ add_action('rest_api_init', function () {
 		/* kicsinyítés ~1600 px-re (olcsóbb, gyorsabb, kevesebb személyes adat megy ki) */
 		$ed = wp_get_image_editor($f['tmp_name']); if (is_wp_error($ed)) { return $fail('bad', 'A kép nem dolgozható fel.', 415); }
 		$ed->resize(1600, 1600, false); $ed->set_quality(88);
-		$tmp = wp_tempnam('cgai') . '.jpg'; $sv = $ed->save($tmp, 'image/jpeg');
+		$tmp = cg_tmp('jpg'); $sv = $ed->save($tmp, 'image/jpeg');
 		if (is_wp_error($sv)) { return $fail('bad', 'A kép nem dolgozható fel.', 500); }
 		$jpeg = (string) @file_get_contents($sv['path']); @unlink($sv['path']); @unlink($tmp);
 		$r = cg_ai_call($prompt, $jpeg, (int) $sv['width'], (int) $sv['height']);
@@ -519,7 +525,7 @@ add_action('rest_api_init', function () {
 		/* mentés a galériába: 2000 px-es JPG + bélyegkép (mint a feltöltésnél) */
 		$dir = cg_dir() . '/' . $ev; wp_mkdir_p($dir);
 		if (!is_file($dir . '/index.php')) { @file_put_contents($dir . '/index.php', "<?php // Silence is golden.\n"); }
-		$tp = wp_tempnam('cgai') . '.png'; file_put_contents($tp, $png);
+		$tp = cg_tmp('png'); file_put_contents($tp, $png);
 		$ed2 = wp_get_image_editor($tp); if (is_wp_error($ed2)) { @unlink($tp); return $fail('ai', 'Hibás AI-kép.', 502); }
 		$ed2->resize(2000, 2000, false); $ed2->set_quality(88);
 		$sv2 = $ed2->save($dir . '/' . $ph . '.jpg', 'image/jpeg'); @unlink($tp);
