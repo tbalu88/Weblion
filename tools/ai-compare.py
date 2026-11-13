@@ -3,14 +3,23 @@
 Használat: python3 -I compare.py <bemeneti mappa> <kimeneti mappa> <prompt-fájl>
 A kulcsot a környezet proxyja adja (a szkript csak egy helykitöltő Bearer-értéket küld)."""
 import base64, io, json, os, ssl, sys, time, urllib.request, urllib.error, html
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageOps
 
-MODELS = [
-    ('google/gemini-3.1-flash-image', 'Nano Banana 2.0 (mostani)', {'aspect_ratio': '3:4', 'resolution': '2K'}),
-    ('google/gemini-nano-banana-2.1', 'Nano Banana 2.1', {'aspect_ratio': '3:4', 'resolution': '2K'}),
-    ('openai/gpt-image-2.6-flare', 'OpenAI GPT-Image 2.6 Flare', {'aspect_ratio': '3:4', 'quality': 'high'}),
-    ('black-forest-labs/flux.2-pro', 'FLUX.2 [pro]', {'aspect_ratio': '3:4'}),
+MODELS = [  # a képarányt a bemeneti fotóhoz igazítjuk (lent)
+    ('google/gemini-3.1-flash-image', 'Nano Banana 2 (mostani)', {'resolution': '2K'}),
+    ('google/gemini-nano-banana-2.1', 'Nano Banana 2.1', {'resolution': '2K'}),
+    ('openai/gpt-image-2.6-flare', 'OpenAI GPT-Image 2.6 Flare', {'quality': 'high'}),
+    ('black-forest-labs/flux.2-pro', 'FLUX.2 [pro]', {}),
 ]
+
+
+def ratio(w, h):
+    r = w / h
+    for lim, name in ((1.6, '16:9'), (1.4, '3:2'), (1.15, '4:3'), (0.87, '1:1'), (0.72, '3:4'), (0.6, '2:3')):
+        if r >= lim:
+            return name
+    return '9:16'
 API = 'https://openrouter.ai/api/v1/images'
 CA = '/root/.ccr/ca-bundle.crt'
 
@@ -51,29 +60,64 @@ def main():
     prompt = open(pf, encoding='utf-8').read().strip()
     os.makedirs(out, exist_ok=True)
     photos = sorted(f for f in os.listdir(src) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.heic')))
-    res, total = [], 0.0
+    res, total, jobs = [], 0.0, []
     for f in photos:
         data_url, size = prep(os.path.join(src, f))
         base = os.path.splitext(f)[0]
         open(os.path.join(out, base + '_be.jpg'), 'wb').write(base64.b64decode(data_url.split(',', 1)[1]))
-        row = {'photo': f, 'in': base + '_be.jpg', 'cells': []}
-        for mid, name, extra in MODELS:
-            r = call(mid, prompt, data_url, extra)
-            if not r['ok']:  # egy újrapróba (pl. ideiglenes hiba, téves tartalomszűrés)
-                time.sleep(2); r2 = call(mid, prompt, data_url, extra)
-                if r2['ok']: r = r2
-            cell = {'model': name, 'sec': round(r['sec'], 1)}
+        row = {'photo': f, 'in': base + '_be.jpg', 'cells': [None] * len(MODELS), 'ratio': ratio(*size)}
+        res.append(row)
+        for i, (mid, name, extra) in enumerate(MODELS):
+            jobs.append((row, i, base, mid, name, dict(extra, aspect_ratio=row['ratio']), data_url))
+
+    def run(job):
+        row, i, base, mid, name, extra, data_url = job
+        r = call(mid, prompt, data_url, extra)
+        if not r['ok']:  # egy újrapróba (pl. ideiglenes hiba, téves tartalomszűrés)
+            time.sleep(2); r2 = call(mid, prompt, data_url, extra)
+            if r2['ok']: r = r2
+        cell = {'model': name, 'sec': round(r['sec'], 1)}
+        if r['ok']:
+            fn = f'{base}__{mid.split("/")[-1]}.png'
+            open(os.path.join(out, fn), 'wb').write(r['png'])
+            cell.update(file=fn, cost=r.get('cost'))
+        else:
+            cell['err'] = r['err']
+        row['cells'][i] = cell
+        print(row['photo'], name, cell.get('cost'), cell['sec'], 's', cell.get('err', 'OK'), flush=True)
+
+    # legfeljebb 3 egyszerre: az OpenRouter a futó kérések várható költségét lefoglalja az egyenlegből (402 in_flight_budget)
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        list(ex.map(run, jobs))
+    fill(out, prompt, res)
+
+def fill(out, prompt, res):
+    """A hibás cellák újrapróbálása egyenként, utána mentés + összehasonlító oldal."""
+    names = {n: (m, e) for m, n, e in MODELS}
+    for row in res:
+        data_url = None
+        for i, c in enumerate(row['cells']):
+            if c and c.get('file'):
+                continue
+            mid, extra = names[MODELS[i][1]]
+            if data_url is None:
+                data_url = 'data:image/jpeg;base64,' + base64.b64encode(open(os.path.join(out, row['in']), 'rb').read()).decode()
+            r = call(mid, prompt, data_url, dict(extra, aspect_ratio=row.get('ratio', '1:1')))
+            cell = {'model': MODELS[i][1], 'sec': round(r['sec'], 1)}
             if r['ok']:
-                fn = f'{base}__{mid.split("/")[-1]}.png'
-                open(os.path.join(out, fn), 'wb').write(r['png'])
-                cell.update(file=fn, cost=r.get('cost'))
-                total += float(r.get('cost') or 0)
+                fn = f'{os.path.splitext(row["in"])[0][:-3]}__{mid.split("/")[-1]}.png'
+                open(os.path.join(out, fn), 'wb').write(r['png']); cell.update(file=fn, cost=r.get('cost'))
             else:
                 cell['err'] = r['err']
-            row['cells'].append(cell)
-            print(f, name, cell.get('cost'), cell['sec'], 's', cell.get('err', 'OK'), flush=True)
-        res.append(row)
+            row['cells'][i] = cell
+            print('pótlás:', row['photo'], cell['model'], cell.get('cost'), cell['sec'], 's', cell.get('err', 'OK'), flush=True)
+    total = sum(float(c.get('cost') or 0) for r in res for c in r['cells'] if c)
     json.dump({'prompt': prompt, 'rows': res, 'total': total}, open(os.path.join(out, 'eredmeny.json'), 'w'), ensure_ascii=False, indent=1)
+    page(out, prompt, res, total)
+    print('KÉSZ', round(total, 3), 'USD', flush=True)
+
+
+def page(out, prompt, res, total):
     # összehasonlító oldal (helyi fájl – a fotók személyes adatok, nem tesszük közzé)
     th = ''.join(f'<th>{html.escape(n)}</th>' for _, n, _ in MODELS)
     rows = ''
@@ -90,8 +134,11 @@ def main():
             f'<h1>AI-karikatúra összehasonlítás</h1><p>Összköltség: <b>${total:.2f}</b> · {len(res)} fotó × {len(MODELS)} modell</p><pre>{html.escape(prompt)}</pre>'
             f'<table><thead><tr><th>Eredeti</th>{th}</tr></thead><tbody>{rows}</tbody></table></body></html>')
     open(os.path.join(out, 'osszehasonlitas.html'), 'w', encoding='utf-8').write(page)
-    print('KÉSZ', round(total, 3), 'USD', flush=True)
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == '--potlas':   # python3 ai-compare.py --potlas <kimeneti mappa>
+        j = json.load(open(os.path.join(sys.argv[2], 'eredmeny.json'), encoding='utf-8'))
+        fill(sys.argv[2], j['prompt'], j['rows'])
+    else:
+        main()
