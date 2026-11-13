@@ -7,3 +7,6 @@ Napló (a tetejére):
 Projekt: Crazy Booth – javítandó sor:
 - A „AI: 3 ajánlat (OpenAI gpt-image-2.5-flare …)” elavult: az OpenAI-nál már a GPT-Image-2.6 (flare / sunburst) az aktuális.
 - A „galéria 0.7.0 commitolva, de NINCS élesítve” elavult: 0.7.0 éles.
+
+Projekt: Crazy Booth – új tény (felhasználó, 2026-11-13):
+- AI-képekhez most az Activation King fotóautomata-szoftvert használják; ott modell választható, általában a „Nano Banana 2”-t (= Google Gemini 3.1 Flash Image, OpenRouteren google/gemini-3.1-flash-image), ha elérhető. Saját Google-kulcsuk nincs (a szoftver intézi) → az összehasonlításhoz OpenRouter-kulcs kell.
