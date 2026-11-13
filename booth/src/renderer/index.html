@@ -21,6 +21,7 @@
     <div class="cd" data-cd></div>
     <div class="shotno" data-shotno></div>
     <div class="flash" data-flash></div>
+    <button type="button" class="xbtn" data-act="cancel" title="Megszakítás (ESC)" aria-label="Megszakítás">✕</button>
   </section>
 
   <section class="scr" data-s="review">
@@ -28,7 +29,7 @@
       <div class="rv-img"><canvas data-out width="1200" height="1800"></canvas></div>
       <div class="rv-side">
         <h2>Kész is!</h2>
-        <div class="qr" data-qrbox hidden><img data-qr alt="QR-kód a letöltéshez"><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
+        <div class="qr" data-qrbox hidden><canvas data-qr aria-label="QR-kód a letöltéshez"></canvas><span>Olvasd be a telefonoddal,<br>és töltsd le a fotódat!</span></div>
         <button type="button" class="big pri" data-act="print">Nyomtatás</button>
         <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div>
         <button type="button" class="big" data-act="again">Újra</button>
@@ -46,7 +47,7 @@
     <div class="rv">
       <div class="rv-img"><img class="ph-big" data-phbig alt=""></div>
       <div class="rv-side">
-        <div class="qr" data-phqrbox><img data-phqr alt="QR-kód"><span>Olvasd be a telefonoddal,<br>és töltsd le!</span></div>
+        <div class="qr" data-phqrbox><canvas data-phqr aria-label="QR-kód"></canvas><span>Olvasd be a telefonoddal,<br>és töltsd le!</span></div>
         <button type="button" class="big pri" data-act="reprint">Nyomtatás</button>
         <button type="button" class="big ghost" data-act="gallery">← Galéria</button>
       </div>

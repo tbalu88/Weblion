@@ -71,27 +71,35 @@
   const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('A kép nem tölthető be')); i.src = src; });
 
   /* ---------- fotózás */
+  /* megszakítás (✕ gomb / ESC) fotózás közben */
+  class Cancel extends Error {}
+  const chk = () => { if (S.cancel) throw new Cancel('megszakítva'); };
+  const wait = async ms => { const end = Date.now() + ms; while (Date.now() < end) { chk(); await sleep(Math.min(100, end - Date.now())); } chk(); };
+  function cancelRun() { if (S.scr === 'live' && S.busy) { S.cancel = true; $('[data-cd]').textContent = ''; } }
   async function run() {
-    if (S.busy) return; S.busy = true; S.shots = [];
+    if (S.busy) return; S.busy = true; S.shots = []; S.cancel = false;
     const n = S.tpl ? S.tpl.shots : (Number(S.cfg.shots) >= 3 ? 3 : 1);
     try {
       show('live'); await liveOn();
       for (let i = 0; i < n; i++) {
         $('[data-shotno]').textContent = n > 1 ? (i + 1) + ' / ' + n : '';
-        for (let k = Number(S.cfg.countdown) || 3; k > 0; k--) { $('[data-cd]').textContent = k; await sleep(1000); }
-        $('[data-cd]').textContent = '';
+        for (let k = Number(S.cfg.countdown) || 3; k > 0; k--) { $('[data-cd]').textContent = k; await wait(1000); }
+        $('[data-cd]').textContent = ''; chk();
         const f = $('[data-flash]'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
         const src = await snap();
+        chk();
         S.shots.push(await loadImg(src));
         B.saveShot(src);
-        if (i < n - 1) await sleep(900);
+        if (i < n - 1) await wait(900);
       }
       await liveOff();
       review();
     } catch (e) {
       await liveOff().catch(() => {});
-      show('start'); err(e.message);
-    } finally { S.busy = false; }
+      $('[data-cd]').textContent = ''; $('[data-shotno]').textContent = '';
+      show('start');
+      if (!(e instanceof Cancel)) err(e.message);
+    } finally { S.busy = false; S.cancel = false; }
   }
   async function review() {
     const cv = $('[data-out]');
@@ -161,6 +169,7 @@
     else if (act === 'done') { clearTimeout(S.idleT); show('start'); }
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
+    else if (act === 'cancel') { cancelRun(); }
     else if (act === 'gallery') { gallery(); }
     else if (act === 'back') { show('start'); }
     else if (act === 'reprint') { reprint(); }
@@ -189,11 +198,20 @@
   let hold = 0;
   $('[data-corner]').addEventListener('pointerdown', () => { hold = setTimeout(openSettings, 3000); });
   ['pointerup', 'pointerleave'].forEach(ev => $('[data-corner]').addEventListener(ev, () => clearTimeout(hold)));
-  document.addEventListener('keydown', e => { if (e.key === 'F2') openSettings(); if (e.key === 'Escape' && S.scr === 'settings') show('start'); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'F2') openSettings();
+    if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery') show('start'); else if (S.scr === 'photo') gallery(); }
+  });
   $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) run(); });
 
-  async function showQr(box, img, ev, photo) {
-    try { const u = await call(B.urls, ev, photo); img.src = await call(B.qr, u.photo); box.hidden = false; } catch (e) { box.hidden = true; }
+  /* QR kirajzolása vászonra (fehér margóval) */
+  function drawQr(cv, q) {
+    const px = 10, m = 2, size = (q.n + m * 2) * px; cv.width = size; cv.height = size;
+    const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+    for (let y = 0; y < q.n; y++) for (let x = 0; x < q.n; x++) if (q.bits[y * q.n + x] === '1') g.fillRect((x + m) * px, (y + m) * px, px, px);
+  }
+  async function showQr(box, cv, ev, photo) {
+    try { const u = await call(B.urls, ev, photo); drawQr(cv, await call(B.qr, u.photo)); box.hidden = false; } catch (e) { box.hidden = true; B.log('QR hiba: ' + e.message); }
   }
   /* ---------- rendezvény (a panelből) + sablon */
   async function ensureEvent() {
@@ -239,7 +257,7 @@
     grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '" style="background-image:url(\'' + encodeURI('file://' + p.file.replace(/\\/g, '/')).replace(/'/g, '%27') + '\')"></button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
     grid.querySelectorAll('[data-ph]').forEach(b => { const i = new Image(); i.onload = () => b.classList.toggle('land', i.naturalWidth > i.naturalHeight); i.src = b.style.backgroundImage.slice(5, -2); });
     const q = $('[data-glqr]'); q.innerHTML = '';
-    if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<img src="' + (await call(B.qr, u.event)) + '" alt=""><span>Az összes fotó<br>a telefonodon</span>'; } catch (e) { /* */ } }
+    if (S.cfg.boothKey) { try { const u = await call(B.urls, ev.ev); q.innerHTML = '<canvas></canvas><span>Az összes fotó<br>a telefonodon</span>'; drawQr(q.querySelector('canvas'), await call(B.qr, u.event)); } catch (e) { /* */ } }
   }
   async function openPhoto(photo, file) {
     const src = await call(B.readImage, file);

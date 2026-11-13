@@ -83,7 +83,8 @@ function make(o) {
       return fs.readdirSync(dir).filter(x => x.endsWith('.jpg')).map(x => ({ photo: x.slice(0, -4), file: path.join(dir, x), t: fs.statSync(path.join(dir, x)).mtimeMs })).sort((a, b) => b.t - a.t);
     },
     readImage: f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64'),
-    qr: url => QR.toDataURL(url, { margin: 1, width: 360, errorCorrectionLevel: 'M' }),
+    /* v0.3.1: a QR mátrixa (a felület rajzolja ki vászonra – nincs képbetöltés) */
+    qr: url => { const q = QR.create(url, { errorCorrectionLevel: 'M' }); const m = q.modules; let s = ''; for (let i = 0; i < m.size * m.size; i++) s += m.data[i] ? '1' : '0'; return { n: m.size, bits: s }; },
     status: () => ({ queued: fs.readdirSync(qdir).filter(x => x.endsWith('.json')).length, sent: last.ok, err: last.err }),
     pump
   };

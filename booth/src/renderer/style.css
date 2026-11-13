@@ -22,7 +22,9 @@ button{font:inherit;cursor:pointer}
 .st-f [hidden]{display:none}
 .lv img[hidden],.lv video[hidden]{display:none}
 .cd{position:relative;font:900 34vh "Segoe UI",sans-serif;color:#fff;text-shadow:0 0 40px rgba(0,0,0,.6);pointer-events:none}
-.shotno{position:absolute;top:3vh;right:4vh;font:700 4vh "Segoe UI",sans-serif;background:rgba(0,0,0,.45);border-radius:999px;padding:.4vh 2.4vh}
+.shotno{position:absolute;top:3vh;left:50%;transform:translateX(-50%);font:700 4vh "Segoe UI",sans-serif;background:rgba(0,0,0,.45);border-radius:999px;padding:.4vh 2.4vh}
+.xbtn{position:absolute;top:2vh;right:2vh;z-index:10;width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center}
+.xbtn:hover{background:rgba(0,0,0,.65)}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 .flash.go{animation:flash .5s ease-out}
 @keyframes flash{0%{opacity:1}100%{opacity:0}}
@@ -64,7 +66,8 @@ button{font:inherit;cursor:pointer}
 .fsbtn:hover{color:#fff;border-color:rgba(255,255,255,.35)}
 .galbtn{position:absolute;bottom:2vh;left:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:17px}
 .qr{display:flex;align-items:center;gap:14px;background:#fff;color:#141C33;border-radius:16px;padding:10px 14px}
-.qr img{width:15vh;height:15vh;min-width:110px;min-height:110px;image-rendering:pixelated}
+.qr canvas{width:15vh;height:15vh;min-width:110px;min-height:110px;flex:none}
+.gl-qr canvas{width:90px;height:90px;background:#fff;padding:4px;border-radius:8px}
 .qr span{font-size:2.1vh;font-weight:600;line-height:1.3}
 .big.sm{height:48px;min-height:48px;font-size:16px;padding:0 18px}
 [data-s=gallery]{flex-direction:column;padding:2vh 3vh;gap:2vh;overflow:hidden}
