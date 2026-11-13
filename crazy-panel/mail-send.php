@@ -215,7 +215,7 @@ function cp_send_ajax() {
 	if ($test) { wp_send_json_success(array('test' => 1, 'to' => $to[0])); }
 	/* a küldött mellékletek megmaradnak (a panelből letölthetők) */
 	$alist = array();
-	foreach ($atts as $x) { @file_put_contents(dirname($x['path']) . '/.sent', '1'); delete_transient('cp_att_' . $x['tok']); $alist[] = array('n' => $x['n'], 'mime' => $x['mime'], 's' => (int) $x['size'], 'f' => $x['tok'] . '/' . basename($x['path'])); }
+	foreach ($atts as $x) { @file_put_contents(dirname($x['path']) . '/.sent', '1'); delete_transient('cp_att_' . $x['tok']); $alist[] = array('n' => $x['n'], 'mime' => $x['mime'], 's' => (int) $x['size'], 'f' => basename(dirname($x['path'])) . '/' . basename($x['path'])); } /* v2.9.239: a valódi (kis-nagybetűs) mappanév – a sanitize_key kisbetűsítette a tokent */
 	/* a levél a panel levélszálába (új levélnél új szál, a válaszok ide fűződnek) */
 	$T = cp_mail_t('threads'); $now = gmdate('Y-m-d H:i:s');
 	$plain = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($html)));

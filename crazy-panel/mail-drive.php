@@ -180,7 +180,7 @@ function cp_mdr_fetch($m, $i) {
 	if (!isset($list[$i])) { return new WP_Error('cp_mdr', 'Nincs ilyen melléklet.'); }
 	$a = $list[$i];
 	if (!empty($a['f']) && function_exists('cp_att_dir')) {
-		$path = cp_att_dir() . '/' . basename(dirname($a['f'])) . '/' . basename($a['f']);
+		$path = function_exists('cp_att_local_path') ? cp_att_local_path($a['f']) : cp_att_dir() . '/' . basename(dirname($a['f'])) . '/' . basename($a['f']);
 		return is_file($path) ? (string) file_get_contents($path) : new WP_Error('cp_mdr', 'A fájl már nincs meg a szerveren.');
 	}
 	if (!function_exists('cp_att_locate') || !function_exists('cp_imp_open')) { return new WP_Error('cp_mdr', 'A postafiók nincs bekötve.'); }

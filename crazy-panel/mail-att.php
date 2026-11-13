@@ -9,6 +9,14 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+/* a panelből küldött melléklet helye; v2.9.239: a korábban kisbetűsítve mentett mappanevet kis-nagybetű nélkül is keresi */
+function cp_att_local_path($f) {
+	$path = cp_att_dir() . '/' . basename(dirname((string) $f)) . '/' . basename((string) $f);
+	if (is_file($path)) { return $path; }
+	$want = strtolower(basename(dirname((string) $f)));
+	foreach ((array) glob(cp_att_dir() . '/*', GLOB_ONLYDIR) as $sub) { if (strtolower(basename($sub)) === $want && is_file($sub . '/' . basename((string) $f))) { return $sub . '/' . basename((string) $f); } }
+	return $path;
+}
 function cp_att_dir() {
 	$u = wp_upload_dir();
 	$d = trailingslashit($u['basedir']) . 'crazy-mail';
@@ -126,7 +134,7 @@ function cp_att_ajax_get() {
 	$inline = !empty($_REQUEST['view']);
 	/* a panelből küldött levél melléklete: a szerveren */
 	if (!empty($a['f'])) {
-		$path = cp_att_dir() . '/' . basename(dirname($a['f'])) . '/' . basename($a['f']);
+		$path = cp_att_local_path($a['f']);
 		if (!is_file($path)) { cp_att_fail('A fájl már nincs meg a szerveren.', 404, true); }
 		cp_att_send_file($a['n'], (string) ($a['mime'] ?? 'application/octet-stream'), (string) file_get_contents($path), $inline);
 	}
