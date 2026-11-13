@@ -18,7 +18,7 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - s10 Rendezvény mentése újrahasználható sablonként
 
 ## 2. fázis – sablon és képernyők (panel 1:1)
-- s2 Sablonszerkesztő a gépen (a panel Sablonkészítője)
+- s2 Sablonszerkesztő a gépen (a panel Sablonkészítője) ✅ online (panel-ablak, 0.9) és internet nélkül (0.11.0: Kezelő → Rendezvény → „Szerkesztés internet nélkül”, sima fehér keret 1/2/3/fekvő)
 - s4 Dinamikus szöveg a sablonon (dátum, vendég neve, kérdőív-válasz)
 - s5 Képernyők testreszabása rendezvényenként (szín, betű, háttér, gombok)
 - s6 Kezdőképernyő ismétlődő videóval

@@ -22,11 +22,11 @@
 - [x] Online felület (0.4.0): a felület a tartalékról frissül (tools/booth-publish.sh), offline az utolsó letöltött fut
 - [ ] Windows-telepítő – a fejlesztés végén (a felhasználó kérése: addig csak Mac); wine-nal a felhőben elakadt, Windows-gépen `npm run dist:win`
 
-## Képtörlés + offline sablonszerkesztő (2026-11-13 este – terv: tasks/plan.md vége, jóváhagyásra vár)
-- [ ] T1 Galéria 0.9.0: lomtáras törlés + visszaállítás (gépkulcs: saját képek; panel: bármelyik)
-- [ ] T2 Booth 0.11.0: kijelölés + törlés a galériában (gép: Kuka; felhő: sorban)
-- [ ] T3 Panel: Fotógaléria → Kezelés: törlés + Lomtár
-- [ ] Ellenőrzőpont: törlés végig
-- [ ] T4 Sablonkészítő + mintaképek + betűk a gépen (offline)
-- [ ] T5 „Sablon szerkesztése (internet nélkül is)” a Kezelőben
-- [ ] Ellenőrzőpont: offline próba Macen és Windowson
+## Képtörlés + offline sablonszerkesztő (2026-11-13 este – terv: tasks/plan.md vége; KÉSZ, élesítve)
+- [x] T1 Galéria 0.9.0: végleges törlés (döntés: azonnal véglegesen; gépkulcs: saját képek; panel: bármelyik)
+- [x] T2 Booth 0.11.0: kijelölés + törlés a galériában (gép: Kuka; felhő: sorban)
+- [x] T3 Panel 2.9.253: Fotógaléria → Kezelés: végleges törlés (lomtár nincs – döntés)
+- [x] Ellenőrzőpont: törlés végig (helyi tesztek + élő csatorna-próba)
+- [x] T4 Sablonkészítő + mintaképek + betűk a gépen (offline) + sima fehér keret 1/2/3/fekvő
+- [x] T5 „Szerkesztés internet nélkül” a Kezelőben (Rendezvény fül)
+- [ ] Ellenőrzőpont: offline próba Macen és Windowson (böngészőben és Electronban kész; valódi gépen a felhasználó)

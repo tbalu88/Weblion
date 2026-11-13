@@ -81,7 +81,9 @@ Sorrend: K4 sablon-letöltés → K2+K3 feltöltés, QR, felhő-galéria → K3 
 
 ---
 
-# Kiegészítés (2026-11-13 este): képtörlés + offline sablonszerkesztő – JÓVÁHAGYÁSRA VÁR
+# Kiegészítés (2026-11-13 este): képtörlés + offline sablonszerkesztő – KÉSZ (galéria 0.9.0, panel 2.9.253–254, Booth 0.11.0)
+
+*Felhasználói döntések: felhő-törlés AZONNAL VÉGLEGESEN (nincs lomtár); offline szerkesztő = a panel Sablonkészítője + „sima fehér keret” 1-2-3 képes (+ fekvő), csak a gépen.*
 
 ## Áttekintés
 1. **Képtörlés, tömegesen is** – a gépen (Kezelő → Galéria) és a felhő-galériából; a panel Fotógaléria → Kezelés ablakából is.
