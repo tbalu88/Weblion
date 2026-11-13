@@ -172,8 +172,9 @@ function cg_upload(WP_REST_Request $req) {
 add_action('init', function () {
 	$p = (string) parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '', PHP_URL_PATH);
 	/* v0.7 mobil alkalmazás (PWA): rövid cím + ikonok */
-	if (preg_match('#^/galeria/app(?:/(icon-(192|512)\.png))?/?$#', $p, $am)) {
-		if (!empty($am[1])) { header('Content-Type: image/png'); header('Cache-Control: public, max-age=604800'); echo base64_decode($am[2] === '192' ? CG_ICON_192 : CG_ICON_512); exit; }
+	/* (kiterjesztés nélkül: a .png címeket a webszerver statikus fájlként keresné, a WordPress meg sem kapná) */
+	if (preg_match('#^/galeria/app(?:/icon-(192|512))?/?$#', $p, $am)) {
+		if (!empty($am[1])) { header('Content-Type: image/png'); header('Cache-Control: public, max-age=604800'); echo base64_decode($am[1] === '192' ? CG_ICON_192 : CG_ICON_512); exit; }
 		wp_redirect(content_url('/plugins/crazy-booth-ui/mobil.html'), 302); exit;
 	}
 	if (!preg_match('#^/galeria/([a-z0-9]{6,32})(?:/([a-z0-9]{6,32}|zip))?/?$#', $p, $m)) { return; }

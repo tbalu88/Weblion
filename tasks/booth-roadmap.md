@@ -68,6 +68,8 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - d4 Kvíz, játék, nyereményjáték
 
 ## 8. fázis – hardver és külön termékek (nagy tételek, egyenként egyeztetve)
+*2026-11-13 – a felhasználó választása: kell: w3+w5, m8, m17, m16, Windows+D5300, w10; nem kell: m18, p12.*
+*Kész: w5 DSLR-beállítások (0.9.0), w3 Canon digiCamControl-lal (tesztelendő), m16 matrica-ív, m8 360° (platform kézi indítással; a vezérléshez a platform típusa kell), Windows zip (0.9.0), m17 + w10: mobil PWA (https://tartalek.eventcrazy.hu/galeria/app/ – fotós mód telefonon, szelfigép mód tableten).*
 - w3 Canon DSLR · w5 Kamerabeállítások a programból (ISO, rekesz, záridő)
 - m8 360°-os spinner mód (platform-vezérlés)
 - m17 Kézi (járkálós) fotós mód
