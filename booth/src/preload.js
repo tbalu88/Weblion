@@ -11,5 +11,7 @@ contextBridge.exposeInMainWorld('booth', {
   printers: () => ipcRenderer.invoke('print:list'),
   print: (dataUrl, o) => ipcRenderer.invoke('print:do', dataUrl, o),
   log: (m) => ipcRenderer.invoke('log', m),
-  quit: () => ipcRenderer.invoke('app:quit')
+  quit: () => ipcRenderer.invoke('app:quit'),
+  fullscreen: on => ipcRenderer.invoke('win:full', on),
+  isFullscreen: () => ipcRenderer.invoke('win:isFull')
 });

@@ -83,6 +83,9 @@ ipcMain.handle('print:do', wrap(async (dataUrl, o) => {
 }));
 ipcMain.handle('log', wrap(async m => log('felület: ' + m)));
 ipcMain.handle('app:quit', wrap(async () => app.quit()));
+/* teljes képernyő ki / be (a kezdőképernyő sarokgombja) */
+ipcMain.handle('win:isFull', wrap(async () => win.isFullScreen() || win.isKiosk()));
+ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win.isFullScreen() || win.isKiosk()) : !!on; win.setKiosk(f); win.setFullScreen(f); return f; }));
 
 /* ---------- ablak */
 app.whenReady().then(() => {

@@ -150,6 +150,7 @@
     else if (act === 'done') { clearTimeout(S.idleT); show('start'); }
     else if (act === 'close') { show('start'); }
     else if (act === 'quit') { B.quit(); }
+    else if (act === 'fs') { e.stopPropagation(); const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
       ['camera', 'dccUrl', 'printer', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
@@ -167,11 +168,11 @@
   $('[data-corner]').addEventListener('pointerdown', () => { hold = setTimeout(openSettings, 3000); });
   ['pointerup', 'pointerleave'].forEach(ev => $('[data-corner]').addEventListener(ev, () => clearTimeout(hold)));
   document.addEventListener('keydown', e => { if (e.key === 'F2') openSettings(); if (e.key === 'Escape' && S.scr === 'settings') show('start'); });
-  $('[data-s=start]').addEventListener('click', () => run());
+  $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) run(); });
 
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
   function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép'); }
   async function initCam() { try { await call(B.camInit); } catch (e) { err(e.message); } }
-  (async () => { S.cfg = await call(B.config); modeInfo(); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); modeInfo(); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
 })();
