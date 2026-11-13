@@ -10,3 +10,4 @@ Projekt: Crazy Booth – javítandó sor:
 
 Projekt: Crazy Booth – új tény (felhasználó, 2026-11-13):
 - AI-képekhez most az Activation King fotóautomata-szoftvert használják; ott modell választható, általában a „Nano Banana 2”-t (= Google Gemini 3.1 Flash Image, OpenRouteren google/gemini-3.1-flash-image), ha elérhető. Saját Google-kulcsuk nincs (a szoftver intézi) → az összehasonlításhoz OpenRouter-kulcs kell.
+- 2026-11-13 · Crazy Booth · OpenRouter-kulcs mentve (Default környezet, openrouter.ai), 10 $ kredit; a 4 modell elérhető; próbahívás (NB 2.1, 1K, arc nélküli kép) rendben: 10,8 mp, 0,038 $. A teszthez a munkatársi fotók és a prompt hiányzik.
