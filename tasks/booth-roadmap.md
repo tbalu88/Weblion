@@ -57,7 +57,8 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 - a7 AI-háttércsere zöld háttér nélkül · z1 Zöld háttér (chroma key)
 - a8 Háttérkivágás / elmosás internet nélkül
 
-## 7. fázis – üzemeltetés, kivetítés, statisztika
+## 7. fázis – üzemeltetés, kivetítés, statisztika ✅ (0.8.0, panel 2.9.246, galéria 0.6.0 – 2026-11-13)
+*v8: a deal adatlapján „Beállítások a gépekre” (a gépek percenként jelentkeznek és átveszik); v7: gépállapot a deal kártyáján; v10: statisztika + ügyfélriport; g8/h11: ?vetites=1 diavetítés, a friss kép kiemelve; v9: a módválasztó; v4: indítógomb; d4: sorsolás (kvíz/játék még nincs).*
 - v8 Webes vezérlőpult: rendezvény beállítása távolról, szinkron a gépekre
 - v7 Távoli figyelés telefonról (állapot, papír, hibák)
 - v10 Statisztika és ügyfélriport
