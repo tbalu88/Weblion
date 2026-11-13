@@ -77,7 +77,8 @@
 		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
 	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
-	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet']];
+	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet'], ['ai', 'AI-kép']];
+	const AI_STYLES = [['karikatura', 'Karikatúra'], ['magazin', 'Magazinborító'], ['plakat', 'Filmplakát'], ['kartya', 'Gyűjtőkártya'], ['portre', 'Céges portré']];
 	function boothCard(x, toEv) {
 		const b = x.booth; if (!b) return '';
 		if (!(x.gal || b.machines.length || b.cfg || (toEv != null && toEv >= -1))) return '';
@@ -89,7 +90,7 @@
 			return '<li><i class="bt-' + (!live ? 'off' : err || (z.cam === false && !z.station) ? 'bad' : low || z.queue > 5 || !z.net ? 'mid' : 'ok') + '"></i><b>' + esc(z.name) + '</b><span>' + esc(st) + '</span></li>';
 		}).join('');
 		const s = b.stats, hrs = s ? Object.entries(s.hours || {}) : [], mx = Math.max(1, ...hrs.map(h => h[1]));
-		const stat = s ? '<div class="bt-st"><span><b>' + s.photos + '</b> fotó</span>' + (s.videos ? '<span><b>' + s.videos + '</b> videó</span>' : '') + (s.guestbook ? '<span><b>' + s.guestbook + '</b> videóüzenet</span>' : '') + (b.prints ? '<span><b>' + b.prints + '</b> nyomat</span>' : '') + (x.guests && x.guests.mailed ? '<span><b>' + x.guests.mailed + '</b> e-mail</span>' : '') + '</div>' +
+		const stat = s ? '<div class="bt-st"><span><b>' + s.photos + '</b> fotó</span>' + (s.videos ? '<span><b>' + s.videos + '</b> videó</span>' : '') + (s.guestbook ? '<span><b>' + s.guestbook + '</b> videóüzenet</span>' : '') + (b.prints ? '<span><b>' + b.prints + '</b> nyomat</span>' : '') + (x.guests && x.guests.mailed ? '<span><b>' + x.guests.mailed + '</b> e-mail</span>' : '') + (s.ai && (s.ai.on || s.ai.used) ? '<span><b>' + s.ai.used + '</b>' + (s.ai.limit ? ' / ' + s.ai.limit : '') + ' AI-kép' + (s.ai.cost ? ' · kb. ' + String(s.ai.cost).replace('.', ',') + ' $' : '') + '</span>' : '') + '</div>' +
 			(hrs.length > 1 ? '<div class="bt-h" aria-label="Fotók óránként">' + hrs.map(h => '<div title="' + esc(h[0] + ': ' + h[1]) + '"><i style="height:' + Math.max(4, Math.round(h[1] / mx * 100)) + '%"></i><small>' + esc(h[0].slice(0, 2)) + '</small></div>').join('') + '</div>' : '') : '';
 		return '<section class="d3-c"><h4>Szelfigép' + (b.machines.length ? ' <small>' + b.machines.length + ' gép</small>' : '') + '</h4>' +
 			(ml ? '<ul class="bt-ml">' + ml + '</ul>' : '<p class="cpx-muted">' + (toEv != null && toEv > 0 ? 'A rendezvény napján itt látszik a gépek állapota (papír, feltöltés, hibák).' : 'Most egy gép sem jelentkezik ennél a rendezvénynél.') + '</p>') + stat +
@@ -100,7 +101,7 @@
 			(b.cfg ? '<p class="cpx-muted bt-cf">A gépek a panelből kapják a beállításokat' + (b.cfg_by ? ' (' + esc(b.cfg_by) + ')' : '') + ' – a rendezvényre állított gépek legfeljebb egy percen belül átveszik.</p>' : '') + '</section>';
 	}
 	async function boothCfg(deal, cur) {
-		const c = cur || {}, u = c.ui || {}, sc = c.screen || {}, on = u.modes || ['photo'];
+		const c = cur || {}, u = c.ui || {}, sc = c.screen || {}, on = u.modes || ['photo'], ai = u.ai || {};
 		const v = (k, d) => (c[k] != null ? c[k] : u[k] != null ? u[k] : d);
 		const chk = (id, val, txt) => '<label class="bt-ck"><input type="checkbox" id="' + id + '"' + (val ? ' checked' : '') + '> ' + txt + '</label>';
 		const num = (id, val, txt, a, b) => '<label>' + txt + '<input type="number" id="' + id + '" min="' + a + '" max="' + b + '" value="' + esc(val) + '"></label>';
@@ -114,6 +115,10 @@
 			'<h5>Megosztás</h5>' + chk('bc-shareEmail', v('shareEmail', false), '„Küldés e-mailben” gomb') +
 			'<label>Név bekérése<select id="bc-askName">' + [['off', 'Nem kérjük'], ['opt', 'Nem kötelező'], ['req', 'Kötelező']].map(o => '<option value="' + o[0] + '"' + (v('askName', 'opt') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
 			chk('bc-formBefore', v('formBefore', false), 'Kérdőív a fotózás előtt') + '<label>A kérdőív saját kérdései (soronként egy, max. 3)<textarea id="bc-questions" rows="3" maxlength="300">' + esc(v('questions', '')) + '</textarea></label>' +
+			'<h5>AI-kép</h5><p class="cpx-muted">Csak akkor fut, ha fent az „AI-kép” mód is be van jelölve. Kb. 0,055 $ / kép (a WP admin „Crazy Booth gépek” oldalán beállított modellel). A vendég fotózás előtt jóváhagyja, hogy a képét külső AI dolgozza fel, és hogy elmúlt 18 éves.</p>' +
+			'<div class="bt-mo">' + AI_STYLES.map(st => chk('bc-ai-' + st[0], (ai.keys || []).includes(st[0]), st[1])).join('') + '</div>' +
+			'<div class="bt-g"><label>Saját stílus neve<input id="bc-ai-cl" maxlength="40" placeholder="pl. Rajzfilm" value="' + esc(ai.custom_label || '') + '"></label><label>Kimenet<select id="bc-ai-out"><option value="ai"' + (ai.out !== 'both' ? ' selected' : '') + '>Csak az AI-kép</option><option value="both"' + (ai.out === 'both' ? ' selected' : '') + '>AI-kép + eredeti egymás mellett</option></select></label>' + num('bc-ai-limit', ai.limit || 300, 'Keret (AI-kép a rendezvényen)', 1, 5000) + '</div>' +
+			'<label>Saját stílus promptja (angolul a legjobb; {nev}, {rendezveny}, {datum} beírható)<textarea id="bc-ai-cp" rows="3" maxlength="1500">' + esc(ai.custom || '') + '</textarea></label>' +
 			'<h5>Kezdőképernyő</h5><div class="bt-g"><label>Felirat<input id="bc-t1" maxlength="60" placeholder="Érints meg!" value="' + esc(sc.t1 || '') + '"></label><label>Alcím<input id="bc-t2" maxlength="80" placeholder="és mosolyogj a kamerába" value="' + esc(sc.t2 || '') + '"></label><label>Felső felirat<input id="bc-brand" maxlength="60" placeholder="EventCrazy logó" value="' + esc(sc.brand || '') + '"></label><label>Kiemelő szín<input type="color" id="bc-color" value="' + esc(sc.color || '#E8894A') + '"></label></div>' +
 			'<div class="gm-b"><button type="button" class="cpx-btn sm" data-bcsave>Mentés a gépekre</button>' + (cur ? '<button type="button" class="cpx-btn ghost sm" data-bcclear>Panel-beállítás törlése</button>' : '') + '</div></div>');
 		if (!box) return;
@@ -123,7 +128,9 @@
 			const modes = BOOTH_MODES.map(m => m[0]).filter(k => g('bc-m-' + k).checked);
 			const o = { modes: modes.length ? modes : ['photo'], shots: Number(g('bc-shots').value), autoPrint: g('bc-autoPrint').checked, bestOf: g('bc-bestOf').checked, retake: g('bc-retake').checked, shareEmail: g('bc-shareEmail').checked, formBefore: g('bc-formBefore').checked, askName: g('bc-askName').value, questions: g('bc-questions').value, t1: g('bc-t1').value.trim(), t2: g('bc-t2').value.trim(), brand: g('bc-brand').value.trim(), color: g('bc-color').value };
 			['countdown', 'cdNext', 'copies', 'limitPhoto', 'limitEvent'].forEach(k => { o[k] = Number(g('bc-' + k).value) || 0; });
-			try { await post('cp_booth_dcfg', { deal, cfg: JSON.stringify(o) }); toast('Mentve – a gépek egy percen belül átveszik.'); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); }
+			o.ai = { styles: AI_STYLES.map(st => st[0]).filter(k => g('bc-ai-' + k).checked), custom: g('bc-ai-cp').value.trim(), custom_label: g('bc-ai-cl').value.trim(), out: g('bc-ai-out').value, limit: Number(g('bc-ai-limit').value) || 300 };
+			if (o.modes.includes('ai') && !o.ai.styles.length && !o.ai.custom) { toast('Az AI-kép módhoz válassz legalább egy stílust (vagy írj saját promptot).', true); return; }
+			try { const r = await post('cp_booth_dcfg', { deal, cfg: JSON.stringify(o) }); toast(r && r.warn ? r.warn : 'Mentve – a gépek egy percen belül átveszik.', !!(r && r.warn)); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); }
 		});
 		const cl = box.querySelector('[data-bcclear]');
 		if (cl) cl.addEventListener('click', async () => { try { await post('cp_booth_dcfg', { deal, clear: 1 }); toast('A panel-beállítás törölve (a gépeken a mostani beállítás marad).'); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); } });

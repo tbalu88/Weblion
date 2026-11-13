@@ -176,7 +176,32 @@ function cp_booth_admin() {
 		echo '<tr><td>' . esc_html($d['name']) . '</td><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $d['at'])) . '</td><td>' . ($d['seen'] ? esc_html(wp_date('Y.m.d. H:i', (int) $d['seen'])) : '–') . '</td><td>' . (empty($d['off']) ? 'aktív' : '<b>letiltva</b>') . '</td><td><button class="button" name="toggle" value="' . esc_attr($id) . '">' . (empty($d['off']) ? 'Letiltás' : 'Engedélyezés') . '</button></td></tr>';
 	}
 	if (!$devs) { echo '<tr><td colspan="5">Még nincs gép.</td></tr>'; }
-	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form></div>';
+	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form>';
+	cp_booth_admin_ai();
+	echo '</div>';
+}
+/* v2.9.251: AI-kép (OpenRouter) – a kulcs a tartalék szerveren, titkosítva tárolódik; itt csak beírni lehet, visszaolvasni nem */
+function cp_booth_admin_ai() {
+	$note = '';
+	if (!empty($_POST['cp_ai_nonce']) && wp_verify_nonce($_POST['cp_ai_nonce'], 'cp_booth_ai')) {
+		$body = array('model' => sanitize_text_field(wp_unslash((string) ($_POST['ai_model'] ?? ''))));
+		$k = trim((string) wp_unslash($_POST['ai_key'] ?? '')); if ($k !== '') { $body['key'] = $k; }
+		if (!empty($_POST['ai_clear'])) { $body['clear'] = 1; }
+		$r = cp_booth_gal_req('POST', '/ai-setup', $body);
+		$note = is_wp_error($r) ? '<div class="notice notice-error"><p>' . esc_html($r->get_error_message()) . '</p></div>' : '<div class="notice notice-success"><p>Mentve.' . (isset($body['key']) ? ' A kulcs ellenőrizve és eltárolva.' : '') . '</p></div>';
+		if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'booth_ai', 'AI-beállítás módosítva' . (isset($body['key']) ? ' (új kulcs)' : '') . (!empty($body['clear']) ? ' (kulcs törölve)' : ''), '', ''); }
+	}
+	$st = cp_booth_gal_req('GET', '/ai-setup');
+	echo '<h2 style="margin-top:28px">AI-kép (karikatúra és társai)</h2>' . $note;
+	if (is_wp_error($st)) { echo '<p>' . esc_html($st->get_error_message()) . '</p>'; return; }
+	$names = array('google/gemini-nano-banana-2.1' => 'Google Nano Banana 2.1 (ajánlott, kb. 0,055 $ / kép)', 'google/gemini-3.1-flash-image' => 'Google Nano Banana 2 (kb. 0,10 $ / kép)', 'openai/gpt-image-2.6-flare' => 'OpenAI GPT-Image 2.6 Flare (kb. 0,05 $ / kép)');
+	echo '<p>Állapot: <b>' . ($st['has_key'] ? 'kulcs beállítva' : 'nincs kulcs – az AI nem működik') . '</b> · ebben a hónapban: <b>' . (int) $st['month']['n'] . '</b> kép, kb. <b>' . esc_html(number_format((float) $st['month']['cost'], 2, ',', ' ')) . ' $</b>' . ((int) $st['month']['err'] ? ', ' . (int) $st['month']['err'] . ' sikertelen' : '') . '.</p>';
+	echo '<p>Az AI rendezvényenként kapcsolható be a deal adatlapján: Szelfigép → „Beállítások a gépekre” → „AI-kép” mód + stílus és keret.</p>';
+	echo '<form method="post">'; wp_nonce_field('cp_booth_ai', 'cp_ai_nonce');
+	echo '<table class="form-table"><tr><th>OpenRouter API-kulcs</th><td><input type="password" name="ai_key" class="regular-text" autocomplete="new-password" placeholder="' . ($st['has_key'] ? 'beállítva – új kulcshoz írd be ide' : 'sk-or-v1-…') . '"><p class="description">Külön kulcsot használj ehhez (költési korláttal). A kulcs a tartalék szerveren titkosítva tárolódik; innen nem olvasható vissza.</p>' . ($st['has_key'] ? '<label><input type="checkbox" name="ai_clear" value="1"> Kulcs törlése (az AI leáll)</label>' : '') . '</td></tr>';
+	echo '<tr><th>Modell</th><td><select name="ai_model">';
+	foreach ((array) $st['models'] as $m) { echo '<option value="' . esc_attr($m) . '"' . selected($m, $st['model'], false) . '>' . esc_html($names[$m] ?? $m) . '</option>'; }
+	echo '</select></td></tr></table><p><button class="button button-primary">AI-beállítás mentése</button></p></form>';
 }
 
 /* ---------- v2.9.244: vendégadatok a szelfigépről (név, e-mail, telefon, kérdőív) – CSAK a panelben, a dealhez kötve,
@@ -287,7 +312,7 @@ function cp_booth_ajax_guests() {
 
 /* ---------- v2.9.246 (Crazy Booth 7. fázis): gépállapot (v7), távoli beállítások (v8), statisztika + ügyfélriport (v10), sorsolás (d4).
  * A gépek percenként jelentkeznek (állapot); a válaszban kapják a deal panelből mentett beállításait. Salesmate-be semmi nem megy. */
-const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'spin', 'guestbook');
+const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'spin', 'guestbook', 'ai');
 function cp_booth_beat_get($id) { $b = get_transient('cp_bb_' . $id); return is_array($b) ? $b : null; }
 function cp_booth_dcfg_all() { $a = get_option('cp_booth_dcfg', array()); return is_array($a) ? $a : array(); }
 function cp_booth_dcfg_get($deal) { $a = cp_booth_dcfg_all(); return isset($a[(string) (int) $deal]) && is_array($a[(string) (int) $deal]) ? $a[(string) (int) $deal] : null; }
@@ -305,8 +330,39 @@ function cp_booth_dcfg_clean($in) {
 	if (isset($in['questions'])) { $ui['questions'] = mb_substr(implode("\n", array_slice(array_filter(array_map('trim', explode("\n", sanitize_textarea_field((string) $in['questions'])))), 0, 3)), 0, 300); }
 	foreach (array('t1' => 60, 't2' => 80, 'brand' => 60) as $k => $n) { if (isset($in[$k])) { $sc[$k] = mb_substr(sanitize_text_field((string) $in[$k]), 0, $n); } }
 	if (isset($in['color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $in['color'])) { $sc['color'] = (string) $in['color']; }
+	/* v2.9.251: AI-kép – stílusok (előre megírt promptok + saját), kimenet, keret */
+	if (isset($in['ai']) && is_array($in['ai'])) {
+		$P = cp_booth_ai_presets(); $keys = array(); $st = array();
+		foreach ((array) ($in['ai']['styles'] ?? array()) as $k) { $k = (string) $k; if (isset($P[$k]) && !in_array($k, $keys, true)) { $keys[] = $k; $st[] = array('k' => $k, 'label' => $P[$k][0], 'prompt' => $P[$k][1]); } }
+		$cp = mb_substr(trim(sanitize_textarea_field((string) ($in['ai']['custom'] ?? ''))), 0, 1500);
+		$cl = mb_substr(trim(sanitize_text_field((string) ($in['ai']['custom_label'] ?? ''))), 0, 40);
+		if ($cp !== '') { $st[] = array('k' => 'sajat', 'label' => $cl !== '' ? $cl : 'Saját stílus', 'prompt' => $cp); }
+		$ui['ai'] = array('styles' => array_slice($st, 0, 6), 'keys' => $keys, 'custom' => $cp, 'custom_label' => $cl, 'out' => (($in['ai']['out'] ?? '') === 'both') ? 'both' : 'ai', 'limit' => max(1, min(5000, (int) ($in['ai']['limit'] ?? 300))));
+	}
 	if ($ui) { $o['ui'] = $ui; } if ($sc) { $o['screen'] = $sc; }
 	return $o;
+}
+/* AI-stílusok (angol prompt – a modellek így a legpontosabbak). Helyettesítők: {nev} vendég neve, {rendezveny} a rendezvény, {datum} dátum */
+function cp_booth_ai_presets() {
+	$keep = ' Keep every person recognizable and keep the same number of people.';
+	return array(
+		'karikatura' => array('Karikatúra', 'Convert this photo into a funny street-artist caricature with exaggerated faces: big heads and small bodies, humorous expressions and playful details. Coloured drawing that looks sketched by a street artist on canvas. Clean white or lightly textured paper background, no graffiti – classic caricature art seen in tourist spots and city streets.' . $keep . ' Do not add any text, letters, signatures, logos or watermarks.'),
+		'magazin' => array('Magazinborító', 'Turn this photo into a glossy fashion magazine cover with professional studio lighting, elegant retouching and a stylish layout.' . $keep . ' Put the masthead "CRAZY" at the top and two short Hungarian cover lines about an unforgettable party. No other text.'),
+		'plakat' => array('Filmplakát', 'Turn this photo into a dramatic Hollywood blockbuster movie poster with cinematic lighting and an epic background.' . $keep . ' Write the title "{rendezveny}" in large letters and the date "{datum}" at the bottom. No other text.'),
+		'kartya' => array('Gyűjtőkártya', 'Turn this photo into a collectible fantasy trading card illustration with an ornate golden frame and a glowing magical background.' . $keep . ' Write "{nev}" on the name plate at the bottom. No other text.'),
+		'portre' => array('Céges portré', 'Create a professional corporate headshot from this photo: neutral light grey studio background, soft studio lighting, smart business attire and natural retouching. Keep the face and identity exactly the same and keep the same number of people. No text.'),
+	);
+}
+/* általános kérés a galériához a panel kulcsával (pl. /ai-setup) */
+function cp_booth_gal_req($method, $path, $body = null, $timeout = 20) {
+	$args = array('method' => $method, 'timeout' => $timeout, 'headers' => array('X-Booth-Key' => cp_booth_panel_key()));
+	if ($body !== null) { $args['body'] = $body; }
+	$r = wp_remote_request('https://tartalek.eventcrazy.hu/wp-json/crazy-galeria/v1' . $path, $args);
+	if (is_wp_error($r)) { return new WP_Error('gal', 'A galéria most nem érhető el.'); }
+	$b = json_decode(wp_remote_retrieve_body($r), true);
+	if (!is_array($b)) { return new WP_Error('gal', 'A galéria nem válaszolt (' . wp_remote_retrieve_response_code($r) . ').'); }
+	if ((int) wp_remote_retrieve_response_code($r) !== 200) { return new WP_Error('gal', (string) ($b['message'] ?? ('Hiba (' . wp_remote_retrieve_response_code($r) . ')'))); }
+	return $b;
 }
 add_action('rest_api_init', function () {
 	register_rest_route('crazy/v1', '/booth/beat', array('methods' => 'POST', 'permission_callback' => function () { return (bool) cp_booth_auth(); }, 'callback' => function (WP_REST_Request $r) {
@@ -341,6 +397,7 @@ function cp_booth_stats($deal) {
 		if ($s['first'] === '' || $loc < $s['first']) { $s['first'] = $loc; } if ($loc > $s['last']) { $s['last'] = $loc; }
 	}
 	ksort($s['hours']);
+	$s['ai'] = isset($g['ai']) && is_array($g['ai']) ? $g['ai'] : null;
 	set_transient($ck, $s, 5 * MINUTE_IN_SECONDS);
 	return $s;
 }
@@ -360,13 +417,17 @@ function cp_booth_ajax_dcfg() {
 	cp_crm_ajax_guard(array('deals'));
 	$deal = (int) ($_POST['deal'] ?? 0); if (!$deal) { cp_el_err('Hiányzó deal.', 400); }
 	$a = cp_booth_dcfg_all(); $k = (string) $deal;
-	if (!empty($_POST['clear'])) { unset($a[$k]); update_option('cp_booth_dcfg', $a, false); wp_send_json_success(array('cfg' => null)); }
+	if (!empty($_POST['clear'])) { unset($a[$k]); update_option('cp_booth_dcfg', $a, false); if (cp_booth_gal_has($deal)) { cp_booth_gal_api('POST', cp_booth_gal_tok($deal), array('ai_on' => 0)); } wp_send_json_success(array('cfg' => null)); }
 	$in = json_decode(wp_unslash((string) ($_POST['cfg'] ?? '')), true);
 	$c = cp_booth_dcfg_clean($in);
 	$cu = function_exists('cp_pu_current') ? cp_pu_current() : null; $who = is_array($cu) ? (string) ($cu['name'] ?? '') : '';
 	$a[$k] = array('at' => time(), 'by' => $who, 'cfg' => $c); update_option('cp_booth_dcfg', $a, false);
 	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_cfg', 'Szelfigép-beállítások mentve', 'deal:' . $deal, ''); }
-	wp_send_json_success(array('cfg' => $c, 'at' => $a[$k]['at']));
+	/* v2.9.251: az AI be/ki és a keret a galérián (ott fizetünk) – a „AI-kép” mód és legalább egy stílus kell hozzá */
+	$aion = in_array('ai', (array) ($c['ui']['modes'] ?? array()), true) && !empty($c['ui']['ai']['styles']);
+	$warn = '';
+	if ($aion || cp_booth_gal_has($deal)) { $g = cp_booth_gal_api('POST', cp_booth_gal_tok($deal), array('ai_on' => $aion ? 1 : 0, 'ai_limit' => (int) ($c['ui']['ai']['limit'] ?? 300))); if (is_wp_error($g)) { $warn = 'Az AI-beállítás a galérián most nem frissült: ' . $g->get_error_message(); } delete_transient('cp_booth_st_' . cp_booth_gal_tok($deal)); }
+	wp_send_json_success(array('cfg' => $c, 'at' => $a[$k]['at'], 'warn' => $warn));
 }
 /* sorsolás a vendégek közül (akik adatot adtak meg); egy vendég egyszer nyerhet */
 add_action('wp_ajax_nopriv_cp_booth_draw', 'cp_booth_ajax_draw'); add_action('wp_ajax_cp_booth_draw', 'cp_booth_ajax_draw');
