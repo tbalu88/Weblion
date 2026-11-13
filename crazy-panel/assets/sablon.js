@@ -1036,6 +1036,8 @@ async function boothSave() {
 		await X.saveBooth(st.deal.id, png, D[st.di].name + ' – ' + cur().label);
 		saveSoon();
 		msg('✓ Elmentve a szelfigépnek – a gép a következő fotózásnál (vagy a beállítások mentésekor) ezt használja.', 'ok');
+		/* v2.9.248: ha a szelfigépből nyílt, mentés után vissza a programba (az ablak bezárul, a gép újratölti a sablont) */
+		if (window.CP_FROM_BOOTH) { msg('✓ Elmentve a szelfigépnek – visszatérés a programba…', 'ok'); setTimeout(() => window.close(), 1300); }
 	} catch (e) { msg('Nem sikerült: ' + e.message, 'err'); }
 	finally { b.disabled = false; b.textContent = label; }
 }

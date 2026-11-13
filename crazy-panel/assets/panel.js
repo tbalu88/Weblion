@@ -3036,6 +3036,14 @@ function elCsv() {
   /* v2.9.104: kontakt / cég saját linkje (#kapcsolatok:ct:<id>) */
   /* v2.9.243: #sablon:<deal> – a Sablonkészítő rögtön a deallel nyílik (a szelfigép „Sablon szerkesztése” gombja) */
   if (DEEP && S.tab === 'sablon' && /^\d+$/.test(DEEP)) { S.sbDeal = DEEP; }
+  /* v2.9.248: a szelfigépből (Crazy Booth) nyitott panel – mindig látható „Vissza a szelfigéphez” gomb (az ablak bezárása) */
+  if (/[?&]szelfigep=1\b/.test(location.search)) {
+    window.CP_FROM_BOOTH = true;
+    const bk = document.createElement('button'); bk.type = 'button'; bk.textContent = '← Vissza a szelfigéphez';
+    bk.setAttribute('style', 'position:fixed;z-index:2147483000;top:calc(10px + env(safe-area-inset-top));right:12px;height:44px;padding:0 18px;border:0;border-radius:999px;background:#E8894A;color:#141C33;font:700 15px Inter,system-ui,sans-serif;box-shadow:0 6px 20px rgba(20,28,51,.3);cursor:pointer');
+    bk.addEventListener('click', () => { window.close(); setTimeout(() => { bk.textContent = 'Zárd be ezt az ablakot (⌘W / Ctrl+W)'; }, 500); });
+    document.body.appendChild(bk);
+  }
   if (DEEP && S.tab === 'kapcsolatok' && /^(ct|co):\d+$/.test(DEEP)) {
     const dp = DEEP; setTimeout(() => { if (window.CPCrm && window.CPCrm.deep) window.CPCrm.deep(dp); }, 400);
   }
