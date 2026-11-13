@@ -215,7 +215,9 @@
     for (let y = 0; y < q.n; y++) for (let x = 0; x < q.n; x++) if (q.bits.charCodeAt(y * q.n + x) === 49) { d += 'M' + (x + 2) + ' ' + (y + 2) + 'h1v1h-1z'; ones++; }
     if (!ones) throw new Error('üres QR');
     const s = q.n + 4;
-    el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + s + ' ' + s + '" shape-rendering="crispEdges"><rect width="' + s + '" height="' + s + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ' + s + ' ' + s + '" shape-rendering="crispEdges" style="display:block"><rect width="' + s + '" height="' + s + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+    /* napló: mekkora lett a QR a képernyőn (hibakereséshez) */
+    requestAnimationFrame(() => { const sv = el.querySelector('svg'), r = sv ? sv.getBoundingClientRect() : null; B.log('QR kirajzolva: ' + q.n + '×' + q.n + ', ' + ones + ' modul, doboz ' + (r ? Math.round(r.width) + '×' + Math.round(r.height) : 'nincs') + ', felület ' + (document.documentElement.dataset.ui || '?')); });
   }
   async function showQr(box, el, ev, photo) {
     box.hidden = true;
