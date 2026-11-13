@@ -320,13 +320,14 @@
     if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok) $('[data-ver2]').textContent += ' · felület ' + r.v.v + (r.v.online ? ' (online)' : ''); });
   }
   document.querySelector('.pad').innerHTML = '1 2 3 4 5 6 7 8 9 ⌫ 0 ✓'.split(' ').map(k => '<button type="button" data-k="' + k + '">' + k + '</button>').join('');
-  document.querySelector('.pad').addEventListener('click', async e => {
-    const k = e.target.dataset.k; if (!k) return;
+  /* a PIN a képernyő-billentyűzetről és a gép billentyűzetéről is (számok, numerikus billentyűzet, Backspace, Enter) */
+  document.querySelector('.pad').addEventListener('click', e => { const k = e.target.dataset.k; if (k) pinKey(k); });
+  async function pinKey(k) {
     if (k === '⌫') pinBuf = pinBuf.slice(0, -1);
     else if (k === '✓') { if (pinBuf === String(S.cfg.pin)) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); await fillForm(); preflight(); } else { pinBuf = ''; err('Hibás PIN'); } }
     else if (pinBuf.length < 8) pinBuf += k;
     $('[data-pin]').textContent = '•'.repeat(pinBuf.length);
-  });
+  }
   document.addEventListener('click', async e => {
     const a = e.target.closest('[data-act]'); if (!a) return;
     const act = a.dataset.act;
@@ -402,6 +403,12 @@
   document.addEventListener('keydown', e => {
     if (S.keyCap) { e.preventDefault(); S.keyCap = false; if (e.code !== 'Escape') { call(B.saveConfig, { ui: Object.assign({}, U(), { startKey: e.code }) }).then(c => { S.cfg = Object.assign(S.cfg, c); keyInfo(); $('[data-stmsg]').textContent = 'Indítógomb mentve: ' + e.code; }).catch(x => { $('[data-stmsg]').textContent = x.message; }); } else keyInfo(); return; }
     if (S.scr === 'start' && !S.busy && !isStation() && startKeyOk(e.code)) { e.preventDefault(); startTap(); return; }
+    if (S.scr === 'settings' && !$('[data-pinbox]').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      /* a numerikus billentyűzet kikapcsolt NumLock mellett is számot ad; a felső sor a billentyűkiosztás szerint (magyaron a 0 máshol van) */
+      const np = /^Numpad([0-9])$/.exec(e.code || '');
+      const k = np ? np[1] : /^[0-9]$/.test(e.key) ? e.key : e.key === 'Backspace' ? '⌫' : (e.key === 'Enter' || e.code === 'NumpadEnter') ? '✓' : '';
+      if (k) { e.preventDefault(); pinKey(k); return; }
+    }
     if (e.key === 'F2') openSettings();
     if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery' || S.scr === 'modes') show('start'); else if (S.scr === 'photo') gallery(); }
   });
