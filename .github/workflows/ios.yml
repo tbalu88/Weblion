@@ -70,9 +70,13 @@ jobs:
           tail -250 ../xcodebuild.log
           exit $rc
 
-      - name: Összegzés (figyelmeztetések, hibák)
+      - name: Összegzés (figyelmeztetések, hibák, tesztek)
         if: always()
         run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path TestResults.xcresult --compact | head -c 6000 || true
+            echo
+          fi
           for f in spinkit.log xcodebuild.log; do
             [ -f "$f" ] || continue
             echo "== $f: $(grep -c ' warning: ' "$f" || true) figyelmeztetés, $(grep -c ' error: ' "$f" || true) hiba"
