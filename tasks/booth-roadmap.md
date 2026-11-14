@@ -72,7 +72,7 @@ Minden fázis végén próba a Macen; a felület online frissül, a „keret” 
 *2026-11-13 – a felhasználó választása: kell: w3+w5, m8, m17, m16, Windows+D5300, w10; nem kell: m18, p12.*
 *Kész: w5 DSLR-beállítások (0.9.0), w3 Canon digiCamControl-lal (tesztelendő), m16 matrica-ív, m8 360° (platform kézi indítással; a vezérléshez a platform típusa kell), Windows zip (0.9.0), m17 + w10: mobil PWA (https://tartalek.eventcrazy.hu/galeria/app/ – fotós mód telefonon, szelfigép mód tableten).*
 - w3 Canon DSLR · w5 Kamerabeállítások a programból (ISO, rekesz, záridő)
-- m8 360°-os spinner mód (platform-vezérlés)
+- m8 360°-os spinner mód (platform-vezérlés) – 2026-11-14: NEM KELL (a 360-at iPhone-nal csinálják, iPad a megosztó állomás)
 - m17 Kézi (járkálós) fotós mód
 - m16 Matrica-ív (matricanyomtató)
 - m18 Fényfestés
@@ -96,6 +96,6 @@ Még hátra (beosztva):
 - Kamera-akku kijelzése (a D5300-hoz, 8. fázis); papír és nyomtató-állapot kész (0.6.0)
 
 ## Döntést igényel
-- AI-szolgáltató és képenkénti költségkeret (6. fázis előtt).
-- Galéria saját domainje (pl. galeria.eventcrazy.hu) – DNS-beállítás.
+- AI-szolgáltató és képenkénti költségkeret (6. fázis előtt). ✅ Nano Banana 2.1; a prompt marad a mostani (2026-11-14).
+- Galéria saját domainje: galeria.eventcrazy.hu – JÓVÁHAGYVA 2026-11-14; DNS (A → 85.155.240.50) + CloudPanel (server_name + Let's Encrypt) a felhasználónál, utána a linkek átállítása (a régi tartalek-linkek maradnak).
 - 8. fázis tételei: melyik kell valóban, milyen hardverrel.
