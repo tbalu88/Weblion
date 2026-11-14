@@ -45,6 +45,7 @@ public struct SpinSettings: Codable, Sendable, Equatable {
     public var captureFPS: Int = 120
     public var recordSeconds: Double = 8
     public var countdown: Int = 3
+    public var countdownSound: Bool = true
     public var stabilization: Bool = true
 
     // Effektek
@@ -116,7 +117,7 @@ public struct SpinSettings: Codable, Sendable, Equatable {
     // MARK: tűrő betöltés
 
     enum CodingKeys: String, CodingKey {
-        case lens, captureFPS, recordSeconds, countdown, stabilization
+        case lens, captureFPS, recordSeconds, countdown, countdownSound, stabilization
         case speedStyle, slowFactor, boomerang, trimStart, trimEnd, outputFPS
         case overlayFile, captionTop, captionBottom, captionColor
         case musicFile, musicTitle, musicStart, musicVolume
@@ -133,6 +134,7 @@ public struct SpinSettings: Codable, Sendable, Equatable {
         captureFPS = v(.captureFPS, d.captureFPS)
         recordSeconds = v(.recordSeconds, d.recordSeconds)
         countdown = v(.countdown, d.countdown)
+        countdownSound = v(.countdownSound, d.countdownSound)
         stabilization = v(.stabilization, d.stabilization)
         speedStyle = v(.speedStyle, d.speedStyle)
         slowFactor = v(.slowFactor, d.slowFactor)
