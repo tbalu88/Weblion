@@ -9,6 +9,8 @@ final class FlowScreenshots: XCTestCase {
     @MainActor
     func testRecordingFlow() throws {
         let app = XCUIApplication()
+        // a következő teszt indításakor ne a keretrendszernek kelljen leállítania (CI-n ez elakadhat)
+        addTeardownBlock { await app.terminate() }
         app.launchArguments = ["-uitest"]
         app.launch()
 
@@ -54,8 +56,9 @@ final class FlowScreenshots: XCTestCase {
         sleep(1)
         snap(app, "10-beallitasok-zene")
 
-        let videos = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Videók'")).firstMatch
+        let videos = app.buttons["settings.videos"]
         if videos.waitForExistence(timeout: 5) {
+            sleep(1)
             videos.tap()
             sleep(2)
             snap(app, "11-videok")
@@ -80,6 +83,8 @@ final class WorstCaseScreenshots: XCTestCase {
     @MainActor
     func testWorstCaseScreens() throws {
         let app = XCUIApplication()
+        // a következő teszt indításakor ne a keretrendszernek kelljen leállítania (CI-n ez elakadhat)
+        addTeardownBlock { await app.terminate() }
         app.launchArguments = ["-uitest-worst"]
         app.launch()
         XCTAssertTrue(app.buttons["Felvétel indítása"].waitForExistence(timeout: 20))

@@ -31,6 +31,7 @@ struct SettingsView: View {
                     } label: {
                         LabeledContent("Videók", value: "\(model.clips.clips.count)")
                     }
+                    .accessibilityIdentifier("settings.videos")
                 }
                 advancedSection
             }
@@ -284,17 +285,15 @@ struct SettingsView: View {
     }
 
     private var advancedSection: some View {
-        @Bindable var model = model
-        return Section {
+        Section {
             LabeledContent("Verzió", value: Self.version)
-            TextField("Galéria címe", text: $model.settings.serverBase)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            NavigationLink {
+                ServerView()
+            } label: {
+                LabeledContent("Galéria címe", value: model.endpoint.base.host() ?? model.settings.serverBase)
+            }
         } header: {
             Text("Haladó")
-        } footer: {
-            Text("Csak akkor módosítsd, ha a galéria új címre költözik.")
         }
     }
 
@@ -355,5 +354,35 @@ struct OverlayPreview: View {
 
     private var key: String {
         "\(frame?.path ?? "")|\(settings.captionTop)|\(settings.captionBottom)|\(settings.captionColor.rawValue)"
+    }
+}
+
+/// A galéria címe – külön képernyőn, hogy véletlenül ne íródjon át.
+struct ServerView: View {
+    @Environment(AppModel.self) private var model
+    @State private var draft = ""
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("https://…", text: $draft)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } footer: {
+                Text("Csak akkor módosítsd, ha a galéria új címre költözik (pl. galeria.eventcrazy.hu). Csak https-cím fogadható el.")
+            }
+            Section {
+                Button("Mentés") { model.settings.serverBase = GalleryEndpoint(string: draft).base.absoluteString }
+                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Vissza az alapértékre") {
+                    draft = GalleryEndpoint.defaultBase
+                    model.settings.serverBase = GalleryEndpoint.defaultBase
+                }
+            }
+        }
+        .navigationTitle("Galéria címe")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { draft = model.settings.serverBase }
     }
 }

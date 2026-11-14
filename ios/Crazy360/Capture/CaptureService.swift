@@ -41,9 +41,9 @@ actor CaptureService {
         }
     }
 
-    /// A munkamenet. Az előnézeti réteg a fő szálon kapcsolódik hozzá (az AVCaptureSession ezt kezeli),
-    /// minden más csak ezen az actoron fut – ezért `nonisolated(unsafe)`.
-    nonisolated(unsafe) let session = AVCaptureSession()
+    /// A munkamenet dobozban: az előnézeti réteg a fő szálon kapcsolódik hozzá, minden más csak ezen az actoron fut.
+    nonisolated let sessionBox = CaptureSessionBox()
+    private var session: AVCaptureSession { sessionBox.session }
 
     private let queue = DispatchSerialQueue(label: "hu.eventcrazy.crazy360.capture")
     nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
@@ -190,6 +190,12 @@ actor CaptureService {
     func stopRecording() {
         if movieOutput.isRecording { movieOutput.stopRecording() }
     }
+}
+
+/// Az AVCaptureSession hordozója a szálak között. Az előnézeti réteg (fő szál) csak hozzákapcsolódik,
+/// a beállítás és az indítás a CaptureService soros szálán fut – az AVCaptureSession ezt a megosztást támogatja.
+nonisolated final class CaptureSessionBox: @unchecked Sendable {
+    let session = AVCaptureSession()
 }
 
 /// A felvétel vége (az AVFoundation tetszőleges szálon hívja).

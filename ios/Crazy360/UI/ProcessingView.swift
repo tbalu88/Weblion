@@ -11,7 +11,7 @@ struct ProcessingView: View {
             VStack(spacing: 18) {
                 Text("Készül a videó")
                     .font(.title2.bold())
-                Text("\(Int((progress * 100).rounded())) %")
+                Text("\(Int((progress * 100).rounded()))%")
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())

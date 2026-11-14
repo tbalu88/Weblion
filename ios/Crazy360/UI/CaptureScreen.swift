@@ -37,13 +37,14 @@ struct CaptureScreen: View {
 
     @ViewBuilder private var preview: some View {
         if model.cameraAvailable {
-            CameraPreview(session: model.capture.session, enabled: triggerEnabled) { model.trigger() }
+            CameraPreview(session: model.capture.sessionBox.session, enabled: triggerEnabled) { model.trigger() }
                 .ignoresSafeArea()
         } else {
             ZStack {
                 LinearGradient(colors: [Theme.navy2, Theme.navy, Theme.orange.opacity(0.35)], startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
                 noCameraCard
+                    .opacity(model.phase == .idle ? 1 : 0)
             }
         }
     }
