@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CB_VER', '1.1.3');
+define('CB_VER', '1.1.4');
 define('CB_OPT', 'crazy_bridge');
 define('CB_LOG', 'crazy_bridge_log');
 define('CB_NS', 'crazy-bridge/v1');
@@ -485,8 +485,10 @@ function cb_r_restore(WP_REST_Request $req) {
 
 function cb_tail($file, $lines) {
 	if (!$file || !is_file($file) || !is_readable($file)) { return null; }
-	$size = filesize($file);
-	$fh = fopen($file, 'r');
+	$size = (int) @filesize($file);
+	if ($size <= 0) { return ''; }   /* v1.1.4: üres (pl. épp forgatott) naplónál a fread(…, 0) végzetes hiba volt */
+	$fh = @fopen($file, 'r');
+	if (!$fh) { return null; }
 	$read = min($size, 512 * 1024);
 	fseek($fh, -$read, SEEK_END);
 	$buf = (string) fread($fh, $read);

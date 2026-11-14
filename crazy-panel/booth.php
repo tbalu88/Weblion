@@ -142,8 +142,15 @@ add_action('wp_ajax_nopriv_cp_booth_gal', 'cp_booth_ajax_gal'); add_action('wp_a
 function cp_booth_ajax_gal() {
 	cp_crm_ajax_guard(array('deals'));
 	$deal = (int) ($_POST['deal'] ?? 0);
-	if (!$deal || !cp_booth_gal_has($deal)) { cp_el_err('Ennek a dealnek még nincs galériája.', 404); }
-	$ev = cp_booth_gal_tok($deal);
+	/* v2.9.255: a Galériák gyűjtőoldalról a deal nélküli (pl. „Kézi” rendezvényes) galéria is kezelhető, a token alapján */
+	$evp = isset($_POST['ev']) ? sanitize_key(wp_unslash((string) $_POST['ev'])) : '';
+	if (!$deal && $evp !== '') {
+		if (!preg_match('/^[a-z0-9]{6,32}$/', $evp)) { cp_el_err('Hibás galéria-azonosító.', 400); }
+		$ev = $evp;
+	} else {
+		if (!$deal || !cp_booth_gal_has($deal)) { cp_el_err('Ennek a dealnek még nincs galériája.', 404); }
+		$ev = cp_booth_gal_tok($deal);
+	}
 	/* v2.9.253: végleges törlés (tömegesen is) – a galériából és a szerverről, 500-as darabokban */
 	if (isset($_POST['del'])) {
 		$L = array_values(array_unique(array_filter(array_map('trim', explode(',', sanitize_text_field(wp_unslash((string) $_POST['del'])))), function ($x) { return (bool) preg_match('/^[a-z0-9]{6,32}$/', $x); })));
@@ -167,6 +174,46 @@ function cp_booth_ajax_gal() {
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 502); }
 	if ($body) { delete_transient('cp_booth_galn_' . $ev); $r = cp_booth_gal_api('GET', $ev); if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 502); } }
 	wp_send_json_success($r);
+}
+
+/* ---------- v2.9.255: Galériák gyűjtőoldal – az összes galéria (deal és deal nélküli), deal-adatokkal; 60 mp gyorsítótár */
+add_action('wp_ajax_nopriv_cp_booth_gal_list', 'cp_booth_ajax_gal_list'); add_action('wp_ajax_cp_booth_gal_list', 'cp_booth_ajax_gal_list');
+function cp_booth_ajax_gal_list() {
+	cp_crm_ajax_guard(array('deals'));
+	$ck = 'cp_booth_gal_list';
+	$g = !empty($_POST['fresh']) ? false : get_transient($ck);
+	if (!is_array($g)) {
+		$g = cp_booth_gal_req('GET', '/admin-list', null, 25);
+		if (is_wp_error($g)) { cp_el_err($g->get_error_message(), 502); }
+		set_transient($ck, $g, MINUTE_IN_SECONDS);
+	}
+	$map = get_option('cp_booth_gal', array()); $rev = array();
+	foreach ((array) $map as $d => $tok) { $rev[(string) $tok] = (int) $d; }
+	$list = array(); $seen = array();
+	foreach ((array) ($g['list'] ?? array()) as $x) {
+		if (!is_array($x) || empty($x['ev'])) { continue; }
+		$ev = (string) $x['ev']; $x['deal'] = $rev[$ev] ?? 0; $seen[$ev] = 1; $list[] = $x;
+	}
+	/* a dealhez már létrehozott, de még üres galériák */
+	foreach ($rev as $ev => $d) {
+		if (!isset($seen[$ev])) { $list[] = array('ev' => $ev, 'n' => 0, 'hidden' => 0, 'ai' => 0, 'video' => 0, 'first' => '', 'last' => '', 'deal' => $d, 'devices' => 0, 'evdate' => '', 'title' => '', 'has_pw' => false, 'hook' => false, 'thumbs' => array(), 'url' => CP_BOOTH_GAL . $ev . '/'); }
+	}
+	/* deal-adatok: cím, rendezvény dátuma, állapot, ügyfél neve és e-mail-címe (a levélíróhoz) */
+	$ids = array_values(array_unique(array_filter(array_map(function ($x) { return (int) $x['deal']; }, $list))));
+	$D = array();
+	if ($ids && function_exists('cp_crm_t')) {
+		global $wpdb; $dt = cp_crm_t('deals'); $ct = cp_crm_t('contacts'); $in = implode(',', array_map('intval', $ids));
+		foreach ((array) $wpdb->get_results("SELECT d.id, d.title, d.event_d, d.status, c.name cname, c.first_name cfirst, c.email cemail FROM $dt d LEFT JOIN $ct c ON c.id = d.contact_id WHERE d.id IN ($in)", ARRAY_A) as $r) { $D[(int) $r['id']] = $r; }
+	}
+	foreach ($list as &$x) {
+		$d = $D[(int) $x['deal']] ?? null;
+		$x['dtitle'] = $d ? (string) $d['title'] : '';
+		$x['date'] = $d && !empty($d['event_d']) ? substr((string) $d['event_d'], 0, 10) : (string) ($x['evdate'] ?? '');
+		$x['dstatus'] = $d ? (string) $d['status'] : '';
+		$x['cname'] = $d ? (string) ($d['cname'] ?: '') : ''; $x['cfirst'] = $d ? (string) ($d['cfirst'] ?: '') : ''; $x['cemail'] = $d ? (string) ($d['cemail'] ?: '') : '';
+	}
+	unset($x);
+	wp_send_json_success(array('list' => $list, 'keep_days' => (int) ($g['keep_days'] ?? 60), 'at' => time()));
 }
 
 /* ---------- WP admin: gépek kezelése */

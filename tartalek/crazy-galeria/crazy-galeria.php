@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.9.0');
+define('CG_VER', '0.10.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -107,6 +107,26 @@ add_action('rest_api_init', function () {
 		global $wpdb;
 		$n = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cg_t() . ' WHERE ev = %s AND hidden = 0', $r['ev']));
 		return array('ev' => $r['ev'], 'n' => $n, 'url' => home_url('/galeria/' . $r['ev'] . '/'));
+	}));
+	/* v0.10.0: az összes galéria összesítve a panel „Galériák” gyűjtőoldalához (csak a panel kulcsával):
+	 * képek / elrejtett / AI / videó, első és utolsó feltöltés, gépek, a legutóbbi 4 kép bélyegképe, cím, jelszó, webhook */
+	register_rest_route('crazy-galeria/v1', '/admin-list', array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function () {
+		global $wpdb; $t = cg_t();
+		$rows = (array) $wpdb->get_results("SELECT ev, COUNT(*) n, SUM(hidden = 1) h, SUM(kind = 'ai') ai, SUM(kind NOT IN ('photo','ai')) v, MIN(created_at) first, MAX(created_at) last, MAX(deal) deal, COUNT(DISTINCT device) devs, MAX(evdate) evdate FROM $t GROUP BY ev ORDER BY last DESC LIMIT 2000", ARRAY_A);
+		$th = array();
+		$tr = $wpdb->get_results("SELECT ev, photo FROM (SELECT ev, photo, ROW_NUMBER() OVER (PARTITION BY ev ORDER BY id DESC) rn FROM $t WHERE hidden = 0 AND kind IN ('photo','ai')) x WHERE rn <= 4", ARRAY_A);
+		foreach ((array) $tr as $r) { $th[$r['ev']][] = cg_url() . '/' . $r['ev'] . '/' . $r['photo'] . '_t.jpg'; }
+		$S = get_option('cg_events', array()); $S = is_array($S) ? $S : array(); $out = array(); $seen = array();
+		$one = function ($ev, $r) use ($S, $th) {
+			$s = isset($S[$ev]) && is_array($S[$ev]) ? $S[$ev] : array();
+			return array('ev' => $ev, 'n' => (int) ($r['n'] ?? 0), 'hidden' => (int) ($r['h'] ?? 0), 'ai' => (int) ($r['ai'] ?? 0), 'video' => (int) ($r['v'] ?? 0),
+				'first' => (string) ($r['first'] ?? ''), 'last' => (string) ($r['last'] ?? ''), 'deal' => (int) ($r['deal'] ?? 0), 'devices' => (int) ($r['devs'] ?? 0), 'evdate' => (string) ($r['evdate'] ?? ''),
+				'title' => (string) ($s['title'] ?? ''), 'has_pw' => !empty($s['pw']), 'hook' => !empty($s['hook']), 'thumbs' => $th[$ev] ?? array(), 'url' => home_url('/galeria/' . $ev . '/'));
+		};
+		foreach ($rows as $r) { $ev = (string) $r['ev']; if (!cg_tok_ok($ev)) { continue; } $out[] = $one($ev, $r); $seen[$ev] = 1; }
+		/* beállított (pl. címet, jelszót kapott), de még kép nélküli galériák */
+		foreach ($S as $ev => $s) { $ev = (string) $ev; if (cg_tok_ok($ev) && !isset($seen[$ev])) { $out[] = $one($ev, array()); } }
+		return array('ok' => true, 'list' => $out, 'keep_days' => CG_KEEP_DAYS);
 	}));
 	/* kezelés a panelből (csak a panel kulcsával): képek listája + beállítások; beállítás; elrejtés */
 	register_rest_route('crazy-galeria/v1', '/admin/(?P<ev>[a-z0-9]{6,32})', array(

@@ -56,7 +56,9 @@
 			(f.img ? '<span class="d3-tb t-img has"><img loading="lazy" alt="" src="' + esc(dfUrl(f.id, 1)) + '"><i>' + esc(d3Ext(f.n) || 'KÉP') + '</i></span>' : d3Thumb({ n: f.n })) +
 			'<b>' + esc(f.n) + '</b><small>' + esc([f.by, f.s ? d3Size(f.s) : '', huDT(f.at)].filter(Boolean).join(' · ')) + '</small></a>' + (f.del ? '<button type="button" class="d3-dfx" data-dfdel="' + f.id + '" title="Fájl törlése" aria-label="' + esc(f.n) + ' törlése">×</button>' : '') + '</li>').join('') + '</ul>';
 	}
-	async function galManage(deal) {
+	/* v2.9.255: a Galériák gyűjtőoldal is hívja – deal nélküli galériánál a token (ev); onChange: a lista frissítése a módosítás után */
+	async function galManage(deal, ev, onChange) {
+		const who = deal ? { deal } : { ev: String(ev || '') };
 		const box = sheet(sheetHead('Fotógaléria kezelése') + '<div class="gm" data-gm><p class="cpx-muted">Betöltés…</p></div>');
 		if (!box) return;
 		box.querySelector('[data-close]').addEventListener('click', hideModal);
@@ -71,7 +73,7 @@
 				'<p class="cpx-muted gm-n">' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + '. A QR-kóddal minden vendég a saját képét mindig látja; a jelszó az összes képre vonatkozik. ' + (sel ? 'Kattints a törlendő képekre.' : 'Kattints egy képre az elrejtéshez / visszaállításhoz.') + '</p>' +
 				'<div class="gm-tb" data-gmtb></div></div>' +
 				'<div class="gm-grid' + (sel ? ' selm' : '') + '">' + g.photos.map(p => '<button type="button" class="' + (p.hidden ? 'off' : '') + (sel && sel.has(p.photo) ? ' sel' : '') + '" data-gmph="' + esc(p.photo) + '" style="background-image:url(\'' + esc(p.thumb) + '\')"' + (sel ? ' aria-pressed="' + (sel.has(p.photo) ? 'true' : 'false') + '" title="Kattints a kijelöléshez"' : ' title="' + (p.hidden ? 'Elrejtve – kattints a visszaállításhoz' : 'Kattints az elrejtéshez') + '"') + '>' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + '</div>';
-			const save = async extra => { try { draw(await post('cp_booth_gal', Object.assign({ deal }, extra))); toast('Mentve.'); } catch (e) { toast(e.message, true); } };
+			const save = async extra => { try { draw(await post('cp_booth_gal', Object.assign({}, who, extra))); toast('Mentve.'); if (onChange) onChange(); } catch (e) { toast(e.message, true); } };
 			body.querySelector('[data-gmsave]').addEventListener('click', () => { const o = { title: body.querySelector('#gm-title').value.trim(), hook: body.querySelector('#gm-hook').value.trim() }; if (o.hook && !/^https:\/\/\S+$/.test(o.hook)) { toast('A webhook címe https://-sel kezdődjön.', true); return; } const pw = body.querySelector('#gm-pw').value.trim(); if (pw) o.password = pw; save(o); });
 			const np = body.querySelector('[data-gmnopw]'); if (np) np.addEventListener('click', () => save({ password: '' }));
 			/* v2.9.253: végleges törlés (tömegesen is) – a galériából és a szerverről; a szelfigépen lévő példányt nem érinti */
@@ -91,7 +93,7 @@
 					const ok = window.CPXAsk ? await window.CPXAsk({ title: L.length + ' kép végleges törlése', text: txt, ok: 'Törlés véglegesen', cancel: 'Mégse', danger: true }) : window.confirm(txt);
 					if (!ok) return;
 					const btn = tb.querySelector('[data-gmdel]'); btn.disabled = true; btn.textContent = 'Törlés…';
-					try { const r = await post('cp_booth_gal', { deal, del: L.join(',') }); sel = null; draw(r); toast((r.deleted_n || 0) + ' kép törölve.'); }
+					try { const r = await post('cp_booth_gal', Object.assign({}, who, { del: L.join(',') })); sel = null; draw(r); toast((r.deleted_n || 0) + ' kép törölve.'); if (onChange) onChange(); }
 					catch (e) { btn.disabled = false; btn.textContent = 'Törlés véglegesen (' + L.length + ')'; toast(e.message, true); }
 				});
 			};
@@ -101,7 +103,7 @@
 				save({ photo: b.dataset.gmph, hidden: b.classList.contains('off') ? 0 : 1 });
 			}));
 		};
-		try { draw(await post('cp_booth_gal', { deal })); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
+		try { draw(await post('cp_booth_gal', who)); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
 	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
 	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet'], ['ai', 'AI-kép']];
@@ -2571,5 +2573,5 @@
 		};
 		draw();
 	}
-	window.CPCrm = { view, status, refresh, newDeal, open: id => openDeal(id), contact: id => openContact(id), company: id => openCompany(id), deep };
+	window.CPCrm = { view, status, refresh, newDeal, open: id => openDeal(id), contact: id => openContact(id), company: id => openCompany(id), deep, galManage };
 })();
