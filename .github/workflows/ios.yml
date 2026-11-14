@@ -1,0 +1,80 @@
+# Crazy 360 (natív iPhone-app) – fordítás és tesztek a GitHub macOS-gépén (szimulátor, aláírás nélkül).
+# A projektet az XcodeGen generálja (ios/project.yml); a logika (ios/SpinKit) külön, `swift test`-tel is fut.
+name: iOS – Crazy 360
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build + tesztek
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Xcode kiválasztása (a legújabb 26/27-es, béta nélkül)
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          XC=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode_27*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -z "$XC" ]; then echo "::error::Nincs Xcode 26/27 a gépen"; exit 1; fi
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          swift --version
+          echo "SIM_SDK=$(xcrun --sdk iphonesimulator --show-sdk-version)" >> "$GITHUB_ENV"
+
+      - name: SpinKit – tesztek
+        working-directory: ios/SpinKit
+        run: |
+          set +e
+          swift test > ../../spinkit.log 2>&1
+          rc=$?
+          grep -Ev '^\[[0-9]+/[0-9]+\]' ../../spinkit.log | tail -120
+          exit $rc
+
+      - name: Projekt generálása (XcodeGen)
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Szimulátor kiválasztása
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 ios/ci/pick_sim.py "$SIM_SDK")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: App – build + tesztek
+        working-directory: ios
+        run: |
+          set +e
+          xcodebuild test -quiet \
+            -project Crazy360.xcodeproj -scheme Crazy360 \
+            -destination "id=$SIM_UDID" \
+            -resultBundlePath ../TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO > ../xcodebuild.log 2>&1
+          rc=$?
+          tail -250 ../xcodebuild.log
+          exit $rc
+
+      - name: Összegzés (figyelmeztetések, hibák)
+        if: always()
+        run: |
+          for f in spinkit.log xcodebuild.log; do
+            [ -f "$f" ] || continue
+            echo "== $f: $(grep -c ' warning: ' "$f" || true) figyelmeztetés, $(grep -c ' error: ' "$f" || true) hiba"
+            grep -E ' (error|warning): ' "$f" | sed -E 's#^.*/ios/##' | sort -u | head -150 || true
+          done

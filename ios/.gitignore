@@ -1,0 +1,8 @@
+# XcodeGen generálja (xcodegen generate) – nem kerül a repóba
+*.xcodeproj/
+Support/Info.plist
+DerivedData/
+build/
+*.xcresult
+SpinKit/.build/
+SpinKit/.swiftpm/

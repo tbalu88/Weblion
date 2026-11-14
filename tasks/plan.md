@@ -122,3 +122,58 @@ Sorrend: K4 sablon-letöltés → K2+K3 feltöltés, QR, felhő-galéria → K3 
 | A sablon.js három helyen fut (panel, portál, gép) | Közepes | Egy forrás: a booth-publish a panel fájlját másolja, nincs külön példány |
 | file:// képek a vásznon („szennyezett” canvas) | Közepes | A mintaképek data-URL-ként töltődnek |
 | Tömeges törlés véletlenül | Magas | Megerősítés + felhőben 7 napos lomtár + gépen Kuka |
+
+---
+
+# Kiegészítés (2026-11-14): natív iPhone 360-app – „Crazy 360” (a LumaBooth kiváltása)
+
+*Felhasználói döntések (2026-11-14): alapváltozattal kezdünk; funkciók: **lassítás-ív, oda-vissza (boomerang), zene, keret / felirat a videón**; az Apple Developer fiókot a felhasználó hozza létre. A platformot nem vezéreljük. Az iPad megosztó állomás a meglévő galéria-oldal (`/galeria/<ev>/?allomas=1`) – a LumaShare helyett.*
+
+## Áttekintés
+iPhone-app a 360-as platform karjára: jó minőségű felvétel (0,5× nagylátószög, 120/240 fps a lassításhoz), a kész videó a telefonon áll össze (ív, oda-vissza, zene, keret + felirat), 1080×1920 MP4, és azonnal a rendezvény galériájába megy (gépkulccsal, sorban, net nélkül is). A vendég QR-ral kapja meg; az iPad a megosztó állomás.
+
+## Architektúra-döntések
+- **SwiftUI + AVFoundation, iOS 17+.** Fordító: Xcode 26/27 (Swift 6.2+). Az app modul **Swift 5 nyelvi módban, teljes concurrency-ellenőrzéssel** indul (Approachable Concurrency + alapból MainActor): a hibák figyelmeztetésként látszanak, de nem állítják meg a fordítást – helyi Xcode nélkül minden fordítás egy CI-kör. A Swift 6 módra váltás külön lépés, ha a figyelmeztetés nulla és a készüléken is kipróbáltuk.
+- **Tiszta logika külön csomagban (`ios/SpinKit`, csak Foundation):** sebesség-ív és képkocka-terv, oda-vissza, kimeneti hossz, multipart-törzs, galéria-API (URL-ek, válaszok), feltöltési sor állapotai, beállítások. Swift Testing tesztek, `swift test` a CI-ban.
+- **Saját renderelő** (AVAssetReader → Core Image → AVAssetWriter): a lassítás-ív + oda-vissza + keret + zene egy menetben, teljes minőség-kontrollal. Az oda-vissza rész a már kiszámolt kockákból áll (JPEG-gyorstár a lemezen, nem a memóriában).
+- **Kimenet:** H.264 High, 1080×1920, 30 fps (60 választható), ~10 Mbit/s, AAC 48 kHz, MP4 gyors indulással (moov elöl). HEVC nem: a galériát böngészőben nézik (Windows / Android), ott nem mindenhol megy.
+- **Felvétel:** AVCaptureMovieFileOutput, 8 bites SDR formátum (nincs HDR → nincs kifakult szín a weben), ultra-wide előnyben, a kért fps-hez a legjobb támogatott formátum. Mikrofon nincs (nincs engedélykérés) – a videó alá zene kerül.
+- **Indítás:** képernyő-gomb, hangerőgomb és Bluetooth-exponáló (AVCaptureEventInteraction, iOS 17.2+), visszaszámlálással; automatikus leállás a beállított hossznál. A képernyő nem alszik el.
+- **Galéria:** a meglévő `/upload` (kind=video + poster), változtatás nélkül. A QR-link előre ismert (`/galeria/<ev>/<kép>`), így a QR azonnal látszik, a feltöltés a háttérben megy. Gépkulcs a Kulcskarikában (Keychain), rendezvények a `/m/events?date=` relén át; „Rendezvény nélkül” is választható (mint a mobil appban).
+- **Fordítás:** GitHub Actions `macos-26`, a legújabb Xcode 26/27, XcodeGen generálja a projektet (a .xcodeproj nincs a repóban), szimulátoros build + teszt aláírás nélkül. A repó nyilvános → a macOS-futtatás ingyenes.
+- **Terjesztés (2. szakasz):** TestFlight belső teszt (felülvizsgálat nélkül). A CI tölti fel App Store Connect API-kulccsal (GitHub secret, chatbe soha), felhőben kezelt aláírással.
+
+## Feladatok
+- [ ] **I1 (S) Projektváz + CI** – XcodeGen-projekt (app + tesztcél), SpinKit csomag, induló képernyő, ikon; workflow: SpinKit-tesztek + szimulátoros build/teszt.
+  - Elfogadás: a CI zöld, a SpinKit-tesztek futnak, a figyelmeztetések látszanak a naplóban.
+- [ ] **I2 (M) Képkocka-terv (SpinKit)** – ív-előbeállítások (normál, végig lassú, gyors–lassú–gyors, lassú–gyors–lassú), levágás, oda-vissza, hosszbecslés, „sima lassítás” határa az fps-ekből.
+  - Elfogadás: a terv monoton, a hossz egyezik a képlettel; oda-vissza tükrös, a fordulópont nem duplázódik; szélső esetek (0 hossz, 1 kocka, túl lassú ív) tesztelve.
+- [ ] **I3 (M) Renderelő** – forrás → elforgatás / kitöltés 1080×1920 → keret + felirat → H.264; zene be- és kiúsztatással (ismétlés, ha rövid); borítókép.
+  - Elfogadás: szintetikus 120 fps-es forrásból a várt hosszú, méretű és fps-ű MP4 lesz zenével; oda-vissza esetén a kockák sorrendje fordított (színkódolt kockákkal ellenőrizve).
+  - Ellenőrzés: integrációs teszt a szimulátoron.
+- [ ] **I4 (M) Feltöltés** – párosítás (a gépkulcsot a rendezvénylista ellenőrzi), rendezvényválasztó, tartós sor (újrapróbálás, net-figyelés), QR.
+  - Elfogadás: net nélkül sorba áll, visszatéréskor feltölt; 401 → „Hibás gépkulcs”, a sor megáll; a QR feltöltés előtt is a jó linkre mutat.
+  - Ellenőrzés: SpinKit-tesztek (multipart, sor), app-teszt hálózati mockkal.
+- [ ] **I5 (M) Felvétel** – kamera-szolgáltatás (actor), formátumválasztás (lencse, fps, 8 bit, stabilizálás), előnézet, felvétel adott hosszra, visszaszámlálás, távkioldó.
+  - Elfogadás (készüléken): 0,5× 120 fps 8 mp-es felvétel; hangerőgombbal indul; a képernyő nem alszik el.
+  - Ellenőrzés: szimulátoron fordul (ott nincs kamera → mintavideó-mód); készüléken a felhasználó (TestFlight után).
+- [ ] **I6 (M) Felület** – felvétel-képernyő, feldolgozás, eredmény (ismétlődő lejátszás + QR + megosztás), beállítások (rendezvény, felvétel, effektek, keret / felirat, zene), mai videók. Előtte `impeccable`, élesítés előtt `break-ui`.
+  - Elfogadás: végigvihető folyamat; a beállítások újraindítás után megmaradnak; hosszú rendezvénynévvel, 0 és 200 videóval sem esik szét.
+- [ ] **Ellenőrzőpont D** – szimulátoron a teljes folyamat mintavideóval, CI zöld, képernyőképek a felhasználónak.
+- [ ] **I7 (S) TestFlight** – aláírás + feltöltés a CI-ből (API-kulcs secretként), útmutató a felhasználónak: fejlesztői fiók, app az App Store Connectben, kulcs, tesztelők.
+- [ ] **Ellenőrzőpont E** – a felhasználó telefonján fut (TestFlight), valódi 360-as próba a platformon.
+
+## Kockázatok
+| Kockázat | Hatás | Kezelés |
+|---|---|---|
+| Nincs helyi Xcode / Swift (a felhős fordítóletöltést a biztonsági szabály tiltja) → minden fordítás CI-kör | Közepes | Logika a SpinKitben; egyszerű, jól ismert API-k; Swift 5 mód teljes ellenőrzéssel |
+| Kamera, távkioldó, valódi sebesség csak készüléken próbálható | Magas | Szimulátoros mintavideó-mód a folyamathoz; korai TestFlight-próba |
+| 240 fps sötét teremben zajos / sötét | Közepes | Alapból 120 fps; a felület kiírja a kapott fps-t |
+| Az ultra-wide nem minden fps-t tud | Közepes | A formátumválasztó a legjobb elérhetőt adja, és kiírja |
+| Hosszú kimenet / nagy fájl (galéria-korlát 80 MB) | Közepes | 10 Mbit/s, előzetes hosszbecslés, figyelmeztetés 60 mp felett |
+| Zene jogai | Közepes | A felhasználó saját / jogtiszta zenét importál; beépített zene nincs |
+| Az Apple-fiók (cégként D-U-N-S) napokig-hetekig tarthat | Közepes | Addig szimulátorra fordítunk; a TestFlight-lépés készen vár |
+
+## Nyitott kérdések (a TestFlight előtt)
+- Név és azonosító: „Crazy 360”, `hu.eventcrazy.crazy360` – megfelel?
+- Van saját, jogtiszta zenekönyvtár, amit be lehetne építeni?

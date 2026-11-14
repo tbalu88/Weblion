@@ -30,3 +30,14 @@
 - [x] T4 Sablonkészítő + mintaképek + betűk a gépen (offline) + sima fehér keret 1/2/3/fekvő
 - [x] T5 „Szerkesztés internet nélkül” a Kezelőben (Rendezvény fül)
 - [ ] Ellenőrzőpont: offline próba Macen és Windowson (böngészőben és Electronban kész; valódi gépen a felhasználó)
+
+## Natív iPhone 360-app „Crazy 360” (2026-11-14 – terv: tasks/plan.md vége)
+- [ ] I1 Projektváz + CI (XcodeGen, SpinKit, macos-26)
+- [ ] I2 Képkocka-terv: ív, levágás, oda-vissza, hosszbecslés
+- [ ] I3 Renderelő: kitöltés, keret + felirat, zene, borítókép
+- [ ] I4 Feltöltés: párosítás, rendezvények, tartós sor, QR
+- [ ] I5 Felvétel: formátum, fps, lencse, visszaszámlálás, távkioldó
+- [ ] I6 Felület: felvétel, eredmény, beállítások, mai videók
+- [ ] Ellenőrzőpont D: szimulátoros végigpróba mintavideóval
+- [ ] I7 TestFlight: aláírás + feltöltés a CI-ből, útmutató
+- [ ] Ellenőrzőpont E: készülékes próba a platformon
