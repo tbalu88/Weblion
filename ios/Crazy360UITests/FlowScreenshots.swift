@@ -23,7 +23,8 @@ final class FlowScreenshots: XCTestCase {
         let stop = app.buttons["Felvétel leállítása"]
         if stop.waitForExistence(timeout: 10) { snap(app, "3-felvetel") }
 
-        let processing = app.staticTexts["Készül a videó"]
+        // a feldolgozás képernyője egy összevont akadálymentes elem („Készül a videó, 42 %, …”)
+        let processing = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Készül a videó'")).firstMatch
         if processing.waitForExistence(timeout: 60) {
             sleep(1)
             snap(app, "4-feldolgozas")

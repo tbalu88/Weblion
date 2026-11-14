@@ -109,7 +109,7 @@ actor CaptureService {
         }
         guard let best = FormatChooser.best(infos, fps: config.fps) else { throw CaptureError.configuration("nincs formátum") }
         let format = formats[best]
-        let fps = Int(min(Double(config.fps), infos[best].maxFPS).rounded(.down))
+        let fps = Self.supportedFPS(Double(config.fps), in: format.videoSupportedFrameRateRanges)
         do {
             try device.lockForConfiguration()
             device.activeFormat = format
@@ -148,6 +148,20 @@ actor CaptureService {
         }
         let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         return Status(lens: lens, fps: fps, width: Int(dims.width), height: Int(dims.height), binned: format.isVideoBinned, stabilized: stabilized)
+    }
+
+    /// A kért fps a formátum valamelyik tartományán belül (különben az AVFoundation kivétellel leállítja az appot).
+    nonisolated static func supportedFPS(_ wanted: Double, in ranges: [AVFrameRateRange]) -> Int {
+        if let r = ranges.first(where: { $0.minFrameRate <= wanted && wanted <= $0.maxFrameRate }) {
+            return Int(min(wanted, r.maxFrameRate).rounded(.down))
+        }
+        // nincs ilyen tartomány: a legközelebbi határ (lefelé kerekítve, a tartományon belül)
+        let bounds = ranges.flatMap { [$0.minFrameRate, $0.maxFrameRate] }
+        guard let nearest = bounds.min(by: { abs($0 - wanted) < abs($1 - wanted) }) else { return 30 }
+        let range = ranges.first { $0.minFrameRate <= nearest && nearest <= $0.maxFrameRate }
+        let value = Int(nearest.rounded(.down))
+        if let range, Double(value) < range.minFrameRate { return Int(range.minFrameRate.rounded(.up)) }
+        return max(1, value)
     }
 
     func start() {

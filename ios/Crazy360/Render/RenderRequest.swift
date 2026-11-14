@@ -20,11 +20,10 @@ nonisolated struct RenderRequest: Sendable {
     var outputWidth = 1080
     var outputHeight = 1920
 
-    /// Bitráta: 1080×1920-on 30 fps-nél 10, 60 fps-nél 14 Mbit/s; kisebb méretnél arányosan kevesebb.
+    /// Bitráta: 1080×1920-on 30 fps-nél 10, 60 fps-nél 14 Mbit/s (SpinSettings); kisebb méretnél arányosan kevesebb.
     var videoBitRate: Int {
-        let base = settings.outputFPS >= 60 ? 14_000_000.0 : 10_000_000.0
         let scale = Double(outputWidth * outputHeight) / (1080.0 * 1920.0)
-        return max(1_000_000, Int(base * scale))
+        return max(1_000_000, Int(Double(settings.videoBitRate) * min(scale, 1)))
     }
 }
 

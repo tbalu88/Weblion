@@ -51,6 +51,21 @@ struct SettingsTests {
         #expect(SpinSettings().sanitized() == SpinSettings())
     }
 
+    @Test func outputFitsTheGalleryLimit() {
+        var s = SpinSettings()
+        #expect(abs(s.maxOutputSeconds - 56.5) < 0.1)
+        // a korláton belül a videó (kép + hang) 80 MB alatt marad
+        #expect(s.maxOutputSeconds * Double(s.videoBitRate + 192_000) / 8 < 80_000_000)
+        s.outputFPS = 60
+        #expect(abs(s.maxOutputSeconds - 40.6) < 0.1)
+        // nagyon lassú, hosszú felvétel: a becslés a korlátnál megáll, a korlát nélküli ennél több
+        s.recordSeconds = 30
+        s.speedStyle = .slow
+        s.slowFactor = 0.125
+        #expect(s.uncappedOutputSeconds > s.maxOutputSeconds)
+        #expect(s.estimatedOutputSeconds <= s.maxOutputSeconds + 1e-9)
+    }
+
     @Test func choicesHaveTitles() {
         #expect(Lens.allCases.allSatisfy { !$0.title.isEmpty })
         #expect(CaptionColor.allCases.allSatisfy { !$0.title.isEmpty })

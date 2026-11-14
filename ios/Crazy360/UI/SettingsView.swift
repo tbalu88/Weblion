@@ -193,8 +193,8 @@ struct SettingsView: View {
                 lines.append("A \(s.slowFactor.factorText) lassítás akkor sima, ha a felvétel legalább \(need) fps – most \(fps) fps, ezért kicsit akadhat.")
             }
         }
-        if s.estimatedOutputSeconds > 60 {
-            lines.append("Hosszú videó lesz: a galéria legfeljebb 80 MB-os videót fogad.")
+        if s.uncappedOutputSeconds > s.maxOutputSeconds + 0.5 {
+            lines.append("Ez kb. \(s.uncappedOutputSeconds.secondsText) lenne, de a videó \(s.maxOutputSeconds.secondsText)-nél véget ér (a galéria 80 MB-os korlátja miatt): rövidebb felvétel vagy kisebb lassítás segít.")
         }
         lines.append("A levágás a kar indulását és megállását veszi le.")
         return lines.joined(separator: " ")

@@ -32,12 +32,12 @@
 - [ ] Ellenőrzőpont: offline próba Macen és Windowson (böngészőben és Electronban kész; valódi gépen a felhasználó)
 
 ## Natív iPhone 360-app „Crazy 360” (2026-11-14 – terv: tasks/plan.md vége)
-- [ ] I1 Projektváz + CI (XcodeGen, SpinKit, macos-26)
-- [ ] I2 Képkocka-terv: ív, levágás, oda-vissza, hosszbecslés
-- [ ] I3 Renderelő: kitöltés, keret + felirat, zene, borítókép
-- [ ] I4 Feltöltés: párosítás, rendezvények, tartós sor, QR
-- [ ] I5 Felvétel: formátum, fps, lencse, visszaszámlálás, távkioldó
-- [ ] I6 Felület: felvétel, eredmény, beállítások, mai videók
+- [x] I1 Projektváz + CI (XcodeGen, SpinKit, macos-26) – zöld
+- [x] I2 Képkocka-terv: ív, levágás, oda-vissza, hosszbecslés (SpinKit-tesztek)
+- [x] I3 Renderelő: kitöltés, keret + felirat, zene, borítókép (szimulátoros tesztek: sorrend, forgatás, hossz, zene)
+- [~] I4 Feltöltés: párosítás, rendezvények, tartós sor, QR – kód + mock-tesztek kész; valódi galériába a felhasználó telefonjáról
+- [~] I5 Felvétel: formátum, fps, lencse, visszaszámlálás, távkioldó – kód kész; kamera csak készüléken próbálható
+- [~] I6 Felület: felvétel, eredmény, beállítások, videók – kész; felületteszt + legrosszabb adatok a CI-ben
 - [ ] Ellenőrzőpont D: szimulátoros végigpróba mintavideóval
-- [ ] I7 TestFlight: aláírás + feltöltés a CI-ből, útmutató
+- [~] I7 TestFlight: a CI-lépés és az útmutató (ios/README.md) kész; Apple Developer fiókra vár
 - [ ] Ellenőrzőpont E: készülékes próba a platformon

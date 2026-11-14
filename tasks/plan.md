@@ -144,23 +144,23 @@ iPhone-app a 360-as platform karjára: jó minőségű felvétel (0,5× nagylát
 - **Terjesztés (2. szakasz):** TestFlight belső teszt (felülvizsgálat nélkül). A CI tölti fel App Store Connect API-kulccsal (GitHub secret, chatbe soha), felhőben kezelt aláírással.
 
 ## Feladatok
-- [ ] **I1 (S) Projektváz + CI** – XcodeGen-projekt (app + tesztcél), SpinKit csomag, induló képernyő, ikon; workflow: SpinKit-tesztek + szimulátoros build/teszt.
+- [x] **I1 (S) Projektváz + CI** – XcodeGen-projekt (app + tesztcél), SpinKit csomag, induló képernyő, ikon; workflow: SpinKit-tesztek + szimulátoros build/teszt.
   - Elfogadás: a CI zöld, a SpinKit-tesztek futnak, a figyelmeztetések látszanak a naplóban.
-- [ ] **I2 (M) Képkocka-terv (SpinKit)** – ív-előbeállítások (normál, végig lassú, gyors–lassú–gyors, lassú–gyors–lassú), levágás, oda-vissza, hosszbecslés, „sima lassítás” határa az fps-ekből.
+- [x] **I2 (M) Képkocka-terv (SpinKit)** – ív-előbeállítások (normál, végig lassú, gyors–lassú–gyors, lassú–gyors–lassú), levágás, oda-vissza, hosszbecslés, „sima lassítás” határa az fps-ekből.
   - Elfogadás: a terv monoton, a hossz egyezik a képlettel; oda-vissza tükrös, a fordulópont nem duplázódik; szélső esetek (0 hossz, 1 kocka, túl lassú ív) tesztelve.
-- [ ] **I3 (M) Renderelő** – forrás → elforgatás / kitöltés 1080×1920 → keret + felirat → H.264; zene be- és kiúsztatással (ismétlés, ha rövid); borítókép.
+- [x] **I3 (M) Renderelő** – forrás → elforgatás / kitöltés 1080×1920 → keret + felirat → H.264; zene be- és kiúsztatással (ismétlés, ha rövid); borítókép.
   - Elfogadás: szintetikus 120 fps-es forrásból a várt hosszú, méretű és fps-ű MP4 lesz zenével; oda-vissza esetén a kockák sorrendje fordított (színkódolt kockákkal ellenőrizve).
   - Ellenőrzés: integrációs teszt a szimulátoron.
-- [ ] **I4 (M) Feltöltés** – párosítás (a gépkulcsot a rendezvénylista ellenőrzi), rendezvényválasztó, tartós sor (újrapróbálás, net-figyelés), QR.
+- [~] **I4 (M) Feltöltés** *(kód + mock-tesztek kész; élő galéria-próba a telefonról)* – párosítás (a gépkulcsot a rendezvénylista ellenőrzi), rendezvényválasztó, tartós sor (újrapróbálás, net-figyelés), QR.
   - Elfogadás: net nélkül sorba áll, visszatéréskor feltölt; 401 → „Hibás gépkulcs”, a sor megáll; a QR feltöltés előtt is a jó linkre mutat.
   - Ellenőrzés: SpinKit-tesztek (multipart, sor), app-teszt hálózati mockkal.
-- [ ] **I5 (M) Felvétel** – kamera-szolgáltatás (actor), formátumválasztás (lencse, fps, 8 bit, stabilizálás), előnézet, felvétel adott hosszra, visszaszámlálás, távkioldó.
+- [~] **I5 (M) Felvétel** *(kód kész; kamera csak készüléken)* – kamera-szolgáltatás (actor), formátumválasztás (lencse, fps, 8 bit, stabilizálás), előnézet, felvétel adott hosszra, visszaszámlálás, távkioldó.
   - Elfogadás (készüléken): 0,5× 120 fps 8 mp-es felvétel; hangerőgombbal indul; a képernyő nem alszik el.
   - Ellenőrzés: szimulátoron fordul (ott nincs kamera → mintavideó-mód); készüléken a felhasználó (TestFlight után).
-- [ ] **I6 (M) Felület** – felvétel-képernyő, feldolgozás, eredmény (ismétlődő lejátszás + QR + megosztás), beállítások (rendezvény, felvétel, effektek, keret / felirat, zene), mai videók. Előtte `impeccable`, élesítés előtt `break-ui`.
+- [~] **I6 (M) Felület** *(kész; felületteszt + legrosszabb adatok a CI-ben)* – felvétel-képernyő, feldolgozás, eredmény (ismétlődő lejátszás + QR + megosztás), beállítások (rendezvény, felvétel, effektek, keret / felirat, zene), mai videók. Előtte `impeccable`, élesítés előtt `break-ui`.
   - Elfogadás: végigvihető folyamat; a beállítások újraindítás után megmaradnak; hosszú rendezvénynévvel, 0 és 200 videóval sem esik szét.
 - [ ] **Ellenőrzőpont D** – szimulátoron a teljes folyamat mintavideóval, CI zöld, képernyőképek a felhasználónak.
-- [ ] **I7 (S) TestFlight** – aláírás + feltöltés a CI-ből (API-kulcs secretként), útmutató a felhasználónak: fejlesztői fiók, app az App Store Connectben, kulcs, tesztelők.
+- [~] **I7 (S) TestFlight** *(CI-lépés + ios/README.md kész; Apple-fiókra vár)* – aláírás + feltöltés a CI-ből (API-kulcs secretként), útmutató a felhasználónak: fejlesztői fiók, app az App Store Connectben, kulcs, tesztelők.
 - [ ] **Ellenőrzőpont E** – a felhasználó telefonján fut (TestFlight), valódi 360-as próba a platformon.
 
 ## Kockázatok

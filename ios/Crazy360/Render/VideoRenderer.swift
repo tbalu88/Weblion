@@ -26,7 +26,8 @@ nonisolated struct VideoRenderer {
 
         // 2. terv
         let plan = FramePlan.make(sourceDuration: sourceDuration, trimStart: settings.trimStart, trimEnd: settings.trimEnd,
-                                  curve: settings.curve, outputFPS: fps, boomerang: settings.boomerang)
+                                  curve: settings.curve, outputFPS: fps, boomerang: settings.boomerang,
+                                  maxDuration: settings.maxOutputSeconds)
         guard !plan.sourceTimes.isEmpty, let firstTime = plan.forwardTimes.first, let lastTime = plan.forwardTimes.last else {
             throw RenderError.emptyPlan
         }

@@ -87,10 +87,22 @@ public struct SpinSettings: Codable, Sendable, Equatable {
     /// A kész videó sebesség-íve.
     public var curve: SpeedCurve { speedStyle.curve(slow: slowFactor) }
 
-    /// A kész videó várható hossza (mp).
+    /// Videó-bitráta 1080×1920-on: 30 fps → 10, 60 fps → 14 Mbit/s.
+    public var videoBitRate: Int { outputFPS >= 60 ? 14_000_000 : 10_000_000 }
+
+    /// A kész videó leghosszabb ideje, hogy a galéria 80 MB-os korlátja alá férjen (hanggal, tartalékkal ~72 MB).
+    public var maxOutputSeconds: Double { 72_000_000.0 * 8 / Double(videoBitRate + 192_000) }
+
+    /// A kész videó várható hossza (mp), a korláttal együtt.
     public var estimatedOutputSeconds: Double {
         FramePlan.estimatedDuration(recordSeconds: recordSeconds, trimStart: trimStart, trimEnd: trimEnd,
-                                    curve: curve, boomerang: boomerang)
+                                    curve: curve, boomerang: boomerang, maxDuration: maxOutputSeconds)
+    }
+
+    /// Korlát nélkül ennyi lenne (ha több a korlátnál, a vége lemarad).
+    public var uncappedOutputSeconds: Double {
+        FramePlan.estimatedDuration(recordSeconds: recordSeconds, trimStart: trimStart, trimEnd: trimEnd,
+                                    curve: curve, boomerang: boomerang, maxDuration: .infinity)
     }
 
     /// Értékek a megengedett tartományba (sérült vagy kézzel szerkesztett mentés után).
