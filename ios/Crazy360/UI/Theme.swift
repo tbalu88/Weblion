@@ -61,7 +61,7 @@ extension Double {
 
     /// „0,25×” – magyar tizedesvesszővel.
     var factorText: String {
-        let s = self == 1.0 / 3.0 ? "0,33" : String(format: "%g", (self * 100).rounded() / 100).replacingOccurrences(of: ".", with: ",")
-        return s + "×"
+        if abs(self - 1.0 / 3.0) < 0.001 { return "0,33×" }
+        return String(format: "%g", self).replacingOccurrences(of: ".", with: ",") + "×"
     }
 }

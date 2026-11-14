@@ -111,6 +111,23 @@ struct RendererTests {
         #expect(img.width == 180 && img.height == 320)
     }
 
+    @Test func longCaptionsWrapIntoTwoBalancedLines() {
+        let halves = OverlayBuilder.splitInTwo("Bartholomew & Aleksandra Wiśniewska-Kowalczyk – 2026. november 30., szombat")
+        // a két sor hossza a lehető legközelebb egymáshoz (45 + 29 karakter)
+        #expect(halves?.0 == "Bartholomew & Aleksandra Wiśniewska-Kowalczyk")
+        #expect(halves?.1 == "– 2026. november 30., szombat")
+        #expect(OverlayBuilder.splitInTwo("Egyszó") == nil)
+        let pair = OverlayBuilder.splitInTwo("Anna Péter")
+        #expect(pair?.0 == "Anna" && pair?.1 == "Péter")
+    }
+
+    @Test func factorLabels() {
+        #expect(0.125.factorText == "0,125×")
+        #expect(0.25.factorText == "0,25×")
+        #expect((1.0 / 3.0).factorText == "0,33×")
+        #expect(0.5.factorText == "0,5×")
+    }
+
     @Test func orientationFromTransform() {
         let cases: [(CGAffineTransform, CGImagePropertyOrientation)] = [
             (CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1080, ty: 0), .right),
