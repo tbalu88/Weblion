@@ -22,6 +22,31 @@ feltöltés a rendezvény galériájába gépkulccsal, QR a vendégnek. Az iPad 
 A GitHub Actions (`.github/workflows/ios.yml`) minden `ios/` változásnál lefut: SpinKit-tesztek, XcodeGen,
 szimulátoros build + tesztek. Macen helyben: `brew install xcodegen && cd ios && xcodegen generate && open Crazy360.xcodeproj`.
 
+## Kipróbálás fejlesztői fiók nélkül (ingyenes Apple ID, 7 napig érvényes)
+
+Minden sikeres CI-futás két letölthetőt ad (GitHub → Actions → „iOS – Crazy 360” → a legutóbbi zöld futás → Artifacts):
+`Crazy360-Xcode-projekt` és `Crazy360-teszt-ipa`. Ingyenes Apple ID-val a saját telefonra telepíthető; 7 nap után lejár,
+akkor újra kell telepíteni (az app adatai megmaradnak). Egy telefonon legfeljebb 3 ilyen app lehet.
+
+**A) Macen, Xcode-dal (hivatalos út – javasolt, ha a Mac tudja az Xcode 26-ot: macOS 15.6 vagy újabb)**
+1. App Store → Xcode (ingyenes). Indítás után Xcode → Settings → Accounts → + → Apple ID → bejelentkezés.
+2. A `Crazy360-Xcode-projekt` kicsomagolása → dupla kattintás a `Crazy360.xcodeproj`-ra.
+3. Bal oldalt a Crazy360 projekt → TARGETS: Crazy360 → Signing & Capabilities → Team: „<név> (Personal Team)”.
+   Ha a Bundle Identifier piros, írd át pl. `hu.eventcrazy.crazy360.teszt`-re.
+4. iPhone kábellel a Machez → a telefonon „Megbízol a számítógépben?” → Megbízom.
+5. iPhone: Beállítások → Adatvédelem és biztonság → Fejlesztői mód → be → újraindítás.
+6. Xcode tetején a készülékválasztóban az iPhone → ▶ (Run).
+7. Első indításkor: iPhone → Beállítások → Általános → VPN és eszközkezelés → az Apple ID-d → Megbízom.
+8. 7 nap múlva: ugyanez a ▶ újra.
+
+**B) Xcode nélkül, Sideloadly-vel (Mac vagy Windows)**
+1. sideloadly.io → telepítés (Windowson az iTunes és az iCloud az Apple oldaláról kell, nem a Microsoft Store-ból).
+2. A `Crazy360-teszt-ipa` kicsomagolása → `Crazy360-teszt.ipa`.
+3. iPhone kábellel; Sideloadly: az .ipa behúzása, Apple ID megadása → Start.
+   A Sideloadly külső program, és az Apple ID-val lép be: erre egy **külön, ingyenes Apple ID** ajánlott.
+4. iPhone: Fejlesztői mód be (lásd fent), majd VPN és eszközkezelés → Megbízom.
+5. 7 naponta ugyanígy újratelepíteni.
+
 ## TestFlight (amikor kész az Apple-fiók)
 
 1. **Apple Developer Program** – developer.apple.com/programs → Enroll. Cégként D-U-N-S szám kell (ingyenes, de

@@ -71,6 +71,41 @@ jobs:
           tail -250 ../xcodebuild.log
           exit $rc
 
+      # Kipróbálás fejlesztői fiók nélkül (ios/README.md): aláíratlan telefonos build (.ipa, Sideloadly / AltStore írja alá
+      # ingyenes Apple ID-val), és a kész Xcode-projekt (Macen Xcode-dal, „Personal Team” aláírással).
+      - name: Telefonos tesztcsomag (aláíratlan .ipa)
+        if: success()
+        working-directory: ios
+        run: |
+          set +e
+          xcodebuild build -quiet -project Crazy360.xcodeproj -scheme Crazy360 -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > ../device.log 2>&1
+          rc=$?
+          tail -40 ../device.log
+          [ $rc -eq 0 ] || exit $rc
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/Crazy360.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/Crazy360-teszt.ipa" Payload)
+          ls -la "$GITHUB_WORKSPACE/Crazy360-teszt.ipa"
+
+      - uses: actions/upload-artifact@v5
+        if: success()
+        with:
+          name: Crazy360-teszt-ipa
+          path: Crazy360-teszt.ipa
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v5
+        if: success()
+        with:
+          name: Crazy360-Xcode-projekt
+          path: |
+            ios/
+            !ios/SpinKit/.build/
+            !ios/SpinKit/.swiftpm/
+          retention-days: 30
+
       - name: Összegzés (figyelmeztetések, hibák, tesztek)
         if: always()
         run: |
