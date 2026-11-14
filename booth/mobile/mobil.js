@@ -48,29 +48,40 @@
   const kvSet = (k, v) => tx('kv', 'readwrite', s => s.put(v, k));
 
   let pumping = false;
+  /* v0.8 (360-as videók): XHR – a nagy fájloknál a feltöltés százaléka látszik; hálózati hibánál null */
+  const send = (fd, onp) => new Promise(res => {
+    const x = new XMLHttpRequest(); x.open('POST', API + '/upload'); x.setRequestHeader('X-Booth-Key', S.key);
+    x.upload.onprogress = e => { if (e.lengthComputable && onp) onp(e.loaded / e.total); };
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText || '{}'); } catch (e) { j = {}; } res({ ok: x.status >= 200 && x.status < 300, status: x.status, j }); };
+    x.onerror = () => res(null); x.onabort = () => res(null);
+    x.send(fd);
+  });
   async function pump() {
     if (pumping || !S.key) return status();
     pumping = true;
     try {
       for (const it of await qAll()) {
         if (!navigator.onLine) break;
-        const fd = new FormData();
+        const vid = it.kind === 'video', fd = new FormData();
         fd.append('ev', it.ev); fd.append('photo', it.photo); fd.append('date', it.date || ''); fd.append('deal', String(it.deal || 0));
-        fd.append('file', it.blob, it.photo + '.jpg');
-        let r;
-        try { r = await fetch(API + '/upload', { method: 'POST', headers: { 'X-Booth-Key': S.key }, body: fd }); } catch (e) { break; }
-        const j = await r.json().catch(() => ({}));
-        if (r.ok && j.ok) { await tx('q', 'readwrite', s => s.delete(it.photo)); }
+        fd.append('file', it.blob, it.photo + (vid ? '.' + ((/\.(mp4|mov|m4v|webm)$/i.exec(it.name || '') || [0, 'mp4'])[1].toLowerCase()) : '.jpg'));
+        if (vid) { fd.append('kind', 'video'); if (it.poster) fd.append('poster', it.poster, it.photo + '.jpg'); }
+        const r = await send(fd, vid ? p => { VP[it.photo] = p; vprog(it.photo); } : null);
+        delete VP[it.photo];
+        if (!r) break;
+        const j = r.j || {};
+        if (r.ok && j.ok) { await tx('q', 'readwrite', s => s.delete(it.photo)); if (it.dk) await kvSet(it.dk, Date.now()).catch(() => {}); }
         else if (r.status === 401 || r.status === 403) { toast('A galéria nem fogadja el a gépkulcsot.', true); break; }
-        else if (r.status >= 400 && r.status < 500) { await tx('q', 'readwrite', s => s.delete(it.photo)); toast('Egy képet a galéria nem fogadott el: ' + (j.message || r.status), true); }
+        else if (r.status >= 400 && r.status < 500) { await tx('q', 'readwrite', s => s.delete(it.photo)); if (vid) VF[it.photo] = j.message || ('hiba ' + r.status); toast((vid ? 'Egy videót' : 'Egy képet') + ' a galéria nem fogadott el: ' + (j.message || r.status), true); }
         else break;
+        if (vid) vlist();
       }
-    } finally { pumping = false; status(); }
+    } finally { pumping = false; status(); if (S.scr === 'vids') vlist(); }
   }
   setInterval(pump, 15000); window.addEventListener('online', pump);
   async function status() {
     let n = 0; try { n = (await qAll()).length; } catch (e) { n = 0; }
-    $$('[data-q]').forEach(x => { x.textContent = n ? n + ' kép feltöltésre vár' + (navigator.onLine ? '…' : ' (nincs internet – automatikusan pótolja)') : 'Minden kép feltöltve.'; });
+    $$('[data-q]').forEach(x => { x.textContent = n ? n + ' fájl (kép / videó) feltöltésre vár' + (navigator.onLine ? '…' : ' (nincs internet – automatikusan pótolja)') : 'Minden feltöltve.'; });
   }
 
   /* ---------- képek */
@@ -193,6 +204,80 @@
   $('[data-corner]').addEventListener('pointerdown', () => { hold = setTimeout(() => { $('[data-pin]').value = ''; show('pin'); setTimeout(() => $('[data-pin]').focus(), 50); }, 3000); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(n => $('[data-corner]').addEventListener(n, () => clearTimeout(hold)));
 
+  /* ---------- 360-as videók (pl. LumaBooth): a telefon Fotók alkalmazásából, borítóképpel, a már feltöltöttek kihagyásával */
+  const VP = {}, VF = {};   /* feltöltés közbeni százalék, elutasított videók üzenete */
+  const MAXV = 80 * 1048576;
+  function vidPoster(f) {
+    return new Promise((res, rej) => {
+      const v = document.createElement('video'), u = URL.createObjectURL(f); let done = false, tried = false;
+      const end = (b, er) => { if (done) return; done = true; clearTimeout(t1); clearTimeout(t2); try { v.pause(); } catch (e) { /* */ } v.removeAttribute('src'); try { v.load(); } catch (e) { /* */ } URL.revokeObjectURL(u); er ? rej(er) : res(b); };
+      const t1 = setTimeout(() => end(null, new Error('A borítókép nem készült el.')), 12000);
+      /* iOS: ha a léptetés nem hoz képkockát, egy rövid lejátszás után próbálja újra */
+      const t2 = setTimeout(() => { if (!tried) { tried = true; v.play().then(() => setTimeout(() => { v.pause(); grab(); }, 300)).catch(() => {}); } }, 4000);
+      const grab = () => {
+        try {
+          if (!v.videoWidth) return;
+          const k = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight)), c = document.createElement('canvas');
+          c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          c.toBlob(b => (b ? end(b) : end(null, new Error('A borítókép nem készült el.'))), 'image/jpeg', 0.85);
+        } catch (e) { end(null, e); }
+      };
+      v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+      v.onloadedmetadata = () => { try { v.currentTime = Math.min(1, (v.duration || 2) / 2); } catch (e) { /* a lejátszásos próba jön */ } };
+      v.onseeked = grab;
+      v.onerror = () => end(null, new Error('A videó nem olvasható ezen az eszközön.'));
+      v.src = u;
+    });
+  }
+  async function blobThumb(b) { const u = URL.createObjectURL(b); try { const i = await loadImg(u); return scaled(i, 360).toDataURL('image/jpeg', 0.7); } finally { setTimeout(() => URL.revokeObjectURL(u), 1000); } }
+  const mb = n => (n / 1048576).toLocaleString('hu-HU', { maximumFractionDigits: 1 }) + ' MB';
+  function vidsInfo() { const e = S.ev; $('[data-vev]').textContent = e ? (e.title || 'Rendezvény') + (e.date ? ' · ' + huDate(e.date) : '') + ' – ide kerülnek a videók' : ''; }
+  async function addVids(files) {
+    const e = S.ev; if (!e) { toast('Előbb válassz rendezvényt.', true); return; }
+    const L = [...files].filter(f => /^video\//.test(f.type) || /\.(mp4|mov|m4v)$/i.test(f.name));
+    if (!L.length) { toast('Nem választottál videót.', true); return; }
+    let added = 0, skip = 0, big = 0, err = 0;
+    const queued = new Set((await qAll().catch(() => [])).map(x => x.dk).filter(Boolean));
+    for (let i = 0; i < L.length; i++) {
+      const f = L[i];
+      $('[data-vev]').textContent = 'Előkészítés: ' + (i + 1) + ' / ' + L.length + '…';
+      if (f.size > MAXV) { big++; continue; }
+      const dk = 'sent:' + e.ev + ':' + f.name + ':' + f.size + ':' + (f.lastModified || 0);
+      if (queued.has(dk) || await kvGet(dk).catch(() => null)) { skip++; continue; }
+      const photo = tok(10);
+      let poster = null; try { poster = await vidPoster(f); } catch (x) { poster = null; }
+      let thumb = ''; try { thumb = poster ? await blobThumb(poster) : ''; } catch (x) { thumb = ''; }
+      try {
+        await tx('q', 'readwrite', s => s.put({ photo, ev: e.ev, deal: e.deal || 0, date: e.date || '', blob: f, poster, kind: 'video', name: f.name, size: f.size, dk, t: Date.now() }));
+        await tx('done', 'readwrite', s => s.put({ photo, ev: e.ev, thumb, kind: 'video', name: f.name, size: f.size, t: Date.now() }));
+        queued.add(dk); added++;
+      } catch (x) { err++; }
+    }
+    vidsInfo();
+    const msg = [added ? added + ' videó feltöltésre kész' : '', skip ? skip + ' már feltöltve' : '', big ? big + ' túl nagy (80 MB fölött – a LumaBooth-ban kisebb felbontás segít)' : '', err ? err + ' nem fért el a telefonon' : ''].filter(Boolean).join(' · ');
+    toast(msg || 'Nincs új videó.', !added && (big || err));
+    vlist(); pump();
+  }
+  async function vlist() {
+    const box = $('[data-vlist]'); if (!box || !S.ev) return;
+    let D = [], Q = [];
+    try { D = (await tx('done', 'readonly', s => s.getAll())).filter(x => x.kind === 'video' && x.ev === S.ev.ev).sort((a, b) => b.t - a.t).slice(0, 60); } catch (e) { D = []; }
+    try { Q = (await qAll()).map(x => x.photo); } catch (e) { Q = []; }
+    box.innerHTML = D.map(x => {
+      const p = VP[x.photo], q = Q.includes(x.photo), f = VF[x.photo];
+      const st = f ? '<span class="bad">' + esc(f) + '</span>' : q ? '<span>' + (p != null ? 'Feltöltés: ' + Math.round(p * 100) + '%' : navigator.onLine ? 'Feltöltésre vár…' : 'Vár – nincs internet') + '</span>' : '<span class="ok">Feltöltve – a galériában és a megosztó állomáson</span>';
+      return '<div class="vr" data-vph="' + esc(x.photo) + '"><span class="vt v" style="' + (x.thumb ? 'background-image:url(\'' + x.thumb + '\')' : '') + '"></span><div class="vn"><b>' + esc(x.name || 'videó') + '</b>' + st + (q ? '<div class="vp"><i style="width:' + Math.round((p || 0) * 100) + '%"></i></div>' : '') + '<span>' + (x.size ? mb(x.size) : '') + '</span></div></div>';
+    }).join('');
+  }
+  let vpT = 0;
+  function vprog(ph) {
+    const r = $('[data-vph="' + ph + '"]'); if (!r || S.scr !== 'vids') return;
+    const now = Date.now(); if (now - vpT < 250) return; vpT = now;
+    const i = r.querySelector('.vp i'), s = r.querySelector('.vn span'); const p = VP[ph] || 0;
+    if (i) i.style.width = Math.round(p * 100) + '%'; if (s) s.textContent = 'Feltöltés: ' + Math.round(p * 100) + '%';
+  }
+  $('[data-vfiles]').addEventListener('change', e => { const f = e.target.files; if (f && f.length) addVids(f).finally(() => { e.target.value = ''; }); });
+
   /* ---------- mai fotók */
   async function recent() {
     let L = []; try { L = await tx('done', 'readonly', s => s.getAll()); } catch (e) { L = []; }
@@ -200,7 +285,7 @@
     L = L.filter(x => x.t >= d0.getTime()).sort((a, b) => b.t - a.t);
     let q = []; try { q = (await qAll()).map(x => x.photo); } catch (e) { q = []; }
     $('[data-rcn]').textContent = L.length ? '(' + L.length + ')' : '';
-    $('[data-rgrid]').innerHTML = L.length ? L.map(x => '<button type="button" data-rph="' + esc(x.photo) + '" data-rev="' + esc(x.ev) + '" style="background-image:url(\'' + x.thumb + '\')">' + (q.includes(x.photo) ? '<i>vár</i>' : '') + '</button>').join('') : '<p class="mu">Ma még nem készült fotó ezen az eszközön.</p>';
+    $('[data-rgrid]').innerHTML = L.length ? L.map(x => '<button type="button"' + (x.kind === 'video' ? ' class="v" aria-label="Videó"' : '') + ' data-rph="' + esc(x.photo) + '" data-rev="' + esc(x.ev) + '" style="background-image:url(\'' + x.thumb + '\')">' + (q.includes(x.photo) ? '<i>vár</i>' : '') + '</button>').join('') : '<p class="mu">Ma még nem készült fotó ezen az eszközön.</p>';
     show('recent');
   }
   $('[data-rgrid]').addEventListener('click', async e => {
@@ -234,6 +319,7 @@
     else if (act === 'evnone') { S.ev = { ev: 'm' + tok(12), deal: 0, title: 'Rendezvény nélkül', date: today() }; LS.set('event', S.ev); S.tpl = null; evInfo(); show('home'); }
     else if (act === 'photog') { if (!S.ev) { toast('Előbb válassz rendezvényt.', true); return; } show('photog'); status(); }
     else if (act === 'kiosk') { if (!S.ev) { toast('Előbb válassz rendezvényt.', true); return; } kioskOn(); }
+    else if (act === 'vids') { if (!S.ev) { toast('Előbb válassz rendezvényt.', true); return; } vidsInfo(); show('vids'); vlist(); status(); }
     else if (act === 'recent') { recent(); }
     else if (act === 'back') { if (S.prev === 'photog') show('photog'); else show('home'); }
     else if (act === 'next') { clearTimeout(S.rt); if (S.last && S.last.kind === 'kiosk') kioskOn(); else if (S.prev === 'recent') recent(); else show('photog'); }

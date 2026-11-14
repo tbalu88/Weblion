@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.10.0');
+define('CG_VER', '0.10.1');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -114,7 +114,7 @@ add_action('rest_api_init', function () {
 		global $wpdb; $t = cg_t();
 		$rows = (array) $wpdb->get_results("SELECT ev, COUNT(*) n, SUM(hidden = 1) h, SUM(kind = 'ai') ai, SUM(kind NOT IN ('photo','ai')) v, MIN(created_at) first, MAX(created_at) last, MAX(deal) deal, COUNT(DISTINCT device) devs, MAX(evdate) evdate FROM $t GROUP BY ev ORDER BY last DESC LIMIT 2000", ARRAY_A);
 		$th = array();
-		$tr = $wpdb->get_results("SELECT ev, photo FROM (SELECT ev, photo, ROW_NUMBER() OVER (PARTITION BY ev ORDER BY id DESC) rn FROM $t WHERE hidden = 0 AND kind IN ('photo','ai')) x WHERE rn <= 4", ARRAY_A);
+		$tr = $wpdb->get_results("SELECT ev, photo FROM (SELECT ev, photo, ROW_NUMBER() OVER (PARTITION BY ev ORDER BY id DESC) rn FROM $t WHERE hidden = 0 AND w > 0) x WHERE rn <= 4", ARRAY_A);
 		foreach ((array) $tr as $r) { $th[$r['ev']][] = cg_url() . '/' . $r['ev'] . '/' . $r['photo'] . '_t.jpg'; }
 		$S = get_option('cg_events', array()); $S = is_array($S) ? $S : array(); $out = array(); $seen = array();
 		$one = function ($ev, $r) use ($S, $th) {
@@ -126,7 +126,8 @@ add_action('rest_api_init', function () {
 		foreach ($rows as $r) { $ev = (string) $r['ev']; if (!cg_tok_ok($ev)) { continue; } $out[] = $one($ev, $r); $seen[$ev] = 1; }
 		/* beállított (pl. címet, jelszót kapott), de még kép nélküli galériák */
 		foreach ($S as $ev => $s) { $ev = (string) $ev; if (cg_tok_ok($ev) && !isset($seen[$ev])) { $out[] = $one($ev, array()); } }
-		return array('ok' => true, 'list' => $out, 'keep_days' => CG_KEEP_DAYS);
+		/* v0.10.1: a videók borítóképe is bélyegkép (w > 0 = van kép / borító); a szerver feltöltési korlátai a hibakereséshez */
+		return array('ok' => true, 'list' => $out, 'keep_days' => CG_KEEP_DAYS, 'limits' => array('upload' => (string) ini_get('upload_max_filesize'), 'post' => (string) ini_get('post_max_size'), 'video_mb' => 80));
 	}));
 	/* kezelés a panelből (csak a panel kulcsával): képek listája + beállítások; beállítás; elrejtés */
 	register_rest_route('crazy-galeria/v1', '/admin/(?P<ev>[a-z0-9]{6,32})', array(

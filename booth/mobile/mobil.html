@@ -47,6 +47,7 @@
       <div class="modes">
         <button class="mode" type="button" data-act="photog"><b>Fotós mód</b><span>A telefon kamerájával fotózol, a vendég QR-ral kapja meg</span></button>
         <button class="mode" type="button" data-act="kiosk"><b>Szelfigép mód</b><span>Tablet állványon: érintésre visszaszámol és fotóz</span></button>
+        <button class="mode" type="button" data-act="vids"><b>360-as videók</b><span>A LumaBooth-ban készült videók feltöltése a telefonról a galériába</span></button>
       </div>
       <button class="btn ghost" type="button" data-act="recent">Mai fotók</button>
       <p class="mu" data-q></p>
@@ -99,6 +100,19 @@
         </div>
         <p class="mu" data-rt></p>
       </div>
+    </div>
+  </section>
+
+  <!-- 360-as videók feltöltése (pl. LumaBooth – a telefon Fotók alkalmazásából, egyszerre többet is) -->
+  <section class="scr" data-s="vids">
+    <div class="pad">
+      <h2>360-as videók</h2>
+      <p class="mu" data-vev></p>
+      <label class="btn pri vpick">Videók kiválasztása<input type="file" accept="video/*,.mp4,.mov,.m4v" multiple data-vfiles hidden></label>
+      <p class="mu">A Fotók közül egyszerre többet is kijelölhetsz. A már feltöltötteket kihagyom; ha nincs internet, a videók a telefonon várnak, és maguktól feltöltődnek. Legfeljebb 80 MB / videó.</p>
+      <div class="vl" data-vlist></div>
+      <p class="mu" data-q></p>
+      <button class="btn ghost" type="button" data-act="home">Vissza</button>
     </div>
   </section>
 

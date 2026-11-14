@@ -30,7 +30,7 @@ button{font:inherit;cursor:pointer;touch-action:manipulation}
 .evcard small{color:var(--o);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:12px}.evcard b{font-size:19px;overflow-wrap:anywhere}.evcard span{color:var(--mu);font-size:14px}
 .modes{display:grid;gap:12px}
 .mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:18px;border-radius:18px;border:0;background:var(--g);color:var(--n2)}
-.mode:nth-child(2){background:var(--n2);color:#fff;border:1.5px solid var(--li)}
+.mode:nth-child(n+2){background:var(--n2);color:#fff;border:1.5px solid var(--li)}
 .mode b{font-size:21px}.mode span{font-size:14px;opacity:.85}
 .evl{display:flex;flex-direction:column;gap:8px}
 .evl button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;border-radius:12px;border:1.5px solid var(--li);background:var(--n2);color:#fff}
@@ -60,6 +60,16 @@ button{font:inherit;cursor:pointer;touch-action:manipulation}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
 .grid button{aspect-ratio:2/3;border:0;border-radius:10px;background:#1E2848 center/cover no-repeat;position:relative}
 .grid button i{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.6);border-radius:999px;padding:1px 8px;font-size:12px;font-style:normal}
+/* 360-as videók: lejátszás-jel a bélyegképen, feltöltési lista */
+.grid button.v::before,.vr .vt.v::before{content:'';position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(14,18,32,.55)}
+.grid button.v::after,.vr .vt.v::after{content:'';position:absolute;left:50%;top:50%;width:11px;height:13px;margin:-6.5px 0 0 -4px;background:#fff;clip-path:polygon(0 0,100% 50%,0 100%)}
+.vpick{display:flex;align-items:center;justify-content:center;cursor:pointer;text-align:center}
+.vl{display:flex;flex-direction:column;gap:8px}.vl:empty{display:none}
+.vr{display:flex;align-items:center;gap:12px;background:var(--n2);border:1.5px solid var(--li);border-radius:12px;padding:8px 10px;min-width:0}
+.vr .vt{position:relative;flex:0 0 56px;height:56px;border-radius:8px;background:#1E2848 center/cover no-repeat}
+.vr .vn{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.vr .vn b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vr .vn span{font-size:13px;color:var(--mu);font-variant-numeric:tabular-nums}
+.vr .vn span.ok{color:#7CD9A8}.vr .vn span.bad{color:#FF9B92}
+.vr .vp{height:4px;border-radius:2px;background:var(--li);overflow:hidden}.vr .vp i{display:block;height:100%;background:var(--o);transition:width .2s ease-out}
 .pinin{height:56px;width:220px;text-align:center;font-size:26px;letter-spacing:8px;border-radius:12px;border:1.5px solid var(--li);background:var(--n2);color:#fff}
 .busy{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px}
 .spin{width:56px;height:56px;border-radius:50%;border:6px solid rgba(255,255,255,.15);border-top-color:var(--o);animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
