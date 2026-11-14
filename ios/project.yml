@@ -78,17 +78,34 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1"
 
+  Crazy360UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Crazy360UITests
+    dependencies:
+      - target: Crazy360
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: hu.eventcrazy.crazy360.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        TEST_TARGET_NAME: Crazy360
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+
 schemes:
   Crazy360:
     build:
       targets:
         Crazy360: all
         Crazy360Tests: [test]
+        Crazy360UITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - Crazy360Tests
+        - Crazy360UITests
     archive:
       config: Release

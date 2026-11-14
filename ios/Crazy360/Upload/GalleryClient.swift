@@ -42,18 +42,7 @@ nonisolated struct GalleryClient: Sendable {
     /// Videó + borítókép feltöltése. Visszaadja a videó galéria-linkjét.
     @concurrent
     func upload(_ clip: Clip, video: URL, poster: URL?) async throws -> String {
-        var parts: [MultipartBody.Part] = [
-            .field(name: "ev", value: clip.ev),
-            .field(name: "photo", value: clip.id),
-            .field(name: "date", value: clip.date),
-            .field(name: "deal", value: String(clip.deal)),
-            .field(name: "kind", value: "video"),
-            .file(name: "file", filename: "\(clip.id).mp4", contentType: "video/mp4", source: video),
-        ]
-        if let poster, FileManager.default.fileExists(atPath: poster.path) {
-            parts.append(.file(name: "poster", filename: "\(clip.id).jpg", contentType: "image/jpeg", source: poster))
-        }
-        let body = MultipartBody(parts: parts)
+        let body = Self.uploadBody(clip, video: video, poster: poster)
         try? FileManager.default.createDirectory(at: Paths.uploads, withIntermediateDirectories: true)
         let bodyFile = Paths.uploads.appendingPathComponent("\(clip.id).body")
         try body.write(to: bodyFile)
@@ -69,6 +58,22 @@ nonisolated struct GalleryClient: Sendable {
         try check(response, message: reply?.message)
         guard let reply, reply.ok == true else { throw Failure.server(reply?.message ?? "") }
         return reply.url ?? endpoint.clipURL(ev: clip.ev, photo: clip.id).absoluteString
+    }
+
+    /// A feltöltés mezői – ugyanazok, mint a mobil appban (ev, photo, date, deal, kind=video, file, poster).
+    static func uploadBody(_ clip: Clip, video: URL, poster: URL?) -> MultipartBody {
+        var parts: [MultipartBody.Part] = [
+            .field(name: "ev", value: clip.ev),
+            .field(name: "photo", value: clip.id),
+            .field(name: "date", value: clip.date),
+            .field(name: "deal", value: String(clip.deal)),
+            .field(name: "kind", value: "video"),
+            .file(name: "file", filename: "\(clip.id).mp4", contentType: "video/mp4", source: video),
+        ]
+        if let poster, FileManager.default.fileExists(atPath: poster.path) {
+            parts.append(.file(name: "poster", filename: "\(clip.id).jpg", contentType: "image/jpeg", source: poster))
+        }
+        return MultipartBody(parts: parts)
     }
 
     /// Hálózati hibák egységesítése.

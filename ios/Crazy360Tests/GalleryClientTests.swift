@@ -32,8 +32,9 @@ nonisolated final class MockURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
             return
         }
-        let body = request.httpBody ?? Self.read(request.httpBodyStream)
-        switch handler(request, body) {
+        // a feltöltés törzsét (fájlból, folyamként) itt nem olvassuk: az olvasás a munkamenet szálán elakadhat –
+        // a törzset külön teszt ellenőrzi (uploadBodyHasTheGalleryFields)
+        switch handler(request, request.httpBody ?? Data()) {
         case .success(let (code, data)):
             guard let response = HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1",
                                                  headerFields: ["Content-Type": "application/json"]) else { return }
@@ -46,20 +47,6 @@ nonisolated final class MockURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
-
-    static func read(_ stream: InputStream?) -> Data {
-        guard let stream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-        while stream.hasBytesAvailable {
-            let n = stream.read(&buffer, maxLength: buffer.count)
-            if n <= 0 { break }
-            data.append(buffer, count: n)
-        }
-        return data
-    }
 }
 
 /// Szálbiztos rekesz (a mock kezelője más szálon fut).
@@ -75,6 +62,7 @@ nonisolated final class Box<T: Sendable>: @unchecked Sendable {
     }
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct GalleryClientTests {
     let key = "cb_teszt_kulcs_0123456789"
 
@@ -125,29 +113,42 @@ struct GalleryClientTests {
         return (clip, video, poster)
     }
 
-    @Test func uploadSendsTheMultipartForm() async throws {
+    @Test func uploadSendsKeyAndReturnsTheLink() async throws {
         let (client, host) = makeClient()
         let (clip, video, poster) = try sampleClip()
         let seen = Box("")
-        MockRoutes.shared.set(host) { request, body in
-            let text = String(decoding: body, as: UTF8.self)
+        MockRoutes.shared.set(host) { request, _ in
             seen.value = [request.httpMethod ?? "", request.value(forHTTPHeaderField: "X-Booth-Key") ?? "",
-                          request.value(forHTTPHeaderField: "Content-Type") ?? "", text].joined(separator: "\n")
+                          request.value(forHTTPHeaderField: "Content-Type") ?? "", request.url?.path ?? ""].joined(separator: "\n")
             return .success((200, Data(#"{"ok":true,"url":"https://x/galeria/abc123xyz/clip0001abcd"}"#.utf8)))
         }
         let url = try await client.upload(clip, video: video, poster: poster)
         #expect(url == "https://x/galeria/abc123xyz/clip0001abcd")
-        let s = seen.value
-        #expect(s.hasPrefix("POST\n\(key)\nmultipart/form-data; boundary="))
-        // a törzs a feltöltési módtól függően elérhető-e a mocknak: ha igen, a mezőket is ellenőrizzük
-        if s.contains("Content-Disposition") {
-            #expect(s.contains("name=\"photo\"\r\n\r\nclip0001abcd"))
-            #expect(s.contains("name=\"kind\"\r\n\r\nvideo"))
-            #expect(s.contains("name=\"ev\"\r\n\r\nabc123xyz"))
-            #expect(s.contains("filename=\"clip0001abcd.mp4\""))
-            #expect(s.contains("VIDEO-BYTES-0123"))
-            #expect(s.contains("name=\"poster\"; filename=\"clip0001abcd.jpg\""))
-        }
+        let lines = seen.value.components(separatedBy: "\n")
+        #expect(lines.count == 4)
+        #expect(lines.first == "POST")
+        #expect(lines.dropFirst().first == key)
+        #expect(lines.dropFirst(2).first?.hasPrefix("multipart/form-data; boundary=") == true)
+        #expect(lines.last == "/wp-json/crazy-galeria/v1/upload")
+    }
+
+    @Test func uploadBodyHasTheGalleryFields() throws {
+        let (clip, video, poster) = try sampleClip()
+        let body = GalleryClient.uploadBody(clip, video: video, poster: poster)
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("body-\(UUID().uuidString.prefix(6))")
+        defer { try? FileManager.default.removeItem(at: out) }
+        try body.write(to: out)
+        let s = String(decoding: try Data(contentsOf: out), as: UTF8.self)
+        #expect(s.contains("name=\"ev\"\r\n\r\nabc123xyz\r\n"))
+        #expect(s.contains("name=\"photo\"\r\n\r\nclip0001abcd\r\n"))
+        #expect(s.contains("name=\"date\"\r\n\r\n2026-11-30\r\n"))
+        #expect(s.contains("name=\"deal\"\r\n\r\n7\r\n"))
+        #expect(s.contains("name=\"kind\"\r\n\r\nvideo\r\n"))
+        #expect(s.contains("name=\"file\"; filename=\"clip0001abcd.mp4\"\r\nContent-Type: video/mp4\r\n\r\nVIDEO-BYTES-0123\r\n"))
+        #expect(s.contains("name=\"poster\"; filename=\"clip0001abcd.jpg\"\r\nContent-Type: image/jpeg"))
+        // borító nélkül nincs poster mező
+        let noPoster = GalleryClient.uploadBody(clip, video: video, poster: nil)
+        #expect(noPoster.parts.count == 6)
     }
 
     @Test func tooLargeIsRejectedForGood() async throws {

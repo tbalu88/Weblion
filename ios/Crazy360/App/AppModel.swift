@@ -65,6 +65,57 @@ final class AppModel {
         clips = JSONStore.load(ClipStore.self, from: "clips.json") ?? ClipStore()
         hasKey = !(Keychain.read(Keychain.boothKey) ?? "").isEmpty
         cameraAvailable = CaptureService.hasCamera
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-uitest") { prepareUITest() }
+        if args.contains("-uitest-worst") { prepareWorstCase() }
+    }
+
+    /// A legrosszabb valószerű adatok (break-ui): hosszú nevek, sok videó, minden feltöltési állapot.
+    private func prepareWorstCase() {
+        var s = SpinSettings()
+        s.captureFPS = 240
+        s.speedStyle = .slowFastSlow
+        s.slowFactor = 0.125
+        s.captionTop = "Bartholomew & Aleksandra Wiśniewska-Kowalczyk – 2026. november 30., szombat"
+        s.captionBottom = "🎉 Köszönjük, hogy velünk ünnepeltetek! 💛"
+        s.musicFile = "nincs-ilyen.m4a"
+        s.musicTitle = "Nagyon hosszú zenecím – Remix (Extended Club Version 2026, Budapest Live)"
+        s.overlayFile = "nincs-ilyen.png"
+        settings = s
+        event = GalleryEvent(ev: "uitest0002",
+                             deal: 12345,
+                             title: "Bartholomew Fitzgerald és Aleksandra Wiśniewska-Kowalczyk esküvője – Budapesti Történeti Múzeum, Oroszlános udvar",
+                             date: "2026-11-30", time: "18:00", loc: "Budapest, I. kerület, Szent György tér 2.")
+        var store = ClipStore()
+        let start = Date().addingTimeInterval(-6 * 3600)
+        for i in 0..<200 {
+            var clip = Clip(id: String(format: "worst%07d", i), ev: "uitest0002", deal: 12345, date: "2026-11-30",
+                            eventTitle: event?.title ?? "", video: "nincs-\(i).mp4", poster: nil,
+                            createdAt: start.addingTimeInterval(Double(i) * 97), duration: i % 7 == 0 ? 75 : 18, bytes: 24_000_000)
+            switch i % 5 {
+            case 0: clip.upload = .done(url: "https://x/galeria/uitest0002/\(clip.id)", at: Date())
+            case 1: clip.upload = .stopped(message: "A galéria nem fogadta el a videót: túl nagy videó (legfeljebb 80 MB).")
+            case 2:
+                clip.lastError = "Nincs internetkapcsolat."
+                clip.attempts = 4
+            case 3: clip.upload = .uploading
+            default: break
+            }
+            store.add(clip)
+        }
+        clips = store
+        notice = "A Fotókba mentés nem sikerült (engedély?). Ellenőrizd a Beállítások → Adatvédelem → Fotók menüben."
+    }
+
+    /// Felülettesztekhez (szimulátor): tiszta állapot, mintarendezvény és -felirat.
+    private func prepareUITest() {
+        var s = SpinSettings()
+        s.captionTop = "Anna & Péter"
+        s.captionBottom = "2026.11.30."
+        settings = s
+        event = GalleryEvent(ev: "uitest0001", deal: 0, title: "Anna & Péter esküvője", date: "2026-11-30", time: "18:00", loc: "Budapest")
+        clips = ClipStore()
+        saveClips()
     }
 
     var endpoint: GalleryEndpoint { GalleryEndpoint(string: settings.serverBase) }

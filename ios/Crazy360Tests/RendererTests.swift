@@ -5,6 +5,7 @@ import Testing
 @testable import Crazy360
 
 /// A renderelő a szimulátoron, mesterséges felvételekkel (a kamera nem kell hozzá).
+@Suite(.timeLimit(.minutes(3)))
 struct RendererTests {
     typealias RGB = TestMedia.RGB
 

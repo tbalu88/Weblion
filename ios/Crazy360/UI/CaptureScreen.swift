@@ -40,6 +40,16 @@ struct CaptureScreen: View {
             CameraPreview(session: model.capture.session, enabled: triggerEnabled) { model.trigger() }
                 .ignoresSafeArea()
         } else {
+            ZStack {
+                LinearGradient(colors: [Theme.navy2, Theme.navy, Theme.orange.opacity(0.35)], startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                noCameraCard
+            }
+        }
+    }
+
+    private var noCameraCard: some View {
+        Group {
             VStack(spacing: 14) {
                 Image(systemName: model.cameraDenied ? "video.slash.fill" : "video.badge.waveform")
                     .font(.system(size: 44, weight: .semibold))

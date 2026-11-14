@@ -20,7 +20,7 @@ jobs:
   build-test:
     name: Build + tesztek
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 40
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
@@ -65,6 +65,7 @@ jobs:
             -project Crazy360.xcodeproj -scheme Crazy360 \
             -destination "id=$SIM_UDID" \
             -resultBundlePath ../TestResults.xcresult \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 600 \
             CODE_SIGNING_ALLOWED=NO > ../xcodebuild.log 2>&1
           rc=$?
           tail -250 ../xcodebuild.log
@@ -82,3 +83,82 @@ jobs:
             echo "== $f: $(grep -c ' warning: ' "$f" || true) figyelmeztetés, $(grep -c ' error: ' "$f" || true) hiba"
             grep -E ' (error|warning): ' "$f" | sed -E 's#^.*/ios/##' | sort -u | head -150 || true
           done
+
+      - name: Képernyőképek a felülettesztből
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path TestResults.xcresult --output-path attachments || true
+            python3 ios/ci/export_shots.py attachments kepernyokepek || true
+          fi
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: kepernyokepek
+          path: kepernyokepek/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # TestFlight: csak „[testflight]” szót tartalmazó commitnál, és csak ha az App Store Connect titkok be vannak állítva
+  # (ios/README.md). Aláírás: felhőben kezelt tanúsítvány, API-kulccsal; buildszám = a futás sorszáma.
+  testflight:
+    name: TestFlight-feltöltés
+    needs: build-test
+    if: contains(github.event.head_commit.message, '[testflight]')
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - name: Titkok megvannak?
+        id: check
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::warning::Hiányoznak az App Store Connect titkok – a TestFlight-feltöltés kimarad (ios/README.md)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.ok == 'true'
+
+      - name: Xcode + projekt
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode_27*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Archív, aláírás, feltöltés
+        if: steps.check.outputs.ok == 'true'
+        working-directory: ios
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$ASC_KEY_P8" > "$KEY"
+          trap 'rm -f "$KEY"' EXIT
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild archive -quiet -project Crazy360.xcodeproj -scheme Crazy360 -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Crazy360.xcarchive" "${AUTH[@]}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Crazy360.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}"
+          echo "Feltöltve a TestFlightra: build $GITHUB_RUN_NUMBER"
