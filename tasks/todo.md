@@ -38,6 +38,6 @@
 - [~] I4 Feltöltés: párosítás, rendezvények, tartós sor, QR – kód + mock-tesztek kész; valódi galériába a felhasználó telefonjáról
 - [~] I5 Felvétel: formátum, fps, lencse, visszaszámlálás, távkioldó – kód kész; kamera csak készüléken próbálható
 - [~] I6 Felület: felvétel, eredmény, beállítások, videók – kész; felületteszt + legrosszabb adatok a CI-ben
-- [ ] Ellenőrzőpont D: szimulátoros végigpróba mintavideóval
+- [x] Ellenőrzőpont D: szimulátoros végigpróba mintavideóval (felületteszt a CI-ben, képernyőképek; legrosszabb adatokkal is – break-ui)
 - [~] I7 TestFlight: a CI-lépés és az útmutató (ios/README.md) kész; Apple Developer fiókra vár
 - [ ] Ellenőrzőpont E: készülékes próba a platformon

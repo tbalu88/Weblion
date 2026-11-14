@@ -159,7 +159,7 @@ iPhone-app a 360-as platform karjára: jó minőségű felvétel (0,5× nagylát
   - Ellenőrzés: szimulátoron fordul (ott nincs kamera → mintavideó-mód); készüléken a felhasználó (TestFlight után).
 - [~] **I6 (M) Felület** *(kész; felületteszt + legrosszabb adatok a CI-ben)* – felvétel-képernyő, feldolgozás, eredmény (ismétlődő lejátszás + QR + megosztás), beállítások (rendezvény, felvétel, effektek, keret / felirat, zene), mai videók. Előtte `impeccable`, élesítés előtt `break-ui`.
   - Elfogadás: végigvihető folyamat; a beállítások újraindítás után megmaradnak; hosszú rendezvénynévvel, 0 és 200 videóval sem esik szét.
-- [ ] **Ellenőrzőpont D** – szimulátoron a teljes folyamat mintavideóval, CI zöld, képernyőképek a felhasználónak.
+- [x] **Ellenőrzőpont D** – szimulátoron a teljes folyamat mintavideóval, CI zöld, képernyőképek a felhasználónak. *(2026-11-14: 16 teszt zöld; break-ui: a hosszú felirat két sorba törik, a 0,125× felirat javítva; hosszkorlát a 80 MB-hoz)*
 - [~] **I7 (S) TestFlight** *(CI-lépés + ios/README.md kész; Apple-fiókra vár)* – aláírás + feltöltés a CI-ből (API-kulcs secretként), útmutató a felhasználónak: fejlesztői fiók, app az App Store Connectben, kulcs, tesztelők.
 - [ ] **Ellenőrzőpont E** – a felhasználó telefonján fut (TestFlight), valódi 360-as próba a platformon.
 
