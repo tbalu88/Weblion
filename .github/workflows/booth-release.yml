@@ -1,0 +1,46 @@
+# Crazy Booth Windows-csomag nyilvános letöltési linkkel (GitHub Release).
+# Indul: „[booth-release]” szót tartalmazó commitnál. A link: .../releases/download/booth-v<verzió>/CrazyBooth-<verzió>-Windows-x64.zip
+name: Crazy Booth – Windows-kiadás
+
+on:
+  push:
+    paths:
+      - 'booth/**'
+      - '.github/workflows/booth-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-zip:
+    if: contains(github.event.head_commit.message, '[booth-release]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Csomagolás (Windows x64 zip)
+        working-directory: booth
+        run: |
+          npm ci
+          npx electron-builder --win zip --x64 --publish never
+          VER=$(node -p "require('./package.json').version")
+          SRC=$(ls dist/*win*.zip dist/*.zip 2>/dev/null | grep -i -v mac | head -1)
+          mkdir -p ../release && cp "$SRC" "../release/CrazyBooth-$VER-Windows-x64.zip"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          ls -la ../release
+      - name: Kiadás (nyilvános letöltés)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="booth-v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" --clobber
+          else
+            gh release create "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" --target "$GITHUB_SHA" \
+              --title "Crazy Booth $VER (Windows)" \
+              --notes "Kicsomagolás után a Crazy Booth.exe indítja. Telepítés nem kell."
+          fi
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/CrazyBooth-$VER-Windows-x64.zip"
