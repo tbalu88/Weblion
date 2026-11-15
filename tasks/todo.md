@@ -54,8 +54,8 @@
 - [ ] Ellenőrzőpont: 0.13.0 kiadás
 
 ## Raktár modul (terv: tasks/plan.md vége)
-- [ ] R1 Cikktörzs + eszközök
-- [ ] R2 Mozgások + helyek
+- [x] R1 Cikktörzs + eszközök – 2.9.259
+- [x] R2 Mozgások + helyek – 2.9.259
 - [ ] R3 Foglalás + pakolási lista + ütközés
 - [ ] R4 QR kiadás/visszavétel
 - [ ] R5 Automatikus papírfogyás

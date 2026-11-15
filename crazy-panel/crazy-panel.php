@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.258');
+define('CP_PANEL_VER', '2.9.259');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -806,6 +806,7 @@ function cp_panel_render_app() {
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
 		'logi'       => function_exists('cp_logi_db_ok') && cp_logi_db_ok() && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.118: Logisztika fül */
 		'gal'        => function_exists('cp_booth_ajax_gal_list') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.255: Galériák gyűjtőoldal */
+		'wh'         => function_exists('cp_wh_ajax_data') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.259: Raktár */
 		'slot'       => function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t') && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.115: beosztás a Kapacitás napjain */
 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
@@ -828,6 +829,7 @@ function cp_panel_render_app() {
 	if (!empty($cfg['gcal']['on'])) { $lazy['gcal'] = array('js' => $asset('gcal')); }
 	if (!empty($cfg['logi'])) { $lazy['logi'] = array('js' => $asset('logi')); }
 	if (!empty($cfg['gal'])) { $lazy['galeriak'] = array('js' => $asset('galeriak')); }
+	if (!empty($cfg['wh'])) { $lazy['raktar'] = array('js' => $asset('raktar')); }
 	$lazy['bgcat'] = array('js' => $asset('bgcat'));
 	if (function_exists('cp_sb_asset_url')) { $lazy['sablon'] = array('js' => cp_sb_asset_url('js')); }
 	$cfg['lazy'] = $lazy;
@@ -3762,6 +3764,7 @@ function cp_el_img_route() {
 require_once __DIR__ . '/bg-window.php'; /* v2.9.232: háttér 2 órás időablak-szabály */
 require_once __DIR__ . '/booth.php'; /* v2.9.238: Crazy Booth szelfigépek */
 require_once __DIR__ . '/booth-log.php'; /* v2.9.256: gépnapló + riasztás */
+require_once __DIR__ . '/raktar.php'; /* v2.9.259: raktár */
 require_once __DIR__ . '/portal.php';
 require_once __DIR__ . '/sablon.php';
 require_once __DIR__ . '/sudoku.php';
