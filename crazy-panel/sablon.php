@@ -141,7 +141,7 @@ function cp_sb_ajax_deal() {
 	if (is_wp_error($d)) { cp_el_err($d->get_error_message(), 502); }
 	$o = cp_panel_opts();
 	$img = trim(cp_panel_str(cp_panel_get($d, CP_SB_F_IMG)));
-	if ($img !== '' && !preg_match('#^https://#i', $img)) { $img = ''; }
+	if ($img !== '' && (!preg_match('#^https://#i', $img) || strpos($img, '#nincs-sablon-kep') !== false)) { $img = ''; } /* a régi űrlap jelző értéke: nincs kép */
 	$pc = cp_panel_get($d, 'primaryContact');
 	$contact = '';
 	if (is_array($pc)) {
