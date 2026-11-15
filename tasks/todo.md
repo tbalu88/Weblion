@@ -46,8 +46,8 @@
 - [x] F1 Riasztás, ha a gép nem jelentkezik kezdés előtt
 - [x] F2 Eseménynapló (beat → tábla) – 2.9.256 élesítve
 - [x] F3 Rendezvény-idővonal a dealen – 2.9.257 élesítve
-- [ ] F4 Kezelői munkaidő
-- [ ] Ellenőrzőpont: F1–F4 élesítve
+- [x] F4 Kezelői munkaidő – 2.9.258 élesítve (Kezelők → Munkaidő)
+- [x] Ellenőrzőpont: F1–F4 élesítve
 - [ ] F5 Eszköznapló + sorozatszámok (0.13.0) + számlálók
 - [ ] F6 Mosoly/taps kioldás (kapcsolóval)
 - [ ] F7 Szervezői élő nézet

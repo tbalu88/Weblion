@@ -194,3 +194,60 @@ function cp_blog_timeline($deal) {
 	}
 	return array('events' => $ev, 'sessions' => $ses, 'sums' => $sum, 'q15' => $q);
 }
+
+/* v2.9.258: kezelői munkaidő a gépnaplóból (Kezelők → Munkaidő). Rendezvényenként és naponként: az első gép indulásától
+ * az utolsó leállásáig; a véglegesített (ha nincs: „ráér”) beosztott kezelők kapják. Hónap: YYYY-MM. */
+add_action('wp_ajax_nopriv_cp_booth_work', 'cp_booth_ajax_work'); add_action('wp_ajax_cp_booth_work', 'cp_booth_ajax_work');
+function cp_booth_ajax_work() {
+	if (function_exists('cp_kz_auth')) { cp_kz_auth(); } else { cp_el_auth(); }
+	$m = (string) ($_REQUEST['m'] ?? ''); if (!preg_match('/^\d{4}-\d{2}$/', $m)) { $m = wp_date('Y-m'); }
+	wp_send_json_success(cp_blog_work($m));
+}
+function cp_blog_work($m) {
+	global $wpdb;
+	$out = array('m' => $m, 'people' => array(), 'none' => array());
+	if (!cp_blog_db_ok()) { return $out; }
+	$from = gmdate('Y-m-d H:i:s', strtotime($m . '-01 00:00:00') - DAY_IN_SECONDS); $to = gmdate('Y-m-d H:i:s', strtotime($m . '-01 +1 month') + DAY_IN_SECONDS);
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT deal_id, dev, t, kind, info FROM ' . cp_blog_t() . " WHERE kind IN ('start','stop') AND deal_id > 0 AND t BETWEEN %s AND %s ORDER BY t, id", $from, $to), ARRAY_A);
+	/* munkamenetek: [deal, kezdés ts, vége ts] */
+	$st = array(); $ses = array();
+	foreach ($rows as $r) {
+		$ts = strtotime($r['t'] . ' UTC'); $k = $r['dev'];
+		if ($r['kind'] === 'start') { $st[$k] = array((int) $r['deal_id'], $ts); }
+		elseif (isset($st[$k])) { $ses[] = array($st[$k][0], $st[$k][1], $ts); unset($st[$k]); }
+		else { $ses[] = array((int) $r['deal_id'], $ts - (int) $r['info'], $ts); }
+	}
+	foreach (cp_blog_open() as $d => $x) { if (isset($st[$d]) && (int) $x['deal'] === $st[$d][0]) { $ses[] = array($st[$d][0], $st[$d][1], (int) $x['l'], 1); } }
+	/* rendezvény + helyi nap → első indulás, utolsó leállás */
+	$ev = array();
+	foreach ($ses as $s) {
+		$day = wp_date('Y-m-d', $s[1]); if (substr($day, 0, 7) !== $m) { continue; }
+		$k = $s[0] . '|' . $day;
+		if (!isset($ev[$k])) { $ev[$k] = array('deal' => $s[0], 'day' => $day, 'a' => $s[1], 'b' => $s[2], 'run' => !empty($s[3])); }
+		else { $ev[$k]['a'] = min($ev[$k]['a'], $s[1]); $ev[$k]['b'] = max($ev[$k]['b'], $s[2]); $ev[$k]['run'] = $ev[$k]['run'] || !empty($s[3]); }
+	}
+	if (!$ev) { return $out; }
+	$deals = array_values(array_unique(array_map(function ($e) { return (int) $e['deal']; }, $ev)));
+	$tit = array();
+	if (function_exists('cp_crm_t')) { foreach ((array) $wpdb->get_results('SELECT id, title FROM ' . cp_crm_t('deals') . ' WHERE id IN (' . implode(',', array_map('intval', $deals)) . ')', ARRAY_A) as $d) { $tit[(int) $d['id']] = (string) $d['title']; } }
+	$asg = array();
+	if (function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t')) {
+		$q = 'SELECT s.deal_id, s.day, s.kz_id, s.status, k.name FROM ' . cp_slot_t() . ' s JOIN ' . cp_kz_t() . " k ON k.id = s.kz_id WHERE s.status IN ('final','accepted') AND s.day BETWEEN %s AND %s AND s.deal_id IN (" . implode(',', array_map('intval', $deals)) . ')';
+		foreach ((array) $wpdb->get_results($wpdb->prepare($q, $m . '-01', $m . '-31'), ARRAY_A) as $a) { $asg[(int) $a['deal_id'] . '|' . $a['day']][$a['status']][(int) $a['kz_id']] = (string) $a['name']; }
+	}
+	ksort($ev);
+	foreach ($ev as $k => $e) {
+		$row = array('day' => $e['day'], 'deal' => $e['deal'], 'title' => $tit[$e['deal']] ?? ('Deal #' . $e['deal']), 'from' => wp_date('H:i', $e['a']), 'to' => wp_date('H:i', $e['b']), 'min' => (int) round(($e['b'] - $e['a']) / 60), 'run' => $e['run']);
+		$who = $asg[$k]['final'] ?? ($asg[$k]['accepted'] ?? array());
+		if (!$who) { $out['none'][] = $row; continue; }
+		foreach ($who as $id => $name) {
+			if (!isset($out['people'][$id])) { $out['people'][$id] = array('id' => $id, 'name' => $name, 'min' => 0, 'rows' => array()); }
+			$out['people'][$id]['rows'][] = $row + array('tentative' => !isset($asg[$k]['final']));
+			$out['people'][$id]['min'] += $row['min'];
+		}
+	}
+	$out['people'] = array_values($out['people']);
+	usort($out['people'], function ($a, $b) { return strcmp($a['name'], $b['name']); });
+	foreach ($out['people'] as &$p) { usort($p['rows'], function ($a, $b) { return strcmp($a['day'] . $a['from'], $b['day'] . $b['from']); }); } unset($p);
+	return $out;
+}

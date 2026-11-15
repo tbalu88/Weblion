@@ -260,10 +260,10 @@
 	const cmText = b => [b.note ? 'Közös jegyzet' + (rateOf(b.rate) ? ' (' + rateOf(b.rate)[1] + ')' : '') + ': ' + b.note : ''].concat((b.cm || []).map(c => (c.who || '–') + (rateOf(c.rate) ? ' (' + rateOf(c.rate)[1] + ')' : '') + (c.body ? ': ' + c.body : ''))).filter(Boolean).join('\n');
 	const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 	/* a cím → nézet: #kezelok = lista, #kezelok:interju (vagy a régi értesítésekből #kezelok:iv), opcionálisan :<foglalás> */
-	function ivHash() { const m = /^#kezelok(?::(interju|iv)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
+	function ivHash() { const m = /^#kezelok(?::(interju|iv|munkaido)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] === 'munkaido' ? 'work' : m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
 	function nav(v, bid) {
 		ivFlushAll();
-		const url = v === 'iv' ? '#kezelok:interju' : '#kezelok';
+		const url = v === 'iv' ? '#kezelok:interju' : v === 'work' ? '#kezelok:munkaido' : '#kezelok';
 		if (location.hash !== url) history.pushState({ cpKz: v }, '', url);
 		S.sub = v; if (bid) IV.focus = bid;
 		if (S.main && S.main.isConnected) view(S.main, true);
@@ -277,12 +277,37 @@
 	/* értesítésből: „kezelok:interju”, „kezelok:iv”, „kezelok:interju:12” */
 	function deep(arg) { const m = /^(?:interju|iv)(?::(\d+))?$/.exec(String(arg || '')); if (m && K.iv) nav('iv', Number(m[1]) || 0); }
 	const ivOpen = () => nav('iv'); /* v2.9.85: a régi felugró ablak helyett az oldalra visz */
-	const vsw = () => K.iv ? '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'iv' ? '' : ' class="on" aria-current="page"') + '>Lista</a><a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a></nav>' : '';
+	/* v2.9.258: harmadik nézet – Munkaidő (a szelfigépek naplójából) */
+	const vsw = () => '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'list' ? ' class="on" aria-current="page"' : '') + '>Lista</a>' +
+		(K.iv ? '<a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a>' : '') +
+		'<a href="#kezelok:munkaido" data-view="work"' + (S.sub === 'work' ? ' class="on" aria-current="page"' : '') + '>Munkaidő</a></nav>';
 	function bindVsw(main) {
 		main.querySelectorAll('.kz-vs [data-view]').forEach(a => a.addEventListener('click', e => {
 			if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; /* új lapon / ablakban: a böngészőé */
 			e.preventDefault(); if (a.dataset.view !== S.sub) nav(a.dataset.view);
 		}));
+	}
+	/* v2.9.258: kezelői munkaidő havonta – az első gép indulásától az utolsó leállásáig, rendezvényenként */
+	const WK = { m: '' };
+	const wkDur = n => { n = Math.max(0, Math.round(n)); return n < 60 ? n + ' p' : Math.floor(n / 60) + ' ó ' + String(n % 60).padStart(2, '0') + ' p'; };
+	const wkMonth = (m, d) => { const [y, mo] = m.split('-').map(Number), t = new Date(y, mo - 1 + d, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); };
+	const wkName = m => { const [y, mo] = m.split('-').map(Number); return y + '. ' + ['január', 'február', 'március', 'április', 'május', 'június', 'július', 'augusztus', 'szeptember', 'október', 'november', 'december'][mo - 1]; };
+	const wkDay = d => { const t = new Date(d + 'T12:00:00'); return d.slice(5).replace('-', '.') + '. ' + ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'][t.getDay()]; };
+	async function workView(main) {
+		if (!WK.m) { const n = new Date(); WK.m = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+		main.innerHTML = '<div class="kz">' + vsw() + '<div class="wk-h"><button type="button" class="cpx-btn ghost sm" data-wkm="-1" aria-label="Előző hónap">‹</button><b>' + esc(wkName(WK.m)) + '</b><button type="button" class="cpx-btn ghost sm" data-wkm="1" aria-label="Következő hónap">›</button></div>' +
+			'<p class="kz-help">A szelfigépek naplójából: rendezvényenként az első gép indulásától az utolsó leállásáig. A beosztásban véglegesített kezelő kapja (ha még nincs véglegesítve, a „ráér” jelölésű – dőlt betűvel). A napló 2026. 11. 15-től készül.</p><div data-wk><p class="cpx-muted">Betöltés…</p></div></div>';
+		bindVsw(main);
+		main.querySelectorAll('[data-wkm]').forEach(b => b.addEventListener('click', () => { WK.m = wkMonth(WK.m, Number(b.dataset.wkm)); workView(main); }));
+		const box = main.querySelector('[data-wk]'), m0 = WK.m;
+		let r; try { r = await post('cp_booth_work', { m: WK.m }); } catch (e) { box.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; return; }
+		if (m0 !== WK.m || !box.isConnected) return;
+		const row = x => '<tr' + (x.tentative ? ' class="wk-t"' : '') + '><td>' + esc(wkDay(x.day)) + '</td><td class="wk-ev"><a href="#deals:' + Number(x.deal) + '">' + esc(x.title) + '</a></td><td class="wk-n">' + esc(x.from) + '–' + (x.run ? 'most' : esc(x.to)) + '</td><td class="wk-n">' + wkDur(x.min) + '</td></tr>';
+		const tbl = L => '<table class="wk-tb"><thead><tr><th>Nap</th><th>Rendezvény</th><th class="wk-n">Gép ment</th><th class="wk-n">Idő</th></tr></thead><tbody>' + L.map(row).join('') + '</tbody></table>';
+		const P = r.people || [], N = r.none || [];
+		box.innerHTML = (P.length ? '<div class="wk-sum">' + P.map(p => '<span><b>' + esc(p.name) + '</b> ' + wkDur(p.min) + ' · ' + p.rows.length + ' rendezvény</span>').join('') + '</div>' + P.map(p => '<section class="wk-p"><h3>' + esc(p.name) + '<small>' + wkDur(p.min) + '</small></h3>' + tbl(p.rows) + '</section>').join('') : '') +
+			(N.length ? '<section class="wk-p"><h3>Nincs beosztott kezelő<small>' + N.length + ' rendezvény</small></h3>' + tbl(N) + '</section>' : '') +
+			(!P.length && !N.length ? '<p class="cpx-empty">Ebben a hónapban nem futott Crazy Booth gép.</p>' : '');
 	}
 	function ivView(main) {
 		main.innerHTML = '<div class="kz kz-ivv">' + vsw() + '<div class="iv-pg"><div class="iv-b"><div class="cpx-empty">Betöltés…</div></div></div></div>';
@@ -483,7 +508,8 @@
 		S.main = main;
 		const h = S.force || ivHash(); S.force = null;
 		if (h) { S.sub = h.v; if (h.b) IV.focus = h.b; }
-		if (!K.iv) S.sub = 'list';
+		if (!K.iv && S.sub === 'iv') S.sub = 'list';
+		if (S.sub === 'work') { if (location.hash !== '#kezelok:munkaido') history.replaceState(history.state, '', '#kezelok:munkaido'); return workView(main); }
 		if (S.sub === 'iv') { if (location.hash !== '#kezelok:interju') history.replaceState(history.state, '', '#kezelok:interju'); return ivView(main); }
 		/* a jegyzetek változtak: a jelentkezők adatlapja frissen töltődik */
 		if (IV.changed) { IV.changed = false; keep = false; }
@@ -524,6 +550,10 @@
 		'.kz-link{border:0;background:none;color:#2F5BD8;cursor:pointer;font:600 12.5px Inter,sans-serif;text-align:left;white-space:nowrap}.kz-link small{display:block;color:#656973;font-weight:500}' +
 		'.kz-det td{background:#FAF8F5!important}.kz-d{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:8px 6px}.kz-d label{display:block;font-size:12px;color:#656973}.kz-d textarea{width:100%;border:1px solid #E6E3DE;border-radius:8px;padding:6px;font:13px Inter,sans-serif}.kz-d ul{margin:6px 0;padding-left:18px}.kz-d li{margin:3px 0}.kz-chk{display:flex!important;gap:6px;align-items:center;margin:6px 0;color:#141C33!important;font-size:13px!important}.kz-d input[type=checkbox]{width:auto;min-width:0;accent-color:#2F5BD8}.kz-d select{width:auto!important;min-width:150px!important;border:1px solid #E6E3DE!important;background:#fff!important}' +
 		/* v2.9.85: Interjú-időpontok oldal (a fül fő területén), nézetkapcsoló, jegyzet */
+		'.wk-h{display:flex;align-items:center;gap:10px;margin:0 0 6px}.wk-h b{font:700 17px "Plus Jakarta Sans",sans-serif;min-width:9em;text-align:center}' +
+		'.wk-sum{display:flex;flex-wrap:wrap;gap:8px 18px;margin:4px 0 14px;font-size:14px;color:var(--mu)}.wk-sum b{color:var(--n);font-weight:700}' +
+		'.wk-p{margin:0 0 18px}.wk-p h3{display:flex;align-items:baseline;gap:10px;margin:0 0 6px;font-size:15px}.wk-p h3 small{font-weight:600;color:var(--mu);font-variant-numeric:tabular-nums}' +
+		'.wk-tb{width:100%;border-collapse:collapse;font-size:14px}.wk-tb th{text-align:left;font-weight:600;color:var(--mu);font-size:12px;padding:4px 8px 4px 0;border-bottom:1px solid #E7E2DA}.wk-tb td:first-child{white-space:nowrap}.wk-tb td{padding:6px 8px 6px 0;border-bottom:1px solid #F0EBE3;vertical-align:top}.wk-n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.wk-tb th.wk-n{text-align:right}.wk-ev{overflow-wrap:anywhere}.wk-ev a{color:inherit}.wk-t td{font-style:italic;color:var(--mu)}' +
 		'.kz-vs{margin:0 0 10px}.kz-vs a{border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;color:var(--mu);text-decoration:none;white-space:nowrap}.kz-vs a.on{background:var(--n);color:#fff}.kz-vs a:not(.on):hover{color:var(--n)}.kz-vs a:focus-visible,.iv-rb:focus-visible,.iv-np:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}' +
 		'.iv-pg{max-width:900px}.iv-b{padding:2px 0 12px}.iv-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.iv-sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}.iv-sw input{width:18px;height:18px;accent-color:#2E7D32}.iv-sum{font-size:13px;color:#656973}' +
 		'.iv-link{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.iv-link input{flex:1;min-width:200px;border:1px solid #E6E3DE;border-radius:8px;padding:8px 10px;font:13px Inter,sans-serif;background:#FAF8F5}.iv-warn{background:#FFF4E5;color:#8A4B08;border-radius:10px;padding:8px 10px;font-size:13px;margin:0 0 10px}' +
