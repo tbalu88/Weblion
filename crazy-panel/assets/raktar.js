@@ -29,7 +29,7 @@
 	function status(s) { if (!s) return; s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function load() {
 		try { S.d = await post('cp_wh_data', {}); S.err = ''; } catch (e) { S.err = e.message; }
-		draw();
+		draw(); deepOpen();
 	}
 	function view(main) {
 		css(); S.main = main;
@@ -80,6 +80,7 @@
 		const types = (S.d.items || []).filter(i => i.kind === 'asset' && (!S.cat || i.cat === S.cat));
 		if (!types.length) return '<div class="rk-empty"><p><b>Még nincs eszköz.</b> Vedd fel a gépeket, kamerákat, nyomtatókat sorozatszámmal – így látszik, melyik hol van, és melyik rendezvényen volt.</p><button type="button" class="cpx-btn sm" data-rnew2="asset">+ Első eszköz felvétele</button></div>';
 		const ST = S.d.status || {}, D = S.d.deals || {};
+		const bulk = (S.d.units || []).length ? '<div class="rk-bar"><button type="button" class="cpx-btn ghost sm" data-rqrall>QR-címkék nyomtatása…</button><span>A kód telefonnal beolvasva a panelben ezt az eszközt nyitja meg.</span></div>' : '';
 		const out = types.map(t => {
 			const U = (S.d.units || []).filter(u => u.item_id === t.id && hit(t.name, u.label, u.serial, u.model, u.loc, u.qr));
 			if (!U.length && S.q) return '';
@@ -91,10 +92,10 @@
 						'<td class="rk-sn" data-l="Sorozatszám">' + (u.serial ? esc(u.serial) : '<span class="cpx-muted">–</span>') + '</td>' +
 						'<td>' + esc(u.loc || '–') + (u.deal_id && D[u.deal_id] ? '<small><a href="#deals:' + u.deal_id + '">' + esc(D[u.deal_id].t) + '</a></small>' : '') + '</td>' +
 						'<td><span class="rk-chip ' + (u.status === 'ok' ? (svc ? 'mid' : 'ok') : u.status === 'svc' || u.status === 'bad' ? 'mid' : 'bad') + '">' + esc(svc && u.status === 'ok' ? 'szerviz esedékes' : ST[u.status] || u.status) + '</span></td>' +
-						'<td class="rk-a"><button type="button" class="rk-lnk" data-rumv="' + u.id + '">' + (u.loc === S.d.ev ? 'Visszavétel' : 'Kiadás / áthelyezés') + '</button><button type="button" class="rk-lnk" data-rhist="' + u.id + '">Előzmények</button></td></tr>';
+						'<td class="rk-a"><button type="button" class="rk-lnk" data-rqr="' + u.id + '">QR</button><button type="button" class="rk-lnk" data-rumv="' + u.id + '">' + (u.loc === S.d.ev ? 'Visszavétel' : 'Kiadás / áthelyezés') + '</button><button type="button" class="rk-lnk" data-rhist="' + u.id + '">Előzmények</button></td></tr>';
 				}).join('') + '</tbody></table>' : '<p class="cpx-muted rk-pad">Ebből a típusból még nincs darab. <button type="button" class="rk-lnk" data-raddu="' + t.id + '">+ Darab felvétele</button></p>') + '</section>';
 		}).join('');
-		return out || '<p class="cpx-empty">Nincs találat.</p>';
+		return bulk + (out || '<p class="cpx-empty">Nincs találat.</p>');
 	}
 	/* ---- Mozgások */
 	async function drawMoves(body) {
@@ -121,6 +122,8 @@
 		if (b.dataset.rumv) { const u = unit(b.dataset.rumv); return moveForm(item(u.item_id), u, u.loc === S.d.ev ? 'back' : 'move'); }
 		if (b.dataset.rhist) { const u = unit(b.dataset.rhist); S.mf = { unit_id: u.id, label: (u.label || '') + (u.serial ? ' (' + u.serial + ')' : '') }; S.sub = 'moves'; view(S.main); return; }
 		if (b.hasAttribute('data-rmfx')) { S.mf = null; draw(); }
+		if (b.dataset.rqr) return qrOne(unit(b.dataset.rqr));
+		if (b.hasAttribute('data-rqrall')) return qrPick();
 	}
 	/* ---- párbeszédablak */
 	function dlg(title, html, onSave, saveTxt) {
@@ -202,6 +205,68 @@
 		dlg('Helyek', '<p class="rk-hint">Soronként egy hely. Az <b>első</b> a fő raktár: ide kerül a beérkezés és az új eszköz. A „' + esc(S.d.ev) + '” hely automatikus (a kiadott tételeké).</p><textarea name="locs" rows="7" maxlength="1500">' + esc((S.d.locs || []).join('\n')) + '</textarea>',
 			async f => { await post('cp_wh_locs', { locs: val(f, 'locs') }); return 'Helyek mentve.'; });
 	}
+	/* ---- QR-kódok (v2.9.260): eszközönként címke; beolvasva a panel ezt az eszközt nyitja meg (#raktar:e:<kód>) */
+	const SRC = (document.currentScript && document.currentScript.src) || '';
+	let qrP = null;
+	function qrLib() {
+		if (window.qrcode) return Promise.resolve();
+		if (!qrP) qrP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = SRC.replace(/raktar\.js(\?.*)?$/, 'qrcode.min.js$1'); sc.onload = res; sc.onerror = () => { qrP = null; rej(new Error('A QR-kód készítője nem töltődött be.')); }; document.head.appendChild(sc); });
+		return qrP;
+	}
+	const uUrl = u => location.origin + location.pathname + '#raktar:e:' + u.qr;
+	const uName = u => { const t = item(u.item_id); return u.label || (t ? t.name : 'Eszköz'); };
+	function qrMake(u) { const q = window.qrcode(0, 'M'); q.addData(uUrl(u)); q.make(); return q; }
+	const qrSvg = (q, size) => q.createSvgTag({ cellSize: Math.max(1, Math.floor(size / (q.getModuleCount() + 4))), margin: 2 }).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+	function deepOpen() {
+		const m = /^#raktar:e:([A-Z0-9]{4,12})$/i.exec(location.hash); if (!m || !S.d) return;
+		history.replaceState(history.state, '', '#raktar');
+		const u = (S.d.units || []).find(x => String(x.qr).toUpperCase() === m[1].toUpperCase());
+		if (!u) { toast('Ez a QR-kód nem tartozik egyik eszközhöz sem (' + m[1] + ').', true); return; }
+		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitForm(u), 50);
+	}
+	async function qrOne(u) {
+		if (!u) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
+		const q = qrMake(u), t = item(u.item_id);
+		const ov = document.createElement('div'); ov.className = 'rk-ov';
+		ov.innerHTML = '<div class="rk-dlg rk-qrd" role="dialog" aria-modal="true" aria-label="QR-kód"><h3>' + esc(uName(u)) + '</h3><div class="rk-qr" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 240) + '</div>' +
+			'<p class="rk-hint">' + esc([t && t.name !== uName(u) ? t.name : '', u.serial ? 'S/N ' + u.serial : '', 'Kód: ' + u.qr].filter(Boolean).join(' · ')) + '</p>' +
+			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
+		document.body.appendChild(ov);
+		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
+		document.addEventListener('keydown', k);
+		ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-qx]')) close(); else if (e.target.closest('[data-qpng]')) qrPng(u, q); else if (e.target.closest('[data-qprint]')) qrPrint([u]); });
+		ov.querySelector('[data-qprint]').focus();
+	}
+	function qrPng(u, q) {
+		const n = q.getModuleCount(), W = 900, cell = Math.floor(560 / n), qs = cell * n, ox = Math.round((W - qs) / 2), oy = 50, t = item(u.item_id);
+		const c = document.createElement('canvas'); c.width = W; c.height = oy + qs + 210; const g = c.getContext('2d');
+		g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#111';
+		for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect(ox + k * cell, oy + r * cell, cell, cell);
+		g.textAlign = 'center'; g.fillStyle = '#141C33';
+		let fs = 44; const nm = uName(u); do { g.font = '700 ' + fs + 'px Inter, "Segoe UI", sans-serif'; fs -= 2; } while (g.measureText(nm).width > W - 80 && fs > 18);
+		g.fillText(nm, W / 2, oy + qs + 70);
+		g.font = '500 28px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#4A5060'; g.fillText([u.serial ? 'S/N ' + u.serial : (t ? t.name : ''), 'Kód: ' + u.qr].filter(Boolean).join('  ·  '), W / 2, oy + qs + 125);
+		c.toBlob(b => { if (!b) { toast('A PNG nem készült el.', true); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'eszkoz-qr-' + u.qr + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }, 'image/png');
+	}
+	/* A4-es címkelap: 3 × 8 címke (70 × 37 mm), a kiválasztott eszközökről */
+	async function qrPrint(U) {
+		if (!U.length) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
+		const w = window.open('', '_blank'); if (!w) { toast('A böngésző letiltotta az új ablakot – engedélyezd a felugró ablakot a panelnek.', true); return; }
+		const lab = u => { const t = item(u.item_id); return '<div class="l"><div class="q">' + qrSvg(qrMake(u), 120) + '</div><div class="t"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>' + esc(u.qr) + ' · EventCrazy</small></div></div>'; };
+		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Eszköz QR-címkék (' + U.length + ' db)</title><style>@page{size:A4;margin:12mm 0 0 0}body{margin:0;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#141C33}' +
+			'.p{display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:37mm;justify-content:center}.l{box-sizing:border-box;display:flex;align-items:center;gap:2.5mm;padding:2.5mm 3mm;overflow:hidden;break-inside:avoid;outline:.2mm dashed #ccc}' +
+			'.q{flex:none;width:28mm;height:28mm}.q svg{width:100%;height:100%;display:block}.t{display:flex;flex-direction:column;gap:.6mm;min-width:0}.t b{font-size:9.5pt;line-height:1.15;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
+			'.t span{font-size:7.5pt;color:#333;overflow-wrap:anywhere}.t small{font-size:7pt;color:#666;letter-spacing:.04em}@media print{.l{outline:0}.no{display:none}}.no{text-align:center;padding:10px;font-size:14px}</style></head><body>' +
+			'<p class="no">' + U.length + ' címke · A4, 3 × 8 címke (70 × 37 mm) – nyomtatás: Ctrl+P / ⌘P, méretezés: 100% („Tényleges méret”).</p><div class="p">' + U.map(lab).join('') + '</div><script>setTimeout(function(){window.print()},400)<\/script></body></html>');
+		w.document.close();
+	}
+	function qrPick() {
+		const types = (S.d.items || []).filter(i => i.kind === 'asset'), U = S.d.units || [];
+		const f = dlg('QR-címkék nyomtatása', '<p class="rk-hint" style="margin-top:0">Jelöld ki, melyik eszközökről kérsz címkét (A4-es lap, 3 × 8 címke).</p><label class="rk-ck"><input type="checkbox" data-qa checked> Mind</label><div class="rk-qpl">' +
+			types.map(t => { const L = U.filter(u => u.item_id === t.id && u.status !== 'gone'); return L.length ? '<fieldset><legend>' + esc(t.name) + '</legend>' + L.map(u => '<label class="rk-ck"><input type="checkbox" name="u" value="' + u.id + '" checked> ' + esc(u.label || t.name) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + '</label>').join('') + '</fieldset>' : ''; }).join('') + '</div>',
+			async f2 => { const ids = Array.from(f2.querySelectorAll('[name=u]:checked')).map(x => Number(x.value)); if (!ids.length) throw new Error('Jelölj ki legalább egy eszközt.'); await qrPrint(U.filter(u => ids.includes(u.id))); return ''; }, 'Címkelap megnyitása');
+		f.querySelector('[data-qa]').addEventListener('change', e => f.querySelectorAll('[name=u]').forEach(x => { x.checked = e.target.checked; }));
+	}
 	let cssDone = false;
 	function css() {
 		if (cssDone) return; cssDone = true;
@@ -225,6 +290,8 @@
 			'.rk-ck{display:flex;align-items:center;gap:8px;font-size:14px}.rk-hint{font-size:12.5px;color:var(--mu);margin:10px 0 0}.rk-err{color:#B3261E;font-size:13px;margin:8px 0 0;min-height:1em}.rk-db{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}' +
 			'.rk-dl{display:flex;flex-direction:column;max-height:180px;overflow:auto}.rk-dl button{border:0;border-bottom:1px solid #F0EBE3;background:#fff;text-align:left;padding:7px 4px;cursor:pointer;font:inherit}.rk-dl button:hover{background:#FAF8F5}.rk-dl b{display:block;font-weight:600;font-size:13.5px;overflow-wrap:anywhere}.rk-dl small{color:var(--mu);font-size:12px}' +
 			'[data-rbody] [hidden],.rk-dlg [hidden]{display:none!important}' +
+			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(380px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +
+			'.rk-qpl{max-height:46vh;overflow:auto;margin-top:8px}.rk-qpl fieldset{border:0;padding:0;margin:0 0 10px}.rk-qpl legend{font:600 12.5px Inter,sans-serif;color:var(--mu);padding:0;margin-bottom:4px}.rk-qpl .rk-ck{padding:3px 0}.rk-qpl small{color:var(--mu)}' +
 			'@media (max-width:640px){.rk-g2{grid-template-columns:1fr}.rk-t thead{display:none}.rk-t,.rk-t tbody,.rk-t tr,.rk-t td{display:block;width:auto}.rk-t tr{padding:8px 4px;border-bottom:1px solid #F0EBE3}.rk-t td{border:0;padding:2px 8px;text-align:left}.rk-n,.rk-a{text-align:left}.rk-a{white-space:normal}.rk-a .rk-lnk{padding-left:0;margin-right:12px}.rk-t td[data-l]::before{content:attr(data-l) ": ";color:var(--mu);font-size:12.5px}.rk-seg{width:100%}.rk-seg button{flex:1}}';
 		document.head.appendChild(st);
 	}
