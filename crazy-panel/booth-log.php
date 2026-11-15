@@ -164,3 +164,33 @@ function cp_blog_admin() {
 	foreach (cp_pu_data()['list'] as $uid => $u) { if (empty($u['a'])) { continue; } echo '<label style="display:block;margin:4px 0"><input type="checkbox" name="to[]" value="' . (int) $uid . '"' . (in_array((int) $uid, $to, true) ? ' checked' : '') . '> ' . esc_html($u['n']) . '</label>'; }
 	echo '<p class="description">Mindenki a saját Beállítások → Értesítések oldalán is kikapcsolhatja (csengő / telefon / Pumble külön).</p><p><button class="button button-primary">Mentés</button></p></form>';
 }
+
+/* v2.9.257: a deal idővonala (Szelfigép kártya → Idővonal): munkamenetek gépenként, események, 5 perces összesítők, fotók 15 percenként */
+add_action('wp_ajax_nopriv_cp_booth_log', 'cp_booth_ajax_log'); add_action('wp_ajax_cp_booth_log', 'cp_booth_ajax_log');
+function cp_booth_ajax_log() {
+	cp_crm_ajax_guard(array('deals'));
+	$deal = (int) ($_POST['deal'] ?? 0); if (!$deal) { cp_el_err('Hiányzó deal.', 400); }
+	wp_send_json_success(cp_blog_timeline($deal));
+}
+function cp_blog_timeline($deal) {
+	$devs = function_exists('cp_booth_devs') ? cp_booth_devs() : array();
+	$nm = function ($d) use ($devs) { return isset($devs[$d]['name']) ? (string) $devs[$d]['name'] : 'ismeretlen gép'; };
+	$loc = function ($t) { return get_date_from_gmt($t, 'Y-m-d H:i'); };
+	$ev = array(); $ses = array(); $sum = array(); $st = array();
+	foreach (cp_blog_rows($deal) as $r) {
+		$d = $r['dev']; $tl = $loc($r['t']);
+		if ($r['kind'] === 'start') { $st[$d] = $tl; $ev[] = array($tl, $nm($d), 'start', $r['info'] !== '' ? 'program ' . $r['info'] : ''); }
+		elseif ($r['kind'] === 'stop') { $ses[] = array($nm($d), $st[$d] ?? '', $tl, (int) $r['info']); unset($st[$d]); $ev[] = array($tl, $nm($d), 'stop', ''); }
+		elseif ($r['kind'] === 'sum') { $j = json_decode($r['info'], true); if (is_array($j)) { $sum[] = array($tl, $nm($d), (int) ($j['p'] ?? 0), $j['pa'] ?? null, (int) ($j['q'] ?? 0), (int) ($j['net'] ?? 1)); } }
+		else { $ev[] = array($tl, $nm($d), $r['kind'], $r['info']); }
+	}
+	/* a még futó gépek (nincs leállás) */
+	foreach (cp_blog_open() as $d => $x) { if ((int) $x['deal'] === $deal && isset($st[$d])) { $ses[] = array($nm($d), $st[$d], $loc(gmdate('Y-m-d H:i:s', (int) $x['l'])), (int) $x['l'] - (int) $x['s'], 1); } }
+	/* fotók 15 percenként a galériából */
+	$q = array();
+	if (function_exists('cp_booth_gal_has') && cp_booth_gal_has($deal)) {
+		$g = cp_booth_gal_api('GET', cp_booth_gal_tok($deal), null, 8);
+		if (!is_wp_error($g)) { foreach ((array) ($g['photos'] ?? array()) as $p) { $l = get_date_from_gmt((string) $p['created_at'], 'Y-m-d H:i'); $k = substr($l, 0, 14) . str_pad((string) (intdiv((int) substr($l, 14, 2), 15) * 15), 2, '0', STR_PAD_LEFT); $q[$k] = ($q[$k] ?? 0) + 1; } ksort($q); }
+	}
+	return array('events' => $ev, 'sessions' => $ses, 'sums' => $sum, 'q15' => $q);
+}

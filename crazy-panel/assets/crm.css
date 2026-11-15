@@ -934,3 +934,10 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .bt-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
 .bt-dr{display:flex;flex-direction:column;gap:12px}.bt-win{min-height:90px;text-align:center}.bt-n{margin:0;color:#B85A1C;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:12px}
 .bt-w{margin:4px 0;font-size:26px;font-weight:800;color:#141C33;overflow-wrap:anywhere}
+
+/* v2.9.257: szelfigép-idővonal */
+.bt-tl h5{margin:16px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#8A90A0}.bt-h15{height:72px}.bt-h15 div{min-width:4px}
+.bt-ml.bt-ses li{grid-template-columns:minmax(0,1fr)}.bt-ses li span{grid-column:1;font-variant-numeric:tabular-nums}
+.bt-ev{list-style:none;margin:0;padding:0;max-height:46vh;overflow:auto}.bt-ev li{display:grid;grid-template-columns:3.2em minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid #EFEAE2;font-size:14px}
+.bt-ev time{font-variant-numeric:tabular-nums;color:#5B6275}.bt-ev b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.bt-ev span{grid-column:2;overflow-wrap:anywhere}
+.bt-ev .bt-e-err span,.bt-ev .bt-e-cam_off span{color:#B3261E}.bt-ev .bt-e-start span,.bt-ev .bt-e-cam_on span{color:#1E7A3A}

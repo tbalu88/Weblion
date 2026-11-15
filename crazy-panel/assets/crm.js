@@ -126,6 +126,7 @@
 			'<p class="bt-b"><button type="button" class="d3-galcp" data-bcfg="' + Number(x.deal.id) + '">Beállítások a gépekre' + (b.cfg ? ' ✓' : '') + '</button>' +
 			(s ? '<button type="button" class="d3-galcp" data-brep="' + Number(x.deal.id) + '">Ügyfélriport</button>' : '') +
 			(x.guests ? '<button type="button" class="d3-galcp" data-bdraw="' + Number(x.deal.id) + '">Sorsolás</button>' : '') +
+			(b.seen || s || b.machines.length ? '<button type="button" class="d3-galcp" data-blog="' + Number(x.deal.id) + '">Idővonal</button>' : '') +
 			(b.show ? '<a class="d3-galcp" href="' + esc(b.show) + '" target="_blank" rel="noopener" title="TV-n / projektoron: a fotók élőben">Diavetítés ↗</a>' : '') + '</p>' +
 			(b.cfg ? '<p class="cpx-muted bt-cf">A gépek a panelből kapják a beállításokat' + (b.cfg_by ? ' (' + esc(b.cfg_by) + ')' : '') + ' – a rendezvényre állított gépek legfeljebb egy percen belül átveszik.</p>' : '') + '</section>';
 	}
@@ -178,6 +179,24 @@
 			'<p class="mu">Köszönjük, hogy minket választottatok!</p><button onclick="window.print()">Nyomtatás / mentés PDF-be</button></body></html>');
 		w.document.close();
 	}
+	/* v2.9.257: a rendezvény idővonala (a gépek naplójából): munkamenetek, fotók 15 percenként, események */
+	async function boothLog(deal) {
+		const box = sheet(sheetHead('Idővonal – szelfigép') + '<div class="bt-tl" data-btl><p class="cpx-muted">Betöltés…</p></div>');
+		if (!box) return;
+		box.querySelector('[data-close]').addEventListener('click', hideModal);
+		const el = box.querySelector('[data-btl]');
+		let r; try { r = await post('cp_booth_log', { deal }); } catch (e) { el.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; return; }
+		const hm = t => String(t || '').slice(11, 16), dur = sec => { const m = Math.round(sec / 60); return m >= 60 ? Math.floor(m / 60) + ' ó ' + (m % 60) + ' p' : m + ' p'; };
+		const lbl = { start: 'elindult', stop: 'leállt (10 perce nem jelentkezik)', err: 'hiba', cam_off: 'a kamera nem ad képet', cam_on: 'a kamera újra működik' };
+		const ses = (r.sessions || []).map(z => '<li><b>' + esc(z[0]) + '</b><span>' + esc(hm(z[1]) + '–' + (z[4] ? 'most' : hm(z[2]))) + ' · ' + esc(dur(z[3])) + (z[4] ? ' · fut' : '') + '</span></li>').join('');
+		const q = Object.entries(r.q15 || {}), mx = Math.max(1, ...q.map(v => v[1]));
+		const gr = q.length > 1 ? '<h5>Fotók 15 percenként</h5><div class="bt-h bt-h15">' + q.map(v => '<div title="' + esc(hm(v[0]) + ': ' + v[1] + ' fotó') + '"><i style="height:' + Math.max(4, Math.round(v[1] / mx * 100)) + '%"></i><small>' + (v[0].slice(14, 16) === '00' ? esc(hm(v[0]).slice(0, 2)) : '') + '</small></div>').join('') + '</div>' : '';
+		const last = {}; (r.sums || []).forEach(z => { last[z[1]] = z; });
+		const pap = Object.values(last).filter(z => z[3] != null).map(z => esc(z[1]) + ': ' + z[3] + ' lap maradt (' + esc(hm(z[0])) + ')').join(' · ');
+		const ev = (r.events || []).map(z => '<li class="bt-e-' + esc(z[2]) + '"><time>' + esc(hm(z[0])) + '</time><b>' + esc(z[1]) + '</b><span>' + esc(lbl[z[2]] || z[2]) + (z[3] ? ': ' + esc(z[3]) : '') + '</span></li>').join('');
+		el.innerHTML = (ses ? '<h5>Gépek működése</h5><ul class="bt-ml bt-ses">' + ses + '</ul>' : '<p class="cpx-muted">Ehhez a rendezvényhez még nincs gépnapló (a napló 2026. 11. 15-től készül).</p>') + gr +
+			(pap ? '<p class="cpx-muted">Papír: ' + pap + '</p>' : '') + (ev ? '<h5>Események</h5><ol class="bt-ev">' + ev + '</ol>' : '');
+	}
 	async function boothDraw(deal) {
 		const box = sheet(sheetHead('Sorsolás a szelfigép vendégei közül') + '<div class="bt-dr" data-bdr><p class="cpx-muted">Akik a gépen megadták a nevüket vagy az e-mail-címüket. Egy vendég egyszer nyerhet.</p><div class="bt-win" data-bwin></div><div class="gm-b"><button type="button" class="cpx-btn sm" data-bgo>Sorsolás</button><button type="button" class="cpx-btn ghost sm" data-breset>Újrakezdés</button></div></div>');
 		if (!box) return;
@@ -213,6 +232,7 @@
 		sh.querySelectorAll('[data-bcfg]').forEach(b => b.addEventListener('click', () => boothCfg(Number(b.dataset.bcfg), D3.ctx && D3.ctx.x && D3.ctx.x.booth ? D3.ctx.x.booth.cfg : null)));
 		sh.querySelectorAll('[data-brep]').forEach(b => b.addEventListener('click', () => { if (D3.ctx && D3.ctx.x) boothReport(D3.ctx.x); }));
 		sh.querySelectorAll('[data-bdraw]').forEach(b => b.addEventListener('click', () => boothDraw(Number(b.dataset.bdraw))));
+		sh.querySelectorAll('[data-blog]').forEach(b => b.addEventListener('click', () => boothLog(Number(b.dataset.blog))));
 		/* v2.9.244: vendégadatok letöltése (CSV, Excelben nyitható) */
 		sh.querySelectorAll('[data-guestcsv]').forEach(b => b.addEventListener('click', async () => {
 			try { const r = await post('cp_booth_guests', { deal: Number(b.dataset.guestcsv) }); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' })); a.download = 'vendegek-' + b.dataset.guestcsv + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast(r.n + ' vendég letöltve.'); }

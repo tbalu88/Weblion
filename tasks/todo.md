@@ -45,7 +45,7 @@
 ## Felügyelet, eszközök, szervezői nézet (2026-11-15 – terv: tasks/plan.md vége)
 - [x] F1 Riasztás, ha a gép nem jelentkezik kezdés előtt
 - [x] F2 Eseménynapló (beat → tábla) – 2.9.256 élesítve
-- [ ] F3 Rendezvény-idővonal a dealen
+- [x] F3 Rendezvény-idővonal a dealen – 2.9.257 élesítve
 - [ ] F4 Kezelői munkaidő
 - [ ] Ellenőrzőpont: F1–F4 élesítve
 - [ ] F5 Eszköznapló + sorozatszámok (0.13.0) + számlálók

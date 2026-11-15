@@ -473,7 +473,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	foreach (cp_booth_devs() as $did => $dv) { if ($did === 'panel') { continue; } $b = cp_booth_beat_get($did); if ($b && (int) $b['deal'] === $id && time() - (int) $b['t'] < 12 * HOUR_IN_SECONDS) { $b['ago'] = time() - (int) $b['t']; $m[] = $b; } }
 	$p = get_option('cp_booth_prints', array()); $prints = is_array($p) && isset($p[(string) $id]) ? array_sum(array_map('intval', $p[(string) $id])) : 0;
 	$c = cp_booth_dcfg_get($id);
-	$x['booth'] = array('machines' => $m, 'cfg' => $c ? $c['cfg'] : null, 'cfg_at' => $c ? (int) $c['at'] : 0, 'cfg_by' => $c ? (string) ($c['by'] ?? '') : '', 'prints' => $prints, 'stats' => cp_booth_stats($id),
+	$x['booth'] = array('machines' => $m, 'cfg' => $c ? $c['cfg'] : null, 'cfg_at' => $c ? (int) $c['at'] : 0, 'cfg_by' => $c ? (string) ($c['by'] ?? '') : '', 'prints' => $prints, 'stats' => cp_booth_stats($id), 'seen' => (function () use ($id) { $v = get_option('cp_booth_seen', array()); return is_array($v) && !empty($v[(string) $id]); })(),
 		'show' => cp_booth_gal_has($id) ? cp_booth_gal_url($id) . '?vetites=1' : '', 'station' => cp_booth_gal_has($id) ? cp_booth_gal_url($id) . '?allomas=1' : '');
 	return $x;
 }, 24);
