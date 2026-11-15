@@ -202,3 +202,29 @@ iPhone-app a 360-as platform karjára: jó minőségű felvétel (0,5× nagylát
 - F7 Szervezői élő nézet (link a dealen, galéria-oldal ?szervezo=…).
 - Ellenőrzőpont: 0.13.0 kiadás, útmutató, memória.
 - Raktár modul: javaslatok a felhasználónak (külön kérte), fejlesztés csak jóváhagyás után.
+
+## Raktár modul (2026-11-15 – a felhasználó mind a 12 javaslatot kérte)
+
+### Döntések
+- Új panel-menüpont: **Raktár** (raktar.php + assets/raktar.js/css), saját táblák (prefix `cp_wh_`):
+  `items` (cikk: fogyóanyag vagy eszköztípus; egység, minimum, ár, szállító, cikkszám, papírfogyás-szorzó),
+  `units` (egyedi eszköz: cikk, sorozatszám, név/címke, hely, állapot, QR-kód, számláló, szervizhatár),
+  `moves` (mozgás: be / ki / vissza / selejt / korrekció / áthelyezés; cikk vagy eszköz, mennyiség, deal, hely, ki, mikor, megjegyzés),
+  `res` (foglalás: deal, nap-tól–ig, cikk + mennyiség vagy eszköz), `po` + `po_lines` (beszerzés: rendelve / beérkezett, ár).
+- Az eszköznapló (F5) = a raktár eszközei: a gépek által jelentett sorozatszám a `units` sorához kapcsolódik (ha nincs, „ismeretlen eszköz” jelzés → egy kattintással felvehető).
+- Készlet = mozgások összege helyenként (nem külön mező) → mindig visszakövethető.
+- Papírfogyás: a rendezvény után (gépnapló: nyomatszám) automatikus „ki” mozgás a beállított cikkekből (papír, festékszalag), a deal-hez kötve; kézzel javítható.
+- QR: a panel nyomtat címkét (A4 lap); telefonon a panel beolvasója (BarcodeDetector, ha nincs: kézi kód).
+- Pénz: csak nyilvántartás (ár, költség a dealen), számlát nem hoz létre.
+
+### Feladatok
+- R1 Cikktörzs + eszközök (lista, szerkesztés, keresés) – UI előtt impeccable
+- R2 Mozgások + helyek + készlet helyenként
+- R3 Foglalás dealre (pakolási lista sablonnal szolgáltatásonként) + ütközésfigyelés
+- R4 QR-címkék + kiadás / visszavétel telefonnal (hiányzó tétel jelzése)
+- R5 Automatikus papírfogyás a gépnaplóból
+- R6 Minimumkészlet + rendelési javaslat (2–4 hét foglalásai)
+- R7 Szerviz (számlálók, határok; szervizben lévő nem foglalható) – F5-tel együtt
+- R8 Leltár mód
+- R9 Anyagköltség a dealen + Elemzés
+- R10 Beszerzések

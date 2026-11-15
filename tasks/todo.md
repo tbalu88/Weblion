@@ -52,3 +52,15 @@
 - [ ] F6 Mosoly/taps kioldás (kapcsolóval)
 - [ ] F7 Szervezői élő nézet
 - [ ] Ellenőrzőpont: 0.13.0 kiadás
+
+## Raktár modul (terv: tasks/plan.md vége)
+- [ ] R1 Cikktörzs + eszközök
+- [ ] R2 Mozgások + helyek
+- [ ] R3 Foglalás + pakolási lista + ütközés
+- [ ] R4 QR kiadás/visszavétel
+- [ ] R5 Automatikus papírfogyás
+- [ ] R6 Rendelési javaslat
+- [ ] R7 Szerviz (+F5)
+- [ ] R8 Leltár
+- [ ] R9 Anyagköltség a dealen
+- [ ] R10 Beszerzések
