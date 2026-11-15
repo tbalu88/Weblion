@@ -16,13 +16,16 @@
     <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
     <div class="warn" data-warn hidden></div>
     <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
-    <button type="button" class="evbtn" data-act="ev" title="Expozíció (világosság)">☀ <span data-evval>0 EV</span></button>
+    <button type="button" class="evbtn" data-act="ev" title="Kamerabeállítás élőképpel">☀ <span data-evval>Kamera</span></button>
     <div class="evp" data-evp hidden>
       <div class="evp-in">
         <div class="evp-lv"><video data-evv autoplay muted playsinline></video><img data-evimg alt=""></div>
-        <div class="evp-row"><button type="button" class="big ghost" data-act="evdn">− 0,5</button><b data-evcur>0 EV</b><button type="button" class="big ghost" data-act="evup">+ 0,5</button></div>
-        <p class="evp-msg" data-evmsg></p>
-        <button type="button" class="big" data-act="evclose">Kész</button>
+        <div class="evp-side">
+          <h3>Kamerabeállítás</h3>
+          <div class="evp-rows" data-evrows></div>
+          <p class="evp-msg" data-evmsg></p>
+          <button type="button" class="big" data-act="evclose">Kész</button>
+        </div>
       </div>
     </div>
   </section>

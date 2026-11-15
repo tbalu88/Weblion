@@ -51,7 +51,7 @@
       if (S.cfg.camId && e.name === 'OverconstrainedError') { delete v.deviceId; S.stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false }).catch(() => null); }
       if (!S.stream) throw new Error(e.name === 'NotAllowedError' ? 'Nincs engedély a kamerához – Macen: Rendszerbeállítások → Adatvédelem és biztonság → Kamera → Crazy Booth bekapcsolása.' : 'A webkamera nem indul (' + (e.message || e.name) + ').');
     }
-    S.streamKey = key;
+    S.streamKey = key; await webApply();
     const st = S.stream.getVideoTracks()[0].getSettings(); B.log('webkamera: ' + (st.width || '?') + '×' + (st.height || '?'));
     return S.stream;
   }
@@ -407,7 +407,7 @@
     else if (act === 'reprint') { reprint(); }
     else if (act === 'evload') { evLoad(); }
     else if (act === 'ev') { e.stopPropagation(); evOpen(); }
-    else if (act === 'evup' || act === 'evdn') { e.stopPropagation(); evStep(act === 'evup' ? 0.5 : -0.5); }
+    else if (act === 'cpdn' || act === 'cpup') { e.stopPropagation(); camStep(a.dataset.k, act === 'cpup' ? 1 : -1); }
     else if (act === 'evclose') { e.stopPropagation(); evClose(); }
     else if (act === 'fs') { e.stopPropagation(); const cur = await B.isFullscreen(); if (cur && cur.ok && cur.v && !U().pinOff) { openSettings('fs'); return; } const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
@@ -1181,38 +1181,110 @@
     /* v0.9: a mentett DSLR-beállítások visszaállítása (ISO, rekesz, záridő…) */
     if (!WEB() && B.camSet && U().camProps) { const r = await camApply(U().camProps); if (r.errs.length) B.log('kamerabeállítás: ' + r.errs.join(' · ')); }
   }
-  /* ---------- gyors expozíció a kezdőképernyőn: DSLR → expozíció-korrekció a kamerán (a legközelebbi támogatott érték),
-   * webkamera → világosítás az élőképen és a fotón (teszthez) */
+  /* ---------- kamerabeállítás élőképpel (kezdőképernyő ☀ gomb)
+   * DSLR (digiCamControl): záridő, ISO, expozíció-korrekció, fehéregyensúly, kézi fehéregyensúly (Kelvin, 0.12-es programtól)
+   * webkamera: amit a kamera tud (záridő, ISO, expozíció, fehéregyensúly / Kelvin); ha semmit, világosítás az élőképen és a fotón */
   const evNum = s => { const m = /^([+-]?\d+(?:[.,]\d+)?)/.exec(String(s).trim()); return m ? Number(m[1].replace(',', '.')) : NaN; };
   const evFmt = n => (n > 0 ? '+' : '') + (Math.round(n * 10) / 10).toString().replace('.', ',') + ' EV';
   const evFilter = () => { const n = WEB() ? Number(U().webEv) || 0 : 0; return n ? 'brightness(' + Math.pow(2, n / 2.2).toFixed(3) + ')' : 'none'; };
-  function evShow(n) { $('[data-evval]').textContent = evFmt(n); $('[data-evcur]').textContent = evFmt(n); const f = evFilter(); [$('[data-video]'), $('[data-evv]')].forEach(x => { if (x) x.style.filter = f === 'none' ? '' : f; }); }
+  function evShow() {
+    const f = evFilter(); [$('[data-video]'), $('[data-evv]')].forEach(x => { if (x) x.style.filter = f === 'none' ? '' : f; });
+    const cp = U().camProps || {}, n = WEB() ? Number(U().webEv) || 0 : evNum(cp.exposurecompensation);
+    $('[data-evval]').textContent = 'Kamera' + (n ? ' · ' + evFmt(n) : '');
+  }
+  const CAM_ROWS = [['shutterspeed', 'Záridő'], ['iso', 'ISO'], ['exposurecompensation', 'Expozíció'], ['whitebalance', 'Fehéregyensúly'], ['temperature', 'Kézi fehéregyensúly']];
+  /* S.cp: { key: { label, values: [..], idx, kind: 'step' | 'select', off } } */
+  function camRows() {
+    const box = $('[data-evrows]'); if (!S.cp) { box.innerHTML = ''; return; }
+    box.innerHTML = Object.entries(S.cp).map(([k, r]) => {
+      const v = r.values[r.idx] != null ? r.values[r.idx] : '–';
+      if (r.kind === 'select') return '<div class="evp-r' + (r.off ? ' off' : '') + '"><span>' + esc(r.label) + '</span><select data-cpsel="' + k + '">' + r.values.map((o, i) => '<option value="' + i + '"' + (i === r.idx ? ' selected' : '') + '>' + esc(r.show ? r.show(o) : o) + '</option>').join('') + '</select></div>';
+      return '<div class="evp-r' + (r.off ? ' off' : '') + '"><span>' + esc(r.label) + '</span><button type="button" data-act="cpdn" data-k="' + k + '"' + (r.idx <= 0 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' le">‹</button><b>' + esc(r.show ? r.show(v) : v) + '</b><button type="button" data-act="cpup" data-k="' + k + '"' + (r.idx >= r.values.length - 1 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' fel">›</button></div>';
+    }).join('');
+  }
+  $('[data-evrows]').addEventListener('change', e => { const sel = e.target.closest('[data-cpsel]'); if (sel) camSet(sel.dataset.cpsel, Number(sel.value)); });
   async function evOpen() {
-    const p = $('[data-evp]'), v = $('[data-evv]'), im = $('[data-evimg]'); p.hidden = false; $('[data-evmsg]').textContent = '';
-    S.evOpen = true;
+    const p = $('[data-evp]'), v = $('[data-evv]'), im = $('[data-evimg]'); p.hidden = false; $('[data-evmsg]').textContent = ''; S.evOpen = true; S.cp = null; camRows();
     if (WEB()) {
-      im.hidden = true; v.hidden = false; evShow(Number(U().webEv) || 0);
-      try { const st = await webStream(); if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); } catch (x) { $('[data-evmsg]').textContent = x.message; }
-      $('[data-evmsg]').textContent = 'Webkamera: a világosítás az élőképre és a fotókra kerül (tesztelésre).';
-      return;
+      im.hidden = true; v.hidden = false;
+      try { const st = await webStream(); if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); } catch (x) { $('[data-evmsg]').textContent = x.message; return; }
+      webRows(); evShow(); return;
     }
     v.hidden = true; im.hidden = false;
-    try { const P = await call(B.camProps), x = (P && P.exposurecompensation) || {}; S.evList = (x.list || []).map(o => ({ o, n: evNum(o) })).filter(o => !isNaN(o.n)).sort((a, b) => a.n - b.n); S.evCur = isNaN(evNum(x.cur)) ? 0 : evNum(x.cur); evShow(S.evCur);
-      if (!S.evList.length) $('[data-evmsg]').textContent = 'A kamera nem adta meg az expozíció-korrekció értékeit (digiCamControl fut?).'; }
-    catch (x) { $('[data-evmsg]').textContent = x.message; }
+    try {
+      const P = await call(B.camProps) || {}; S.cp = {};
+      for (const [k, label] of CAM_ROWS) {
+        const x = P[k] || {}; let vals = (x.list || []).slice();
+        if (!vals.length) continue;
+        if (k === 'exposurecompensation' || k === 'temperature') vals = vals.map(o => ({ o, n: evNum(o) })).filter(o => !isNaN(o.n)).sort((a, b) => a.n - b.n).map(o => o.o);
+        const idx = Math.max(0, vals.indexOf(x.cur));
+        S.cp[k] = { label, values: vals, idx, kind: k === 'whitebalance' ? 'select' : 'step' };
+      }
+      if (S.cp.temperature) S.cp.temperature.off = !/kelvin/i.test((S.cp.whitebalance && S.cp.whitebalance.values[S.cp.whitebalance.idx]) || '');
+      if (!Object.keys(S.cp).length) $('[data-evmsg]').textContent = 'A kamera nem adott beállítási értékeket (fut a digiCamControl, be van kötve a gép?).';
+      else if (!P.temperature) $('[data-evmsg]').textContent = 'Kézi fehéregyensúly (Kelvin): a 0.12-es programtól.';
+      camRows();
+    } catch (x) { $('[data-evmsg]').textContent = x.message; }
     try { await call(B.liveStart); const tick = async () => { if (!S.evOpen) return; try { const f = await call(B.liveFrame); if (f) im.src = f; } catch (x) { /* következő */ } setTimeout(tick, 150); }; tick(); } catch (x) { $('[data-evmsg]').textContent = 'Élőkép: ' + x.message; }
   }
-  async function evStep(d) {
-    if (WEB()) { const n = Math.max(-3, Math.min(3, (Number(U().webEv) || 0) + d)); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webEv: n }) })); evShow(n); return; }
-    if (!S.evList || !S.evList.length) return;
-    const want = S.evCur + d, cands = S.evList.filter(o => d > 0 ? o.n > S.evCur + 0.01 : o.n < S.evCur - 0.01);
-    if (!cands.length) { $('[data-evmsg]').textContent = 'Elérted a kamera határát.'; return; }
-    const pick = cands.reduce((a, b) => Math.abs(b.n - want) < Math.abs(a.n - want) ? b : a);
-    $('[data-evmsg]').textContent = 'Beállítás…';
-    try { await call(B.camSet, 'exposurecompensation', pick.o); S.evCur = pick.n; evShow(pick.n);
-      S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { camProps: Object.assign({}, U().camProps || {}, { exposurecompensation: pick.o }) }) }));
-      $('[data-evmsg]').textContent = 'Kézi (M) módban a korrekció nem hat – ott a záridőt / ISO-t állítsd a Kezelőben.'; }
-    catch (x) { $('[data-evmsg]').textContent = x.message; }
+  function camStep(k, d) { const r = S.cp && S.cp[k]; if (!r) return; const i = r.idx + d; if (i < 0 || i >= r.values.length) return; camSet(k, i); }
+  async function camSet(k, i) {
+    const r = S.cp[k]; if (!r) return;
+    if (WEB()) { r.idx = i; await r.apply(r.values[i]); camRows(); return; }
+    const val = r.values[i]; $('[data-evmsg]').textContent = 'Beállítás…';
+    try {
+      const saved = Object.assign({}, U().camProps || {});
+      if (k === 'temperature' && S.cp.whitebalance) {   /* a Kelvin csak „Kelvin” fehéregyensúlynál hat: előbb azt kapcsoljuk */
+        const wb = S.cp.whitebalance, ki = wb.values.findIndex(o => /kelvin/i.test(o));
+        if (ki >= 0 && wb.idx !== ki) { await call(B.camSet, 'whitebalance', wb.values[ki]); wb.idx = ki; }
+        if (ki >= 0) { delete saved.whitebalance; saved.whitebalance = wb.values[ki]; }
+      }
+      await call(B.camSet, k, val); r.idx = i;
+      delete saved[k]; saved[k] = val;
+      if (k === 'whitebalance' && S.cp.temperature) S.cp.temperature.off = !/kelvin/i.test(val);
+      if (k === 'temperature') r.off = false;
+      S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { camProps: saved }) }));
+      $('[data-evmsg]').textContent = 'Mentve – induláskor is ez lesz.' + (k === 'exposurecompensation' ? ' Kézi (M) módban a korrekció nem hat.' : '');
+      evShow();
+    } catch (x) { $('[data-evmsg]').textContent = x.message; }
+    camRows();
+  }
+  /* webkamera: a getCapabilities szerint, amit tud; a beállítás a következő indításkor is visszaáll (webApply) */
+  function webRows() {
+    const t = S.stream && S.stream.getVideoTracks()[0], caps = (t && t.getCapabilities && t.getCapabilities()) || {}, cur = (t && t.getSettings && t.getSettings()) || {};
+    const W = Object.assign({}, U().webCam || {}); S.cp = {};
+    const rng = (c, n) => { const out = [], st = c.step || (c.max - c.min) / n; for (let x = c.min; x <= c.max + 1e-9 && out.length < 200; x += st) out.push(Math.round(x * 1000) / 1000); return out; };
+    const near = (vals, x) => vals.reduce((bi, v, i) => Math.abs(v - x) < Math.abs(vals[bi] - x) ? i : bi, 0);
+    const save = async patch => { Object.assign(W, patch); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webCam: W }) })); };
+    const apply = async c => { try { await t.applyConstraints({ advanced: [c] }); $('[data-evmsg]').textContent = 'Mentve.'; } catch (x) { $('[data-evmsg]').textContent = 'A kamera nem fogadta el: ' + x.message; } };
+    if (caps.exposureTime && caps.exposureMode && caps.exposureMode.includes('manual')) {
+      const vals = rng(caps.exposureTime, 40);
+      S.cp.exposureTime = { label: 'Záridő', values: vals, idx: near(vals, W.exposureTime || cur.exposureTime || vals[0]), kind: 'step', show: v => '1/' + Math.round(10000 / v),
+        apply: async v => { await apply({ exposureMode: 'manual', exposureTime: v }); await save({ exposureTime: v }); } };
+    }
+    if (caps.iso) { const vals = rng(caps.iso, 20); S.cp.iso = { label: 'ISO', values: vals, idx: near(vals, W.iso || cur.iso || vals[0]), kind: 'step', apply: async v => { await apply({ exposureMode: 'manual', iso: v }); await save({ iso: v }); } }; }
+    if (caps.exposureCompensation) { const vals = rng(caps.exposureCompensation, 12); S.cp.exposureCompensation = { label: 'Expozíció', values: vals, idx: near(vals, W.exposureCompensation || 0), kind: 'step', show: evFmt, apply: async v => { await apply({ exposureCompensation: v }); await save({ exposureCompensation: v }); } }; }
+    else { const vals = [-3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3]; S.cp.webEv = { label: 'Világosítás', values: vals, idx: near(vals, Number(U().webEv) || 0), kind: 'step', show: evFmt, apply: async v => { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webEv: v }) })); evShow(); } }; }
+    if (caps.whiteBalanceMode && caps.whiteBalanceMode.length > 1) {
+      const modes = caps.whiteBalanceMode.slice(), nm = { continuous: 'Automatikus', manual: 'Kézi (Kelvin)', 'single-shot': 'Egyszeri mérés', none: 'Nincs' };
+      S.cp.wbMode = { label: 'Fehéregyensúly', values: modes, idx: Math.max(0, modes.indexOf(W.wbMode || cur.whiteBalanceMode || 'continuous')), kind: 'select', show: m => nm[m] || m,
+        apply: async m => { await apply({ whiteBalanceMode: m }); await save({ wbMode: m }); if (S.cp.colorTemperature) S.cp.colorTemperature.off = m !== 'manual'; } };
+    }
+    if (caps.colorTemperature) { const vals = rng(caps.colorTemperature, 30); S.cp.colorTemperature = { label: 'Kézi fehéregyensúly', values: vals, idx: near(vals, W.colorTemperature || cur.colorTemperature || 5000), kind: 'step', off: (W.wbMode || cur.whiteBalanceMode) !== 'manual', show: v => Math.round(v) + ' K',
+      apply: async v => { await apply({ whiteBalanceMode: 'manual', colorTemperature: v }); await save({ wbMode: 'manual', colorTemperature: v }); if (S.cp.wbMode) S.cp.wbMode.idx = Math.max(0, S.cp.wbMode.values.indexOf('manual')); S.cp.colorTemperature.off = false; } }; }
+    $('[data-evmsg]').textContent = Object.keys(S.cp).length > 1 ? 'Webkamera: amit ez a kamera állítani enged.' : 'Ez a webkamera nem enged kézi beállítást – a világosítás az élőképre és a fotóra kerül.';
+    camRows();
+  }
+  /* induláskor / új webkamera-kapcsolatnál a mentett webkamera-beállítások */
+  async function webApply() {
+    const t = S.stream && S.stream.getVideoTracks()[0], W = U().webCam; if (!t || !W || !t.applyConstraints) return;
+    const c = {};
+    if (W.exposureTime) { c.exposureMode = 'manual'; c.exposureTime = W.exposureTime; }
+    if (W.iso) { c.exposureMode = 'manual'; c.iso = W.iso; }
+    if (W.exposureCompensation != null) c.exposureCompensation = W.exposureCompensation;
+    if (W.wbMode) c.whiteBalanceMode = W.wbMode;
+    if (W.wbMode === 'manual' && W.colorTemperature) c.colorTemperature = W.colorTemperature;
+    try { await t.applyConstraints({ advanced: [c] }); } catch (x) { B.log('webkamera-beállítás: ' + x.message); }
   }
   async function evClose() { S.evOpen = false; $('[data-evp]').hidden = true; if (!WEB()) { try { await call(B.liveStop); } catch (x) { /* mindegy */ } } }
   const CAMP = [['iso', 'ISO', 'pl. 200'], ['aperture', 'Rekesz (f)', 'pl. 5.6'], ['shutterspeed', 'Záridő', 'pl. 1/125'], ['exposurecompensation', 'Expozíció-korrekció', 'pl. +0.3'], ['whitebalance', 'Fehéregyensúly', 'pl. Auto']];
@@ -1230,8 +1302,8 @@
   }
   async function camApply(vals) {
     const errs = [], good = {};
-    for (const [k, v] of Object.entries(vals || {})) { if (!v) continue; try { await call(B.camSet, k, v); good[k] = v; } catch (e) { errs.push(e.message); } }
+    for (const [k, v] of Object.entries(vals || {})) { if (!v || (k === 'temperature' && !/kelvin/i.test((vals || {}).whitebalance || ''))) continue; try { await call(B.camSet, k, v); good[k] = v; } catch (e) { errs.push(e.message); } }
     return { errs, good };
   }
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); (U().startWindowed ? B.fullscreen(false) : B.isFullscreen()).then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); evShow(WEB() ? Number(U().webEv) || 0 : evNum((U().camProps || {}).exposurecompensation) || 0); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); (U().startWindowed ? B.fullscreen(false) : B.isFullscreen()).then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); evShow(); await initCam(); })().catch(e => err(e.message));
 })();

@@ -4,7 +4,10 @@
 const fs = require('fs');
 const path = require('path');
 /* v0.9 kamerabeállítások – a digiCamControl dokumentált tulajdonságnevei (slc get / set / list) */
-const PROPS = ['iso', 'aperture', 'shutterspeed', 'exposurecompensation', 'whitebalance'];
+const PROPS = ['iso', 'aperture', 'shutterspeed', 'exposurecompensation', 'whitebalance', 'temperature'];
+/* v0.12: kézi fehéregyensúly (Kelvin) – a digiCamControl Nikon-meghajtójában „Temperature” (camera.temperature),
+ * 31 előre megadott érték („2500 K” … „10000 K”), csak „Kelvin” fehéregyensúlynál hat */
+const SLC = { temperature: 'camera.temperature' };
 /* a válasz formátuma nincs dokumentálva: JSON-tömböt és soronkénti / vesszős szöveget is elfogadunk */
 const clean = s => String(s == null ? '' : s).replace(/^\uFEFF/, '').trim().replace(/^"(.*)"$/, '$1');
 function parseList(t) {
@@ -48,15 +51,15 @@ function make(opts) {
       const out = {};
       for (const p of PROPS) {
         let list = [], cur = '';
-        try { list = parseList(await get('/?slc=list&param1=' + p + '&param2=')); } catch (e) { list = []; }
-        try { cur = clean(await get('/?slc=get&param1=' + p + '&param2=')); if (/^ok$/i.test(cur)) cur = ''; } catch (e) { cur = ''; }
+        try { list = parseList(await get('/?slc=list&param1=' + (SLC[p] || p) + '&param2=')); } catch (e) { list = []; }
+        try { cur = clean(await get('/?slc=get&param1=' + (SLC[p] || p) + '&param2=')); if (/^ok$/i.test(cur)) cur = ''; } catch (e) { cur = ''; }
         out[p] = { cur, list };
       }
       return out;
     },
     async setProp(p, v) {
       if (!PROPS.includes(p)) throw new Error('Ismeretlen kamerabeállítás: ' + p);
-      const r = clean(await get('/?slc=set&param1=' + p + '&param2=' + enc(String(v))));
+      const r = clean(await get('/?slc=set&param1=' + (SLC[p] || p) + '&param2=' + enc(String(v))));
       if (r && !/^ok\b/i.test(r)) throw new Error('A kamera nem fogadta el (' + p + ' = ' + v + '): ' + r.slice(0, 120));
       return true;
     },
