@@ -87,7 +87,7 @@
   async function snap() {
     if (WEB()) {
       const v = $('[data-video]'), c = document.createElement('canvas');
-      if (S.stream && v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; const g = c.getContext('2d'); g.drawImage(v, 0, 0);   /* a mentett kép nem tükrözött (csak az élőkép) */ return c.toDataURL('image/jpeg', 0.92); }
+      if (S.stream && v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; const g = c.getContext('2d'); g.filter = evFilter(); g.drawImage(v, 0, 0); g.filter = 'none';   /* a mentett kép nem tükrözött (csak az élőkép) */ return c.toDataURL('image/jpeg', 0.92); }
       return mockFrame();
     }
     return call(B.capture);
@@ -311,6 +311,7 @@
   let pinBuf = '';
   function openSettings() {
     pinBuf = ''; $('[data-pin]').textContent = ''; $('[data-pinbox]').hidden = false; $('[data-form]').hidden = true; show('settings');
+    if (U().pinOff) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); fillForm().then(preflight).catch(e => err(e.message)); }
   }
   async function fillForm() {
     const f = $('[data-form]'), c = S.cfg;
@@ -404,6 +405,9 @@
     else if (act === 'back') { clearTimeout(S.idleT); show('start'); }
     else if (act === 'reprint') { reprint(); }
     else if (act === 'evload') { evLoad(); }
+    else if (act === 'ev') { e.stopPropagation(); evOpen(); }
+    else if (act === 'evup' || act === 'evdn') { e.stopPropagation(); evStep(act === 'evup' ? 0.5 : -0.5); }
+    else if (act === 'evclose') { e.stopPropagation(); evClose(); }
     else if (act === 'fs') { e.stopPropagation(); const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
@@ -441,7 +445,7 @@
     if (e.key === 'F2' && S.scr !== 'sbed') openSettings();
     if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery' || S.scr === 'modes') show('start'); else if (S.scr === 'photo') gallery(); }
   });
-  $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]')) startTap(); });
+  $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]') && !e.target.closest('[data-evp]')) startTap(); });
   $('[data-modes]').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) { clearTimeout(S.idleT); run(b.dataset.mode); } });
 
   /* v0.3.2: QR inline SVG-ként (sem képbetöltés, sem vászon); hibánál kivétel – a csempe nem jelenik meg */
@@ -638,7 +642,7 @@
     try { const j = JSON.parse(await f.text()); if (!j || j.crazyBooth !== 1) throw new Error('Ez nem Crazy Booth beállításfájl'); const o = {}; EXP_KEYS.forEach(k => { if (j.cfg && j.cfg[k] !== undefined) o[k] = j.cfg[k]; }); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, o)); if (Array.isArray(j.presets)) preStore(j.presets); await fillForm(); modeInfo(); $('[data-stmsg]').textContent = 'Beállítások betöltve.'; }
     catch (x) { $('[data-stmsg]').textContent = 'Importálás: ' + x.message; }
   });
-  function tplInfo() { const el = $('[data-tplinfo]'); if (el) el.textContent = 'Sablon: ' + (S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : (S.cfg.event && S.cfg.event.deal ? 'nincs – alap keret' : 'nincs rendezvény kiválasztva – alap keret')); }
+  function tplInfo() { const pv = $('[data-tplprev]'); if (pv) { pv.hidden = !(S.tpl && S.tpl.img); if (S.tpl && S.tpl.img) pv.src = S.tpl.img.src; } const el = $('[data-tplinfo]'); if (el) el.textContent = 'Sablon: ' + (S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : (S.cfg.event && S.cfg.event.deal ? 'nincs – alap keret' : 'nincs rendezvény kiválasztva – alap keret')); }
   /* a panelből visszatérve a sablon újratöltődik */
   /* v0.9.1: a panel-ablak bezárásakor (sablonszerkesztő) azonnal újratöltjük a sablont */
   if (B.onChildClosed) B.onChildClosed(() => { if (S.tplEditing) window.dispatchEvent(new Event('focus')); });
@@ -698,8 +702,8 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', questions: '', consentText: '', lanSsid: '' };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -1175,6 +1179,40 @@
     /* v0.9: a mentett DSLR-beállítások visszaállítása (ISO, rekesz, záridő…) */
     if (!WEB() && B.camSet && U().camProps) { const r = await camApply(U().camProps); if (r.errs.length) B.log('kamerabeállítás: ' + r.errs.join(' · ')); }
   }
+  /* ---------- gyors expozíció a kezdőképernyőn: DSLR → expozíció-korrekció a kamerán (a legközelebbi támogatott érték),
+   * webkamera → világosítás az élőképen és a fotón (teszthez) */
+  const evNum = s => { const m = /^([+-]?\d+(?:[.,]\d+)?)/.exec(String(s).trim()); return m ? Number(m[1].replace(',', '.')) : NaN; };
+  const evFmt = n => (n > 0 ? '+' : '') + (Math.round(n * 10) / 10).toString().replace('.', ',') + ' EV';
+  const evFilter = () => { const n = WEB() ? Number(U().webEv) || 0 : 0; return n ? 'brightness(' + Math.pow(2, n / 2.2).toFixed(3) + ')' : 'none'; };
+  function evShow(n) { $('[data-evval]').textContent = evFmt(n); $('[data-evcur]').textContent = evFmt(n); const f = evFilter(); [$('[data-video]'), $('[data-evv]')].forEach(x => { if (x) x.style.filter = f === 'none' ? '' : f; }); }
+  async function evOpen() {
+    const p = $('[data-evp]'), v = $('[data-evv]'), im = $('[data-evimg]'); p.hidden = false; $('[data-evmsg]').textContent = '';
+    S.evOpen = true;
+    if (WEB()) {
+      im.hidden = true; v.hidden = false; evShow(Number(U().webEv) || 0);
+      try { const st = await webStream(); if (v.srcObject !== st) v.srcObject = st; await v.play().catch(() => {}); } catch (x) { $('[data-evmsg]').textContent = x.message; }
+      $('[data-evmsg]').textContent = 'Webkamera: a világosítás az élőképre és a fotókra kerül (tesztelésre).';
+      return;
+    }
+    v.hidden = true; im.hidden = false;
+    try { const P = await call(B.camProps), x = (P && P.exposurecompensation) || {}; S.evList = (x.list || []).map(o => ({ o, n: evNum(o) })).filter(o => !isNaN(o.n)).sort((a, b) => a.n - b.n); S.evCur = isNaN(evNum(x.cur)) ? 0 : evNum(x.cur); evShow(S.evCur);
+      if (!S.evList.length) $('[data-evmsg]').textContent = 'A kamera nem adta meg az expozíció-korrekció értékeit (digiCamControl fut?).'; }
+    catch (x) { $('[data-evmsg]').textContent = x.message; }
+    try { await call(B.liveStart); const tick = async () => { if (!S.evOpen) return; try { const f = await call(B.liveFrame); if (f) im.src = f; } catch (x) { /* következő */ } setTimeout(tick, 150); }; tick(); } catch (x) { $('[data-evmsg]').textContent = 'Élőkép: ' + x.message; }
+  }
+  async function evStep(d) {
+    if (WEB()) { const n = Math.max(-3, Math.min(3, (Number(U().webEv) || 0) + d)); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webEv: n }) })); evShow(n); return; }
+    if (!S.evList || !S.evList.length) return;
+    const want = S.evCur + d, cands = S.evList.filter(o => d > 0 ? o.n > S.evCur + 0.01 : o.n < S.evCur - 0.01);
+    if (!cands.length) { $('[data-evmsg]').textContent = 'Elérted a kamera határát.'; return; }
+    const pick = cands.reduce((a, b) => Math.abs(b.n - want) < Math.abs(a.n - want) ? b : a);
+    $('[data-evmsg]').textContent = 'Beállítás…';
+    try { await call(B.camSet, 'exposurecompensation', pick.o); S.evCur = pick.n; evShow(pick.n);
+      S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { camProps: Object.assign({}, U().camProps || {}, { exposurecompensation: pick.o }) }) }));
+      $('[data-evmsg]').textContent = 'Kézi (M) módban a korrekció nem hat – ott a záridőt / ISO-t állítsd a Kezelőben.'; }
+    catch (x) { $('[data-evmsg]').textContent = x.message; }
+  }
+  async function evClose() { S.evOpen = false; $('[data-evp]').hidden = true; if (!WEB()) { try { await call(B.liveStop); } catch (x) { /* mindegy */ } } }
   const CAMP = [['iso', 'ISO', 'pl. 200'], ['aperture', 'Rekesz (f)', 'pl. 5.6'], ['shutterspeed', 'Záridő', 'pl. 1/125'], ['exposurecompensation', 'Expozíció-korrekció', 'pl. +0.3'], ['whitebalance', 'Fehéregyensúly', 'pl. Auto']];
   async function camRead() {
     const box = $('[data-camprops]');
@@ -1193,5 +1231,5 @@
     for (const [k, v] of Object.entries(vals || {})) { if (!v) continue; try { await call(B.camSet, k, v); good[k] = v; } catch (e) { errs.push(e.message); } }
     return { errs, good };
   }
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); B.isFullscreen().then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); (U().startWindowed ? B.fullscreen(false) : B.isFullscreen()).then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); evShow(WEB() ? Number(U().webEv) || 0 : evNum((U().camProps || {}).exposurecompensation) || 0); await initCam(); })().catch(e => err(e.message));
 })();

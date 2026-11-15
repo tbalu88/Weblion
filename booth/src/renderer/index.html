@@ -16,6 +16,15 @@
     <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
     <div class="warn" data-warn hidden></div>
     <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
+    <button type="button" class="evbtn" data-act="ev" title="Expozíció (világosság)">☀ <span data-evval>0 EV</span></button>
+    <div class="evp" data-evp hidden>
+      <div class="evp-in">
+        <div class="evp-lv"><video data-evv autoplay muted playsinline></video><img data-evimg alt=""></div>
+        <div class="evp-row"><button type="button" class="big ghost" data-act="evdn">− 0,5</button><b data-evcur>0 EV</b><button type="button" class="big ghost" data-act="evup">+ 0,5</button></div>
+        <p class="evp-msg" data-evmsg></p>
+        <button type="button" class="big" data-act="evclose">Kész</button>
+      </div>
+    </div>
   </section>
 
   <section class="scr" data-s="modes">
@@ -152,7 +161,7 @@
               <div class="st-evh"><span>Rendezvény</span><input type="date" data-evdate><button type="button" class="big ghost sm" data-act="evload">Rendezvények betöltése</button></div>
               <div class="st-evl" data-evlist></div>
               <p class="st-msg" data-evmsg></p>
-              <div class="st-tpl"><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="sboff">Szerkesztés internet nélkül</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
+              <div class="st-tpl"><img class="st-tplprev" data-tplprev alt="A sablon előnézete" hidden><span data-tplinfo>Sablon: –</span><button type="button" class="big ghost sm" data-act="tpledit">Sablon szerkesztése (panel)</button><button type="button" class="big ghost sm" data-act="sboff">Szerkesztés internet nélkül</button><button type="button" class="big ghost sm" data-act="tplreload">Sablon frissítése</button></div>
             </div>
             <h3 class="st-h">Kivetítés és megosztó állomás</h3>
             <div class="st-proj" data-proj></div>
@@ -250,6 +259,8 @@
             <p class="st-up" data-dcc>Az itt alkalmazott értékeket a program minden induláskor visszaállítja. Kézi (M) módban minden állítható; automatikus módban a kamera felülírhatja.</p>
             <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
             <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
+            <label class="chk"><input id="u-pinOff" type="checkbox"> PIN nélkül nyíljon a Kezelő (csak tesztelés idejére – rendezvényen kapcsold vissza!)</label>
+            <label class="chk"><input id="u-startWindowed" type="checkbox"> Indulás ablakban (nem teljes képernyőn)</label>
             <h3 class="st-h">Átvitel másik gépre</h3>
             <div class="st-b"><button type="button" class="big ghost sm" data-act="export">Beállítások exportja</button><label class="big ghost sm st-imp">Importálás<input type="file" accept="application/json,.json" data-import hidden></label><button type="button" class="big ghost sm" data-act="defaults">Alapértékek visszaállítása</button></div>
             <p class="st-up">Az export a gépkulcsot és a PIN-t nem tartalmazza – azt minden gépen külön kell megadni.</p>

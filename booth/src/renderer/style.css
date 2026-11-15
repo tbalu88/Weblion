@@ -68,8 +68,15 @@ button{font:inherit;cursor:pointer}
 .bgm::after{content:"";position:absolute;inset:0;background:rgba(10,14,26,.45)}
 [data-s=start]>*:not(.bgm){position:relative;z-index:1}
 [data-s=start]>.fsbtn,[data-s=start]>.galbtn,[data-s=start]>.warn,[data-s=start]>.mode{position:absolute}
+[data-s=start]>.evbtn{position:absolute;bottom:2vh;right:2vh}[data-s=start]>.evp{position:absolute;inset:0;z-index:6}
 .fsbtn{position:absolute;top:2vh;right:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:var(--mu);font-size:15px}
 .fsbtn:hover{color:#fff;border-color:rgba(255,255,255,.35)}
+.evbtn{position:absolute;bottom:2vh;right:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:17px}
+.evp{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.82)}.evp[hidden]{display:none!important}
+.evp-in{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(90vw,720px);max-height:94vh}
+.evp-lv{height:min(60vh,calc((90vw)/1.5),480px);aspect-ratio:3/2;max-width:100%;background:#000;border-radius:12px;overflow:hidden}.evp-lv video,.evp-lv img{width:100%;height:100%;object-fit:cover;display:block}.evp-lv [hidden]{display:none!important}
+.evp-row{display:flex;align-items:center;gap:20px}.evp-row b{min-width:5ch;text-align:center;font-size:28px;font-variant-numeric:tabular-nums}.evp-msg{margin:0;min-height:1.2em;color:var(--mu);font-size:15px;text-align:center}
+.st-tplprev{display:block;max-height:180px;max-width:100%;border-radius:6px;background:repeating-conic-gradient(#3a3f52 0 25%,#2a2e3d 0 50%) 0 0/16px 16px;margin-bottom:8px}.st-tplprev[hidden]{display:none!important}
 .galbtn{position:absolute;bottom:2vh;left:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-size:17px}
 .qr{display:flex;align-items:center;gap:14px;background:#fff;color:#141C33;border-radius:16px;padding:10px 14px}
 .qr[hidden],.gl-qr[hidden]{display:none!important}   /* a .qr display:flex különben felülírná a hidden-t */
