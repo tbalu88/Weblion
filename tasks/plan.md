@@ -177,3 +177,28 @@ iPhone-app a 360-as platform karjára: jó minőségű felvétel (0,5× nagylát
 ## Nyitott kérdések (a TestFlight előtt)
 - Név és azonosító: „Crazy 360”, `hu.eventcrazy.crazy360` – megfelel?
 - Van saját, jogtiszta zenekönyvtár, amit be lehetne építeni?
+
+---
+
+## Felügyelet, eszközök, szervezői nézet (2026-11-15 – a felhasználó jóváhagyta: 1, 2, 3, 7, 5, 16; raktár: csak javaslat)
+
+### Döntések
+- Adatforrás: a gépek percenkénti jelentkezése (`/booth/beat`, booth.php). Ma csak az utolsó állapot marad meg (transient) → új: rendezvényenkénti **eseménynapló** (`wp_cp_booth_log`: deal, gép, idő, típus, adat), ebből jön a munkaidő (2), az idővonal (5) és a szervezői nézet számai (16). Csak állapotváltozás és 5 percenkénti összesítő kerül bele (nem minden jelentkezés).
+- Kezdési idő: `cp_sm_fetch_range` + `cp_panel_normalize` (time / win), ugyanaz, amit a Booth rendezvénylistája használ.
+- Értesítés: a meglévő `cp_notify` (panel + telefon). Címzett: a deal felelőse + a Gépkezelő mezőben / beosztásban szereplő kezelő, ha panel-felhasználó.
+- Sorozatszámok: a nyomtatóé USB-azonosítóból (Windows: PnP-azonosító, Mac: system_profiler), a kameráé a digiCamControlból → **0.13.0 program**; a régi program jelentése sorozatszám nélkül is működik.
+- Exponálásszám: a Nikon JPEG-ek gyártói adataiból (ShutterCount), ha nincs, saját számlálás.
+- Mosoly/taps: a gépen fut, net nélkül; alapból KI; 10 mp után magától exponál.
+- Szervezői nézet: titkos link (mint a galéria), csak számok + a galéria friss képei, vendégadat nélkül; a linket a felelős másolja ki a dealből (automatikus levél nincs).
+
+### Feladatok
+- F1 Riasztás, ha a gép nem jelentkezik (kezdés −30 és −15 perc) – booth.php + cron. *Kész, ha:* próbadeal kezdés előtt 30 perccel értesítést ad, jelentkező gépnél nem.
+- F2 Eseménynapló (beat → wp_cp_booth_log) – alap a többihez. *Kész, ha:* a beat-ből állapotváltások kerülnek a táblába, 90 nap után törlődnek.
+- F3 Rendezvény-idővonal a deal Szelfigép kártyáján (indulás, csúcsidő-grafikon, hibák, leállás).
+- F4 Kezelői munkaidő a Beosztás nézetben (rendezvényenként, havi összesítő).
+- Ellenőrzőpont: F1–F4 élesítve, útmutató.
+- F5 Eszköznapló a panelben + sorozatszám-jelentés a gépről (0.13.0) + számlálók, szervizhatár.
+- F6 Mosoly/taps kioldás (Kezelő kapcsoló, alapból ki).
+- F7 Szervezői élő nézet (link a dealen, galéria-oldal ?szervezo=…).
+- Ellenőrzőpont: 0.13.0 kiadás, útmutató, memória.
+- Raktár modul: javaslatok a felhasználónak (külön kérte), fejlesztés csak jóváhagyás után.

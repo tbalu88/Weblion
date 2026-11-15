@@ -241,6 +241,7 @@ function cp_booth_admin() {
 	if (!$devs) { echo '<tr><td colspan="5">Még nincs gép.</td></tr>'; }
 	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form>';
 	cp_booth_admin_ai();
+	if (function_exists('cp_blog_admin')) { cp_blog_admin(); }
 	echo '</div>';
 }
 /* v2.9.251: AI-kép (OpenRouter) – a kulcs a tartalék szerveren, titkosítva tárolódik; itt csak beírni lehet, visszaolvasni nem */
@@ -436,7 +437,9 @@ add_action('rest_api_init', function () {
 			'ver' => mb_substr(sanitize_text_field((string) ($j['ver'] ?? '')), 0, 40), 'scr' => mb_substr(sanitize_key((string) ($j['scr'] ?? '')), 0, 12),
 			'paper' => $paper, 'queue' => max(0, (int) ($j['queue'] ?? 0)), 'guests' => max(0, (int) ($j['guests'] ?? 0)), 'prints' => max(0, (int) ($j['prints'] ?? 0)),
 			'err' => mb_substr(sanitize_text_field((string) ($j['err'] ?? '')), 0, 160), 'err_at' => max(0, (int) ($j['err_at'] ?? 0)), 'cam' => array_key_exists('cam', $j) && $j['cam'] !== null ? (bool) $j['cam'] : null, 'net' => !empty($j['net']), 'station' => !empty($j['station']));
+		$prev = cp_booth_beat_get($d['id']);
 		set_transient('cp_bb_' . $d['id'], $b, 3 * DAY_IN_SECONDS);
+		if (function_exists('cp_blog_beat')) { cp_blog_beat($d['id'], $prev, $b); } /* v2.9.256: eseménynapló */
 		/* a nyomatok száma dealenként és gépenként (a riporthoz: a legnagyobb jelentett érték marad meg) */
 		if ($deal && $b['prints']) { $p = get_option('cp_booth_prints', array()); if (!is_array($p)) { $p = array(); } $k = (string) $deal; if ((int) ($p[$k][$d['id']] ?? 0) < $b['prints']) { $p[$k][$d['id']] = $b['prints']; update_option('cp_booth_prints', $p, false); } }
 		$c = $deal ? cp_booth_dcfg_get($deal) : null;
