@@ -42,16 +42,29 @@
   }
 
   /* képkockák → videó: seq = képkocka-sorszámok listája (a sorrend és ismétlés adja a boomerangot / lassítást) */
+  /* sablonnal: a mozgókép a sablon fotóablakaiba kerül (több ablaknál mindegyikbe), fölé a sablon képe */
+  function coverDraw(g, src, x, y, w, h) {
+    const sw = src.width, sh = src.height, k = Math.max(w / sw, h / sh), cw = w / k, ch = h / k;
+    g.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, x, y, w, h);
+  }
   async function render(list, seq, fps, opt) {
     opt = opt || {};
-    const w = list[0].width, h = list[0].height, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const tpl = opt.tpl && opt.tpl.img && opt.tpl.holes && opt.tpl.holes.length ? opt.tpl : null;
+    let w = list[0].width, h = list[0].height, kt = 1;
+    if (tpl) { const tw = tpl.img.naturalWidth || tpl.img.width, th = tpl.img.naturalHeight || tpl.img.height; kt = Math.min(1, MAXW / Math.max(tw, th)); w = Math.round(tw * kt / 2) * 2; h = Math.round(th * kt / 2) * 2; }
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d'), stream = c.captureStream(fps);
     const mu = await musicTrack(opt.music, seq.length / fps);
     if (mu && mu.track) stream.addTrack(mu.track);
     const mime = pickMime(), rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6e6 }), chunks = [];
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     const done = new Promise(r => { rec.onstop = r; });
-    const draw = i => { g.drawImage(list[i], 0, 0); overlay(g, w, h, opt.text, opt.sub); };
+    const draw = i => {
+      if (!tpl) { g.drawImage(list[i], 0, 0); overlay(g, w, h, opt.text, opt.sub); return; }
+      g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+      tpl.holes.forEach(r => coverDraw(g, list[i], (r[0] - 2) * kt, (r[1] - 2) * kt, (r[2] + 4) * kt, (r[3] + 4) * kt));
+      g.drawImage(tpl.img, 0, 0, w, h);
+    };
     draw(seq[0]); rec.start(); if (mu) mu.start();
     const t0 = performance.now();
     for (let n = 0; n < seq.length; n++) {

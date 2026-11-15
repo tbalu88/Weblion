@@ -247,14 +247,14 @@
           const fr = await C.frames(v, 1, 1); list.push(fr[0]); chk();
         }
         $('[data-shotno]').textContent = '';
-        busy('Készül a GIF…'); out = await C.render(list, C.seqStills(4, 15, 2), 15, Object.assign({ onTick: busyBar }, opt));
+        busy('Készül a GIF…'); out = await C.render(list, C.seqStills(4, 15, 2), 15, Object.assign({ onTick: busyBar, tpl: S.tpl }, opt));
       } else if (mode === 'boom' || mode === 'slow') {
         pose(mode === 'boom' ? 'Mozogj! Integess, ugorj, koccints!' : 'Valami látványosat!'); await countdown(cdSec(mode)); pose('');
         rec.hidden = false;
         const fr = await C.frames(v, mode === 'boom' ? 1600 : 3000, mode === 'boom' ? 24 : 30, p => tick(p)); chk();
         rec.hidden = true;
         busy(mode === 'boom' ? 'Készül a boomerang…' : 'Készül a lassított videó…');
-        out = await C.render(fr, mode === 'boom' ? C.seqBoom(fr.length, 2) : C.seqRamp(fr.length), mode === 'boom' ? 24 : 30, Object.assign({ onTick: busyBar }, opt));
+        out = await C.render(fr, mode === 'boom' ? C.seqBoom(fr.length, 2) : C.seqRamp(fr.length), mode === 'boom' ? 24 : 30, Object.assign({ onTick: busyBar, tpl: S.tpl }, opt));
       } else if (mode === 'spin') {
         /* 360°: külön kamera is lehet (a karon); álló 9:16; normál → lassítva → visszatekerés */
         const sid = U().spinCam, vert = U().spinVertical !== false;
@@ -309,7 +309,8 @@
   }
   /* ---------- beállítások (PIN) */
   let pinBuf = '';
-  function openSettings() {
+  function openSettings(then) {
+    S.pinThen = then || null;
     pinBuf = ''; $('[data-pin]').textContent = ''; $('[data-pinbox]').hidden = false; $('[data-form]').hidden = true; show('settings');
     if (U().pinOff) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); fillForm().then(preflight).catch(e => err(e.message)); }
   }
@@ -341,7 +342,7 @@
   document.querySelector('.pad').addEventListener('click', e => { const k = e.target.dataset.k; if (k) pinKey(k); });
   async function pinKey(k) {
     if (k === '⌫') pinBuf = pinBuf.slice(0, -1);
-    else if (k === '✓') { if (pinBuf === String(S.cfg.pin)) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); await fillForm(); preflight(); } else { pinBuf = ''; err('Hibás PIN'); } }
+    else if (k === '✓') { if (pinBuf === String(S.cfg.pin) && S.pinThen === 'fs') { S.pinThen = null; show('start'); const r = await B.fullscreen(false); if (r && r.ok) $('[data-act=fs] span').textContent = 'Teljes képernyő be'; return; } if (pinBuf === String(S.cfg.pin)) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); await fillForm(); preflight(); } else { pinBuf = ''; err('Hibás PIN'); } }
     else if (pinBuf.length < 8) pinBuf += k;
     $('[data-pin]').textContent = '•'.repeat(pinBuf.length);
   }
@@ -408,7 +409,7 @@
     else if (act === 'ev') { e.stopPropagation(); evOpen(); }
     else if (act === 'evup' || act === 'evdn') { e.stopPropagation(); evStep(act === 'evup' ? 0.5 : -0.5); }
     else if (act === 'evclose') { e.stopPropagation(); evClose(); }
-    else if (act === 'fs') { e.stopPropagation(); const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
+    else if (act === 'fs') { e.stopPropagation(); const cur = await B.isFullscreen(); if (cur && cur.ok && cur.v && !U().pinOff) { openSettings('fs'); return; } const r = await B.fullscreen(); if (r && r.ok) a.querySelector('span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
       ['camera', 'dccUrl', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
