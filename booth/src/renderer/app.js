@@ -588,7 +588,8 @@
   function glTb() {
     const tb = $('[data-gltb]'), n = glTiles().length;
     $('[data-glqr]').hidden = !!S.gsel;
-    if (!B.galDel || !n) { tb.innerHTML = ''; return; }
+    if (!n) { tb.innerHTML = ''; return; }
+    if (!B.galDel) { tb.innerHTML = '<span class="st-up">Képtörléshez frissítsd a programot (0.11.0 vagy újabb).</span>'; return; }
     if (!S.gsel) { tb.innerHTML = '<button type="button" class="big ghost sm" data-act="glsel">Kijelölés</button>'; return; }
     const k = S.gsel.size;
     tb.innerHTML = '<b>' + k + ' kijelölve</b><button type="button" class="big ghost sm" data-act="glall">' + (k === n ? 'Egyik sem' : 'Mind (' + n + ')') + '</button>' +

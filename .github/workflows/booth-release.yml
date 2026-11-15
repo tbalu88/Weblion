@@ -44,3 +44,31 @@ jobs:
               --notes "Kicsomagolás után a Crazy Booth.exe indítja. Telepítés nem kell."
           fi
           echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/CrazyBooth-$VER-Windows-x64.zip"
+
+  mac-zip:
+    needs: windows-zip
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Csomagolás (Mac, Apple Silicon zip)
+        working-directory: booth
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm ci
+          npx electron-builder --mac zip --arm64 --publish never || true
+          VER=$(node -p "require('./package.json').version")
+          SRC=$(ls dist/*.zip | grep -i -v win | head -1)
+          [ -n "$SRC" ] || { echo "nincs Mac zip"; exit 1; }
+          mkdir -p ../release && cp "$SRC" "../release/CrazyBooth-$VER-Mac-AppleSilicon.zip"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+      - name: Feltöltés a kiadáshoz
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "booth-v$VER" "release/CrazyBooth-$VER-Mac-AppleSilicon.zip" --clobber
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/booth-v$VER/CrazyBooth-$VER-Mac-AppleSilicon.zip"
