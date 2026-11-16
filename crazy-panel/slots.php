@@ -81,6 +81,9 @@ function cp_slot_skill($kind, $txt) {
 }
 
 /* egy nap slotjai a Kapacitás adataiból + a beosztások */
+/* v2.9.264: létszám slotonként (hány ember kell) – alapból 1; kulcs: deal|nap|slot */
+function cp_slot_cnt_all() { $c = get_option('cp_slot_cnt', array()); return is_array($c) ? $c : array(); }
+function cp_slot_cnt($deal, $day, $skey) { $c = cp_slot_cnt_all(); return max(1, min(20, (int) ($c[$deal . '|' . $day . '|' . $skey] ?? 1))); }
 function cp_slot_day($day) {
 	global $wpdb;
 	$evs = function_exists('cp_cap_month') ? (array) cp_cap_month(substr($day, 0, 7)) : array();
@@ -100,7 +103,7 @@ function cp_slot_day($day) {
 			$nk = $deal . '|' . $day . '|' . $skey;
 			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
 			$slots[] = array('deal' => $deal, 'skey' => $skey, 'kind' => $k, 'skill' => cp_slot_skill($k, $k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
-				'need' => $need, 'need_set' => isset($need_o[$nk]) ? 1 : 0, 'bp' => $bp === null ? -1 : ($bp ? 1 : 0),
+				'need' => $need, 'need_set' => isset($need_o[$nk]) ? 1 : 0, 'cnt' => cp_slot_cnt($deal, $day, $skey), 'bp' => $bp === null ? -1 : ($bp ? 1 : 0),
 				'title' => (string) ($e['title'] ?? ''), 'stage' => $stage, 'booked' => ($e['state'] ?? '') === 'booked' ? 1 : 0,
 				'time' => (string) ($e['time'] ?? ''), 'loc' => (string) ($e['loc'] ?? ''), 'svc' => (string) ($k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
 				'can_inv' => ($contract || cp_slot_xmas($day)) ? 1 : 0, 'asg' => array());
@@ -159,12 +162,12 @@ function cp_slot_month($m, $full = false) {
 		}
 	}
 	if (cp_slot_db_ok()) {
-		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, deal_id, skey, MAX(status = %s) f, MAX(status IN (%s, %s)) i FROM ' . cp_slot_t() . ' WHERE day BETWEEN %s AND %s GROUP BY day, deal_id, skey', 'final', 'invited', 'accepted', $m . '-01', $m . '-31'), ARRAY_A) as $r) {
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, deal_id, skey, SUM(status = %s) f, MAX(status IN (%s, %s)) i FROM ' . cp_slot_t() . ' WHERE day BETWEEN %s AND %s GROUP BY day, deal_id, skey', 'final', 'invited', 'accepted', $m . '-01', $m . '-31'), ARRAY_A) as $r) {
 			if (!isset($out[$r['day']])) { continue; }
 			$nd = $slotNeed[$r['deal_id'] . '|' . $r['day'] . '|' . $r['skey']] ?? null;
 			if ($nd === null) { continue; }
-			if ((int) $r['f']) { $out[$r['day']][1]++; $x[$r['day']][$nd === 'kezelo' ? 'fk' : 'fh']++; }
-			elseif ((int) $r['i']) { $out[$r['day']][2]++; $x[$r['day']][$nd === 'kezelo' ? 'ik' : 'ih']++; }
+			if ((int) $r['f'] >= cp_slot_cnt((int) $r['deal_id'], $r['day'], $r['skey'])) { $out[$r['day']][1]++; $x[$r['day']][$nd === 'kezelo' ? 'fk' : 'fh']++; }
+			elseif ((int) $r['i'] || (int) $r['f']) { $out[$r['day']][2]++; $x[$r['day']][$nd === 'kezelo' ? 'ik' : 'ih']++; }
 		}
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, COUNT(DISTINCT kz_id) n FROM ' . cp_slot_t() . " WHERE status = 'final' AND day BETWEEN %s AND %s GROUP BY day", $m . '-01', $m . '-31'), ARRAY_A) as $r) { if (isset($x[$r['day']])) { $x[$r['day']]['b'] = (int) $r['n']; } }
 	}
@@ -212,7 +215,8 @@ function cp_slot_ajax_act() {
 	if ($op === 'invite') {
 		if (!$slot) { cp_el_err('Ez a slot már nincs meg (a deal változott) – frissítsd a napot.'); }
 		/* v2.9.121: véglegesített slotra nem lehet újabb embert meghívni (előbb a véglegesítést kell visszavonni) */
-		foreach ($slot['asg'] as $a0) { if ($a0['st'] === 'final') { cp_el_err('Ez a slot már véglegesítve van (' . $a0['n'] . '). Új embert csak a véglegesítés visszavonása (×) után lehet meghívni.'); } }
+		$nf0 = count(array_filter($slot['asg'], function ($a0) { return $a0['st'] === 'final'; }));
+		if ($nf0 >= $slot['cnt']) { cp_el_err('Ez a slot már betelt (' . $nf0 . ' / ' . $slot['cnt'] . ' fő véglegesítve). Új embert a létszám növelése vagy egy véglegesítés visszavonása (×) után lehet meghívni.'); }
 		if (!$slot['can_inv'] && empty($_POST['force'])) { cp_el_err('Erre a rendezvényre még nem lehet meghívni (nincs kiküldött szerződés, és nem karácsonyi időszak).'); }
 		$ids = array_slice(array_unique(array_filter(array_map('intval', explode(',', (string) ($_POST['kz'] ?? ''))))), 0, 10);
 		if (!$ids) { cp_el_err('Válassz legalább egy kezelőt.'); }
@@ -237,18 +241,22 @@ function cp_slot_ajax_act() {
 			$busy = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T WHERE kz_id = %d AND day = %s AND status = 'final' AND id <> %d", (int) $r['kz_id'], $day, $id));
 			if ($busy && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Ő erre a napra már be van osztva egy másik rendezvényre. Így is véglegesíted?')); }
 			/* v2.9.121: egy slotra egy véglegesített ember – a korábbit leváltja (rákérdezés után) */
-			$prev = $wpdb->get_var($wpdb->prepare("SELECT k.name FROM $T a LEFT JOIN " . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.day = %s AND a.skey = %s AND a.status = 'final' AND a.id <> %d LIMIT 1", (int) $r['deal_id'], $day, $r['skey'], $id));
-			if ($prev !== null && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Erre a slotra már ' . ($prev ?: 'valaki') . ' van véglegesítve. Leváltod?')); }
-			if ($prev !== null) { $pids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", (int) $r['deal_id'], $day, $r['skey'], $id)); $wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", $now, (int) $r['deal_id'], $day, $r['skey'], $id)); foreach ($pids as $pid) { cp_slot_ics_cancel((int) $pid); } }
+			/* v2.9.264: a létszámig több ember is véglegesíthető; csak betelt slotnál kérdez rá a leváltásra */
+			$cnt = cp_slot_cnt((int) $r['deal_id'], $day, $r['skey']);
+			$nfin = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d", (int) $r['deal_id'], $day, $r['skey'], $id));
+			$prev = $nfin >= $cnt ? $wpdb->get_var($wpdb->prepare("SELECT k.name FROM $T a LEFT JOIN " . cp_kz_t() . " k ON k.id = a.kz_id WHERE a.deal_id = %d AND a.day = %s AND a.skey = %s AND a.status = 'final' AND a.id <> %d ORDER BY a.updated_at DESC LIMIT 1", (int) $r['deal_id'], $day, $r['skey'], $id)) : null;
+			if ($prev !== null && empty($_POST['force'])) { wp_send_json_error(array('code' => 'busy', 'msg' => 'Ez a slot már betelt (' . $nfin . ' / ' . $cnt . ' fő). Leváltod ' . ($prev ?: 'a legutóbb véglegesítettet') . '? (Ha több ember kell, előbb növeld a létszámot.)')); }
+			if ($prev !== null) { $pids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final' AND id <> %d ORDER BY updated_at DESC LIMIT %d", (int) $r['deal_id'], $day, $r['skey'], $id, $nfin - $cnt + 1)); if ($pids) { $wpdb->query("UPDATE $T SET status = 'dropped', updated_at = '" . esc_sql($now) . "' WHERE id IN (" . implode(',', array_map('intval', $pids)) . ')'); foreach ($pids as $pid) { cp_slot_ics_cancel((int) $pid); } } }
 			$wpdb->update($T, array('status' => 'final', 'by_name' => $who, 'updated_at' => $now), array('id' => $id));
 			/* v2.9.117: megerősítő levél a kezelőnek (ha van e-mail-címe) */
 			$fm = cp_slot_mail((int) $id, 'final');
 			if ($fm === true) { $wpdb->update($T, array('fin_mail_at' => $now), array('id' => $id)); }
-			/* a slot többi jelöltje: „nem rá esett” (v2.9.162: akinek ment naptárbejegyzés, az lemondást kap) */
-			$oids = $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", (int) $r['deal_id'], $day, $r['skey'], $id));
-			$wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", $now, (int) $r['deal_id'], $day, $r['skey'], $id));
+			/* a slot többi jelöltje: „nem rá esett” – v2.9.264: csak ha a létszám betelt (v2.9.162: akinek ment naptárbejegyzés, az lemondást kap) */
+			$full = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND status = 'final'", (int) $r['deal_id'], $day, $r['skey'])) >= $cnt;
+			$oids = !$full ? array() : $wpdb->get_col($wpdb->prepare("SELECT id FROM $T WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", (int) $r['deal_id'], $day, $r['skey'], $id));
+			if ($full) { $wpdb->query($wpdb->prepare("UPDATE $T SET status = 'dropped', updated_at = %s WHERE deal_id = %d AND day = %s AND skey = %s AND id <> %d AND status IN ('invited','accepted')", $now, (int) $r['deal_id'], $day, $r['skey'], $id)); }
 			foreach ($oids as $oid) { cp_slot_ics_cancel((int) $oid); }
-			$log = 'véglegesítve';
+			$log = 'véglegesítve' . ($cnt > 1 ? ' (' . min($cnt, $nfin + 1) . ' / ' . $cnt . ' fő)' : '');
 		} else {
 			$st = sanitize_key($_POST['st'] ?? '');
 			if (!in_array($st, array('invited', 'accepted', 'declined'), true)) { cp_el_err('Hibás állapot.'); }
@@ -261,6 +269,14 @@ function cp_slot_ajax_act() {
 			elseif ($st !== 'accepted' && in_array($r['status'], array('accepted', 'final'), true)) { cp_slot_ics_cancel($id); }
 		}
 		$deal = (int) $r['deal_id'];
+	} elseif ($op === 'cnt') {
+		/* v2.9.264: létszám (hány ember kell erre a slotra) */
+		if (!$slot) { cp_el_err('Ez a slot már nincs meg – frissítsd a napot.'); }
+		$v = max(1, min(20, (int) ($_POST['v'] ?? 1)));
+		$c = cp_slot_cnt_all(); $k = $deal . '|' . $day . '|' . $skey;
+		if ($v === 1) { unset($c[$k]); } else { $c[$k] = $v; }
+		update_option('cp_slot_cnt', $c, false);
+		$log = 'létszám: ' . $v . ' fő';
 	} elseif ($op === 'swap') {
 		/* v2.9.126: csere a deal adatlapjáról – a régi ember helyére az új (véglegesítettnél csak Ákos / admin, és az új is véglegesített lesz) */
 		$id = (int) ($_POST['id'] ?? 0); $nk = (int) ($_POST['kz'] ?? 0);
