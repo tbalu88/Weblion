@@ -105,15 +105,15 @@
 	const kitsOf = () => Object.entries(S.d.kits || {}).map(e => Object.assign({ id: e[0] }, e[1])).sort((a, b) => a.name.localeCompare(b.name, 'hu'));
 	function drawKits() {
 		const K = kitsOf().filter(k => hit(k.name, k.note)), ST = S.d.status || {}, D = S.d.deals || {}, ev = S.d.ev;
-		const top = '<div class="rk-bar"><button type="button" class="cpx-btn sm" data-rkit="new">+ Új szolgáltatáscsomag</button><span>Egy szolgáltatáscsomag egy lépésben kiadható egy rendezvényre és visszavehető – visszavételkor pipálva látszik, mi jött vissza.</span></div>';
+		const top = '<div class="rk-bar"><button type="button" class="cpx-btn sm" data-rkit="new">+ Új szolgáltatáscsomag</button><span>Egy szolgáltatáscsomag egy lépésben kiadható (rendezvényre vagy más helyre, pl. haza) és visszavehető – visszavételkor pipálva látszik, mi jött vissza.</span></div>';
 		if (!kitsOf().length) return top + '<div class="rk-empty"><p><b>Még nincs szolgáltatáscsomag.</b> Állíts össze egyet a gyakran együtt kimenő eszközökből, pl. „Szelfigép 1. csomag”: kamera, nyomtató, laptop, állvány + 2 tekercs papír.</p></div>';
 		return top + (K.length ? K.map(k => {
-			const U = (k.units || []).map(unit).filter(Boolean), out = U.filter(u => u.loc === ev), bad = U.filter(u => u.status !== 'ok');
-			const st = out.length === U.length && U.length ? '<span class="rk-chip mid">kint: ' + esc(D[out[0].deal_id] ? D[out[0].deal_id].t : 'rendezvényen') + '</span>' : out.length ? '<span class="rk-chip mid">' + out.length + ' / ' + U.length + ' kint</span>' : '<span class="rk-chip ok">raktárban</span>';
+			const U = (k.units || []).map(unit).filter(Boolean), out = U.filter(u => u.loc !== S.d.locs[0]), bad = U.filter(u => u.status !== 'ok');
+			const st = out.length === U.length && U.length ? '<span class="rk-chip mid">kint: ' + esc(out[0].loc === ev ? (D[out[0].deal_id] ? D[out[0].deal_id].t : 'rendezvényen') : out[0].loc) + '</span>' : out.length ? '<span class="rk-chip mid">' + out.length + ' / ' + U.length + ' kint</span>' : '<span class="rk-chip ok">raktárban</span>';
 			return '<section class="rk-kit"><div class="rk-kh"><h3>' + esc(k.name) + '</h3>' + st + (bad.length ? '<span class="rk-chip bad">' + bad.length + ' nem használható</span>' : '') + '</div>' + (k.note ? '<p class="rk-kn">' + esc(k.note) + '</p>' : '') +
 				'<ul class="rk-kl">' + U.map(u => { const t = item(u.item_id); return '<li><span>' + esc(u.label || (t && t.name)) + '</span><small>' + esc(u.loc === ev ? 'kint' : u.loc) + (u.status !== 'ok' ? ' · ' + esc(ST[u.status] || u.status) : '') + '</small></li>'; }).join('') +
 				(k.stock || []).map(x => { const i = item(x[0]); return i ? '<li><span>' + esc(i.name) + '</span><small>' + nf(x[1]) + ' ' + esc(i.unit) + '</small></li>' : ''; }).join('') + '</ul>' +
-				'<div class="rk-ka"><button type="button" class="cpx-btn sm" data-rkmv="out" data-rkid="' + esc(k.id) + '">Kiadás rendezvényre</button><button type="button" class="cpx-btn ghost sm" data-rkmv="back" data-rkid="' + esc(k.id) + '"' + (out.length ? '' : ' disabled') + '>↩ Visszavétel</button><button type="button" class="rk-lnk" data-rkit="' + esc(k.id) + '">✎ Szerkesztés</button></div></section>';
+				'<div class="rk-ka"><button type="button" class="cpx-btn sm" data-rkmv="out" data-rkid="' + esc(k.id) + '">Kiadás</button><button type="button" class="cpx-btn ghost sm" data-rkmv="back" data-rkid="' + esc(k.id) + '"' + (out.length ? '' : ' disabled') + '>↩ Visszavétel</button><button type="button" class="rk-lnk" data-rkqr="' + esc(k.id) + '">QR</button><button type="button" class="rk-lnk" data-rkit="' + esc(k.id) + '">✎ Szerkesztés</button></div></section>';
 		}).join('') : '<p class="cpx-empty">Nincs találat.</p>');
 	}
 	function kitForm(id) {
@@ -135,26 +135,51 @@
 		sl.addEventListener('click', e => { const b = e.target.closest('[data-srm]'); if (b) b.closest('.rk-ks').remove(); });
 		f.querySelector('[data-kq]').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); f.querySelectorAll('[data-kul] .rk-ck').forEach(l => { l.hidden = q && !l.textContent.toLowerCase().includes(q); }); });
 	}
+	/* v2.9.286: csomag QR – beolvasva: ha valami kint van → visszavétel, különben kiadás (a listán bármi kivehető) */
+	function kitScan(id) { const k = (S.d.kits || {})[id]; if (!k) return; const out = (k.units || []).map(unit).filter(Boolean).some(u => u.loc !== S.d.locs[0]); kitMove(id, out ? 'back' : 'out'); }
+	async function kitQr(id) {
+		const k = (S.d.kits || {})[id]; if (!k || !k.qr) { toast('A csomag QR-kódja a következő betöltéskor készül el – frissítsd az oldalt.', true); return; }
+		try { await qrLib(); } catch (e) { toast(e.message, true); return; }
+		const pu = { _kit: 1, qr: k.qr, label: k.name, item_id: 0, serial: '', tag: 'Szolgáltatáscsomag – beolvasva: kiadás / visszavétel' }, q = qrMake(pu);
+		const ov = document.createElement('div'); ov.className = 'rk-ov';
+		ov.innerHTML = '<div class="rk-dlg rk-qrd" role="dialog" aria-modal="true" aria-label="Csomag QR-kódja"><h3>' + esc(k.name) + '</h3><div class="rk-qr" role="img" aria-label="QR-kód: ' + esc(k.qr) + '">' + qrSvg(q, 240) + '</div>' +
+			'<p class="rk-hint">Szolgáltatáscsomag · Kód: <b>' + esc(k.qr) + '</b><br>Beolvasva rögtön a kiadás (vagy ha kint van, a visszavétel) nyílik meg – a listán bármi kivehető.</p>' +
+			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qcopy>Kép másolása</button><button type="button" class="cpx-btn sm" data-qprint>' + (canShareImg() ? 'Nyomtatás / megosztás' : 'Címke nyomtatása') + '</button></div></div>';
+		document.body.appendChild(ov);
+		const close = () => { ov.remove(); document.removeEventListener('keydown', kk); }, kk = e => { if (e.key === 'Escape') close(); };
+		document.addEventListener('keydown', kk);
+		ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-qx]')) close(); else if (e.target.closest('[data-qcopy]')) qrCopy(pu, q, pu.tag); else if (e.target.closest('[data-qprint]')) qrPrint([pu]); });
+	}
 	function kitMove(id, type) {
 		const k = (S.d.kits || {})[id]; if (!k) return;
-		const ev = S.d.ev, ST = S.d.status || {}, out = type === 'out';
-		const U = (k.units || []).map(unit).filter(Boolean);
-		const urow = u => { const t = item(u.item_id), can = out ? u.loc !== ev : u.loc === ev, warn = out && can && u.status !== 'ok'; return '<label class="rk-ck' + (can ? '' : ' off') + '"><input type="checkbox" name="u" value="' + u.id + '"' + (can && !warn ? ' checked' : '') + (can ? '' : ' disabled') + '> <span>' + esc(u.label || (t && t.name)) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (!can ? ' <small>(' + (out ? 'már kint van' : 'nincs kint') + ')</small>' : warn ? ' <small class="w">(' + esc(ST[u.status] || u.status) + ')</small>' : '') + '</span></label>'; };
+		const ev = S.d.ev, main = S.d.locs[0], ST = S.d.status || {}, out = type === 'out';
+		const U = (k.units || []).map(unit).filter(Boolean), oth = (S.d.locs || []).slice(1);
+		const urow = u => { const t = item(u.item_id), can = out ? u.loc !== ev : u.loc !== main, warn = out && can && u.status !== 'ok'; return '<label class="rk-ck' + (can ? '' : ' off') + '"><input type="checkbox" name="u" value="' + u.id + '"' + (can && !warn ? ' checked' : '') + (can ? '' : ' disabled') + '> <span>' + esc(u.label || (t && t.name)) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (!can ? ' <small>(' + (out ? 'már kint van' : 'raktárban') + ')</small>' : !out ? ' <small>(' + esc(u.loc === ev ? 'rendezvényen' : u.loc) + ')</small>' : warn ? ' <small class="w">(' + esc(ST[u.status] || u.status) + ')</small>' : '') + '</span></label>'; };
 		const srow = x => { const i = item(x[0]); return i ? '<label class="rk-ks2"><span>' + esc(i.name) + '</span><input name="sq" data-si="' + i.id + '" inputmode="decimal" value="' + (out ? nf(x[1]) : '') + '" placeholder="' + (out ? '' : 'maradék, ha van') + '"><small>' + esc(i.unit) + '</small></label>' : ''; };
 		const f = dlg((out ? 'Kiadás: ' : 'Visszavétel: ') + k.name,
-			(out ? '<div class="rk-f w"><span>Rendezvény (deal)</span><input data-dq placeholder="Keresés: név vagy deal-szám (üresen: a következő 2 hét)" autocomplete="off"><input type="hidden" name="deal"><div class="rk-dl" data-dl></div></div>' : '<p class="rk-hint" style="margin-top:0">Pipáld ki, ami visszajött. Ami nincs kipipálva, kint marad (hiányzóként látszik).</p>') +
+			(out ? '<p class="rk-hint" style="margin-top:0">Ami mégsem megy, vedd ki a pipát – az a raktárban marad.</p>' +
+				'<div class="rk-seg" role="radiogroup" aria-label="Hová"><label><input type="radio" name="dest" value="ev" checked> Rendezvényre</label><label><input type="radio" name="dest" value="loc"> Más helyre (pl. haza)</label></div>' +
+				'<div class="rk-f w" data-kloc hidden><span>Hová</span><select name="to">' + oth.map(l => '<option>' + esc(l) + '</option>').join('') + '<option value="__new">+ Új hely…</option></select></div>' +
+				'<div class="rk-f w" data-kev><span>Rendezvény (deal)</span><input data-dq placeholder="Keresés: név vagy deal-szám (üresen: a következő 2 hét)" autocomplete="off"><input type="hidden" name="deal"><div class="rk-dl" data-dl></div></div>' : '<p class="rk-hint" style="margin-top:0">Pipáld ki, ami visszajött. Ami nincs kipipálva, kint marad (hiányzóként látszik).</p>') +
 			'<h4 class="rk-h4">Eszközök</h4><div class="rk-qpl">' + (U.map(urow).join('') || '<p class="cpx-muted">Nincs eszköz a szolgáltatáscsomagban.</p>') + '</div>' +
 			((k.stock || []).length ? '<h4 class="rk-h4">' + (out ? 'Fogyóanyag' : 'Visszahozott fogyóanyag') + '</h4>' + k.stock.map(srow).join('') : ''),
 			async f2 => {
 				const units = Array.from(f2.querySelectorAll('[name=u]:checked')).map(c => c.value);
 				const stock = Array.from(f2.querySelectorAll('[name=sq]')).map(x => [Number(x.dataset.si), String(x.value).replace(',', '.')]).filter(r => Number(r[1]) > 0);
 				if (!units.length && !stock.length) throw new Error('Nincs kijelölt tétel.');
-				const r = await post('cp_wh_kit', { op: 'move', id, type, deal: val(f2, 'deal'), units: units.join(','), stock: JSON.stringify(stock) });
-				const miss = !out ? U.filter(u => u.loc === ev && !units.includes(String(u.id))).length : 0;
-				return (out ? 'Kiadva: ' : 'Visszavéve: ') + r.n + ' tétel.' + (miss ? ' ' + miss + ' eszköz kint maradt.' : '');
+				let t2 = type, to = '';
+				if (out && val(f2, 'dest') === 'loc') {
+					t2 = 'move'; to = val(f2, 'to');
+					if (to === '__new' || !to) { to = String(prompt('Az új hely neve (pl. Otthon):') || '').trim(); if (!to) throw new Error('Add meg, hová viszed.'); if (!S.d.locs.includes(to)) { const r0 = await post('cp_wh_locs', { locs: S.d.locs.concat([to]).join('\n') }); S.d.locs = r0.locs || S.d.locs.concat([to]); } }
+				}
+				const r = await post('cp_wh_kit', { op: 'move', id, type: t2, to, deal: t2 === 'out' ? val(f2, 'deal') : '', units: units.join(','), stock: JSON.stringify(stock) });
+				const miss = !out ? U.filter(u => u.loc !== main && !units.includes(String(u.id))).length : 0;
+				return (t2 === 'move' ? 'Elvive (' + to + '): ' : out ? 'Kiadva: ' : 'Visszavéve: ') + r.n + ' tétel.' + (miss ? ' ' + miss + ' eszköz kint maradt.' : '');
 			}, out ? 'Kiadás' : 'Visszavétel');
 		if (out) {
 			const dl = f.querySelector('[data-dl]'); let qt = 0;
+			const ds = () => { const loc = val(f, 'dest') === 'loc'; f.querySelector('[data-kloc]').hidden = !loc; f.querySelector('[data-kev]').hidden = loc; };
+			f.querySelectorAll('[name=dest]').forEach(x => x.addEventListener('change', ds));
 			const dq = async q => { try { const r = await post('cp_wh_dealq', { q }); dl.innerHTML = (r.rows || []).map(d => '<button type="button" data-did="' + d.id + '"><b>' + esc(d.title) + '</b><small>#' + d.id + (d.event_d ? ' · ' + esc(huD(d.event_d)) : '') + '</small></button>').join('') || '<p class="cpx-muted">Nincs találat.</p>'; } catch (x) { dl.innerHTML = '<p class="rk-err">' + esc(x.message) + '</p>'; } };
 			f.querySelector('[data-dq]').addEventListener('input', e => { clearTimeout(qt); f.elements.deal.value = ''; qt = setTimeout(() => dq(e.target.value.trim()), 200); });
 			dl.addEventListener('click', e => { const b = e.target.closest('[data-did]'); if (!b) return; f.elements.deal.value = b.dataset.did; f.querySelector('[data-dq]').value = b.querySelector('b').textContent + ' (#' + b.dataset.did + ')'; dl.innerHTML = ''; });
@@ -182,6 +207,7 @@
 		if (b.dataset.rcard) return unitCard(unit(b.dataset.rcard));
 		if (b.dataset.rkit) return kitForm(b.dataset.rkit === 'new' ? null : b.dataset.rkit);
 		if (b.dataset.rkmv) return kitMove(b.dataset.rkid, b.dataset.rkmv);
+		if (b.dataset.rkqr) return kitQr(b.dataset.rkqr);
 		if (b.dataset.rnew2) return b.dataset.rnew2 === 'asset' ? addAssets(null) : itemForm(null, 'stock');
 		if (b.dataset.raddu) return addAssets(item(b.dataset.raddu));
 		if (b.dataset.rmv) return moveForm(item(b.dataset.rid), null, b.dataset.rmv);
@@ -343,13 +369,14 @@
 		if (!qrP) qrP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = SRC.replace(/raktar\.js(\?.*)?$/, 'qrcode.min.js$1'); sc.onload = res; sc.onerror = () => { qrP = null; rej(new Error('A QR-kód készítője nem töltődött be.')); }; document.head.appendChild(sc); });
 		return qrP;
 	}
-	const uUrl = u => location.origin + location.pathname + '#raktar:e:' + u.qr;
-	const uName = u => { const t = item(u.item_id); return u.label || (t ? t.name : 'Eszköz'); };
+	const uUrl = u => location.origin + location.pathname + (u._kit ? '#raktar:k:' : '#raktar:e:') + u.qr;
+	const uName = u => { const t = u._kit ? null : item(u.item_id); return u.label || (t ? t.name : 'Eszköz'); };
 	function qrMake(u) { const q = window.qrcode(0, 'M'); q.addData(uUrl(u)); q.make(); return q; }
 	const qrSvg = (q, size) => q.createSvgTag({ cellSize: Math.max(1, Math.floor(size / (q.getModuleCount() + 4))), margin: 2 }).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
 	function deepOpen() {
-		const m = /^#raktar:e:([A-Z0-9]{4,12})$/i.exec(location.hash); if (!m || !S.d) return;
+		const m = /^#raktar:[ek]:([A-Z0-9]{4,12})$/i.exec(location.hash); if (!m || !S.d) return;
 		history.replaceState(history.state, '', '#raktar');
+		if (openCode(m[1].toUpperCase())) return;
 		const u = (S.d.units || []).find(x => String(x.qr).toUpperCase() === m[1].toUpperCase());
 		if (!u) { toast('Ez a QR-kód nem tartozik egyik eszközhöz sem (' + m[1] + ').', true); return; }
 		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitCard(u), 50);
@@ -445,8 +472,10 @@
 		if (!jqP) jqP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = SRC.replace(/raktar\.js(\?.*)?$/, 'jsqr.js$1'); sc.onload = res; sc.onerror = () => { jqP = null; rej(new Error('A QR-felismerő nem töltődött be.')); }; document.head.appendChild(sc); });
 		return jqP;
 	}
-	const codeOf = txt => { const t = String(txt || '').trim(), m = /#raktar:e:([A-Z0-9]{4,12})\b/i.exec(t) || /^([A-Z0-9]{4,12})$/i.exec(t); return m ? m[1].toUpperCase() : ''; };
+	const codeOf = txt => { const t = String(txt || '').trim(), m = /#raktar:[ek]:([A-Z0-9]{4,12})\b/i.exec(t) || /^([A-Z0-9]{4,12})$/i.exec(t); return m ? m[1].toUpperCase() : ''; };
 	function openCode(code) {
+		const kit = kitsOf().find(k => String(k.qr || '').toUpperCase() === code);
+		if (kit) { S.sub = 'kits'; keep(); S.q = ''; view(S.main); setTimeout(() => kitScan(kit.id), 50); toast('Beolvasva: ' + kit.name); return true; }
 		const u = (S.d.units || []).find(x => String(x.qr).toUpperCase() === code);
 		if (!u) return false;
 		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitCard(u), 50);
@@ -524,6 +553,7 @@
 			'.rk-chist h4{margin:14px 0 4px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}.rk-chist ul{list-style:none;margin:0;padding:0}.rk-chist li{display:grid;grid-template-columns:auto 1fr;gap:0 10px;padding:5px 0;font-size:13px;border-bottom:1px solid #F0EBE3}.rk-chist time{color:var(--mu);font-variant-numeric:tabular-nums}.rk-chist span{overflow-wrap:anywhere}.rk-chist small{grid-column:2;color:var(--mu)}.rk-chist .cpx-muted{font-size:13px}' +
 			'.rk-kit{background:#fff;border:1px solid var(--li);border-radius:14px;padding:14px 16px;margin:0 0 12px}.rk-kh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.rk-kh h3{margin:0;font:800 16px Inter,sans-serif;overflow-wrap:anywhere;margin-right:auto}.rk-kn{margin:4px 0 0;font-size:13px;color:var(--mu)}' +
 			'.rk-kl{list-style:none;margin:10px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px}.rk-kl li{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:4px 0;border-bottom:1px solid #F0EBE3;min-width:0}.rk-kl li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rk-kl small{color:var(--mu);white-space:nowrap}.rk-ka{display:flex;flex-wrap:wrap;align-items:center;gap:8px}' +
+			'.rk-seg{display:flex;gap:4px;background:var(--li);border-radius:12px;padding:3px;margin:10px 0 4px}.rk-seg label{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px;border-radius:9px;font:600 13.5px Inter,sans-serif;cursor:pointer;text-align:center}.rk-seg input{position:absolute;opacity:0;pointer-events:none}.rk-seg label:has(input:checked){background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}.rk-seg label:has(input:focus-visible){outline:2px solid #2F5BEA}' +
 			'.rk-h4{margin:14px 0 6px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}.rk-kq{width:100%;box-sizing:border-box;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;margin-bottom:6px}.rk-ck[hidden]{display:none}.rk-ck.off{opacity:.5}.rk-ck small.w{color:#9B2A1F}' +
 			'.rk-ks{display:flex;gap:6px;align-items:center;margin:0 0 6px}.rk-ks select{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 6px;font:inherit}.rk-ks input{width:80px;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit}.rk-ks2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:14px}.rk-ks2 span{flex:1;min-width:0;overflow-wrap:anywhere}.rk-ks2 input{width:90px;height:36px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit}.rk-ks2 small{color:var(--mu);min-width:3em}' +
 			'.rk-tagf{margin-top:12px;text-align:left}' +
