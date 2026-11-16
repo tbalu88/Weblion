@@ -206,6 +206,7 @@ function cp_logi_day($day) {
 function cp_logi_auth() {
 	cp_el_auth();
 	cp_tab_need(array('naptar'));
+	cp_tab_need(array('logisztika')); /* v2.9.288: a Láthatóságban személyenként kapcsolható */
 	if (!cp_logi_db_ok()) { cp_el_err('A Logisztika adatbázisa készül – töltsd újra az oldalt.', 503); }
 }
 add_action('wp_ajax_nopriv_cp_logi_day', 'cp_logi_ajax_day'); add_action('wp_ajax_cp_logi_day', 'cp_logi_ajax_day');
