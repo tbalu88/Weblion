@@ -139,7 +139,9 @@ function cp_send_ajax() {
 	$cc = $test ? array() : cp_send_addrs(wp_unslash($_POST['cc'] ?? ''));
 	$bcc = $test ? array() : cp_send_addrs(wp_unslash($_POST['bcc'] ?? ''));
 	if (!$to) { cp_el_err($test ? 'A fiókodhoz nincs e-mail-cím.' : 'Adj meg legalább egy érvényes címzettet.'); }
-	if (count($to) + count($cc) + count($bcc) > 20) { cp_el_err('Legfeljebb 20 címzett lehet.'); }
+	/* v2.9.262: tömeges levél titkos másolatban (pl. interjú-eredmények): a rejtett címzettek külön, legfeljebb 100 */
+	if (count($to) + count($cc) > 20) { cp_el_err('Legfeljebb 20 címzett lehet (Címzett + Másolat).'); }
+	if (count($bcc) > 100) { cp_el_err('Titkos másolatban legfeljebb 100 címzett lehet – oszd több levélre.'); }
 	$n = (int) get_transient('cp_send_n' . $me);
 	if ($n >= 30) { cp_el_err('Óránként legfeljebb 30 levelet küldhetsz a panelből (próbaüzem).', 429); }
 	$thread = (int) ($_POST['thread'] ?? 0);

@@ -491,6 +491,7 @@ function cp_iv_css() {
 }
 
 /* ------------------------------------------------------------ panel: Kezelők → Interjú-időpontok */
+function cp_iv_final() { $f = get_option('cp_iv_final', array()); return is_array($f) ? $f : array(); }
 function cp_iv_admin_data() {
 	global $wpdb;
 	$o = cp_iv_opts();
@@ -521,7 +522,7 @@ function cp_iv_admin_data() {
 		}
 		$cl[] = array('id' => (int) $r['id'], 'name' => $r['name'], 'phone' => $r['phone'], 'email' => $r['email'], 'slot' => $r['day'] ? cp_iv_hu_day($r['day'], false) . ' ' . $r['tm'] : '', 'at' => function_exists('cp_crm_local') ? cp_crm_local($r['changed_at']) : (string) $r['changed_at'], 'by' => $who);
 	}
-	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0, 'cmt' => cp_iv_cmt_ok() ? 1 : 0, 'cancels' => $cl);
+	return array('opts' => array('on' => (int) $o['on'], 'title' => $o['title'], 'location' => $o['location'], 'note' => $o['note'], 'dur' => (int) $o['dur'], 'days' => array_values((array) $o['days']), 'close_min' => (int) $o['close_min'], 'cancel_h' => (int) $o['cancel_h'], 'remind' => (int) $o['remind']), 'days' => $days, 'cancelled' => $cancelled, 'url' => cp_iv_url(), 'notes' => $nt ? 1 : 0, 'cmt' => cp_iv_cmt_ok() ? 1 : 0, 'cancels' => $cl, 'final' => cp_iv_final()); /* v2.9.262: végső döntés foglalásonként */
 }
 
 /* ------------------------------------------------------------ v2.9.85: interjú-jegyzet és értékelés (csak a panelben – soha nem a nyilvános oldalon, soha nem levélben) */
@@ -670,6 +671,13 @@ function cp_iv_ajax_admin() {
 	} elseif ($do === 'cancel') {
 		$b = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_iv_t('bookings') . ' WHERE id = %d', (int) ($_POST['id'] ?? 0)), ARRAY_A);
 		if ($b && $b['status'] === 'ok') { cp_iv_cancel($b, true); }
+	} elseif ($do === 'final') {
+		/* v2.9.262: végső döntés (alkalmas / nem alkalmas / üres = még nincs döntés) – opcióban, foglalásonként */
+		$id = (int) ($_POST['id'] ?? 0); $v = (string) ($_POST['v'] ?? '');
+		if (!$id || !in_array($v, array('yes', 'no', ''), true)) { cp_el_err('Hibás kérés.'); }
+		$f = cp_iv_final(); if ($v === '') { unset($f[(string) $id]); } else { $f[(string) $id] = $v; }
+		update_option('cp_iv_final', $f, false);
+		if (function_exists('cp_audit_add')) { $n = (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_iv_t('bookings') . ' WHERE id = %d', $id)); cp_audit_add('kezelok', 'interview', 'Interjú végső döntés: ' . ($v === 'yes' ? 'alkalmas' : ($v === 'no' ? 'nem alkalmas' : 'törölve')), '', $n); }
 	} elseif ($do === 'save') {
 		if (function_exists('cp_admin_need')) { cp_admin_need(); }
 		$in = json_decode((string) wp_unslash($_POST['o'] ?? ''), true);
