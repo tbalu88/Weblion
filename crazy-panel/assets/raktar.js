@@ -92,7 +92,7 @@
 				(U.length ? '<table class="rk-t"><thead><tr><th>Darab</th><th>Sorozatszám</th><th>Hol</th><th>Állapot</th><th class="rk-a"><span class="rk-sr">Műveletek</span></th></tr></thead><tbody>' + U.map(u => {
 					const svc = u.svc_limit > 0 && u.counter - u.svc_base >= u.svc_limit;
 					const sn = u.label && u.label.indexOf(t.name + ' ') === 0 ? u.label.slice(t.name.length + 1) : (u.label || '#' + u.id); /* v2.9.276: a csoport neve nem ismétlődik a darabnál */
-					return '<tr><td><button type="button" class="rk-nm" data-runit="' + u.id + '" title="' + esc(u.label || t.name) + '">' + esc(sn) + '</button><small>' + esc([u.tag, u.model, 'QR ' + u.qr].filter(Boolean).join(' · ')) + '</small></td>' +
+					return '<tr><td><button type="button" class="rk-nm" data-rcard="' + u.id + '" title="' + esc(u.label || t.name) + '">' + esc(sn) + '</button><small>' + esc([u.tag, u.model, 'QR ' + u.qr].filter(Boolean).join(' · ')) + '</small></td>' +
 						'<td class="rk-sn" data-l="Sorozatszám">' + (u.serial ? esc(u.serial) : '<span class="cpx-muted">–</span>') + '</td>' +
 						'<td>' + esc(u.loc || '–') + (u.deal_id && D[u.deal_id] ? '<small><a href="#deals:' + u.deal_id + '">' + esc(D[u.deal_id].t) + '</a></small>' : '') + '</td>' +
 						'<td><span class="rk-chip ' + (u.status === 'ok' ? (svc ? 'mid' : 'ok') : u.status === 'svc' || u.status === 'bad' ? 'mid' : 'bad') + '">' + esc(svc && u.status === 'ok' ? 'szerviz esedékes' : ST[u.status] || u.status) + '</span></td>' +
@@ -119,6 +119,7 @@
 		const b = e.target.closest('button'); if (!b) return;
 		if (b.dataset.ritem) return itemForm(item(b.dataset.ritem));
 		if (b.dataset.runit) return unitForm(unit(b.dataset.runit));
+		if (b.dataset.rcard) return unitCard(unit(b.dataset.rcard));
 		if (b.dataset.rnew2) return b.dataset.rnew2 === 'asset' ? addAssets(null) : itemForm(null, 'stock');
 		if (b.dataset.raddu) return addAssets(item(b.dataset.raddu));
 		if (b.dataset.rmv) return moveForm(item(b.dataset.rid), null, b.dataset.rmv);
@@ -186,6 +187,43 @@
 		if (!t) f.elements.name.addEventListener('input', () => { const x = types.find(y => y.name.toLowerCase() === f.elements.name.value.trim().toLowerCase()); ex.hidden = !x; if (x) { ex.textContent = 'Már létezik (' + (S.d.units || []).filter(u => u.item_id === x.id).length + ' db) – az új darabok ehhez kerülnek.'; if (f.elements.cat && !f.elements.cat.value && x.cat) f.elements.cat.value = x.cat; } });
 		ser.addEventListener('input', () => { const n = ser.value.split(/\n/).filter(x => x.trim()).length; if (n > Number(qty.value || 0)) qty.value = n; });
 	}
+	/* v2.9.282: eszköz áttekintő lapja (beolvasás után ez nyílik): csak a kitöltött adatok + gyors műveletek; a teljes űrlap a Szerkesztés mögött */
+	async function unitCard(u) {
+		if (!u) return;
+		const t = item(u.item_id), ST = S.d.status || {}, D = S.d.deals || {}, ev = S.d.ev, out = u.loc === ev;
+		const svc = u.svc_limit > 0 && u.counter - u.svc_base >= u.svc_limit;
+		const row = (l, v) => v ? '<div class="rk-kv"><span>' + l + '</span><b>' + v + '</b></div>' : '';
+		const ov = document.createElement('div'); ov.className = 'rk-ov';
+		ov.innerHTML = '<div class="rk-dlg rk-card" role="dialog" aria-modal="true" aria-label="' + esc(u.label || (t && t.name) || 'Eszköz') + '">' +
+			'<div class="rk-ch"><div><h3>' + esc(u.label || (t && t.name) || 'Eszköz') + '</h3><p>' + esc([t && t.name !== u.label ? t.name : '', t && t.cat].filter(Boolean).join(' · ')) + '</p></div><button type="button" class="rk-x" data-cx aria-label="Bezárás">×</button></div>' +
+			'<div class="rk-where ' + (out ? 'out' : '') + '"><span class="rk-chip ' + (u.status === 'ok' ? (svc ? 'mid' : 'ok') : u.status === 'svc' || u.status === 'bad' ? 'mid' : 'bad') + '">' + esc(svc && u.status === 'ok' ? 'szerviz esedékes' : ST[u.status] || u.status) + '</span>' +
+			'<b>' + esc(u.loc || '–') + '</b>' + (out && u.deal_id && D[u.deal_id] ? '<a href="#deals:' + u.deal_id + '" data-cdeal>' + esc(D[u.deal_id].t) + '</a>' : '') + '</div>' +
+			(u.tag ? '<p class="rk-ctag">' + esc(u.tag) + '</p>' : '') +
+			'<div class="rk-kvs">' + row('Sorozatszám', esc(u.serial)) + row('Gyári típus', esc(u.model)) + (u.counter || u.svc_limit ? row('Számláló', esc(String(u.counter)) + (u.svc_limit ? ' / szerviz ' + esc(String(u.svc_base + u.svc_limit)) : '')) : '') + row('Megjegyzés', esc(u.note)) + row('QR-kód', esc(u.qr)) + '</div>' +
+			'<div class="rk-acts">' + (out ? '<button type="button" class="cpx-btn" data-ca="back">↩ Visszavétel a raktárba</button>' : '<button type="button" class="cpx-btn" data-ca="out">Kiadás rendezvényre</button><button type="button" class="cpx-btn ghost" data-ca="move">Áthelyezés</button>') + '</div>' +
+			'<label class="rk-cst"><span>Állapot</span><select data-cst>' + Object.entries(ST).map(s => '<option value="' + s[0] + '"' + (u.status === s[0] ? ' selected' : '') + '>' + esc(s[1]) + '</option>').join('') + '</select></label>' +
+			'<div class="rk-chist" data-chist><p class="cpx-muted">Előzmények betöltése…</p></div>' +
+			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-cqr>QR / címke</button><button type="button" class="cpx-btn ghost sm" data-ced>✎ Szerkesztés</button><button type="button" class="cpx-btn sm" data-cx>Kész</button></div></div>';
+		document.body.appendChild(ov);
+		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
+		document.addEventListener('keydown', k);
+		ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
+		ov.addEventListener('click', e => {
+			const b = e.target.closest('button,a'); if (!b) return;
+			if (b.hasAttribute('data-cx')) close();
+			else if (b.dataset.ca) { close(); moveForm(t, u, b.dataset.ca); }
+			else if (b.hasAttribute('data-ced')) { close(); unitForm(u); }
+			else if (b.hasAttribute('data-cqr')) { close(); qrOne(u); }
+			else if (b.hasAttribute('data-cdeal')) close();
+		});
+		ov.querySelector('[data-cst]').addEventListener('change', async e => { const v = e.target.value; try { await post('cp_wh_ustat', { id: u.id, status: v }); u.status = v; toast('Állapot: ' + (ST[v] || v)); await load(); close(); const nu = unit(u.id); if (nu) unitCard(nu); } catch (x) { toast(x.message, true); e.target.value = u.status; } });
+		try {
+			const r = await post('cp_wh_moves', { unit_id: u.id }), T = S.d.types || {}, RD = r.deals || {};
+			const L = (r.rows || []).slice(0, 4);
+			const h = ov.querySelector('[data-chist]'); if (!h.isConnected) return;
+			h.innerHTML = L.length ? '<h4>Legutóbbi mozgások</h4><ul>' + L.map(x => '<li><time>' + esc(String(x.at).slice(0, 16).replace(/-/g, '.').replace(' ', ' ')) + '</time><span>' + esc(x.note && x.type === 'adj' && !Number(x.qty) ? x.note : (T[x.type] || x.type)) + (x.deal_id && RD[x.deal_id] ? ' – ' + esc(RD[x.deal_id].t) : (x.loc_to ? ' → ' + esc(x.loc_to) : '')) + '</span><small>' + esc(x.by_name || '') + '</small></li>').join('') + '</ul>' : '';
+		} catch (x) { const h = ov.querySelector('[data-chist]'); if (h) h.innerHTML = ''; }
+	}
 	function unitForm(u) {
 		const types = (S.d && S.d.items || []).filter(i => i.kind === 'asset' && i.active);
 		const x = u || {}, ST = (S.d && S.d.status) || {};
@@ -223,6 +261,7 @@
 			(!u ? '<p class="rk-hint">Készlet most: ' + (Object.keys(st).length ? Object.entries(st).map(e => esc(e[0]) + ' ' + nf(e[1])).join(' · ') : 'nincs') + '</p>' : ''),
 			async f2 => { const t = val(f2, 'type'); await post('cp_wh_move', { type: t, item_id: i.id, unit_id: u ? u.id : 0, qty: val(f2, 'qty'), from: val(f2, 'from'), to: val(f2, 'to'), deal: val(f2, 'deal'), price: val(f2, 'price'), note: val(f2, 'note') }); return T[t] + ' rögzítve.'; }, 'Rögzítés');
 		const sh = () => { const t = val(f, 'type'); f.querySelector('[data-mf]').hidden = !!u || !['out', 'move', 'scrap'].includes(t); f.querySelector('[data-mt]').hidden = !['in', 'back', 'move', 'adj'].includes(t) || (t === 'move' && false); f.querySelector('[data-md]').hidden = t !== 'out'; f.querySelector('[data-mp]').hidden = t !== 'in'; if (t === 'out') dq(''); };
+		if (u && types.includes(type)) f.elements.type.value = type; /* v2.9.282: az áttekintő lapról a választott mozgással nyílik */
 		f.elements.type.addEventListener('change', sh);
 		let qt = 0; const dl = f.querySelector('[data-dl]');
 		async function dq(q) { try { const r = await post('cp_wh_dealq', { q }); dl.innerHTML = (r.rows || []).map(d => '<button type="button" data-did="' + d.id + '"><b>' + esc(d.title) + '</b><small>#' + d.id + (d.event_d ? ' · ' + esc(huD(d.event_d)) : '') + '</small></button>').join('') || '<p class="cpx-muted">Nincs találat.</p>'; } catch (x) { dl.innerHTML = '<p class="rk-err">' + esc(x.message) + '</p>'; } }
@@ -251,7 +290,7 @@
 		history.replaceState(history.state, '', '#raktar');
 		const u = (S.d.units || []).find(x => String(x.qr).toUpperCase() === m[1].toUpperCase());
 		if (!u) { toast('Ez a QR-kód nem tartozik egyik eszközhöz sem (' + m[1] + ').', true); return; }
-		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitForm(u), 50);
+		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitCard(u), 50);
 	}
 	async function qrOne(u) {
 		if (!u) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
@@ -337,7 +376,7 @@
 	function openCode(code) {
 		const u = (S.d.units || []).find(x => String(x.qr).toUpperCase() === code);
 		if (!u) return false;
-		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitForm(u), 50);
+		S.sub = 'assets'; keep(); S.q = String(u.serial || u.qr).toLowerCase(); view(S.main); setTimeout(() => unitCard(u), 50);
 		toast('Beolvasva: ' + (u.label || code));
 		return true;
 	}
@@ -405,6 +444,11 @@
 			'.rk-tree{margin:-4px 0 12px;font-size:13px;color:var(--mu);line-height:1.5}.rk-tree b{color:var(--ink)}.rk-tree span{margin:0 4px}.rk-ex{display:block;color:#1E6B39;font-size:12px;margin-top:3px}.rk-ex[hidden]{display:none}' +
 			'.rk-lab{display:flex;align-items:center;gap:14px;margin:4px auto 0;width:min(100%,390px);aspect-ratio:70/37;box-sizing:border-box;padding:12px 14px;border:1.5px dashed #C9C4BB;border-radius:10px;background:#fff;text-align:left}.rk-lq{flex:none;width:44%;aspect-ratio:1}.rk-lq svg{width:100%;height:100%;display:block}' +
 			'.rk-lt{display:flex;flex-direction:column;gap:2px;min-width:0;color:#141C33}.rk-lt b{font-size:15px;line-height:1.2;overflow-wrap:anywhere}.rk-lt span{font-size:13px;font-weight:600;color:#141C33;overflow-wrap:anywhere}.rk-lt i{font-style:normal;font-weight:700;font-size:13px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.rk-lt i[hidden]{display:none}.rk-lt small{font-size:13px;font-weight:600;color:#141C33;letter-spacing:.02em}.rk-lt em{font-style:normal;font-weight:800;font-size:13px;margin-top:2px}' +
+			'.rk-card{width:min(480px,100%)}.rk-ch{display:flex;align-items:flex-start;gap:10px}.rk-ch>div{flex:1;min-width:0}.rk-ch h3{margin:0;font:800 20px/1.25 Inter,sans-serif;overflow-wrap:anywhere}.rk-ch p{margin:3px 0 0;color:var(--mu);font-size:13.5px}.rk-x{border:0;background:#F1EFEB;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;flex:none}' +
+			'.rk-where{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:14px 0 4px;padding:12px;border-radius:12px;background:#F3FAF5;font-size:15px}.rk-where.out{background:#FFF6E6}.rk-where a{flex-basis:100%;font-size:13px;color:var(--ink);overflow-wrap:anywhere}.rk-ctag{margin:8px 0 0;font-weight:700;font-size:15px;overflow-wrap:anywhere}' +
+			'.rk-kvs{margin:10px 0 0}.rk-kv{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #F0EBE3;font-size:14px}.rk-kv span{color:var(--mu);min-width:7.5em}.rk-kv b{font-weight:600;overflow-wrap:anywhere;min-width:0}' +
+			'.rk-acts{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}.rk-acts .cpx-btn{flex:1 1 180px;min-height:46px;font-size:15px}.rk-cst{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;color:var(--mu)}.rk-cst select{flex:1;height:40px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit;color:var(--ink);background:#fff}' +
+			'.rk-chist h4{margin:14px 0 4px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}.rk-chist ul{list-style:none;margin:0;padding:0}.rk-chist li{display:grid;grid-template-columns:auto 1fr;gap:0 10px;padding:5px 0;font-size:13px;border-bottom:1px solid #F0EBE3}.rk-chist time{color:var(--mu);font-variant-numeric:tabular-nums}.rk-chist span{overflow-wrap:anywhere}.rk-chist small{grid-column:2;color:var(--mu)}.rk-chist .cpx-muted{font-size:13px}' +
 			'.rk-tagf{margin-top:12px;text-align:left}' +
 			'.rk-scan .rk-dlg{width:min(460px,100%)}.rk-cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:1/1}.rk-cam video{width:100%;height:100%;object-fit:cover;display:block}.rk-cam i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}.rk-cam[hidden]{display:none}.rk-man{display:flex;gap:8px;margin-top:10px}.rk-man input{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;text-transform:uppercase}' +
 			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(440px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +

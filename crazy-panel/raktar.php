@@ -280,3 +280,16 @@ function cp_wh_ajax_del() {
 	if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'delete', $log, 'raktar', ''); }
 	wp_send_json_success(array('ok' => true));
 }
+
+/* v2.9.282: gyors állapotváltás az eszköz áttekintő lapjáról (beolvasás után) */
+add_action('wp_ajax_nopriv_cp_wh_ustat', 'cp_wh_ajax_ustat'); add_action('wp_ajax_cp_wh_ustat', 'cp_wh_ajax_ustat');
+function cp_wh_ajax_ustat() {
+	cp_wh_guard(); global $wpdb;
+	$id = (int) ($_POST['id'] ?? 0); $st = (string) ($_POST['status'] ?? '');
+	if (!$id || !isset(cp_wh_status()[$st])) { cp_el_err('Hibás kérés.'); }
+	$u = $wpdb->get_row($wpdb->prepare('SELECT item_id, status, loc FROM ' . cp_wh_t('units') . ' WHERE id = %d', $id), ARRAY_A); if (!$u) { cp_el_err('Nincs ilyen eszköz.', 404); }
+	if ($u['status'] === $st) { wp_send_json_success(array('ok' => true)); }
+	$wpdb->update(cp_wh_t('units'), array('status' => $st, 'updated_at' => current_time('mysql')), array('id' => $id));
+	$wpdb->insert(cp_wh_t('moves'), array('item_id' => (int) $u['item_id'], 'unit_id' => $id, 'qty' => 0, 'type' => 'adj', 'loc_from' => '', 'loc_to' => '', 'by_name' => cp_wh_who(), 'at' => current_time('mysql'), 'note' => 'állapot: ' . cp_wh_status()[$u['status']] . ' → ' . cp_wh_status()[$st]));
+	wp_send_json_success(array('ok' => true));
+}
