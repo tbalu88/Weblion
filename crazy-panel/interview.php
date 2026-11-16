@@ -677,6 +677,18 @@ function cp_iv_ajax_admin() {
 		if (!$id || !in_array($v, array('yes', 'no', ''), true)) { cp_el_err('Hibás kérés.'); }
 		$f = cp_iv_final(); if ($v === '') { unset($f[(string) $id]); } else { $f[(string) $id] = $v; }
 		update_option('cp_iv_final', $f, false);
+		/* v2.9.263: az alkalmasnak jelölt jelentkező a Kezelők → Jelentkezők listába kerül (ha már ott van: aktív lesz, a megjegyzésbe az eredmény) */
+		if ($v === 'yes' && function_exists('cp_kz_ok') && cp_kz_ok()) {
+			$b = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_iv_t('bookings') . ' WHERE id = %d', $id), ARRAY_A);
+			if ($b) {
+				$T = cp_kz_t(); $now = gmdate('Y-m-d H:i:s'); $line = 'Interjú eredménye: alkalmas (' . wp_date('m.d. H:i') . ', ' . (function_exists('cp_kz_who') ? cp_kz_who() : '') . ')';
+				$row = $b['kz_id'] ? $wpdb->get_row($wpdb->prepare("SELECT id, note FROM $T WHERE id = %d", (int) $b['kz_id']), ARRAY_A) : null;
+				if (!$row && $b['email'] !== '') { $row = $wpdb->get_row($wpdb->prepare("SELECT id, note FROM $T WHERE email = %s ORDER BY id DESC LIMIT 1", $b['email']), ARRAY_A); }
+				if ($row) { $wpdb->update($T, array('active' => 1, 'note' => mb_substr(trim((string) $row['note'] . "\n" . $line), -2000), 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló'), array('id' => (int) $row['id'])); $kz = (int) $row['id']; }
+				else { $wpdb->insert($T, array('name' => $b['name'], 'email' => $b['email'], 'phone' => $b['phone'], 'kind' => 'jelentkezo', 'note' => $line, 'active' => 1, 'created_at' => $now, 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló')); $kz = (int) $wpdb->insert_id; }
+				if ($kz && (int) $b['kz_id'] !== $kz) { $wpdb->update(cp_iv_t('bookings'), array('kz_id' => $kz), array('id' => $id)); }
+			}
+		}
 		if (function_exists('cp_audit_add')) { $n = (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_iv_t('bookings') . ' WHERE id = %d', $id)); cp_audit_add('kezelok', 'interview', 'Interjú végső döntés: ' . ($v === 'yes' ? 'alkalmas' : ($v === 'no' ? 'nem alkalmas' : 'törölve')), '', $n); }
 	} elseif ($do === 'save') {
 		if (function_exists('cp_admin_need')) { cp_admin_need(); }

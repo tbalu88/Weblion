@@ -486,7 +486,7 @@
 		q('[data-ivon]', el => { const oo = ivCollect(box); oo.on = el.checked ? 1 : 0; ivDo({ do: 'save', o: JSON.stringify(oo) }).then(ok => ok && toast(oo.on ? 'A foglalás megnyitva.' : 'A foglalás lezárva.')); }, 'change');
 		q('[data-ivcanc]', () => { IV.canc = !IV.canc; ivDraw(); });
 		q('[data-ivflt]', el => { IV.flt = el.dataset.ivflt; ivDraw(); });
-		q('[data-ivfin]', el => { const id = Number(el.dataset.ivfin), v = FIN({ id }) === el.dataset.v ? '' : el.dataset.v; ivDo({ do: 'final', id, v }).then(ok => ok && toast(v ? 'Végső döntés: ' + FINL[v].toLowerCase() + '.' : 'Döntés törölve.')); });
+		q('[data-ivfin]', el => { const id = Number(el.dataset.ivfin), v = FIN({ id }) === el.dataset.v ? '' : el.dataset.v; ivDo({ do: 'final', id, v }).then(ok => ok && toast(v === 'yes' ? 'Alkalmas – bekerült a Kezelők → Jelentkezők listába.' : v ? 'Végső döntés: ' + FINL[v].toLowerCase() + '.' : 'Döntés törölve.')); });
 		q('[data-ivmail]', (el, e) => { e.preventDefault(); ivMail([el.dataset.ivmail], [], ''); });
 		q('[data-ivbulk]', el => ivBulk(el.dataset.ivbulk));
 		q('[data-ivres]', () => {
