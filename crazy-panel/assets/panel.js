@@ -611,7 +611,7 @@
     S.calView = S.calView || ls('cpx_calv', 'month'); S.calFilter = S.calFilter || ls('cpx_calf', 'all');
     /* v2.9.116: Gépek | Beosztás – a beosztás nézetben a csempék a kezelő- és host-igényt mutatják */
     S.calMode = C.slot ? (S.calMode || ls('cpx_calm', 'gep')) : 'gep';
-    const tb = el('div', { class: 'cpx-caltb' }, (C.slot ? '<div class="seg cm" role="group" aria-label="Mit mutasson">' + [['gep', 'Gépek'], ['slot', 'Beosztás']].map(x => '<button type="button" data-cm="' + x[0] + '" class="' + (S.calMode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' : '') + (S.calMode === 'slot' ? '' : '<div class="seg" role="group" aria-label="Nézet">' + [['month', 'Hónap'], ['year', 'Év']].map(x => '<button type="button" data-cv="' + x[0] + '" class="' + (S.calView === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+    const tb = el('div', { class: 'cpx-caltb' }, (C.slot ? '<div class="seg cm" role="group" aria-label="Mit mutasson">' + [['gep', 'Gépek'], ['slot', 'Beosztás']].map(x => '<button type="button" data-cm="' + x[0] + '" class="' + (S.calMode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' : '') + (S.calMode === 'slot' ? '' : '<div class="seg" role="group" aria-label="Nézet">' + [['week', 'Hét'], ['month', 'Hónap'], ['year', 'Év']].map(x => '<button type="button" data-cv="' + x[0] + '" class="' + (S.calView === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
       '<div class="seg" role="group" aria-label="Szűrő">' + [['all', 'Minden nap'], ['risk', 'Kockázatos'], ['free', 'Van szabad gép']].map(x => '<button type="button" data-cf="' + x[0] + '" class="' + (S.calFilter === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>'));
     tb.querySelectorAll('[data-cm]').forEach(b => b.addEventListener('click', () => { S.calMode = b.dataset.cm; try { localStorage.setItem('cpx_calm', S.calMode); } catch (e) { /* privát mód */ } render(); }));
     tb.querySelectorAll('[data-cv]').forEach(b => b.addEventListener('click', () => { S.calView = b.dataset.cv; try { localStorage.setItem('cpx_calv', S.calView); } catch (e) { /* privát mód */ } render(); }));
@@ -620,6 +620,7 @@
     if (!document.getElementById('cpx-cal2-css')) document.head.appendChild(el('style', { id: 'cpx-cal2-css' }, CAL2_CSS));
     if (S.calMode === 'slot') { head.querySelector('.cpx-legend').innerHTML = '<span class="lg ok"></span>mindenki beosztva<span class="lg mid"></span>folyamatban<span class="lg full"></span>hiányzik beosztás'; viewSlotMonth(main); return; }
     if (S.calView === 'year') { viewYear(main); return; }
+    if (S.calView === 'week') { viewWeek(main, head); return; }
     /* v1.80: átláthatóbb havi nézet – az egész csempe színes, nagy szám a szabad gépeknek, kétszínű sáv (foglalt + függő), kockázatjelzés */
     const c = S.cache[S.month];
     const [from, to] = monthRange(S.month);
@@ -689,6 +690,12 @@
     wrap.querySelectorAll('[data-ym]').forEach(b => b.addEventListener('click', () => { S.month = b.dataset.ym; S.calView = 'month'; try { localStorage.setItem('cpx_calv', 'month'); } catch (e) { /* privát mód */ } render(); }));
   }
   const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
+    '.cpx-week{display:flex;flex-direction:column;gap:8px}.wk-d{background:#fff;border:1.5px solid #E6E2DC;border-radius:12px;overflow:hidden}.wk-d.ok{border-color:#BFE3CB}.wk-d.mid{border-color:#F0C982}.wk-d.full{border-color:#EBA59B}.wk-d.past{opacity:.6}.wk-d.today{box-shadow:0 0 0 2.5px #141C33}.wk-d.risk{box-shadow:inset 0 0 0 2px #D97706}.wk-d.dim{opacity:.25}' +
+    '.wk-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;width:100%;border:0;cursor:pointer;text-align:left;padding:9px 12px;font:inherit;color:#141C33}.wk-d.ok .wk-h{background:#E3F4E9}.wk-d.mid .wk-h{background:#FCEBCB}.wk-d.full .wk-h{background:#F9D5D0}.wk-h:focus-visible{outline:2px solid #141C33;outline-offset:-2px}' +
+    '.wk-dn{font:800 15px "Plus Jakarta Sans",sans-serif}.wk-dn em{font:700 10.5px Inter,sans-serif;font-style:normal;background:#141C33;color:#fff;border-radius:999px;padding:1px 7px;margin-left:4px;vertical-align:2px}' +
+    '.wk-cap{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:12.5px;color:#3D4250;font-variant-numeric:tabular-nums}.wk-cap b{font-weight:800;color:#141C33}.wk-cap b.no{color:#B42318}.wk-cap small{color:#6B6F78}.wk-cap .pend{background:#FFF3C4;color:#7A5B00;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}.wk-rk{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#D97706;color:#fff;font:800 11px Inter,sans-serif}' +
+    '.wk-ev{list-style:none;margin:0;padding:4px 0}.wk-ev li{display:grid;grid-template-columns:3em minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 12px;font-size:13px}.wk-ev li+li{border-top:1px solid #F0EBE3}.wk-ev li[data-wdeal]{cursor:pointer}.wk-ev li[data-wdeal]:hover{background:#FAF8F5}.wk-ev li.pending .wk-tt b{font-weight:600;color:#4A4F5A}' +
+    '.wk-t{font-variant-numeric:tabular-nums;color:#6B6F78;font-size:12px}.wk-tt{min-width:0}.wk-tt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.wk-tt small{display:block;color:#6B6F78;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wk-ev .badge{font-size:10.5px;white-space:nowrap}.wk-0{margin:0;padding:8px 12px;font-size:12.5px;color:#8A8F99}' +
     /* v2.9.266: mobilon tömörebb – az összesítők egy görgethető sorban, a naptárcellák levegősebbek, kevesebb zajjal */
     '@media (max-width:560px){.cpx-kpis{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -2px 10px;padding:0 2px 2px;-webkit-overflow-scrolling:touch}.cpx-kpis::-webkit-scrollbar{display:none}' +
     '.cpx-kpis .kpi{flex:0 0 auto;display:flex;align-items:baseline;gap:5px;padding:6px 10px;border-radius:999px;white-space:nowrap}.cpx-kpis .kpi b{display:inline;font:800 15px "Plus Jakarta Sans",sans-serif}.cpx-kpis .kpi span{font-size:12px}' +
@@ -749,6 +756,47 @@
     '.evrow.link{cursor:pointer}.evrow.link:hover{background:#FAF8F5}.evrow .go{float:right;font-size:12px;color:#2F5BD8;font-weight:600}' +
     '@media (max-width:760px){.cpx-cal.v2 .big b{font-size:18px}.cpx-cal.v2 .big span,.cpx-cal.v2 .spn{display:none}.cpx-cal.v2 .ft{justify-content:flex-start}.cpx-cal.v2 .pend span{display:none}.cpx-cal.v2 .dn .tg{display:none}.cpx-cal.v2 .dn .rk{display:none}.cpx-cal.v2 .bar{height:5px}}';
 
+  /* v2.9.267: heti nézet – a hét napjai egymás alatt: szabad gépek, függő ajánlatok, a rendezvények listája (mobilon a legolvashatóbb) */
+  const monOf = s => { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
+  const addD = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
+  async function viewWeek(main, head) {
+    const tdy = today();
+    if (!S.week || monthKey(S.week) !== S.month && monthKey(addD(S.week, 6)) !== S.month) S.week = monOf(monthKey(tdy) === S.month ? tdy : S.month + '-01');
+    const days = [0, 1, 2, 3, 4, 5, 6].map(i => addD(S.week, i));
+    /* fejléc: hét-léptető a hónap-léptető helyén */
+    const d0 = parseYmd(days[0]), d6 = parseYmd(days[6]);
+    const lbl = (d0.getFullYear() !== new Date().getFullYear() ? d0.getFullYear() + '. ' : '') + HU_MONTHS[d0.getMonth()] + ' ' + d0.getDate() + '. – ' + (d6.getMonth() !== d0.getMonth() ? HU_MONTHS[d6.getMonth()] + ' ' : '') + d6.getDate() + '.';
+    const nav = el('div', { class: 'cpx-mnav' });
+    nav.innerHTML = '<button class="cpx-btn ghost" data-w="-7" aria-label="Előző hét">‹</button><h2>' + esc(lbl) + '</h2><button class="cpx-btn ghost" data-w="7" aria-label="Következő hét">›</button><button class="cpx-btn ghost cpx-today" data-w="0" title="Ugrás az aktuális hétre"' + (days.includes(tdy) ? ' disabled' : '') + '>Ma</button>';
+    const old = head.querySelector('.cpx-mnav'); if (old) old.replaceWith(nav);
+    nav.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => { const n = Number(b.dataset.w); S.week = n ? addD(S.week, n) : monOf(tdy); S.month = monthKey(addD(S.week, 3)); render(); }));
+    const ms = Array.from(new Set(days.map(monthKey)));
+    const miss = ms.filter(m => !S.cache[m]);
+    const wrap = el('div', { class: 'cpx-week' }); main.appendChild(wrap);
+    if (miss.length) { wrap.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; try { await Promise.all(miss.map(m => load(m))); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; } if (!wrap.isConnected) return; wrap.innerHTML = ''; }
+    let bk = 0, pd = 0;
+    wrap.innerHTML = days.map(date => {
+      const I = dayInfo(monthKey(date), date), past = date < tdy, wd = parseYmd(date).getDay();
+      const lvl = I.freeS <= 0 ? 'full' : I.freeS <= 2 ? 'mid' : 'ok';
+      const risk = !past && ((I.pSelfie > Math.max(0, I.freeS)) || (I.pSpin > Math.max(0, I.freeP)));
+      const dim = (S.calFilter === 'risk' && !risk) || (S.calFilter === 'free' && (past || I.freeS <= 0));
+      const ev = I.ev.slice().sort((a, b) => (a.state === b.state ? 0 : a.state === 'booked' ? -1 : 1) || String(a.time || '').localeCompare(String(b.time || '')));
+      bk += ev.filter(e => e.state === 'booked').length; pd += ev.filter(e => e.state !== 'booked').length;
+      const sm = S.slotm && S.slotm[monthKey(date)] && S.slotm[monthKey(date)][date];
+      return '<section class="wk-d ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (risk ? ' risk' : '') + (dim ? ' dim' : '') + '">' +
+        '<button type="button" class="wk-h" data-wd="' + date + '"><span class="wk-dn"><b>' + HU_DAYS[(wd + 6) % 7] + '</b> ' + esc(HU_MONTHS[parseYmd(date).getMonth()].slice(0, 3) + '. ' + parseYmd(date).getDate() + '.') + (date === tdy ? ' <em>ma</em>' : '') + '</span>' +
+        '<span class="wk-cap"><b>' + Math.max(0, I.freeS) + '</b> szabad <small>/ ' + I.capS + '</small> · Spinner <b class="' + (I.freeP <= 0 ? 'no' : '') + '">' + Math.max(0, I.freeP) + '</b><small>/' + I.capP + '</small>' +
+        (I.pSelfie + I.pSpin ? ' <span class="pend">' + (I.pSelfie + I.pSpin) + ' függő</span>' : '') + (risk ? ' <span class="wk-rk" title="Több függő ajánlat, mint szabad gép">!</span>' : '') + (sm && sm[0] ? ' <span class="sl-mk ' + (sm[1] >= sm[0] ? 'ok' : sm[1] + sm[2] > 0 ? 'mid' : 'no') + '" title="Beosztás: véglegesítve / slot">👤 ' + sm[1] + '/' + sm[0] + '</span>' : '') + '</span></button>' +
+        (ev.length ? '<ul class="wk-ev">' + ev.map(e => '<li class="' + e.state + '"' + (Number(dealOf(e)) > 0 && window.CPCrm && window.CPCrm.open ? ' data-wdeal="' + Number(dealOf(e)) + '" tabindex="0" role="button"' : '') + '><span class="wk-t">' + esc(e.time || '–') + '</span><span class="wk-tt"><b>' + esc(e.title || 'Deal #' + dealOf(e)) + '</b><small>' + esc([kindLabel(e), e.loc].filter(Boolean).join(' · ')) + '</small></span>' + stateBadge(e) + '</li>').join('') + '</ul>' : '<p class="wk-0">Nincs rendezvény</p>') +
+        '</section>';
+    }).join('');
+    wrap.insertAdjacentHTML('afterbegin', '<div class="cpx-kpis">' + kpi('Foglalás a héten', bk) + kpi('Függő ajánlat', pd) + '</div>');
+    wrap.querySelectorAll('[data-wd]').forEach(b => b.addEventListener('click', () => openDay(b.dataset.wd)));
+    wrap.querySelectorAll('[data-wdeal]').forEach(r => { const go = () => window.CPCrm.open(Number(r.dataset.wdeal)); r.addEventListener('click', go); r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }); });
+    if (C.slot && !(S.slotm && ms.every(m => S.slotm[m]))) {
+      try { for (const m of ms) { const r = await slotPost('cp_slot_month', { m }); S.slotm = S.slotm || {}; S.slotm[m] = r.d || {}; } if (wrap.isConnected && S.calView === 'week') render(); } catch (e) { /* nélküle is működik */ }
+    }
+  }
   function openDay(date) {
     const m = monthKey(date);
     const I = dayInfo(m, date);
