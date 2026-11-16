@@ -24,7 +24,7 @@
 	const nf = n => { const v = Math.round(Number(n || 0) * 100) / 100; return v.toLocaleString('hu-HU', { maximumFractionDigits: 2 }); };
 	const ft = n => Number(n || 0).toLocaleString('hu-HU') + ' Ft';
 	const huD = s => (s ? String(s).slice(0, 10).replace(/-/g, '.') + '.' : '');
-	const SUBS = [['stock', 'Készlet'], ['assets', 'Eszközök'], ['kits', 'Csomagok'], ['moves', 'Mozgások']];
+	const SUBS = [['stock', 'Készlet'], ['assets', 'Eszközök'], ['kits', 'Szolgáltatáscsomagok'], ['moves', 'Mozgások']];
 
 	function status(s) { if (!s) return; s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function load() {
@@ -105,8 +105,8 @@
 	const kitsOf = () => Object.entries(S.d.kits || {}).map(e => Object.assign({ id: e[0] }, e[1])).sort((a, b) => a.name.localeCompare(b.name, 'hu'));
 	function drawKits() {
 		const K = kitsOf().filter(k => hit(k.name, k.note)), ST = S.d.status || {}, D = S.d.deals || {}, ev = S.d.ev;
-		const top = '<div class="rk-bar"><button type="button" class="cpx-btn sm" data-rkit="new">+ Új csomag</button><span>Egy csomag egy lépésben kiadható egy rendezvényre és visszavehető – visszavételkor pipálva látszik, mi jött vissza.</span></div>';
-		if (!kitsOf().length) return top + '<div class="rk-empty"><p><b>Még nincs csomag.</b> Állíts össze egyet a gyakran együtt kimenő eszközökből, pl. „Szelfigép 1. csomag”: kamera, nyomtató, laptop, állvány + 2 tekercs papír.</p></div>';
+		const top = '<div class="rk-bar"><button type="button" class="cpx-btn sm" data-rkit="new">+ Új szolgáltatáscsomag</button><span>Egy szolgáltatáscsomag egy lépésben kiadható egy rendezvényre és visszavehető – visszavételkor pipálva látszik, mi jött vissza.</span></div>';
+		if (!kitsOf().length) return top + '<div class="rk-empty"><p><b>Még nincs szolgáltatáscsomag.</b> Állíts össze egyet a gyakran együtt kimenő eszközökből, pl. „Szelfigép 1. csomag”: kamera, nyomtató, laptop, állvány + 2 tekercs papír.</p></div>';
 		return top + (K.length ? K.map(k => {
 			const U = (k.units || []).map(unit).filter(Boolean), out = U.filter(u => u.loc === ev), bad = U.filter(u => u.status !== 'ok');
 			const st = out.length === U.length && U.length ? '<span class="rk-chip mid">kint: ' + esc(D[out[0].deal_id] ? D[out[0].deal_id].t : 'rendezvényen') + '</span>' : out.length ? '<span class="rk-chip mid">' + out.length + ' / ' + U.length + ' kint</span>' : '<span class="rk-chip ok">raktárban</span>';
@@ -120,16 +120,16 @@
 		const k = id ? (S.d.kits || {})[id] : null, x = k || { name: '', note: '', units: [], stock: [] };
 		const taken = {}; kitsOf().forEach(o => { if (o.id !== id) (o.units || []).forEach(u => { taken[u] = o.name; }); });
 		const types = (S.d.items || []).filter(i => i.kind === 'asset'), stockItems = (S.d.items || []).filter(i => i.kind === 'stock' && i.active);
-		const uRows = types.map(t => { const U = (S.d.units || []).filter(u => u.item_id === t.id && u.status !== 'gone'); return U.length ? '<fieldset><legend>' + esc(t.name) + '</legend>' + U.map(u => '<label class="rk-ck"' + (taken[u.id] ? ' title="Már a(z) „' + esc(taken[u.id]) + '” csomagban van"' : '') + '><input type="checkbox" name="u" value="' + u.id + '"' + ((x.units || []).includes(u.id) ? ' checked' : '') + (taken[u.id] ? ' disabled' : '') + '> ' + esc(u.label || t.name) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (taken[u.id] ? ' <small>(' + esc(taken[u.id]) + ')</small>' : '') + '</label>').join('') + '</fieldset>' : ''; }).join('');
+		const uRows = types.map(t => { const U = (S.d.units || []).filter(u => u.item_id === t.id && u.status !== 'gone'); return U.length ? '<fieldset><legend>' + esc(t.name) + '</legend>' + U.map(u => '<label class="rk-ck"' + (taken[u.id] ? ' title="Már a(z) „' + esc(taken[u.id]) + '” szolgáltatáscsomagban van"' : '') + '><input type="checkbox" name="u" value="' + u.id + '"' + ((x.units || []).includes(u.id) ? ' checked' : '') + (taken[u.id] ? ' disabled' : '') + '> ' + esc(u.label || t.name) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (taken[u.id] ? ' <small>(' + esc(taken[u.id]) + ')</small>' : '') + '</label>').join('') + '</fieldset>' : ''; }).join('');
 		const sRow = (iid, q) => '<div class="rk-ks"><select name="si"><option value="">– fogyóanyag –</option>' + stockItems.map(i => '<option value="' + i.id + '"' + (i.id === iid ? ' selected' : '') + '>' + esc(i.name) + ' (' + esc(i.unit) + ')</option>').join('') + '</select><input name="sq" inputmode="decimal" value="' + (q || '') + '" placeholder="menny."><button type="button" class="rk-lnk" data-srm aria-label="Sor törlése">×</button></div>';
-		const f = dlg(k ? k.name : 'Új csomag', '<div class="rk-g2">' + fld('Csomag neve', inp('name', x.name, ' required maxlength="120" placeholder="pl. Szelfigép 1. csomag"'), 1) + fld('Megjegyzés', inp('note', x.note, ' maxlength="300" placeholder="pl. fekete Peli-láda"'), 1) + '</div>' +
-			'<h4 class="rk-h4">Eszközök a csomagban</h4><input type="search" class="rk-kq" data-kq placeholder="Szűrés név vagy sorozatszám szerint" aria-label="Eszközök szűrése"><div class="rk-qpl" data-kul>' + (uRows || '<p class="cpx-muted">Még nincs eszköz a raktárban.</p>') + '</div>' +
+		const f = dlg(k ? k.name : 'Új szolgáltatáscsomag', '<div class="rk-g2">' + fld('Szolgáltatáscsomag neve', inp('name', x.name, ' required maxlength="120" placeholder="pl. Szelfigép 1. csomag"'), 1) + fld('Megjegyzés', inp('note', x.note, ' maxlength="300" placeholder="pl. fekete Peli-láda"'), 1) + '</div>' +
+			'<h4 class="rk-h4">Eszközök a szolgáltatáscsomagban</h4><input type="search" class="rk-kq" data-kq placeholder="Szűrés név vagy sorozatszám szerint" aria-label="Eszközök szűrése"><div class="rk-qpl" data-kul>' + (uRows || '<p class="cpx-muted">Még nincs eszköz a raktárban.</p>') + '</div>' +
 			'<h4 class="rk-h4">Fogyóanyag (kiadáskor ennyi megy ki)</h4><div data-ksl>' + ((x.stock || []).map(s2 => sRow(s2[0], s2[1])).join('') || '') + '</div>' + (stockItems.length ? '<button type="button" class="rk-lnk" data-sadd>+ Fogyóanyag sor</button>' : '<p class="cpx-muted">Nincs felvett fogyóanyag.</p>'),
 			async f2 => {
 				const units = Array.from(f2.querySelectorAll('[name=u]:checked')).map(c => c.value).join(',');
 				const stock = Array.from(f2.querySelectorAll('.rk-ks')).map(r => [Number(r.querySelector('[name=si]').value), String(r.querySelector('[name=sq]').value).replace(',', '.')]).filter(r => r[0] && Number(r[1]) > 0);
-				await post('cp_wh_kit', { op: 'save', id: id || '', name: val(f2, 'name'), note: val(f2, 'note'), units, stock: JSON.stringify(stock) }); S.sub = 'kits'; keep(); return 'Csomag mentve.';
-			}, 'Mentés', id ? async () => { const ok = await (window.CPXConfirm ? window.CPXConfirm('Törlöd a(z) „' + k.name + '” csomagot?\n\nAz eszközök és a készlet megmaradnak, csak a csomag-összeállítás törlődik.') : Promise.resolve(window.confirm('Törlöd a csomagot?'))); if (!ok) return false; await post('cp_wh_kit', { op: 'del', id }); return 'Csomag törölve.'; } : null);
+				await post('cp_wh_kit', { op: 'save', id: id || '', name: val(f2, 'name'), note: val(f2, 'note'), units, stock: JSON.stringify(stock) }); S.sub = 'kits'; keep(); return 'Szolgáltatáscsomag mentve.';
+			}, 'Mentés', id ? async () => { const ok = await (window.CPXConfirm ? window.CPXConfirm('Törlöd a(z) „' + k.name + '” szolgáltatáscsomagot?\n\nAz eszközök és a készlet megmaradnak, csak a szolgáltatáscsomag összeállítása törlődik.') : Promise.resolve(window.confirm('Törlöd a csomagot?'))); if (!ok) return false; await post('cp_wh_kit', { op: 'del', id }); return 'Szolgáltatáscsomag törölve.'; } : null);
 		const sl = f.querySelector('[data-ksl]'), ad = f.querySelector('[data-sadd]');
 		if (ad) ad.addEventListener('click', () => sl.insertAdjacentHTML('beforeend', sRow(0, '')));
 		sl.addEventListener('click', e => { const b = e.target.closest('[data-srm]'); if (b) b.closest('.rk-ks').remove(); });
@@ -143,7 +143,7 @@
 		const srow = x => { const i = item(x[0]); return i ? '<label class="rk-ks2"><span>' + esc(i.name) + '</span><input name="sq" data-si="' + i.id + '" inputmode="decimal" value="' + (out ? nf(x[1]) : '') + '" placeholder="' + (out ? '' : 'maradék, ha van') + '"><small>' + esc(i.unit) + '</small></label>' : ''; };
 		const f = dlg((out ? 'Kiadás: ' : 'Visszavétel: ') + k.name,
 			(out ? '<div class="rk-f w"><span>Rendezvény (deal)</span><input data-dq placeholder="Keresés: név vagy deal-szám (üresen: a következő 2 hét)" autocomplete="off"><input type="hidden" name="deal"><div class="rk-dl" data-dl></div></div>' : '<p class="rk-hint" style="margin-top:0">Pipáld ki, ami visszajött. Ami nincs kipipálva, kint marad (hiányzóként látszik).</p>') +
-			'<h4 class="rk-h4">Eszközök</h4><div class="rk-qpl">' + (U.map(urow).join('') || '<p class="cpx-muted">Nincs eszköz a csomagban.</p>') + '</div>' +
+			'<h4 class="rk-h4">Eszközök</h4><div class="rk-qpl">' + (U.map(urow).join('') || '<p class="cpx-muted">Nincs eszköz a szolgáltatáscsomagban.</p>') + '</div>' +
 			((k.stock || []).length ? '<h4 class="rk-h4">' + (out ? 'Fogyóanyag' : 'Visszahozott fogyóanyag') + '</h4>' + k.stock.map(srow).join('') : ''),
 			async f2 => {
 				const units = Array.from(f2.querySelectorAll('[name=u]:checked')).map(c => c.value);
@@ -530,7 +530,7 @@
 			'.rk-scan .rk-dlg{width:min(460px,100%)}.rk-cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:1/1}.rk-cam video{width:100%;height:100%;object-fit:cover;display:block}.rk-cam i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}.rk-cam[hidden]{display:none}.rk-man{display:flex;gap:8px;margin-top:10px}.rk-man input{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;text-transform:uppercase}' +
 			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(440px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +
 			'.rk-qpl{max-height:46vh;overflow:auto;margin-top:8px}.rk-qpl fieldset{border:0;padding:0;margin:0 0 10px}.rk-qpl legend{font:600 12.5px Inter,sans-serif;color:var(--mu);padding:0;margin-bottom:4px}.rk-qpl .rk-ck{padding:3px 0}.rk-qpl small{color:var(--mu)}' +
-			'@media (max-width:640px){.rk-g2{grid-template-columns:1fr}.rk-t thead{display:none}.rk-t,.rk-t tbody,.rk-t tr,.rk-t td{display:block;width:auto}.rk-t tr{padding:8px 4px;border-bottom:1px solid #F0EBE3}.rk-t td{border:0;padding:2px 8px;text-align:left}.rk-n,.rk-a{text-align:left}.rk-a{white-space:normal}.rk-a .rk-lnk{padding-left:0;margin-right:12px}.rk-t td[data-l]::before{content:attr(data-l) ": ";color:var(--mu);font-size:12.5px}.rk-seg{width:100%}.rk-seg button{flex:1}}';
+			'@media (max-width:640px){.rk-g2{grid-template-columns:1fr}.rk-t thead{display:none}.rk-t,.rk-t tbody,.rk-t tr,.rk-t td{display:block;width:auto}.rk-t tr{padding:8px 4px;border-bottom:1px solid #F0EBE3}.rk-t td{border:0;padding:2px 8px;text-align:left}.rk-n,.rk-a{text-align:left}.rk-a{white-space:normal}.rk-a .rk-lnk{padding-left:0;margin-right:12px}.rk-t td[data-l]::before{content:attr(data-l) ": ";color:var(--mu);font-size:12.5px}.rk-seg{width:100%;overflow-x:auto;scrollbar-width:none}.rk-seg::-webkit-scrollbar{display:none}.rk-seg button{flex:1 0 auto;white-space:nowrap;padding:0 11px}}';
 		document.head.appendChild(st);
 	}
 	window.CPRaktar = { view, status, refresh: load };

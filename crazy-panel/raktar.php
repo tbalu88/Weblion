@@ -304,22 +304,22 @@ function cp_wh_ajax_kit() {
 	$K = cp_wh_kits(); $op = (string) ($_POST['op'] ?? 'list');
 	if ($op === 'save') {
 		$id = (string) ($_POST['id'] ?? ''); if ($id === '' || !isset($K[$id])) { $id = 'k' . time() . wp_rand(10, 99); }
-		$name = cp_wh_str('name', 120); if ($name === '') { cp_el_err('Adj nevet a csomagnak (pl. „Szelfigép 1. csomag”).'); }
+		$name = cp_wh_str('name', 120); if ($name === '') { cp_el_err('Adj nevet a szolgáltatáscsomagnak (pl. „Szelfigép 1. csomag”).'); }
 		$units = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_POST['units'] ?? ''))))));
 		$stock = array(); foreach ((array) json_decode((string) wp_unslash($_POST['stock'] ?? '[]'), true) as $s) { $i = (int) ($s[0] ?? 0); $q = round((float) ($s[1] ?? 0), 2); if ($i && $q > 0) { $stock[] = array($i, $q); } }
-		if (!$units && !$stock) { cp_el_err('Tegyél legalább egy elemet a csomagba.'); }
-		foreach ($K as $kid => $k) { if ($kid !== $id && array_intersect($units, (array) $k['units'])) { cp_el_err('Egy eszköz már egy másik csomagban van („' . $k['name'] . '”) – egy darab csak egy csomagban lehet.'); } }
+		if (!$units && !$stock) { cp_el_err('Tegyél legalább egy elemet a szolgáltatáscsomagba.'); }
+		foreach ($K as $kid => $k) { if ($kid !== $id && array_intersect($units, (array) $k['units'])) { cp_el_err('Egy eszköz már egy másik szolgáltatáscsomagban van („' . $k['name'] . '”) – egy darab csak egy csomagban lehet.'); } }
 		$K[$id] = array('name' => $name, 'note' => cp_wh_str('note', 300), 'units' => $units, 'stock' => $stock, 'at' => time());
 		update_option('cp_wh_kits', $K, false);
-		if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: csomag mentve – ' . $name, 'raktar', ''); }
+		if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: szolgáltatáscsomag mentve – ' . $name, 'raktar', ''); }
 	} elseif ($op === 'del') {
-		$id = (string) ($_POST['id'] ?? ''); if (isset($K[$id])) { $n = $K[$id]['name']; unset($K[$id]); update_option('cp_wh_kits', $K, false); if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: csomag törölve – ' . $n, 'raktar', ''); } }
+		$id = (string) ($_POST['id'] ?? ''); if (isset($K[$id])) { $n = $K[$id]['name']; unset($K[$id]); update_option('cp_wh_kits', $K, false); if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: szolgáltatáscsomag törölve – ' . $n, 'raktar', ''); } }
 	} elseif ($op === 'move') {
 		/* kiadás (out) vagy visszavétel (back): a kipipált darabok és fogyóanyagok egy lépésben */
-		$id = (string) ($_POST['id'] ?? ''); if (!isset($K[$id])) { cp_el_err('Nincs ilyen csomag.', 404); }
+		$id = (string) ($_POST['id'] ?? ''); if (!isset($K[$id])) { cp_el_err('Nincs ilyen szolgáltatáscsomag.', 404); }
 		$type = ($_POST['type'] ?? '') === 'back' ? 'back' : 'out'; $deal = (int) ($_POST['deal'] ?? 0);
 		if ($type === 'out' && !$deal) { cp_el_err('Melyik rendezvényre adod ki? Válassz dealt.'); }
-		$main = cp_wh_main(); $now = current_time('mysql'); $who = cp_wh_who(); $note = 'csomag: ' . $K[$id]['name']; $n = 0;
+		$main = cp_wh_main(); $now = current_time('mysql'); $who = cp_wh_who(); $note = 'szolgáltatáscsomag: ' . $K[$id]['name']; $n = 0;
 		$ids = array_values(array_intersect(array_map('intval', explode(',', (string) ($_POST['units'] ?? ''))), array_map('intval', (array) $K[$id]['units'])));
 		foreach ($ids as $uid) {
 			$u = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_wh_t('units') . ' WHERE id = %d', $uid), ARRAY_A); if (!$u) { continue; }
@@ -335,7 +335,7 @@ function cp_wh_ajax_kit() {
 			$wpdb->insert(cp_wh_t('moves'), array('item_id' => $i, 'unit_id' => 0, 'qty' => $q, 'type' => $type, 'loc_from' => $type === 'out' ? $main : CP_WH_EVENT, 'loc_to' => $type === 'out' ? CP_WH_EVENT : $main, 'deal_id' => $deal, 'by_name' => $who, 'at' => $now, 'note' => $note));
 			$n++;
 		}
-		if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: csomag ' . ($type === 'out' ? 'kiadva' : 'visszavéve') . ' – ' . $K[$id]['name'] . ' (' . $n . ' tétel)', 'raktar', ''); }
+		if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'kit', 'Raktár: szolgáltatáscsomag ' . ($type === 'out' ? 'kiadva' : 'visszavéve') . ' – ' . $K[$id]['name'] . ' (' . $n . ' tétel)', 'raktar', ''); }
 		wp_send_json_success(array('n' => $n, 'kits' => cp_wh_kits()));
 	}
 	wp_send_json_success(array('kits' => cp_wh_kits()));
