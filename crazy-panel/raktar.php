@@ -255,3 +255,27 @@ function cp_wh_ajax_tag() {
 	$wpdb->update(cp_wh_t('units'), array('tag' => cp_wh_str('tag', 120), 'updated_at' => current_time('mysql')), array('id' => $id));
 	wp_send_json_success(array('ok' => true));
 }
+
+/* v2.9.275: törlés – cikk / eszközfajta (a darabjaival és a mozgásnaplójával együtt) vagy egy darab (a mozgásaival) */
+add_action('wp_ajax_nopriv_cp_wh_del', 'cp_wh_ajax_del'); add_action('wp_ajax_cp_wh_del', 'cp_wh_ajax_del');
+function cp_wh_ajax_del() {
+	cp_wh_guard(); global $wpdb;
+	$what = (string) ($_POST['what'] ?? ''); $id = (int) ($_POST['id'] ?? 0);
+	if (!$id || !in_array($what, array('item', 'unit'), true)) { cp_el_err('Hibás kérés.'); }
+	if ($what === 'unit') {
+		$u = $wpdb->get_row($wpdb->prepare('SELECT u.label, u.serial, i.name FROM ' . cp_wh_t('units') . ' u LEFT JOIN ' . cp_wh_t('items') . ' i ON i.id = u.item_id WHERE u.id = %d', $id), ARRAY_A);
+		if (!$u) { cp_el_err('Nincs ilyen eszköz.', 404); }
+		$m = (int) $wpdb->query($wpdb->prepare('DELETE FROM ' . cp_wh_t('moves') . ' WHERE unit_id = %d', $id));
+		$wpdb->delete(cp_wh_t('units'), array('id' => $id));
+		$log = 'Raktár: eszköz törölve – ' . ($u['label'] ?: $u['name']) . ($u['serial'] !== '' ? ' (S/N ' . $u['serial'] . ')' : '') . ', ' . $m . ' mozgás';
+	} else {
+		$name = (string) $wpdb->get_var($wpdb->prepare('SELECT name FROM ' . cp_wh_t('items') . ' WHERE id = %d', $id));
+		if ($name === '') { cp_el_err('Nincs ilyen cikk.', 404); }
+		$m = (int) $wpdb->query($wpdb->prepare('DELETE FROM ' . cp_wh_t('moves') . ' WHERE item_id = %d', $id));
+		$n = (int) $wpdb->query($wpdb->prepare('DELETE FROM ' . cp_wh_t('units') . ' WHERE item_id = %d', $id));
+		$wpdb->delete(cp_wh_t('items'), array('id' => $id));
+		$log = 'Raktár: cikk törölve – ' . $name . ($n ? ', ' . $n . ' darab' : '') . ', ' . $m . ' mozgás';
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'delete', $log, 'raktar', ''); }
+	wp_send_json_success(array('ok' => true));
+}
