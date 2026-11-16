@@ -243,7 +243,7 @@
 		const q = qrMake(u), t = item(u.item_id);
 		const ov = document.createElement('div'); ov.className = 'rk-ov';
 		ov.innerHTML = '<div class="rk-dlg rk-qrd" role="dialog" aria-modal="true" aria-label="QR-kód"><h3>' + esc(uName(u)) + '</h3><div class="rk-qr" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 240) + '</div>' +
-			'<p class="rk-hint">' + esc([t && t.name !== uName(u) ? t.name : '', u.serial ? 'S/N ' + u.serial : '', 'Kód: ' + u.qr].filter(Boolean).join(' · ')) + '</p>' +
+			'<p class="rk-hint">' + esc([t && t.name !== uName(u) ? t.name : '', u.serial ? 'S/N ' + u.serial : '', 'Kód: ' + u.qr].filter(Boolean).join(' · ')) + '</p><p class="rk-hint" style="margin-top:2px"><b>eventcrazy.hu</b></p>' +
 			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
 		document.body.appendChild(ov);
 		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
@@ -260,17 +260,18 @@
 		let fs = 44; const nm = uName(u); do { g.font = '700 ' + fs + 'px Inter, "Segoe UI", sans-serif'; fs -= 2; } while (g.measureText(nm).width > W - 80 && fs > 18);
 		g.fillText(nm, W / 2, oy + qs + 70);
 		g.font = '500 28px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#4A5060'; g.fillText([u.serial ? 'S/N ' + u.serial : (t ? t.name : ''), 'Kód: ' + u.qr].filter(Boolean).join('  ·  '), W / 2, oy + qs + 125);
+		g.font = '700 30px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#141C33'; g.fillText('eventcrazy.hu', W / 2, oy + qs + 180);
 		c.toBlob(b => { if (!b) { toast('A PNG nem készült el.', true); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'eszkoz-qr-' + u.qr + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }, 'image/png');
 	}
 	/* A4-es címkelap: 3 × 8 címke (70 × 37 mm), a kiválasztott eszközökről */
 	async function qrPrint(U) {
 		if (!U.length) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
 		const w = window.open('', '_blank'); if (!w) { toast('A böngésző letiltotta az új ablakot – engedélyezd a felugró ablakot a panelnek.', true); return; }
-		const lab = u => { const t = item(u.item_id); return '<div class="l"><div class="q">' + qrSvg(qrMake(u), 120) + '</div><div class="t"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>' + esc(u.qr) + ' · EventCrazy</small></div></div>'; };
+		const lab = u => { const t = item(u.item_id); return '<div class="l"><div class="q">' + qrSvg(qrMake(u), 120) + '</div><div class="t"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>Kód: ' + esc(u.qr) + '</small><em>eventcrazy.hu</em></div></div>'; };
 		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Eszköz QR-címkék (' + U.length + ' db)</title><style>@page{size:A4;margin:12mm 0 0 0}body{margin:0;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#141C33}' +
 			'.p{display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:37mm;justify-content:center}.l{box-sizing:border-box;display:flex;align-items:center;gap:2.5mm;padding:2.5mm 3mm;overflow:hidden;break-inside:avoid;outline:.2mm dashed #ccc}' +
 			'.q{flex:none;width:28mm;height:28mm}.q svg{width:100%;height:100%;display:block}.t{display:flex;flex-direction:column;gap:.6mm;min-width:0}.t b{font-size:9.5pt;line-height:1.15;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
-			'.t span{font-size:7.5pt;color:#333;overflow-wrap:anywhere}.t small{font-size:7pt;color:#666;letter-spacing:.04em}@media print{.l{outline:0}.no{display:none}}.no{text-align:center;padding:10px;font-size:14px}</style></head><body>' +
+			'.t span{font-size:7.5pt;color:#333;overflow-wrap:anywhere}.t small{font-size:7pt;color:#666;letter-spacing:.04em}.t em{font-style:normal;font-weight:800;font-size:9pt;color:#141C33;margin-top:.4mm}@media print{.l{outline:0}.no{display:none}}.no{text-align:center;padding:10px;font-size:14px}</style></head><body>' +
 			'<p class="no">' + U.length + ' címke · A4, 3 × 8 címke (70 × 37 mm) – nyomtatás: Ctrl+P / ⌘P, méretezés: 100% („Tényleges méret”).</p><div class="p">' + U.map(lab).join('') + '</div><script>setTimeout(function(){window.print()},400)<\/script></body></html>');
 		w.document.close();
 	}
