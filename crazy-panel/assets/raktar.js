@@ -257,14 +257,17 @@
 		if (!u) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
 		const q = qrMake(u), t = item(u.item_id);
 		const ov = document.createElement('div'); ov.className = 'rk-ov';
-		ov.innerHTML = '<div class="rk-dlg rk-qrd" role="dialog" aria-modal="true" aria-label="QR-kód"><h3>' + esc(uName(u)) + '</h3><div class="rk-qr" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 240) + '</div>' +
-			'<p class="rk-hint">' + esc([t && t.name !== uName(u) ? t.name : '', u.serial ? 'S/N ' + u.serial : '', 'Kód: ' + u.qr].filter(Boolean).join(' · ')) + '</p><p class="rk-hint" style="margin-top:2px"><b>eventcrazy.hu</b></p>' +
+		/* v2.9.277: élő címke-előnézet – pontosan az, ami a nyomtatott címkére kerül; a felirat gépelés közben frissül */
+		ov.innerHTML = '<div class="rk-dlg rk-qrd" role="dialog" aria-modal="true" aria-label="QR-kód"><h3>Címke előnézete</h3>' +
+			'<div class="rk-lab" aria-label="A nyomtatandó címke"><div class="rk-lq" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 160) + '</div><div class="rk-lt"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') +
+			'<i data-qprev' + (u.tag ? '' : ' hidden') + '>' + esc(u.tag || '') + '</i>' + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>Kód: ' + esc(u.qr) + '</small><em>eventcrazy.hu</em></div></div>' +
 			'<label class="rk-f rk-tagf"><span>Egyedi felirat a címkén (nem kötelező)</span><input data-qtag maxlength="120" value="' + esc(u.tag || '') + '" placeholder="pl. Tartalék kamera – töltő a dobozban"></label>' +
 			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
 		document.body.appendChild(ov);
 		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
 		document.addEventListener('keydown', k);
-		const tg = ov.querySelector('[data-qtag]');
+		const tg = ov.querySelector('[data-qtag]'), pv = ov.querySelector('[data-qprev]');
+		tg.addEventListener('input', () => { const v = tg.value.trim(); pv.textContent = v; pv.hidden = !v; });
 		const saveTag = async () => { const v = tg.value.trim(); if (v === (u.tag || '')) return; try { await post('cp_wh_tag', { id: u.id, tag: v }); u.tag = v; } catch (x) { toast(x.message, true); } };
 		tg.addEventListener('change', saveTag);
 		ov.addEventListener('click', async e => { if (e.target === ov || e.target.closest('[data-qx]')) { await saveTag(); close(); } else if (e.target.closest('[data-qpng]')) { await saveTag(); qrPng(u, q); } else if (e.target.closest('[data-qprint]')) { await saveTag(); qrPrint([u]); } });
@@ -380,9 +383,11 @@
 			'.rk-del{margin-right:auto;border:0;background:none;color:#B3261E;font:600 13px Inter,sans-serif;cursor:pointer;padding:6px 4px;text-decoration:underline;text-underline-offset:2px}.rk-del:focus-visible{outline:2px solid #B3261E;outline-offset:2px}' +
 			'.rk-cat{font:800 13px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu);margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--li)}.rk-cat:first-of-type{margin-top:4px}' +
 			'.rk-tree{margin:-4px 0 12px;font-size:13px;color:var(--mu);line-height:1.5}.rk-tree b{color:var(--ink)}.rk-tree span{margin:0 4px}.rk-ex{display:block;color:#1E6B39;font-size:12px;margin-top:3px}.rk-ex[hidden]{display:none}' +
+			'.rk-lab{display:flex;align-items:center;gap:14px;margin:4px auto 0;width:min(100%,390px);aspect-ratio:70/37;box-sizing:border-box;padding:12px 14px;border:1.5px dashed #C9C4BB;border-radius:10px;background:#fff;text-align:left}.rk-lq{flex:none;width:44%;aspect-ratio:1}.rk-lq svg{width:100%;height:100%;display:block}' +
+			'.rk-lt{display:flex;flex-direction:column;gap:2px;min-width:0;color:#141C33}.rk-lt b{font-size:15px;line-height:1.2;overflow-wrap:anywhere}.rk-lt span{font-size:12px;color:#333;overflow-wrap:anywhere}.rk-lt i{font-style:normal;font-weight:700;font-size:13px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.rk-lt i[hidden]{display:none}.rk-lt small{font-size:11px;color:#666;letter-spacing:.04em}.rk-lt em{font-style:normal;font-weight:800;font-size:13px;margin-top:2px}' +
 			'.rk-tagf{margin-top:12px;text-align:left}' +
 			'.rk-scan .rk-dlg{width:min(460px,100%)}.rk-cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:1/1}.rk-cam video{width:100%;height:100%;object-fit:cover;display:block}.rk-cam i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}.rk-cam[hidden]{display:none}.rk-man{display:flex;gap:8px;margin-top:10px}.rk-man input{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;text-transform:uppercase}' +
-			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(380px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +
+			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(440px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +
 			'.rk-qpl{max-height:46vh;overflow:auto;margin-top:8px}.rk-qpl fieldset{border:0;padding:0;margin:0 0 10px}.rk-qpl legend{font:600 12.5px Inter,sans-serif;color:var(--mu);padding:0;margin-bottom:4px}.rk-qpl .rk-ck{padding:3px 0}.rk-qpl small{color:var(--mu)}' +
 			'@media (max-width:640px){.rk-g2{grid-template-columns:1fr}.rk-t thead{display:none}.rk-t,.rk-t tbody,.rk-t tr,.rk-t td{display:block;width:auto}.rk-t tr{padding:8px 4px;border-bottom:1px solid #F0EBE3}.rk-t td{border:0;padding:2px 8px;text-align:left}.rk-n,.rk-a{text-align:left}.rk-a{white-space:normal}.rk-a .rk-lnk{padding-left:0;margin-right:12px}.rk-t td[data-l]::before{content:attr(data-l) ": ";color:var(--mu);font-size:12.5px}.rk-seg{width:100%}.rk-seg button{flex:1}}';
 		document.head.appendChild(st);
