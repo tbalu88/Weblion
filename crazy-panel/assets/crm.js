@@ -2418,7 +2418,12 @@
 			'<h4>Deal</h4><div class="crm-eg">' + inp('title', 'Deal neve *', 'text', ' required') +
 			'<label class="crm-ef"><span>Szakasz</span><select data-k="stage">' + opts(STAGES.map(x => [x, x]), pre) + '</select></label>' +
 			'<label class="crm-ef"><span>Felelős</span><select data-k="owner_id">' + opts([['', '–']].concat(Object.keys(USERS).filter(i => USERS[i].a).map(i => [i, USERS[i].n])), me) + '</select></label>' +
-			inp('value', 'Érték (Ft)', 'number') + inp('note', 'Megjegyzés', 'area') + '</div>' +
+			inp('value', 'Érték (Ft)', 'number') +
+			/* v2.9.265: szerződő fél (EV/KFT), kiszállási díj kézzel, háttér – már létrehozáskor */
+			'<label class="crm-ef"><span>Szerződés (EV/KFT)</span><select data-k="ctype">' + opts([['', '–'], ['EV', 'EV'], ['KFT', 'KFT']], '') + '</select></label>' +
+			inp('km_fee', 'Kiszállási díj (Ft)', 'number', ' min="0" step="1" inputmode="numeric" placeholder="üresen: később számolható"') +
+			'<label class="crm-ef"><span>Fotófal / háttér</span><input type="text" data-k="background" list="crm-n-bg" maxlength="80" placeholder="pl. Még nem tudom"><datalist id="crm-n-bg">' + (vals.background || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></label>' +
+			inp('note', 'Megjegyzés', 'area') + '</div>' +
 			'<p class="crm-ro">A deal a Salesmate-ben is létrejön; az átnevezést és a Pumble-értesítést a panel végzi.</p>' +
 			'<div class="crm-ebar"><button class="cpx-btn" type="submit">Deal létrehozása</button><button class="cpx-btn ghost" type="button" data-close>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
 		sh0.innerHTML = h;
