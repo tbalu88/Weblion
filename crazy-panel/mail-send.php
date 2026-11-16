@@ -142,8 +142,11 @@ function cp_send_ajax() {
 	/* v2.9.262: tömeges levél titkos másolatban (pl. interjú-eredmények): a rejtett címzettek külön, legfeljebb 100 */
 	if (count($to) + count($cc) > 20) { cp_el_err('Legfeljebb 20 címzett lehet (Címzett + Másolat).'); }
 	if (count($bcc) > 100) { cp_el_err('Titkos másolatban legfeljebb 100 címzett lehet – oszd több levélre.'); }
-	$n = (int) get_transient('cp_send_n' . $me);
-	if ($n >= 30) { cp_el_err('Óránként legfeljebb 30 levelet küldhetsz a panelből (próbaüzem).', 429); }
+	/* v2.9.264: a próbaüzemi 30/óra korlát kivezetve – csak egy elszabadult küldés elleni védőháló marad (300 levél / naptári óra / kolléga);
+	   a számláló órás kulcson van, így óra végén biztosan nullázódik (a régi kulcs minden küldéssel meghosszabbodott) */
+	$nk = 'cp_send_n' . $me . '_' . gmdate('YmdH');
+	$n = (int) get_transient($nk);
+	if ($n >= 300) { cp_el_err('Ebben az órában már 300 levelet küldtél a panelből – a következő órában újra lehet.', 429); }
 	$thread = (int) ($_POST['thread'] ?? 0);
 	$t = $thread ? $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $thread), ARRAY_A) : null;
 	if ($thread && !$t) { cp_el_err('Nincs ilyen levélszál.', 404); }
@@ -212,7 +215,7 @@ function cp_send_ajax() {
 	}
 	/* elment: innentől ugyanez az azonosító nem küldhet újra (ha az Elküldött-mentés vagy a válasz elakad is) */
 	if ($sidk !== '' && !$test) { set_transient($sidk, array('thread' => $t ? (int) $t['id'] : 0, 'warn' => ''), 30 * MINUTE_IN_SECONDS); }
-	set_transient('cp_send_n' . $me, $n + 1, HOUR_IN_SECONDS);
+	set_transient($nk, $n + 1, HOUR_IN_SECONDS + 300);
 	$warn = !empty($o['append']) && !$test ? cp_send_append($mime) : '';
 	if ($test) { wp_send_json_success(array('test' => 1, 'to' => $to[0])); }
 	/* a küldött mellékletek megmaradnak (a panelből letölthetők) */
