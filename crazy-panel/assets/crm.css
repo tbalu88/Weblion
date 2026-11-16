@@ -327,6 +327,16 @@ a.d3-who:hover{background:#F6F3EE}
 	.crm-card .crm-cl{font-size:14.5px;color:#656973;margin-top:3px}
 	.crm-card .crm-cv{display:none}
 	.crm-card .crm-cfoot{margin-top:6px}
+	/* v2.9.269: tömörebb csempe telefonon – kisebb belső tér és betűk, a lábléc (jegyzet, jelvények) alacsonyabb */
+	.crm-board .crm-card{padding:9px 14px 7px;gap:1px}
+	.crm-board .crm-card .crm-ct{font-size:15px;line-height:1.25}
+	.crm-board .crm-card .crm-cl{font-size:13px;margin-top:1px;line-height:1.35}
+	.crm-board .crm-card .crm-est{font-size:12.5px;padding:0 5px}
+	.crm-board .crm-card .crm-cap{font-size:11.5px;line-height:1.5}
+	.crm-board .crm-card .crm-cfoot{margin-top:2px;min-height:24px;gap:6px}
+	.crm-board .crm-card .crm-qnb{width:24px;height:24px;margin-left:-4px}
+	.crm-board .crm-card .crm-cfoot .crm-qnb+*{margin-left:auto}
+	.crm-board .crm-card .crm-rot{font-size:12px}
 	.crm-card .crm-cfoot .crm-av{display:none}
 	.crm-fab{display:flex;align-items:center;justify-content:center;position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;border:0;background:var(--n);color:#fff;font:300 34px/1 Inter,sans-serif;box-shadow:0 10px 24px -8px rgba(20,28,51,.55);z-index:40;cursor:pointer}
 	body:not(.mn-on) .crm-fab{bottom:22px}
