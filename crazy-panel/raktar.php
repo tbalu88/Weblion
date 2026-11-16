@@ -7,7 +7,7 @@
  * ===================================================================== */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_WH_DB_VER', '1');
+define('CP_WH_DB_VER', '2'); /* 2: units.tag – egyedi felirat a QR-címkén (v2.9.274) */
 function cp_wh_t($n) { global $wpdb; return $wpdb->prefix . 'cp_wh_' . $n; }
 function cp_wh_db_ok() { return get_option('cp_wh_db_ver') === CP_WH_DB_VER; }
 
@@ -46,6 +46,7 @@ add_action('init', function () {
   svc_limit int(11) NOT NULL DEFAULT 0,
   svc_base int(11) NOT NULL DEFAULT 0,
   note varchar(500) NOT NULL DEFAULT '',
+  tag varchar(120) NOT NULL DEFAULT '',
   updated_at datetime NULL,
   PRIMARY KEY  (id),
   KEY item (item_id),
@@ -144,7 +145,7 @@ function cp_wh_ajax_unit() {
 	if (!$item || !$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_wh_t('items') . " WHERE id = %d AND kind = 'asset'", $item))) { cp_el_err('Válassz eszköztípust.'); }
 	$st = (string) ($_POST['status'] ?? 'ok'); if (!isset(cp_wh_status()[$st])) { $st = 'ok'; }
 	$row = array('item_id' => $item, 'label' => cp_wh_str('label', 120), 'serial' => cp_wh_str('serial', 120), 'model' => cp_wh_str('model', 160), 'status' => $st,
-		'counter' => max(0, (int) ($_POST['counter'] ?? 0)), 'svc_limit' => max(0, (int) ($_POST['svc_limit'] ?? 0)), 'note' => cp_wh_str('note', 500), 'updated_at' => current_time('mysql'));
+		'counter' => max(0, (int) ($_POST['counter'] ?? 0)), 'svc_limit' => max(0, (int) ($_POST['svc_limit'] ?? 0)), 'note' => cp_wh_str('note', 500), 'tag' => cp_wh_str('tag', 120), 'updated_at' => current_time('mysql'));
 	if ($row['label'] === '' && $row['serial'] === '') { cp_el_err('Adj nevet vagy sorozatszámot az eszköznek.'); }
 	if ($row['serial'] !== '' && $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_wh_t('units') . ' WHERE serial = %s AND id <> %d', $row['serial'], $id))) { cp_el_err('Ez a sorozatszám már szerepel egy másik eszköznél.'); }
 	if ($id) {
@@ -244,4 +245,13 @@ function cp_wh_ajax_assets_add() {
 	}
 	if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'asset', 'Raktár: ' . $n . ' db eszköz felvéve – ' . $name, 'raktar', ''); }
 	wp_send_json_success(array('item' => $item, 'n' => $n));
+}
+
+/* v2.9.274: egyedi felirat a QR-címkén (a QR-ablakból mentve) */
+add_action('wp_ajax_nopriv_cp_wh_tag', 'cp_wh_ajax_tag'); add_action('wp_ajax_cp_wh_tag', 'cp_wh_ajax_tag');
+function cp_wh_ajax_tag() {
+	cp_wh_guard(); global $wpdb;
+	$id = (int) ($_POST['id'] ?? 0); if (!$id) { cp_el_err('Hiányzó eszköz.'); }
+	$wpdb->update(cp_wh_t('units'), array('tag' => cp_wh_str('tag', 120), 'updated_at' => current_time('mysql')), array('id' => $id));
+	wp_send_json_success(array('ok' => true));
 }
