@@ -262,7 +262,7 @@
 			'<div class="rk-lab" aria-label="A nyomtatandó címke"><div class="rk-lq" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 160) + '</div><div class="rk-lt"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') +
 			'<i data-qprev' + (u.tag ? '' : ' hidden') + '>' + esc(u.tag || '') + '</i>' + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>Kód: ' + esc(u.qr) + '</small><em>eventcrazy.hu</em></div></div>' +
 			'<label class="rk-f rk-tagf"><span>Egyedi felirat a címkén (nem kötelező)</span><input data-qtag maxlength="120" value="' + esc(u.tag || '') + '" placeholder="pl. Tartalék kamera – töltő a dobozban"></label>' +
-			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
+			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qcopy>Kép másolása</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
 		document.body.appendChild(ov);
 		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
 		document.addEventListener('keydown', k);
@@ -270,10 +270,11 @@
 		tg.addEventListener('input', () => { const v = tg.value.trim(); pv.textContent = v; pv.hidden = !v; });
 		const saveTag = async () => { const v = tg.value.trim(); if (v === (u.tag || '')) return; try { await post('cp_wh_tag', { id: u.id, tag: v }); u.tag = v; } catch (x) { toast(x.message, true); } };
 		tg.addEventListener('change', saveTag);
-		ov.addEventListener('click', async e => { if (e.target === ov || e.target.closest('[data-qx]')) { await saveTag(); close(); } else if (e.target.closest('[data-qpng]')) { await saveTag(); qrPng(u, q); } else if (e.target.closest('[data-qprint]')) { await saveTag(); qrPrint([u]); } });
+		ov.addEventListener('click', async e => { if (e.target === ov || e.target.closest('[data-qx]')) { await saveTag(); close(); } else if (e.target.closest('[data-qcopy]')) { qrCopy(u, q, tg.value.trim()); saveTag(); } else if (e.target.closest('[data-qpng]')) { await saveTag(); qrPng(u, q); } else if (e.target.closest('[data-qprint]')) { await saveTag(); qrPrint([u]); } });
 		ov.querySelector('[data-qprint]').focus();
 	}
-	function qrPng(u, q) {
+	/* v2.9.278: a címkekép vászonra rajzolva – letöltéshez és vágólapra másoláshoz is */
+	function qrCanvas(u, q) {
 		const n = q.getModuleCount(), W = 900, cell = Math.floor(560 / n), qs = cell * n, ox = Math.round((W - qs) / 2), oy = 50, t = item(u.item_id);
 		const c = document.createElement('canvas'); c.width = W; c.height = oy + qs + 260; const g = c.getContext('2d');
 		g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#111';
@@ -284,6 +285,17 @@
 		g.font = '500 28px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#4A5060'; g.fillText([u.serial ? 'S/N ' + u.serial : (t ? t.name : ''), 'Kód: ' + u.qr].filter(Boolean).join('  ·  '), W / 2, oy + qs + 125);
 		if (u.tag) { let ts = 30; do { g.font = '700 ' + ts + 'px Inter, "Segoe UI", sans-serif'; ts -= 2; } while (g.measureText(u.tag).width > W - 80 && ts > 16); g.fillStyle = '#141C33'; g.fillText(u.tag, W / 2, oy + qs + 170); }
 		g.font = '700 30px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#141C33'; g.fillText('eventcrazy.hu', W / 2, oy + qs + (u.tag ? 225 : 180));
+		return c;
+	}
+	/* vágólapra: a ClipboardItem-nek ígéretet adunk át még a kattintás alatt (Safari ezt kéri) */
+	function qrCopy(u, q, tag) {
+		const uu = Object.assign({}, u, { tag: tag });
+		if (!navigator.clipboard || !window.ClipboardItem) { toast('Ez a böngésző nem tud képet másolni – használd a „PNG letöltése” gombot.', true); return; }
+		const blob = new Promise((res, rej) => qrCanvas(uu, q).toBlob(b => b ? res(b) : rej(new Error('A kép nem készült el.')), 'image/png'));
+		navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => toast('A címkekép a vágólapon – illeszd be a nyomtató alkalmazásába (Ctrl+V / ⌘V).'), e => toast('A másolás nem sikerült (' + (e && e.message || 'a böngésző nem engedte') + ') – használd a „PNG letöltése” gombot.', true));
+	}
+	function qrPng(u, q) {
+		const c = qrCanvas(u, q);
 		c.toBlob(b => { if (!b) { toast('A PNG nem készült el.', true); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'eszkoz-qr-' + u.qr + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }, 'image/png');
 	}
 	/* A4-es címkelap: 3 × 8 címke (70 × 37 mm), a kiválasztott eszközökről */
