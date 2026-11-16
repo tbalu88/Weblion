@@ -1198,7 +1198,8 @@
 		/* v2.9.114: csak két címke – „Elolvasva” (valódi megnyitás) vagy „Kézbesítve” (az automatikus letöltés is ide tartozik; a részletek a listában) */
 		const [cls, lab] = p.n ? ['on', 'Elolvasva' + (p.n > 1 ? ' ' + p.n + '×' : '')] : ['', 'Kézbesítve'];
 		/* v2.9.270: mobilon csak ikon a kártya jobb felső sarkában – egy pipa: kézbesítve, dupla pipa: elolvasva */
-		const ic = p.n ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12.5l5 5L17.5 7"/><path d="M11.5 16.5l1 1L23 7"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l5 5L20 7"/></svg>';
+		/* v2.9.271: borítéka: kézbesítve (kék), szem: elolvasva (zöld) – a pipa lezárásnak tűnt */
+		const ic = p.n ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>';
 		return '<button type="button" class="ml-pxb ' + cls + '" data-pxm="' + m.id + '" aria-haspopup="dialog" aria-label="' + esc(lab) + ' – megnyitás-követés részletei" title="Megnyitás-követés – részletek"><span class="ml-pxi">' + ic + '</span><span class="ml-pxt">' + esc(lab) + ' ▾</span></button>';
 	}
 	function pxPop(btn, m) {
@@ -1212,7 +1213,7 @@
 		document.body.appendChild(el);
 		const r = btn.getBoundingClientRect(), w = Math.min(420, window.innerWidth - 16);
 		el.style.width = w + 'px'; el.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px'; el.style.top = (r.bottom + 6) + 'px';
-		const off = e => { if (!el.contains(e.target) && e.target !== btn) el._close(); }, key = e => { if (e.key === 'Escape') { el._close(); btn.focus(); } };
+		const off = e => { if (!el.contains(e.target) && !btn.contains(e.target)) el._close(); } /* v2.9.271: a jelvény ikonjára koppintva is bezárul (nem nyílik újra) */, key = e => { if (e.key === 'Escape') { el._close(); btn.focus(); } };
 		el._close = () => { el.remove(); document.removeEventListener('pointerdown', off, true); document.removeEventListener('keydown', key, true); window.removeEventListener('scroll', el._close, true); };
 		setTimeout(() => { document.addEventListener('pointerdown', off, true); document.addEventListener('keydown', key, true); window.addEventListener('scroll', el._close, true); }, 0);
 	}

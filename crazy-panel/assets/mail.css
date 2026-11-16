@@ -958,7 +958,7 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
 /* v2.9.109: megnyitás-követés */
 .ml-px{font-size:12px;color:var(--mu);margin:-2px 0 8px;padding-left:2px}.ml-px.on{color:#17663A;font-weight:600}.ml-px.auto{color:#9A5B00}
 /* v2.9.113: megnyitás-követés jelvény + lista */
-.ml-pxb{border:0;border-radius:6px;padding:2px 8px;margin-left:8px;font:600 12px Inter,sans-serif;cursor:pointer;background:#EEF0F3;color:#3A3F4B;vertical-align:1px;white-space:nowrap}
+.ml-pxb{border:0;border-radius:6px;padding:2px 8px;margin-left:8px;font:600 12px Inter,sans-serif;cursor:pointer;background:#1F5BD8;color:#fff;vertical-align:1px;white-space:nowrap}
 .ml-pxb.on{background:#2E7D4F;color:#fff}
 .ml-pxi{display:none}
 /* v2.9.270: mobilon a jelvény a levélkártya jobb felső sarkában, csak ikonnal */
@@ -968,8 +968,9 @@ html.mlp-lock body{padding-right:var(--mlp-sb,0px)}
   .ml-read .ml-msg .ml-pxt{display:none}
   .ml-read .ml-msg .ml-pxi{display:inline-flex}
   .ml-pxi svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-  .ml-read .ml-msg .ml-pxb.on{background:#E3F0FF;color:#1D5FD1}
-  .ml-read .ml-msg .ml-pxb:not(.on){background:#F1EFEB;color:#6B6F78}
+  .ml-read .ml-msg .ml-pxb.on{background:#2E7D4F;color:#fff}
+  .ml-read .ml-msg .ml-pxb:not(.on){background:#1F5BD8;color:#fff}
+  .ml-pxi svg{stroke-width:2}
   .ml-read .ml-msg:has(.ml-pxb) .ml-mh>div{padding-right:34px;min-width:0}
 }.ml-pxb.auto{background:#FFF0D6;color:#8A5300}.ml-pxb:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}
 .ml-pxp{position:fixed;z-index:10050;background:#fff;border:1px solid #E6E3DE;border-radius:12px;box-shadow:0 14px 34px rgba(20,28,51,.18);padding:12px 14px;font:13px Inter,sans-serif;color:#141C33;box-sizing:border-box;max-height:60vh;overflow:auto}
