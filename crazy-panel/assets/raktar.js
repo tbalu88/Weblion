@@ -363,7 +363,7 @@
 			'<div class="rk-lab" aria-label="A nyomtatandó címke"><div class="rk-lq" role="img" aria-label="QR-kód: ' + esc(u.qr) + '">' + qrSvg(q, 160) + '</div><div class="rk-lt"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') +
 			'<i data-qprev' + (u.tag ? '' : ' hidden') + '>' + esc(u.tag || '') + '</i>' + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>Kód: ' + esc(u.qr) + '</small><em>eventcrazy.hu</em></div></div>' +
 			'<label class="rk-f rk-tagf"><span>Egyedi felirat a címkén (nem kötelező)</span><input data-qtag maxlength="120" value="' + esc(u.tag || '') + '" placeholder="pl. Tartalék kamera – töltő a dobozban"></label>' +
-			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qcopy>Kép másolása</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>Címke nyomtatása</button></div></div>';
+			'<div class="rk-db"><button type="button" class="cpx-btn ghost sm" data-qx>Bezárás</button><button type="button" class="cpx-btn ghost sm" data-qcopy>Kép másolása</button><button type="button" class="cpx-btn ghost sm" data-qpng>PNG letöltése</button><button type="button" class="cpx-btn sm" data-qprint>' + (canShareImg() ? 'Nyomtatás / megosztás' : 'Címke nyomtatása') + '</button></div></div>';
 		document.body.appendChild(ov);
 		const close = () => { ov.remove(); document.removeEventListener('keydown', k); }, k = e => { if (e.key === 'Escape') close(); };
 		document.addEventListener('keydown', k);
@@ -371,7 +371,7 @@
 		tg.addEventListener('input', () => { const v = tg.value.trim(); pv.textContent = v; pv.hidden = !v; });
 		const saveTag = async () => { const v = tg.value.trim(); if (v === (u.tag || '')) return; try { await post('cp_wh_tag', { id: u.id, tag: v }); u.tag = v; } catch (x) { toast(x.message, true); } };
 		tg.addEventListener('change', saveTag);
-		ov.addEventListener('click', async e => { if (e.target === ov || e.target.closest('[data-qx]')) { await saveTag(); close(); } else if (e.target.closest('[data-qcopy]')) { qrCopy(u, q, tg.value.trim()); saveTag(); } else if (e.target.closest('[data-qpng]')) { await saveTag(); qrPng(u, q); } else if (e.target.closest('[data-qprint]')) { await saveTag(); qrPrint([u]); } });
+		ov.addEventListener('click', async e => { if (e.target === ov || e.target.closest('[data-qx]')) { await saveTag(); close(); } else if (e.target.closest('[data-qcopy]')) { qrCopy(u, q, tg.value.trim()); saveTag(); } else if (e.target.closest('[data-qpng]')) { await saveTag(); qrPng(u, q); } else if (e.target.closest('[data-qprint]')) { qrPrint([Object.assign({}, u, { tag: tg.value.trim() })]); saveTag(); } });
 		ov.querySelector('[data-qprint]').focus();
 	}
 	/* v2.9.278: a címkekép vászonra rajzolva – letöltéshez és vágólapra másoláshoz is */
@@ -408,18 +408,29 @@
 		c.toBlob(b => { if (!b) { toast('A PNG nem készült el.', true); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'eszkoz-qr-' + u.qr + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }, 'image/png');
 	}
 	/* A4-es címkelap: 3 × 8 címke (70 × 37 mm), a kiválasztott eszközökről */
+	/* v2.9.284: mobilon nincs külön nyomtatási lap (iPhone-on beragadt) – a címkeképek a megosztás menübe mennek:
+	 * onnan AirPrint („Nyomtatás”) vagy a címkenyomtató alkalmazása (pl. Open Label) választható. A fájl szinkron készül, hogy a koppintás „élő” maradjon. */
+	function canShareImg() { try { return !!(navigator.share && navigator.canShare && window.matchMedia && matchMedia('(pointer:coarse)').matches && navigator.canShare({ files: [new File([new Uint8Array(1)], 'a.png', { type: 'image/png' })] })); } catch (e) { return false; } }
+	function labelFile(u) { const d = qrCanvas(u, qrMake(u)).toDataURL('image/png'), bin = atob(d.split(',')[1]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new File([a], 'cimke-' + u.qr + '.png', { type: 'image/png' }); }
+	function shareLabels(U) {
+		let files; try { files = U.map(labelFile); } catch (e) { toast('A címkekép nem készült el.', true); return; }
+		navigator.share({ files, title: U.length > 1 ? U.length + ' QR-címke' : 'QR-címke' }).then(() => {}, e => { if (!e || e.name !== 'AbortError') toast('A megosztás nem sikerült – használd a „Kép másolása” gombot.', true); });
+	}
 	async function qrPrint(U) {
-		if (!U.length) return; try { await qrLib(); } catch (e) { toast(e.message, true); return; }
+		if (!U.length) return;
+		if (window.qrcode && canShareImg()) { shareLabels(U); return; }
+		try { await qrLib(); } catch (e) { toast(e.message, true); return; }
 		const w = window.open('', '_blank'); if (!w) { toast('A böngésző letiltotta az új ablakot – engedélyezd a felugró ablakot a panelnek.', true); return; }
 		const lab = u => { const t = item(u.item_id); return '<div class="l"><div class="q">' + qrSvg(qrMake(u), 120) + '</div><div class="t"><b>' + esc(uName(u)) + '</b>' + (t && t.name !== uName(u) ? '<span>' + esc(t.name) + '</span>' : '') + (u.tag ? '<i>' + esc(u.tag) + '</i>' : '') + (u.serial ? '<span>S/N ' + esc(u.serial) + '</span>' : '') + '<small>Kód: ' + esc(u.qr) + '</small><em>eventcrazy.hu</em></div></div>'; };
-		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><title>Eszköz QR-címkék (' + U.length + ' db)</title><style>@page{size:A4;margin:12mm 0 0 0}body{margin:0;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#141C33}' +
+		w.document.write('<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Eszköz QR-címkék (' + U.length + ' db)</title><style>@page{size:A4;margin:12mm 0 0 0}body{margin:0;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#141C33}' +
 			'.p{display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:37mm;justify-content:center}.l{box-sizing:border-box;display:flex;align-items:center;gap:2.5mm;padding:2.5mm 3mm;overflow:hidden;break-inside:avoid;outline:.2mm dashed #ccc}' +
 			'.q{flex:none;width:28mm;height:28mm}.q svg{width:100%;height:100%;display:block}.t{display:flex;flex-direction:column;gap:.6mm;min-width:0}.t b{font-size:9.5pt;line-height:1.15;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
-			'.t span{font-size:9pt;font-weight:600;color:#141C33;overflow-wrap:anywhere}.t small{font-size:9pt;font-weight:600;color:#141C33;letter-spacing:.02em}.t i{font-style:normal;font-weight:700;font-size:8pt;color:#141C33;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.t em{font-style:normal;font-weight:800;font-size:9pt;color:#141C33;margin-top:.4mm}@media print{.l{outline:0}.no{display:none}}.no{text-align:center;padding:10px;font-size:14px}.nb{display:flex;justify-content:center;gap:10px;padding:14px 10px 0}.nb button{font:600 16px Inter,Arial,sans-serif;padding:12px 18px;border-radius:999px;border:1.5px solid #141C33;background:#fff;color:#141C33;cursor:pointer}.nb .pr{background:#141C33;color:#fff}</style></head><body>' +
+			'.t span{font-size:9pt;font-weight:600;color:#141C33;overflow-wrap:anywhere}.t small{font-size:9pt;font-weight:600;color:#141C33;letter-spacing:.02em}.t i{font-style:normal;font-weight:700;font-size:9pt;color:#141C33;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.t em{font-style:normal;font-weight:800;font-size:9pt;color:#141C33;margin-top:.4mm}@media print{.l{outline:0}.no{display:none}}.no{text-align:center;padding:10px;font-size:14px}.nb{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 56px) 12px 0}.nb button{font:600 16px Inter,Arial,sans-serif;padding:12px 18px;border-radius:999px;border:1.5px solid #141C33;background:#fff;color:#141C33;cursor:pointer}.nb .pr{background:#141C33;color:#fff}</style></head><body>' +
 			'<div class="no nb"><button type="button" onclick="back()">← Vissza a panelbe</button><button type="button" class="pr" onclick="window.print()">Nyomtatás</button></div><p class="no">' + U.length + ' címke · A4, 3 × 8 címke (70 × 37 mm) – nyomtatás: Ctrl+P / ⌘P, méretezés: 100% („Tényleges méret”).</p><div class="p">' + U.map(lab).join('') + '</div><script>var P=' + JSON.stringify(location.href.split('#')[0] + '#raktar') + ';function back(){try{window.close()}catch(e){}setTimeout(function(){location.href=P},250)}window.addEventListener("afterprint",function(){setTimeout(back,300)});setTimeout(function(){window.print()},400)<\/script></body></html>');
 		w.document.close();
 	}
 	function qrPick() {
+		qrLib().catch(() => {}); /* előre betöltve, hogy mobilon a megosztás a koppintáskor azonnal indulhasson */
 		const types = (S.d.items || []).filter(i => i.kind === 'asset'), U = S.d.units || [];
 		const f = dlg('QR-címkék nyomtatása', '<p class="rk-hint" style="margin-top:0">Jelöld ki, melyik eszközökről kérsz címkét (A4-es lap, 3 × 8 címke).</p><label class="rk-ck"><input type="checkbox" data-qa checked> Mind</label><div class="rk-qpl">' +
 			types.map(t => { const L = U.filter(u => u.item_id === t.id && u.status !== 'gone'); return L.length ? '<fieldset><legend>' + esc(t.name) + '</legend>' + L.map(u => '<label class="rk-ck"><input type="checkbox" name="u" value="' + u.id + '" checked> ' + esc(u.label || t.name) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + '</label>').join('') + '</fieldset>' : ''; }).join('') + '</div>',
