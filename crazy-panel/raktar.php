@@ -235,6 +235,7 @@ function cp_wh_ajax_assets_add() {
 	if (count(array_unique($serials)) !== count($serials)) { cp_el_err('Egy sorozatszám kétszer szerepel a listában.'); }
 	$item = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_wh_t('items') . " WHERE kind = 'asset' AND name = %s LIMIT 1", $name));
 	$now = current_time('mysql');
+	if ($item && cp_wh_str('cat', 60) !== '') { $wpdb->query($wpdb->prepare('UPDATE ' . cp_wh_t('items') . " SET cat = %s WHERE id = %d AND cat = ''", cp_wh_str('cat', 60), $item)); } /* meglévő, kategória nélküli fajta: megkapja */
 	if (!$item) { $wpdb->insert(cp_wh_t('items'), array('kind' => 'asset', 'name' => $name, 'cat' => cp_wh_str('cat', 60), 'unit' => 'db', 'price' => max(0, (int) round(cp_wh_num($_POST['price'] ?? 0))), 'active' => 1, 'updated_at' => $now)); $item = (int) $wpdb->insert_id; }
 	$have = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_wh_t('units') . ' WHERE item_id = %d', $item));
 	$model = cp_wh_str('model', 160); $lim = max(0, (int) ($_POST['svc_limit'] ?? 0)); $loc = cp_wh_main();
