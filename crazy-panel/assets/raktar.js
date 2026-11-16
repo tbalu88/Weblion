@@ -275,16 +275,24 @@
 	}
 	/* v2.9.278: a címkekép vászonra rajzolva – letöltéshez és vágólapra másoláshoz is */
 	function qrCanvas(u, q) {
-		const n = q.getModuleCount(), W = 900, cell = Math.floor(560 / n), qs = cell * n, ox = Math.round((W - qs) / 2), oy = 50, t = item(u.item_id);
-		const c = document.createElement('canvas'); c.width = W; c.height = oy + qs + 260; const g = c.getContext('2d');
-		g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#111';
-		for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect(ox + k * cell, oy + r * cell, cell, cell);
-		g.textAlign = 'center'; g.fillStyle = '#141C33';
-		let fs = 44; const nm = uName(u); do { g.font = '700 ' + fs + 'px Inter, "Segoe UI", sans-serif'; fs -= 2; } while (g.measureText(nm).width > W - 80 && fs > 18);
-		g.fillText(nm, W / 2, oy + qs + 70);
-		g.font = '500 28px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#4A5060'; g.fillText([u.serial ? 'S/N ' + u.serial : (t ? t.name : ''), 'Kód: ' + u.qr].filter(Boolean).join('  ·  '), W / 2, oy + qs + 125);
-		if (u.tag) { let ts = 30; do { g.font = '700 ' + ts + 'px Inter, "Segoe UI", sans-serif'; ts -= 2; } while (g.measureText(u.tag).width > W - 80 && ts > 16); g.fillStyle = '#141C33'; g.fillText(u.tag, W / 2, oy + qs + 170); }
-		g.font = '700 30px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#141C33'; g.fillText('eventcrazy.hu', W / 2, oy + qs + (u.tag ? 225 : 180));
+		/* v2.9.279: ugyanaz a fekvő elrendezés, mint az előnézet és a nyomtatott címke (70 × 37 mm, 20 px/mm): QR balra, szöveg jobbra */
+		const W = 1400, H = 740, P = 48, n = q.getModuleCount(), qa = H - 2 * P, cell = Math.floor(qa / n), qs = cell * n, qx = P + Math.round((qa - qs) / 2), qy = Math.round((H - qs) / 2), t = item(u.item_id);
+		const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+		g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#111';
+		for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect(qx + k * cell, qy + r * cell, cell, cell);
+		const x0 = P + qa + 44, tw = W - x0 - P, F = '"Inter", "Segoe UI", Arial, sans-serif';
+		/* sortörés szóhatáron, legfeljebb max sor (az utolsó „…”-tal rövidül) */
+		const wrap = (txt, font, max) => { g.font = font; const w = String(txt).split(/\s+/), L = []; let cur = ''; w.forEach(x => { const tr = cur ? cur + ' ' + x : x; if (g.measureText(tr).width <= tw || !cur) cur = tr; else { L.push(cur); cur = x; } }); if (cur) L.push(cur); if (L.length > max) { L.length = max; let l = L[max - 1]; while (g.measureText(l + '…').width > tw && l.length > 1) l = l.slice(0, -1); L[max - 1] = l + '…'; } return L.map(l => { while (g.measureText(l).width > tw && l.length > 1) l = l.slice(0, -1); return l; }); };
+		const nm = uName(u), rows = [];
+		wrap(nm, '700 54px ' + F, 2).forEach(l => rows.push([l, '700 54px ' + F, '#141C33', 64]));
+		if (t && t.name !== nm) wrap(t.name, '400 36px ' + F, 1).forEach(l => rows.push([l, '400 36px ' + F, '#333', 46]));
+		if (u.tag) wrap(u.tag, '700 44px ' + F, 2).forEach(l => rows.push([l, '700 44px ' + F, '#141C33', 54]));
+		if (u.serial) wrap('S/N ' + u.serial, '400 36px ' + F, 1).forEach(l => rows.push([l, '400 36px ' + F, '#333', 46]));
+		rows.push(['Kód: ' + u.qr, '400 32px ' + F, '#666', 44]);
+		rows.push(['eventcrazy.hu', '800 46px ' + F, '#141C33', 60]);
+		const th = rows.reduce((a, r) => a + r[3], 0); let y = Math.round((H - th) / 2);
+		g.textAlign = 'left'; g.textBaseline = 'top';
+		rows.forEach(r => { g.font = r[1]; g.fillStyle = r[2]; g.fillText(r[0], x0, y + Math.round((r[3] - parseInt(r[1].split(' ')[1], 10)) / 2)); y += r[3]; });
 		return c;
 	}
 	/* vágólapra: a ClipboardItem-nek ígéretet adunk át még a kattintás alatt (Safari ezt kéri) */
