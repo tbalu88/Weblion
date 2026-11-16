@@ -24,7 +24,7 @@
 	const nf = n => { const v = Math.round(Number(n || 0) * 100) / 100; return v.toLocaleString('hu-HU', { maximumFractionDigits: 2 }); };
 	const ft = n => Number(n || 0).toLocaleString('hu-HU') + ' Ft';
 	const huD = s => (s ? String(s).slice(0, 10).replace(/-/g, '.') + '.' : '');
-	const SUBS = [['stock', 'Készlet'], ['assets', 'Eszközök'], ['moves', 'Mozgások']];
+	const SUBS = [['stock', 'Készlet'], ['assets', 'Eszközök'], ['kits', 'Csomagok'], ['moves', 'Mozgások']];
 
 	function status(s) { if (!s) return; s.textContent = S.err || ''; s.className = 'cpx-status' + (S.err ? ' err' : ''); }
 	async function load() {
@@ -60,7 +60,7 @@
 		if (!S.d) { body.innerHTML = S.err ? '<div class="cpx-empty err">' + esc(S.err) + '</div>' : '<div class="cpx-empty">Betöltés…</div>'; return; }
 		const cs = m.querySelector('[data-rcat]'), cats = Array.from(new Set((S.d.items || []).map(i => i.cat).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'hu'));
 		cs.innerHTML = '<option value="">Minden kategória</option>' + cats.map(c => '<option' + (c === S.cat ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
-		if (S.sub === 'assets') body.innerHTML = drawAssets(); else if (S.sub === 'moves') { body.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; drawMoves(body); } else body.innerHTML = drawStock();
+		if (S.sub === 'kits') body.innerHTML = drawKits(); else if (S.sub === 'assets') body.innerHTML = drawAssets(); else if (S.sub === 'moves') { body.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; drawMoves(body); } else body.innerHTML = drawStock();
 	}
 	/* ---- Készlet: fogyóanyag */
 	function drawStock() {
@@ -101,6 +101,66 @@
 		}).join('');
 		return bulk + (out || '<p class="cpx-empty">Nincs találat.</p>');
 	}
+	/* ---- Csomagok (v2.9.283): előre összeállított eszközök + fogyóanyag, egy lépésben ki / vissza */
+	const kitsOf = () => Object.entries(S.d.kits || {}).map(e => Object.assign({ id: e[0] }, e[1])).sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+	function drawKits() {
+		const K = kitsOf().filter(k => hit(k.name, k.note)), ST = S.d.status || {}, D = S.d.deals || {}, ev = S.d.ev;
+		const top = '<div class="rk-bar"><button type="button" class="cpx-btn sm" data-rkit="new">+ Új csomag</button><span>Egy csomag egy lépésben kiadható egy rendezvényre és visszavehető – visszavételkor pipálva látszik, mi jött vissza.</span></div>';
+		if (!kitsOf().length) return top + '<div class="rk-empty"><p><b>Még nincs csomag.</b> Állíts össze egyet a gyakran együtt kimenő eszközökből, pl. „Szelfigép 1. csomag”: kamera, nyomtató, laptop, állvány + 2 tekercs papír.</p></div>';
+		return top + (K.length ? K.map(k => {
+			const U = (k.units || []).map(unit).filter(Boolean), out = U.filter(u => u.loc === ev), bad = U.filter(u => u.status !== 'ok');
+			const st = out.length === U.length && U.length ? '<span class="rk-chip mid">kint: ' + esc(D[out[0].deal_id] ? D[out[0].deal_id].t : 'rendezvényen') + '</span>' : out.length ? '<span class="rk-chip mid">' + out.length + ' / ' + U.length + ' kint</span>' : '<span class="rk-chip ok">raktárban</span>';
+			return '<section class="rk-kit"><div class="rk-kh"><h3>' + esc(k.name) + '</h3>' + st + (bad.length ? '<span class="rk-chip bad">' + bad.length + ' nem használható</span>' : '') + '</div>' + (k.note ? '<p class="rk-kn">' + esc(k.note) + '</p>' : '') +
+				'<ul class="rk-kl">' + U.map(u => { const t = item(u.item_id); return '<li><span>' + esc(u.label || (t && t.name)) + '</span><small>' + esc(u.loc === ev ? 'kint' : u.loc) + (u.status !== 'ok' ? ' · ' + esc(ST[u.status] || u.status) : '') + '</small></li>'; }).join('') +
+				(k.stock || []).map(x => { const i = item(x[0]); return i ? '<li><span>' + esc(i.name) + '</span><small>' + nf(x[1]) + ' ' + esc(i.unit) + '</small></li>' : ''; }).join('') + '</ul>' +
+				'<div class="rk-ka"><button type="button" class="cpx-btn sm" data-rkmv="out" data-rkid="' + esc(k.id) + '">Kiadás rendezvényre</button><button type="button" class="cpx-btn ghost sm" data-rkmv="back" data-rkid="' + esc(k.id) + '"' + (out.length ? '' : ' disabled') + '>↩ Visszavétel</button><button type="button" class="rk-lnk" data-rkit="' + esc(k.id) + '">✎ Szerkesztés</button></div></section>';
+		}).join('') : '<p class="cpx-empty">Nincs találat.</p>');
+	}
+	function kitForm(id) {
+		const k = id ? (S.d.kits || {})[id] : null, x = k || { name: '', note: '', units: [], stock: [] };
+		const taken = {}; kitsOf().forEach(o => { if (o.id !== id) (o.units || []).forEach(u => { taken[u] = o.name; }); });
+		const types = (S.d.items || []).filter(i => i.kind === 'asset'), stockItems = (S.d.items || []).filter(i => i.kind === 'stock' && i.active);
+		const uRows = types.map(t => { const U = (S.d.units || []).filter(u => u.item_id === t.id && u.status !== 'gone'); return U.length ? '<fieldset><legend>' + esc(t.name) + '</legend>' + U.map(u => '<label class="rk-ck"' + (taken[u.id] ? ' title="Már a(z) „' + esc(taken[u.id]) + '” csomagban van"' : '') + '><input type="checkbox" name="u" value="' + u.id + '"' + ((x.units || []).includes(u.id) ? ' checked' : '') + (taken[u.id] ? ' disabled' : '') + '> ' + esc(u.label || t.name) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (taken[u.id] ? ' <small>(' + esc(taken[u.id]) + ')</small>' : '') + '</label>').join('') + '</fieldset>' : ''; }).join('');
+		const sRow = (iid, q) => '<div class="rk-ks"><select name="si"><option value="">– fogyóanyag –</option>' + stockItems.map(i => '<option value="' + i.id + '"' + (i.id === iid ? ' selected' : '') + '>' + esc(i.name) + ' (' + esc(i.unit) + ')</option>').join('') + '</select><input name="sq" inputmode="decimal" value="' + (q || '') + '" placeholder="menny."><button type="button" class="rk-lnk" data-srm aria-label="Sor törlése">×</button></div>';
+		const f = dlg(k ? k.name : 'Új csomag', '<div class="rk-g2">' + fld('Csomag neve', inp('name', x.name, ' required maxlength="120" placeholder="pl. Szelfigép 1. csomag"'), 1) + fld('Megjegyzés', inp('note', x.note, ' maxlength="300" placeholder="pl. fekete Peli-láda"'), 1) + '</div>' +
+			'<h4 class="rk-h4">Eszközök a csomagban</h4><input type="search" class="rk-kq" data-kq placeholder="Szűrés név vagy sorozatszám szerint" aria-label="Eszközök szűrése"><div class="rk-qpl" data-kul>' + (uRows || '<p class="cpx-muted">Még nincs eszköz a raktárban.</p>') + '</div>' +
+			'<h4 class="rk-h4">Fogyóanyag (kiadáskor ennyi megy ki)</h4><div data-ksl>' + ((x.stock || []).map(s2 => sRow(s2[0], s2[1])).join('') || '') + '</div>' + (stockItems.length ? '<button type="button" class="rk-lnk" data-sadd>+ Fogyóanyag sor</button>' : '<p class="cpx-muted">Nincs felvett fogyóanyag.</p>'),
+			async f2 => {
+				const units = Array.from(f2.querySelectorAll('[name=u]:checked')).map(c => c.value).join(',');
+				const stock = Array.from(f2.querySelectorAll('.rk-ks')).map(r => [Number(r.querySelector('[name=si]').value), String(r.querySelector('[name=sq]').value).replace(',', '.')]).filter(r => r[0] && Number(r[1]) > 0);
+				await post('cp_wh_kit', { op: 'save', id: id || '', name: val(f2, 'name'), note: val(f2, 'note'), units, stock: JSON.stringify(stock) }); S.sub = 'kits'; keep(); return 'Csomag mentve.';
+			}, 'Mentés', id ? async () => { const ok = await (window.CPXConfirm ? window.CPXConfirm('Törlöd a(z) „' + k.name + '” csomagot?\n\nAz eszközök és a készlet megmaradnak, csak a csomag-összeállítás törlődik.') : Promise.resolve(window.confirm('Törlöd a csomagot?'))); if (!ok) return false; await post('cp_wh_kit', { op: 'del', id }); return 'Csomag törölve.'; } : null);
+		const sl = f.querySelector('[data-ksl]'), ad = f.querySelector('[data-sadd]');
+		if (ad) ad.addEventListener('click', () => sl.insertAdjacentHTML('beforeend', sRow(0, '')));
+		sl.addEventListener('click', e => { const b = e.target.closest('[data-srm]'); if (b) b.closest('.rk-ks').remove(); });
+		f.querySelector('[data-kq]').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); f.querySelectorAll('[data-kul] .rk-ck').forEach(l => { l.hidden = q && !l.textContent.toLowerCase().includes(q); }); });
+	}
+	function kitMove(id, type) {
+		const k = (S.d.kits || {})[id]; if (!k) return;
+		const ev = S.d.ev, ST = S.d.status || {}, out = type === 'out';
+		const U = (k.units || []).map(unit).filter(Boolean);
+		const urow = u => { const t = item(u.item_id), can = out ? u.loc !== ev : u.loc === ev, warn = out && can && u.status !== 'ok'; return '<label class="rk-ck' + (can ? '' : ' off') + '"><input type="checkbox" name="u" value="' + u.id + '"' + (can && !warn ? ' checked' : '') + (can ? '' : ' disabled') + '> <span>' + esc(u.label || (t && t.name)) + (u.serial ? ' <small>S/N ' + esc(u.serial) + '</small>' : '') + (!can ? ' <small>(' + (out ? 'már kint van' : 'nincs kint') + ')</small>' : warn ? ' <small class="w">(' + esc(ST[u.status] || u.status) + ')</small>' : '') + '</span></label>'; };
+		const srow = x => { const i = item(x[0]); return i ? '<label class="rk-ks2"><span>' + esc(i.name) + '</span><input name="sq" data-si="' + i.id + '" inputmode="decimal" value="' + (out ? nf(x[1]) : '') + '" placeholder="' + (out ? '' : 'maradék, ha van') + '"><small>' + esc(i.unit) + '</small></label>' : ''; };
+		const f = dlg((out ? 'Kiadás: ' : 'Visszavétel: ') + k.name,
+			(out ? '<div class="rk-f w"><span>Rendezvény (deal)</span><input data-dq placeholder="Keresés: név vagy deal-szám (üresen: a következő 2 hét)" autocomplete="off"><input type="hidden" name="deal"><div class="rk-dl" data-dl></div></div>' : '<p class="rk-hint" style="margin-top:0">Pipáld ki, ami visszajött. Ami nincs kipipálva, kint marad (hiányzóként látszik).</p>') +
+			'<h4 class="rk-h4">Eszközök</h4><div class="rk-qpl">' + (U.map(urow).join('') || '<p class="cpx-muted">Nincs eszköz a csomagban.</p>') + '</div>' +
+			((k.stock || []).length ? '<h4 class="rk-h4">' + (out ? 'Fogyóanyag' : 'Visszahozott fogyóanyag') + '</h4>' + k.stock.map(srow).join('') : ''),
+			async f2 => {
+				const units = Array.from(f2.querySelectorAll('[name=u]:checked')).map(c => c.value);
+				const stock = Array.from(f2.querySelectorAll('[name=sq]')).map(x => [Number(x.dataset.si), String(x.value).replace(',', '.')]).filter(r => Number(r[1]) > 0);
+				if (!units.length && !stock.length) throw new Error('Nincs kijelölt tétel.');
+				const r = await post('cp_wh_kit', { op: 'move', id, type, deal: val(f2, 'deal'), units: units.join(','), stock: JSON.stringify(stock) });
+				const miss = !out ? U.filter(u => u.loc === ev && !units.includes(String(u.id))).length : 0;
+				return (out ? 'Kiadva: ' : 'Visszavéve: ') + r.n + ' tétel.' + (miss ? ' ' + miss + ' eszköz kint maradt.' : '');
+			}, out ? 'Kiadás' : 'Visszavétel');
+		if (out) {
+			const dl = f.querySelector('[data-dl]'); let qt = 0;
+			const dq = async q => { try { const r = await post('cp_wh_dealq', { q }); dl.innerHTML = (r.rows || []).map(d => '<button type="button" data-did="' + d.id + '"><b>' + esc(d.title) + '</b><small>#' + d.id + (d.event_d ? ' · ' + esc(huD(d.event_d)) : '') + '</small></button>').join('') || '<p class="cpx-muted">Nincs találat.</p>'; } catch (x) { dl.innerHTML = '<p class="rk-err">' + esc(x.message) + '</p>'; } };
+			f.querySelector('[data-dq]').addEventListener('input', e => { clearTimeout(qt); f.elements.deal.value = ''; qt = setTimeout(() => dq(e.target.value.trim()), 200); });
+			dl.addEventListener('click', e => { const b = e.target.closest('[data-did]'); if (!b) return; f.elements.deal.value = b.dataset.did; f.querySelector('[data-dq]').value = b.querySelector('b').textContent + ' (#' + b.dataset.did + ')'; dl.innerHTML = ''; });
+			dq('');
+		}
+	}
 	/* ---- Mozgások */
 	async function drawMoves(body) {
 		let r; try { r = await post('cp_wh_moves', S.mf || {}); } catch (e) { body.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
@@ -120,6 +180,8 @@
 		if (b.dataset.ritem) return itemForm(item(b.dataset.ritem));
 		if (b.dataset.runit) return unitForm(unit(b.dataset.runit));
 		if (b.dataset.rcard) return unitCard(unit(b.dataset.rcard));
+		if (b.dataset.rkit) return kitForm(b.dataset.rkit === 'new' ? null : b.dataset.rkit);
+		if (b.dataset.rkmv) return kitMove(b.dataset.rkid, b.dataset.rkmv);
 		if (b.dataset.rnew2) return b.dataset.rnew2 === 'asset' ? addAssets(null) : itemForm(null, 'stock');
 		if (b.dataset.raddu) return addAssets(item(b.dataset.raddu));
 		if (b.dataset.rmv) return moveForm(item(b.dataset.rid), null, b.dataset.rmv);
@@ -449,6 +511,10 @@
 			'.rk-kvs{margin:10px 0 0}.rk-kv{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #F0EBE3;font-size:14px}.rk-kv span{color:var(--mu);min-width:7.5em}.rk-kv b{font-weight:600;overflow-wrap:anywhere;min-width:0}' +
 			'.rk-acts{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}.rk-acts .cpx-btn{flex:1 1 180px;min-height:46px;font-size:15px}.rk-cst{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;color:var(--mu)}.rk-cst select{flex:1;height:40px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit;color:var(--ink);background:#fff}' +
 			'.rk-chist h4{margin:14px 0 4px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}.rk-chist ul{list-style:none;margin:0;padding:0}.rk-chist li{display:grid;grid-template-columns:auto 1fr;gap:0 10px;padding:5px 0;font-size:13px;border-bottom:1px solid #F0EBE3}.rk-chist time{color:var(--mu);font-variant-numeric:tabular-nums}.rk-chist span{overflow-wrap:anywhere}.rk-chist small{grid-column:2;color:var(--mu)}.rk-chist .cpx-muted{font-size:13px}' +
+			'.rk-kit{background:#fff;border:1px solid var(--li);border-radius:14px;padding:14px 16px;margin:0 0 12px}.rk-kh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.rk-kh h3{margin:0;font:800 16px Inter,sans-serif;overflow-wrap:anywhere;margin-right:auto}.rk-kn{margin:4px 0 0;font-size:13px;color:var(--mu)}' +
+			'.rk-kl{list-style:none;margin:10px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px}.rk-kl li{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:4px 0;border-bottom:1px solid #F0EBE3;min-width:0}.rk-kl li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rk-kl small{color:var(--mu);white-space:nowrap}.rk-ka{display:flex;flex-wrap:wrap;align-items:center;gap:8px}' +
+			'.rk-h4{margin:14px 0 6px;font:700 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}.rk-kq{width:100%;box-sizing:border-box;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;margin-bottom:6px}.rk-ck[hidden]{display:none}.rk-ck.off{opacity:.5}.rk-ck small.w{color:#9B2A1F}' +
+			'.rk-ks{display:flex;gap:6px;align-items:center;margin:0 0 6px}.rk-ks select{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 6px;font:inherit}.rk-ks input{width:80px;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit}.rk-ks2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:14px}.rk-ks2 span{flex:1;min-width:0;overflow-wrap:anywhere}.rk-ks2 input{width:90px;height:36px;border:1.5px solid var(--li);border-radius:10px;padding:0 8px;font:inherit}.rk-ks2 small{color:var(--mu);min-width:3em}' +
 			'.rk-tagf{margin-top:12px;text-align:left}' +
 			'.rk-scan .rk-dlg{width:min(460px,100%)}.rk-cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:1/1}.rk-cam video{width:100%;height:100%;object-fit:cover;display:block}.rk-cam i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}.rk-cam[hidden]{display:none}.rk-man{display:flex;gap:8px;margin-top:10px}.rk-man input{flex:1;min-width:0;height:38px;border:1.5px solid var(--li);border-radius:10px;padding:0 10px;font:inherit;text-transform:uppercase}' +
 			'.rk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--mu)}.rk-qrd{width:min(440px,100%);text-align:center}.rk-qrd .rk-db{justify-content:center;flex-wrap:wrap}.rk-qr{width:240px;height:240px;margin:0 auto}.rk-qr svg{width:100%;height:100%;display:block}' +
