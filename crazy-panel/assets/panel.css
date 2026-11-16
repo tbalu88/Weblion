@@ -717,6 +717,9 @@ a{color:var(--ot)}
 @media (max-width:760px){.cpx-toast{font-size:15px;padding:12px 18px}body.mn-on:not(.mn-hide) .cpx-toast{bottom:calc(76px + env(safe-area-inset-bottom))}}
 /* v1.88.2: iPhone-on a 16px-nél kisebb betűs mezőbe koppintva a Safari ránagyít és úgy marad – mobilon minden beviteli mező legalább 16px */
 @media (max-width:760px){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,select{font-size:max(16px,1em)!important}}
+/* v2.9.268: mobilon az oldal vízszintesen nem csúszhat el (iOS: a tábla oldalra húzása a végén a teljes lapot is elhúzta) –
+   html: hidden (a nézetablakra terjed, nem rontja a ragadós fejléceket), body: clip (nem lesz görgető-tároló) */
+@media (max-width:760px){html{overflow-x:hidden}body{overflow-x:clip;max-width:100%}.crm-board,.cpx-kpis,.cpx-tabs{overscroll-behavior-x:contain}}
 
 /* v2.7.9: kompaktabb oldalmenü (asztali nézet) + olvasatlan levelek száma a Levelezés mellett */
 .cpx-tabs button{position:relative}
