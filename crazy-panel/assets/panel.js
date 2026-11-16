@@ -689,6 +689,14 @@
     wrap.querySelectorAll('[data-ym]').forEach(b => b.addEventListener('click', () => { S.month = b.dataset.ym; S.calView = 'month'; try { localStorage.setItem('cpx_calv', 'month'); } catch (e) { /* privát mód */ } render(); }));
   }
   const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
+    /* v2.9.266: mobilon tömörebb – az összesítők egy görgethető sorban, a naptárcellák levegősebbek, kevesebb zajjal */
+    '@media (max-width:560px){.cpx-kpis{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -2px 10px;padding:0 2px 2px;-webkit-overflow-scrolling:touch}.cpx-kpis::-webkit-scrollbar{display:none}' +
+    '.cpx-kpis .kpi{flex:0 0 auto;display:flex;align-items:baseline;gap:5px;padding:6px 10px;border-radius:999px;white-space:nowrap}.cpx-kpis .kpi b{display:inline;font:800 15px "Plus Jakarta Sans",sans-serif}.cpx-kpis .kpi span{font-size:12px}' +
+    '.cpx-cal.v2{gap:4px}.cpx-cal.v2 .cpx-day{min-height:62px;padding:5px 5px 4px;gap:3px;border-radius:10px;overflow:hidden}' +
+    '.cpx-cal.v2 .dn{font-size:13px;gap:3px}.cpx-cal.v2 .dn .pend{font-size:10px;padding:0 4px;line-height:15px;border-radius:5px}.cpx-cal.v2 .dn .tg{display:none}' +
+    '.cpx-cal.v2 .big b{font-size:19px}.cpx-cal.v2 .bar{height:4px}' +
+    '.cpx-cal.v2 .ft{font-size:10px;overflow:hidden;justify-content:flex-start}.cpx-cal.v2 .ft .spn{display:none}' +
+    '.cpx-cal.v2 .sl-mk{font-size:10px;padding:0 4px;line-height:15px;border-radius:5px;max-width:100%;overflow:hidden;text-overflow:clip}.cpx-cal.v2 .sl-mk i{display:none}}' +
     /* v2.9.115: beosztás */
     '.cpx-cal.slv .cpx-day.none{background:#FAF8F5;border-color:#EEE9E2}.cpx-cal.slv .cpx-day.ok{background:#E3F4E9;border-color:#BFE3CB}.cpx-cal.slv .cpx-day.mid{background:#FCEBCB;border-color:#F0C982}.cpx-cal.slv .cpx-day.full{background:#F9D5D0;border-color:#EBA59B}.cpx-cal.slv .cpx-day.past{opacity:.55}' +
     '.cpx-cal.slv .sll{display:flex;align-items:baseline;gap:6px;font-size:12px;color:#3D4250}.cpx-cal.slv .sll span{min-width:46px}.cpx-cal.slv .sll b{color:#141C33}.cpx-cal.slv .sll i{font-style:normal;font-weight:700;color:#8A5300;font-size:11px}.cpx-cal.slv .slu{font:700 11px Inter,sans-serif;color:#8A5300}.cpx-cal.slv .slz{color:#B0ACA5;margin-top:auto}' +
@@ -833,7 +841,7 @@
         const x = r.d[c.dataset.date]; if (!x || !x[0] || c.classList.contains('past')) return;
         const ft = c.querySelector('.ft'); if (!ft) return;
         const cls = x[1] >= x[0] ? 'ok' : x[1] + x[2] > 0 ? 'mid' : 'no';
-        ft.insertAdjacentHTML('beforeend', '<span class="sl-mk ' + cls + '" title="Beosztás: ' + x[1] + ' véglegesítve, ' + x[2] + ' meghívás folyamatban, ' + x[0] + ' slot">👤 ' + x[1] + '/' + x[0] + '</span>');
+        ft.insertAdjacentHTML('beforeend', '<span class="sl-mk ' + cls + '" title="Beosztás: ' + x[1] + ' véglegesítve, ' + x[2] + ' meghívás folyamatban, ' + x[0] + ' slot"><i aria-hidden="true">👤 </i>' + x[1] + '/' + x[0] + '</span>');
       });
     } catch (e) { /* a naptár nélküle is működik */ }
   }
