@@ -62,6 +62,12 @@ function cp_slot_bp($loc) {
 	/* vidék csak egyértelmű jelre: Budapesten kívüli irányítószám (2xxx–9xxx), vagy ismert település; különben ismeretlen */
 	if (preg_match('/(^|[^\d])[2-9]\d{3}(?!\d)/u', $l)) { return false; }
 	if (preg_match('/debrecen|szeged|győr|pécs|miskolc|kecskemét|székesfehérvár|szolnok|veszprém|eger\b|siófok|balaton|tata|gödöllő|budaörs|érd\b|szentendre|vác\b|szombathely|nyíregyháza|sopron|zalaegerszeg|kaposvár|tatabánya|esztergom|visegrád|dunakeszi|törökbálint|herceghalom|zsámbék|zsambék|velence|hévíz|keszthely|tihany/iu', $l)) { return false; }
+	/* v2.9.264: ha a szövegből nem derül ki (pl. „Gárdony”), a Logisztika fül helykeresője dönt (gyorsítótárból; kérésenként legfeljebb 2 új keresés) */
+	if (function_exists('cp_logi_geo') && function_exists('cp_logi_t')) {
+		static $budget = 2;
+		$g = cp_logi_geo($l, $budget);
+		if (is_array($g)) { return $g[0] >= 47.34 && $g[0] <= 47.62 && $g[1] >= 18.92 && $g[1] <= 19.34; }
+	}
 	return null;
 }
 /* a gép tudás-kulcsa a szolgáltatás szövegéből (a Kezelők fül tudás-listájához) */
