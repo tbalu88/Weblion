@@ -1197,7 +1197,9 @@
 		const p = m && m.dir === 'out' ? m.px : null; if (!p) return '';
 		/* v2.9.114: csak két címke – „Elolvasva” (valódi megnyitás) vagy „Kézbesítve” (az automatikus letöltés is ide tartozik; a részletek a listában) */
 		const [cls, lab] = p.n ? ['on', 'Elolvasva' + (p.n > 1 ? ' ' + p.n + '×' : '')] : ['', 'Kézbesítve'];
-		return '<button type="button" class="ml-pxb ' + cls + '" data-pxm="' + m.id + '" aria-haspopup="dialog" title="Megnyitás-követés – részletek">' + esc(lab) + ' ▾</button>';
+		/* v2.9.270: mobilon csak ikon a kártya jobb felső sarkában – egy pipa: kézbesítve, dupla pipa: elolvasva */
+		const ic = p.n ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12.5l5 5L17.5 7"/><path d="M11.5 16.5l1 1L23 7"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l5 5L20 7"/></svg>';
+		return '<button type="button" class="ml-pxb ' + cls + '" data-pxm="' + m.id + '" aria-haspopup="dialog" aria-label="' + esc(lab) + ' – megnyitás-követés részletei" title="Megnyitás-követés – részletek"><span class="ml-pxi">' + ic + '</span><span class="ml-pxt">' + esc(lab) + ' ▾</span></button>';
 	}
 	function pxPop(btn, m) {
 		const old = document.querySelector('.ml-pxp'); if (old) { const same = old.dataset.m === String(m.id); old._close(); if (same) return; }
