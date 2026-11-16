@@ -222,3 +222,26 @@ function cp_wh_ajax_dealq() {
 	else { $rows = $wpdb->get_results($wpdb->prepare("SELECT id, title, event_d FROM $T WHERE deleted_at IS NULL AND title LIKE %s ORDER BY event_d DESC LIMIT 20", '%' . $wpdb->esc_like($q) . '%'), ARRAY_A); }
 	wp_send_json_success(array('rows' => (array) $rows));
 }
+
+/* v2.9.272: eszköz felvétele egy lépésben – megnevezés (ha már van ilyen eszközfajta, ahhoz kerül), darabszám, sorozatszámok soronként */
+add_action('wp_ajax_nopriv_cp_wh_assets_add', 'cp_wh_ajax_assets_add'); add_action('wp_ajax_cp_wh_assets_add', 'cp_wh_ajax_assets_add');
+function cp_wh_ajax_assets_add() {
+	cp_wh_guard(); global $wpdb;
+	$name = cp_wh_str('name', 160); if ($name === '') { cp_el_err('Add meg az eszköz nevét (pl. „Nikon D5300 váz”).'); }
+	$serials = array_values(array_filter(array_map(function ($x) { return mb_substr(trim(sanitize_text_field($x)), 0, 120); }, preg_split('/[\r\n]+/', (string) wp_unslash($_POST['serials'] ?? '')))));
+	$n = max(1, min(100, (int) ($_POST['qty'] ?? 1))); $n = max($n, count($serials));
+	foreach ($serials as $s) { if ($wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_wh_t('units') . ' WHERE serial = %s', $s))) { cp_el_err('Ez a sorozatszám már szerepel: ' . $s); } }
+	if (count(array_unique($serials)) !== count($serials)) { cp_el_err('Egy sorozatszám kétszer szerepel a listában.'); }
+	$item = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_wh_t('items') . " WHERE kind = 'asset' AND name = %s LIMIT 1", $name));
+	$now = current_time('mysql');
+	if (!$item) { $wpdb->insert(cp_wh_t('items'), array('kind' => 'asset', 'name' => $name, 'cat' => cp_wh_str('cat', 60), 'unit' => 'db', 'price' => max(0, (int) round(cp_wh_num($_POST['price'] ?? 0))), 'active' => 1, 'updated_at' => $now)); $item = (int) $wpdb->insert_id; }
+	$have = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cp_wh_t('units') . ' WHERE item_id = %d', $item));
+	$model = cp_wh_str('model', 160); $lim = max(0, (int) ($_POST['svc_limit'] ?? 0)); $loc = cp_wh_main();
+	for ($i = 0; $i < $n; $i++) {
+		$wpdb->insert(cp_wh_t('units'), array('item_id' => $item, 'label' => $name . ' #' . ($have + $i + 1), 'serial' => $serials[$i] ?? '', 'model' => $model, 'loc' => $loc, 'status' => 'ok', 'qr' => cp_wh_new_qr(), 'svc_limit' => $lim, 'updated_at' => $now));
+		$uid = (int) $wpdb->insert_id;
+		$wpdb->insert(cp_wh_t('moves'), array('item_id' => $item, 'unit_id' => $uid, 'qty' => 1, 'type' => 'in', 'loc_to' => $loc, 'by_name' => cp_wh_who(), 'at' => $now, 'note' => 'felvéve'));
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('raktar', 'asset', 'Raktár: ' . $n . ' db eszköz felvéve – ' . $name, 'raktar', ''); }
+	wp_send_json_success(array('item' => $item, 'n' => $n));
+}

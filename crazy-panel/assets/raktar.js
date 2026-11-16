@@ -42,7 +42,7 @@
 		main.querySelector('[data-rq]').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { S.q = e.target.value.trim().toLowerCase(); draw(); }, 150); });
 		main.querySelector('[data-rcat]').addEventListener('change', e => { S.cat = e.target.value; draw(); });
 		main.querySelectorAll('[data-rsub]').forEach(b => b.addEventListener('click', () => { S.sub = b.dataset.rsub; keep(); main.querySelectorAll('[data-rsub]').forEach(x => x.setAttribute('aria-selected', String(x === b))); draw(); }));
-		main.querySelectorAll('[data-rnew]').forEach(b => b.addEventListener('click', () => b.dataset.rnew === 'asset' ? unitForm(null) : itemForm(null, 'stock')));
+		main.querySelectorAll('[data-rnew]').forEach(b => b.addEventListener('click', () => b.dataset.rnew === 'asset' ? addAssets(null) : itemForm(null, 'stock')));
 		main.querySelector('[data-rlocs]').addEventListener('click', locsForm);
 		main.querySelector('[data-rbody]').addEventListener('click', act);
 		if (S.d) draw();
@@ -72,7 +72,7 @@
 				'<td class="rk-n"><b>' + nf(t) + '</b> ' + esc(i.unit) + (out ? ' <span class="rk-chip bad">elfogyott</span>' : low ? ' <span class="rk-chip mid">kevés</span>' : '') + '</td>' +
 				'<td class="rk-loc">' + (loc.length ? loc.map(e => '<span>' + esc(e[0]) + ': ' + nf(e[1]) + '</span>').join('') : '<span class="cpx-muted">–</span>') + '</td>' +
 				'<td class="rk-n" data-l="Minimum">' + (i.min_qty ? nf(i.min_qty) : '–') + '</td>' +
-				'<td class="rk-a"><button type="button" class="rk-lnk" data-rmv="in" data-rid="' + i.id + '">Beérkezés</button><button type="button" class="rk-lnk" data-rmv="out" data-rid="' + i.id + '">Kiadás</button><button type="button" class="rk-lnk" data-rmore="' + i.id + '" aria-label="További műveletek: ' + esc(i.name) + '">Több…</button></td></tr>';
+				'<td class="rk-a"><button type="button" class="rk-lnk" data-ritem="' + i.id + '">✎ Szerkesztés</button><button type="button" class="rk-lnk" data-rmv="in" data-rid="' + i.id + '">Beérkezés</button><button type="button" class="rk-lnk" data-rmv="out" data-rid="' + i.id + '">Kiadás</button><button type="button" class="rk-lnk" data-rmore="' + i.id + '" aria-label="További műveletek: ' + esc(i.name) + '">Több…</button></td></tr>';
 		}).join('') + '</tbody></table>';
 	}
 	/* ---- Eszközök: típusonként a darabok */
@@ -85,15 +85,15 @@
 			const U = (S.d.units || []).filter(u => u.item_id === t.id && hit(t.name, u.label, u.serial, u.model, u.loc, u.qr));
 			if (!U.length && S.q) return '';
 			const ok = U.filter(u => u.status === 'ok').length;
-			return '<section class="rk-g"><h3><button type="button" class="rk-nm" data-ritem="' + t.id + '">' + esc(t.name) + '</button><small>' + U.length + ' db' + (U.length !== ok ? ' · ' + ok + ' használható' : '') + '</small></h3>' +
+			return '<section class="rk-g"><h3><span class="rk-gn">' + esc(t.name) + '</span><small>' + U.length + ' db' + (U.length !== ok ? ' · ' + ok + ' használható' : '') + '</small><span class="rk-ga"><button type="button" class="rk-lnk" data-raddu="' + t.id + '">+ Darab</button><button type="button" class="rk-lnk" data-ritem="' + t.id + '">✎ Szerkesztés</button></span></h3>' +
 				(U.length ? '<table class="rk-t"><thead><tr><th>Eszköz</th><th>Sorozatszám</th><th>Hol</th><th>Állapot</th><th class="rk-a"><span class="rk-sr">Műveletek</span></th></tr></thead><tbody>' + U.map(u => {
 					const svc = u.svc_limit > 0 && u.counter - u.svc_base >= u.svc_limit;
 					return '<tr><td><button type="button" class="rk-nm" data-runit="' + u.id + '">' + esc(u.label || t.name) + '</button><small>' + esc([u.model, 'QR ' + u.qr].filter(Boolean).join(' · ')) + '</small></td>' +
 						'<td class="rk-sn" data-l="Sorozatszám">' + (u.serial ? esc(u.serial) : '<span class="cpx-muted">–</span>') + '</td>' +
 						'<td>' + esc(u.loc || '–') + (u.deal_id && D[u.deal_id] ? '<small><a href="#deals:' + u.deal_id + '">' + esc(D[u.deal_id].t) + '</a></small>' : '') + '</td>' +
 						'<td><span class="rk-chip ' + (u.status === 'ok' ? (svc ? 'mid' : 'ok') : u.status === 'svc' || u.status === 'bad' ? 'mid' : 'bad') + '">' + esc(svc && u.status === 'ok' ? 'szerviz esedékes' : ST[u.status] || u.status) + '</span></td>' +
-						'<td class="rk-a"><button type="button" class="rk-lnk" data-rqr="' + u.id + '">QR</button><button type="button" class="rk-lnk" data-rumv="' + u.id + '">' + (u.loc === S.d.ev ? 'Visszavétel' : 'Kiadás / áthelyezés') + '</button><button type="button" class="rk-lnk" data-rhist="' + u.id + '">Előzmények</button></td></tr>';
-				}).join('') + '</tbody></table>' : '<p class="cpx-muted rk-pad">Ebből a típusból még nincs darab. <button type="button" class="rk-lnk" data-raddu="' + t.id + '">+ Darab felvétele</button></p>') + '</section>';
+						'<td class="rk-a"><button type="button" class="rk-lnk" data-runit="' + u.id + '">✎ Szerkesztés</button><button type="button" class="rk-lnk" data-rqr="' + u.id + '">QR</button><button type="button" class="rk-lnk" data-rumv="' + u.id + '">' + (u.loc === S.d.ev ? 'Visszavétel' : 'Kiadás / áthelyezés') + '</button><button type="button" class="rk-lnk" data-rhist="' + u.id + '">Előzmények</button></td></tr>';
+				}).join('') + '</tbody></table>' : '<p class="cpx-muted rk-pad">Ebből még nincs darab. <button type="button" class="rk-lnk" data-raddu="' + t.id + '">+ Darab felvétele</button></p>') + '</section>';
 		}).join('');
 		return bulk + (out || '<p class="cpx-empty">Nincs találat.</p>');
 	}
@@ -115,8 +115,8 @@
 		const b = e.target.closest('button'); if (!b) return;
 		if (b.dataset.ritem) return itemForm(item(b.dataset.ritem));
 		if (b.dataset.runit) return unitForm(unit(b.dataset.runit));
-		if (b.dataset.rnew2) return b.dataset.rnew2 === 'asset' ? unitForm(null) : itemForm(null, 'stock');
-		if (b.dataset.raddu) return unitForm({ item_id: Number(b.dataset.raddu) });
+		if (b.dataset.rnew2) return b.dataset.rnew2 === 'asset' ? addAssets(null) : itemForm(null, 'stock');
+		if (b.dataset.raddu) return addAssets(item(b.dataset.raddu));
 		if (b.dataset.rmv) return moveForm(item(b.dataset.rid), null, b.dataset.rmv);
 		if (b.dataset.rmore) return moveForm(item(b.dataset.rmore), null, 'more');
 		if (b.dataset.rumv) { const u = unit(b.dataset.rumv); return moveForm(item(u.item_id), u, u.loc === S.d.ev ? 'back' : 'move'); }
@@ -162,13 +162,27 @@
 			'<p class="rk-hint">A „Fogyás nyomatonként” alapján a rendezvény után a gépek nyomatszámából automatikusan lejön a készlet (papír, festékszalag).</p>',
 			async f => { await post('cp_wh_item', { id: x.id || 0, kind: i ? x.kind : val(f, 'kind'), name: val(f, 'name'), cat: val(f, 'cat'), unit: val(f, 'unit'), min_qty: val(f, 'min_qty'), price: val(f, 'price'), supplier: val(f, 'supplier'), sku: val(f, 'sku'), per_print: val(f, 'per_print'), note: val(f, 'note'), inactive: f.elements.inactive && f.elements.inactive.checked ? 1 : '' }); return 'Mentve.'; });
 	}
+	/* v2.9.272: eszköz felvétele egy lépésben – megnevezés (meglévőhöz is), darabszám, sorozatszámok soronként (nem kötelező) */
+	function addAssets(t) {
+		const types = (S.d.items || []).filter(i => i.kind === 'asset'), cats = S.d.cats || [];
+		const f = dlg(t ? t.name + ' – új darab' : 'Új eszköz', '<div class="rk-g2">' +
+			fld('Megnevezés', '<input name="name" required maxlength="160" list="rk-atypes" value="' + esc(t ? t.name : '') + '"' + (t ? ' readonly' : '') + ' placeholder="pl. Nikon D5300 váz, Gran Turismo 7 lemez"><datalist id="rk-atypes">' + types.map(x => '<option value="' + esc(x.name) + '">').join('') + '</datalist>', 1) +
+			fld('Darabszám', inp('qty', '1', ' type="number" min="1" max="100" inputmode="numeric" required')) +
+			(t ? '' : fld('Kategória', '<input name="cat" list="rk-cats2" maxlength="60"><datalist id="rk-cats2">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>')) +
+			fld('Sorozatszámok (nem kötelező, soronként egy)', '<textarea name="serials" rows="3" placeholder="ha a darabokon van gyári szám – a sorrend a darabok sorrendje"></textarea>', 1) +
+			fld('Gyári típus (nem kötelező)', inp('model', '', ' maxlength="160" placeholder="pl. Nikon D5300"')) + fld('Szervizhatár (nem kötelező)', inp('svc_limit', '', ' inputmode="numeric" placeholder="pl. 100000 exponálás"')) + '</div>' +
+			'<p class="rk-hint">Minden darab külön sort kap (saját QR-kóddal, helyével, állapotával), a neve „' + esc(t ? t.name : 'Megnevezés') + ' #1, #2…” lesz – később átírható. Ha a megnevezés már szerepel, az új darabok ahhoz kerülnek. Az új darabok a fő raktárba kerülnek (' + esc(S.d.locs[0]) + ').</p>',
+			async f2 => { const r = await post('cp_wh_assets_add', { name: val(f2, 'name'), qty: val(f2, 'qty'), cat: val(f2, 'cat'), serials: val(f2, 'serials'), model: val(f2, 'model'), svc_limit: val(f2, 'svc_limit') }); S.sub = 'assets'; keep(); return r.n + ' db felvéve.'; }, 'Felvétel');
+		const ser = f.elements.serials, qty = f.elements.qty;
+		ser.addEventListener('input', () => { const n = ser.value.split(/\n/).filter(x => x.trim()).length; if (n > Number(qty.value || 0)) qty.value = n; });
+	}
 	function unitForm(u) {
 		const types = (S.d && S.d.items || []).filter(i => i.kind === 'asset' && i.active);
 		const x = u || {}, ST = (S.d && S.d.status) || {};
 		if (!types.length) { toast('Előbb vegyél fel egy eszköztípust (pl. „Nikon D5300 váz”) – utána jöhetnek a darabok.'); return itemForm(null, 'asset'); }
 		dlg(x.id ? (x.label || 'Eszköz') : 'Új eszköz', '<div class="rk-g2">' +
-			fld('Típus', '<select name="item_id">' + types.map(t => '<option value="' + t.id + '"' + (t.id === x.item_id ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select>', 1) +
-			fld('Név / címke', inp('label', x.label, ' maxlength="120" placeholder="pl. Szelfigép 3 kamerája"')) + fld('Sorozatszám', inp('serial', x.serial, ' maxlength="120" autocomplete="off"')) +
+			fld('Eszközfajta', '<select name="item_id">' + types.map(t => '<option value="' + t.id + '"' + (t.id === x.item_id ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select>', 1) +
+			fld('Egyedi név', inp('label', x.label, ' maxlength="120" placeholder="pl. Szelfigép 3 kamerája"')) + fld('Sorozatszám', inp('serial', x.serial, ' maxlength="120" autocomplete="off"')) +
 			fld('Gyári típus', inp('model', x.model, ' maxlength="160" placeholder="pl. Nikon D5300"')) +
 			fld('Állapot', '<select name="status">' + Object.entries(ST).map(s => '<option value="' + s[0] + '"' + ((x.status || 'ok') === s[0] ? ' selected' : '') + '>' + esc(s[1]) + '</option>').join('') + '</select>') +
 			fld('Számláló (exponálás / nyomat)', inp('counter', x.counter || '', ' inputmode="numeric"')) + fld('Szervizhatár (0 = nincs)', inp('svc_limit', x.svc_limit || '', ' inputmode="numeric" placeholder="pl. 100000"')) +
@@ -281,7 +295,7 @@
 			'.rk-a{text-align:right;white-space:nowrap}.rk-lnk{border:0;background:none;padding:4px 6px;font:600 12.5px Inter,sans-serif;color:var(--n);text-decoration:underline;text-underline-offset:2px;cursor:pointer}' +
 			'.rk-loc span{display:inline-block;margin:0 10px 2px 0;font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}' +
 			'.rk-chip{display:inline-block;font:600 11px Inter,sans-serif;border-radius:999px;padding:2px 8px;white-space:nowrap;vertical-align:1px}.rk-chip.ok{background:#E3F4E8;color:#1E6B39}.rk-chip.mid{background:#FCF0DC;color:#7A4E12}.rk-chip.bad{background:#FBE6E4;color:#9B2A1F}' +
-			'.rk-off td{opacity:.55}.rk-g{margin:0 0 18px}.rk-g h3{display:flex;align-items:baseline;gap:10px;margin:0 0 6px;font-size:15px}.rk-g h3 small{font:600 12.5px Inter,sans-serif;color:var(--mu)}.rk-pad{margin:4px 0 0}' +
+			'.rk-off td{opacity:.55}.rk-g{margin:0 0 18px}.rk-g h3{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 6px;font-size:15px}.rk-gn{overflow-wrap:anywhere}.rk-ga{margin-left:auto;display:inline-flex;gap:2px}.rk-g h3 small{font:600 12.5px Inter,sans-serif;color:var(--mu)}.rk-pad{margin:4px 0 0}' +
 			'.rk-empty{background:#fff;border:1px dashed var(--li);border-radius:14px;padding:22px;max-width:60ch}.rk-empty p{margin:0 0 12px}.rk-flt{font-size:13px;color:var(--mu);margin:0 0 8px}.rk-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}' +
 			'.rk-ov{position:fixed;inset:0;z-index:10070;background:rgba(20,28,51,.4);display:flex;align-items:center;justify-content:center;padding:16px}' +
 			'.rk-dlg{background:#fff;border-radius:18px;padding:22px;width:min(560px,100%);max-height:92vh;overflow:auto;box-shadow:0 24px 60px rgba(20,28,51,.3)}.rk-dlg h3{margin:0 0 14px;font:700 17px/1.3 Inter,sans-serif;overflow-wrap:anywhere}' +
