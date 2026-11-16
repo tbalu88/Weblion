@@ -51,10 +51,10 @@
   };
   /* kezdőoldal: a Statisztikák fül (ha a modul be van kapcsolva) */
   /* v1.37: felhasználónként beállítható, mely fülek és eszközök látszanak (C.tabs: az engedélyezettek) */
-  const CAN = id => (id === 'logisztika' ? !!C.logi : id === 'galeriak' ? !!C.gal : id === 'raktar' ? !!C.wh : (!Array.isArray(C.tabs) || C.tabs.includes(id))) || (id === 'naplo' && !!(C.au && C.au.on)) || (id === 'beallitasok' && !!(C.set && C.set.on)) || id === 'ertesitesek';
+  const CAN = id => (id === 'logisztika' ? !!C.logi : id === 'galeriak' ? !!C.gal : id === 'raktar' ? !!C.wh : id === 'aikredit' ? !!C.aic : (!Array.isArray(C.tabs) || C.tabs.includes(id))) || (id === 'naplo' && !!(C.au && C.au.on)) || (id === 'beallitasok' && !!(C.set && C.set.on)) || id === 'ertesitesek';
   const HOME = C.dash && C.dash.on && CAN('kezdolap') ? 'kezdolap' : C.st && C.st.on ? 'stat' : (CAN('naptar') ? 'naptar' : ((C.tabs || [])[0] || 'naptar'));
   /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
-  if (!['naptar', 'kovetes', 'hatterek', 'hatterkat', 'beallitasok', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals', 'kapcsolatok'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : [], C.fl && C.fl.on ? ['flows'] : [], C.au && C.au.on ? ['naplo'] : [], C.dash && C.dash.on ? ['kezdolap'] : [], C.gcal && C.gcal.on ? ['gnaptar'] : [], C.wl && C.wl.on ? ['munkanaplo'] : [], C.kz && C.kz.on ? ['kezelok'] : [], C.nt && C.nt.on ? ['ertesitesek'] : [], C.gal ? ['galeriak'] : [], C.wh ? ['raktar'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
+  if (!['naptar', 'kovetes', 'hatterek', 'hatterkat', 'beallitasok', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals', 'kapcsolatok'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : [], C.fl && C.fl.on ? ['flows'] : [], C.au && C.au.on ? ['naplo'] : [], C.dash && C.dash.on ? ['kezdolap'] : [], C.gcal && C.gcal.on ? ['gnaptar'] : [], C.wl && C.wl.on ? ['munkanaplo'] : [], C.kz && C.kz.on ? ['kezelok'] : [], C.nt && C.nt.on ? ['ertesitesek'] : [], C.gal ? ['galeriak'] : [], C.wh ? ['raktar'] : [], C.aic ? ['aikredit'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
   const d0 = new Date();
   if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
 
@@ -133,7 +133,7 @@
   function shell() {
     app.innerHTML = '';
     const DEALS = (C.crm && C.crm.on ? tabBtn('deals', 'Deal-ek') + tabBtn('kapcsolatok', 'Kapcsolatok') : '') + (C.mail && C.mail.on ? tabBtn('mail', 'Levelezés') : '') + (C.kb && C.kb.on ? tabBtn('feladatok', 'Feladatok') : '');
-    const TOOLS = (C.wl && C.wl.on ? [['munkanaplo', 'Munkanapló']] : []).concat((C.logi ? [['logisztika', 'Logisztika']] : []).concat([['munkalap', 'Napi munkalap'], ['ellenorzes', 'Gyors ellenőrzés'], ['sablon', 'Sablonkészítő'], ['hatterkat', 'Háttérkatalógus']]).concat(C.fl && C.fl.on ? [['flows', 'Automatizmusok']] : [], C.au && C.au.on ? [['naplo', 'Napló']] : [])).filter(t => CAN(t[0]));
+    const TOOLS = (C.wl && C.wl.on ? [['munkanaplo', 'Munkanapló']] : []).concat((C.logi ? [['logisztika', 'Logisztika']] : []).concat([['munkalap', 'Napi munkalap'], ['ellenorzes', 'Gyors ellenőrzés'], ['sablon', 'Sablonkészítő'], ['hatterkat', 'Háttérkatalógus']], C.aic ? [['aikredit', 'AI-kredit']] : []).concat(C.fl && C.fl.on ? [['flows', 'Automatizmusok']] : [], C.au && C.au.on ? [['naplo', 'Napló']] : [])).filter(t => CAN(t[0]));
     let toolsOpen = TOOLS.some(t => t[0] === S.tab);
     try { if (localStorage.getItem('cpx_tools') === '1') toolsOpen = true; } catch (e) { /* privát mód */ }
     app.classList.add('cpx-shell');
@@ -235,6 +235,7 @@
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
     kapcsolatok: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    aikredit: '<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18.5 15l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z"/>',
     hatterkat: '<rect x="2.5" y="5" width="8.5" height="14" rx="1.5"/><rect x="13" y="5" width="8.5" height="14" rx="1.5"/><path d="M9 12h6M13 10l2 2-2 2"/>',
     beallitasok: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
     naplo: '<path d="M6 3h10l3 3v15H6z"/><path d="M9 9h7M9 13h7M9 17h4"/>',
@@ -278,8 +279,8 @@
    * window.CPXNeed('kanban', …) → Promise: betölti (egyszer) a szkriptet és a CSS-t; hibánál elutasít, a következő hívás újrapróbálja.
    * window.CPXHas('kanban') → elérhető-e a modul (betöltve vagy betölthető). */
   const LZ = C.lazy || {};
-  const LZ_G = { stat: 'CPStat', settings: 'CPSettings', audit: 'CPAudit', flows: 'CPFlows', kanban: 'CPKanban', dash: 'CPDash', gcal: 'CPGcal', kezelok: 'CPKezelok', contacts: 'CPContacts', bgcat: 'CPBgCat', sablon: 'CPSablon', bill: 'CPBill', contract: 'CPContract', logi: 'CPLogi', galeriak: 'CPGal', raktar: 'CPRaktar' };
-  const LZ_TAB = { stat: 'stat', beallitasok: 'settings', naplo: 'audit', flows: 'flows', feladatok: 'kanban', kezdolap: 'dash', gnaptar: 'gcal', kezelok: 'kezelok', kapcsolatok: 'contacts', hatterkat: 'bgcat', sablon: 'sablon', logisztika: 'logi', galeriak: 'galeriak', raktar: 'raktar' };
+  const LZ_G = { stat: 'CPStat', settings: 'CPSettings', audit: 'CPAudit', flows: 'CPFlows', kanban: 'CPKanban', dash: 'CPDash', gcal: 'CPGcal', kezelok: 'CPKezelok', contacts: 'CPContacts', bgcat: 'CPBgCat', sablon: 'CPSablon', bill: 'CPBill', contract: 'CPContract', logi: 'CPLogi', galeriak: 'CPGal', raktar: 'CPRaktar', ai: 'CPAi' };
+  const LZ_TAB = { stat: 'stat', beallitasok: 'settings', naplo: 'audit', flows: 'flows', feladatok: 'kanban', kezdolap: 'dash', gnaptar: 'gcal', kezelok: 'kezelok', kapcsolatok: 'contacts', hatterkat: 'bgcat', sablon: 'sablon', logisztika: 'logi', galeriak: 'galeriak', raktar: 'raktar', aikredit: 'ai' };
   const LZ_P = {};
   const lzReady = n => !!(LZ_G[n] && window[LZ_G[n]]);
   const lzHas = n => lzReady(n) || !!(LZ[n] && LZ[n].js);
@@ -555,6 +556,7 @@
 	if (S.tab === 'feladatok') { pollTrack(false); elPoll(false); if (window.CPKanban) window.CPKanban.view(main); else main.innerHTML = '<div class="cpx-empty err">A Feladatok fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'mail') { pollTrack(false); elPoll(false); if (window.CPMail) window.CPMail.view(main); else main.innerHTML = '<div class="cpx-empty err">A Levelezés nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'logisztika') { pollTrack(false); elPoll(false); if (window.CPLogi) window.CPLogi.view(main); else main.innerHTML = '<div class="cpx-empty err">A Logisztika nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
+	if (S.tab === 'aikredit') { pollTrack(false); elPoll(false); if (window.CPAi) window.CPAi.view(main); else main.innerHTML = '<div class="cpx-empty err">Az AI-kredit nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'galeriak') { pollTrack(false); elPoll(false); if (window.CPGal) window.CPGal.view(main); else main.innerHTML = '<div class="cpx-empty err">A Galériák nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'raktar') { pollTrack(false); elPoll(false); if (window.CPRaktar) window.CPRaktar.view(main); else main.innerHTML = '<div class="cpx-empty err">A Raktár nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }
 	if (S.tab === 'kezelok') { pollTrack(false); elPoll(false); if (window.CPKezelok) window.CPKezelok.view(main); else main.innerHTML = '<div class="cpx-empty err">A Kezelők fül nem töltődött be – töltsd újra az oldalt.</div>'; renderStatus(); return; }

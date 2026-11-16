@@ -244,6 +244,14 @@ function cp_booth_admin() {
 	if (function_exists('cp_blog_admin')) { cp_blog_admin(); }
 	echo '</div>';
 }
+/* v2.9.287: AI-kredit a panel Eszközök csoportjában – egyenleg (OpenRouter), havi felhasználás, feltöltés linkje */
+add_action('wp_ajax_nopriv_cp_ai_credit', 'cp_booth_ajax_ai_credit'); add_action('wp_ajax_cp_ai_credit', 'cp_booth_ajax_ai_credit');
+function cp_booth_ajax_ai_credit() {
+	cp_crm_ajax_guard(array('deals'));
+	$st = cp_booth_gal_req('GET', '/ai-setup' . (!empty($_POST['fresh']) ? '?fresh=1' : ''));
+	if (is_wp_error($st)) { cp_el_err($st->get_error_message(), 502); }
+	wp_send_json_success(array('has_key' => !empty($st['has_key']), 'model' => (string) ($st['model'] ?? ''), 'month' => $st['month'] ?? null, 'credits' => $st['credits'] ?? null, 'admin' => function_exists('cp_panel_is_admin') && cp_panel_is_admin() ? admin_url('options-general.php?page=cp-booth') : ''));
+}
 /* v2.9.251: AI-kép (OpenRouter) – a kulcs a tartalék szerveren, titkosítva tárolódik; itt csak beírni lehet, visszaolvasni nem */
 function cp_booth_admin_ai() {
 	$note = '';

@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.286');
+define('CP_PANEL_VER', '2.9.287');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -806,6 +806,7 @@ function cp_panel_render_app() {
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
 		'logi'       => function_exists('cp_logi_db_ok') && cp_logi_db_ok() && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.118: Logisztika fül */
 		'gal'        => function_exists('cp_booth_ajax_gal_list') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.255: Galériák gyűjtőoldal */
+		'aic'        => function_exists('cp_booth_ajax_ai_credit') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.287: AI-kredit (Eszközök) */
 		'wh'         => function_exists('cp_wh_ajax_data') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.259: Raktár */
 		'slot'       => function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t') && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.115: beosztás a Kapacitás napjain */
 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
@@ -829,6 +830,7 @@ function cp_panel_render_app() {
 	if (!empty($cfg['gcal']['on'])) { $lazy['gcal'] = array('js' => $asset('gcal')); }
 	if (!empty($cfg['logi'])) { $lazy['logi'] = array('js' => $asset('logi')); }
 	if (!empty($cfg['gal'])) { $lazy['galeriak'] = array('js' => $asset('galeriak')); }
+	if (!empty($cfg['aic'])) { $lazy['ai'] = array('js' => $asset('aikredit')); }
 	if (!empty($cfg['wh'])) { $lazy['raktar'] = array('js' => $asset('raktar')); }
 	$lazy['bgcat'] = array('js' => $asset('bgcat'));
 	if (function_exists('cp_sb_asset_url')) { $lazy['sablon'] = array('js' => cp_sb_asset_url('js')); }

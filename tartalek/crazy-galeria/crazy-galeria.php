@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.10.1');
+define('CG_VER', '0.10.2');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -491,6 +491,19 @@ function cg_ai_enc($s) { $iv = random_bytes(16); return base64_encode($iv . open
 function cg_ai_dec($s) { $b = base64_decode((string) $s, true); if ($b === false || strlen($b) < 17) { return ''; } $r = openssl_decrypt(substr($b, 16), 'aes-256-cbc', cg_ai_k(), OPENSSL_RAW_DATA, substr($b, 0, 16)); return $r === false ? '' : $r; }
 function cg_ai_key() { $o = cg_ai_opts(); return !empty($o['key']) ? cg_ai_dec($o['key']) : ''; }
 function cg_ai_model() { $o = cg_ai_opts(); $m = (string) ($o['model'] ?? ''); return in_array($m, explode(',', CG_AI_MODELS), true) ? $m : 'google/gemini-nano-banana-2.1'; }
+/* v0.10.2: OpenRouter-egyenleg (5 percig gyorsítótárazva). Előbb /credits (összes vásárolt − elhasznált), ha ez a kulccsal
+ * nem kérdezhető le, a kulcs saját kerete (/key: limit_remaining). Visszaad: bal (USD vagy null), src, at. */
+function cg_ai_get($url, $key) { $ch = curl_init($url); curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 12, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $key))); $res = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); $j = $code === 200 && $res ? json_decode($res, true) : null; return is_array($j) && isset($j['data']) && is_array($j['data']) ? $j['data'] : null; }
+function cg_ai_balance($fresh = false) {
+	$key = cg_ai_key(); if ($key === '') { return array('bal' => null, 'src' => 'nokey', 'at' => time()); }
+	$c = get_transient('cg_ai_bal'); if (!$fresh && is_array($c)) { return $c; }
+	$out = array('bal' => null, 'src' => 'none', 'at' => time());
+	$d = cg_ai_get('https://openrouter.ai/api/v1/credits', $key);
+	if ($d && isset($d['total_credits'])) { $out = array('bal' => round((float) $d['total_credits'] - (float) ($d['total_usage'] ?? 0), 2), 'src' => 'credits', 'at' => time()); }
+	else { $k = cg_ai_get('https://openrouter.ai/api/v1/key', $key); if ($k && isset($k['limit_remaining']) && $k['limit_remaining'] !== null) { $out = array('bal' => round((float) $k['limit_remaining'], 2), 'src' => 'key', 'at' => time()); } }
+	set_transient('cg_ai_bal', $out, $out['src'] === 'none' ? 60 : 300);
+	return $out;
+}
 function cg_ai_ev_info($ev) {
 	global $wpdb; $s = cg_evset($ev); $a = isset($s['ai']) && is_array($s['ai']) ? $s['ai'] : array();
 	$row = $wpdb->get_row($wpdb->prepare('SELECT COUNT(*) n, COALESCE(SUM(cost),0) c FROM ' . cg_t() . " WHERE ev = %s AND kind = 'ai'", $ev));
@@ -523,10 +536,10 @@ function cg_ai_call($prompt, $jpeg, $w, $h) {
 add_action('rest_api_init', function () {
 	/* beállítás a panelből (csak a panel kulcsával): kulcs (írható, nem olvasható vissza), modell; állapot + havi összesítő */
 	register_rest_route('crazy-galeria/v1', '/ai-setup', array(
-		array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function () {
+		array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			$o = cg_ai_opts(); $L = get_option('cg_ai_log', array()); $mo = gmdate('Y-m'); $n = 0; $c = 0.0; $err = 0;
 			foreach ((array) $L as $e) { if (strpos((string) ($e['t'] ?? ''), $mo) === 0) { if (!empty($e['ok'])) { $n++; $c += (float) ($e['cost'] ?? 0); } else { $err++; } } }
-			return array('ok' => true, 'has_key' => !empty($o['key']), 'model' => cg_ai_model(), 'models' => explode(',', CG_AI_MODELS), 'month' => array('n' => $n, 'cost' => round($c, 2), 'err' => $err));
+			return array('ok' => true, 'has_key' => !empty($o['key']), 'model' => cg_ai_model(), 'models' => explode(',', CG_AI_MODELS), 'month' => array('n' => $n, 'cost' => round($c, 2), 'err' => $err), 'credits' => !empty($o['key']) ? cg_ai_balance((bool) $r->get_param('fresh')) : null);
 		}),
 		array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			$o = cg_ai_opts();
@@ -538,7 +551,7 @@ add_action('rest_api_init', function () {
 				$ch = curl_init('https://openrouter.ai/api/v1/key'); curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $k)));
 				$res = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
 				if ($code !== 200) { return new WP_REST_Response(array('ok' => false, 'message' => 'Az OpenRouter nem fogadta el a kulcsot (' . $code . ').'), 400); }
-				$o['key'] = cg_ai_enc($k); $o['set_at'] = time();
+				$o['key'] = cg_ai_enc($k); $o['set_at'] = time(); delete_transient('cg_ai_bal');
 			}
 			$m = (string) $r->get_param('model'); if ($m !== '' && in_array($m, explode(',', CG_AI_MODELS), true)) { $o['model'] = $m; }
 			update_option('cg_ai', $o, false);
