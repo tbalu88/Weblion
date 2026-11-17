@@ -728,6 +728,17 @@
     '.cpx-caltb .seg.cm button.on{background:#141C33;color:#fff}' +
     '@media (max-width:760px){.cpx-cal.slv .sll span{display:none}.cpx-cal.slv .sll{font-size:11px}.cpx-cal.slv .slu{display:none}}' +
     '.sl-mk{font:700 11px Inter,sans-serif;border-radius:6px;padding:1px 6px;white-space:nowrap}.sl-mk.ok{background:#DDF3E6;color:#17663A}.sl-mk.mid{background:#FFF0D6;color:#8A5300}.sl-mk.no{background:#FDECEA;color:#B42318}' +
+    /* v2.9.299: szélesebb, jobban átlátható beosztás – nagyobb gombok, levegősebb sorok */
+    '.sl-box .sl-a{gap:8px}.sl-box .sl-a li{padding:10px 12px;border:1px solid #ECE8E1;background:#fff;border-radius:10px;font-size:14px;gap:12px;align-items:center}.sl-box .sl-a li > span:first-child{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;line-height:1.35}.sl-box .sl-a li b{font-size:15px}' +
+    '.sl-box .sl-st{font-size:12px;padding:2px 9px}.sl-box .sl-k{font-size:11.5px}.sl-box .sl-ms,.sl-box .sl-to{font-size:12.5px}.sl-box .sl-a li.fin{background:#F1FAF4;border-color:#BFE3CB}' +
+    '.sl-box .sl-acts{gap:6px}.sl-box .sl-acts button{min-height:36px;padding:6px 12px;font:600 13px Inter,sans-serif;border-radius:9px;border:1.5px solid #E2DDD5;background:#fff;color:#141C33}.sl-box .sl-acts button:hover{background:#F6F4F0}' +
+    '.sl-box .sl-acts button.yes{border-color:#9FD3B2;color:#17663A}.sl-box .sl-acts button.yes:hover{background:#E9F6EE}.sl-box .sl-acts button.no{border-color:#F0B9B2;color:#B42318}.sl-box .sl-acts button.no:hover{background:#FDF0EE}' +
+    '.sl-box .sl-acts button.x{width:36px;padding:0;font-size:18px;color:#6B6F78;border:1.5px solid #E2DDD5}.sl-box .sl-acts button.x:hover{color:#B42318;border-color:#F0B9B2}.sl-box .sl-acts .sl-ph,.sl-box .sl-acts a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1.5px solid #E2DDD5;border-radius:9px;background:#fff;font-size:15px}' +
+    '.sl-box .sl-pbar{gap:8px;margin-top:10px}.sl-box .sl-inv,.sl-box .sl-send{min-height:40px;padding:8px 16px;font:600 14px Inter,sans-serif;border-radius:10px}.sl-box .sl-sum>span{font-size:13px;padding:4px 11px}' +
+    '.sl-box .sl-pool{padding:14px 16px;border-radius:14px}.sl-box .sl-ph2 b{font-size:15px}.sl-box .sl-ph2 small{font-size:13px}.sl-box .sl-row{padding:14px 16px;border-radius:14px;margin:10px 0}.sl-box .sl-h b{font-size:15px}' +
+    '.sl-box .sl-asg select{height:42px;font-size:14px;border-radius:10px}.sl-box .sl-asg .cpx-btn{min-height:42px;padding:8px 18px;font-size:14px}.sl-box .sl-c{padding:8px 4px;font-size:14px}' +
+    '.sl-box .sl-tags{gap:6px;margin-top:6px}.sl-box .sl-tags i,.sl-box .sl-need{font-size:12.5px;padding:3px 9px}.sl-box .sl-cnt button{width:32px;height:30px;font-size:16px}.sl-box .sl-cnt b{font-size:13px;padding:0 6px}' +
+    '@media (max-width:640px){.sl-box .sl-a li{flex-direction:column;align-items:stretch}.sl-box .sl-acts{justify-content:flex-start;flex-wrap:wrap}}' +
     '.sl-sum{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:auto}.sl-sum>span{font:600 11.5px Inter,sans-serif;background:#F1EEE9;color:#3A3F4B;border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums}.sl-sum>span.ok{background:#E3F4E9;color:#17663A}.sl-sum>span.w{background:#FFF3C4;color:#7A5B00}.sl-sum b{font-weight:800}' +
     '.sl-pool{border:1px solid #E6E2DC;border-radius:12px;padding:10px 12px;background:#FBFAF7;margin:6px 0 14px}.sl-ph2{display:flex;flex-direction:column;gap:1px;margin:0 0 4px}.sl-ph2 b{font:700 13.5px Inter,sans-serif;color:#141C33}.sl-ph2 small{font-size:12px;color:#6B6F78}.sl-ph3{margin-top:4px}.sl-pbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.sl-pbar .sl-inv,.sl-pbar .sl-send{margin:0}.sl-to{color:#17663A;font-weight:600}' +
     '.sl-asg{display:flex;gap:8px;margin-top:8px;align-items:center}.sl-asg select{flex:1;min-width:0;height:36px;border:1.5px solid #E6E2DC;border-radius:8px;padding:0 8px;font:500 13px Inter,sans-serif;background:#fff;color:#141C33}.sl-asg .cpx-btn{flex-shrink:0;padding:7px 12px}@media (max-width:520px){.sl-asg{flex-direction:column;align-items:stretch}.sl-sum{margin-left:0}}' +
@@ -888,7 +899,7 @@
   }
   function openSlotDay(date) {
     const dlg = document.getElementById('cpx-modal');
-    dlg.innerHTML = '<div class="cpx-sheet"><div class="cpx-sheet-h"><h3>' + esc(huDate(date)) + ' – beosztás</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div><div class="sl-box" data-slots><p class="cpx-muted">Betöltés…</p></div>' +
+    dlg.innerHTML = '<div class="cpx-sheet wide sl-wide"><div class="cpx-sheet-h"><h3>' + esc(huDate(date)) + ' – beosztás</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div><div class="sl-box" data-slots><p class="cpx-muted">Betöltés…</p></div>' +
       '<div class="cpx-sheet-f"><button class="cpx-btn ghost" id="cpx-goDay">A nap gépei és foglalásai</button></div></div>';
     dlg.hidden = false;
     slotLoad(dlg.querySelector('[data-slots]'), date);
@@ -954,7 +965,7 @@
           (p.asg.length ? ' <small class="sl-to">→ ' + esc(p.asg.join(', ')) + '</small>' : '') + (p.note ? ' <small>„' + esc(p.note) + '”</small>' : '') +
           (p.st === 'invited' && p.id ? (p.sent ? ' <small class="sl-ms ok" title="Meghívó elküldve: ' + esc(p.sent) + '">✉ elküldve</small>' : p.em ? ' <small class="sl-ms">✉ még nincs elküldve</small>' : ' <small class="sl-ms no" title="A Kezelők fülön nincs e-mail-címe – telefonon kell megkeresni">📞 nincs e-mail</small>') : '') +
           (p.ans ? ' <small class="sl-ms ok" title="Linkről válaszolt: ' + esc(p.ans) + '">↩ linkről</small>' : '') + '</span>' +
-          '<span class="sl-acts">' + (p.id && !p.asg.length && p.st !== 'dropped' ? (p.st !== 'accepted' ? '<button type="button" data-st="accepted" data-a="' + p.id + '" title="Telefonon / üzenetben igent mondott">Ráér</button>' : '') + (p.st !== 'declined' ? '<button type="button" data-st="declined" data-a="' + p.id + '" title="Nem ér rá">Nem</button>' : '') : '') +
+          '<span class="sl-acts">' + (p.id && !p.asg.length && p.st !== 'dropped' ? (p.st !== 'accepted' ? '<button type="button" class="yes" data-st="accepted" data-a="' + p.id + '" title="Telefonon / üzenetben igent mondott">✓ Ráér</button>' : '') + (p.st !== 'declined' ? '<button type="button" class="no" data-st="declined" data-a="' + p.id + '" title="Nem ér rá">Nem ér rá</button>' : '') : '') +
           tel(p.ph) + (p.id && !p.asg.length ? '<button type="button" class="x" data-del="' + p.id + '" data-what="pool" title="Kivétel a nap köréből" aria-label="Kivétel a nap köréből">×</button>' : '') + '</span></li>';
       }).join('') + '</ul>' : '<p class="cpx-muted">Erre a napra még senkit nem hívtunk meg.</p>') +
       '<div class="sl-pbar"><button type="button" class="sl-inv" data-pinv' + (open.pool ? ' hidden' : '') + '>＋ Meghívás erre a napra</button>' +
