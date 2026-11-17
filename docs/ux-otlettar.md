@@ -64,6 +64,18 @@ a 2., 3., 7. pont elkészült; a 12. (sötét mód) 2026-11-06-án, v2.7.10–2.
 | X3 | „Legutóbb megnyitott” deal-ek / levelek, eszközök között szinkronizálva | ~0,5 nap |
 | C2 | Levél ütemezett küldése (a gomb 2.9.181 óta rejtve) | ~1 nap |
 
+## 2026-11-17: az ügymenet alapján (felajánlva, még nem kért)
+| # | Javaslat | Miért (amit a munkában láttunk) | Becslés |
+|---|---|---|---|
+| M1 | Tartalék szerver figyelő: 5 percenként ellenőrzi a galériát / AI-t, leállásnál panel-riasztás + Pumble | 2026-11-17: a VPS leállását csak az AI-kredit fülön vettük észre | ~0,5 nap |
+| M2 | Tömeges lezárás védelme: ha a kijelöltek közt megválaszolatlan ügyfél-levél van, rákérdez és listázza | 2026-11-05: 120 szál egy kattintással zárult le, 32 válasz nélkül maradt | ~0,5 nap |
+| M3 | Telt házas ajánlatkérések rögzítése („nem fért bele”) + alvállalkozói / másik napos javaslat a válaszhoz | decemberi pénteken 12–16 elveszett deal, az okuk nem mérhető | ~1 nap |
+| M4 | Dinamikus ár mérése: az ajánlatkori napszint mentése a dealre + riport (nyerési arány, átlagár szintenként) | a dinamikus ár finomhangolásához | ~0,5 nap |
+| M5 | Kezelői heti elérhetőség-bekérő: egy linken több napot jelöl be (ráér / nem), a napi körbe íródik | a napi meghívás naponként egy levél | ~1 nap |
+| M6 | „Indulási csomag” a kezelőnek T-1 napon: cím, időpont, kapcsolattartó, háttér, kiadott szolgáltatáscsomag (raktár) | a beosztás, logisztika, raktár egy levélben | ~1 nap |
+| M7 | AI-kredit riasztás: 5 $ alatt panel- és telefonos értesítés (Ákos + admin) | a kredit rendezvény közben fogyhat el | ~0,5 nap |
+| M8 | Új deal levélből: értesítés a felelősnek („visszatérő ügyfél új dátummal”), és a deal kitöltése a levél adataival (helyszín, óraszám, létszám) | az automatikus új deal ma üres mezőkkel jön létre | ~1 nap |
+
 ## Jegelt funkciók
 
 | # | Funkció | Mi lenne | Állapot |
