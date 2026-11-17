@@ -26,6 +26,8 @@ add_action('init', function () {
 		header('Content-Type: application/manifest+json; charset=utf-8');
 		echo wp_json_encode(array(
 			'name' => 'Crazy panel', 'short_name' => 'Crazy panel', 'id' => cp_pwa_base(), 'start_url' => cp_pwa_base(), 'scope' => cp_pwa_base(),
+			/* v2.9.297: Androidon a panel-linkek (pl. Pumble-ből) a telepített appban nyílnak – a már futó ablakban */
+			'launch_handler' => array('client_mode' => array('navigate-existing', 'auto')), 'capture_links' => 'existing-client-navigate',
 			'display' => 'standalone', 'background_color' => '#141C33', 'theme_color' => '#141C33', 'lang' => 'hu',
 			'icons' => array(
 				array('src' => cp_pwa_url('icon192'), 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any maskable'),
