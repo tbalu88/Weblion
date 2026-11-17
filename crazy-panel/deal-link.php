@@ -403,6 +403,21 @@ function cp_dl_text_dates($text, $at) {
 	}
 	return $out;
 }
+/* v2.9.303 (M8): a levél saját szövegéből szabályalapon (AI nélkül): helyszín, kezdés, óraszám, létszám */
+function cp_dl_extract($text) {
+	$t = cp_dl_own_text($text); $o = array();
+	if (preg_match('/^[\s\-•*]*(?:helysz[ií]n|location|venue|c[ií]m)\s*[:\-–]\s*(.{3,160})$/imu', $t, $m) || preg_match('/(?:helysz[ií]n|location|venue)\s*:\s*([^\n]{3,160})/iu', $t, $m)) { $o['venue'] = trim(preg_replace('/\s+/u', ' ', $m[1]), " .\t"); }
+	if (preg_match('/(\d{2,4})\s*(?:f[őo]|f[őo]s|vend[ée]g|r[ée]sztvev[őo]|ember|people|guests)\b/iu', $t, $m) && (int) $m[1] >= 10 && (int) $m[1] <= 5000) { $o['guests'] = (int) $m[1]; }
+	/* „20 és 23 óra között”, „18:00–22:00”, „17-től 21-ig” */
+	if (preg_match('/(?<!\d)(\d{1,2})(?:[:.](\d{2}))?\s*(?:óra|h)?\s*(?:és|–|-|—|tól|-tól|t[óo]l)\s*(\d{1,2})(?:[:.](\d{2}))?\s*(?:óra|h)?\s*(?:között|-ig|ig)?/iu', $t, $m) && (int) $m[1] <= 23 && (int) $m[3] <= 24 && ((isset($m[2]) && $m[2] !== '') || preg_match('/között|óra|ig\b|-ig/iu', $m[0]))) {
+		$sh = (int) $m[1]; $sm = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0; $eh = (int) $m[3]; $em = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : 0;
+		$dur = ($eh * 60 + $em) - ($sh * 60 + $sm); if ($dur <= 0) { $dur += 1440; }
+		if ($dur >= 60 && $dur <= 720) { $o['start'] = sprintf('%02d:%02d', $sh, $sm); $o['hours'] = (int) ceil($dur / 60); }
+	}
+	if (empty($o['hours']) && preg_match('/(?<!\d)(\d{1,2})\s*(?:órá(?:s|ra|t|nyi)?|óra)\b/iu', $t, $m) && (int) $m[1] >= 1 && (int) $m[1] <= 12) { $o['hours'] = (int) $m[1]; }
+	if (empty($o['start']) && preg_match('/(?<!\d)(\d{1,2})[:.](\d{2})\s*(?:-kor|kor|-tól|tól|órától|-t[óo]l|kezd)/iu', $t, $m) && (int) $m[1] <= 23) { $o['start'] = sprintf('%02d:%02d', (int) $m[1], (int) $m[2]); }
+	return $o;
+}
 function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	if (!$tid || empty($no['cid']) || !cp_dl_autonew_on() || !function_exists('cp_sm_request') || !function_exists('cp_crm_new_id')) { return 0; }
 	global $wpdb;
@@ -429,6 +444,12 @@ function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	$hay = mb_strtolower(remove_accents($subj . ' ' . cp_dl_own_text($text))); $sv = array();
 	foreach (array('Fotóautomata' => '/fotoautomata/', 'Szelfigép' => '/szelfigep|photobooth|selfie ?box|szelfi ?box/', '360 Spinner' => '/spinner|360/', 'AI Karikatúra' => '/karikatura/') as $k => $re) { if (preg_match($re, $hay)) { $sv[] = $k; } }
 	if ($sv) { $body[cp_crm_sm_field('service')] = mb_substr(implode(' | ', $sv), 0, 100); }
+	/* v2.9.303 (M8): a levélből kiolvasható adatok a dealbe */
+	$ex = cp_dl_extract($text); $exl = array();
+	if (!empty($ex['venue'])) { $body[cp_crm_sm_field('venue')] = $ex['venue']; $exl[] = 'helyszín'; }
+	if (!empty($ex['guests'])) { $body[cp_crm_sm_field('guests')] = (int) $ex['guests']; $exl[] = 'létszám'; }
+	if (!empty($ex['hours'])) { $body[cp_crm_sm_field('hours')] = (int) $ex['hours']; $exl[] = 'óraszám'; }
+	if (!empty($ex['start']) && function_exists('cp_crm_to_sm')) { $tv = cp_crm_to_sm('time', $ex['start'], $date); if ($tv) { $body[cp_crm_sm_field('start_at')] = $tv; $exl[] = 'kezdés'; } }
 	$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
 	if (is_wp_error($dr)) { delete_option('cp_dl_an_' . md5($no['cid'] . '|' . $date)); return 0; }
 	$id = cp_crm_new_id($dr); if (!$id) { return 0; }
@@ -437,5 +458,12 @@ function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $id), array('id' => (int) $tid));
 	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $tid, 'kind' => 'autodeal', 'text' => mb_substr('Új deal automatikusan létrehozva (új rendezvénydátum a levélben: ' . cp_dl_hu_day($date, true) . ', visszatérő ügyfél): ' . $body['title'], 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
 	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	/* v2.9.303 (M8): értesítés a felelősnek (az előző deal felelőse; ha nincs panel-fiókja, az adminok) */
+	if (function_exists('cp_notify') && function_exists('cp_pu_data')) {
+		$to = array(); $own = (int) ($body['owner'] ?? 0);
+		foreach ((array) (cp_pu_data()['list'] ?? array()) as $uid => $u) { if (empty($u['a'])) { continue; } if ($own && (int) ($u['sm'] ?? 0) === $own) { $to[] = (int) $uid; } }
+		if (!$to) { foreach ((array) (cp_pu_data()['list'] ?? array()) as $uid => $u) { if (!empty($u['a']) && ($u['r'] ?? '') === 'admin') { $to[] = (int) $uid; } } }
+		foreach (array_unique($to) as $u) { cp_notify($u, 'autodeal', 'visszatérő ügyfél új ajánlatkérése – új deal: ' . $body['title'] . ($exl ? ' (a levélből kitöltve: ' . implode(', ', $exl) . ')' : ''), 'deals:' . $id, 'Crazy panel'); }
+	}
 	return $id;
 }

@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) { exit; }
 /* az események: kulcs => [csoport, megnevezés, mikor jön, ki kapja, fontos] */
 function cp_nt_kinds() {
 	return array(
+		'autodeal'    => array('Ajánlatkérés és deal', 'Új deal egy levélből', 'Visszatérő ügyfél új rendezvénydátummal írt – a panel új dealt nyitott neki (a levélből kitöltve, amit lehetett).', 'az ügyfél korábbi dealjének felelőse (különben az adminok)', 1),
 		'lead'        => array('Ajánlatkérés és deal', 'Új ajánlatkérés', 'Weboldali űrlapról vagy webes megkeresésből új ajánlatkérés érkezett.', 'minden aktív kolléga', 1),
 		'iv_book'     => array('Ajánlatkérés és deal', 'Interjú-foglalás (kezelő-jelentkező)', 'Egy kezelő-jelentkező időpontot foglalt, módosított vagy lemondott az interjú-foglaló oldalon.', 'adminok (vagy a beállított kollégák)', 0),
 		'lead_fail'   => array('Ajánlatkérés és deal', 'Sikertelen deal-létrehozás', 'Egy weboldali ajánlatkérésből 3 próbálkozás után sem jött létre deal – kézzel kell felvenni.', 'adminok', 1),
