@@ -173,6 +173,8 @@ function cp_slot_day($day) {
 		}
 		unset($s);
 	}
+	/* v2.9.308: a rendezvény csak „Szerződés kiküldve”-től felfelé igényel embert; a függő ajánlat slotja csak akkor marad, ha már van rá beosztás */
+	$slots = array_values(array_filter($slots, function ($s) { if ($s['booked']) { return true; } foreach ($s['asg'] as $a) { if (!in_array($a['st'], array('declined', 'dropped'), true)) { return true; } } return false; }));
 	/* v2.9.298: a nap köre – a napi meghívások + akit (régebben) közvetlenül egy rendezvényre osztottak be */
 	$ttl = array(); foreach ($slots as $s0) { $ttl[$s0['deal'] . '|' . $s0['skey']] = ($s0['title'] !== '' ? $s0['title'] : 'Deal #' . $s0['deal']) . ($s0['kind'] === 'spin' ? ' (spinner)' : ''); }
 	$pool = array(); $inpool = array();
@@ -206,7 +208,7 @@ function cp_slot_month($m, $full = false) {
 	global $wpdb;
 	$out = array(); $x = array();
 	$need_o = get_option('cp_slot_need', array()); if (!is_array($need_o)) { $need_o = array(); }
-	$slotNeed = array();
+	$slotNeed = array(); $pend = array();
 	foreach ((array) (function_exists('cp_cap_month') ? cp_cap_month($m) : array()) as $e) {
 		$d = (string) ($e['date'] ?? ''); if ($d === '') { continue; }
 		if (!isset($out[$d])) { $out[$d] = array(0, 0, 0); $x[$d] = array('k' => 0, 'h' => 0, 'u' => 0, 'fk' => 0, 'fh' => 0, 'ik' => 0, 'ih' => 0, 'sp' => 0, 'b' => 0); }
@@ -218,6 +220,8 @@ function cp_slot_month($m, $full = false) {
 			$need = $k === 'spin' || $bp === false ? 'kezelo' : 'host';
 			$nk = $deal . '|' . $d . '|' . $skey;
 			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
+			/* v2.9.308: létszámigény csak „Szerződés kiküldve”-től felfelé (booked); a függő ajánlat csak akkor számít, ha már van rá beosztás */
+			if (($e['state'] ?? '') !== 'booked') { $pend[$nk] = array($d, $need); continue; }
 			$out[$d][0]++;
 			$x[$d][$need === 'kezelo' ? 'k' : 'h']++;
 			if ($bp === null && !isset($need_o[$nk])) { $x[$d]['u']++; }
@@ -228,7 +232,9 @@ function cp_slot_month($m, $full = false) {
 	if (cp_slot_db_ok()) {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, deal_id, skey, SUM(status = %s) f, MAX(status IN (%s, %s)) i FROM ' . cp_slot_t() . ' WHERE day BETWEEN %s AND %s GROUP BY day, deal_id, skey', 'final', 'invited', 'accepted', $m . '-01', $m . '-31'), ARRAY_A) as $r) {
 			if (!isset($out[$r['day']])) { continue; }
-			$nd = $slotNeed[$r['deal_id'] . '|' . $r['day'] . '|' . $r['skey']] ?? null;
+			$pk = $r['deal_id'] . '|' . $r['day'] . '|' . $r['skey'];
+			if (isset($pend[$pk]) && ((int) $r['i'] || (int) $r['f'])) { $slotNeed[$pk] = $pend[$pk][1]; $out[$r['day']][0]++; $x[$r['day']][$pend[$pk][1] === 'kezelo' ? 'k' : 'h']++; unset($pend[$pk]); }
+			$nd = $slotNeed[$pk] ?? null;
 			if ($nd === null) { continue; }
 			if ((int) $r['f'] >= cp_slot_cnt((int) $r['deal_id'], $r['day'], $r['skey'])) { $out[$r['day']][1]++; $x[$r['day']][$nd === 'kezelo' ? 'fk' : 'fh']++; }
 			elseif ((int) $r['i'] || (int) $r['f']) { $out[$r['day']][2]++; $x[$r['day']][$nd === 'kezelo' ? 'ik' : 'ih']++; }
