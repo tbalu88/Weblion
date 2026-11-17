@@ -326,7 +326,7 @@ function cp_imp_relink($tid, $email, $at, $subj = '', $text = null) {
 	global $wpdb;
 	$t = $wpdb->get_row($wpdb->prepare('SELECT ' . cp_dl_thread_cols() . ' FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid), ARRAY_A);
 	if (!$t) { return; }
-	$t['first'] = (string) $email; $t['at'] = (string) $at; $t['subj2'] = (string) $subj;
+	$t['first'] = (string) $email; $t['at'] = (string) $at; $t['subj2'] = (string) $subj; $t['text'] = (string) $text;
 	$ctx = cp_dl_ctx(array($t));
 	$dec = cp_dl_decide($ctx['ths'][0], $ctx);
 	cp_dl_apply((int) $tid, $dec, $ctx);
@@ -440,7 +440,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	$dlx = null; $dld = null;
 	if (!$t) {
 		/* v2.9.73: új szál – a deal-link.php szabályai (deal-jel, dátum, további cím, SM-azonosító, céges domain) */
-		$dlx = cp_dl_ctx(array(array('id' => 0, 'deal_id' => 0, 'src' => 'imap', 'created_at' => $at, 'last_at' => $at, 'at' => $at, 'contact_email' => $other['e'], 'subject' => $subj, 'parts' => $parts)));
+		$dlx = cp_dl_ctx(array(array('id' => 0, 'deal_id' => 0, 'src' => 'imap', 'created_at' => $at, 'last_at' => $at, 'at' => $at, 'contact_email' => $other['e'], 'subject' => $subj, 'parts' => $parts, 'text' => $text)));
 		$dld = cp_dl_decide($dlx['ths'][0], $dlx);
 		$deal = $dld['act'] === 'link' && !$sys ? (int) $dld['deal'] : 0;
 		$wpdb->insert($T, array('mailbox' => $o['box'], 'subject' => mb_substr($subj, 0, 255), 'contact_name' => mb_substr($other['n'], 0, 190), 'contact_email' => mb_substr($other['e'], 0, 190), 'deal_id' => $deal ?: null,

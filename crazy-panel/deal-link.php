@@ -245,6 +245,12 @@ function cp_dl_choose(array $ids, array $dates, $at, $ctx, $domain = false) {
 		$dmo = array(); $hit = array();
 		foreach ($open as $i) { $x = array_values(array_intersect(cp_dl_deal_days($i, $ctx), $dates)); if ($x) { $dmo[] = $i; $hit[$i] = $x[0]; } }
 		if (count($dmo) === 1) { return array('deal' => $dmo[0], 'amb' => false, 'cands' => $ids, 'date' => $hit[$dmo[0]]); }
+		/* v2.9.296: a levél jövőbeli dátuma egyik dealhez sem illik → új ajánlatkérés (akkor is, ha van nyitott dealje) */
+		if (!$dmo && !$domain) {
+			$all = array(); foreach ($ids as $i) { foreach (cp_dl_deal_days($i, $ctx) as $d) { $all[$d] = 1; } }
+			$today = substr((string) $at, 0, 10) ?: gmdate('Y-m-d');
+			foreach ($dates as $d) { if ($d >= $today && !isset($all[$d])) { return array('deal' => 0, 'amb' => false, 'cands' => $ids, 'noopen' => 1, 'newdate' => $d); } }
+		}
 	}
 	if (count($open) === 1) { return array('deal' => $open[0], 'amb' => false, 'cands' => $ids, 'one' => 1); }
 	if ($open) { return array('deal' => 0, 'amb' => count($open) > 1, 'cands' => $ids); }
@@ -255,6 +261,8 @@ function cp_dl_pick(array $t, array $ctx) {
 	$sub = trim((string) ($t['subject'] ?? '') . ' ' . (string) ($t['subj2'] ?? ''));
 	$at = (string) ($t['at'] ?? '') !== '' ? (string) $t['at'] : ((string) ($t['last_at'] ?? '') !== '' ? (string) $t['last_at'] : gmdate('Y-m-d H:i:s'));
 	$dates = cp_dl_dates($sub, $at);
+	/* v2.9.296: ha a tárgyban nincs dátum, a levél saját (nem idézett) szövegéből */
+	if (!$dates && (string) ($t['text'] ?? '') !== '') { $dates = cp_dl_text_dates($t['text'], $at); }
 	$none = array('deal' => 0, 'rule' => '', 'why' => '', 'amb' => false, 'cands' => array());
 	/* 1. deal-jel */
 	$tok = cp_dl_token($sub);
@@ -386,6 +394,15 @@ function cp_dl_own_text($text) {
 	$p = preg_split('/^\s*(?:>|-{2,}\s*(?:Original|Eredeti|Forwarded|Továbbított)|(?:On|Le|Am)\s.{4,120}(?:wrote|écrit|schrieb)\s*:|.{4,160}\s(?:ezt írta|írta)\s*:|(?:Feladó|From)\s*:)/mu', $t, 2);
 	return mb_substr((string) $p[0], 0, 2000);
 }
+/* v2.9.296: dátumok a levél saját szövegéből – csak rendezvényre utaló sorokból (a fizetési határidő, „holnap 12.15-kor” stb. ne számítson) */
+function cp_dl_text_dates($text, $at) {
+	$out = array();
+	foreach (preg_split('/\R/u', cp_dl_own_text($text)) as $ln) {
+		if (!preg_match('/érdekl|ajánlat|árajánlat|kapacit|szabad|foglal|bérl|bérel|rendezvény|esemény|időpont|dátum|party|parti|buli|gála|vacsor|esküvő|karácsony|évzáró|fotóautomat|szelfi|selfie|spinner|fotó/iu', $ln)) { continue; }
+		foreach (cp_dl_dates($ln, $at) as $d) { if (!in_array($d, $out, true)) { $out[] = $d; } }
+	}
+	return $out;
+}
 function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	if (!$tid || empty($no['cid']) || !cp_dl_autonew_on() || !function_exists('cp_sm_request') || !function_exists('cp_crm_new_id')) { return 0; }
 	global $wpdb;
@@ -393,7 +410,7 @@ function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	$taken = array(); foreach ((array) $no['cands'] as $i) { foreach (cp_dl_deal_days((int) $i, $ctx) as $d) { $taken[$d] = 1; } }
 	$pickd = function ($l) use ($today, $max, $taken) { $l = array_values(array_filter($l, function ($d) use ($today, $max, $taken) { return $d >= $today && $d <= $max && !isset($taken[$d]); })); sort($l); return $l ? $l[0] : ''; };
 	$date = $pickd(cp_dl_dates($subj, gmdate('Y-m-d H:i:s')));
-	if ($date === '') { $date = $pickd(cp_dl_dates(cp_dl_own_text($text), gmdate('Y-m-d H:i:s'))); }
+	if ($date === '') { $date = $pickd(cp_dl_text_dates($text, gmdate('Y-m-d H:i:s'))); }
 	if ($date === '') { return 0; }
 	/* kettőzés ellen: ugyanarra a kontaktra és napra egyszer (párhuzamos letöltésnél is) */
 	if (!add_option('cp_dl_an_' . md5($no['cid'] . '|' . $date), time(), '', 'no')) { return 0; }
@@ -410,7 +427,7 @@ function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
 	$body[cp_crm_sm_field('event_d')] = $date;
 	/* szolgáltatás a tárgyból / a levélből, a meglévő értékek közül */
 	$hay = mb_strtolower(remove_accents($subj . ' ' . cp_dl_own_text($text))); $sv = array();
-	foreach (array('Fotóautomata' => '/fotoautomata/', 'Szelfigép' => '/szelfigep|photobooth/', '360 Spinner' => '/spinner|360/', 'AI Karikatúra' => '/karikatura/') as $k => $re) { if (preg_match($re, $hay)) { $sv[] = $k; } }
+	foreach (array('Fotóautomata' => '/fotoautomata/', 'Szelfigép' => '/szelfigep|photobooth|selfie ?box|szelfi ?box/', '360 Spinner' => '/spinner|360/', 'AI Karikatúra' => '/karikatura/') as $k => $re) { if (preg_match($re, $hay)) { $sv[] = $k; } }
 	if ($sv) { $body[cp_crm_sm_field('service')] = mb_substr(implode(' | ', $sv), 0, 100); }
 	$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
 	if (is_wp_error($dr)) { delete_option('cp_dl_an_' . md5($no['cid'] . '|' . $date)); return 0; }
