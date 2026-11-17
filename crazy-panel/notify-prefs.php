@@ -36,7 +36,17 @@ function cp_nt_kinds() {
 function cp_nt_prefs() { $p = get_option('cp_nt_prefs', array()); return is_array($p) ? $p : array(); }
 /* $ch: b = csengő, p = telefon (push), u = Pumble */
 function cp_nt_default($kind, $ch) { return !(in_array($kind, array('lead', 'iv_book'), true) && $ch === 'u'); } /* az új ajánlatkérésről alapból nem megy Pumble (2026-11-08-i döntés) */
+/* v2.9.310: aki nem tagja az irodának (alapból Ákos), az nem kap deallel / ügyféllel kapcsolatos értesítést */
+function cp_nt_deal_kinds() { return array('lead', 'lead_fail', 'autodeal', 'deal_note', 'kb_recall', 'mail_follow'); }
+function cp_nt_nooffice($uid) {
+	$uid = (int) $uid; $o = get_option('cp_nt_nooffice', null);
+	if (is_array($o)) { return in_array($uid, array_map('intval', $o), true); }
+	if (!function_exists('cp_pu_data')) { return false; }
+	$u = cp_pu_data()['list'][$uid] ?? null;
+	return $u && preg_match('/ákos/iu', (string) ($u['n'] ?? ''));
+}
 function cp_nt_on($uid, $kind, $ch) {
+	if (in_array($kind, cp_nt_deal_kinds(), true) && cp_nt_nooffice($uid)) { return false; }
 	$p = cp_nt_prefs();
 	return isset($p[(int) $uid][$kind][$ch]) ? !empty($p[(int) $uid][$kind][$ch]) : cp_nt_default($kind, $ch);
 }
