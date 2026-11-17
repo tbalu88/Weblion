@@ -119,8 +119,9 @@
 		const head = ['Név', 'Telefon', 'E-mail'].concat(k === 'kezelo' ? ['Autó', 'Gépek'] : ['Autó'], J ? ['Felvétel'] : [], [J ? 'Megjegyzés' : 'Egyéb'], J ? [] : ['Közelgő']);
 		main.querySelector('.kz-body').innerHTML = S.err ? '<div class="cpx-empty err">' + esc(S.err) + '</div>' :
 			'<div class="kz-n">' + L.length + ' fő' + (miss ? ' · <b class="kz-warn">' + miss + ' főnél hiányzik személyes adat</b>' : '') + (S.reveal ? ' · <span class="kz-open">🔓 személyes adatok láthatók (naplózva)</span>' : '') + '</div>' +
-			'<div class="kz-tw"><table class="kz-t kz-r"><thead><tr><th class="kz-fl"></th>' + head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
-			L.map(x => '<tr data-id="' + x.id + '" class="' + (x.flag ? 'fl-' + x.flag : '') + (x.active ? '' : ' off') + '"><td class="kz-fl"><button type="button" class="kz-tog" data-more aria-expanded="' + (S.open === x.id) + '" title="Részletek">' + (S.open === x.id ? '▾' : '▸') + '</button></td>' +
+			'<div class="kz-tw"><table class="kz-t kz-r"><thead><tr><th class="kz-fl"></th>' + (J ? '<th title="Rangsor – húzással vagy a nyilakkal módosítható">Rang</th>' : '') + head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
+			L.map((x, i) => '<tr data-id="' + x.id + '" class="' + (x.flag ? 'fl-' + x.flag : '') + (x.active ? '' : ' off') + '"><td class="kz-fl' + (J ? ' kz-flw' : '') + '">' + (J ? '<span class="kz-drag" title="Húzd a rangsor módosításához" aria-label="Áthelyezés">⠿</span>' : '') + '<button type="button" class="kz-tog" data-more aria-expanded="' + (S.open === x.id) + '" title="Részletek">' + (S.open === x.id ? '▾' : '▸') + '</button></td>' +
+				(J ? '<td class="kz-rk"><b>' + (i + 1) + '.</b><span class="kz-rkb"><button type="button" data-rk="-1" aria-label="Feljebb: ' + esc(x.name) + '"' + (i ? '' : ' disabled') + '>▲</button><button type="button" data-rk="1" aria-label="Lejjebb: ' + esc(x.name) + '"' + (i < L.length - 1 ? '' : ' disabled') + '>▼</button></span></td>' : '') +
 				'<td class="kz-nm"><b>' + esc(x.name) + '</b>' + (x.el ? '<small>' + esc(x.el.name) + ' · ' + esc(x.el.role) + '</small>' : '') + '</td><td class="kz-nw">' + tel(x.phone) + '</td><td>' + mail(x.email) + '</td>' +
 				(k === 'kezelo' ? '<td class="kz-nw">' + (x.plate ? esc(x.plate) : '') + (x.car ? ' <span class="kz-car ' + esc(x.car) + '">' + (x.car === 'teher' ? 'teher' : 'személy') + '</span>' : (x.plate ? '' : '<span class="cpx-muted">–</span>')) + '</td><td class="kz-chips">' + chips(x.skills, SKL) + '</td>'
 					: '<td class="kz-nw">' + (x.has_car ? '✓ van' : '<span class="cpx-muted">–</span>') + '</td>') +
@@ -128,10 +129,20 @@
 				'<td class="kz-ex">' + esc(x.extra || '') + '</td>' +
 				(J ? '' : '<td class="kz-nw">' + (x.up.length ? '<button type="button" class="kz-link" data-more>' + x.up.length + ' · ' + esc(huD(x.up[0].event_d)) + '</button>' : '<span class="cpx-muted">–</span>') + '</td>') +
 				'</tr>' +
-				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (head.length + 1) + '">' + detailRead(x) + '</td></tr>' : '')).join('') +
+				(S.open === x.id ? '<tr class="kz-det"><td colspan="' + (head.length + (J ? 2 : 1)) + '">' + detailRead(x) + '</td></tr>' : '')).join('') +
 			'</tbody></table></div>';
 		main.querySelectorAll('tr[data-id] [data-more]').forEach(b => b.addEventListener('click', () => { const id = Number(b.closest('tr').dataset.id); S.open = S.open === id ? 0 : id; draw(); }));
 		main.querySelectorAll('[data-deal]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); if (window.CPCrm) window.CPCrm.open(Number(a.dataset.deal)); }));
+		/* v2.9.309: Jelentkezők rangsora – ▲▼ gombok és húzás szerkesztő mód nélkül is */
+		if (J) {
+			main.querySelectorAll('[data-rk]').forEach(b => b.addEventListener('click', async () => {
+				const id = Number(b.closest('tr').dataset.id), k = L.findIndex(x => x.id === id), o = L[k + Number(b.dataset.rk)]; if (!o) return;
+				const a = S.rows.findIndex(x => x.id === id), c = S.rows.findIndex(x => x.id === o.id); const nr = S.rows.slice(); nr[a] = S.rows[c]; nr[c] = S.rows[a]; S.rows = nr; draw();
+				const f = main.querySelector('tr[data-id="' + id + '"] [data-rk="' + b.dataset.rk + '"]'); if (f && !f.disabled) f.focus();
+				try { await post('cp_kz_order', { ids: S.rows.map(x => x.id).join(',') }); } catch (e) { toast(e.message, true); load(); }
+			}));
+			dnd(main);
+		}
 		bindIvGo(main);
 		if (window.CPXStatus) window.CPXStatus();
 	}
@@ -588,7 +599,7 @@
 		'.kz-t td{border-bottom:1px solid #F0ECE6;padding:2px 3px;vertical-align:middle}.kz-t input,.kz-t select{width:100%;min-width:110px;border:1px solid transparent;border-radius:6px;padding:6px 6px;font:13px Inter,sans-serif;background:transparent;color:#141C33}' +
 		'.kz-t input:hover,.kz-t select:hover{border-color:#E6E3DE}.kz-t input:focus,.kz-t select:focus{border-color:#2F5BD8;background:#fff;outline:none}.kz-t input[data-f=name]{font-weight:600;min-width:150px}.kz-t input[data-f=email]{min-width:190px}.kz-t td.kz-sv input{min-width:120px}.kz-t input[data-f=address]{min-width:230px}' +
 		'.kz-t input.saving{background:#FFF8E1}.kz-t input.saved,.kz-t select.saved{background:#E8F6EE}.kz-s{font-size:12px;text-align:center;white-space:nowrap}.kz-s.ok{color:#17663A}.kz-s.no{color:#B4400E;background:#FDF1EC}' +
-		'.kz-fl{width:28px;text-align:center}.kz-flw{width:46px;white-space:nowrap}.kz-drag{cursor:grab;color:#B5B0A8;font-size:14px;padding:0 3px;user-select:none}.kz-drag:hover{color:#141C33}tr.kz-dragging td{opacity:.45;background:#EEF3FD!important}.kz-tog{border:0;background:none;cursor:pointer;color:#656973;font-size:13px;width:24px;height:24px;border-radius:6px}.kz-tog:hover{background:#F0ECE6;color:#141C33}.kz-fl button{border:0;background:none;cursor:pointer;font-size:15px;color:#D0CCC5}tr.fl-red td{background:#FBE9E7}tr.fl-red .kz-fl button{color:#D84315}tr.fl-yellow td{background:#FFF8E1}tr.fl-yellow .kz-fl button{color:#F9A825}tr.fl-green td{background:#EAF6EC}tr.fl-green .kz-fl button{color:#2E7D32}tr.off td{opacity:.55}' +
+		'.kz-rk{white-space:nowrap;width:74px}.kz-rk b{display:inline-block;min-width:24px;font-variant-numeric:tabular-nums;color:#141C33}.kz-rkb{display:inline-flex;gap:2px;vertical-align:middle}.kz-rkb button{border:1px solid #E6E2DC;background:#fff;border-radius:6px;width:24px;height:24px;font-size:10px;color:#656973;cursor:pointer;padding:0}.kz-rkb button:hover:not(:disabled){border-color:#141C33;color:#141C33}.kz-rkb button:disabled{opacity:.35;cursor:default}.kz-fl{width:28px;text-align:center}.kz-flw{width:46px;white-space:nowrap}.kz-drag{cursor:grab;color:#B5B0A8;font-size:14px;padding:0 3px;user-select:none}.kz-drag:hover{color:#141C33}tr.kz-dragging td{opacity:.45;background:#EEF3FD!important}.kz-tog{border:0;background:none;cursor:pointer;color:#656973;font-size:13px;width:24px;height:24px;border-radius:6px}.kz-tog:hover{background:#F0ECE6;color:#141C33}.kz-fl button{border:0;background:none;cursor:pointer;font-size:15px;color:#D0CCC5}tr.fl-red td{background:#FBE9E7}tr.fl-red .kz-fl button{color:#D84315}tr.fl-yellow td{background:#FFF8E1}tr.fl-yellow .kz-fl button{color:#F9A825}tr.fl-green td{background:#EAF6EC}tr.fl-green .kz-fl button{color:#2E7D32}tr.off td{opacity:.55}' +
 		'.kz-link{border:0;background:none;color:#2F5BD8;cursor:pointer;font:600 12.5px Inter,sans-serif;text-align:left;white-space:nowrap}.kz-link small{display:block;color:#656973;font-weight:500}' +
 		'.kz-det td{background:#FAF8F5!important}.kz-d{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:8px 6px}.kz-d label{display:block;font-size:12px;color:#656973}.kz-d textarea{width:100%;border:1px solid #E6E3DE;border-radius:8px;padding:6px;font:13px Inter,sans-serif}.kz-d ul{margin:6px 0;padding-left:18px}.kz-d li{margin:3px 0}.kz-chk{display:flex!important;gap:6px;align-items:center;margin:6px 0;color:#141C33!important;font-size:13px!important}.kz-d input[type=checkbox]{width:auto;min-width:0;accent-color:#2F5BD8}.kz-d select{width:auto!important;min-width:150px!important;border:1px solid #E6E3DE!important;background:#fff!important}' +
 		/* v2.9.85: Interjú-időpontok oldal (a fül fő területén), nézetkapcsoló, jegyzet */

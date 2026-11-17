@@ -247,7 +247,7 @@ function cp_iv_cancel($b, $by_admin = false) {
 	return true;
 }
 
-/* a jelentkező a Kezelők → Jelentkezők közé (e-mail alapján; ha már szerepel, csak megjegyzés kerül hozzá) */
+/* ha a foglaló már szerepel a Kezelők táblában (e-mail alapján), a megjegyzésébe kerül a foglalás; új sort nem hoz létre (v2.9.309) */
 function cp_iv_kz_upsert($b, $s, $what) {
 	if (!function_exists('cp_kz_ok') || !cp_kz_ok()) { return 0; }
 	global $wpdb;
@@ -260,8 +260,8 @@ function cp_iv_kz_upsert($b, $s, $what) {
 		$wpdb->update($T, array('note' => mb_substr(trim((string) $row['note'] . "\n" . $line), -2000), 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló'), array('id' => (int) $row['id']));
 		return (int) $row['id'];
 	}
-	$wpdb->insert($T, array('name' => $b['name'], 'email' => $b['email'], 'phone' => $b['phone'], 'kind' => 'jelentkezo', 'note' => $line, 'active' => 1, 'created_at' => $now, 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló'));
-	return (int) $wpdb->insert_id;
+	/* v2.9.309: foglaláskor már nem kerül be a Jelentkezők közé – csak az „Alkalmas” végső döntés után (lásd: do=final) */
+	return 0;
 }
 function cp_iv_notify($text) {
 	if (!function_exists('cp_notify') || !function_exists('cp_pu_data')) { return; }
@@ -685,7 +685,7 @@ function cp_iv_ajax_admin() {
 				$row = $b['kz_id'] ? $wpdb->get_row($wpdb->prepare("SELECT id, note FROM $T WHERE id = %d", (int) $b['kz_id']), ARRAY_A) : null;
 				if (!$row && $b['email'] !== '') { $row = $wpdb->get_row($wpdb->prepare("SELECT id, note FROM $T WHERE email = %s ORDER BY id DESC LIMIT 1", $b['email']), ARRAY_A); }
 				if ($row) { $wpdb->update($T, array('active' => 1, 'note' => mb_substr(trim((string) $row['note'] . "\n" . $line), -2000), 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló'), array('id' => (int) $row['id'])); $kz = (int) $row['id']; }
-				else { $wpdb->insert($T, array('name' => $b['name'], 'email' => $b['email'], 'phone' => $b['phone'], 'kind' => 'jelentkezo', 'note' => $line, 'active' => 1, 'created_at' => $now, 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló')); $kz = (int) $wpdb->insert_id; }
+				else { $wpdb->insert($T, array('name' => $b['name'], 'email' => $b['email'], 'phone' => $b['phone'], 'kind' => 'jelentkezo', 'note' => $line, 'active' => 1, 'pos' => (int) $wpdb->get_var("SELECT MAX(pos) FROM $T") + 1 /* v2.9.309: a rangsor végére */, 'created_at' => $now, 'updated_at' => $now, 'updated_by' => 'Interjú-foglaló')); $kz = (int) $wpdb->insert_id; }
 				if ($kz && (int) $b['kz_id'] !== $kz) { $wpdb->update(cp_iv_t('bookings'), array('kz_id' => $kz), array('id' => $id)); }
 			}
 		}
