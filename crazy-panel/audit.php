@@ -221,7 +221,7 @@ add_action('cp_audit_gc_ev', function () {
 /* ------------------------------------------------------------ a napló megtekintése: csak admin */
 function cp_audit_auth() {
 	cp_el_auth();
-	if (!function_exists('cp_panel_is_admin') || !cp_panel_is_admin()) { cp_el_err('A napló csak az adminoknak érhető el.', 403); }
+	if (!function_exists('cp_panel_can') || !cp_panel_can('naplo')) { cp_el_err('A Napló nincs engedélyezve a fiókodnak (Beállítások → Láthatóság).', 403); }
 	if (!cp_audit_db_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 }
 function cp_audit_where() {

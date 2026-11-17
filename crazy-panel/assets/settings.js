@@ -184,7 +184,7 @@
 	/* ------------------------------------------------------------ láthatóság */
 	function secVis(box, d) {
 		/* v2.9.288: a fülek és az Eszközök menü elemei külön csoportban; soronként „mindenki” gyorsgomb */
-		const us = d.users.filter(u => u.a), TK = ['munkanaplo', 'logisztika', 'munkalap', 'ellenorzes', 'sablon', 'hatterkat', 'aikredit', 'flows'];
+		const us = d.users.filter(u => u.a), TK = ['munkanaplo', 'naplo', 'logisztika', 'munkalap', 'ellenorzes', 'sablon', 'hatterkat', 'aikredit', 'flows'];
 		const tabs = Object.keys(d.tabs).filter(k => !TK.includes(k)), tools = TK.filter(k => d.tabs[k]);
 		const row = k => '<tr><td>' + esc(d.tabs[k]) + '<button type="button" class="cs-vall" data-vall="' + k + '" aria-label="' + esc(d.tabs[k]) + ': mindenkinél be / ki">mind</button></td>' + us.map(u => '<td><input type="checkbox" data-v="' + u.id + '|' + k + '"' + (d.vis[u.id] && d.vis[u.id][k] ? ' checked' : '') + ' aria-label="' + esc(u.n + ' – ' + d.tabs[k]) + '"></td>').join('') + '</tr>';
 		const grp = (t, sub) => '<tr class="cs-vg"><th colspan="' + (us.length + 1) + '">' + esc(t) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</th></tr>';

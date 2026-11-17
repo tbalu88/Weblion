@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.310');
+define('CP_PANEL_VER', '2.9.311');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -801,7 +801,7 @@ function cp_panel_render_app() {
 		'gcal'       => array('on' => function_exists('cp_gcal_ajax_ev') && cp_panel_can_x('gnaptar')),
 		'bil'        => array('on' => function_exists('cp_bil_ajax_deal') && cp_panel_can_x('szamlazas')),
 		'ct'         => array('on' => function_exists('cp_ct_ajax_get') && cp_panel_can_x('deals')),
-		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_is_admin()),
+		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_can('naplo')), /* v2.9.311: Láthatóságból állítható (alapból adminok) */
 		'wl'         => function_exists('cp_wl_cfg') ? cp_wl_cfg() : array('on' => false),
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
 		'logi'       => function_exists('cp_logi_db_ok') && cp_logi_db_ok() && cp_panel_can_x('naptar') && cp_panel_can_x('logisztika') ? 1 : 0, /* v2.9.118: Logisztika fül */
