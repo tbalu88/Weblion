@@ -1205,26 +1205,36 @@
 		   elvesztésnél kötelező ok választólistából */
 		if (p.st === 'Lost') { const w = await lostWhy(name); if (w === null) return false; p.why = w; }
 		const old = r ? Object.assign({}, r) : null;
-		if (r) { if (p.to) r.stage = p.to; if (p.st) r.status = p.st; r._busy = 1; redrawBoard(); }
-		if (!(await window.CPXUndo('Áthelyezve: ' + name + ' → ' + what, 5000))) {
-			if (r && old) { Object.assign(r, old); delete r._busy; } redrawBoard(); toast('Visszavonva – nem változott semmi.'); return false;
-		}
+		/* v2.9.293: azonnali léptetés – a kártya rögtön átkerül, a Salesmate-írás azonnal indul a háttérben (nincs 5 mp várakozás);
+		   a „Visszavonás” 5 mp-ig él: ilyenkor a panel visszaírja az eredeti szakaszt / állapotot */
+		if (r) { if (p.to) r.stage = p.to; if (p.st) r.status = p.st; redrawBoard(); }
+		const tidy = () => { if (S.board) { S.board.rows = S.board.rows.filter(y => y.status === 'Open' || cfStatusShown(y.status)); redrawBoard(); } };
+		const put = (S._mvq = (S._mvq || Promise.resolve()).catch(() => {}).then(() => post('cp_crm_move', Object.assign({ id: id }, p))));
+		let undone = false;
+		window.CPXUndo('Áthelyezve: ' + name + ' → ' + what, 5000).then(async keep => {
+			if (keep) return;
+			undone = true;
+			if (r && old) { Object.assign(r, old); redrawBoard(); }
+			const back = p.to ? { to: old ? old.stage : '' } : { st: old ? old.status : 'Open' };
+			if (!back.to && !back.st) return;
+			try { await put; } catch (e) { toast('Visszavonva – nem változott semmi.'); return; }
+			try { const x = await (S._mvq = S._mvq.catch(() => {}).then(() => post('cp_crm_move', Object.assign({ id: id }, back)))); if (x.row && S.board) { const i2 = S.board.rows.findIndex(y => y.id === id); if (i2 >= 0) S.board.rows[i2] = x.row; } toast('Visszavonva – a Salesmate-ben is visszaírva.'); }
+			catch (e) { toast('A visszavonás nem sikerült: ' + e.message, true); }
+			tidy();
+		});
 		let ok = false;
 		try {
-			const x = await post('cp_crm_move', Object.assign({ id: id }, p));
-			if (x.row && S.board) { const i = S.board.rows.findIndex(y => y.id === id); if (i >= 0) S.board.rows[i] = x.row; }
-			toast(x.warn ? x.warn : (x.changed ? 'Kész – a Salesmate-ben is átírva.' : 'Nem kellett változtatni, már ott volt.'), !!x.warn);
+			const x = await put;
+			if (!undone) {
+				if (x.row && S.board) { const i = S.board.rows.findIndex(y => y.id === id); if (i >= 0) S.board.rows[i] = x.row; }
+				if (x.warn) toast(x.warn, true);
+			}
 			ok = true;
-			if (p.st === 'Lost') slotStorno(id, name);
+			if (p.st === 'Lost' && !undone) setTimeout(() => { if (!undone) slotStorno(id, name); }, 5200);
 		} catch (e) {
-			if (r && old) Object.assign(r, old);
-			toast('Nem sikerült: ' + e.message, true);
+			if (!undone) { if (r && old) Object.assign(r, old); toast('Nem sikerült: ' + e.message, true); }
 		}
-		if (S.board) {
-			S.board.rows.forEach(y => { delete y._busy; });
-			S.board.rows = S.board.rows.filter(y => y.status === 'Open' || cfStatusShown(y.status));
-			redrawBoard();
-		}
+		if (!undone) tidy();
 		return ok;
 	}
 	/* az oszlopok a képernyő aljáig érjenek (a saját görgetésük így mindig elérhető) */
