@@ -242,6 +242,11 @@
 			if (el.tagName === 'IMG' && !/^https:\/\//i.test(el.getAttribute('src') || '')) { el.remove(); return; }
 			const st = Object.keys(keep).map(k => k + ':' + keep[k]).join(';'); if (st) el.setAttribute('style', st);
 		});
+		/* v2.9.292: a linkek (és a bennük lévő szöveg) a környező szöveg méretét és betűtípusát kapják – a forrás linkstílusa
+		   (pl. kisebb 10 pt, más betűtípus) ne üssön el a szöveg többi részétől; a szín és az aláhúzás marad */
+		const onlyLink = el => { const w = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT); let any = false; while (w.nextNode()) { if (!w.currentNode.nodeValue.trim()) continue; any = true; if (!w.currentNode.parentElement.closest('a')) return false; } return any; };
+		doc.body.querySelectorAll('[style]').forEach(el => { if (el.tagName !== 'A' && !el.closest('a') && el.querySelector('a') && onlyLink(el)) { el.style.removeProperty('font-size'); el.style.removeProperty('font-family'); } });
+		doc.body.querySelectorAll('a, a *').forEach(el => { if (!el.style) return; el.style.removeProperty('font-size'); el.style.removeProperty('font-family'); if (!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style'); });
 		/* v2.9.213: méretigazítás a levél alapbetűjéhez (14 px), mint a Salesmate-ben – a beillesztett szöveg leggyakoribb (törzs-)mérete
 		   lesz 14 px (a méret lekerül, a levél alapbetűjét kapja), a többi (cím, apró betű) arányosan igazodik */
 		const BASE = 14, pxOf = el => { for (let x = el; x && x !== doc.body; x = x.parentElement) { const v = x.style && x.style.fontSize; if (v) return /px$/.test(v) ? parseFloat(v) : NaN; } return BASE; };
