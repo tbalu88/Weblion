@@ -49,7 +49,10 @@
 		}
 		/* v2.9.305: figyelő állapota (M1 / M7) */
 		if (d && d.mon) { const M = d.mon, ago = M.srv_at ? Math.max(0, Math.round((Date.now() / 1000 - M.srv_at) / 60)) : null;
-			h += '<div class="ai-mon"><b>Figyelő</b><span class="' + (M.srv_ok ? 'ok' : 'bad') + '">' + (M.srv_ok ? '● Tartalék szerver (galéria, AI, mobil app): elérhető' : '● Tartalék szerver: NEM ÉRHETŐ EL' + (M.srv_err ? ' (' + esc(M.srv_err) + ')' : '')) + '</span><small>' + (ago === null ? 'még nem futott' : 'utolsó ellenőrzés: ' + (ago < 1 ? 'most' : ago + ' perce')) + ' · 5 percenként · riasztás 10 perc kiesés után, és ha az AI-kredit ' + M.thr + ' $ alá esik. A csatornák: Beállítások → Értesítések.</small></div>'; }
+			h += '<div class="ai-mon"><b>Figyelő</b><span class="' + (M.srv_ok ? 'ok' : 'bad') + '">' + (M.srv_ok ? '● Tartalék szerver (galéria, AI, mobil app): elérhető' : '● Tartalék szerver: NEM ÉRHETŐ EL' + (M.srv_err ? ' (' + esc(M.srv_err) + ')' : '')) + '</span><small>' + (ago === null ? 'még nem futott' : 'utolsó ellenőrzés: ' + (ago < 1 ? 'most' : ago + ' perce')) + ' · 5 percenként · riasztás 10 perc kiesés után, és ha az AI-kredit ' + M.thr + ' $ alá esik. A csatornák: Beállítások → Értesítések.</small>' +
+				/* v2.9.306: a fő szervert a tartalék figyeli (Pumble) */
+				(() => { const w = d.watch; if (!w) return ''; const wa = w.at ? Math.round((Date.now() / 1000 - w.at) / 60) : null, live = wa !== null && wa <= 5;
+					return '<span class="' + (live && !w.down ? 'ok' : 'bad') + '" style="margin-top:6px">' + (!w.at ? '● Fő szerver figyelése (a tartalékról): még nem indult – a CloudPanelben kell egy percenkénti cron-sor' : !live ? '● Fő szerver figyelése: ' + wa + ' perce nem futott – ellenőrizd a CloudPanel cron-sorát' : w.down ? '● A fő szerver a figyelő szerint NEM ÉRHETŐ EL' : '● Fő szerver (eventcrazy.hu) figyelése a tartalékról: működik') + '</span><small>' + (w.at ? 'utolsó ellenőrzés: ' + (wa < 1 ? 'most' : wa + ' perce') + ' · ' : '') + 'percenként · leállásnál Pumble-üzenet a közös csatornába' + (w.hook ? '' : ' (a Pumble-cím még nincs átadva)') + '.</small>'; })() + '</div>'; }
 		m.innerHTML = h + '</div>';
 		const f = m.querySelector('[data-aif]'); if (f) f.addEventListener('click', () => load(true));
 	}

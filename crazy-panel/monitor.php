@@ -36,6 +36,15 @@ function cp_mon_tick() {
 		}
 		cp_mon_save($s);
 	}
+	/* v2.9.306: a fő szerver figyelője a tartalékon fut – a közös Pumble-csatorna címét innen kapja (egyszer, és ha változik) */
+	if (empty($s['srv_down']) && (int) ($s['srv_fail'] ?? 0) === 0 && function_exists('cp_nt_hook_get') && function_exists('cp_booth_gal_req')) {
+		$hook = (string) cp_nt_hook_get('notif_hook'); $hh = $hook === '' ? '' : md5($hook);
+		if ($hh !== (string) ($s['watch_hook'] ?? '-') && $now - (int) ($s['watch_try'] ?? 0) > 3600) {
+			$s['watch_try'] = $now; cp_mon_save($s);
+			$r = cp_booth_gal_req('POST', '/watch-setup', array('hook' => $hook, 'test' => empty($s['watch_hook']) ? 1 : 0));
+			if (!is_wp_error($r)) { $s['watch_hook'] = $hh; cp_mon_save($s); }
+		}
+	}
 	/* M7 – 30 percenként, csak ha a szerver él */
 	if (empty($s['srv_down']) && (int) ($s['srv_fail'] ?? 0) === 0 && $now - (int) ($s['ai_at'] ?? 0) >= 1790 && function_exists('cp_booth_gal_req')) {
 		$s['ai_at'] = $now; cp_mon_save($s);

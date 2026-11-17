@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.10.2');
+define('CG_VER', '0.10.4');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -504,6 +504,51 @@ function cg_ai_balance($fresh = false) {
 	set_transient('cg_ai_bal', $out, $out['src'] === 'none' ? 60 : 300);
 	return $out;
 }
+/* ---------- v0.10.3: a FŐ szerver (eventcrazy.hu, Crazy panel) figyelése innen – ha az leáll, magáról nem tud szólni.
+ * Futtatás: a CloudPanel percenkénti cron-sora hívja a /watch-tick címet (bejelentkezés nélkül, 50 mp-es korláttal).
+ * Két egymás utáni hiba (~2 perc) = Pumble-üzenet a közös értesítési csatornába; helyreálláskor is. A Pumble-címet a panel
+ * adja át (/watch-setup, titkosítva tárolva). Az állapotot a panel az /ai-setup válaszában látja (Eszközök → AI-kredit). */
+function cg_watch_opts() { $o = get_option('cg_watch', array()); return is_array($o) ? $o : array(); }
+function cg_watch_pumble($text) {
+	$o = cg_watch_opts(); $h = !empty($o['hook']) ? cg_ai_dec($o['hook']) : '';
+	if ($h === '' || strpos($h, 'https://') !== 0) { return false; }
+	/* közvetlen cURL – a tartalékon a WordPress külső HTTP-kérései tiltva vannak (az AI-hívás is így megy) */
+	$ch = curl_init($h); curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_POSTFIELDS => wp_json_encode(array('text' => $text)), CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10, CURLOPT_HTTPHEADER => array('Content-Type: application/json')));
+	curl_exec($ch); $c = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+	return $c >= 200 && $c < 300;
+}
+function cg_watch_tick() {
+	$o = cg_watch_opts(); $now = time();
+	if (strpos((string) ($o['err'] ?? ''), 'letiltotta') !== false) { $o['fail'] = 0; $o['down'] = 0; $o['err'] = ''; } /* a 0.10.3 téves (WP-tiltás miatti) állapota */
+	if ($now - (int) ($o['at'] ?? 0) < 50) { return array('skip' => 1); }
+	$o['at'] = $now;
+	$ch = curl_init('https://eventcrazy.hu/wp-json/crazy-bridge/v1/alive?t=' . $now); curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false, CURLOPT_HTTPHEADER => array('Cache-Control: no-cache')));
+	$body = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); $cerr = curl_error($ch); curl_close($ch);
+	$err = $body === false ? 'nem érhető el (' . mb_substr($cerr, 0, 60) . ')' : ($code === 200 && strpos((string) $body, 'alive') !== false ? '' : 'HTTP ' . $code);
+	if ($err === '') {
+		if (!empty($o['down'])) { cg_watch_pumble('✅ **Crazy panel / eventcrazy.hu újra elérhető** – ' . max(1, (int) round(($now - (int) $o['down']) / 60)) . ' perc kiesés után.'); }
+		$o['fail'] = 0; $o['down'] = 0; $o['ok_at'] = $now;
+	} else {
+		$o['fail'] = (int) ($o['fail'] ?? 0) + 1; $o['err'] = $err;
+		if ($o['fail'] === 2 && empty($o['down'])) { $o['down'] = $now - 60; cg_watch_pumble('🚨 **A fő szerver nem érhető el** (eventcrazy.hu – a Crazy panel, a weboldal és az ügyfélportál) – ' . $err . '. Teendő: a tárhelyszolgáltató felületén ellenőrizd / indítsd újra. (A tartalék szerver figyeli, percenként.)'); }
+		elseif (!empty($o['down']) && ($now - (int) $o['down']) >= 3600 && empty($o['remind'])) { $o['remind'] = 1; cg_watch_pumble('🚨 **A fő szerver még mindig nem érhető el** (' . (int) round(($now - (int) $o['down']) / 60) . ' perce) – ' . $err . '.'); }
+	}
+	if ($err === '') { unset($o['remind']); }
+	update_option('cg_watch', $o, false);
+	return array('ok' => $err === '' ? 1 : 0, 'fail' => (int) ($o['fail'] ?? 0));
+}
+function cg_watch_status() { $o = cg_watch_opts(); return array('hook' => !empty($o['hook']) ? 1 : 0, 'at' => (int) ($o['at'] ?? 0), 'ok_at' => (int) ($o['ok_at'] ?? 0), 'down' => (int) ($o['down'] ?? 0), 'err' => (string) ($o['err'] ?? '')); }
+add_action('rest_api_init', function () {
+	register_rest_route('crazy-galeria/v1', '/watch-tick', array('methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function () { nocache_headers(); return cg_watch_tick(); }));
+	register_rest_route('crazy-galeria/v1', '/watch-setup', array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
+		$h = trim((string) $r->get_param('hook')); $o = cg_watch_opts();
+		if ($h === '') { unset($o['hook']); } elseif (preg_match('#^https://[a-z0-9.-]+/#i', $h)) { $o['hook'] = cg_ai_enc($h); } else { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás webhook-cím.'), 400); }
+		update_option('cg_watch', $o, false);
+		if ($r->get_param('test')) { cg_watch_pumble('ℹ️ Crazy panel: a tartalék szerver mostantól figyeli a fő szervert (eventcrazy.hu) – leálláskor ide jön riasztás.'); }
+		return array('ok' => true) + cg_watch_status();
+	}));
+});
+
 function cg_ai_ev_info($ev) {
 	global $wpdb; $s = cg_evset($ev); $a = isset($s['ai']) && is_array($s['ai']) ? $s['ai'] : array();
 	$row = $wpdb->get_row($wpdb->prepare('SELECT COUNT(*) n, COALESCE(SUM(cost),0) c FROM ' . cg_t() . " WHERE ev = %s AND kind = 'ai'", $ev));
@@ -539,7 +584,7 @@ add_action('rest_api_init', function () {
 		array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			$o = cg_ai_opts(); $L = get_option('cg_ai_log', array()); $mo = gmdate('Y-m'); $n = 0; $c = 0.0; $err = 0;
 			foreach ((array) $L as $e) { if (strpos((string) ($e['t'] ?? ''), $mo) === 0) { if (!empty($e['ok'])) { $n++; $c += (float) ($e['cost'] ?? 0); } else { $err++; } } }
-			return array('ok' => true, 'has_key' => !empty($o['key']), 'model' => cg_ai_model(), 'models' => explode(',', CG_AI_MODELS), 'month' => array('n' => $n, 'cost' => round($c, 2), 'err' => $err), 'credits' => !empty($o['key']) ? cg_ai_balance((bool) $r->get_param('fresh')) : null);
+			return array('ok' => true, 'has_key' => !empty($o['key']), 'model' => cg_ai_model(), 'models' => explode(',', CG_AI_MODELS), 'month' => array('n' => $n, 'cost' => round($c, 2), 'err' => $err), 'credits' => !empty($o['key']) ? cg_ai_balance((bool) $r->get_param('fresh')) : null, 'watch' => cg_watch_status());
 		}),
 		array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function ($r) {
 			$o = cg_ai_opts();

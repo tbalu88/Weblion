@@ -252,7 +252,7 @@ function cp_booth_ajax_ai_credit() {
 	cp_crm_ajax_guard(array('aikredit'));
 	$st = cp_booth_gal_req('GET', '/ai-setup' . (!empty($_POST['fresh']) ? '?fresh=1' : ''));
 	if (is_wp_error($st)) { wp_send_json_success(array('down' => 1, 'err' => $st->get_error_message(), 'mon' => cp_booth_mon_out())); }
-	wp_send_json_success(array('has_key' => !empty($st['has_key']), 'model' => (string) ($st['model'] ?? ''), 'month' => $st['month'] ?? null, 'credits' => $st['credits'] ?? null, 'admin' => function_exists('cp_panel_is_admin') && cp_panel_is_admin() ? admin_url('options-general.php?page=cp-booth') : '', 'mon' => cp_booth_mon_out()));
+	wp_send_json_success(array('has_key' => !empty($st['has_key']), 'model' => (string) ($st['model'] ?? ''), 'month' => $st['month'] ?? null, 'credits' => $st['credits'] ?? null, 'admin' => function_exists('cp_panel_is_admin') && cp_panel_is_admin() ? admin_url('options-general.php?page=cp-booth') : '', 'mon' => cp_booth_mon_out(), 'watch' => $st['watch'] ?? null));
 }
 /* v2.9.251: AI-kép (OpenRouter) – a kulcs a tartalék szerveren, titkosítva tárolódik; itt csak beírni lehet, visszaolvasni nem */
 function cp_booth_admin_ai() {
