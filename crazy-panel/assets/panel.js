@@ -728,6 +728,9 @@
     '.cpx-caltb .seg.cm button.on{background:#141C33;color:#fff}' +
     '@media (max-width:760px){.cpx-cal.slv .sll span{display:none}.cpx-cal.slv .sll{font-size:11px}.cpx-cal.slv .slu{display:none}}' +
     '.sl-mk{font:700 11px Inter,sans-serif;border-radius:6px;padding:1px 6px;white-space:nowrap}.sl-mk.ok{background:#DDF3E6;color:#17663A}.sl-mk.mid{background:#FFF0D6;color:#8A5300}.sl-mk.no{background:#FDECEA;color:#B42318}' +
+    '.sl-sum{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:auto}.sl-sum>span{font:600 11.5px Inter,sans-serif;background:#F1EEE9;color:#3A3F4B;border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums}.sl-sum>span.ok{background:#E3F4E9;color:#17663A}.sl-sum>span.w{background:#FFF3C4;color:#7A5B00}.sl-sum b{font-weight:800}' +
+    '.sl-pool{border:1px solid #E6E2DC;border-radius:12px;padding:10px 12px;background:#FBFAF7;margin:6px 0 14px}.sl-ph2{display:flex;flex-direction:column;gap:1px;margin:0 0 4px}.sl-ph2 b{font:700 13.5px Inter,sans-serif;color:#141C33}.sl-ph2 small{font-size:12px;color:#6B6F78}.sl-ph3{margin-top:4px}.sl-pbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.sl-pbar .sl-inv,.sl-pbar .sl-send{margin:0}.sl-to{color:#17663A;font-weight:600}' +
+    '.sl-asg{display:flex;gap:8px;margin-top:8px;align-items:center}.sl-asg select{flex:1;min-width:0;height:36px;border:1.5px solid #E6E2DC;border-radius:8px;padding:0 8px;font:500 13px Inter,sans-serif;background:#fff;color:#141C33}.sl-asg .cpx-btn{flex-shrink:0;padding:7px 12px}@media (max-width:520px){.sl-asg{flex-direction:column;align-items:stretch}.sl-sum{margin-left:0}}' +
     '.sl-box{margin:4px 0 10px}.sl-x{font:600 11.5px Inter,sans-serif;background:#E7F4EA;color:#17663A;border-radius:999px;padding:2px 8px}' +
     '.sl-row{border:1px solid #E6E2DC;border-radius:10px;padding:9px 11px;margin:6px 0;background:#fff}.sl-row.done{border-color:#BFE3CB;background:#F6FBF8}.sl-row.soft{border-style:dashed}' +
     '.sl-cnt{display:inline-flex;align-items:center;border:1px solid #E7E2DA;border-radius:999px;overflow:hidden;background:#fff}.sl-cnt button{border:0;background:none;width:24px;height:22px;font:700 13px Inter,sans-serif;color:#141C33;cursor:pointer}.sl-cnt button:disabled{opacity:.3;cursor:default}.sl-cnt b{display:inline!important;font:600 11px Inter,sans-serif!important;padding:0 2px;font-variant-numeric:tabular-nums}.sl-tags i.ok{background:#E3F4E8;color:#1E6B39}' +
@@ -906,8 +909,9 @@
       grid.querySelectorAll('.cpx-day[data-date]').forEach(c => {
         const x = r.d[c.dataset.date]; if (!x || !x[0] || c.classList.contains('past')) return;
         const ft = c.querySelector('.ft'); if (!ft) return;
-        const cls = x[1] >= x[0] ? 'ok' : x[1] + x[2] > 0 ? 'mid' : 'no';
-        ft.insertAdjacentHTML('beforeend', '<span class="sl-mk ' + cls + '" title="Beosztás: ' + x[1] + ' véglegesítve, ' + x[2] + ' meghívás folyamatban, ' + x[0] + ' slot"><i aria-hidden="true">👤 </i>' + x[1] + '/' + x[0] + '</span>');
+        const cls = x[1] >= x[0] ? 'ok' : x[1] + x[2] + (x[3] || 0) + (x[4] || 0) > 0 ? 'mid' : 'no';
+        /* v2.9.298: + a nap köre: ráér (x[3]) / válaszra vár (x[4]) */
+        ft.insertAdjacentHTML('beforeend', '<span class="sl-mk ' + cls + '" title="Beosztás: ' + x[1] + ' / ' + x[0] + ' slot kiosztva · a nap köre: ' + (x[3] || 0) + ' ráér' + (x[4] ? ', ' + x[4] + ' válaszra vár' : '') + '"><i aria-hidden="true">👤 </i>' + x[1] + '/' + x[0] + ((x[3] || 0) > x[1] ? ' <small>+' + ((x[3] || 0) - x[1]) + '</small>' : '') + '</span>');
       });
     } catch (e) { /* a naptár nélküle is működik */ }
   }
@@ -917,69 +921,113 @@
     try { slotDraw(box, date, await slotPost('cp_slot_day', { day: date })); }
     catch (e) { box.innerHTML = '<div class="cpx-dsec"><h4>Beosztás</h4></div><div class="cpx-empty err">' + esc(e.message) + '</div>'; }
   }
+  /* v2.9.298: napi alapú beosztás – felül a nap köre (napra hívjuk meg az embereket), alatta a rendezvények slotjai;
+     a slotokhoz a kör ráérő tagjait rendeli Ákos / admin (= véglegesítés, a megszokott levéllel) */
   function slotDraw(box, date, x) {
     const open = box._open || {};
-    const sk = x.skills || {};
+    const sk = x.skills || {}, pool = x.pool || [], cById = {}; (x.cands || []).forEach(c => { cById[c.id] = c; });
     const fit = (s, c) => {
-      const why = [];
+      const why = [], cc = cById[c.kz || c.id] || {};
       if (s.need === 'kezelo' && c.kind !== 'kezelo') why.push(s.kind === 'spin' ? 'spinnerre csak kezelő' : 'vidékre kezelő kell');
-      if (c.sk.length && s.skill && !c.sk.includes(s.skill)) why.push('nem kezel ' + (sk[s.skill] || s.skill) + ' gépet');
-      if (!c.sk.length && s.skill === 'spinner') why.push('nincs spinner-tudása');
-      if (c.busy.some(k => k !== s.deal + '|' + s.skey)) why.push('aznap már be van osztva');
-      if (c.na) why.push(c.na); /* v2.9.151: a Kezelők adatlapján megadott elérhetőség */
+      const csk = c.sk || [];
+      if (csk.length && s.skill && !csk.includes(s.skill)) why.push('nem kezel ' + (sk[s.skill] || s.skill) + ' gépet');
+      if (!csk.length && s.skill === 'spinner') why.push('nincs spinner-tudása');
+      if (cc.na) why.push(cc.na);
       return why;
     };
-    const head = '<div class="cpx-dsec"><h4>Beosztás (' + x.slots.length + ' slot)</h4>' + (x.xmas ? '<span class="sl-x" title="Karácsonyi időszak: már ajánlatkérés után is meghívható">🎄 ajánlatkéréstől</span>' : '') + '</div>';
-    if (!x.slots.length) { box.innerHTML = head + '<p class="cpx-muted">Erre a napra nincs rendezvény.</p>'; return; }
-    box.innerHTML = head + x.slots.map((s, i) => {
-      const nfin = s.asg.filter(a => a.st === 'final').length, cnt = s.cnt || 1, fin = nfin >= cnt; /* v2.9.264: létszám – a slot csak a létszám betelésekor kész */
+    const tel = ph => ph ? '<a href="tel:' + esc(ph.replace(/[^\d+]/g, '')) + '" class="sl-ph" title="Hívás" aria-label="Hívás">📞</a>' : '';
+    const kindI = k => '<i class="sl-k ' + esc(k) + '">' + (k === 'kezelo' ? 'Kezelő' : 'Host') + '</i>';
+    const need = x.slots.reduce((a, s) => a + (s.cnt || 1), 0);
+    const nfinAll = x.slots.reduce((a, s) => a + s.asg.filter(q => q.st === 'final').length, 0);
+    const acc = pool.filter(p => p.st === 'accepted'), inv = pool.filter(p => p.st === 'invited');
+    const free = acc.filter(p => !p.asg.length);
+    const unsent = pool.filter(p => p.st === 'invited' && !p.sent && p.em && p.id);
+    const inPool = new Set(pool.filter(p => p.st !== 'dropped').map(p => p.kz));
+    const pc = x.cands.filter(c => !inPool.has(c.id)), pcGood = pc.filter(c => !c.na), pcBad = pc.filter(c => c.na);
+    const cRow = c => '<label class="sl-c' + (c.na ? ' bad' : '') + '"><input type="checkbox" value="' + c.id + '"><span><b>' + esc(c.n) + '</b> ' + kindI(c.kind) + (c.car ? ' 🚗' : '') + (c.na ? '<small>' + esc(c.na) + '</small>' : '') + '</span>' + tel(c.ph) + '</label>';
+    const head = '<div class="cpx-dsec"><h4>Beosztás</h4>' + '<span class="sl-sum"><span title="Ennyi ember kell aznap (rendezvényenként gépenként 1, + az extra létszám)">Igény <b>' + need + '</b></span><span class="ok" title="Ráér erre a napra">Ráér <b>' + acc.length + '</b></span><span title="Rendezvényhez rendelve">Kiosztva <b>' + nfinAll + '</b></span>' + (inv.length ? '<span class="w" title="Meghívva, még nem válaszolt">Válaszra vár <b>' + inv.length + '</b></span>' : '') + '</span></div>';
+    const poolH = '<div class="sl-pool"><div class="sl-ph2"><b>A nap köre</b><small>Akiket erre a napra hívtunk meg. A rendezvényekhez lent rendeled őket.</small></div>' +
+      (pool.length ? '<ul class="sl-a">' + pool.map(p => {
+        const cls = p.asg.length ? 'fin' : (SL_ST[p.st] || ['', 'inv'])[1];
+        const stl = p.asg.length ? 'Kiosztva' : p.st === 'dropped' ? 'Értesítve: nem kell' : (SL_ST[p.st] || [p.st])[0];
+        return '<li class="' + cls + '"><span><b>' + esc(p.n) + '</b> ' + kindI(p.kind) + (p.car ? ' 🚗' : '') + ' <i class="sl-st">' + esc(stl) + '</i>' +
+          (p.asg.length ? ' <small class="sl-to">→ ' + esc(p.asg.join(', ')) + '</small>' : '') + (p.note ? ' <small>„' + esc(p.note) + '”</small>' : '') +
+          (p.st === 'invited' && p.id ? (p.sent ? ' <small class="sl-ms ok" title="Meghívó elküldve: ' + esc(p.sent) + '">✉ elküldve</small>' : p.em ? ' <small class="sl-ms">✉ még nincs elküldve</small>' : ' <small class="sl-ms no" title="A Kezelők fülön nincs e-mail-címe – telefonon kell megkeresni">📞 nincs e-mail</small>') : '') +
+          (p.ans ? ' <small class="sl-ms ok" title="Linkről válaszolt: ' + esc(p.ans) + '">↩ linkről</small>' : '') + '</span>' +
+          '<span class="sl-acts">' + (p.id && !p.asg.length && p.st !== 'dropped' ? (p.st !== 'accepted' ? '<button type="button" data-st="accepted" data-a="' + p.id + '" title="Telefonon / üzenetben igent mondott">Ráér</button>' : '') + (p.st !== 'declined' ? '<button type="button" data-st="declined" data-a="' + p.id + '" title="Nem ér rá">Nem</button>' : '') : '') +
+          tel(p.ph) + (p.id && !p.asg.length ? '<button type="button" class="x" data-del="' + p.id + '" data-what="pool" title="Kivétel a nap köréből" aria-label="Kivétel a nap köréből">×</button>' : '') + '</span></li>';
+      }).join('') + '</ul>' : '<p class="cpx-muted">Erre a napra még senkit nem hívtunk meg.</p>') +
+      '<div class="sl-pbar"><button type="button" class="sl-inv" data-pinv' + (open.pool ? ' hidden' : '') + '>＋ Meghívás erre a napra</button>' +
+        (unsent.length ? '<button type="button" class="sl-send" data-psend>✉ Meghívó küldése (' + unsent.length + ')</button>' : '') +
+        (x.can_final && free.length && nfinAll ? '<button type="button" class="sl-send" data-drop title="Rövid levél azoknak, akik ráértek, de nem kaptak rendezvényt">Értesítés a ki nem osztottaknak (' + free.length + ')</button>' : '') + '</div>' +
+      '<div class="sl-pick" data-ppick' + (open.pool ? '' : ' hidden') + '>' + (pcGood.length ? pcGood.map(cRow).join('') : '<p class="cpx-muted">Mindenki benne van már a nap körében.</p>') +
+        (pcBad.length ? '<details><summary>Az elérhetősége szerint aznap nem jó (' + pcBad.length + ')</summary>' + pcBad.map(cRow).join('') + '</details>' : '') +
+        '<div class="sl-pb"><button type="button" class="cpx-btn" data-pgo>Meghívás a napra</button><button type="button" class="cpx-btn ghost" data-pcancel>Mégse</button></div></div></div>';
+    if (!x.slots.length) { box.innerHTML = head + poolH + '<p class="cpx-muted">Erre a napra nincs rendezvény.</p>'; bind(); return; }
+    const slotsH = '<div class="sl-ph2 sl-ph3"><b>Rendezvények</b><small>' + (x.can_final ? 'Válaszd ki, ki menjen – a kör ráérő tagjai vannak elöl.' : 'A rendezvényekhez Ákos rendeli az embereket.') + '</small></div>' + x.slots.map((s, i) => {
+      const fins = s.asg.filter(a => a.st === 'final'), nfin = fins.length, cnt = s.cnt || 1, fin = nfin >= cnt;
+      const legacy = s.asg.filter(a => a.st !== 'final' && a.st !== 'dropped');
       const where = s.bp === 1 ? 'Budapest' : s.bp === 0 ? 'Vidék' : 'Helyszín ismeretlen';
       const needL = s.need === 'kezelo' ? 'Kezelő kell' : 'Host/hostess is mehet';
-      const live = s.asg.filter(a => a.st !== 'dropped');
-      const cands = x.cands.filter(c => !s.asg.some(a => a.kz === c.id && a.st !== 'declined' && a.st !== 'dropped'));
-      const good = cands.filter(c => !fit(s, c).length), bad = cands.filter(c => fit(s, c).length);
-      const cRow = c => { const w = fit(s, c); return '<label class="sl-c' + (w.length ? ' bad' : '') + '"><input type="checkbox" value="' + c.id + '"><span><b>' + esc(c.n) + '</b> <i class="sl-k ' + c.kind + '">' + (c.kind === 'kezelo' ? 'Kezelő' : 'Host') + '</i>' + (c.car ? ' 🚗' : '') + (w.length ? '<small>' + esc(w.join(' · ')) + '</small>' : '') + '</span>' + (c.ph ? '<a href="tel:' + esc(c.ph.replace(/[^\d+]/g, '')) + '" class="sl-ph" title="Hívás">📞</a>' : '') + '</label>'; };
+      const here = new Set(fins.map(a => a.kz));
+      const opt = (p, extra) => { const w = fit(s, p); return '<option value="' + (p.kz || p.id) + '">' + esc(p.n) + (extra ? ' – ' + extra : '') + (w.length ? ' ⚠ ' + esc(w.join(', ')) : '') + '</option>'; };
+      const o1 = acc.filter(p => !p.asg.length && !here.has(p.kz)), o2 = acc.filter(p => p.asg.length && !here.has(p.kz)), o3 = inv.filter(p => !here.has(p.kz));
+      const o4 = x.cands.filter(c => !inPool.has(c.id) && !here.has(c.id));
+      const sel = '<select data-asel="' + i + '" aria-label="Ki menjen erre a rendezvényre"><option value="">– válassz embert –</option>' +
+        (o1.length ? '<optgroup label="Ráér, még szabad">' + o1.map(p => opt(p)).join('') + '</optgroup>' : '') +
+        (o2.length ? '<optgroup label="Ráér, de már máshová kiosztva">' + o2.map(p => opt(p, p.asg.join(', '))).join('') + '</optgroup>' : '') +
+        (o3.length ? '<optgroup label="Meghívva, még nem válaszolt">' + o3.map(p => opt(p)).join('') + '</optgroup>' : '') +
+        (o4.length ? '<optgroup label="Nincs a nap körében">' + o4.map(c => opt(c)).join('') + '</optgroup>' : '') + '</select>';
       return '<div class="sl-row' + (fin ? ' done' : '') + (s.booked ? '' : ' soft') + '" data-i="' + i + '">' +
         '<div class="sl-h"><b>' + esc(s.title || 'Deal #' + s.deal) + '</b><span class="sl-tags"><i>' + (s.kind === 'spin' ? '360 Spinner' : esc(sk[s.skill] || 'Szelfigép')) + '</i><i class="' + (s.bp === 0 ? 'vid' : s.bp === -1 ? 'unk' : '') + '">' + where + '</i>' + (s.time ? '<i>' + esc(s.time) + '</i>' : '<i class="unk">időpont még nincs</i>') +
         '<button type="button" class="sl-need ' + s.need + '" data-need="' + i + '" title="Automatikus a helyszín és a gép alapján – kattintva átállítható">' + needL + (s.need_set ? ' ✎' : '') + '</button>' +
-          '<span class="sl-cnt" title="Hány ember kell erre a rendezvényre (gépenként)"><button type="button" data-cnt="' + i + '" data-v="' + (cnt - 1) + '"' + (cnt <= 1 ? ' disabled' : '') + ' aria-label="Létszám csökkentése">−</button><b>' + cnt + ' fő</b><button type="button" data-cnt="' + i + '" data-v="' + (cnt + 1) + '"' + (cnt >= 20 ? ' disabled' : '') + ' aria-label="Létszám növelése">+</button></span>' +
-          (cnt > 1 || nfin ? '<i class="' + (fin ? 'ok' : 'unk') + '">' + nfin + ' / ' + cnt + ' véglegesítve</i>' : '') + (s.booked ? '' : '<i class="soft">' + esc(s.stage || 'ajánlat') + '</i>') + '</span></div>' +
-        (live.length ? '<ul class="sl-a">' + live.map(a => '<li class="' + SL_ST[a.st][1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + SL_ST[a.st][0] + '</i>' + (a.note ? ' <small>„' + esc(a.note) + '”</small>' : '') + (a.st === 'invited' ? (a.sent ? ' <small class="sl-ms ok" title="Meghívó elküldve: ' + esc(a.sent) + '">✉ elküldve</small>' : a.em ? ' <small class="sl-ms">✉ még nincs elküldve</small>' : ' <small class="sl-ms no" title="A Kezelők fülön nincs e-mail-címe – telefonon kell megkeresni">📞 nincs e-mail</small>') : '') + (a.ans ? ' <small class="sl-ms ok" title="Linkről válaszolt: ' + esc(a.ans) + '">↩ linkről</small>' : '') + '</span>' +
-          '<span class="sl-acts">' + (a.st !== 'final' ? '<button type="button" data-st="accepted" data-a="' + a.id + '" title="Telefonon / üzenetben igent mondott">Ráér</button><button type="button" data-st="declined" data-a="' + a.id + '" title="Nem ér rá">Nem</button>' + (x.can_final ? '<button type="button" class="fin" data-fin="' + a.id + '" title="Beosztás véglegesítése (Ákos)">Véglegesít</button>' : '') : '') +
-          (a.ph ? '<a href="tel:' + esc(a.ph.replace(/[^\d+]/g, '')) + '" title="Hívás">📞</a>' : '') + '<button type="button" class="x" data-del="' + a.id + '" title="Meghívás törlése" aria-label="Meghívás törlése">×</button></span></li>').join('') + '</ul>' : '') +
-        (fin ? '' : (s.can_inv ? '<button type="button" class="sl-inv" data-inv="' + i + '"' + (open[i] ? ' hidden' : '') + '>＋ Meghívás</button>' + (live.some(a => a.st === 'invited' && !a.sent && a.em) ? '<button type="button" class="sl-send" data-send="' + i + '">✉ Meghívó küldése (' + live.filter(a => a.st === 'invited' && !a.sent && a.em).length + ')</button>' : '') : '<p class="sl-wait">Meghívni a szerződés kiküldése után lehet' + (x.xmas ? '' : ' (karácsonyi időszakban már ajánlatkéréskor)') + '.</p>')) +
-        '<div class="sl-pick" data-pick="' + i + '"' + (open[i] && !fin ? '' : ' hidden') + '>' + (good.length ? good.map(cRow).join('') : '<p class="cpx-muted">Nincs a feltételeknek megfelelő szabad ember.</p>') +
-          (bad.length ? '<details><summary>Nem javasolt (' + bad.length + ')</summary>' + bad.map(cRow).join('') + '</details>' : '') +
-          '<div class="sl-pb"><button type="button" class="cpx-btn" data-go="' + i + '">Meghívás</button><button type="button" class="cpx-btn ghost" data-cancel="' + i + '">Mégse</button></div></div></div>';
-    }).join('') + (x.can_final ? '' : '<p class="sl-note">A beosztást Ákos véglegesíti.</p>');
-    /* v2.9.117: az összes el nem küldött meghívó egyszerre */
-    const unsent = []; x.slots.forEach(s => s.asg.forEach(a => { if (a.st === 'invited' && !a.sent && a.em) unsent.push(a); }));
-    if (unsent.length > 1) box.querySelector('.cpx-dsec').insertAdjacentHTML('beforeend', '<button type="button" class="sl-send all" data-sendall>✉ Minden meghívó küldése (' + unsent.length + ')</button>');
-    const act = async (p, b) => {
-      if (b) b.disabled = true;
-      try { const nx = await slotPost('cp_slot_act', Object.assign({ day: date }, p)); slotDraw(box, date, nx); slotMonthRefresh(date); if (nx.msg) setTimeout(() => alert(nx.msg), 30); }
-      catch (e) {
-        if (e.code === 'busy' && window.confirm(e.message)) return act(Object.assign({}, p, { force: 1 }), b);
-        alert(e.message); if (b) b.disabled = false;
-      }
-    };
-    const S_ = i => x.slots[Number(i)];
-    box.querySelectorAll('[data-inv]').forEach(b => b.addEventListener('click', () => { box._open = Object.assign({}, box._open, { [b.dataset.inv]: 1 }); slotDraw(box, date, x); }));
-    box.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', () => { const o = Object.assign({}, box._open); delete o[b.dataset.cancel]; box._open = o; slotDraw(box, date, x); }));
-    box.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
-      const pk = box.querySelector('[data-pick="' + b.dataset.go + '"]'), ids = Array.from(pk.querySelectorAll('input:checked')).map(c => c.value);
-      if (!ids.length) { alert('Jelölj ki legalább egy embert.'); return; }
-      const s = S_(b.dataset.go); const o = Object.assign({}, box._open); delete o[b.dataset.go]; box._open = o;
-      act({ op: 'invite', deal: s.deal, skey: s.skey, kz: ids.join(',') }, b);
-    }));
-    box.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => { const note = b.dataset.st === 'declined' ? (window.prompt('Megjegyzés (nem kötelező, pl. miért nem ér rá):', '') || '') : ''; act({ op: 'st', id: b.dataset.a, st: b.dataset.st, note: note }, b); }));
-    box.querySelectorAll('[data-fin]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Véglegesíted ezt a beosztást?\n\nA kezelő megerősítő e-mailt kap (ha van e-mail-címe), ' + (() => { const s = x.slots.find(z => z.asg.some(q => String(q.id) === b.dataset.fin)) || {}, c = s.cnt || 1, n = (s.asg || []).filter(q => q.st === 'final').length + 1; return n >= c ? 'a slot többi jelöltje „nem rá esett” lesz' + (c > 1 ? ' (betelt: ' + c + ' fő)' : '') + '.' : 'a többi jelölt marad (' + n + ' / ' + c + ' fő lesz véglegesítve).'; })())) act({ op: 'final', id: b.dataset.fin }, b); }));
-    const sendIds = (L, b) => { if (!L.length) return; if (!window.confirm('Elküldöd a meghívót e-mailben ' + L.length + ' embernek?\n\n' + L.map(a => '• ' + a.n).join('\n') + '\n\nA levélben a nap, a helyszín, az időpont és a gép szerepel (az ügyfél neve nem), és egy „Ráérek / Nem érek rá” gomb.')) return; act({ op: 'send', ids: L.map(a => a.id).join(',') }, b); };
-    box.querySelectorAll('[data-send]').forEach(b => b.addEventListener('click', () => sendIds(S_(b.dataset.send).asg.filter(a => a.st === 'invited' && !a.sent && a.em), b)));
-    const sa = box.querySelector('[data-sendall]'); if (sa) sa.addEventListener('click', () => sendIds(unsent, sa));
-    box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Törlöd ezt a meghívást?')) act({ op: 'del', id: b.dataset.del }, b); }));
-    box.querySelectorAll('[data-cnt]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.cnt); act({ op: 'cnt', deal: s.deal, skey: s.skey, v: b.dataset.v }, b); }));
-    box.querySelectorAll('[data-need]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.need); const v = s.need === 'kezelo' ? 'host' : 'kezelo'; act({ op: 'need', deal: s.deal, skey: s.skey, v: v }, b); }));
+          '<span class="sl-cnt" title="Hány ember kell erre a rendezvényre (gépenként) – extra slot nyitása"><button type="button" data-cnt="' + i + '" data-v="' + (cnt - 1) + '"' + (cnt <= 1 ? ' disabled' : '') + ' aria-label="Létszám csökkentése">−</button><b>' + cnt + ' fő</b><button type="button" data-cnt="' + i + '" data-v="' + (cnt + 1) + '"' + (cnt >= 20 ? ' disabled' : '') + ' aria-label="Létszám növelése (extra slot)">+</button></span>' +
+          '<i class="' + (fin ? 'ok' : 'unk') + '">' + nfin + ' / ' + cnt + ' kiosztva</i>' + (s.booked ? '' : '<i class="soft">' + esc(s.stage || 'ajánlat') + '</i>') + '</span></div>' +
+        (fins.length || legacy.length ? '<ul class="sl-a">' + fins.concat(legacy).map(a => '<li class="' + (SL_ST[a.st] || ['', 'inv'])[1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + (a.st === 'final' ? 'Kiosztva ✓' : (SL_ST[a.st] || [a.st])[0]) + '</i>' + (a.st === 'final' && !a.fm && a.em ? ' <small class="sl-ms">✉ levél nem ment el</small>' : '') + '</span>' +
+          '<span class="sl-acts">' + tel(a.ph) + (x.can_final || a.st !== 'final' ? '<button type="button" class="x" data-del="' + a.id + '" data-what="asg" title="Levétel a rendezvényről (vissza a nap körébe)" aria-label="Levétel a rendezvényről">×</button>' : '') + '</span></li>').join('') + '</ul>' : '') +
+        (!fin && x.can_final ? '<div class="sl-asg">' + sel + '<button type="button" class="cpx-btn" data-ago="' + i + '">Hozzárendel</button></div>' : (!fin ? '<p class="sl-wait">Még ' + (cnt - nfin) + ' ember kell – Ákos rendeli hozzá.</p>' : '')) + '</div>';
+    }).join('');
+    box.innerHTML = head + poolH + slotsH;
+    bind();
+    function bind() {
+      const act = async (p, b) => {
+        if (b) b.disabled = true;
+        try { const nx = await slotPost('cp_slot_act', Object.assign({ day: date }, p)); slotDraw(box, date, nx); slotMonthRefresh(date); if (nx.msg) setTimeout(() => alert(nx.msg), 30); }
+        catch (e) {
+          if (e.code === 'busy' && window.confirm(e.message)) return act(Object.assign({}, p, { force: 1 }), b);
+          alert(e.message); if (b) b.disabled = false;
+        }
+      };
+      const S_ = i => x.slots[Number(i)];
+      const q = sel => box.querySelector(sel);
+      const setOpen = v => { box._open = Object.assign({}, box._open, { pool: v ? 1 : 0 }); slotDraw(box, date, x); };
+      if (q('[data-pinv]')) q('[data-pinv]').addEventListener('click', () => setOpen(true));
+      if (q('[data-pcancel]')) q('[data-pcancel]').addEventListener('click', () => setOpen(false));
+      if (q('[data-pgo]')) q('[data-pgo]').addEventListener('click', e => {
+        const ids = Array.from(box.querySelectorAll('[data-ppick] input:checked')).map(c => c.value);
+        if (!ids.length) { alert('Jelölj ki legalább egy embert.'); return; }
+        box._open = Object.assign({}, box._open, { pool: 0 }); act({ op: 'dinv', kz: ids.join(',') }, e.currentTarget);
+      });
+      if (q('[data-psend]')) q('[data-psend]').addEventListener('click', e => {
+        if (!window.confirm('Elküldöd a napi meghívót e-mailben ' + unsent.length + ' embernek?\n\n' + unsent.map(a => '• ' + a.n).join('\n') + '\n\nA levélben csak a nap szerepel („Ráérsz …?”) és egy „Ráérek / Nem érek rá” gomb; a rendezvény adatait a hozzárendeléskor kapják meg.')) return;
+        act({ op: 'send', ids: unsent.map(a => a.id).join(',') }, e.currentTarget);
+      });
+      if (q('[data-drop]')) q('[data-drop]').addEventListener('click', e => {
+        if (!window.confirm('Rövid levelet küldesz ' + free.length + ' embernek, hogy erre a napra nem lesz rá szükség:\n\n' + free.map(a => '• ' + a.n).join('\n') + '\n\nA naptárbejegyzésük (ha kaptak) törlődik, és kikerülnek a nap köréből („értesítve: nem kell”).')) return;
+        act({ op: 'droprest' }, e.currentTarget);
+      });
+      box.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => { const note = b.dataset.st === 'declined' ? (window.prompt('Megjegyzés (nem kötelező, pl. miért nem ér rá):', '') || '') : ''; act({ op: 'st', id: b.dataset.a, st: b.dataset.st, note: note }, b); }));
+      box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (window.confirm(b.dataset.what === 'pool' ? 'Kiveszed őt a nap köréből?' : 'Leveszed őt erről a rendezvényről?\n\nLevelet kap, hogy a beosztása módosult; a nap körében marad (ráér).')) act({ op: 'del', id: b.dataset.del }, b); }));
+      box.querySelectorAll('[data-ago]').forEach(b => b.addEventListener('click', () => {
+        const s = S_(b.dataset.ago), v = box.querySelector('[data-asel="' + b.dataset.ago + '"]').value;
+        if (!v) { alert('Válassz embert a listából.'); return; }
+        const nm = (box.querySelector('[data-asel="' + b.dataset.ago + '"] option:checked') || {}).textContent || '';
+        if (!window.confirm('Hozzárendeled: ' + nm.replace(/ ⚠.*$/, '') + '\n→ ' + (s.title || 'Deal #' + s.deal) + '\n\nMegkapja e-mailben a rendezvény adatait (naptárbejegyzéssel).')) return;
+        act({ op: 'assign', deal: s.deal, skey: s.skey, kz: v }, b);
+      }));
+      box.querySelectorAll('[data-cnt]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.cnt); act({ op: 'cnt', deal: s.deal, skey: s.skey, v: b.dataset.v }, b); }));
+      box.querySelectorAll('[data-need]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.need); const v = s.need === 'kezelo' ? 'host' : 'kezelo'; act({ op: 'need', deal: s.deal, skey: s.skey, v: v }, b); }));
+    }
   }
   function slotMonthRefresh(date) {
     if (S.calMode === 'slot') { if (S.tab === 'naptar' && monthKey(date) === S.month && document.querySelector('.cpx-cal.slv')) render(); return; }
