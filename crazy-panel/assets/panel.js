@@ -86,6 +86,21 @@
     }
   }
 
+  /* v2.9.290: dinamikus ár – napi igazítás (ugyanaz a szabály, mint a szerveren: hét napja + utolsó gépek + last minute) */
+  function dpDay(I, date) {
+    const P = C.dp; if (!P || !P.on || date < today()) return null;
+    const dow = (parseYmd(date).getDay() + 6) % 7, L = []; let a = P.wd[dow] || 0;
+    if (a) L.push(HU_DAYS_LONG[(dow + 1) % 7].replace(/^./, c => c.toUpperCase()) + (a < 0 ? ' – gyengébb nap: ' : ' – erős nap: ') + dpFt(a));
+    const eff = I.freeS - 0.5 * I.pSelfie; let lvl = 'ok';
+    if (I.freeS <= 0) { lvl = 'full'; L.push('Betelt – alvállalkozó vagy másik nap'); }
+    else if (eff <= P.thr) { lvl = 'last'; a += P.last; L.push('Utolsó gépek: ' + dpFt(P.last)); }
+    const days = Math.round((parseYmd(date) - parseYmd(today())) / 864e5);
+    if (lvl === 'ok' && days < P.lmD && eff >= P.lmF) { a += P.lm; L.push('Last minute (' + days + ' nap): ' + dpFt(P.lm)); }
+    a = Math.max(P.min, Math.min(P.max, a));
+    return { a, lvl, tip: 'Javasolt árigazítás (belső): ' + (a ? dpFt(a) : 'alapár') + '\n' + L.join('\n') + '\nAlapár: a hónapra kiküldött ajánlatok mediánja – a deal adatlapján látszik a teljes javaslat.' };
+  }
+  const dpFt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toLocaleString('hu-HU') + ' Ft';
+  const dpChip = q => !q || (!q.a && q.lvl !== 'full') ? '' : '<span class="dpc ' + (q.lvl === 'full' ? 'full' : q.a < 0 ? 'dn' : 'up') + '" title="' + esc(q.tip) + '">' + (q.lvl === 'full' ? 'betelt' : (q.a > 0 ? '+' : '−') + Math.round(Math.abs(q.a) / 1000) + 'e') + '</span>';
   function dayInfo(m, date) {
     const c = S.cache[m];
     const ev = c ? c.events.filter(e => e.date === date) : [];
@@ -606,7 +621,7 @@
     main.innerHTML = '';
     const head = el('div', { class: 'cpx-head' });
     head.appendChild(monthNav(render));
-    head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg ok"></span>3+ szabad<span class="lg mid"></span>1–2 szabad<span class="lg full"></span>betelt<span class="lg pend"></span>függő ajánlat<span class="lg risk">!</span>több ajánlat, mint szabad gép'));
+    head.appendChild(el('div', { class: 'cpx-legend' }, '<span class="lg ok"></span>3+ szabad<span class="lg mid"></span>1–2 szabad<span class="lg full"></span>betelt<span class="lg pend"></span>függő ajánlat<span class="lg risk">!</span>több ajánlat, mint szabad gép' + (C.dp && C.dp.on ? '<span class="dpc dn" style="margin-left:10px">−10e</span><span class="dpc up">+10e</span> javasolt árigazítás (belső)' : '')));
     main.appendChild(head);
     /* v1.81: nézet (hónap / év) és szűrő (mind / kockázatos / van szabad gép) – a böngésző megjegyzi */
     const ls = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
@@ -654,7 +669,7 @@
       cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + (I.subs ? '<span class="sub" title="Alvállalkozói gép erre a napra – a szabad gépek közé beszámít">+' + I.subs + ' alv.</span>' : '') + (pend ? '<span class="pend">' + pend + '<span> ajánlat</span></span>' : '') + (risk ? '<em class="rk" aria-label="kockázat">!</em>' : '') + '</div>' +
         '<div class="big"><b>' + Math.max(0, I.freeS) + '</b><span>szabad<small> / ' + I.capS + ' szelfigép</small></span></div>' +
         '<div class="bar"><i style="width:' + pctS + '%"></i><u style="width:' + pctP + '%"></u></div>' +
-        '<div class="ft"><span class="spn' + (I.freeP <= 0 ? ' no' : '') + '">Spinner <b>' + Math.max(0, I.freeP) + '</b>/' + I.capP + '</span></div>';
+        '<div class="ft"><span class="spn' + (I.freeP <= 0 ? ' no' : '') + '">Spinner <b>' + Math.max(0, I.freeP) + '</b>/' + I.capP + '</span>' + dpChip(dpDay(I, date)) + '</div>';
       cell.addEventListener('click', () => openDay(date));
       grid.appendChild(cell);
     }
@@ -692,6 +707,7 @@
     wrap.querySelectorAll('[data-ym]').forEach(b => b.addEventListener('click', () => { S.month = b.dataset.ym; S.calView = 'month'; try { localStorage.setItem('cpx_calv', 'month'); } catch (e) { /* privát mód */ } render(); }));
   }
   const CAL2_CSS = '.cpx-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}' +
+    '.dpc{display:inline-block;font:700 10.5px Inter,sans-serif;border-radius:6px;padding:1px 6px;margin-left:6px;font-variant-numeric:tabular-nums;white-space:nowrap;vertical-align:1px}.dpc.dn{background:#E3F4E9;color:#14532D}.dpc.up{background:#FCEBCB;color:#7A4A00}.dpc.full{background:#F9D5D0;color:#8C1D18}.cpx-day .ft{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}' +
     '.cpx-week{display:flex;flex-direction:column;gap:8px}.wk-d{background:#fff;border:1.5px solid #E6E2DC;border-radius:12px;overflow:hidden}.wk-d.ok{border-color:#BFE3CB}.wk-d.mid{border-color:#F0C982}.wk-d.full{border-color:#EBA59B}.wk-d.past{opacity:.6}.wk-d.today{box-shadow:0 0 0 2.5px #141C33}.wk-d.risk{box-shadow:inset 0 0 0 2px #D97706}.wk-d.dim{opacity:.25}' +
     '.wk-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;width:100%;border:0;cursor:pointer;text-align:left;padding:9px 12px;font:inherit;color:#141C33}.wk-d.ok .wk-h{background:#E3F4E9}.wk-d.mid .wk-h{background:#FCEBCB}.wk-d.full .wk-h{background:#F9D5D0}.wk-h:focus-visible{outline:2px solid #141C33;outline-offset:-2px}' +
     '.wk-dn{font:800 15px "Plus Jakarta Sans",sans-serif}.wk-dn em{font:700 10.5px Inter,sans-serif;font-style:normal;background:#141C33;color:#fff;border-radius:999px;padding:1px 7px;margin-left:4px;vertical-align:2px}' +
@@ -788,7 +804,7 @@
       return '<section class="wk-d ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (risk ? ' risk' : '') + (dim ? ' dim' : '') + '">' +
         '<button type="button" class="wk-h" data-wd="' + date + '"><span class="wk-dn"><b>' + HU_DAYS[(wd + 6) % 7] + '</b> ' + esc(HU_MONTHS[parseYmd(date).getMonth()].slice(0, 3) + '. ' + parseYmd(date).getDate() + '.') + (date === tdy ? ' <em>ma</em>' : '') + '</span>' +
         '<span class="wk-cap"><b>' + Math.max(0, I.freeS) + '</b> szabad <small>/ ' + I.capS + '</small> · Spinner <b class="' + (I.freeP <= 0 ? 'no' : '') + '">' + Math.max(0, I.freeP) + '</b><small>/' + I.capP + '</small>' +
-        (I.pSelfie + I.pSpin ? ' <span class="pend">' + (I.pSelfie + I.pSpin) + ' függő</span>' : '') + (risk ? ' <span class="wk-rk" title="Több függő ajánlat, mint szabad gép">!</span>' : '') + (sm && sm[0] ? ' <span class="sl-mk ' + (sm[1] >= sm[0] ? 'ok' : sm[1] + sm[2] > 0 ? 'mid' : 'no') + '" title="Beosztás: véglegesítve / slot">👤 ' + sm[1] + '/' + sm[0] + '</span>' : '') + '</span></button>' +
+        (I.pSelfie + I.pSpin ? ' <span class="pend">' + (I.pSelfie + I.pSpin) + ' függő</span>' : '') + dpChip(dpDay(I, date)) + (risk ? ' <span class="wk-rk" title="Több függő ajánlat, mint szabad gép">!</span>' : '') + (sm && sm[0] ? ' <span class="sl-mk ' + (sm[1] >= sm[0] ? 'ok' : sm[1] + sm[2] > 0 ? 'mid' : 'no') + '" title="Beosztás: véglegesítve / slot">👤 ' + sm[1] + '/' + sm[0] + '</span>' : '') + '</span></button>' +
         (ev.length ? '<ul class="wk-ev">' + ev.map(e => '<li class="' + e.state + '"' + (Number(dealOf(e)) > 0 && window.CPCrm && window.CPCrm.open ? ' data-wdeal="' + Number(dealOf(e)) + '" tabindex="0" role="button"' : '') + '><span class="wk-t">' + esc(e.time || '–') + '</span><span class="wk-tt"><b>' + esc(e.title || 'Deal #' + dealOf(e)) + '</b><small>' + esc([kindLabel(e), e.loc].filter(Boolean).join(' · ')) + '</small></span>' + stateBadge(e) + '</li>').join('') + '</ul>' : '<p class="wk-0">Nincs rendezvény</p>') +
         '</section>';
     }).join('');

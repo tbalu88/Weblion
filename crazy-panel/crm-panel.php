@@ -304,6 +304,8 @@ function cp_crm_deal_data($id) {
 		/* v2.9.70: többnaposnál a legszűkebb nap (a dupla foglalás minden napot figyel) */
 		$k = $mdays ? cp_mday_cap_worst(wp_list_pluck($mdays, 'day')) : cp_cap_day($deal['event_d']);
 		if ($k) { $deal['cap'] = $k; }
+		/* v2.9.290: dinamikus árjavaslat (belső) */
+		if (function_exists('cp_dp_quote') && $deal['event_d'] >= wp_date('Y-m-d')) { $q = cp_dp_quote($deal); if ($q) { $deal['dp'] = $q; } }
 	}
 	$deal['owner'] = cp_crm_user_name($deal['owner_id']);
 	$deal['created_by_n'] = cp_crm_user_name($deal['created_by']);

@@ -951,3 +951,18 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .bt-ev{list-style:none;margin:0;padding:0;max-height:46vh;overflow:auto}.bt-ev li{display:grid;grid-template-columns:3.2em minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid #EFEAE2;font-size:14px}
 .bt-ev time{font-variant-numeric:tabular-nums;color:#5B6275}.bt-ev b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.bt-ev span{grid-column:2;overflow-wrap:anywhere}
 .bt-ev .bt-e-err span,.bt-ev .bt-e-cam_off span{color:#B3261E}.bt-ev .bt-e-start span,.bt-ev .bt-e-cam_on span{color:#1E7A3A}
+
+/* v2.9.290: dinamikus árjavaslat a deal adatlapon */
+.d3-dp{margin-top:10px;border:1px solid #E6E3DE;border-radius:12px;background:#FBFAF7;font-size:13px}
+.d3-dp summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;padding:9px 12px;cursor:pointer;list-style:none}
+.d3-dp summary::-webkit-details-marker{display:none}
+.d3-dp summary span{font-weight:600;color:#656973;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.d3-dp summary b{font-size:16px;font-variant-numeric:tabular-nums;color:#141C33}
+.d3-dp summary small{color:#656973;width:100%}
+.d3-dp.last summary b{color:#9A5B00}.d3-dp.full summary b{color:#B3261E}
+.d3-dp ul{list-style:none;margin:0;padding:0 12px}
+.d3-dp li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid #EFECE6}
+.d3-dp li span{min-width:0;overflow-wrap:anywhere}.d3-dp li b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.d3-dp li.adj span{color:#3B4256}
+.d3-dp p{margin:6px 12px 10px;color:#656973;font-size:12px}
+.crm-dpq{grid-column:1/-1;background:#FBFAF7;border:1px solid #E6E3DE;border-radius:10px;padding:8px 10px;font-size:13px}.crm-dpq small{color:#656973}.crm-dpq>small{display:block;margin-top:3px;overflow-wrap:anywhere}.crm-dpq .ml-link{margin-top:4px;padding:0}

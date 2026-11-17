@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.289');
+define('CP_PANEL_VER', '2.9.291');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -808,6 +808,7 @@ function cp_panel_render_app() {
 		'gal'        => function_exists('cp_booth_ajax_gal_list') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.255: Galériák gyűjtőoldal */
 		'aic'        => function_exists('cp_booth_ajax_ai_credit') && cp_panel_can_x('aikredit') ? 1 : 0, /* v2.9.287: AI-kredit (Eszközök) */
 		'wh'         => function_exists('cp_wh_ajax_data') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.259: Raktár */
+		'dp'         => function_exists('cp_dp_cfg') && cp_panel_can_x('naptar') ? cp_dp_cfg() : array('on' => 0), /* v2.9.290: dinamikus ár – napi címkék */
 		'slot'       => function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t') && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.115: beosztás a Kapacitás napjain */
 		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
@@ -3820,6 +3821,7 @@ require_once __DIR__ . '/sm-local.php';
 require_once __DIR__ . '/gdrive-backup.php';
 require_once __DIR__ . '/worklog.php';
 require_once __DIR__ . '/capacity.php';
+require_once __DIR__ . '/dynprice.php'; /* v2.9.290: dinamikus árjavaslat */
 require_once __DIR__ . '/portal-link.php';
 require_once __DIR__ . '/dashboard.php';
 require_once __DIR__ . '/gcal.php';
