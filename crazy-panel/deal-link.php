@@ -247,8 +247,18 @@ function cp_dl_choose(array $ids, array $dates, $at, $ctx, $domain = false) {
 	}
 	if (count($open) === 1) { return array('deal' => $open[0], 'amb' => false, 'cands' => $ids, 'one' => 1); }
 	if (count($open) > 1 || $domain) { return array('deal' => 0, 'amb' => count($open) > 1, 'cands' => $ids); }
-	/* nincs nyitott: a levél idejéhez legközelebb létrehozott (mint eddig a cp_imp_pick_deal) */
-	$ref = strtotime($at . ' UTC') ?: time();
+	/* v2.9.294: nyitott deal nélkül lezárt dealhez csak akkor kötünk, ha a levél még hozzá tartozhat: a tárgyban nincs más
+	   (egyik dealhez sem illő) rendezvénydátum – az új ajánlatkérés –, és a deal rendezvénye még előttünk van, vagy legfeljebb
+	   45 napja volt / zárult le (utóügy: számla, képek, köszönet). Különben nincs automatikus kötés (új dealt kell nyitni). */
+	if ($dates) { return array('deal' => 0, 'amb' => false, 'cands' => $ids, 'new' => 1); }
+	$ref = strtotime($at . ' UTC') ?: time(); $all = $ids;
+	$ids = array_values(array_filter($ids, function ($i) use ($ctx, $ref) {
+		$d = $ctx['deals'][$i]; $ev = $d['ev'] !== '' ? strtotime(substr($d['ev'], 0, 10) . ' 23:59:59 UTC') : 0; $cl = $d['cl'] !== '' ? strtotime($d['cl'] . ' UTC') : 0;
+		$last = max($ev ?: 0, $cl ?: 0, $ev || $cl ? 0 : (strtotime($d['cr'] . ' UTC') ?: 0));
+		return $last && $ref <= $last + 45 * DAY_IN_SECONDS;
+	}));
+	if (!$ids) { return array('deal' => 0, 'amb' => false, 'cands' => $all, 'new' => 1); }
+	/* a megmaradtak közül a levél idejéhez legközelebb létrehozott (mint eddig a cp_imp_pick_deal) */
 	usort($ids, function ($a, $b) use ($ctx, $ref) { return abs((strtotime($ctx['deals'][$a]['cr'] . ' UTC') ?: 0) - $ref) <=> abs((strtotime($ctx['deals'][$b]['cr'] . ' UTC') ?: 0) - $ref); });
 	return array('deal' => $ids[0], 'amb' => false, 'cands' => $ids);
 }
