@@ -76,6 +76,19 @@ function cp_slot_pool_migrate() {
 }
 add_action('init', function () { if (cp_slot_db_ok() && !get_option('cp_slot_pool_v1')) { cp_slot_pool_migrate(); } }, 20);
 
+/* v2.9.300: közvetlen rendezvény-meghívás elfogadásakor az ember a nap körébe is bekerül (ráér) – ugyanazzal a naptárbejegyzéssel */
+function cp_slot_pool_join($aid) {
+	global $wpdb; $T = cp_slot_t();
+	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", (int) $aid), ARRAY_A);
+	if (!$r || (int) $r['deal_id'] === 0) { return; }
+	$p = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE deal_id = 0 AND day = %s AND kz_id = %d AND status <> 'dropped' LIMIT 1", $r['day'], (int) $r['kz_id']), ARRAY_A);
+	$now = gmdate('Y-m-d H:i:s');
+	if ($p) { if ($p['status'] !== 'accepted') { $wpdb->update($T, array('status' => 'accepted', 'updated_at' => $now), array('id' => (int) $p['id'])); } return; }
+	$wpdb->insert($T, array('deal_id' => 0, 'day' => $r['day'], 'skey' => '', 'kz_id' => (int) $r['kz_id'], 'status' => 'accepted', 'tok' => substr(bin2hex(random_bytes(12)), 0, 24), 'note' => 'rendezvény-meghívásból', 'by_name' => (string) $r['by_name'], 'inv_uid' => (int) $r['inv_uid'], 'ans_at' => $r['ans_at'], 'created_at' => $now, 'updated_at' => $now));
+	$pid = (int) $wpdb->insert_id;
+	if ($pid && cp_slot_ics_sent((int) $r['id'])) { cp_slot_uid_link($pid, cp_slot_ics_uid($r)); cp_slot_ics_sent($pid, true); }
+}
+
 function cp_slot_states() { return array('invited' => 'Meghívva', 'accepted' => 'Ráér', 'declined' => 'Nem ér rá', 'final' => 'Véglegesítve', 'dropped' => 'Nem rá esett'); }
 /* a karácsonyi időszak (ilyenkor már ajánlatkérés után is meghívható) – HH-NN tól-ig, beállítható */
 function cp_slot_opts() { $o = get_option('cp_slot_opts', array()); return array_merge(array('xmas_from' => '11-15', 'xmas_to' => '12-31'), is_array($o) ? $o : array()); }
@@ -292,7 +305,8 @@ function cp_slot_ajax_act() {
 			/* v2.9.298: a napi körből csak az vehető ki, akit aznap nem rendeltünk rendezvényhez */
 			if ((int) $r['deal_id'] === 0 && $wpdb->get_var($wpdb->prepare("SELECT id FROM $T WHERE kz_id = %d AND day = %s AND deal_id > 0 AND status = 'final' LIMIT 1", (int) $r['kz_id'], $day))) { cp_el_err('Őt erre a napra már rendezvényhez rendelted – előbb vedd le onnan (×).'); }
 			$pid = (int) $r['deal_id'] > 0 ? (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $T WHERE kz_id = %d AND day = %s AND deal_id = 0 AND status IN ('accepted','invited') LIMIT 1", (int) $r['kz_id'], $day)) : 0;
-			if ($pid && cp_slot_uid_shared($id)) {
+			$shared = cp_slot_uid_shared($id) || ($pid && (cp_slot_uid_map()[$pid] ?? '') === cp_slot_ics_uid($r)); /* v2.9.300: a nap köre a rendezvény-meghívás bejegyzését vette át */
+			if ($pid && $shared) {
 				/* a naptárbejegyzés közös a napi körrel: nem lemondás, hanem visszaáll „foglalt nap”-ra, és levél, hogy a beosztás módosult */
 				cp_slot_mail($pid, 'back'); cp_slot_ics_sent($id, false);
 			} else { cp_slot_ics_cancel($id); } /* v2.9.162: ha kapott naptárbejegyzést, lemondás */
@@ -327,7 +341,7 @@ function cp_slot_ajax_act() {
 			$wpdb->update($T, array('status' => $st, 'note' => $note !== '' ? $note : $r['note'], 'by_name' => $who, 'updated_at' => $now), array('id' => $id));
 			$log = cp_slot_states()[$st];
 			/* v2.9.162: „Ráér” → naptárbejegyzés a kezelőnek; ha visszavonják, lemondás */
-			if ($st === 'accepted' && $r['status'] !== 'accepted') { $cm = cp_slot_mail($id, 'accepted'); if ($cm === true) { $log .= ' (naptárbejegyzés elküldve)'; } }
+			if ($st === 'accepted' && $r['status'] !== 'accepted') { $cm = cp_slot_mail($id, 'accepted'); if ($cm === true) { $log .= ' (naptárbejegyzés elküldve)'; } if ((int) $r['deal_id'] > 0) { cp_slot_pool_join($id); } }
 			elseif ($st !== 'accepted' && in_array($r['status'], array('accepted', 'final'), true)) { cp_slot_ics_cancel($id); }
 		}
 		$deal = (int) $r['deal_id'];
@@ -595,7 +609,7 @@ add_action('init', function () {
 			$note = mb_substr(sanitize_text_field(wp_unslash($_POST['note'] ?? '')), 0, 255);
 			$wpdb->update(cp_slot_t(), array('status' => $ns, 'note' => $note, 'ans_at' => gmdate('Y-m-d H:i:s'), 'updated_at' => gmdate('Y-m-d H:i:s')), array('id' => (int) $x['r']['id']));
 			/* v2.9.162: elfogadáskor naptárbejegyzés e-mailben; ha visszavonja, lemondás */
-			if ($ns === 'accepted' && $st !== 'accepted') { cp_slot_mail((int) $x['r']['id'], 'accepted'); }
+			if ($ns === 'accepted' && $st !== 'accepted') { cp_slot_mail((int) $x['r']['id'], 'accepted'); if ((int) $x['r']['deal_id'] > 0) { cp_slot_pool_join((int) $x['r']['id']); } }
 			elseif ($ns === 'declined' && $st === 'accepted') { cp_slot_ics_cancel((int) $x['r']['id']); }
 			/* értesítés: aki meghívta + Ákos */
 			if (function_exists('cp_notify')) {

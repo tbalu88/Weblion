@@ -994,9 +994,20 @@
         '<button type="button" class="sl-need ' + s.need + '" data-need="' + i + '" title="Automatikus a helyszín és a gép alapján – kattintva átállítható">' + needL + (s.need_set ? ' ✎' : '') + '</button>' +
           '<span class="sl-cnt" title="Hány ember kell erre a rendezvényre (gépenként) – extra slot nyitása"><button type="button" data-cnt="' + i + '" data-v="' + (cnt - 1) + '"' + (cnt <= 1 ? ' disabled' : '') + ' aria-label="Létszám csökkentése">−</button><b>' + cnt + ' fő</b><button type="button" data-cnt="' + i + '" data-v="' + (cnt + 1) + '"' + (cnt >= 20 ? ' disabled' : '') + ' aria-label="Létszám növelése (extra slot)">+</button></span>' +
           '<i class="' + (fin ? 'ok' : 'unk') + '">' + nfin + ' / ' + cnt + ' kiosztva</i>' + (s.booked ? '' : '<i class="soft">' + esc(s.stage || 'ajánlat') + '</i>') + '</span></div>' +
-        (fins.length || legacy.length ? '<ul class="sl-a">' + fins.concat(legacy).map(a => '<li class="' + (SL_ST[a.st] || ['', 'inv'])[1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + (a.st === 'final' ? 'Kiosztva ✓' : (SL_ST[a.st] || [a.st])[0]) + '</i>' + (a.st === 'final' && !a.fm && a.em ? ' <small class="sl-ms">✉ levél nem ment el</small>' : '') + '</span>' +
-          '<span class="sl-acts">' + tel(a.ph) + (x.can_final || a.st !== 'final' ? '<button type="button" class="x" data-del="' + a.id + '" data-what="asg" title="Levétel a rendezvényről (vissza a nap körébe)" aria-label="Levétel a rendezvényről">×</button>' : '') + '</span></li>').join('') + '</ul>' : '') +
-        (!fin && x.can_final ? '<div class="sl-asg">' + sel + '<button type="button" class="cpx-btn" data-ago="' + i + '">Hozzárendel</button></div>' : (!fin ? '<p class="sl-wait">Még ' + (cnt - nfin) + ' ember kell – Ákos rendeli hozzá.</p>' : '')) + '</div>';
+        (fins.length || legacy.length ? '<ul class="sl-a">' + fins.concat(legacy).map(a => '<li class="' + (SL_ST[a.st] || ['', 'inv'])[1] + '"><span><b>' + esc(a.n) + '</b> <i class="sl-st">' + (a.st === 'final' ? 'Kiosztva ✓' : a.st === 'invited' ? 'Meghívva erre a rendezvényre' : (SL_ST[a.st] || [a.st])[0]) + '</i>' + (a.st === 'final' && !a.fm && a.em ? ' <small class="sl-ms">✉ levél nem ment el</small>' : '') +
+          (a.st === 'invited' ? (a.sent ? ' <small class="sl-ms ok" title="Meghívó elküldve: ' + esc(a.sent) + '">✉ elküldve</small>' : a.em ? ' <small class="sl-ms">✉ még nincs elküldve</small>' : ' <small class="sl-ms no">📞 nincs e-mail</small>') : '') + (a.ans ? ' <small class="sl-ms ok" title="Linkről válaszolt: ' + esc(a.ans) + '">↩ linkről</small>' : '') + (a.note ? ' <small>„' + esc(a.note) + '”</small>' : '') + '</span>' +
+          '<span class="sl-acts">' + (a.st !== 'final' ? (a.st !== 'accepted' ? '<button type="button" class="yes" data-st="accepted" data-a="' + a.id + '" title="Telefonon / üzenetben igent mondott">✓ Ráér</button>' : '') + (a.st !== 'declined' ? '<button type="button" class="no" data-st="declined" data-a="' + a.id + '" title="Nem ér rá">Nem ér rá</button>' : '') + (x.can_final && a.st === 'accepted' ? '<button type="button" class="fin" data-fin="' + a.id + '" title="Véglegesítés: a rendezvényre ő megy">Véglegesít</button>' : '') : '') +
+          tel(a.ph) + (x.can_final || a.st !== 'final' ? '<button type="button" class="x" data-del="' + a.id + '" data-what="' + (a.st === 'final' ? 'asg' : 'einv') + '" title="' + (a.st === 'final' ? 'Levétel a rendezvényről (vissza a nap körébe)' : 'Meghívás törlése') + '" aria-label="Törlés">×</button>' : '') + '</span></li>').join('') + '</ul>' : '') +
+        (!fin && x.can_final ? '<div class="sl-asg">' + sel + '<button type="button" class="cpx-btn" data-ago="' + i + '">Hozzárendel</button></div>' : (!fin ? '<p class="sl-wait">Még ' + (cnt - nfin) + ' ember kell – Ákos rendeli hozzá.</p>' : '')) +
+        /* v2.9.300: közvetlen meghívás erre a rendezvényre – a levélben az időpont, a helyszín és a gép */
+        (!fin ? '<div class="sl-pbar"><button type="button" class="sl-inv" data-einv="' + i + '"' + (open['e' + i] ? ' hidden' : '') + '>＋ Meghívás erre a rendezvényre</button>' +
+          (legacy.some(a => a.st === 'invited' && !a.sent && a.em) ? '<button type="button" class="sl-send" data-esend="' + i + '">✉ Meghívó küldése (' + legacy.filter(a => a.st === 'invited' && !a.sent && a.em).length + ')</button>' : '') + '</div>' +
+          '<div class="sl-pick" data-epick="' + i + '"' + (open['e' + i] ? '' : ' hidden') + '>' + (s.can_inv ? '' : '<p class="sl-wait">Rendezvényre közvetlenül a szerződés kiküldése után lehet meghívni (karácsonyi időszakban már ajánlatkéréskor) – addig használd a napi meghívást.</p>') +
+          (!s.time || s.bp === -1 ? '<p class="sl-wait">' + (!s.time ? 'Az időpont még nincs megadva' : 'A helyszín még nincs megadva') + ' – a levélben „még egyeztetés alatt” szerepel.</p>' : '') +
+          (() => { const onSlot = new Set(s.asg.filter(a => a.st !== 'dropped' && a.st !== 'declined').map(a => a.kz)); const L = x.cands.filter(c => !onSlot.has(c.id)); const g = L.filter(c => !fit(s, c).length), bd = L.filter(c => fit(s, c).length);
+            const r = c => { const w = fit(s, c); return '<label class="sl-c' + (w.length ? ' bad' : '') + '"><input type="checkbox" value="' + c.id + '"><span><b>' + esc(c.n) + '</b> ' + kindI(c.kind) + (c.car ? ' 🚗' : '') + (w.length ? '<small>' + esc(w.join(' · ')) + '</small>' : '') + '</span>' + tel(c.ph) + '</label>'; };
+            return (g.length ? g.map(r).join('') : '<p class="cpx-muted">Nincs a feltételeknek megfelelő ember.</p>') + (bd.length ? '<details><summary>Nem javasolt (' + bd.length + ')</summary>' + bd.map(r).join('') + '</details>' : ''); })() +
+          '<div class="sl-pb"><button type="button" class="cpx-btn" data-ego="' + i + '"' + (s.can_inv ? '' : ' disabled') + '>Meghívás a rendezvényre</button><button type="button" class="cpx-btn ghost" data-ecancel="' + i + '">Mégse</button></div></div>' : '') + '</div>';
     }).join('');
     box.innerHTML = head + poolH + slotsH;
     bind();
@@ -1028,7 +1039,7 @@
         act({ op: 'droprest' }, e.currentTarget);
       });
       box.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => { const note = b.dataset.st === 'declined' ? (window.prompt('Megjegyzés (nem kötelező, pl. miért nem ér rá):', '') || '') : ''; act({ op: 'st', id: b.dataset.a, st: b.dataset.st, note: note }, b); }));
-      box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (window.confirm(b.dataset.what === 'pool' ? 'Kiveszed őt a nap köréből?' : 'Leveszed őt erről a rendezvényről?\n\nLevelet kap, hogy a beosztása módosult; a nap körében marad (ráér).')) act({ op: 'del', id: b.dataset.del }, b); }));
+      box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (window.confirm(b.dataset.what === 'pool' ? 'Kiveszed őt a nap köréből?' : b.dataset.what === 'einv' ? 'Törlöd ezt a rendezvény-meghívást?' : 'Leveszed őt erről a rendezvényről?\n\nLevelet kap, hogy a beosztása módosult; a nap körében marad (ráér).')) act({ op: 'del', id: b.dataset.del }, b); }));
       box.querySelectorAll('[data-ago]').forEach(b => b.addEventListener('click', () => {
         const s = S_(b.dataset.ago), v = box.querySelector('[data-asel="' + b.dataset.ago + '"]').value;
         if (!v) { alert('Válassz embert a listából.'); return; }
@@ -1037,6 +1048,22 @@
         act({ op: 'assign', deal: s.deal, skey: s.skey, kz: v }, b);
       }));
       box.querySelectorAll('[data-cnt]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.cnt); act({ op: 'cnt', deal: s.deal, skey: s.skey, v: b.dataset.v }, b); }));
+      /* v2.9.300: közvetlen rendezvény-meghívás */
+      const eo = (i, v) => { const o = Object.assign({}, box._open); if (v) o['e' + i] = 1; else delete o['e' + i]; box._open = o; slotDraw(box, date, x); };
+      box.querySelectorAll('[data-einv]').forEach(b => b.addEventListener('click', () => eo(b.dataset.einv, true)));
+      box.querySelectorAll('[data-ecancel]').forEach(b => b.addEventListener('click', () => eo(b.dataset.ecancel, false)));
+      box.querySelectorAll('[data-ego]').forEach(b => b.addEventListener('click', () => {
+        const ids = Array.from(box.querySelectorAll('[data-epick="' + b.dataset.ego + '"] input:checked')).map(c => c.value);
+        if (!ids.length) { alert('Jelölj ki legalább egy embert.'); return; }
+        const s = S_(b.dataset.ego); const o = Object.assign({}, box._open); delete o['e' + b.dataset.ego]; box._open = o;
+        act({ op: 'invite', deal: s.deal, skey: s.skey, kz: ids.join(',') }, b);
+      }));
+      box.querySelectorAll('[data-esend]').forEach(b => b.addEventListener('click', () => {
+        const s = S_(b.dataset.esend), L = s.asg.filter(a => a.st === 'invited' && !a.sent && a.em);
+        if (!window.confirm('Elküldöd a rendezvény-meghívót e-mailben ' + L.length + ' embernek?\n\n' + L.map(a => '• ' + a.n).join('\n') + '\n\nA levélben a nap, az időpont, a helyszín és a gép szerepel (az ügyfél neve nem), és egy „Ráérek / Nem érek rá” gomb.')) return;
+        act({ op: 'send', ids: L.map(a => a.id).join(',') }, b);
+      }));
+      box.querySelectorAll('[data-fin]').forEach(b => b.addEventListener('click', () => { if (window.confirm('Véglegesíted? Ő megy erre a rendezvényre.\n\nMegerősítő e-mailt kap a rendezvény adataival (naptárbejegyzéssel).')) act({ op: 'final', id: b.dataset.fin }, b); }));
       box.querySelectorAll('[data-need]').forEach(b => b.addEventListener('click', () => { const s = S_(b.dataset.need); const v = s.need === 'kezelo' ? 'host' : 'kezelo'; act({ op: 'need', deal: s.deal, skey: s.skey, v: v }, b); }));
     }
   }
