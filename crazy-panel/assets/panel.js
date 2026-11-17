@@ -2967,11 +2967,11 @@ function elCsv() {
 			note.innerHTML = nh;
 
 			const al = d.aam || [];
-			aam.innerHTML = '<h3>Kezelőknél lévő AAM-befizetések <small class="cpx-muted">(Salesmate: ' + (d.aamMode === 'loose' ? 'EV, helyszíni készpénz vagy üres fizetési mód' : 'EV + helyszínen készpénz') + ', ' + esc(String(d.aamFrom || '').replace(/-/g, '.')) + '. óta: ' + (+d.aamTotal || 0) + ' deal, ebből ' + Math.max(0, (+d.aamTotal || 0) - al.length) + ' már rendezve)</small></h3>' +
+			aam.innerHTML = '<h3>Kezelőknél lévő AAM- és KFT KP-befizetések <small class="cpx-muted">(Salesmate: ' + (d.aamMode === 'loose' ? 'EV, helyszíni készpénz vagy üres fizetési mód; KFT + helyszíni készpénz' : 'EV vagy KFT + helyszínen készpénz') + ', ' + esc(String(d.aamFrom || '').replace(/-/g, '.')) + '. óta: ' + (+d.aamTotal || 0) + ' deal, ebből ' + Math.max(0, (+d.aamTotal || 0) - al.length) + ' már rendezve)</small></h3>' +
 				(al.length ? '<div class="tw-aamwrap"><table class="el-t tw-at"><thead><tr><th>Dátum</th><th>Ügyfél</th><th>Kezelő</th><th class="r">Csomag</th><th class="r">Kiszállás</th><th class="r">Várható</th><th></th></tr></thead><tbody>' +
 					al.map((a, n) => {
 						const kz = kezBySm(a.gk);
-						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="' + esc(C.sm + a.id + '/detail') + '" target="_blank" rel="noopener">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
+						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="' + esc(C.sm + a.id + '/detail') + '" target="_blank" rel="noopener">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + (a.ct === 'KFT' ? '<small class="tw-pm" style="background:#E7F1FB;color:#1D4E89" title="KFT, helyszíni készpénz – az összeg bruttó (nettó ' + ft(a.net || 0) + ' + 27% ÁFA)">KFT KP · bruttó</small>' : '') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
 							'<td class="r">' + ft(a.val) + '</td><td class="r">' + (a.kd ? ft(a.kd) : '–') + '</td><td class="r"><b>' + ft(a.val + a.kd) + '</b></td>' +
 							'<td class="tw-acts"><button class="cpx-btn sm" data-aam="' + n + '">Tárcába került ✓</button> <button class="cpx-btn ghost sm" data-skip="' + n + '" title="Kivétel a listából (pl. mégsem készpénzben fizetett)">Nem kell</button></td></tr>';
 					}).join('') + '</tbody></table></div>'

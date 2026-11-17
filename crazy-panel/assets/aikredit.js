@@ -24,6 +24,7 @@
 		'.ai-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.ai-act a,.ai-act button{min-height:40px;display:inline-flex;align-items:center;text-decoration:none}' +
 		'.ai-m{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.ai-m div{background:#fff;border:1px solid var(--li,#E6E2DA);border-radius:12px;padding:12px}.ai-m b{display:block;font:700 20px Inter,sans-serif;font-variant-numeric:tabular-nums}.ai-m span{font-size:12.5px;color:var(--mu,#6B6B6B)}' +
 		'.ai-how{margin-top:18px;font-size:14px;line-height:1.55;color:#333}.ai-how ol{padding-left:20px;margin:6px 0 0}.ai-t{font-size:12.5px;color:var(--mu,#6B6B6B);margin-top:10px}' +
+		'.ai-mon{margin-top:18px;padding:12px 14px;border:1px solid var(--li,#E6E2DA);border-radius:12px;background:#fff;display:flex;flex-direction:column;gap:3px;font-size:13.5px}.ai-mon .ok{color:#17663A;font-weight:600}.ai-mon .bad{color:#B3261E;font-weight:700}.ai-mon small{color:var(--mu,#6B6B6B)}' +
 		'@media (max-width:520px){.ai-bal{font-size:34px}.ai-m{grid-template-columns:1fr 1fr}.ai-m div:last-child{grid-column:1/-1}.ai-act a,.ai-act button{flex:1 1 auto;justify-content:center}}';
 	function css() { if (document.getElementById('ai-css')) return; const st = document.createElement('style'); st.id = 'ai-css'; st.textContent = CSS; document.head.appendChild(st); }
 	function draw() {
@@ -32,10 +33,11 @@
 		let h = '<div class="ai-w"><h2>AI-kredit</h2><p class="ai-sub">Az AI-képek (karikatúra, magazinborító és társai) az OpenRouter-fiók kreditjéből készülnek. A feltöltés és a fizetés az OpenRouter oldalán történik.</p>';
 		if (S.err && !d) h += '<div class="cpx-empty err">' + esc(S.err) + '</div>';
 		else if (!d) h += '<div class="cpx-empty">Betöltés…</div>';
+		else if (d.down) h += '<div class="ai-card"><b>A tartalék szerver most nem érhető el</b> – az egyenleg nem kérdezhető le, és az online galériák, AI-képek sem működnek.<p class="ai-est">Teendő: RackForest ügyfélkapu → a VPS újraindítása. (' + esc(d.err || '') + ')</p></div>';
 		else if (!d.has_key) h += '<div class="ai-card"><b>Nincs beállítva AI-kulcs</b> – az AI-képek most nem készülnek.<p class="ai-est">A kulcsot a WordPress adminban, a „Crazy Booth gépek” oldalon lehet megadni.</p><div class="ai-act">' + (d.admin ? '<a class="cpx-btn ghost" href="' + esc(d.admin) + '" target="_blank" rel="noopener">Beállítás ↗</a>' : '') + '</div></div>';
 		else {
 			const c = d.credits || {}, b = c.bal, pr = PRICE[d.model] || 0.06, mo = d.month || {};
-			const lvl = b == null ? '' : b < 5 ? 'low' : b < 15 ? 'mid' : '';
+			const thr = (d.mon && d.mon.thr) || 10, lvl = b == null ? '' : b < thr ? 'low' : b < thr * 2 ? 'mid' : '';
 			h += '<div class="ai-card"><div class="ai-lbl">Egyenleg</div>' +
 				(b == null ? '<div class="ai-bal">–</div><div class="ai-est">Az egyenleg ezzel a kulccsal nem kérdezhető le – az OpenRouteren látszik.</div>'
 					: '<div class="ai-bal ' + lvl + '">' + usd(b) + '</div><div class="ai-est">kb. ' + Math.max(0, Math.floor(b / pr)).toLocaleString('hu-HU') + ' AI-kép a jelenlegi modellel (~' + pr.toLocaleString('hu-HU', { maximumFractionDigits: 3 }) + ' $ / kép)' + (c.src === 'key' ? ' · a kulcs saját kerete' : '') + '</div>') +
@@ -45,6 +47,9 @@
 				'<div class="ai-m"><div><b>' + Number(mo.n || 0).toLocaleString('hu-HU') + '</b><span>AI-kép ebben a hónapban</span></div><div><b>' + usd(mo.cost || 0) + '</b><span>költség ebben a hónapban</span></div><div><b>' + Number(mo.err || 0).toLocaleString('hu-HU') + '</b><span>sikertelen kérés</span></div></div>' +
 				'<div class="ai-how"><b>Feltöltés lépésről lépésre</b><ol><li>Kattints a „Kredit feltöltése” gombra – az OpenRouter oldala nyílik meg.</li><li>Lépj be az OpenRouter-fiókba (a cég fiókja).</li><li>„Add Credits” → összeg → fizetés kártyával.</li><li>Gyere vissza, és nyomd meg a „Frissítés” gombot – az új egyenleg pár másodperc múlva itt látszik.</li></ol></div>';
 		}
+		/* v2.9.305: figyelő állapota (M1 / M7) */
+		if (d && d.mon) { const M = d.mon, ago = M.srv_at ? Math.max(0, Math.round((Date.now() / 1000 - M.srv_at) / 60)) : null;
+			h += '<div class="ai-mon"><b>Figyelő</b><span class="' + (M.srv_ok ? 'ok' : 'bad') + '">' + (M.srv_ok ? '● Tartalék szerver (galéria, AI, mobil app): elérhető' : '● Tartalék szerver: NEM ÉRHETŐ EL' + (M.srv_err ? ' (' + esc(M.srv_err) + ')' : '')) + '</span><small>' + (ago === null ? 'még nem futott' : 'utolsó ellenőrzés: ' + (ago < 1 ? 'most' : ago + ' perce')) + ' · 5 percenként · riasztás 10 perc kiesés után, és ha az AI-kredit ' + M.thr + ' $ alá esik. A csatornák: Beállítások → Értesítések.</small></div>'; }
 		m.innerHTML = h + '</div>';
 		const f = m.querySelector('[data-aif]'); if (f) f.addEventListener('click', () => load(true));
 	}

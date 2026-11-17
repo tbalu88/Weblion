@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.303');
+define('CP_PANEL_VER', '2.9.305');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3852,6 +3852,8 @@ function cp_tw_defaults() {
 		'pay_val'  => 'Helyszínen készpénz',
 		'f_ev'     => 'textCustomField11',
 		'ev_val'   => 'EV',
+		'kft_val'  => 'KFT', /* v2.9.304: a KFT + helyszíni készpénz („KFT KP”) dealek is a tárcába jönnek – bruttóban */
+		'kft_on'   => 1,
 		'aam_from' => '2026-09-01',
 		'aam_mode' => 'strict',
 		'aam_skip' => array(),
@@ -4057,7 +4059,7 @@ function cp_tw_aam_deals($o, $force) {
 	if ($e['f_gk'] !== '') { $fields[] = 'deal.' . $e['f_gk']; }
 	$fields = array_values(array_unique($fields));
 	// a cp_panel_d_ előtag miatt a panel gyorsítótár-ürítése ezt is törli
-	$ck = 'cp_panel_d_tw' . md5('v2|' . $from . $to . wp_json_encode($fields) . $o['pay_val'] . '|' . $o['ev_val']);
+	$ck = 'cp_panel_d_tw' . md5('v4|' . (string) ($o['kft_on'] ?? 1) . '|' . $from . $to . wp_json_encode($fields) . $o['pay_val'] . '|' . $o['ev_val']);
 	$c = $force ? false : get_transient($ck);
 	if (!is_array($c) || !isset($c['loose'])) {
 		$info = null;
@@ -4068,22 +4070,27 @@ function cp_tw_aam_deals($o, $force) {
 		$stats = array();
 		$seen = array();
 		$pv = cp_panel_lc($o['pay_val']);
-		$ev = cp_panel_lc($o['ev_val']);
+		$ev = cp_panel_lc($o['ev_val']); $kft = !empty($o['kft_on']) ? cp_panel_lc((string) ($o['kft_val'] ?? 'KFT')) : '';
 		foreach ((array) $rows as $r) {
 			$id = cp_panel_str(cp_panel_get($r, 'id'));
 			if ($id === '' || isset($seen[$id])) { continue; }
 			$seen[$id] = 1;
 			if (isset($r['_mday']) && (int) $r['_mday']['n'] > 1) { continue; } /* v2.9.70: a deal egyszer, az 1. napján (egy összeg) */
 			if (cp_panel_lc(cp_panel_str(cp_panel_get($r, 'status'))) === 'lost') { continue; }
-			if (cp_panel_lc(trim(cp_panel_str(cp_panel_get($r, $o['f_ev'])))) !== $ev) { continue; }
+			$ct = cp_panel_lc(trim(cp_panel_str(cp_panel_get($r, $o['f_ev']))));
+			$isK = $kft !== '' && $ct === $kft;
+			if ($ct !== $ev && !$isK) { continue; }
 			$date = cp_panel_norm_date(cp_panel_get($r, $p['f_date']));
 			if ($date === '' || $date < $from || $date > $to) { continue; }
 			$pm = trim(cp_panel_str(cp_panel_get($r, $o['f_pay'])));
 			$sk = $pm === '' ? '(nincs kitöltve)' : $pm;
 			$stats[$sk] = isset($stats[$sk]) ? $stats[$sk] + 1 : 1;
 			$isPay = cp_panel_lc($pm) === $pv;
+			/* v2.9.305: a mentett szerződés fizetési módja is számít („helyszínen készpénzben”) – a fizetési mód mezőt ritkán töltik */
+			if (!$isPay) { $ctd = get_option('cp_ct_d' . (int) $id); if (is_array($ctd) && (($ctd['st']['pay'] ?? '') === 'cash')) { $isPay = true; if ($pm === '') { $pm = 'helyszínen készpénz (szerződés)'; } } }
 			/* „laza” mód: EV + helyszíni készpénz VAGY üres fizetési mód; más fizetési móddal (utalás, kártya) soha */
 			if (!$isPay && $pm !== '') { continue; }
+			if ($isK && !$isPay) { continue; } /* KFT-nél csak a kifejezetten helyszíni készpénzes (az üres fizetési mód ott utalás) */
 			$title = cp_panel_str(cp_panel_get($r, 'title'));
 			$pc = cp_panel_get($r, 'primaryContact');
 			$val = cp_panel_get($r, 'dealValue');
@@ -4098,7 +4105,10 @@ function cp_tw_aam_deals($o, $force) {
 				'gk'    => $e['f_gk'] !== '' ? cp_panel_str(cp_panel_get($r, $e['f_gk'])) : '',
 				'stage' => cp_panel_str(cp_panel_get($r, 'stage')),
 				'pm'    => $pm,
+				'ct'    => $isK ? 'KFT' : 'EV',
 			);
+			/* v2.9.304: KFT KP – a deal értéke és a kiszállási díj nettó, a helyszínen bruttót (+27% ÁFA) fizetnek */
+			if ($isK) { $item['net'] = $item['val'] + $item['kd']; $item['val'] = (int) round($item['val'] * 1.27); $item['kd'] = (int) round($item['kd'] * 1.27); }
 			if ($isPay) { $list[] = $item; }
 			$loose[] = $item;
 		}

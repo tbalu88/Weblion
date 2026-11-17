@@ -3,7 +3,7 @@
  * v2.9.302: Figyelők (a felhasználó választása: M1, M7)
  *  M1 – a tartalék szerver (galéria, AI-kép, mobil app, feltöltő híd) 5 percenként: ha kétszer egymás után nem válaszol,
  *       riasztás (csengő / telefon / Pumble a beállítások szerint); ha helyreáll, külön értesítés.
- *  M7 – az AI-kredit (OpenRouter-egyenleg) 30 percenként: ha a küszöb (alapból 5 $) alá esik, egyszer riaszt; újra csak akkor,
+ *  M7 – az AI-kredit (OpenRouter-egyenleg) 30 percenként: ha a küszöb (10 $) alá esik, egyszer riaszt; újra csak akkor,
  *       ha közben fölé ment (feltöltés).
  * Címzettek: mint a gép-kimaradásnál (cp_blog_alert_to: Ákos + adminok, a Crazy Booth gépek oldalon állítható).
  * Futás: a percenkénti cp_blog_tick ütemező mellett, saját időzítéssel (transient).
@@ -41,7 +41,7 @@ function cp_mon_tick() {
 		$s['ai_at'] = $now; cp_mon_save($s);
 		$st = cp_booth_gal_req('GET', '/ai-setup');
 		$bal = !is_wp_error($st) && isset($st['credits']['bal']) && $st['credits']['bal'] !== null ? (float) $st['credits']['bal'] : null;
-		$thr = (float) get_option('cp_mon_ai_thr', 5);
+		$thr = (float) get_option('cp_mon_ai_thr', 10); /* a felhasználó döntése: 10 $ */
 		if ($bal !== null) {
 			if ($bal < $thr && empty($s['ai_low'])) { $s['ai_low'] = 1; cp_mon_notify('ai_low', 'kevés az AI-kredit: ' . number_format($bal, 2, ',', ' ') . ' $ (kb. ' . max(0, (int) floor($bal / 0.055)) . ' AI-kép) – töltsd fel: Eszközök → AI-kredit → Kredit feltöltése', 'aikredit'); }
 			elseif ($bal >= $thr + 1) { $s['ai_low'] = 0; }

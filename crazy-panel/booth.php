@@ -246,11 +246,13 @@ function cp_booth_admin() {
 }
 /* v2.9.287: AI-kredit a panel Eszközök csoportjában – egyenleg (OpenRouter), havi felhasználás, feltöltés linkje */
 add_action('wp_ajax_nopriv_cp_ai_credit', 'cp_booth_ajax_ai_credit'); add_action('wp_ajax_cp_ai_credit', 'cp_booth_ajax_ai_credit');
+/* v2.9.305: a figyelő (monitor.php) állapota az AI-kredit oldalon */
+function cp_booth_mon_out() { $s = get_option('cp_mon_state', array()); if (!is_array($s)) { $s = array(); } return array('srv_ok' => empty($s['srv_down']) && (int) ($s['srv_fail'] ?? 0) === 0 ? 1 : 0, 'srv_at' => (int) ($s['srv_at'] ?? 0), 'srv_down' => (int) ($s['srv_down'] ?? 0), 'srv_err' => (string) ($s['srv_err'] ?? ''), 'thr' => (float) get_option('cp_mon_ai_thr', 10)); }
 function cp_booth_ajax_ai_credit() {
 	cp_crm_ajax_guard(array('aikredit'));
 	$st = cp_booth_gal_req('GET', '/ai-setup' . (!empty($_POST['fresh']) ? '?fresh=1' : ''));
-	if (is_wp_error($st)) { cp_el_err($st->get_error_message(), 502); }
-	wp_send_json_success(array('has_key' => !empty($st['has_key']), 'model' => (string) ($st['model'] ?? ''), 'month' => $st['month'] ?? null, 'credits' => $st['credits'] ?? null, 'admin' => function_exists('cp_panel_is_admin') && cp_panel_is_admin() ? admin_url('options-general.php?page=cp-booth') : ''));
+	if (is_wp_error($st)) { wp_send_json_success(array('down' => 1, 'err' => $st->get_error_message(), 'mon' => cp_booth_mon_out())); }
+	wp_send_json_success(array('has_key' => !empty($st['has_key']), 'model' => (string) ($st['model'] ?? ''), 'month' => $st['month'] ?? null, 'credits' => $st['credits'] ?? null, 'admin' => function_exists('cp_panel_is_admin') && cp_panel_is_admin() ? admin_url('options-general.php?page=cp-booth') : '', 'mon' => cp_booth_mon_out()));
 }
 /* v2.9.251: AI-kép (OpenRouter) – a kulcs a tartalék szerveren, titkosítva tárolódik; itt csak beírni lehet, visszaolvasni nem */
 function cp_booth_admin_ai() {
