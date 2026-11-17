@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) { exit; }
 
 function cp_dp_defaults() {
 	return array('on' => 1, 'wd1' => -10000, 'wd2' => -10000, 'wd3' => 0, 'wd4' => 10000, 'wd5' => 10000, 'wd6' => 0, 'wd7' => -10000,
-		'last_thr' => 2, 'last_add' => 10000, 'lm_days' => 14, 'lm_free' => 5, 'lm_add' => -5000, 'min' => -15000, 'max' => 20000, 'step' => 5000, 'min_n' => 5);
+		'last_thr' => 2, 'last_add' => 10000, 'lm_days' => 14, 'lm_free' => 5, 'lm_add' => -5000, 'min' => -15000, 'max' => 20000, 'step' => 5000, 'min_n' => 5, 'day_on' => 1, 'day_end' => 16, 'day_add' => -10000);
 }
 function cp_dp_opts() { $o = get_option('cp_dp', array()); return array_merge(cp_dp_defaults(), is_array($o) ? $o : array()); }
 function cp_dp_on() { return !empty(cp_dp_opts()['on']); }
@@ -115,17 +115,21 @@ function cp_dp_base($brand, $key, $h, $date) {
 }
 
 /* napi igazítás: array(összeg, sorok[], szint, szabad) – $kind: selfie | spin; $self: a deal maga függőként számít-e */
-function cp_dp_day($date, $kind = 'selfie', $self = false) {
+/* v2.9.301: $endm – a rendezvény vége percben (kezdés + óraszám), ha ismert. Nappali rendezvény (legkésőbb day_end órakor
+   véget ér): csúcsnapon is kedvezményes – a hét napja és az „utolsó gépek” felár helyett a nappali kedvezmény (a felhasználó döntése) */
+function cp_dp_day($date, $kind = 'selfie', $self = false, $endm = null) {
 	$o = cp_dp_opts(); $L = array(); $a = 0;
 	$dow = (int) wp_date('N', strtotime($date . ' 12:00:00'));
 	$nm = array(1 => 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat', 'vasárnap')[$dow];
-	$w = (int) $o['wd' . $dow]; if ($w) { $L[] = array(ucfirst($nm) . ($w < 0 ? ' (gyengébb nap)' : ' (erős nap)'), $w); $a += $w; }
+	$dayev = !empty($o['day_on']) && $endm !== null && $endm <= (int) $o['day_end'] * 60;
+	if ($dayev) { $L[] = array('Nappali rendezvény (' . sprintf('%d:%02d', intdiv($endm, 60), $endm % 60) . '-ig véget ér) – csúcsnapon is kedvezményes', (int) $o['day_add']); $a += (int) $o['day_add']; }
+	else { $w = (int) $o['wd' . $dow]; if ($w) { $L[] = array(ucfirst($nm) . ($w < 0 ? ' (gyengébb nap)' : ' (erős nap)'), $w); $a += $w; } }
 	$k = function_exists('cp_cap_day') ? cp_cap_day($date) : null; $free = null; $lvl = 'ok';
 	if ($k) {
 		$free = $kind === 'spin' ? $k['fp'] : $k['fs']; $pend = ($kind === 'spin' ? $k['pp'] : $k['ps']) - ($self ? 1 : 0);
 		$eff = $free - 0.5 * max(0, $pend);
 		if ($free <= 0) { $lvl = 'full'; $L[] = array('Betelt nap – alvállalkozó vagy másik nap', 0); }
-		elseif ($eff <= ($kind === 'spin' ? min(1.0, (float) $o['last_thr']) : (float) $o['last_thr'])) { /* spinnerből csak 2 van: ott az utolsó gép számít */ $lvl = 'last'; $L[] = array('Utolsó gépek (' . $free . ' szabad, ' . max(0, $pend) . ' függő ajánlat)', (int) $o['last_add']); $a += (int) $o['last_add']; }
+		elseif (!$dayev && $eff <= ($kind === 'spin' ? min(1.0, (float) $o['last_thr']) : (float) $o['last_thr'])) { /* spinnerből csak 2 van: ott az utolsó gép számít */ $lvl = 'last'; $L[] = array('Utolsó gépek (' . $free . ' szabad, ' . max(0, $pend) . ' függő ajánlat)', (int) $o['last_add']); $a += (int) $o['last_add']; }
 		$days = (int) floor((strtotime($date) - strtotime(wp_date('Y-m-d'))) / 86400);
 		if ($lvl === 'ok' && $days >= 0 && $days < (int) $o['lm_days'] && $eff >= (float) $o['lm_free']) { $L[] = array('Last minute (' . $days . ' nap múlva, ' . $free . ' szabad gép)', (int) $o['lm_add']); $a += (int) $o['lm_add']; }
 	}
@@ -144,7 +148,12 @@ function cp_dp_quote($d) {
 	if (count($K) > 1) { $lines[] = array('Több szolgáltatás: összeadva, csomagkedvezmény nélkül', 0); }
 	$kind = count(array_intersect($K, array('spinner', 'overhead', 'vip'))) === count($K) ? 'spin' : 'selfie';
 	$self = ($d['status'] ?? '') === 'Open' && function_exists('cp_crm_stages') && in_array($d['stage'] ?? '', array_slice(cp_crm_stages(), 0, 2), true);
-	list($adj, $AL, $lvl, $free) = cp_dp_day($date, $kind, $self);
+	/* a rendezvény vége: kezdés (start_at helyi idő, vagy az Új deal ablak start_hm-je) + óraszám */
+	$endm = null; $hm = '';
+	if (!empty($d['start_hm']) && preg_match('/^(\d{1,2}):(\d{2})$/', (string) $d['start_hm'], $mm)) { $hm = $mm[0]; }
+	elseif (!empty($d['start_at']) && preg_match('/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/', (string) $d['start_at'], $mm)) { $hm = $mm[1] . ':' . $mm[2]; }
+	if ($hm !== '' && !$noh) { list($hh, $mi) = array_map('intval', explode(':', $hm)); $endm = $hh * 60 + $mi + $h * 60; }
+	list($adj, $AL, $lvl, $free) = cp_dp_day($date, $kind, $self, $endm);
 	$step = max(1, (int) cp_dp_opts()['step']);
 	$p = (int) (round(($base + $adj) / $step) * $step);
 	return array('p' => $p, 'base' => (int) $base, 'adj' => $adj, 'lines' => $lines, 'day' => $AL, 'lvl' => $lvl, 'free' => $free, 'sure' => $sure ? 1 : 0, 'noh' => $noh ? 1 : 0, 'h' => $h,
@@ -157,7 +166,7 @@ function cp_dp_ajax_quote() {
 	if (function_exists('cp_crm_ajax_guard')) { cp_crm_ajax_guard(array('deals')); } else { cp_el_auth(); }
 	$g = function ($k, $n = 200) { return mb_substr(sanitize_text_field(wp_unslash((string) ($_POST[$k] ?? ''))), 0, $n); };
 	$brand = $g('brand', 20) === 'ec' ? '[EventCrazy]' : '[Crazyphoto]';
-	$q = cp_dp_quote(array('event_d' => $g('date', 10), 'hours' => (int) ($_POST['hours'] ?? 0), 'service' => $g('service', 300), 'title' => $brand, 'status' => 'Open', 'stage' => function_exists('cp_crm_stages') ? (cp_crm_stages()[0] ?? '') : ''));
+	$q = cp_dp_quote(array('event_d' => $g('date', 10), 'hours' => (int) ($_POST['hours'] ?? 0), 'start_hm' => $g('start', 5), 'service' => $g('service', 300), 'title' => $brand, 'status' => 'Open', 'stage' => function_exists('cp_crm_stages') ? (cp_crm_stages()[0] ?? '') : ''));
 	wp_send_json_success(array('q' => $q));
 }
 
@@ -180,6 +189,8 @@ add_filter('cp_sx_sections', function ($S) {
 			$f('wd1', 'Hétfő', 'A hét napjai'), $f('wd2', 'Kedd', 'A hét napjai'), $f('wd3', 'Szerda', 'A hét napjai'), $f('wd4', 'Csütörtök', 'A hét napjai'), $f('wd5', 'Péntek', 'A hét napjai'), $f('wd6', 'Szombat', 'A hét napjai'), $f('wd7', 'Vasárnap', 'A hét napjai'),
 			$f('last_thr', 'Utolsó gépek: ennyi vagy kevesebb szabad gép', 'Kapacitás', 'a függő ajánlatok fél gépnek számítanak'), $f('last_add', 'Utolsó gépek felára', 'Kapacitás'),
 			$f('lm_days', 'Last minute: ennyi napon belül', 'Kapacitás'), $f('lm_free', 'Last minute: legalább ennyi szabad gép', 'Kapacitás'), $f('lm_add', 'Last minute igazítás', 'Kapacitás'),
+			array('k' => 'day_on', 't' => 'sw', 'l' => 'Nappali rendezvény kedvezmény (csúcsnapon is)', 'g' => 'Nappali rendezvény', 'opt' => 'cp_dp', 'sub' => 'day_on', 'def' => 1),
+			$f('day_end', 'Nappalinak számít, ha legkésőbb ennyi órakor véget ér', 'Nappali rendezvény', 'kezdés + óraszám; pl. 16 = 16:00'), $f('day_add', 'Nappali kedvezmény (negatív)', 'Nappali rendezvény'),
 			$f('min', 'Legnagyobb kedvezmény (negatív)', 'Korlátok'), $f('max', 'Legnagyobb felár', 'Korlátok'), $f('step', 'Kerekítés (Ft)', 'Korlátok'), $f('min_n', 'Legalább ennyi idei ajánlat kell az alapárhoz', 'Korlátok', 'kevesebbnél az előző év ugyanazon hónapja is számít'),
 		),
 		'after' => function () { global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_cp\\_dp\\_s\\_%' OR option_name LIKE '\\_transient\\_timeout\\_cp\\_dp\\_s\\_%'"); },

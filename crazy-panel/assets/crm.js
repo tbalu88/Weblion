@@ -2486,7 +2486,7 @@
 				const my = ++dpSeq, date = q('event_d').value, svc = dpSvc();
 				if (!date || !svc) { dpq.hidden = true; return; }
 				try {
-					const r = await post('cp_dp_quote', { date, service: svc, hours: q('hours').value || 0, brand: /^\s*\[(eventcrazy|ec_)/i.test(q('title').value || brand) ? 'ec' : 'cp' });
+					const r = await post('cp_dp_quote', { date, service: svc, hours: q('hours').value || 0, start: q('start_at') ? q('start_at').value : '', brand: /^\s*\[(eventcrazy|ec_)/i.test(q('title').value || brand) ? 'ec' : 'cp' });
 					if (my !== dpSeq || !form.isConnected) return; const x = r.q;
 					if (!x) { dpq.hidden = true; return; }
 					dpq.hidden = false;
@@ -2495,7 +2495,7 @@
 				} catch (er) { dpq.hidden = true; }
 			}, 400);
 		};
-		['event_d', 'hours', 'service', 'title'].forEach(k => { const e = q(k); if (e) { e.addEventListener('input', dpRun); e.addEventListener('change', dpRun); } });
+		['event_d', 'hours', 'service', 'title', 'start_at'].forEach(k => { const e = q(k); if (e) { e.addEventListener('input', dpRun); e.addEventListener('change', dpRun); } });
 		form.querySelectorAll('[data-k="svc"], [data-k="services_ec"]').forEach(e => e.addEventListener('change', dpRun));
 		/* v1.69: deal egy levélből – ismert adatok azonnal, az AI-kiolvasás utána (csak az üres mezőkbe) */
 		if (X) {
