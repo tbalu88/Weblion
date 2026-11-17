@@ -321,14 +321,20 @@ function cp_imp_deal_manual($tid) {
 }
 /* v2.9.73: a deal-link.php szabályaival (deal-jel, dátum, további cím, SM-azonosító, céges domain); a döntés az okot
    is megadja, az esemény ezzel íródik. $subj: az új levél tárgya (a szál tárgya mellett). Kézi csatolást nem ír felül. */
-function cp_imp_relink($tid, $email, $at, $subj = '') {
+function cp_imp_relink($tid, $email, $at, $subj = '', $text = null) {
 	if (!function_exists('cp_crm_t')) { return; }
 	global $wpdb;
 	$t = $wpdb->get_row($wpdb->prepare('SELECT ' . cp_dl_thread_cols() . ' FROM ' . cp_mail_t('threads') . ' WHERE id = %d', $tid), ARRAY_A);
 	if (!$t) { return; }
 	$t['first'] = (string) $email; $t['at'] = (string) $at; $t['subj2'] = (string) $subj;
 	$ctx = cp_dl_ctx(array($t));
-	cp_dl_apply((int) $tid, cp_dl_decide($ctx['ths'][0], $ctx), $ctx);
+	$dec = cp_dl_decide($ctx['ths'][0], $ctx);
+	cp_dl_apply((int) $tid, $dec, $ctx);
+	/* v2.9.295: élő beérkező levél ismert ügyféltől, nyitott deal nélkül, új rendezvénydátummal → új deal (ha a szál nincs kézzel csatolva / nyitott dealen) */
+	if ($text !== null && $dec['act'] === 'keep' && !empty($dec['noopen']) && $dec['why'] !== 'manual' && function_exists('cp_dl_autonew')) {
+		$cd = $dec['cur'] ? ($ctx['deals'][$dec['cur']] ?? null) : null;
+		if (!$cd || $cd['st'] !== 'Open') { cp_dl_autonew((int) $tid, $dec['noopen'], (string) $subj, (string) $text, $ctx); }
+	}
 }
 /* az utolsó 60 nap (v2.9.63: 30 helyett – a 60 napos szál-szabállyal összhangban) automatikusan kötött szálai: deal nélküli vagy lezárt/törölt dealen ülő → újrakötés (15 percenként) */
 function cp_imp_relink_recent() {
@@ -430,7 +436,7 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	}
 	/* v2.9.58: a feldolgozás (IMAP-letöltés) közben nem került-e be mégis – még minden írás előtt (a zár mellett is ellenőrizve) */
 	if ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $M WHERE mid = %s", $mid))) { return 'dup'; }
-	if ($t && $live && !$out && !$sys) { cp_imp_relink((int) $t['id'], $other['e'], $at, $subj); }
+	if ($t && $live && !$out && !$sys) { cp_imp_relink((int) $t['id'], $other['e'], $at, $subj, $blocked || $promo ? null : $text); }
 	$dlx = null; $dld = null;
 	if (!$t) {
 		/* v2.9.73: új szál – a deal-link.php szabályai (deal-jel, dátum, további cím, SM-azonosító, céges domain) */
@@ -443,6 +449,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 		if (!$wpdb->insert_id) { throw new \Exception('A levélszál mentése nem sikerült: ' . $wpdb->last_error); }
 		$t = array('id' => (int) $wpdb->insert_id, 'last_at' => $at, 'msg_count' => 0, 'folder' => $blocked ? 'spam' : ($sys ? 'system' : ($promo ? 'promo' : ($live ? 'inbox' : 'archive'))), 'deal_id' => $deal ?: 0);
 		if ($deal) { cp_dl_event((int) $t['id'], $dld, $dlx); } /* v2.9.73: az automatikus kötés oka a szál idővonalán */
+		/* v2.9.295: ismert ügyfél új ajánlatkérése (nincs nyitott dealje, új rendezvénydátum) → új deal */
+		elseif ($live && !$out && !$sys && !$blocked && !$promo && !empty($dld['noopen']) && function_exists('cp_dl_autonew')) { $nid = cp_dl_autonew((int) $t['id'], $dld['noopen'], $subj, $text, $dlx); if ($nid) { $t['deal_id'] = $nid; } }
 	}
 	$wpdb->insert($M, array('thread_id' => (int) $t['id'], 'dir' => $out ? 'out' : 'in', 'from_name' => mb_substr($f['n'] !== '' ? $f['n'] : $f['e'], 0, 190), 'from_email' => mb_substr($f['e'], 0, 190),
 		'to_list' => mb_substr($fmt($to), 0, 2000), 'cc_list' => mb_substr($fmt($cc), 0, 2000), 'subject' => mb_substr($subj, 0, 255), 'body' => $body, 'attachments' => wp_json_encode(array_slice($acc['att'], 0, 20)),

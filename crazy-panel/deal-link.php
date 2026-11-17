@@ -234,33 +234,21 @@ function cp_dl_deal_days($id, $ctx) {
 	if ($d && $d['ev'] !== '') { $l[] = substr($d['ev'], 0, 10); }
 	return array_values(array_unique($l));
 }
-/* dealek közül: dátum-egyezés → egyetlen nyitott → (nyitott nélkül) a levélhez legközelebb létrehozott; több nyitott dátum nélkül: kétes */
+/* v2.9.295: automatikusan CSAK nyitott dealhez köt (a felhasználó döntése): dátum-egyezés egy nyitott deallel → egyetlen nyitott deal;
+   több nyitott dátum nélkül: kétes (javaslat). Nyitott deal nélkül nincs kötés – a lezárt dealek csak javaslatként (cands)
+   jelennek meg; 'noopen' jelzi, hogy a kontaktnak nincs nyitott dealje (új ajánlatkérésnél ebből lesz új deal). */
 function cp_dl_choose(array $ids, array $dates, $at, $ctx, $domain = false) {
 	$ids = array_values(array_unique(array_filter($ids, function ($i) use ($ctx) { return isset($ctx['deals'][$i]) && !$ctx['deals'][$i]['del']; })));
-	if (!$ids) { return array('deal' => 0, 'amb' => false, 'cands' => array()); }
+	if (!$ids) { return array('deal' => 0, 'amb' => false, 'cands' => array(), 'noopen' => 1); }
 	$open = array_values(array_filter($ids, function ($i) use ($ctx) { return $ctx['deals'][$i]['st'] === 'Open'; }));
 	if ($dates) {
-		$dm = array(); $dmo = array(); $hit = array();
-		foreach ($ids as $i) { $x = array_values(array_intersect(cp_dl_deal_days($i, $ctx), $dates)); if ($x) { $dm[] = $i; $hit[$i] = $x[0]; if ($ctx['deals'][$i]['st'] === 'Open') { $dmo[] = $i; } } }
-		$pick = count($dmo) === 1 ? $dmo[0] : (!$dmo && !$domain && count($dm) === 1 ? $dm[0] : 0);
-		if ($pick) { return array('deal' => $pick, 'amb' => false, 'cands' => $ids, 'date' => $hit[$pick]); }
+		$dmo = array(); $hit = array();
+		foreach ($open as $i) { $x = array_values(array_intersect(cp_dl_deal_days($i, $ctx), $dates)); if ($x) { $dmo[] = $i; $hit[$i] = $x[0]; } }
+		if (count($dmo) === 1) { return array('deal' => $dmo[0], 'amb' => false, 'cands' => $ids, 'date' => $hit[$dmo[0]]); }
 	}
 	if (count($open) === 1) { return array('deal' => $open[0], 'amb' => false, 'cands' => $ids, 'one' => 1); }
-	if (count($open) > 1 || $domain) { return array('deal' => 0, 'amb' => count($open) > 1, 'cands' => $ids); }
-	/* v2.9.294: nyitott deal nélkül lezárt dealhez csak akkor kötünk, ha a levél még hozzá tartozhat: a tárgyban nincs más
-	   (egyik dealhez sem illő) rendezvénydátum – az új ajánlatkérés –, és a deal rendezvénye még előttünk van, vagy legfeljebb
-	   45 napja volt / zárult le (utóügy: számla, képek, köszönet). Különben nincs automatikus kötés (új dealt kell nyitni). */
-	if ($dates) { return array('deal' => 0, 'amb' => false, 'cands' => $ids, 'new' => 1); }
-	$ref = strtotime($at . ' UTC') ?: time(); $all = $ids;
-	$ids = array_values(array_filter($ids, function ($i) use ($ctx, $ref) {
-		$d = $ctx['deals'][$i]; $ev = $d['ev'] !== '' ? strtotime(substr($d['ev'], 0, 10) . ' 23:59:59 UTC') : 0; $cl = $d['cl'] !== '' ? strtotime($d['cl'] . ' UTC') : 0;
-		$last = max($ev ?: 0, $cl ?: 0, $ev || $cl ? 0 : (strtotime($d['cr'] . ' UTC') ?: 0));
-		return $last && $ref <= $last + 45 * DAY_IN_SECONDS;
-	}));
-	if (!$ids) { return array('deal' => 0, 'amb' => false, 'cands' => $all, 'new' => 1); }
-	/* a megmaradtak közül a levél idejéhez legközelebb létrehozott (mint eddig a cp_imp_pick_deal) */
-	usort($ids, function ($a, $b) use ($ctx, $ref) { return abs((strtotime($ctx['deals'][$a]['cr'] . ' UTC') ?: 0) - $ref) <=> abs((strtotime($ctx['deals'][$b]['cr'] . ' UTC') ?: 0) - $ref); });
-	return array('deal' => $ids[0], 'amb' => false, 'cands' => $ids);
+	if ($open) { return array('deal' => 0, 'amb' => count($open) > 1, 'cands' => $ids); }
+	return array('deal' => 0, 'amb' => false, 'cands' => $ids, 'noopen' => 1);
 }
 /* a szabályok sorrendben; visszaad: deal, rule (token|date|contact|alias|part|smid|domain|domaindate|''), why, amb, cands */
 function cp_dl_pick(array $t, array $ctx) {
@@ -284,6 +272,7 @@ function cp_dl_pick(array $t, array $ctx) {
 		$ids = array();
 		foreach (array_unique(array_merge($direct, $alias)) as $cid) { $ids = array_merge($ids, $ctx['by_ct'][$cid] ?? array()); }
 		$r = cp_dl_choose($ids, $dates, $at, $ctx);
+		if (!$r['deal'] && !empty($r['noopen']) && !isset($noopen)) { $cs = array_values(array_unique(array_merge($direct, $alias))); $noopen = array('cid' => (int) $cs[0], 'email' => $e, 'cands' => $r['cands']); }
 		if ($r['deal']) {
 			$rule = !$direct ? 'alias' : ($k === 0 ? 'contact' : 'part');
 			$why = $rule === 'alias' ? 'a kontakt további címe alapján: ' . $e : ($rule === 'part' ? 'a levelezés résztvevője alapján: ' . $e : 'a kontakt e-mail-címe alapján');
@@ -299,6 +288,7 @@ function cp_dl_pick(array $t, array $ctx) {
 		if ($r['amb'] && !$amb) { $amb = $r; }
 	}
 	if ($amb) { return array('deal' => 0, 'rule' => '', 'why' => '', 'amb' => true, 'cands' => $amb['cands']); }
+	if (isset($noopen)) { return $none + array('noopen' => $noopen); } /* ismert ügyfél, nyitott deal nélkül: új ajánlatkérésnél új deal (cp_dl_autonew) */
 	/* 4. ismeretlen cím céges domainről */
 	if (!$known) {
 		foreach ($parts as $e) {
@@ -318,7 +308,7 @@ function cp_dl_pick(array $t, array $ctx) {
 function cp_dl_decide(array $t, array $ctx) {
 	$tid = (int) ($t['id'] ?? 0);
 	$cur = (int) ($t['deal_id'] ?? 0);
-	$keep = function ($why, $p = null) use ($cur) { return array('act' => 'keep', 'deal' => $cur, 'rule' => '', 'why' => $why, 'amb' => $p ? $p['amb'] : false, 'cur' => $cur); };
+	$keep = function ($why, $p = null) use ($cur) { return array('act' => 'keep', 'deal' => $cur, 'rule' => '', 'why' => $why, 'amb' => $p ? $p['amb'] : false, 'cur' => $cur) + ($p && !empty($p['noopen']) ? array('noopen' => $p['noopen']) : array()); };
 	if (($tid && !empty($ctx['manual'][$tid])) || (string) ($t['src'] ?? '') === 'panel') { return $keep('manual'); }
 	$p = cp_dl_pick($t, $ctx);
 	$cd = $cur ? ($ctx['deals'][$cur] ?? null) : null;
@@ -383,4 +373,52 @@ function cp_imp_link_dryrun($days = 60) {
 	$res['q'] = $ctx['q'] + 1;
 	$res['ms'] = (int) round((microtime(true) - $t0) * 1000);
 	return $res;
+}
+
+/* ------------------------------------------------------------ v2.9.295: új deal a levélből (a felhasználó döntése)
+ * Ha ismert ügyfél (kontakt vagy további címe) ír, nincs nyitott dealje, és a levélben új rendezvénydátum van – jövőbeli,
+ * és egyik (lezárt, elvesztett) dealjének sem a napja –, a panel új dealt hoz létre az első szakaszban, és a szálat hozzá köti.
+ * Dátum: előbb a tárgyból, ha ott nincs, a levél saját (nem idézett) szövegének elejéből. Csak élő, beérkező levélnél fut
+ * (a 15 percenkénti újrakötés soha nem hoz létre dealt). Kikapcsolható: cp_dl_autonew = '0'. */
+function cp_dl_autonew_on() { return get_option('cp_dl_autonew', '1') !== '0' && !empty(cp_panel_opts()['stage_write']); }
+function cp_dl_own_text($text) {
+	$t = (string) $text;
+	$p = preg_split('/^\s*(?:>|-{2,}\s*(?:Original|Eredeti|Forwarded|Továbbított)|(?:On|Le|Am)\s.{4,120}(?:wrote|écrit|schrieb)\s*:|.{4,160}\s(?:ezt írta|írta)\s*:|(?:Feladó|From)\s*:)/mu', $t, 2);
+	return mb_substr((string) $p[0], 0, 2000);
+}
+function cp_dl_autonew($tid, array $no, $subj, $text, array $ctx) {
+	if (!$tid || empty($no['cid']) || !cp_dl_autonew_on() || !function_exists('cp_sm_request') || !function_exists('cp_crm_new_id')) { return 0; }
+	global $wpdb;
+	$today = wp_date('Y-m-d'); $max = wp_date('Y-m-d', time() + 730 * DAY_IN_SECONDS);
+	$taken = array(); foreach ((array) $no['cands'] as $i) { foreach (cp_dl_deal_days((int) $i, $ctx) as $d) { $taken[$d] = 1; } }
+	$pickd = function ($l) use ($today, $max, $taken) { $l = array_values(array_filter($l, function ($d) use ($today, $max, $taken) { return $d >= $today && $d <= $max && !isset($taken[$d]); })); sort($l); return $l ? $l[0] : ''; };
+	$date = $pickd(cp_dl_dates($subj, gmdate('Y-m-d H:i:s')));
+	if ($date === '') { $date = $pickd(cp_dl_dates(cp_dl_own_text($text), gmdate('Y-m-d H:i:s'))); }
+	if ($date === '') { return 0; }
+	/* kettőzés ellen: ugyanarra a kontaktra és napra egyszer (párhuzamos letöltésnél is) */
+	if (!add_option('cp_dl_an_' . md5($no['cid'] . '|' . $date), time(), '', 'no')) { return 0; }
+	$D = cp_crm_t('deals');
+	if ($wpdb->get_var($wpdb->prepare("SELECT id FROM $D WHERE contact_id = %d AND event_d = %s AND deleted_at IS NULL LIMIT 1", (int) $no['cid'], $date))) { return 0; }
+	$ct = $wpdb->get_row($wpdb->prepare('SELECT id, name, email FROM ' . cp_crm_t('contacts') . ' WHERE id = %d', (int) $no['cid']), ARRAY_A);
+	if (!$ct) { return 0; }
+	$prev = $wpdb->get_row($wpdb->prepare("SELECT title, owner_id FROM $D WHERE contact_id = %d AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1", (int) $no['cid']), ARRAY_A);
+	$brand = $prev && preg_match('/^\s*(\[[^\]]{2,30}\])/u', (string) $prev['title'], $m) && !preg_match('/facebook/i', $m[1]) ? $m[1] : '[Crazyphoto]';
+	$name = trim((string) $ct['name']) !== '' ? trim((string) $ct['name']) : (string) $ct['email'];
+	$o = cp_panel_opts();
+	$body = array('title' => $brand . ' ' . $name . ' | ' . $date, 'pipeline' => $o['pipeline'], 'stage' => cp_crm_stages()[0], 'primaryContact' => (int) $no['cid'], 'currency' => 'HUF');
+	if ($prev && (int) $prev['owner_id'] && isset(cp_crm_users()[(int) $prev['owner_id']])) { $body['owner'] = (int) $prev['owner_id']; }
+	$body[cp_crm_sm_field('event_d')] = $date;
+	/* szolgáltatás a tárgyból / a levélből, a meglévő értékek közül */
+	$hay = mb_strtolower(remove_accents($subj . ' ' . cp_dl_own_text($text))); $sv = array();
+	foreach (array('Fotóautomata' => '/fotoautomata/', 'Szelfigép' => '/szelfigep|photobooth/', '360 Spinner' => '/spinner|360/', 'AI Karikatúra' => '/karikatura/') as $k => $re) { if (preg_match($re, $hay)) { $sv[] = $k; } }
+	if ($sv) { $body[cp_crm_sm_field('service')] = mb_substr(implode(' | ', $sv), 0, 100); }
+	$dr = cp_sm_request('POST', '/apis/deal/v4', $body);
+	if (is_wp_error($dr)) { delete_option('cp_dl_an_' . md5($no['cid'] . '|' . $date)); return 0; }
+	$id = cp_crm_new_id($dr); if (!$id) { return 0; }
+	if (function_exists('cp_crm_after_write')) { cp_crm_after_write($id); }
+	$wpdb->insert(cp_crm_t('history'), array('deal_id' => $id, 'field' => 'created', 'old_val' => '', 'new_val' => 'létrehozva automatikusan egy levélből (új rendezvénydátum)', 'by_user' => 'Crazy panel', 'at' => gmdate('Y-m-d H:i:s'), 'src' => 'panel'));
+	$wpdb->update(cp_mail_t('threads'), array('deal_id' => $id), array('id' => (int) $tid));
+	$wpdb->insert(cp_mail_t('events'), array('thread_id' => (int) $tid, 'kind' => 'autodeal', 'text' => mb_substr('Új deal automatikusan létrehozva (új rendezvénydátum a levélben: ' . cp_dl_hu_day($date, true) . ', visszatérő ügyfél): ' . $body['title'], 0, 255), 'author_uid' => 0, 'author' => 'Crazy panel', 'created_at' => gmdate('Y-m-d H:i:s')));
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	return $id;
 }
