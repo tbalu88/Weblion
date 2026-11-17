@@ -704,15 +704,19 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_PRN = ['printScale', 'printDx', 'printDy'];
+  const verGe = (a, b) => { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return true; };
+  const prOpt = () => { const u = Object.assign({}, UI_DEF, U()); return { paper: u.paperSize, fit: u.printFit, scale: u.printScale, dx: u.printDx, dy: u.printDy }; };
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
     const u = Object.assign({}, UI_DEF, U()), on = modeList();
     UI_NUM.forEach(k => { $('#u-' + k).value = u[k]; });
     UI_CHK.forEach(k => { $('#u-' + k).checked = !!u[k]; });
-    UI_SEL.concat(UI_LIM, UI_TXT).forEach(k => { $('#u-' + k).value = u[k]; });
+    UI_SEL.concat(UI_LIM, UI_TXT, UI_PRN).forEach(k => { $('#u-' + k).value = u[k]; });
+    $('[data-prpinfo]').textContent = verGe(S.cfg.version, '0.14.0') ? 'A papírméretet a nyomtató-meghajtóban is állítsd ugyanerre. Próbanyomattal ellenőrizd az illesztést.' : 'A papírméret és az illesztés a program 0.14.0-s változatától működik (most: ' + (S.cfg.version || '?') + ').';
     if (!$('#u-consentText').value) $('#u-consentText').value = CONSENT_DEF;
     document.querySelectorAll('[data-maconly]').forEach(x => { x.hidden = !S.cfg.mac; });
     /* v0.13: megosztási opciók – ha az e-mail nem jelenhet meg, a beállítás megmondja, miért */
@@ -736,6 +740,8 @@
     UI_SEL.forEach(k => { u[k] = $('#u-' + k).value; });
     UI_TXT.forEach(k => { u[k] = $('#u-' + k).value.trim(); }); if (u.consentText === CONSENT_DEF) u.consentText = '';
     UI_LIM.forEach(k => { u[k] = Math.max(0, Number($('#u-' + k).value) || 0); });
+    /* v0.14: papír-illesztés – a nagyítás 90–110 %, az eltolás ±5 mm */
+    u.printScale = Math.min(110, Math.max(90, Number($('#u-printScale').value) || 100)); ['printDx', 'printDy'].forEach(k => { u[k] = Math.min(5, Math.max(-5, Number($('#u-' + k).value) || 0)); });
     u.stickerBleed = Math.min(5, u.stickerBleed);
     u.color = {}; Object.keys(CLR).forEach(k => { u.color[k] = Number($('#' + CLR[k]).value) || 0; });
     const pr = [...document.querySelectorAll('[data-prn]:checked')].map(x => x.dataset.prn); u.printers = pr;
@@ -855,7 +861,7 @@
       const left = paperLeft(name);
       if (left !== null && left < copies && order.length > 1) { last = new Error(pName(name) + ': kevés a papír'); continue; }
       try {
-        await call(B.print, dataUrl, { copies, printer: name || undefined });
+        await call(B.print, dataUrl, Object.assign(prOpt(), { copies, printer: name || undefined }));
         paperUse(name, copies); B.log('nyomtatva: ' + pName(name) + ' ×' + copies + (left !== null ? ' (papír: ' + Math.max(0, left - copies) + ')' : ''));
         return name;
       } catch (e) { last = e; B.log('nyomtatási hiba (' + pName(name) + '): ' + e.message); if (mode === 'one') break; }
@@ -897,7 +903,7 @@
   async function stickerOut(imgs) {
     const name = U().stickerPrinter || printList()[0] || '';
     const sheet = BoothCompose.stickerSheet(imgs, Number(U().stickerGrid) || 4, U().stickerBleed != null ? U().stickerBleed : 1.5);
-    await call(B.print, BoothCompose.toPrint(sheet, colorAdj()), { copies: 1, printer: name || undefined });
+    await call(B.print, BoothCompose.toPrint(sheet, colorAdj()), Object.assign(prOpt(), { copies: 1, printer: name || undefined }));
     paperUse(name, 1); B.log('matrica-ív: ' + pName(name));
   }
   async function stickerPrint() {
@@ -919,7 +925,7 @@
     const a = colorAdj();
     g.fillStyle = '#141C33'; g.font = '700 46px "Segoe UI",sans-serif'; g.fillText('Crazy Booth – próbanyomat', 1100, 680);
     g.font = '400 32px "Segoe UI",sans-serif'; ['Nyomtató: ' + pName(name), 'Fényerő ' + a.b + ' · Kontraszt ' + a.c, 'Telítettség ' + a.s + ' · Melegség ' + a.w, new Date().toLocaleString('hu-HU')].forEach((t, i) => g.fillText(t, 1100, 750 + i * 50, 660));
-    await call(B.print, BoothCompose.toPrint(c, a), { copies: 1, printer: name || undefined }); paperUse(name, 1);
+    await call(B.print, BoothCompose.toPrint(c, a), Object.assign(prOpt(), { copies: 1, printer: name || undefined })); paperUse(name, 1);
   }
 
   /* ---------- nyomtatóállomás: ez a gép a rendezvény nyomtatási sorát nyomtatja (a fotózó gépek „a nyomtatónál vedd át” módban) */

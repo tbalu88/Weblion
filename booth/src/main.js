@@ -82,12 +82,16 @@ ipcMain.handle('print:list', wrap(async () => (await win.webContents.getPrinters
 ipcMain.handle('print:do', wrap(async (dataUrl, o) => {
   o = o || {};
   const pw = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
-  const html = '<!doctype html><html><head><style>@page{size:4in 6in;margin:0}html,body{margin:0;padding:0}img{display:block;width:4in;height:6in;object-fit:cover}</style></head><body><img src="' + dataUrl + '"></body></html>';
+  /* v0.14: papírméret, kitöltés, nagyítás és eltolás a beállítások Nyomtató fülén */
+  const PS = { '4x6': [4, 6], '5x7': [5, 7], '6x8': [6, 8] }, sz = PS[o.paper] || PS['4x6'];
+  const fit = o.fit === 'contain' ? 'contain' : 'cover', sc = Math.min(110, Math.max(90, Number(o.scale) || 100)) / 100;
+  const dx = Math.min(5, Math.max(-5, Number(o.dx) || 0)), dy = Math.min(5, Math.max(-5, Number(o.dy) || 0));
+  const html = '<!doctype html><html><head><style>@page{size:' + sz[0] + 'in ' + sz[1] + 'in;margin:0}html,body{margin:0;padding:0;background:#fff;overflow:hidden;width:' + sz[0] + 'in;height:' + sz[1] + 'in}img{display:block;width:' + sz[0] + 'in;height:' + sz[1] + 'in;object-fit:' + fit + ';transform:translate(' + dx + 'mm,' + dy + 'mm) scale(' + sc + ');transform-origin:center}</style></head><body><img src="' + dataUrl + '"></body></html>';
   await pw.loadURL('data:text/html;base64,' + Buffer.from(html).toString('base64'));
   const copies = Math.max(1, Math.min(10, Number(o.copies || cfg.copies) || 1));
-  const res = await new Promise(res => pw.webContents.print({ silent: true, printBackground: true, deviceName: o.printer || cfg.printer || undefined, copies, margins: { marginType: 'none' }, pageSize: { width: 101600, height: 152400 } }, (ok, why) => res({ ok, why })));
+  const res = await new Promise(res => pw.webContents.print({ silent: true, printBackground: true, deviceName: o.printer || cfg.printer || undefined, copies, margins: { marginType: 'none' }, pageSize: { width: sz[0] * 25400, height: sz[1] * 25400 } }, (ok, why) => res({ ok, why })));
   pw.destroy();
-  log('nyomtatás: ' + (res.ok ? 'ok' : 'hiba ' + res.why) + ' x' + copies);
+  log('nyomtatás: ' + (res.ok ? 'ok' : 'hiba ' + res.why) + ' x' + copies + ' (' + sz.join('x') + ', ' + fit + (sc !== 1 || dx || dy ? ', ' + Math.round(sc * 100) + '%, ' + dx + '/' + dy + ' mm' : '') + ')');
   if (!res.ok) throw new Error('A nyomtatás nem sikerült: ' + (res.why || 'ismeretlen hiba'));
   return true;
 }));

@@ -146,6 +146,7 @@
           <button type="button" data-tab="st">Kezdés</button>
           <button type="button" data-tab="sh">Fotózás</button>
           <button type="button" data-tab="af">Utána</button>
+          <button type="button" data-tab="pr">Nyomtató</button>
           <button type="button" data-tab="hw">Gép</button>
         </nav>
         <div class="st-panes">
@@ -209,12 +210,37 @@
 
           <div class="st-pane" data-pane="af">
             <label>Előnézet ideje (mp) – utána vissza a kezdéshez <input name="reviewSec" type="number" min="5" max="120"></label>
+            <h3 class="st-h">Megosztási opciók</h3>
+            <p class="st-up">Mit lásson a vendég a fotója után? Több is bekapcsolható.</p>
+            <label class="chk"><input id="u-shareQr" type="checkbox"> QR-kód – a vendég a telefonjával letölti a fotót</label>
+            <label class="chk"><input id="u-shareEmail" type="checkbox"> E-mail – „Küldés e-mailben” gomb; a panel levélküldője küldi a fotó linkjét</label>
+            <p class="st-up" data-shemhint hidden></p>
+            <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop – a vendég iPhone-jára (csak Macen)</label>
+            <h3 class="st-h">Adatgyűjtés</h3>
+            <label>Név bekérése <select id="u-askName"><option value="off">Nem kérjük</option><option value="opt">Nem kötelező</option><option value="req">Kötelező</option></select></label>
+            <label class="chk"><input id="u-formBefore" type="checkbox"> Kérdőív a fotózás előtt</label>
+            <label>A kérdőív saját kérdései (soronként egy, legfeljebb 3; az e-mailes küldésnél nem jelennek meg) <textarea id="u-questions" rows="3" maxlength="300"></textarea></label>
+            <label>Hozzájárulás szövege <textarea id="u-consentText" rows="3" maxlength="400"></textarea></label>
+            <label class="chk"><input id="u-osk" type="checkbox"> Képernyő-billentyűzet az űrlapon (érintőképernyőhöz)</label>
+            <p class="st-up">A vendégadat csak a panelbe kerül, a dealhez (Salesmate-be nem), és 60 nap után törlődik. Letöltés: a deal adatlapján, „Vendégadatok”.</p>
+            <h3 class="st-h">Internet nélküli QR</h3>
+            <div class="st-row"><label>QR a helyi Wi-Fi-ről <select id="u-lanQr"><option value="off">Ki</option><option value="auto">Csak ha nincs internet</option><option value="always">Mindig</option></select></label><label>A Wi-Fi neve a vendégeknek <input id="u-lanSsid" maxlength="40" placeholder="pl. EventCrazy-Foto"></label></div>
+            <p class="st-up" data-laninfo></p>
+            <p class="st-up" data-upst></p>
+          </div>
+
+          <div class="st-pane" data-pane="pr">
             <label>Példány alapból <input name="copies" type="number" min="1" max="10"></label>
             <label class="chk"><input name="autoPrint" type="checkbox"> Automatikus nyomtatás (gomb nélkül)</label>
             <h3 class="st-h">Nyomtatók és papír</h3>
             <label>Hol nyomtasson? <select id="u-printWhere"><option value="local">Ezen a gépen (a csatlakoztatott nyomtató)</option><option value="station">Nyomtatóállomáson (másik gép, „a nyomtatónál vedd át”)</option></select></label>
             <div class="prl" data-prlist></div>
             <div class="st-row"><label>Több nyomtató esetén <select id="u-printMode"><option value="one">Csak az első</option><option value="rr">Felváltva (terhelés elosztása)</option><option value="backup">Tartalék: ha az első hibás vagy kifogyott, a következő</option></select></label><label>Lap / tekercs (DS620 4×6": 400) <input id="u-paperRoll" type="number" min="10" max="2000"></label></div>
+            <h3 class="st-h">Papír és illesztés</h3>
+            <div class="st-row"><label>Papírméret <select id="u-paperSize"><option value="4x6">10×15 cm (4×6") – a 2×6"-os csíkhoz is (a vágást a nyomtató-meghajtó adja)</option><option value="5x7">13×18 cm (5×7")</option><option value="6x8">15×20 cm (6×8")</option></select></label><label>Kitöltés <select id="u-printFit"><option value="cover">Szegély nélkül (a széle levágódhat)</option><option value="contain">Teljes kép (fehér sáv maradhat)</option></select></label></div>
+            <div class="st-row"><label>Nagyítás (%) <input id="u-printScale" type="number" min="90" max="110" step="1"></label><label>Eltolás jobbra (mm) <input id="u-printDx" type="number" min="-5" max="5" step="0.5"></label><label>Eltolás lefelé (mm) <input id="u-printDy" type="number" min="-5" max="5" step="0.5"></label></div>
+            <p class="st-up">Ha a nyomaton fehér szél látszik, növeld a nagyítást (pl. 102 %); ha a kép elcsúszott, told el (mínusz: balra / felfelé). Nagyítás: 90–110 %, eltolás: ±5 mm.</p>
+            <p class="st-up" data-prpinfo></p>
             <h3 class="st-h">Nyomtatási korlát <small>(0 = nincs korlát)</small></h3>
             <div class="st-row"><label>Képenként legfeljebb (példány) <input id="u-limitPhoto" type="number" min="0" max="20"></label><label>Rendezvényenként összesen <input id="u-limitEvent" type="number" min="0" max="5000"></label></div>
             <p class="st-up" data-prcount></p>
@@ -232,26 +258,9 @@
             <div class="st-row"><label>Képek egy íven <select id="u-stickerGrid"><option value="2">2</option><option value="4">4 (2×2)</option><option value="6">6 (2×3)</option><option value="8">8 (2×4)</option><option value="16">16 (4×4)</option></select></label><label>Matricanyomtató <select id="u-stickerPrinter" data-stprn></select></label></div>
             <label>Vágási ráhagyás (mm) – a matricapapír vágásához igazítsd <input id="u-stickerBleed" type="number" min="0" max="5" step="0.5"></label>
             <div class="st-b"><button type="button" class="big ghost sm" data-act="stickertest">Próba-ív nyomtatása</button></div>
-            <h3 class="st-h">Megosztási opciók</h3>
-            <p class="st-up">Mit lásson a vendég a fotója után? Több is bekapcsolható.</p>
-            <label class="chk"><input id="u-shareQr" type="checkbox"> QR-kód – a vendég a telefonjával letölti a fotót</label>
-            <label class="chk"><input id="u-shareEmail" type="checkbox"> E-mail – „Küldés e-mailben” gomb; a panel levélküldője küldi a fotó linkjét</label>
-            <p class="st-up" data-shemhint hidden></p>
-            <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop – a vendég iPhone-jára (csak Macen)</label>
-            <h3 class="st-h">Adatgyűjtés</h3>
-            <label>Név bekérése <select id="u-askName"><option value="off">Nem kérjük</option><option value="opt">Nem kötelező</option><option value="req">Kötelező</option></select></label>
-            <label class="chk"><input id="u-formBefore" type="checkbox"> Kérdőív a fotózás előtt</label>
-            <label>A kérdőív saját kérdései (soronként egy, legfeljebb 3; az e-mailes küldésnél nem jelennek meg) <textarea id="u-questions" rows="3" maxlength="300"></textarea></label>
-            <label>Hozzájárulás szövege <textarea id="u-consentText" rows="3" maxlength="400"></textarea></label>
-            <label class="chk"><input id="u-osk" type="checkbox"> Képernyő-billentyűzet az űrlapon (érintőképernyőhöz)</label>
-            <p class="st-up">A vendégadat csak a panelbe kerül, a dealhez (Salesmate-be nem), és 60 nap után törlődik. Letöltés: a deal adatlapján, „Vendégadatok”.</p>
-            <h3 class="st-h">Internet nélküli QR</h3>
-            <div class="st-row"><label>QR a helyi Wi-Fi-ről <select id="u-lanQr"><option value="off">Ki</option><option value="auto">Csak ha nincs internet</option><option value="always">Mindig</option></select></label><label>A Wi-Fi neve a vendégeknek <input id="u-lanSsid" maxlength="40" placeholder="pl. EventCrazy-Foto"></label></div>
-            <p class="st-up" data-laninfo></p>
             <h3 class="st-h">Nyomtatóállomás</h3>
             <label class="chk"><input id="u-station" type="checkbox"> Ez a gép nyomtatóállomás: a kiválasztott rendezvény nyomtatási sorát nyomtatja (fotózás nélkül)</label>
             <p class="st-up" data-stinfo></p>
-            <p class="st-up" data-upst></p>
           </div>
 
           <div class="st-pane" data-pane="hw">
