@@ -232,9 +232,13 @@
             <div class="st-row"><label>Képek egy íven <select id="u-stickerGrid"><option value="2">2</option><option value="4">4 (2×2)</option><option value="6">6 (2×3)</option><option value="8">8 (2×4)</option><option value="16">16 (4×4)</option></select></label><label>Matricanyomtató <select id="u-stickerPrinter" data-stprn></select></label></div>
             <label>Vágási ráhagyás (mm) – a matricapapír vágásához igazítsd <input id="u-stickerBleed" type="number" min="0" max="5" step="0.5"></label>
             <div class="st-b"><button type="button" class="big ghost sm" data-act="stickertest">Próba-ív nyomtatása</button></div>
-            <h3 class="st-h">Megosztás és adatgyűjtés</h3>
-            <label class="chk"><input id="u-shareEmail" type="checkbox"> „Küldés e-mailben” gomb – a panel levélküldője küldi a fotó linkjét</label>
-            <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop gomb (Mac: a vendég iPhone-jára)</label>
+            <h3 class="st-h">Megosztási opciók</h3>
+            <p class="st-up">Mit lásson a vendég a fotója után? Több is bekapcsolható.</p>
+            <label class="chk"><input id="u-shareQr" type="checkbox"> QR-kód – a vendég a telefonjával letölti a fotót</label>
+            <label class="chk"><input id="u-shareEmail" type="checkbox"> E-mail – „Küldés e-mailben” gomb; a panel levélküldője küldi a fotó linkjét</label>
+            <p class="st-up" data-shemhint hidden></p>
+            <label class="chk" data-maconly><input id="u-airdrop" type="checkbox"> AirDrop – a vendég iPhone-jára (csak Macen)</label>
+            <h3 class="st-h">Adatgyűjtés</h3>
             <label>Név bekérése <select id="u-askName"><option value="off">Nem kérjük</option><option value="opt">Nem kötelező</option><option value="req">Kötelező</option></select></label>
             <label class="chk"><input id="u-formBefore" type="checkbox"> Kérdőív a fotózás előtt</label>
             <label>A kérdőív saját kérdései (soronként egy, legfeljebb 3; az e-mailes küldésnél nem jelennek meg) <textarea id="u-questions" rows="3" maxlength="300"></textarea></label>

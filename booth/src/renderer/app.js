@@ -217,7 +217,7 @@
     thumbs(); show('review');
     const ev = S.cfg.event;
     shareButtons();
-    if (!again) { S.lastPhoto = await call(B.newTok, 10); $('[data-qrbox]').hidden = true; if (S.cfg.boothKey || lanActive()) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto); }
+    if (!again) { S.lastPhoto = await call(B.newTok, 10); $('[data-qrbox]').hidden = true; if (qrOn() && (S.cfg.boothKey || lanActive())) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto); }
     S.pending = { ev, photo: S.lastPhoto, data: cv.toDataURL('image/jpeg', 0.92), meta: {} };
     const changeable = S.pick || (S.pool && S.pool.length > 1);
     if (changeable && !lanActive()) { clearTimeout(S.saveT); S.saveT = setTimeout(commit, 12000); } else await commit();
@@ -297,7 +297,7 @@
     $('[data-printui]').hidden = true; $('[data-thumbs]').hidden = true; S.pool = null; S.pick = false; shareButtons();
     $('[data-qrbox]').hidden = true; show('review');
     const ev = S.cfg.event; S.lastPhoto = await call(B.newTok, 10);
-    if (S.cfg.boothKey || lanActive()) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto);
+    if (qrOn() && (S.cfg.boothKey || lanActive())) showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.lastPhoto);
     S.pending = { ev, photo: S.lastPhoto, data: await window.BoothClips.blobToDataUrl(S.clip.blob), meta: { poster: S.clip.poster, kind: mode === 'guestbook' ? 'guestbook' : 'video' } };
     await commit();
     idle();
@@ -541,7 +541,7 @@
     S.lastPhoto = photo; $('[data-phdel]').hidden = !B.galDel;
     $('[data-phqrbox]').hidden = true;
     show('photo');
-    if (S.cfg.boothKey) showQr($('[data-phqrbox]'), $('[data-phqr]'), S.cfg.event.ev, photo);
+    if (S.cfg.boothKey && qrOn()) showQr($('[data-phqrbox]'), $('[data-phqr]'), S.cfg.event.ev, photo);
   }
   $('[data-glgrid]').addEventListener('click', e => {
     const b = e.target.closest('[data-ph]'); if (!b) return;
@@ -704,8 +704,8 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -715,6 +715,9 @@
     UI_SEL.concat(UI_LIM, UI_TXT).forEach(k => { $('#u-' + k).value = u[k]; });
     if (!$('#u-consentText').value) $('#u-consentText').value = CONSENT_DEF;
     document.querySelectorAll('[data-maconly]').forEach(x => { x.hidden = !S.cfg.mac; });
+    /* v0.13: megosztási opciók – ha az e-mail nem jelenhet meg, a beállítás megmondja, miért */
+    const emw = !B.guest ? 'Az e-mailes küldéshez a program újabb változata kell.' : !S.cfg.boothKey ? 'Az e-mail gomb csak párosított gépen jelenik meg (Beállítások → Párosítás).' : !(S.cfg.event && S.cfg.event.deal) ? 'Az e-mail gomb csak akkor jelenik meg, ha a kiválasztott rendezvény deallel van összekötve.' : '';
+    $('[data-shemhint]').textContent = emw; $('[data-shemhint]').hidden = !emw;
     $('#u-shareEmail').disabled = !B.guest; $('#u-formBefore').disabled = !B.guest; $('#u-lanQr').disabled = !B.lanStart;
     $('[data-laninfo]').textContent = !B.lanStart ? 'Ehhez a program 0.7.0-s vagy újabb változata kell.' : 'A vendég telefonja ugyanazon a Wi-Fi-n legyen, mint a gép (pl. a gép internetmegosztása / hotspotja).';
     if (B.lanInfo) B.lanInfo().then(r => { if (r && r.ok && r.v.ip) $('[data-laninfo]').textContent += ' A gép címe: ' + r.v.ip + (r.v.on ? ':' + r.v.port + ' (fut)' : ''); });
@@ -965,6 +968,7 @@
   window.addEventListener('resize', () => { if (S.scr === 'live' && !$('[data-lvframe]').hidden) frameGuide(true); });
   /* ---------- 5. fázis: megosztás és adatgyűjtés (e-mail a panel levélküldőjén, vendégadat csak a panelbe, AirDrop, helyi Wi-Fi-s QR) */
   const CONSENT_DEF = 'Hozzájárulok, hogy az EventCrazy a megadott adataimat a fotó elküldéséhez és a rendezvény szervezőjének átadásához kezelje. Az adatokat 60 nap után töröljük.';
+  const qrOn = () => U().shareQr !== false; /* v0.13: a QR-kód kikapcsolható (alapból be) */
   const canEmail = () => !!(U().shareEmail && B.guest && S.cfg.boothKey && S.cfg.event && S.cfg.event.deal);
   const canAir = () => !!(U().airdrop && S.cfg.mac && B.shareMac);
   const questions = () => String(U().questions || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 3);
