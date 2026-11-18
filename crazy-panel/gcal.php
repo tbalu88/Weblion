@@ -253,6 +253,86 @@ function cp_gcal_ajax_plan() {
 	wp_send_json_success($p);
 }
 
+/* ------------------------------------------------------------ v2.9.323: eltérések a naptár és a panel között (csak olvas)
+ * A naptárbejegyzéseket a megszokott módon párosítja a dealekhez (kezelői link vagy az aznapi ügyfélnév), majd összeveti:
+ * dátum, kezdés, időtartam, helyszín, kezelő; jelzi az elveszett / törölt dealt, a párosítatlan bejegyzést és a bejegyzés
+ * nélküli foglalt dealt. Semmit nem ír sem a naptárba, sem a panelbe. */
+add_action('wp_ajax_nopriv_cp_gcal_diff', 'cp_gcal_ajax_diff');
+add_action('wp_ajax_cp_gcal_diff', 'cp_gcal_ajax_diff');
+function cp_gcal_hm($dt) { return preg_match('/(\d{2}):(\d{2})/', (string) $dt, $m) ? $m[1] . ':' . $m[2] : ''; }
+function cp_gcal_ajax_diff() {
+	cp_el_auth();
+	cp_tab_need(array('gnaptar'));
+	if (!cp_gcal_ok()) { cp_el_err('A Google Naptár nincs bekötve.'); }
+	@set_time_limit(90);
+	$r = cp_gcal_diff(cp_el_req_date('to'), !empty($_POST['force']));
+	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 502); }
+	wp_send_json_success($r);
+}
+function cp_gcal_diff($to = '', $force = false) {
+	global $wpdb;
+	$from = wp_date('Y-m-d'); if ($to === '' || $to < $from) { $to = wp_date('Y') . '-12-31'; }
+	if (strtotime($to) - strtotime($from) > 200 * DAY_IN_SECONDS) { $to = wp_date('Y-m-d', strtotime($from) + 200 * DAY_IN_SECONDS); }
+	$ev = cp_gcal_events($from, $to, $force);
+	if (is_wp_error($ev)) { return $ev; }
+	/* minden deal az időszakban (az elveszett / törölt is – hogy jelezhessük, ha a naptárban még szerepel) */
+	$D = cp_crm_t('deals');
+	$all = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, d.operator, d.deleted_at, c.name cn FROM $D d LEFT JOIN " . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.event_d BETWEEN %s AND %s', wp_date('Y-m-d', strtotime($from) - 60 * DAY_IN_SECONDS), wp_date('Y-m-d', strtotime($to) + 60 * DAY_IN_SECONDS)), ARRAY_A);
+	$live = array_values(array_filter($all, function ($d) use ($from, $to) { return empty($d['deleted_at']) && $d['status'] !== 'Lost' && $d['event_d'] >= $from && $d['event_d'] <= $to; }));
+	list($byDate, $byId, $byKey) = cp_gcal_index($live);
+	$dead = array(); foreach ($all as $d) { if (!empty($d['deleted_at']) || $d['status'] === 'Lost') { $dead[] = $d; } }
+	list($dDate, $dId) = cp_gcal_index($dead);
+	list($aDate, $aId) = cp_gcal_index(array_values(array_filter($all, function ($d) { return empty($d['deleted_at']) && $d['status'] !== 'Lost'; })));
+	$kz = array(); if (function_exists('cp_kz_t')) { foreach ((array) $wpdb->get_col('SELECT name FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host')") as $n) { $n = trim((string) $n); if (mb_strlen($n) >= 4) { $kz[] = $n; } } }
+	$booked = array_map('mb_strtolower', cp_panel_lines(cp_panel_opts()['booked_stages']));
+	$norm = function ($x) { return cp_gcal_norm($x); };
+	$names = function ($txt) use ($kz, $norm) { $t = ' ' . $norm($txt) . ' '; $o = array(); foreach ($kz as $n) { $k = $norm($n); $p = explode(' ', $k); $last = end($p); if (strpos($t, ' ' . $k . ' ') !== false || (count($p) > 1 && strpos($t, ' ' . $p[0] . ' ') !== false && strpos($t, ' ' . $last . ' ') !== false)) { $o[] = $n; } } return array_values(array_unique($o)); };
+	$rows = array(); $seen = array();
+	foreach ($ev as $e) {
+		$day = substr($e['s'], 0, 10); if ($day < $from) { continue; }
+		$key = cp_gcal_match_key($e, $byDate, $byId);
+		$it = array();
+		$row = array('day' => $day, 'ev' => cp_gcal_unpen($e['t']), 'link' => $e['link'], 'deal' => 0, 'dt' => '', 'stg' => '');
+		if ($key === '') {
+			/* más napon van-e ilyen nevű deal (dátumeltérés), vagy elveszett / törölt deal */
+			$alt = '';
+			foreach ($aDate as $dd => $L) { if ($dd === $day) { continue; } $tmp = cp_gcal_match_key(array('raw' => '', 's' => $dd . ' 00:00', 't' => $e['t']), array($dd => $L), $aId); if ($tmp !== '') { $alt = $tmp; $altDay = $dd; break; } }
+			$dk = cp_gcal_match_key($e, $dDate, $dId);
+			if ($dk !== '') { $d = $dId[(int) $dk]; $row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $it[] = array('k' => 'lost', 'm' => !empty($d['deleted_at']) ? 'A deal törölve van, a naptárban még szerepel' : 'A deal elveszett, a naptárban még szerepel'); }
+			elseif ($alt !== '') { $d = $aId[(int) $alt]; $row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $row['stg'] = (string) $d['stage']; $it[] = array('k' => 'date', 'm' => 'Dátum eltér', 'cal' => $day, 'pan' => (string) $d['event_d']); }
+			else { $it[] = array('k' => 'nodeal', 'm' => 'Nincs hozzá deal a panelben (név vagy dátum alapján sem)'); }
+			$row['it'] = $it; $rows[] = $row; continue;
+		}
+		$seen[$key] = 1;
+		$x = $byKey[$key] ?? $byId[(int) $key]; $d = $byId[(int) $key];
+		$row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $row['stg'] = (string) $d['stage'];
+		$dn = (int) ($x['dn'] ?? 1);
+		if (empty($e['ad']) && $dn === 1) {
+			$ch = cp_gcal_hm($e['s']); $ph = $d['start_at'] ? cp_gcal_hm(cp_crm_local((string) $d['start_at'])) : '';
+			if ($ch !== '' && $ph === '') { $it[] = array('k' => 'time', 'm' => 'Kezdés csak a naptárban', 'cal' => $ch, 'pan' => '–'); }
+			elseif ($ch !== '' && $ph !== '' && $ch !== $ph) { $it[] = array('k' => 'time', 'm' => 'Kezdés eltér', 'cal' => $ch, 'pan' => $ph); }
+			$eh = (strtotime($e['e']) - strtotime($e['s'])) / 3600; $phs = (float) $d['hours'];
+			if ($eh > 1 && $eh < 24 && $phs > 0 && abs($eh - $phs) >= 0.5) { $it[] = array('k' => 'hours', 'm' => 'Időtartam eltér', 'cal' => rtrim(rtrim(number_format($eh, 1, ',', ''), '0'), ',') . ' óra', 'pan' => rtrim(rtrim(number_format($phs, 1, ',', ''), '0'), ',') . ' óra'); }
+			elseif ($eh > 1 && $eh < 24 && $phs <= 0) { $it[] = array('k' => 'hours', 'm' => 'Időtartam csak a naptárban', 'cal' => rtrim(rtrim(number_format($eh, 1, ',', ''), '0'), ',') . ' óra', 'pan' => '–'); }
+		}
+		$cl = trim((string) $e['loc']); $pl = trim((string) $d['venue']);
+		if ($cl !== '' && $pl === '') { $it[] = array('k' => 'loc', 'm' => 'Helyszín csak a naptárban', 'cal' => $cl, 'pan' => '–'); }
+		elseif ($cl !== '' && $pl !== '') { $a = $norm($cl); $b = $norm($pl); $ta = array_filter(explode(' ', $a), function ($w) { return strlen($w) > 3; }); $tb = array_filter(explode(' ', $b), function ($w) { return strlen($w) > 3; }); if ($ta && $tb && !array_intersect($ta, $tb) && strpos($a, $b) === false && strpos($b, $a) === false) { $it[] = array('k' => 'loc', 'm' => 'Helyszín eltér', 'cal' => $cl, 'pan' => $pl); } }
+		$cn = $names($e['t'] . ' ' . wp_strip_all_tags($e['raw'])); $pn = $names((string) $d['operator']);
+		if ($cn && !$pn) { $it[] = array('k' => 'op', 'm' => 'Kezelő csak a naptárban', 'cal' => implode(', ', $cn), 'pan' => trim((string) $d['operator']) !== '' ? (string) $d['operator'] : '–'); }
+		elseif ($cn && $pn && array_diff($cn, $pn)) { $it[] = array('k' => 'op', 'm' => 'Kezelő eltér', 'cal' => implode(', ', $cn), 'pan' => (string) $d['operator']); }
+		if ($it) { $row['it'] = $it; $rows[] = $row; }
+	}
+	/* foglalt (szerződéses) deal naptárbejegyzés nélkül */
+	foreach ($byKey as $k => $x) {
+		if (isset($seen[$k]) || $x['day'] < $from || $x['day'] > $to) { continue; }
+		if (!in_array(mb_strtolower((string) $x['stage']), $booked, true) && $x['status'] !== 'Won') { continue; }
+		$rows[] = array('day' => $x['day'], 'ev' => '', 'link' => '', 'deal' => (int) $x['id'], 'dt' => (string) $x['title'], 'stg' => (string) $x['stage'], 'it' => array(array('k' => 'noev', 'm' => 'Nincs naptárbejegyzés')));
+	}
+	usort($rows, function ($a, $b) { return strcmp($a['day'], $b['day']); });
+	return array('from' => $from, 'to' => $to, 'ev' => count($ev), 'rows' => $rows);
+}
+
 /* ------------------------------------------------------------ átállás: árnyék-ellenőrzés (10 percenként) */
 add_action('cp_crm_tick', 'cp_gcal_shadow', 31);
 function cp_gcal_shadow() {
