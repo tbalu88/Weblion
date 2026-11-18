@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.312');
+define('CP_PANEL_VER', '2.9.313');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -488,6 +488,7 @@ function cp_panel_normalize($rows) {
 	$pending = array_map('mb_strtolower', cp_panel_lines($o['pending_stages']));
 	// ügyfélportál: az „Adatlap kiküldve” szakasz (a szerződés előtt) ajánlatként látszik
 	if (function_exists('cp_portal_sent_stage') && cp_portal_sent_stage() !== '') { $pending[] = mb_strtolower(cp_portal_sent_stage()); }
+	$pending[] = mb_strtolower('Adatlap kitöltve'); /* v2.9.313: a szerződés előtti szakasz – ajánlatként látszik */
 	$pipeline = mb_strtolower(trim($o['pipeline']));
 	$extra = cp_panel_extra_fields();
 	$out = array();

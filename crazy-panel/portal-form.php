@@ -172,6 +172,7 @@ function cp_portal_complete($portal) {
 	if ($first) {
 		cp_portal_notify_once($portal, 'completed', 'email', function () use ($portal) { return cp_portal_send_client_mail($portal, 'completed'); });
 		cp_portal_sm_queue($portal->deal_id, 'note', 'Adatlap kitöltve (ügyfélportál)');
+		$did = (int) $portal->deal_id; if (function_exists('cp_portal_defer')) { cp_portal_defer(function () use ($did) { cp_af_move($did); }); } else { cp_af_move($did); }
 	}
 	return array_merge($res, array('ok' => true, 'first' => $first));
 }
@@ -334,3 +335,37 @@ function cp_portal_duration_info($portal, $answers) {
 	$chosen = cp_portal_schedule_hours(isset($answers['schedule']) ? $answers['schedule'] : null);
 	return array('pkg' => $pkg, 'chosen' => $chosen, 'diff' => $pkg > 0 && $chosen > 0 && abs($chosen - $pkg) >= 0.25);
 }
+
+/* ------------------------------------------------------------ v2.9.313: „Adatlap kitöltve” szakasz
+ * Ha az ügyfél kitöltötte az adatlapot, és a deal az „Adatlap kiküldve” szakaszban áll, átlép az „Adatlap kitöltve” szakaszba
+ * (Salesmate-ben is). Későbbi szakaszból soha nem lép vissza. Kapcsoló: cp_af_on = '1' (bekapcsolás, amikor a szakasz a
+ * Salesmate-pipeline-ban is létezik). Negyedóránként pótló kör is fut (pl. ha a Salesmate épp nem volt elérhető). */
+function cp_af_from() { return 'Adatlap kiküldve'; }
+function cp_af_to() { return 'Adatlap kitöltve'; }
+function cp_af_move($deal_id) {
+	if (get_option('cp_af_on') !== '1' || !function_exists('cp_sm_put_deal')) { return false; }
+	global $wpdb; $deal_id = (int) $deal_id; if ($deal_id <= 0) { return false; }
+	$D = cp_crm_t('deals');
+	$d = $wpdb->get_row($wpdb->prepare("SELECT id, stage, status, pipeline FROM $D WHERE id = %d AND deleted_at IS NULL", $deal_id), ARRAY_A);
+	if (!$d || $d['status'] !== 'Open' || cp_panel_lc($d['stage']) !== cp_panel_lc(cp_af_from())) { return false; }
+	$body = array('stage' => cp_af_to()); if ((string) $d['pipeline'] !== '') { $body['pipeline'] = (string) $d['pipeline']; }
+	$put = cp_sm_put_deal($deal_id, $body);
+	if (is_wp_error($put)) { if (function_exists('cp_portal_error_add')) { cp_portal_error_add($deal_id, 'szakaszváltás (Adatlap kitöltve)', $put->get_error_message()); } return false; }
+	$wpdb->update($D, array('stage' => cp_af_to()), array('id' => $deal_id));
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'af_move', 'Automatikus szakaszváltás: Adatlap kitöltve', 'deal:' . $deal_id, cp_af_from() . ' → ' . cp_af_to()); }
+	return true;
+}
+function cp_af_sweep($limit = 20) {
+	if (get_option('cp_af_on') !== '1') { return 0; }
+	global $wpdb; $p = $wpdb->prefix;
+	$ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT d.id FROM {$p}crazy_portal_portals pp JOIN {$p}crazy_portal_form_state fs ON fs.portal_id = pp.id JOIN " . cp_crm_t('deals') . " d ON d.id = pp.deal_id WHERE fs.completed_at IS NOT NULL AND d.deleted_at IS NULL AND d.status = 'Open' AND d.stage = %s LIMIT %d", cp_af_from(), (int) $limit));
+	$n = 0; foreach ((array) $ids as $id) { if (cp_af_move((int) $id)) { $n++; } }
+	return $n;
+}
+add_action('cp_blog_tick', function () {
+	if (get_option('cp_af_on') !== '1' || get_transient('cp_af_sweep')) { return; }
+	set_transient('cp_af_sweep', 1, 15 * MINUTE_IN_SECONDS);
+	cp_af_sweep();
+});
+

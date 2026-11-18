@@ -323,7 +323,7 @@ function cp_gcal_pen_sync($dry = false) {
 	if (is_wp_error($ev)) { if (!$dry) { delete_transient('cp_gcal_pen_lock'); } return $ev; }
 	$deals = cp_gcal_deals($from, $to); list($bd, $bi, $bk) = cp_gcal_index($deals);
 	$PEN = cp_gcal_stages()[0];
-	$later = array('Szerződés aláírva', 'Adatlap kiküldve', 'Rendezvény felkészül', 'Pénzre várunk', 'Rendezvény lement (G&R)');
+	$later = array('Szerződés aláírva', 'Adatlap kiküldve', 'Adatlap kitöltve', 'Rendezvény felkészül', 'Pénzre várunk', 'Rendezvény lement (G&R)');
 	$out = array('add' => array(), 'remove' => array(), 'create' => array(), 'wait' => array(), 'err' => array());
 	$has = array();
 	foreach ($ev as $e) {

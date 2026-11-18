@@ -12,7 +12,7 @@ require_once __DIR__ . '/crm-filter.php';
 
 /* a fő pipeline szakaszai sorrendben (a Salesmate beállításai szerint, 2026. okt.) */
 function cp_crm_stages() {
-	return array('Érdeklődő / Megrendelő', 'Ajánlat kiküldve', 'Adatlap kiküldve', 'Szerződés kiküldve', 'Szerződés aláírva', 'Rendezvény felkészül', 'Rendezvény lement (G&R)', 'Pénzre várunk');
+	return array('Érdeklődő / Megrendelő', 'Ajánlat kiküldve', 'Adatlap kiküldve', 'Adatlap kitöltve', 'Szerződés kiküldve', 'Szerződés aláírva', 'Rendezvény felkészül', 'Rendezvény lement (G&R)', 'Pénzre várunk');
 }
 
 function cp_crm_panel_on() {
