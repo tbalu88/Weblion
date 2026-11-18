@@ -125,6 +125,7 @@
     <div class="sbed-main" data-sbmain></div>
   </section>
 
+  <section class="scr" data-s="draw"><div class="drw"><div class="drw-box"><canvas data-drawcv aria-label="A rajzod készül"></canvas></div><b>Rajzolunk…</b></div></section>
   <section class="scr" data-s="busy"><div class="busy"><div class="spin"></div><b data-busyt>Nyomtatás…</b><div class="busybar" data-busybar hidden><div></div></div></div></section>
 
   <section class="scr" data-s="settings">
@@ -196,6 +197,7 @@
             <label class="chk"><input id="u-retake" type="checkbox"> Egy kép újrafotózása a csíkban (koppintás a képre)</label>
             <label>Csoportkép: visszaszámlálás (mp) <input id="u-groupCd" type="number" min="3" max="15"></label>
             <div class="st-row"><label>Videó hossza (mp) <input id="u-videoSec" type="number" min="3" max="30"></label><label>Videóüzenet hossza (mp) <input id="u-gbSec" type="number" min="10" max="90"></label></div>
+            <div class="st-row"><label>AI-rajz hossza (mp) – a rajzolás a képernyőn <input id="u-drawSec" type="number" min="8" max="60"></label></div>
             <h3 class="st-h">360°-os mód</h3>
             <div class="st-row"><label>Felvétel hossza (mp) <input id="u-spinSec" type="number" min="4" max="20"></label><label>Visszaszámlálás (mp) – a platform indításához <input id="u-spinCd" type="number" min="3" max="15"></label></div>
             <label>360° kamera (pl. a karra szerelt webkamera) <select id="u-spinCam" data-spincam></select></label>
@@ -294,6 +296,7 @@
   <div class="err" data-err hidden></div>
 </div>
 <script src="compose.js"></script>
+<script src="draw.js"></script>
 <script src="clips.js"></script>
 <script src="app.js"></script>
 </body>

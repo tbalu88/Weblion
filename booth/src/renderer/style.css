@@ -294,3 +294,9 @@ button{font:inherit;cursor:pointer}
 .aiok-b{display:flex;gap:2vh;justify-content:center;flex-wrap:wrap}.aiok-b .big{flex:1 1 30vh;padding:0 3vh}
 [data-s=aistyle]{flex-direction:column;align-items:center;justify-content:center;gap:5vh;background:radial-gradient(circle at 50% 40%,#1E2848 0%,var(--n) 70%);padding:4vh}
 [data-s=aistyle] .mt{aspect-ratio:auto;min-height:16vh}
+/* 0.15.0: AI-rajz – a rajzolás képernyője */
+[data-s=draw]{align-items:center;justify-content:center;background:#0e1220}
+.drw{display:flex;flex-direction:column;align-items:center;gap:2vh}
+.drw-box{width:92vw;height:84vh;display:grid;place-items:center}
+.drw-box canvas{background:#fff;border-radius:1.2vh;box-shadow:0 2vh 6vh rgba(0,0,0,.45)}
+.drw b{font-size:3vh;font-weight:600;color:rgba(255,255,255,.7)}

@@ -106,7 +106,7 @@
 		try { draw(await post('cp_booth_gal', who)); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
 	}
 	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
-	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet'], ['ai', 'AI-kép']];
+	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet'], ['ai', 'AI-kép'], ['aidraw', 'AI-rajz (élő)']];
 	const AI_STYLES = [['karikatura', 'Karikatúra'], ['magazin', 'Magazinborító'], ['plakat', 'Filmplakát'], ['kartya', 'Gyűjtőkártya'], ['portre', 'Céges portré']];
 	function boothCard(x, toEv) {
 		const b = x.booth; if (!b) return '';
@@ -159,7 +159,7 @@
 			const o = { modes: modes.length ? modes : ['photo'], shots: Number(g('bc-shots').value), autoPrint: g('bc-autoPrint').checked, bestOf: g('bc-bestOf').checked, retake: g('bc-retake').checked, shareEmail: g('bc-shareEmail').checked, formBefore: g('bc-formBefore').checked, askName: g('bc-askName').value, questions: g('bc-questions').value, t1: g('bc-t1').value.trim(), t2: g('bc-t2').value.trim(), brand: g('bc-brand').value.trim(), color: g('bc-color').value };
 			['countdown', 'cdNext', 'copies', 'limitPhoto', 'limitEvent'].forEach(k => { o[k] = Number(g('bc-' + k).value) || 0; });
 			o.ai = { styles: AI_STYLES.map(st => st[0]).filter(k => g('bc-ai-' + k).checked), custom: g('bc-ai-cp').value.trim(), custom_label: g('bc-ai-cl').value.trim(), out: g('bc-ai-out').value, limit: Number(g('bc-ai-limit').value) || 300 };
-			if (o.modes.includes('ai') && !o.ai.styles.length && !o.ai.custom) { toast('Az AI-kép módhoz válassz legalább egy stílust (vagy írj saját promptot).', true); return; }
+			if ((o.modes.includes('ai') || o.modes.includes('aidraw')) && !o.ai.styles.length && !o.ai.custom) { toast('Az AI-kép / AI-rajz módhoz válassz legalább egy stílust (vagy írj saját promptot).', true); return; }
 			try { const r = await post('cp_booth_dcfg', { deal, cfg: JSON.stringify(o) }); toast(r && r.warn ? r.warn : 'Mentve – a gépek egy percen belül átveszik.', !!(r && r.warn)); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); }
 		});
 		const cl = box.querySelector('[data-bcclear]');

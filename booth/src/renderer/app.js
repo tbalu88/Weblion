@@ -111,10 +111,11 @@
     slow: { name: 'Lassított', sub: 'slow motion', clip: true, ico: '<circle cx="24" cy="24" r="17"/><path d="M24 14v10l7 5"/>' },
     spin: { name: '360°', sub: 'forgó platform, lassítva', clip: true, ico: '<ellipse cx="24" cy="36" rx="17" ry="5"/><path d="M24 8v20M17 15l7-7 7 7"/><path d="M38 24a14 14 0 0 1-3 8"/>' },
     ai: { name: 'AI-kép', sub: 'rajzolt, stílusos változat', ico: '<path d="M10 38l4-12 18-18 8 8-18 18z"/><path d="M28 12l8 8"/><path d="M36 30l2 4 4 2-4 2-2 4-2-4-4-2 4-2z"/>' },
+    aidraw: { name: 'AI-rajz', sub: 'élőben megrajzolva', ico: '<path d="M8 40c6-2 10-8 14-8s4 6 9 6 8-6 10-10"/><path d="M30 8l10 10-14 14-8 2 2-8z"/>' },
     guestbook: { name: 'Videóüzenet', sub: 'jókívánság hanggal', clip: true, ico: '<rect x="18" y="6" width="12" height="22" rx="6"/><path d="M11 22c0 7 6 12 13 12s13-5 13-12M24 34v8M17 42h14"/>' }
   };
   const U = () => (S.cfg && S.cfg.ui) || {};
-  const modeList = () => { const m = (U().modes || ['photo']).filter(k => MODES[k] && (k !== 'ai' || aiReady())); return m.length ? m : ['photo']; };
+  const modeList = () => { const m = (U().modes || ['photo']).filter(k => MODES[k] && ((k !== 'ai' && k !== 'aidraw') || aiReady())); return m.length ? m : ['photo']; };
   const POSES = ['Mosolyt!', 'Most egy vicceset!', 'És egy utolsót – a legjobbat!', 'Még egyet!'];
   const svgIco = p => '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
   function modesScreen() {
@@ -154,7 +155,7 @@
   async function run(mode) {
     if (S.busy) return; S.busy = true; S.shots = []; S.cancel = false; clearTimeout(S.idleT);
     mode = MODES[mode] ? mode : modeList()[0]; S.mode = mode;
-    if (mode === 'ai') { S.busy = false; return runAi(); }
+    if (mode === 'ai' || mode === 'aidraw') { S.busy = false; return runAi(mode === 'aidraw'); }
     if (MODES[mode].clip) { S.busy = false; return runClip(mode); }
     const n = S.tpl ? S.tpl.shots : (Number(S.cfg.shots) >= 3 ? 3 : 1), take = n === 1 && U().bestOf ? 3 : n;
     try {
@@ -704,11 +705,11 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
   const UI_PRN = ['printScale', 'printDx', 'printDy'];
   const verGe = (a, b) => { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return true; };
   const prOpt = () => { const u = Object.assign({}, UI_DEF, U()); return { paper: u.paperSize, fit: u.printFit, scale: u.printScale, dx: u.printDx, dy: u.printDy }; };
-  const UI_DEF = { cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
+  const UI_DEF = { drawSec: 20, cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -731,7 +732,7 @@
     const ev = (S.cfg.event && S.cfg.event.ev) || '-', pc = counts()[ev];
     $('[data-prcount]').textContent = 'Ezen a gépen ezen a rendezvényen eddig: ' + ((pc && pc.total) || 0) + ' nyomat.';
     const rec = !!(window.MediaRecorder && window.BoothClips);
-    $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => { const dis = (MODES[k].clip && !rec) || (k === 'ai' && !aiReady()); return '<label class="mchk' + (dis ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + (k === 'ai' && !aiReady() ? 'a panelből kapcsolható' : MODES[k].sub) + '</small></label>'; }).join('');
+    $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => { const dis = (MODES[k].clip && !rec) || ((k === 'ai' || k === 'aidraw') && !aiReady()); return '<label class="mchk' + (dis ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + (k === 'ai' && !aiReady() ? 'a panelből kapcsolható' : MODES[k].sub) + '</small></label>'; }).join('');
   }
   function uiCollect() {
     const u = Object.assign({}, U());
@@ -804,7 +805,7 @@
     const ev = S.cfg.event; add(ev && ev.deal ? 'ok' : 'mid', 'Rendezvény', ev && ev.deal ? ev.title + ' · ' + (ev.date || '') : 'nincs kiválasztva (Rendezvény fül)');
     add(S.tpl ? 'ok' : 'mid', 'Sablon', S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : 'alap keret');
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
-    if ((U().modes || []).includes('ai')) add(!B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', 'AI-kép', !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs');
+    if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) add(!B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', 'AI-kép', !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs');
     if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;
@@ -1117,15 +1118,15 @@
     const nm = (S.guestPre && S.guestPre.name) || (S.aiName || '') || 'EventCrazy';
     return String(p || '').replace(/\{nev\}|\{név\}/gi, nm).replace(/\{rendezveny\}|\{rendezvény\}/gi, ttl || 'EventCrazy').replace(/\{datum\}|\{dátum\}/gi, d ? d + '.' : today());
   }
-  async function runAi() {
+  async function runAi(draw) {
     if (S.busy || S.scr === 'aiok') return;
     /* hozzájárulás: külső feldolgozó + 18 év (a modell szolgáltatójának feltétele) – még a foglaltság előtt dől el */
     show('aiok');
     const ok = await aiWait('aiok', 30000);
-    if (ok === false) return run(modeList().find(k => !MODES[k].clip && k !== 'ai') || 'photo');
+    if (ok === false) return run(modeList().find(k => !MODES[k].clip && k !== 'ai' && k !== 'aidraw') || 'photo');
     if (!ok) { show('start'); return; }
     if (S.busy) return;
-    S.busy = true; S.cancel = false; S.mode = 'ai';
+    S.busy = true; S.cancel = false; S.mode = draw ? 'aidraw' : 'ai';
     let img = null;
     try {
       show('live'); await liveOn();
@@ -1139,7 +1140,7 @@
         const i = await aiWait('aistyle', 25000);
         st = L[i == null ? 0 : i];
       }
-      await aiMake(img, st);
+      await aiMake(img, st, draw);
     } catch (e) {
       await liveOff().catch(() => {}); pose(''); $('[data-cd]').textContent = '';
       if (e instanceof Cancel) { show('start'); }
@@ -1147,7 +1148,7 @@
       else { show('start'); err(e.message); }
     } finally { S.busy = false; S.cancel = false; clearInterval(S.aiT); }
   }
-  async function aiMake(img, st) {
+  async function aiMake(img, st, draw) {
     busy('Pillanat, rajzolunk… (kb. 20–30 mp)');
     const t0 = Date.now(); clearInterval(S.aiT); S.aiT = setInterval(() => busyBar(Math.min(0.95, 1 - Math.exp(-(Date.now() - t0) / 12000))), 250);
     const ev = S.cfg.event, src = await call(B.newTok, 10), aiId = await call(B.newTok, 10);
@@ -1161,19 +1162,37 @@
     call(B.keep, ev.ev, ev.deal || 0, ev.date || '', src, img.src, {}).catch(() => {});
     call(B.keep, ev.ev, ev.deal || 0, ev.date || '', S.lastPhoto, r.img, { kind: 'ai' }).catch(() => {});
     if (S.guestPre) { const d = S.guestPre; S.guestPre = null; submitGuest(d, S.lastPhoto, !!d.email && !!U().shareEmail).catch(() => {}); }
-    reviewAi(img, ai);
+    if (draw) await drawAi(img, ai); else reviewAi(img, ai);
   }
-  function reviewAi(orig, ai) {
+  function reviewAi(orig, ai) { aiOut(orig, ai); aiReview(false); }
+  function aiOut(orig, ai) {
     const cv = $('[data-out]'), vo = $('[data-outv]'); vo.hidden = true; vo.removeAttribute('src'); cv.hidden = false;
     const o = { title: (S.cfg.event && S.cfg.event.deal && S.cfg.event.title) || S.cfg.title || 'EventCrazy', date: today() };
     if (U().ai.out === 'both') BoothCompose.pair(cv, orig, ai, o);
     else BoothCompose.compose(cv, [ai], Object.assign({ tpl: S.tpl && S.tpl.shots === 1 ? S.tpl : null }, o));
     S.shots = [ai]; S.pool = null; S.pick = false; S.pending = null; S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
+  }
+  function aiReview(noAuto) {
     $('[data-printui]').hidden = false; $('[data-stickerbtn]').hidden = !U().sticker; $('[data-thumbs]').hidden = true; shareButtons();
     $('[data-qrbox]').hidden = true; show('review');
     if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), S.cfg.event.ev, S.lastPhoto);
-    if (S.cfg.autoPrint) { print(); return; }
+    if (S.cfg.autoPrint && !noAuto) { print(); return; }
     idle();
+  }
+  /* 0.15.0: AI-rajz – a kész AI-kép „élő megrajzolása” a képernyőn (draw.js); automatikus nyomtatásnál a nyomtatás közben már fut */
+  async function drawAi(orig, ai) {
+    aiOut(orig, ai);
+    const pr = S.cfg.autoPrint ? doPrint($('[data-out]'), S.copies, S.lastPhoto).then(r => ({ r }), e => ({ e })) : null;
+    show('draw');
+    try { await BoothDraw.play($('[data-drawcv]'), ai, Math.max(8, Math.min(60, Number(U().drawSec) || 20))); } catch (e) { B.log('AI-rajz: ' + e.message); }
+    await sleep(1500);
+    if (!pr) { aiReview(true); return; }
+    show('busy'); $('[data-busyt]').textContent = remote() ? 'Küldés a nyomtatóra…' : 'Nyomtatás…';
+    const x = await pr;
+    if (x.e) { aiReview(true); err(x.e.message); return; }
+    const r = x.r;
+    $('[data-busyt]').textContent = r.remote ? 'Elküldve! A rajzot a nyomtatónál veheted át' + (r.ahead ? ' (előtted ' + r.ahead + ' kép).' : '.') : 'Kész! Vedd ki a rajzot a nyomtatóból.' + (r.n < S.copies ? ' (' + r.n + ' példány – elérted a keretet)' : '');
+    await sleep(r.remote ? 3500 : 2500); show('start'); warnings();
   }
   /* ha az AI nem sikerül (nincs net, elfogyott a keret, a szolgáltató elutasította): az eredeti fotó a szokásos módon */
   function aiFallback(msg, img) {

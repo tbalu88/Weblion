@@ -794,7 +794,7 @@ function drawDeal() {
 	if (!d) { box.hidden = true; box.innerHTML = ''; tp.hidden = true; return; }
 	box.hidden = false;
 	let h = '<div class="sb-dh"><b>' + esc(d.title) + '</b>' + (d.date ? ' · ' + esc(X.huDate ? X.huDate(d.date) : dotDate(d.date)) : '') +
-		(C.sm ? ' · <a href="' + esc(C.sm + d.id + '/detail') + '" target="_blank" rel="noopener">Salesmate ↗</a>' : '') +
+		(C.sm ? ' · <a href="#deals:' + Number(d.id) + '" data-pdeal="' + Number(d.id) + '">Deal megnyitása →</a>' : '') +
 		'<button type="button" class="sb-link" data-dealclear>leválasztás</button></div>';
 	if (d.loading) h += '<p class="cpx-muted">A deal adatainak betöltése…</p>';
 	if (d.err) h += '<p class="sb-warn">A Salesmate-ből nem sikerült lekérni: ' + esc(d.err) + (d.note ? ' (a panelen tárolt megjegyzésből dolgozom)' : '') + '</p>';

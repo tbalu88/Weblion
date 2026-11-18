@@ -386,7 +386,7 @@ function cp_booth_ajax_guests() {
 
 /* ---------- v2.9.246 (Crazy Booth 7. fázis): gépállapot (v7), távoli beállítások (v8), statisztika + ügyfélriport (v10), sorsolás (d4).
  * A gépek percenként jelentkeznek (állapot); a válaszban kapják a deal panelből mentett beállításait. Salesmate-be semmi nem megy. */
-const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'spin', 'guestbook', 'ai');
+const CP_BOOTH_MODES = array('photo', 'glam', 'group', 'gif', 'boom', 'video', 'slow', 'spin', 'guestbook', 'ai', 'aidraw');
 function cp_booth_beat_get($id) { $b = get_transient('cp_bb_' . $id); return is_array($b) ? $b : null; }
 function cp_booth_dcfg_all() { $a = get_option('cp_booth_dcfg', array()); return is_array($a) ? $a : array(); }
 function cp_booth_dcfg_get($deal) { $a = cp_booth_dcfg_all(); return isset($a[(string) (int) $deal]) && is_array($a[(string) (int) $deal]) ? $a[(string) (int) $deal] : null; }
@@ -500,7 +500,7 @@ function cp_booth_ajax_dcfg() {
 	$a[$k] = array('at' => time(), 'by' => $who, 'cfg' => $c); update_option('cp_booth_dcfg', $a, false);
 	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_cfg', 'Szelfigép-beállítások mentve', 'deal:' . $deal, ''); }
 	/* v2.9.251: az AI be/ki és a keret a galérián (ott fizetünk) – a „AI-kép” mód és legalább egy stílus kell hozzá */
-	$aion = in_array('ai', (array) ($c['ui']['modes'] ?? array()), true) && !empty($c['ui']['ai']['styles']);
+	$aion = (in_array('ai', (array) ($c['ui']['modes'] ?? array()), true) || in_array('aidraw', (array) ($c['ui']['modes'] ?? array()), true)) && !empty($c['ui']['ai']['styles']); /* v2.9.331: az AI-rajz is */
 	$warn = '';
 	if ($aion || cp_booth_gal_has($deal)) { $g = cp_booth_gal_api('POST', cp_booth_gal_tok($deal), array('ai_on' => $aion ? 1 : 0, 'ai_limit' => (int) ($c['ui']['ai']['limit'] ?? 300))); if (is_wp_error($g)) { $warn = 'Az AI-beállítás a galérián most nem frissült: ' . $g->get_error_message(); } delete_transient('cp_booth_st_' . cp_booth_gal_tok($deal)); }
 	wp_send_json_success(array('cfg' => $c, 'at' => $a[$k]['at'], 'warn' => $warn));

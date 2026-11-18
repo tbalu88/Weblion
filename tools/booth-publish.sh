@@ -8,7 +8,7 @@ SRC=booth/src/renderer
 B=https://tartalek.eventcrazy.hu/wp-json/crazy-bridge/v1
 DEST=plugins/crazy-booth-ui
 # v0.11: az offline sablonszerkesztő is (a panel sablon.js/css-e – egy forrás: crazy-panel/assets – és az adatcsomag)
-FILES="index.html app.js compose.js clips.js style.css sablon.js sablon.css sablon-adat.js"
+FILES="index.html app.js compose.js clips.js draw.js style.css sablon.js sablon.css sablon-adat.js"
 cp crazy-panel/assets/sablon.js crazy-panel/assets/sablon.css "$SRC/"
 [ -s "$SRC/sablon-adat.js" ] || { echo "HIBA: hiányzik a sablon-adat.js (python3 -I tools/booth-sablon-assets.py)"; exit 1; }
 SHELL_MIN=$(python3 -c "import json;print(json.load(open('booth/package.json')).get('uiShellMin','0.4.0'))")
