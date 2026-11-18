@@ -300,3 +300,4 @@ button{font:inherit;cursor:pointer}
 .drw-box{width:92vw;height:84vh;display:grid;place-items:center}
 .drw-box canvas{background:#fff;border-radius:1.2vh;box-shadow:0 2vh 6vh rgba(0,0,0,.45)}
 .drw b{font-size:3vh;font-weight:600;color:rgba(255,255,255,.7)}
+[data-drawbtns] .big{white-space:nowrap;font-size:.86em}

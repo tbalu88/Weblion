@@ -209,6 +209,7 @@
     if (S.guestPre) { const d = S.guestPre; S.guestPre = null; submitGuest(d, p.photo, !!d.email && !!U().shareEmail).catch(e => B.log('vendégadat: ' + e.message)); }
   }
   async function review(again) {
+    drawBtns(false);
     const cv = $('[data-out]'), vo = $('[data-outv]');
     vo.hidden = true; vo.removeAttribute('src'); cv.hidden = false;
     BoothCompose.compose(cv, S.shots, { title: S.cfg.title || 'EventCrazy', date: today(), tpl: S.tpl });
@@ -293,6 +294,7 @@
   const busy = t => { show('busy'); $('[data-busyt]').textContent = t; busyBar(0); };
   const busyBar = p => { const b = $('[data-busybar]'); b.hidden = !(p > 0); b.firstElementChild.style.transform = 'scaleX(' + Math.min(1, p) + ')'; };
   async function reviewClip(mode) {
+    drawBtns(false);
     const cv = $('[data-out]'), vo = $('[data-outv]');
     cv.hidden = true; vo.hidden = false; vo.src = URL.createObjectURL(S.clip.blob); vo.muted = mode !== 'guestbook'; vo.play().catch(() => {});
     $('[data-printui]').hidden = true; $('[data-thumbs]').hidden = true; S.pool = null; S.pick = false; shareButtons();
@@ -351,6 +353,8 @@
     const a = e.target.closest('[data-act]'); if (!a) return;
     const act = a.dataset.act;
     if (act === 'print') print();
+    else if (act === 'drawplay') { drawPlay(); }
+    else if (act === 'drawqr') { drawQrToggle(); }
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
     else if (act === 'recstop') { S.recStop = true; }
     else if (act === 'keycap') { S.keyCap = true; keyInfo(); }
@@ -705,11 +709,11 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed', 'drawVideo'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
   const UI_PRN = ['printScale', 'printDx', 'printDy'];
   const verGe = (a, b) => { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return true; };
   const prOpt = () => { const u = Object.assign({}, UI_DEF, U()); return { paper: u.paperSize, fit: u.printFit, scale: u.printScale, dx: u.printDx, dy: u.printDy }; };
-  const UI_DEF = { drawSec: 20, cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
+  const UI_DEF = { drawSec: 20, drawVideo: true, cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -1173,6 +1177,7 @@
     S.shots = [ai]; S.pool = null; S.pick = false; S.pending = null; S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
   }
   function aiReview(noAuto) {
+    drawBtns(S.mode === 'aidraw' && !!S.drawClip);
     $('[data-printui]').hidden = false; $('[data-stickerbtn]').hidden = !U().sticker; $('[data-thumbs]').hidden = true; shareButtons();
     $('[data-qrbox]').hidden = true; show('review');
     if (S.cfg.boothKey) showQr($('[data-qrbox]'), $('[data-qr]'), S.cfg.event.ev, S.lastPhoto);
@@ -1181,11 +1186,20 @@
   }
   /* 0.15.0: AI-rajz – a kész AI-kép „élő megrajzolása” a képernyőn (draw.js); automatikus nyomtatásnál a nyomtatás közben már fut */
   async function drawAi(orig, ai) {
-    aiOut(orig, ai);
+    aiOut(orig, ai); S.drawClip = null; S.drawVid = '';
     const pr = S.cfg.autoPrint ? doPrint($('[data-out]'), S.copies, S.lastPhoto).then(r => ({ r }), e => ({ e })) : null;
     show('draw');
-    try { await BoothDraw.play($('[data-drawcv]'), ai, Math.max(8, Math.min(60, Number(U().drawSec) || 20))); } catch (e) { B.log('AI-rajz: ' + e.message); }
-    await sleep(1500);
+    let clip = null;
+    try { clip = await BoothDraw.play($('[data-drawcv]'), ai, Math.max(8, Math.min(60, Number(U().drawSec) || 20)), null, { record: U().drawVideo !== false }); } catch (e) { B.log('AI-rajz: ' + e.message); }
+    /* 0.16.0: a rajzolás videója a galériába (a fotó mellé, saját QR-kóddal) és helyben is megmarad */
+    if (clip && clip.blob && clip.blob.size) {
+      S.drawClip = clip;
+      try {
+        const ev = S.cfg.event, vid = await call(B.newTok, 10); S.drawVid = vid;
+        const du = await BoothClips.blobToDataUrl(clip.blob);
+        call(B.keep, ev.ev, ev.deal || 0, ev.date || '', vid, du, { poster: clip.poster, kind: 'video' }).catch(e => B.log('AI-rajz videó mentése: ' + e.message));
+      } catch (e) { B.log('AI-rajz videó: ' + e.message); }
+    } else await sleep(1500);
     if (!pr) { aiReview(true); return; }
     show('busy'); $('[data-busyt]').textContent = remote() ? 'Küldés a nyomtatóra…' : 'Nyomtatás…';
     const x = await pr;
@@ -1193,6 +1207,27 @@
     const r = x.r;
     $('[data-busyt]').textContent = r.remote ? 'Elküldve! A rajzot a nyomtatónál veheted át' + (r.ahead ? ' (előtted ' + r.ahead + ' kép).' : '.') : 'Kész! Vedd ki a rajzot a nyomtatóból.' + (r.n < S.copies ? ' (' + r.n + ' példány – elérted a keretet)' : '');
     await sleep(r.remote ? 3500 : 2500); show('start'); warnings();
+  }
+  /* 0.16.0: AI-rajz a kész képernyőn – újrajátszás (a rögzített videó) és a videó QR-kódja */
+  function drawBtns(on) {
+    const w = $('[data-drawbtns]'); if (!w) return; w.hidden = !on; S.drawQr = false;
+    const sp = $('[data-qrbox] span'), bx = $('[data-qrbox]'); if (sp && !bx.dataset.lan && !bx.dataset.err) sp.innerHTML = 'Olvasd be a telefonoddal,<br>és töltsd le a fotódat!';
+    const q = $('[data-act=drawqr]'); if (q) { q.hidden = !(on && S.drawVid && qrOn() && (S.cfg.boothKey || lanActive())); q.textContent = 'Videó QR'; }
+  }
+  function drawPlay() {
+    if (!S.drawClip) return;
+    const cv = $('[data-out]'), vo = $('[data-outv]');
+    if (vo.dataset.u) URL.revokeObjectURL(vo.dataset.u);
+    vo.dataset.u = URL.createObjectURL(S.drawClip.blob); vo.src = vo.dataset.u; vo.loop = false; vo.muted = true;
+    cv.hidden = true; vo.hidden = false; vo.currentTime = 0; vo.play().catch(() => {});
+    vo.onended = () => { vo.onended = null; vo.loop = true; if (S.scr === 'review' && S.mode === 'aidraw') { vo.hidden = true; cv.hidden = false; } };
+    idle();
+  }
+  function drawQrToggle() {
+    S.drawQr = !S.drawQr; const ev = S.cfg.event;
+    $('[data-act=drawqr]').textContent = S.drawQr ? 'Kép QR' : 'Videó QR';
+    showQr($('[data-qrbox]'), $('[data-qr]'), ev.ev, S.drawQr ? S.drawVid : S.lastPhoto).then(() => { const sp = $('[data-qrbox] span'); if (sp && !$('[data-qrbox]').dataset.lan && !$('[data-qrbox]').dataset.err) sp.innerHTML = 'Olvasd be a telefonoddal,<br>és töltsd le a ' + (S.drawQr ? 'rajzvideót!' : 'fotódat!'); });
+    idle();
   }
   /* ha az AI nem sikerül (nincs net, elfogyott a keret, a szolgáltató elutasította): az eredeti fotó a szokásos módon */
   function aiFallback(msg, img) {

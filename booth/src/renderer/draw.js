@@ -146,11 +146,12 @@
   const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
 
   /* lejátszás: cv = a képernyő vászna, img = a kész AI-kép, sec = teljes hossz (mp). Promise: a végén teljesül. */
-  function play(cv, img, sec, an) {
-    an = an || analyse(img);
+  /* opt.record: a rajzolás közben videó is készül (a képernyő vásznáról) – eredmény: { blob, mime, poster } */
+  function play(cv, img, sec, an, opt) {
+    an = an || analyse(img); opt = opt || {};
     const dpr = Math.min(2, window.devicePixelRatio || 1), box = (cv.parentElement || cv).getBoundingClientRect();
     const fit = Math.min((box.width || 600) / an.a, (box.height || 800) / an.b);
-    const W = Math.round(an.a * fit * dpr), H = Math.round(an.b * fit * dpr), s = W / an.a;
+    const W = Math.round(an.a * fit * dpr / 2) * 2, H = Math.round(an.b * fit * dpr / 2) * 2, s = W / an.a; /* páros méret: a H.264-hez kell */
     cv.width = W; cv.height = H; cv.style.width = Math.round(W / dpr) + 'px'; cv.style.height = Math.round(H / dpr) + 'px';
     const x = cv.getContext('2d'), mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
     const lines = mk(), lx = lines.getContext('2d'); lx.strokeStyle = '#111'; lx.lineWidth = Math.max(1.2, 1.1 * dpr); lx.lineCap = 'round'; lx.lineJoin = 'round';
@@ -159,6 +160,21 @@
     const nSpl = an.regions.reduce((t, r) => t + r.spl.length, 0);
     const D = Math.max(6, Number(sec) || 20) * 1000, T1 = 0.46, T2 = 0.86, T3 = 0.95, tool = Math.max(0.55, W / 900);
     let si = 0, sj = 2, done = 0, ri = 0, rk = 0, painted = 0;
+    let rec = null, chunks = [], mime = '';
+    if (opt.record && window.MediaRecorder && cv.captureStream) {
+      try {
+        mime = (window.BoothClips && window.BoothClips.pickMime()) || 'video/webm';
+        rec = new MediaRecorder(cv.captureStream(30), { mimeType: mime, videoBitsPerSecond: 5e6 });
+        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); rec.start(500);
+      } catch (e) { rec = null; }
+    }
+    const finish = res => {
+      if (!rec) { res(null); return; }
+      /* a kész kép 1,5 mp-ig a videó végén is kitart */
+      const h0 = performance.now(), hold = () => { x.globalAlpha = 1; x.drawImage(img, 0, 0, W, H); if (performance.now() - h0 < 1500) requestAnimationFrame(hold); else { rec.onstop = () => res({ blob: new Blob(chunks, { type: mime.split(';')[0] }), mime: mime.split(';')[0], poster: cv.toDataURL('image/jpeg', 0.88) }); try { rec.stop(); } catch (e) { res(null); } } };
+      requestAnimationFrame(hold);
+    };
     const t0 = performance.now();
     return new Promise(res => {
       const frame = now => {
@@ -198,7 +214,7 @@
         if (p > T2) { x.globalAlpha = ease((p - T2) / (T3 - T2)); x.drawImage(img, 0, 0, W, H); x.globalAlpha = 1; }
         if (p <= T1 && tip) pen(x, tip[0], tip[1], tool);
         else if (p > T1 && p <= T2 && bt) brush(x, bt[0], bt[1], tool, bcol);
-        if (p < 1) requestAnimationFrame(frame); else { x.globalAlpha = 1; x.drawImage(img, 0, 0, W, H); res(); }
+        if (p < 1) requestAnimationFrame(frame); else { x.globalAlpha = 1; x.drawImage(img, 0, 0, W, H); finish(res); }
       };
       requestAnimationFrame(frame);
     });

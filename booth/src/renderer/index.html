@@ -95,6 +95,7 @@
         <div class="thumbs" data-thumbs hidden></div>
         <div class="printui" data-printui><div class="prrow"><button type="button" class="big pri" data-act="print">Nyomtatás</button><button type="button" class="big" data-act="sticker" data-stickerbtn hidden>Matrica</button></div>
         <div class="copies"><button type="button" data-cp="-1">−</button><span data-cpn>1</span> példány<button type="button" data-cp="1">+</button></div></div>
+        <div class="prrow" data-drawbtns hidden><button type="button" class="big" data-act="drawplay">▶ Rajzolás</button><button type="button" class="big" data-act="drawqr">Videó QR</button></div>
         <div class="shr" data-shr hidden><button type="button" class="big" data-act="email" data-shemail hidden>✉ E-mailben</button><button type="button" class="big" data-act="airdrop" data-shair hidden>AirDrop</button></div>
         <button type="button" class="big" data-act="again">Újra</button>
         <button type="button" class="big ghost" data-act="done">Kész</button>
@@ -198,6 +199,7 @@
             <label>Csoportkép: visszaszámlálás (mp) <input id="u-groupCd" type="number" min="3" max="15"></label>
             <div class="st-row"><label>Videó hossza (mp) <input id="u-videoSec" type="number" min="3" max="30"></label><label>Videóüzenet hossza (mp) <input id="u-gbSec" type="number" min="10" max="90"></label></div>
             <div class="st-row"><label>AI-rajz hossza (mp) – a rajzolás a képernyőn <input id="u-drawSec" type="number" min="8" max="60"></label></div>
+            <label class="chk"><input id="u-drawVideo" type="checkbox"> AI-rajz: a rajzolás videója is mentődjön a galériába (saját QR-kóddal, a kész képernyőn újrajátszható)</label>
             <h3 class="st-h">360°-os mód</h3>
             <div class="st-row"><label>Felvétel hossza (mp) <input id="u-spinSec" type="number" min="4" max="20"></label><label>Visszaszámlálás (mp) – a platform indításához <input id="u-spinCd" type="number" min="3" max="15"></label></div>
             <label>360° kamera (pl. a karra szerelt webkamera) <select id="u-spinCam" data-spincam></select></label>
