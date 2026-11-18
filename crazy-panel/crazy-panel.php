@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.323');
+define('CP_PANEL_VER', '2.9.324');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3854,6 +3854,7 @@ require_once __DIR__ . '/gdrive-backup.php';
 require_once __DIR__ . '/worklog.php';
 require_once __DIR__ . '/capacity.php';
 require_once __DIR__ . '/dynprice.php';
+require_once __DIR__ . '/dealinfo.php'; /* v2.9.324: Rendezvényinfó a kezelőnek */
 require_once __DIR__ . '/support.php'; /* v2.9.312: Segítség – AI-chat */
 require_once __DIR__ . '/monitor.php'; /* v2.9.302: tartalék szerver és AI-kredit figyelő */ /* v2.9.290: dinamikus árjavaslat */
 require_once __DIR__ . '/portal-link.php';

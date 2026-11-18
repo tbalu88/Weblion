@@ -309,6 +309,33 @@
 	const capTip = k => 'Kapacitás ' + k.d.replace(/-/g, '.') + '.: ' + Math.max(0, k.fs) + ' szabad szelfigép a ' + k.cs + '-ből' + (k.sub ? ' (benne ' + k.sub + ' alvállalkozói)' : '') + ', ' + Math.max(0, k.fp) + ' szabad spinner a ' + k.cp + '-ből; függő ajánlat: ' + (k.ps + k.pp) + (k.risk ? '\nFigyelem: több a függő ajánlat, mint a szabad gép.' : '');
 	/* v2.9.290: dinamikus árjavaslat (belső): alapár a hónap kiküldött ajánlataiból + napi igazítás */
 	const dpFt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toLocaleString('hu-HU') + ' Ft';
+	/* v2.9.324: Rendezvényinfó a kezelőnek – a naptárba eddig kézzel írt adatok (csak a panelben; a naptárbejegyzésbe a panel írja) */
+	function dinfoSec(d, x) {
+		const F = x.dinfoF || {}, V = x.dinfo || {}, ks = Object.keys(F), has = ks.some(k => V[k]);
+		const edit = W && !d.deleted_at ? '<button type="button" class="d3-gsync" data-diedit title="Rendezvényinfó szerkesztése">✎ Szerkesztés</button>' : '';
+		return '<section class="d3-c d3-di" data-di><h4 class="d3-adh">Rendezvényinfó a kezelőnek' + edit + '</h4>' +
+			(has ? '<dl class="crm-dl">' + ks.filter(k => V[k]).map(k => '<dt>' + esc(F[k][0]) + '</dt><dd' + (k === 'note' ? ' class="d3-din"' : '') + '>' + esc(V[k]) + '</dd>').join('') + '</dl>' : '<p class="cpx-muted">Még nincs kitöltve. Ide írd, amit eddig a naptárbejegyzésbe: tematika, dress code, galéria neve, építés, bontás, megjegyzés a kezelőnek.</p>') +
+			(V._at ? '<p class="crm-meta">Módosítva: ' + esc(huDT(V._at)) + (V._by ? ' (' + esc(V._by) + ')' : '') + '</p>' : '') + '</section>';
+	}
+	function dinfoBind(sh, d, x) {
+		const sec = sh.querySelector('[data-di]'); if (!sec) return;
+		const b = sec.querySelector('[data-diedit]'); if (!b) return;
+		b.addEventListener('click', () => {
+			const F = x.dinfoF || {}, V = x.dinfo || {};
+			sec.innerHTML = '<h4 class="d3-adh">Rendezvényinfó a kezelőnek</h4><form class="crm-edit d3-dif">' + Object.keys(F).map(k => '<label class="crm-ef"><span>' + esc(F[k][0]) + '</span>' + (F[k][1] === 'area' ? '<textarea rows="3" data-dk="' + k + '">' + esc(V[k] || '') + '</textarea>' : '<input type="text" data-dk="' + k + '" value="' + esc(V[k] || '') + '">') + '</label>').join('') +
+				'<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-dicancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
+			const form = sec.querySelector('form');
+			sec.querySelector('[data-dicancel]').onclick = () => { sec.outerHTML = dinfoSec(d, x); dinfoBind(sh, d, x); };
+			form.addEventListener('submit', async e => {
+				e.preventDefault();
+				const f = {}; form.querySelectorAll('[data-dk]').forEach(el => { f[el.dataset.dk] = el.value; });
+				const msg = form.querySelector('.crm-emsg'); msg.textContent = 'Mentés…';
+				try { const r = await post('cp_dinfo_save', { id: d.id, f: JSON.stringify(f) }); x.dinfo = r.dinfo; const nw = sh.querySelector('[data-di]'); nw.outerHTML = dinfoSec(d, x); dinfoBind(sh, d, x); toast('Rendezvényinfó mentve.'); }
+				catch (er) { msg.textContent = er.message; }
+			});
+			const first = form.querySelector('[data-dk]'); if (first) first.focus();
+		});
+	}
 	const dpHtml = q => !q ? '' : '<details class="d3-dp ' + esc(q.lvl) + '"><summary><span>Javasolt ár</span><b>' + esc(money(q.p, 'HUF')) + '</b><small>' + esc(q.vat) + (q.adj ? ' · ' + dpFt(q.adj) : '') + (q.sure ? '' : ' · kevés adat') + '</small></summary>' +
 		'<ul>' + q.lines.map(l => '<li><span>' + esc(l[0]) + '</span><b>' + (l[1] ? esc(money(l[1], 'HUF')) : '') + '</b></li>').join('') + q.day.map(l => '<li class="adj"><span>' + esc(l[0]) + '</span><b>' + (l[1] ? esc(dpFt(l[1])) : '') + '</b></li>').join('') + '</ul>' +
 		(q.noh ? '<p>Nincs megadva óraszám – 3 órával számolva.</p>' : '') + '<p>Belső javaslat (' + esc(q.brand) + ', ' + esc(q.vat) + ', kiszállás nélkül) – az ügyfél nem látja; a végső árról te döntesz.</p></details>';
@@ -2024,7 +2051,7 @@
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>' + (W && c && c.email && !d.deleted_at ? '<div class="d3-cos" data-cos></div>' : '')) + '</section>' +
 			'<section class="d3-c"><h4 class="d3-adh">Adatok' + (x.gcal_on && R.edit && d.event_d && !d.deleted_at ? '<button type="button" class="d3-gsync" data-gsync title="A cégnaptár bejegyzésének frissítése a deal és az ügyfél-adatlap mostani adataival (ha nincs, létrehozza)">📅 Naptárbejegyzés frissítése</button>' : '') + '</h4>' + fieldGroups(d, x.pinfo) +
-				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section></aside>' +
+				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section>' + (x.dinfo ? dinfoSec(d, x) : '') + '</aside>' +
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok */
@@ -2097,6 +2124,7 @@
 		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
+		dinfoBind(sh, d, x);
 		const kbl = sh.querySelector('[data-kbl]');
 		if (window.CPKanban) window.CPKanban.linked(kbl, { deal: d.id });
 		/* v2.9.1: e-mail küldése a dealből – a levélíró a kontakt címével, a dealhez kötve */

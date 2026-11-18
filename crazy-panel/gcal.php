@@ -186,9 +186,15 @@ function cp_gcal_plan($id, $day = '') {
 	$L = array();
 	if (function_exists('cp_el_link')) { $L[] = '<b>📋 KEZELŐI ADATLAP</b> – a rendezvény után itt töltsd ki:<br><b><a href="' . esc_url(cp_el_link($key)) . '">' . esc_html(cp_el_link($key)) . '</a></b><br>━━━━━━━━━━━━━━━━━━━━<br>'; }
 	$row = function ($k, $v) use (&$L) { if (trim((string) $v) !== '') { $L[] = esc_html($k) . ': ' . esc_html(trim((string) $v)); } };
+	/* v2.9.324: Rendezvényinfó a kezelőnek (a deal adatlapjáról) – a megjegyzés legfelül, kiemelve */
+	$di = function_exists('cp_dinfo_get') ? cp_dinfo_get((int) $id) : array();
+	if (!empty($di['note'])) { $L[] = '<b>' . nl2br(esc_html($di['note'])) . '</b><br>'; }
+	$row('Tematika', $di['theme'] ?? ''); $row('DressCode', $di['dress'] ?? ''); $row('Galéria név', $di['gal'] ?? '');
+	if (!empty($di['theme']) || !empty($di['dress']) || !empty($di['gal'])) { $L[] = ''; }
 	$row('Helyszín', $d['venue']);
 	$row('Időpont', $date !== '' ? str_replace('-', '.', $date) . '.' : '');
 	$row('Aktivitás', $s !== '' ? $s . ($e !== '' ? '-' . $e : '') : '');
+	$row('Építés', $di['build'] ?? ''); $row('Bontás', $di['tear'] ?? '');
 	$row('Kontakt személy', $d['cn']);
 	$row('Kontakt telefonszám', $d['cm'] ?: $d['cp']);
 	$row('Rendelkezésre állási idő', $hrs > 0 ? str_replace('.', ',', rtrim(rtrim(number_format($hrs, 1, '.', ''), '0'), '.')) . ' óra' : '');
@@ -196,6 +202,7 @@ function cp_gcal_plan($id, $day = '') {
 	$row('Fizetés', $d['pay_method']);
 	$x = array();
 	if (trim((string) $d['album']) !== '') { $x[] = ' - Album: ' . esc_html($d['album']); }
+	if (!empty($di['photo'])) { $x[] = ' - Fotó: ' . esc_html($di['photo']); }
 	if ((int) $d['guests'] > 0) { $x[] = ' - Létszám: ' . (int) $d['guests'] . ' fő'; }
 	if ($x) { $L[] = '<br>Egyéb:<br>' . implode('<br>', $x); }
 	if ($pi && $pi['rows']) { $L[] = '<br><b>Az ügyfél adatlapjáról:</b><br>' . implode('<br>', array_map(function ($r) { return esc_html($r['l']) . ': ' . esc_html($r['t']); }, array_filter($pi['rows'], function ($r) { return $r['k'] !== 'schedule'; }))); }
@@ -259,6 +266,27 @@ function cp_gcal_ajax_plan() {
  * nélküli foglalt dealt. Semmit nem ír sem a naptárba, sem a panelbe. */
 add_action('wp_ajax_nopriv_cp_gcal_diff', 'cp_gcal_ajax_diff');
 add_action('wp_ajax_cp_gcal_diff', 'cp_gcal_ajax_diff');
+/* v2.9.324: a (kézzel írt vagy a panel által írt) leírás „Címke: érték” sorai + a felső szabad szöveg (megjegyzés a kezelőnek) */
+function cp_gcal_parse($raw) {
+	$t = preg_replace('#<br\s*/?>|</p>|</div>|</li>#i', "\n", (string) $raw);
+	$t = html_entity_decode(wp_strip_all_tags($t), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	$map = array('tematika' => 'theme', 'dresscode' => 'dress', 'dress code' => 'dress', 'galeria nev' => 'gal', 'galeria neve' => 'gal', 'helyszin' => 'venue', 'idopont' => 'date', 'aktivitas' => 'act',
+		'epites' => 'build', 'bontas' => 'tear', 'kontakt szemely' => 'cn', 'kontakt telefonszam' => 'phone', 'kontakt telefon' => 'phone', 'rendelkezesre allasi ido' => 'hours', 'rendelkezesre allas' => 'hours',
+		'hatter' => 'bg', 'fizetes' => 'pay', 'album' => 'album', 'foto' => 'photo', 'letszam' => 'guests');
+	$out = array(); $note = array(); $started = false;
+	foreach (preg_split('/\R/u', $t) as $ln) {
+		$l = trim(preg_replace('/^\s*[-–•]\s*/u', '', $ln));
+		if ($l === '') { continue; }
+		if ($started && preg_match('/^-{5,}/', trim($ln))) { break; } /* lábléc (árak) */
+		if (preg_match('/^([^:]{2,40}):\s*(.*)$/u', $l, $m)) {
+			$k = cp_gcal_norm($m[1]);
+			if (isset($map[$k])) { $v = trim($m[2]); if ($v !== '' && $v !== '-' && $v !== '–') { $out[$map[$k]] = mb_substr($v, 0, 300); } $started = true; continue; }
+		}
+		if (!$started && !preg_match('#https?://|kezel[őo]i adatlap|^[━─—_=\-\s]+$#iu', $l)) { $note[] = $l; }
+	}
+	if ($note) { $out['note'] = mb_substr(implode("\n", $note), 0, 2000); }
+	return $out;
+}
 function cp_gcal_hm($dt) { return preg_match('/(\d{2}):(\d{2})/', (string) $dt, $m) ? $m[1] . ':' . $m[2] : ''; }
 function cp_gcal_ajax_diff() {
 	cp_el_auth();
@@ -269,6 +297,32 @@ function cp_gcal_ajax_diff() {
 	if (is_wp_error($r)) { cp_el_err($r->get_error_message(), 502); }
 	wp_send_json_success($r);
 }
+/* v2.9.324: átvétel a naptárból – jóváhagyott tételek: kezdés (a dealre, a Salesmate-be is) és a Rendezvényinfó mezői (csak a panelbe) */
+add_action('wp_ajax_nopriv_cp_gcal_import', 'cp_gcal_ajax_import');
+add_action('wp_ajax_cp_gcal_import', 'cp_gcal_ajax_import');
+function cp_gcal_ajax_import() {
+	cp_el_auth();
+	cp_tab_need(array('gnaptar'));
+	cp_tab_need(array('deals'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	@set_time_limit(120);
+	$L = json_decode((string) wp_unslash($_POST['items'] ?? ''), true);
+	if (!is_array($L) || !$L || count($L) > 200) { cp_el_err('Hibás kérés.'); }
+	$F = function_exists('cp_dinfo_fields') ? cp_dinfo_fields() : array();
+	$by = array(); foreach ($L as $x) { $id = (int) ($x['deal'] ?? 0); $f = (string) ($x['f'] ?? ''); $v = (string) ($x['v'] ?? ''); if ($id > 0 && ($f === 'start' || isset($F[$f]))) { $by[$id][$f] = $v; } }
+	$ok = 0; $err = array();
+	foreach ($by as $id => $vals) {
+		if (isset($vals['start'])) {
+			$t = preg_match('/^(\d{1,2}):(\d{2})$/', $vals['start'], $m) ? sprintf('%02d:%02d', $m[1], $m[2]) : '';
+			if ($t === '') { $err[] = '#' . $id . ': hibás időpont'; }
+			else { $r = cp_crm_save_data($id, array('start_at' => $t), array()); if (is_wp_error($r)) { $err[] = '#' . $id . ': ' . $r->get_error_message(); } else { $ok++; } }
+			unset($vals['start']);
+		}
+		if ($vals && function_exists('cp_dinfo_set')) { cp_dinfo_set($id, $vals); $ok += count($vals); }
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('naptar', 'gcal_import', 'Átvétel a naptárból', '', $ok . ' tétel' . ($err ? ', ' . count($err) . ' hiba' : '')); }
+	wp_send_json_success(array('ok' => $ok, 'err' => $err));
+}
 function cp_gcal_diff($to = '', $force = false) {
 	global $wpdb;
 	$from = wp_date('Y-m-d'); if ($to === '' || $to < $from) { $to = wp_date('Y') . '-12-31'; }
@@ -277,7 +331,7 @@ function cp_gcal_diff($to = '', $force = false) {
 	if (is_wp_error($ev)) { return $ev; }
 	/* minden deal az időszakban (az elveszett / törölt is – hogy jelezhessük, ha a naptárban még szerepel) */
 	$D = cp_crm_t('deals');
-	$all = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, d.operator, d.deleted_at, c.name cn FROM $D d LEFT JOIN " . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.event_d BETWEEN %s AND %s', wp_date('Y-m-d', strtotime($from) - 60 * DAY_IN_SECONDS), wp_date('Y-m-d', strtotime($to) + 60 * DAY_IN_SECONDS)), ARRAY_A);
+	$all = (array) $wpdb->get_results($wpdb->prepare("SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, d.operator, d.deleted_at, d.pay_method, d.guests, d.album, d.background, c.name cn, c.mobile cm, c.phone cp FROM $D d LEFT JOIN " . cp_crm_t('contacts') . ' c ON c.id = d.contact_id WHERE d.event_d BETWEEN %s AND %s', wp_date('Y-m-d', strtotime($from) - 60 * DAY_IN_SECONDS), wp_date('Y-m-d', strtotime($to) + 60 * DAY_IN_SECONDS)), ARRAY_A);
 	$live = array_values(array_filter($all, function ($d) use ($from, $to) { return empty($d['deleted_at']) && $d['status'] !== 'Lost' && $d['event_d'] >= $from && $d['event_d'] <= $to; }));
 	list($byDate, $byId, $byKey) = cp_gcal_index($live);
 	$dead = array(); foreach ($all as $d) { if (!empty($d['deleted_at']) || $d['status'] === 'Lost') { $dead[] = $d; } }
@@ -307,20 +361,32 @@ function cp_gcal_diff($to = '', $force = false) {
 		$x = $byKey[$key] ?? $byId[(int) $key]; $d = $byId[(int) $key];
 		$row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $row['stg'] = (string) $d['stage'];
 		$dn = (int) ($x['dn'] ?? 1);
-		if (empty($e['ad']) && $dn === 1) {
-			$ch = cp_gcal_hm($e['s']); $ph = $d['start_at'] ? cp_gcal_hm(cp_crm_local((string) $d['start_at'])) : '';
-			if ($ch !== '' && $ph === '') { $it[] = array('k' => 'time', 'm' => 'Kezdés csak a naptárban', 'cal' => $ch, 'pan' => '–'); }
-			elseif ($ch !== '' && $ph !== '' && $ch !== $ph) { $it[] = array('k' => 'time', 'm' => 'Kezdés eltér', 'cal' => $ch, 'pan' => $ph); }
-			$eh = (strtotime($e['e']) - strtotime($e['s'])) / 3600; $phs = (float) $d['hours'];
-			if ($eh > 1 && $eh < 24 && $phs > 0 && abs($eh - $phs) >= 0.5) { $it[] = array('k' => 'hours', 'm' => 'Időtartam eltér', 'cal' => rtrim(rtrim(number_format($eh, 1, ',', ''), '0'), ',') . ' óra', 'pan' => rtrim(rtrim(number_format($phs, 1, ',', ''), '0'), ',') . ' óra'); }
-			elseif ($eh > 1 && $eh < 24 && $phs <= 0) { $it[] = array('k' => 'hours', 'm' => 'Időtartam csak a naptárban', 'cal' => rtrim(rtrim(number_format($eh, 1, ',', ''), '0'), ',') . ' óra', 'pan' => '–'); }
+		$P = cp_gcal_parse($e['raw']);
+		$di = function_exists('cp_dinfo_get') ? cp_dinfo_get((int) $d['id']) : array();
+		$add = function ($k, $m, $cal, $pan, $f = '') use (&$it) { $it[] = array('k' => $k, 'm' => $m, 'cal' => (string) $cal, 'pan' => (string) ($pan === '' ? '–' : $pan)) + ($f !== '' ? array('f' => $f, 'v' => (string) $cal) : array()); };
+		$same = function ($a, $b) { $a = cp_gcal_norm($a); $b = cp_gcal_norm($b); return $a === $b || ($a !== '' && $b !== '' && (strpos($a, $b) !== false || strpos($b, $a) !== false)); };
+		if ($dn === 1) {
+			/* kezdés: a leírás „Aktivitás” sorából, különben a bejegyzés kezdéséből */
+			$ch = ''; if (!empty($P['act']) && preg_match('/(\d{1,2})[:.](\d{2})/', $P['act'], $m)) { $ch = sprintf('%02d:%02d', $m[1], $m[2]); } elseif (empty($e['ad'])) { $ch = cp_gcal_hm($e['s']); }
+			$ph = $d['start_at'] ? cp_gcal_hm(cp_crm_local((string) $d['start_at'])) : '';
+			if ($ch !== '' && $ch !== '00:00' && $ch !== $ph) { $add('time', $ph === '' ? 'Kezdés csak a naptárban' : 'Kezdés eltér', $ch, $ph, 'start'); }
+			if (!empty($P['hours']) && preg_match('/(\d+(?:[.,]\d+)?)/', $P['hours'], $m)) { $ch2 = (float) str_replace(',', '.', $m[1]); $phs = (float) $d['hours']; if ($ch2 > 0 && abs($ch2 - $phs) >= 0.25) { $add('hours', $phs > 0 ? 'Rendelkezésre állás eltér' : 'Rendelkezésre állás csak a naptárban', rtrim(rtrim(number_format($ch2, 1, ',', ''), '0'), ',') . ' óra', $phs > 0 ? rtrim(rtrim(number_format($phs, 1, ',', ''), '0'), ',') . ' óra' : ''); } }
 		}
-		$cl = trim((string) $e['loc']); $pl = trim((string) $d['venue']);
-		if ($cl !== '' && $pl === '') { $it[] = array('k' => 'loc', 'm' => 'Helyszín csak a naptárban', 'cal' => $cl, 'pan' => '–'); }
-		elseif ($cl !== '' && $pl !== '') { $a = $norm($cl); $b = $norm($pl); $ta = array_filter(explode(' ', $a), function ($w) { return strlen($w) > 3; }); $tb = array_filter(explode(' ', $b), function ($w) { return strlen($w) > 3; }); if ($ta && $tb && !array_intersect($ta, $tb) && strpos($a, $b) === false && strpos($b, $a) === false) { $it[] = array('k' => 'loc', 'm' => 'Helyszín eltér', 'cal' => $cl, 'pan' => $pl); } }
+		$cl = trim((string) ($P['venue'] ?? '')) !== '' ? trim((string) $P['venue']) : trim((string) $e['loc']); $pl = trim((string) $d['venue']);
+		if ($cl !== '' && $pl === '') { $add('loc', 'Helyszín csak a naptárban', $cl, ''); }
+		elseif ($cl !== '' && $pl !== '') { $a = $norm($cl); $b = $norm($pl); $ta = array_filter(explode(' ', $a), function ($w) { return strlen($w) > 3; }); $tb = array_filter(explode(' ', $b), function ($w) { return strlen($w) > 3; }); if ($ta && $tb && !array_intersect($ta, $tb) && strpos($a, $b) === false && strpos($b, $a) === false) { $add('loc', 'Helyszín eltér', $cl, $pl); } }
+		if (!empty($P['cn']) && trim((string) $d['cn']) !== '' && !$same($P['cn'], $d['cn'])) { $add('contact', 'Kontakt személy eltér', $P['cn'], $d['cn']); }
+		if (!empty($P['phone'])) { $cp = preg_replace('/\D/', '', (string) ($d['cm'] ?: $d['cp'])); $cc = preg_replace('/\D/', '', $P['phone']); if ($cc !== '' && substr($cc, -8) !== substr($cp, -8)) { $add('contact', $cp === '' ? 'Telefonszám csak a naptárban' : 'Telefonszám eltér', $P['phone'], (string) ($d['cm'] ?: $d['cp'])); } }
+		if (!empty($P['pay']) && !$same($P['pay'], (string) $d['pay_method'])) { $add('other', trim((string) $d['pay_method']) === '' ? 'Fizetés csak a naptárban' : 'Fizetés eltér', $P['pay'], (string) $d['pay_method']); }
+		if (!empty($P['guests']) && preg_match('/(\d+)/', $P['guests'], $m) && (int) $m[1] !== (int) $d['guests']) { $add('other', (int) $d['guests'] > 0 ? 'Létszám eltér' : 'Létszám csak a naptárban', (int) $m[1] . ' fő', (int) $d['guests'] > 0 ? (int) $d['guests'] . ' fő' : ''); }
+		if (!empty($P['album']) && !$same($P['album'], (string) $d['album'])) { $add('other', trim((string) $d['album']) === '' ? 'Album csak a naptárban' : 'Album eltér', $P['album'], (string) $d['album']); }
+		if (!empty($P['bg']) && !$same($P['bg'], (string) $d['background'])) { $add('other', trim((string) $d['background']) === '' ? 'Háttér csak a naptárban' : 'Háttér eltér', $P['bg'], (string) $d['background']); }
+		/* Rendezvényinfó a kezelőnek (új mezők) – átvehető */
+		$FL = function_exists('cp_dinfo_fields') ? cp_dinfo_fields() : array();
+		foreach ($FL as $fk => $fx) { if (!empty($P[$fk]) && trim((string) ($di[$fk] ?? '')) !== trim((string) $P[$fk])) { $add('info', $fx[0] . (trim((string) ($di[$fk] ?? '')) === '' ? ' – csak a naptárban' : ' – eltér'), $P[$fk], (string) ($di[$fk] ?? ''), $fk); } }
 		$cn = $names($e['t'] . ' ' . wp_strip_all_tags($e['raw'])); $pn = $names((string) $d['operator']);
-		if ($cn && !$pn) { $it[] = array('k' => 'op', 'm' => 'Kezelő csak a naptárban', 'cal' => implode(', ', $cn), 'pan' => trim((string) $d['operator']) !== '' ? (string) $d['operator'] : '–'); }
-		elseif ($cn && $pn && array_diff($cn, $pn)) { $it[] = array('k' => 'op', 'm' => 'Kezelő eltér', 'cal' => implode(', ', $cn), 'pan' => (string) $d['operator']); }
+		if ($cn && !$pn) { $add('op', 'Kezelő csak a naptárban', implode(', ', $cn), trim((string) $d['operator'])); }
+		elseif ($cn && $pn && array_diff($cn, $pn)) { $add('op', 'Kezelő eltér', implode(', ', $cn), (string) $d['operator']); }
 		if ($it) { $row['it'] = $it; $rows[] = $row; }
 	}
 	/* foglalt (szerződéses) deal naptárbejegyzés nélkül */

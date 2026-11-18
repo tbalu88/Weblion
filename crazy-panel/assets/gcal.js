@@ -181,7 +181,8 @@
 		const d = new Date(S.at); s.textContent = 'Naptár: ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); s.className = 'cpx-status';
 	}
 	/* v2.9.323: eltérések a naptár és a panel között (csak lista – semmit nem ír át) */
-	const DK = { time: 'Kezdés', hours: 'Időtartam', loc: 'Helyszín', op: 'Kezelő', date: 'Dátum', lost: 'Elveszett / törölt deal', nodeal: 'Nincs hozzá deal', noev: 'Nincs naptárbejegyzés' };
+	const DK = { time: 'Kezdés', info: 'Rendezvényinfó', hours: 'Rendelkezésre állás', loc: 'Helyszín', contact: 'Kontakt', other: 'Egyéb adat', op: 'Kezelő', date: 'Dátum', lost: 'Elveszett / törölt deal', nodeal: 'Nincs hozzá deal', noev: 'Nincs naptárbejegyzés' };
+	S.sel = S.sel || {};
 	async function loadDiff(force) {
 		S.dErr = ''; S.dBusy = true;
 		try { S.diff = await post('cp_gcal_diff', { to: new Date().getFullYear() + '-12-31', force: force ? 1 : 0 }); } catch (e) { S.dErr = e.message; }
@@ -195,18 +196,33 @@
 		const f = S.dF || '';
 		const rows = D.rows.filter(r => !f || r.it.some(i => i.k === f));
 		const fd = s => { const p = s.split('-'); return p[1] + '.' + p[2] + '.'; };
-		h += '<div class="gc-diff"><p class="gc-dinfo">A naptár (' + D.ev + ' bejegyzés) és a panel összevetése <b>' + fd(D.from) + ' – ' + fd(D.to) + '</b> között. Csak lista: semmit nem ír át. A deal nevére kattintva megnyílik az adatlap, ott javíthatod.</p>' +
+		h += '<div class="gc-diff"><p class="gc-dinfo">A naptár (' + D.ev + ' bejegyzés) és a panel összevetése <b>' + fd(D.from) + ' – ' + fd(D.to) + '</b> között. Magától semmit nem ír át: csak a kipipált tételek kerülnek át. A deal nevére kattintva megnyílik az adatlap, ott javíthatod.</p>' +
 			'<div class="gc-dch"><button type="button" data-df="" class="' + (!f ? 'on' : '') + '">Mind <b>' + D.rows.length + '</b></button>' + Object.keys(DK).filter(k => cnt[k]).map(k => '<button type="button" data-df="' + k + '" class="' + (f === k ? 'on' : '') + '">' + DK[k] + ' <b>' + cnt[k] + '</b></button>').join('') + '<button type="button" class="cpx-btn ghost" data-dref>Újra</button></div>' +
+			(() => { const imp = []; D.rows.forEach(r => r.it.forEach(i => { if (i.f && r.deal) imp.push(r.deal + '|' + i.f); })); const n = Object.keys(S.sel).filter(k => S.sel[k] && imp.includes(k)).length;
+				return imp.length ? '<div class="gc-imp"><span><b>' + imp.length + '</b> tétel átvehető a naptárból (kezdés és rendezvényinfó). Pipáld ki, amit átviszel – a kezdés a Salesmate-be is bekerül, a rendezvényinfó csak a panelbe.</span><button type="button" class="cpx-btn ghost" data-impall>Mind kijelölése</button><button type="button" class="cpx-btn" data-impgo' + (n ? '' : ' disabled') + '>Kijelöltek átvétele (' + n + ')</button></div>' : ''; })() +
 			(rows.length ? '<div class="gc-dt"><div class="gc-dr gc-dhd"><span>Dátum</span><span>Naptárbejegyzés</span><span>Deal a panelben</span><span>Eltérés (naptár → panel)</span></div>' + rows.map(r =>
 				'<div class="gc-dr"><span class="gc-dd">' + esc(fd(r.day)) + '</span><span>' + (r.ev ? (r.link ? '<a href="' + esc(r.link) + '" target="_blank" rel="noopener">' + esc(r.ev) + ' ↗</a>' : esc(r.ev)) : '<i class="gc-mu">– nincs –</i>') + '</span>' +
 				'<span>' + (r.deal ? '<a href="#deals:' + r.deal + '" data-pdeal="' + r.deal + '">' + esc(r.dt) + '</a>' + (r.stg ? '<small>' + esc(r.stg) + '</small>' : '') : '<i class="gc-mu">– nincs –</i>') + '</span>' +
-				'<span class="gc-dit">' + r.it.map(i => '<span class="gc-di ' + i.k + '"><b>' + esc(i.m) + '</b>' + (i.cal !== undefined ? ' <em>' + esc(i.cal) + ' → ' + esc(i.pan) + '</em>' : '') + '</span>').join('') + '</span></div>').join('') + '</div>'
+				'<span class="gc-dit">' + r.it.map(i => { const id = i.f ? r.deal + '|' + i.f : ''; return '<span class="gc-di ' + i.k + (i.f ? ' imp' : '') + '">' + (i.f && r.deal ? '<label class="gc-ck" title="Átvétel a dealre"><input type="checkbox" data-imp="' + esc(id) + '"' + (S.sel[id] ? ' checked' : '') + '></label>' : '') + '<span><b>' + esc(i.m) + '</b>' + (i.cal !== undefined ? ' <em>' + esc(i.cal) + ' → ' + esc(i.pan) + '</em>' : '') + '</span></span>'; }).join('') + '</span></div>').join('') + '</div>'
 				: '<div class="cpx-empty">Ebben a csoportban nincs eltérés.</div>') + '</div>';
 		m.innerHTML = h + '</div>'; bind(); bindDiff(m);
 	}
 	function bindDiff(m) {
 		m.querySelectorAll('[data-df]').forEach(b => b.addEventListener('click', () => { S.dF = b.dataset.df; draw(); }));
 		m.querySelectorAll('[data-dref]').forEach(b => b.addEventListener('click', () => { S.diff = null; loadDiff(true); draw(); }));
+		m.querySelectorAll('[data-imp]').forEach(c => c.addEventListener('change', () => { S.sel[c.dataset.imp] = c.checked; draw(); }));
+		const ia = m.querySelector('[data-impall]'); if (ia) ia.addEventListener('click', () => { const f = S.dF || ''; S.diff.rows.forEach(r => { if (f && !r.it.some(i => i.k === f)) return; r.it.forEach(i => { if (i.f && r.deal) S.sel[r.deal + '|' + i.f] = true; }); }); draw(); });
+		const ig = m.querySelector('[data-impgo]');
+		if (ig) ig.addEventListener('click', async () => {
+			const items = []; S.diff.rows.forEach(r => r.it.forEach(i => { if (i.f && r.deal && S.sel[r.deal + '|' + i.f]) items.push({ deal: r.deal, f: i.f, v: i.v }); }));
+			if (!items.length) return;
+			const nStart = items.filter(x => x.f === 'start').length;
+			if (!window.confirm(items.length + ' tétel átvétele a naptárból' + (nStart ? ' (ebből ' + nStart + ' kezdési idő a Salesmate-be is bekerül)' : '') + '. Mehet?')) return;
+			ig.disabled = true; ig.textContent = 'Átvétel…';
+			try { const r = await post('cp_gcal_import', { items: JSON.stringify(items) }); S.sel = {}; window.alert(r.ok + ' tétel átvéve.' + (r.err.length ? '\n\nNem sikerült:\n' + r.err.join('\n') : '')); }
+			catch (e) { window.alert(e.message); }
+			S.diff = null; loadDiff(true); draw();
+		});
 	}
 	function view(main) {
 		S.main = main;
@@ -223,7 +239,7 @@
 		'.gc-dinfo{margin:0 0 10px;color:#5F5B55;font-size:13.5px}.gc-dch{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}.gc-dch button[data-df]{border:1px solid #DDD9D2;background:#fff;border-radius:999px;padding:6px 12px;font:500 13px Inter,sans-serif;cursor:pointer;color:#1F1D1A}.gc-dch button[data-df].on{background:#141C33;border-color:#141C33;color:#fff}.gc-dch b{margin-left:4px;font-variant-numeric:tabular-nums}' +
 		'.gc-dt{background:#fff;border:1px solid #E6E2DC;border-radius:14px;overflow:hidden}.gc-dr{display:grid;grid-template-columns:70px minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.6fr);gap:12px;padding:10px 14px;border-top:1px solid #F0ECE6;font-size:13.5px;align-items:start}.gc-dr:first-child{border-top:0}.gc-dhd{background:#F7F5F1;font-weight:700;font-size:12px;color:#5F5B55;text-transform:uppercase;letter-spacing:.03em}' +
 		'.gc-dr a{color:#141C33;font-weight:600;text-decoration:none;overflow-wrap:anywhere}.gc-dr a:hover{text-decoration:underline}.gc-dr small{display:block;color:#8A857D;font-size:12px}.gc-dd{font-weight:700;font-variant-numeric:tabular-nums}.gc-mu{color:#A09A91}' +
-		'.gc-dit{display:flex;flex-direction:column;gap:4px}.gc-di{border-radius:8px;padding:4px 8px;background:#F1EEE9}.gc-di b{font-weight:600}.gc-di em{font-style:normal;color:#5F5B55;overflow-wrap:anywhere}.gc-di.nodeal,.gc-di.lost,.gc-di.noev{background:#FDECEA;color:#8C1D18}.gc-di.date{background:#FFF3C4}' +
+		'.gc-imp{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:#EEF2FA;border:1px solid #D3DCEF;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13.5px}.gc-imp span{flex:1 1 320px}.gc-di.imp{display:flex;gap:8px;align-items:flex-start}.gc-ck input{width:18px;height:18px;margin:1px 0 0;accent-color:#141C33;cursor:pointer}.gc-di.info{background:#EAF5EE}' + '.gc-dit{display:flex;flex-direction:column;gap:4px}.gc-di{border-radius:8px;padding:4px 8px;background:#F1EEE9}.gc-di b{font-weight:600}.gc-di em{font-style:normal;color:#5F5B55;overflow-wrap:anywhere}.gc-di.nodeal,.gc-di.lost,.gc-di.noev{background:#FDECEA;color:#8C1D18}.gc-di.date{background:#FFF3C4}' +
 		'@media (max-width:760px){.gc-dhd{display:none}.gc-dr{grid-template-columns:1fr;gap:4px}}' +
 		'.gc-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}' +
 		'.gc-nav{display:flex;align-items:center;gap:6px}.gc-nav h2{margin:0 6px;font:700 20px "Plus Jakarta Sans",Inter,sans-serif;min-width:150px;text-align:center}' +
