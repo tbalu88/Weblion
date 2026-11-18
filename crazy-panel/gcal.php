@@ -326,6 +326,18 @@ function cp_gcal_ajax_import() {
 function cp_gcal_diff($to = '', $force = false) {
 	global $wpdb;
 	$from = wp_date('Y-m-d'); if ($to === '' || $to < $from) { $to = wp_date('Y') . '-12-31'; }
+	/* v2.9.326: 10 perces gyorsítótár + zár – egyszerre csak egy számolás fusson (a nehéz kérés ne terhelje a szervert) */
+	$ck = 'cp_gcal_diff_' . md5($from . $to);
+	if (!$force) { $c = get_transient($ck); if (is_array($c)) { return $c + array('cached' => 1); } }
+	if (get_transient('cp_gcal_diff_lock')) { $c = get_transient($ck); if (is_array($c)) { return $c + array('cached' => 1); } return new WP_Error('busy', 'Az összevetés most készül – próbáld újra fél perc múlva.'); }
+	set_transient('cp_gcal_diff_lock', 1, 120);
+	$r = cp_gcal_diff_run($from, $to, $force);
+	delete_transient('cp_gcal_diff_lock');
+	if (!is_wp_error($r)) { set_transient($ck, $r, 10 * MINUTE_IN_SECONDS); }
+	return $r;
+}
+function cp_gcal_diff_run($from, $to, $force) {
+	global $wpdb;
 	if (strtotime($to) - strtotime($from) > 200 * DAY_IN_SECONDS) { $to = wp_date('Y-m-d', strtotime($from) + 200 * DAY_IN_SECONDS); }
 	$ev = cp_gcal_events($from, $to, $force);
 	if (is_wp_error($ev)) { return $ev; }
