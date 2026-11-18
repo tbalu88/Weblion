@@ -1025,7 +1025,7 @@
         (pcBad.length ? '<details><summary>Az elérhetősége szerint aznap nem jó (' + pcBad.length + ')</summary>' + pcBad.map(cRow).join('') + '</details>' : '') +
         '<div class="sl-pb"><button type="button" class="cpx-btn" data-pgo>Meghívás a napra</button><button type="button" class="cpx-btn ghost" data-pcancel>Mégse</button></div></div></div>';
     if (!x.slots.length) { box.innerHTML = head + poolH + '<p class="cpx-muted">Erre a napra nincs rendezvény.</p>'; bind(); return; }
-    const slotsH = '<div class="sl-ph2 sl-ph3"><b><i class="sl-n" aria-hidden="true">2</i>Rendezvények<span class="sl-cn">' + x.slots.length + ' slot</span></b><small>' + (x.can_final ? 'Válaszd ki, ki menjen – a kör ráérő tagjai vannak elöl.' : 'A rendezvényekhez Ákos rendeli az embereket.') + '</small></div>' + x.slots.map((s, i) => {
+    const slotsH = '<div class="sl-ph2 sl-ph3"><b><i class="sl-n" aria-hidden="true">2</i>Rendezvények<span class="sl-cn">' + new Set(x.slots.map(q => q.deal)).size + ' rendezvény</span></b><small>' + (x.can_final ? 'Válaszd ki, ki menjen – a kör ráérő tagjai vannak elöl.' : 'A rendezvényekhez Ákos rendeli az embereket.') + '</small></div>' + x.slots.map((s, i) => {
       const fins = s.asg.filter(a => a.st === 'final'), nfin = fins.length, cnt = s.cnt || 1, fin = nfin >= cnt;
       const legacy = s.asg.filter(a => a.st !== 'final' && a.st !== 'dropped');
       const where = s.bp === 1 ? 'Budapest' : s.bp === 0 ? 'Vidék' : 'Helyszín ismeretlen';
