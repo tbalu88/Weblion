@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.311');
+define('CP_PANEL_VER', '2.9.312');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -806,6 +806,7 @@ function cp_panel_render_app() {
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
 		'logi'       => function_exists('cp_logi_db_ok') && cp_logi_db_ok() && cp_panel_can_x('naptar') && cp_panel_can_x('logisztika') ? 1 : 0, /* v2.9.118: Logisztika fül */
 		'gal'        => function_exists('cp_booth_ajax_gal_list') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.255: Galériák gyűjtőoldal */
+		'sup'        => function_exists('cp_sup_cfg') ? cp_sup_cfg() : array('on' => 0), /* v2.9.312: Segítség-chat */
 		'aic'        => function_exists('cp_booth_ajax_ai_credit') && cp_panel_can_x('aikredit') ? 1 : 0, /* v2.9.287: AI-kredit (Eszközök) */
 		'wh'         => function_exists('cp_wh_ajax_data') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.259: Raktár */
 		'dp'         => function_exists('cp_dp_cfg') && cp_panel_can_x('naptar') ? cp_dp_cfg() : array('on' => 0), /* v2.9.290: dinamikus ár – napi címkék */
@@ -833,6 +834,7 @@ function cp_panel_render_app() {
 	if (!empty($cfg['gal'])) { $lazy['galeriak'] = array('js' => $asset('galeriak')); }
 	if (!empty($cfg['aic'])) { $lazy['ai'] = array('js' => $asset('aikredit')); }
 	if (!empty($cfg['wh'])) { $lazy['raktar'] = array('js' => $asset('raktar')); }
+	if (!empty($cfg['sup']['on'])) { $lazy['sup'] = array('js' => $asset('support')); }
 	$lazy['bgcat'] = array('js' => $asset('bgcat'));
 	if (function_exists('cp_sb_asset_url')) { $lazy['sablon'] = array('js' => cp_sb_asset_url('js')); }
 	$cfg['lazy'] = $lazy;
@@ -3822,6 +3824,7 @@ require_once __DIR__ . '/gdrive-backup.php';
 require_once __DIR__ . '/worklog.php';
 require_once __DIR__ . '/capacity.php';
 require_once __DIR__ . '/dynprice.php';
+require_once __DIR__ . '/support.php'; /* v2.9.312: Segítség – AI-chat */
 require_once __DIR__ . '/monitor.php'; /* v2.9.302: tartalék szerver és AI-kredit figyelő */ /* v2.9.290: dinamikus árjavaslat */
 require_once __DIR__ . '/portal-link.php';
 require_once __DIR__ . '/dashboard.php';

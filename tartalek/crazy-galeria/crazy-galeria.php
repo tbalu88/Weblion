@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.10.4');
+define('CG_VER', '0.11.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -649,4 +649,32 @@ add_action('rest_api_init', function () {
 		cg_hook($ev, $ph, 'ai');
 		return array('ok' => true, 'photo' => $ph, 'url' => home_url('/galeria/' . $ev . '/' . $ph), 'img' => 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($sv2['path'])), 'cost' => $cost, 'sec' => $sec, 'left' => $info['limit'] > 0 ? max(0, $info['limit'] - $info['used'] - 1) : null);
 	}));
+});
+
+/* ------------------------------------------------------------ 0.11.0: Segítség-chat (a panel hívja; OpenRouter, a meglévő kulccsal)
+ * Csak a panel érheti el (X-Booth-Key = Panel). A panel küldi az üzeneteket és az eszközök leírását; itt csak továbbítjuk,
+ * modell-fehérlistával, tokenkorláttal, és a napi költséget összesítjük. */
+define('CG_SUP_MODELS', 'anthropic/claude-haiku-5.5,anthropic/claude-sonnet-5.5');
+add_action('rest_api_init', function () {
+	register_rest_route('crazy-galeria/v1', '/support-chat', array('methods' => 'POST', 'permission_callback' => 'cg_is_panel', 'callback' => function (WP_REST_Request $r) {
+		$j = json_decode((string) $r->get_param('j'), true);
+		if (!is_array($j) || empty($j['messages']) || !is_array($j['messages'])) { return new WP_Error('bad', 'Hibás kérés.', array('status' => 400)); }
+		$key = cg_ai_key(); if ($key === '') { return new WP_Error('nokey', 'Az AI nincs beállítva.', array('status' => 503)); }
+		$model = in_array((string) ($j['model'] ?? ''), explode(',', CG_SUP_MODELS), true) ? (string) $j['model'] : 'anthropic/claude-haiku-5.5';
+		$body = array('model' => $model, 'messages' => array_slice($j['messages'], -40), 'max_tokens' => 1200, 'temperature' => 0.2, 'usage' => array('include' => true));
+		if (!empty($j['tools']) && is_array($j['tools'])) { $body['tools'] = array_slice($j['tools'], 0, 30); }
+		$ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+		curl_setopt_array($ch, array(CURLOPT_POST => true, CURLOPT_POSTFIELDS => wp_json_encode($body), CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 45, CURLOPT_CONNECTTIMEOUT => 8,
+			CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $key, 'Content-Type: application/json', 'X-Title: Crazy panel – Segítség', 'HTTP-Referer: https://eventcrazy.hu')));
+		$res = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+		$a = $res ? json_decode($res, true) : null;
+		if ($code !== 200 || !is_array($a) || empty($a['choices'][0]['message'])) {
+			$m = is_array($a) && isset($a['error']['message']) ? (string) $a['error']['message'] : ('HTTP ' . $code);
+			return new WP_Error('ai', $code === 402 ? 'Elfogyott az AI-kredit.' : 'Az AI most nem válaszolt.', array('status' => 502, 'detail' => mb_substr($m, 0, 200)));
+		}
+		$cost = (float) ($a['usage']['cost'] ?? 0); $d = wp_date('Y-m-d');
+		$u = get_option('cg_sup_usage', array()); if (!is_array($u)) { $u = array(); } $u[$d] = round(($u[$d] ?? 0) + $cost, 5); $u = array_slice($u, -62, null, true); update_option('cg_sup_usage', $u, false);
+		return array('ok' => 1, 'message' => $a['choices'][0]['message'], 'finish' => (string) ($a['choices'][0]['finish_reason'] ?? ''), 'cost' => $cost, 'model' => $model);
+	}));
+	register_rest_route('crazy-galeria/v1', '/support-usage', array('methods' => 'GET', 'permission_callback' => 'cg_is_panel', 'callback' => function () { $u = get_option('cg_sup_usage', array()); return array('ok' => 1, 'usage' => is_array($u) ? $u : array()); }));
 });

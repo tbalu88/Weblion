@@ -30,6 +30,7 @@ function cp_nt_kinds() {
 		'booth_miss'  => array('Szelfigép', 'A gép nem jelentkezett', 'Egy rendezvény kezdése előtt 30, majd 15 perccel még egyetlen Crazy Booth gép sem jelentkezett vele (csak ahol korábban már futott Crazy Booth).', 'Ákos és akiket a Crazy Booth gépek oldalon beállítottak', 1),
 		'srv_down'    => array('Rendszer', 'Tartalék szerver leállt / helyreállt', 'A galériát, az AI-képeket és a mobil appot kiszolgáló tartalék szerver 10 perce nem válaszol – és amikor újra elérhető.', 'Ákos és akiket a Crazy Booth gépek oldalon beállítottak', 1),
 		'ai_low'      => array('Szelfigép', 'Kevés az AI-kredit', 'Az OpenRouter-egyenleg 10 $ alá esett (egyszer szól, újra csak feltöltés után).', 'Ákos és akiket a Crazy Booth gépek oldalon beállítottak', 1),
+		'support'     => array('Rendszer', 'Segítségkérés a Segítség-chatből', 'Egy kolléga a Segítség menüben a „Küldés Balázsnak” gombbal továbbította a problémáját (a linken a teljes beszélgetés).', 'Tóth Balázs (ha nincs: az adminok)', 1),
 		'system'      => array('Rendszer', 'Rendszer-figyelmeztetés', 'A panel önellenőrzése hibát talált (pl. elakadt szinkron, hiányzó beállítás).', 'adminok', 1),
 	);
 }
