@@ -239,7 +239,7 @@ function cp_set_ajax_admin() {
 			break;
 		case 'rot':
 			if (!function_exists('cp_crm_rot_opts')) { cp_el_err('Nem érhető el.'); }
-			$lim = array('lead_h' => 720, 'offer_d' => 365, 'sheet_before' => 120, 'sheet_min' => 60, 'con_before' => 365, 'con_min' => 90, 'done_wd' => 30, 'g_lead_h' => 720, 'g_offer' => 90, 'g_sheet' => 60, 'g_con' => 90, 'g_done' => 30);
+			$lim = array('lead_h' => 720, 'offer_d' => 365, 'sheet_before' => 120, 'sheet_min' => 60, 'fill_d' => 90, 'g_fill' => 60, 'con_before' => 365, 'con_min' => 90, 'done_wd' => 30, 'g_lead_h' => 720, 'g_offer' => 90, 'g_sheet' => 60, 'g_con' => 90, 'g_done' => 30);
 			$ro = array();
 			foreach ($lim as $k => $mx) { $ro[$k] = max(0, min($mx, (int) $p($k))); }
 			update_option('cp_rot_opts', $ro, false);

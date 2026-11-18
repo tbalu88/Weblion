@@ -294,13 +294,14 @@
 			row('Érdeklődő / Megrendelő', n('lead_h', 'órával a szakaszba kerülés után', 720), n('g_lead_h', 'óra', 720)) +
 			row('Ajánlat kiküldve', n('offer_d', 'nappal a szakaszba kerülés után', 365), n('g_offer', 'nap', 90)) +
 			row('Adatlap kiküldve', n('sheet_before', 'nappal a rendezvény előtt', 120) + '<br>' + n('sheet_min', 'napot legalább a szakaszban', 60), n('g_sheet', 'nap', 60)) +
+			row('Adatlap kitöltve', n('fill_d', 'nappal a szakaszba kerülés után (addig ki kell küldeni a szerződést)', 90), n('g_fill', 'nap', 60)) +
 			row('Szerződés kiküldve', n('con_before', 'nappal a rendezvény előtt', 365) + '<br>' + n('con_min', 'napot legalább a szakaszban', 90), n('g_con', 'nap', 90)) +
 			row('Szerződés aláírva, Rendezvény felkészül', '<span class="cs-muted">nem rohad</span>', '') +
 			row('Rendezvény lement', n('done_wd', 'munkanappal a rendezvény után (ha nincs lezárva)', 30), n('g_done', 'nap', 30)) +
 			'</tbody></table></div><div class="cs-bar"><button type="button" class="cpx-btn" data-save>Mentés</button><button type="button" class="cpx-btn ghost" data-def>Alapértékek</button></div>';
-		const keys = ['lead_h', 'offer_d', 'sheet_before', 'sheet_min', 'con_before', 'con_min', 'done_wd', 'g_lead_h', 'g_offer', 'g_sheet', 'g_con', 'g_done'];
+		const keys = ['lead_h', 'offer_d', 'sheet_before', 'sheet_min', 'fill_d', 'g_fill', 'con_before', 'con_min', 'done_wd', 'g_lead_h', 'g_offer', 'g_sheet', 'g_con', 'g_done'];
 		box.querySelector('[data-save]').addEventListener('click', e => { const p = { sec: 'rot' }; keys.forEach(k => { p[k] = val(box, k); }); save(e.currentTarget, 'cp_set_admin', p); });
-		box.querySelector('[data-def]').addEventListener('click', () => { const D = { lead_h: 24, offer_d: 30, sheet_before: 7, sheet_min: 3, con_before: 30, con_min: 7, done_wd: 2, g_lead_h: 24, g_offer: 7, g_sheet: 3, g_con: 7, g_done: 2 }; keys.forEach(k => { const i = box.querySelector('[data-k="' + k + '"]'); if (i) i.value = D[k]; }); });
+		box.querySelector('[data-def]').addEventListener('click', () => { const D = { lead_h: 24, offer_d: 30, sheet_before: 7, sheet_min: 3, fill_d: 3, g_fill: 2, con_before: 30, con_min: 7, done_wd: 2, g_lead_h: 24, g_offer: 7, g_sheet: 3, g_con: 7, g_done: 2 }; keys.forEach(k => { const i = box.querySelector('[data-k="' + k + '"]'); if (i) i.value = D[k]; }); });
 	}
 	function secPanel(box, d) {
 		const p = d.panel;
