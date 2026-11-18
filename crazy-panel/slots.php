@@ -157,7 +157,7 @@ function cp_slot_day($day) {
 			$slots[] = array('deal' => $deal, 'skey' => $skey, 'kind' => $k, 'skill' => cp_slot_skill($k, $k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
 				'need' => $need, 'need_set' => isset($need_o[$nk]) ? 1 : 0, 'cnt' => cp_slot_cnt($deal, $day, $skey), 'bp' => $bp === null ? -1 : ($bp ? 1 : 0),
 				'title' => (string) ($e['title'] ?? ''), 'stage' => $stage, 'booked' => ($e['state'] ?? '') === 'booked' ? 1 : 0,
-				'time' => (string) ($e['time'] ?? ''), 'loc' => (string) ($e['loc'] ?? ''), 'svc' => (string) ($k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
+				'time' => (string) ($e['time'] ?? '') !== '' && is_array($e['win'] ?? null) && isset($e['win'][1]) ? (string) $e['time'] . '–' . sprintf('%02d:%02d', intdiv((int) $e['win'][1], 60) % 24, (int) $e['win'][1] % 60) : (string) ($e['time'] ?? ''), 'loc' => (string) ($e['loc'] ?? ''), 'svc' => (string) ($k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
 				'can_inv' => ($contract || cp_slot_xmas($day)) ? 1 : 0, 'van' => cp_slot_van($e) ? 1 : 0, 'asg' => array());
 		}
 	}

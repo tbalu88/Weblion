@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.319');
+define('CP_PANEL_VER', '2.9.320');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -540,6 +540,10 @@ function cp_panel_normalize($rows) {
 			$v = cp_panel_str(cp_panel_get($r, $key));
 			if ($v !== '') { $ex[] = array($label, $v); }
 		}
+		/* v2.9.320: ha a külön „Kezdés” mező nincs beállítva, az időpont a rendezvény idősávjából (kezdés – vége) jön */
+		$win_ = function_exists('cp_bgw_row') ? cp_bgw_row($r) : null;
+		$tm_ = $o['f_time'] !== '' ? cp_panel_norm_time(cp_panel_get($r, $o['f_time'])) : '';
+		if ($tm_ === '' && is_array($win_) && isset($win_[0])) { $tm_ = sprintf('%02d:%02d', intdiv((int) $win_[0], 60) % 24, (int) $win_[0] % 60); }
 		$out[] = array(
 			'id'      => $id,
 			'title'   => cp_panel_str(cp_panel_get($r, 'title')),
@@ -547,8 +551,8 @@ function cp_panel_normalize($rows) {
 			'state'   => $state,
 			'won'     => $status === 'won',
 			'date'    => $date,
-			'time'    => $o['f_time'] !== '' ? cp_panel_norm_time(cp_panel_get($r, $o['f_time'])) : '',
-			'win'     => function_exists('cp_bgw_row') ? cp_bgw_row($r) : null, /* v2.9.232: [kezdés perc, vége perc] | null */
+			'time'    => $tm_,
+			'win'     => $win_, /* v2.9.232: [kezdés perc, vége perc] | null */
 			'selfie'  => $sp,
 			'spin'    => $spin,
 			'kind'    => ($spin !== '' && $sp === '') ? 'spin' : (($spin !== '' && $sp !== '') ? 'both' : 'selfie'),
