@@ -44,7 +44,7 @@ function cp_dash_ajax_data() {
 	if ($uid && cp_panel_can_x('feladatok') && function_exists('cp_kb_db_ok') && cp_kb_db_ok()) {
 		$B = cp_kb_t('boards'); $Cd = cp_kb_t('cards');
 		foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT c.id, c.title, c.due, b.name bn FROM $Cd c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL AND (b.kind <> 'personal' OR b.owner_uid = %d)
-			WHERE c.archived_at IS NULL AND c.done = 0 AND FIND_IN_SET(%d, c.assignees) AND (c.due IS NULL OR c.due <= %s) ORDER BY c.due IS NULL, c.due, c.id DESC LIMIT 200", $uid, $uid, wp_date('Y-m-d', time() + 2 * DAY_IN_SECONDS)), ARRAY_A) as $r) {
+			WHERE c.archived_at IS NULL AND c.done = 0 AND FIND_IN_SET(%d, c.assignees) AND (c.due IS NULL OR c.due <= %s) ORDER BY c.due IS NULL, c.due, c.id DESC LIMIT 200", $uid, $uid, wp_date('Y-m-d', time() + 60 * DAY_IN_SECONDS)) /* v2.9.314: a későbbi határidősek is (60 napig) – „Közelgő határidők” csoport */, ARRAY_A) as $r) {
 			if (isset($hid['card:' . $r['id']])) { continue; }
 			$todo[] = array('k' => 'card', 'id' => (int) $r['id'], 't' => (string) $r['title'], 'due' => (string) $r['due'], 'bn' => (string) $r['bn']);
 		}
