@@ -341,7 +341,7 @@
 		if (x.term) ext.push(x.term + ' napos fizetés');
 		if (x.pm) ext.push(esc(x.pm));
 		if (x.st && x.id) ext.push(esc(x.st));
-		const name = x.id ? '<a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t || ('Deal #' + x.id)) + '</a>' : '<b>' + esc(x.t) + '</b>';
+		const name = x.id ? '<a href="#deals:' + Number(x.id) + '" data-pdeal="' + Number(x.id) + '">' + esc(x.t || ('Deal #' + x.id)) + '</a>' : '<b>' + esc(x.t) + '</b>';
 		return '<li' + (x.sev ? ' class="st-al-' + x.sev + '"' : '') + '>' + name + (x.id ? '' : (x.st ? ' – ' + esc(x.st) : '')) + (ext.length ? ' <span class="st-sub">· ' + ext.join(' · ') + '</span>' : '') + (x.v ? ' <span class="st-al-v">' + ft(x.v) + '</span>' : '') + (x.ok && x.cid ? ' <button type="button" class="cpx-btn ghost sm st-mok" data-cid="' + esc(x.cid) + '" data-rv="' + esc(x.rv) + '" title="Nem kell rá válaszolni (pl. köszönő levél) – újabb levélnél újra jelez">✓ Nem kell válasz</button>' : '') + '</li>';
 	}
 	function toastSt(t) {
@@ -842,7 +842,7 @@
 	/* hiányzó adatok listája (csak a fülön) */
 	function missList(list, what) {
 		if (!list || !list.length) return '';
-		return '<details class="st-miss-d"><summary>' + list.length + ' rendezvénynél hiányzik ' + what + ' – lista</summary><ul class="st-ul">' + list.map(x => '<li><a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.svc ? ' · ' + esc(x.svc) : '') + (x.el ? '' : ' · nincs Elszámolás-sor') + '</span></li>').join('') + '</ul></details>';
+		return '<details class="st-miss-d"><summary>' + list.length + ' rendezvénynél hiányzik ' + what + ' – lista</summary><ul class="st-ul">' + list.map(x => '<li><a href="#deals:' + Number(x.id) + '" data-pdeal="' + Number(x.id) + '">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.svc ? ' · ' + esc(x.svc) : '') + (x.el ? '' : ' · nincs Elszámolás-sor') + '</span></li>').join('') + '</ul></details>';
 	}
 
 	/* nyomtatás (Elszámolás: papírfogyasztás) */
@@ -857,7 +857,7 @@
 		const bars = (title, obj) => { const e = Object.entries(obj); if (!e.length) return ''; const mx = Math.max(...e.map(x => x[1])); return '<h4 style="margin:12px 0 6px">' + title + '</h4><div class="st-bars">' + e.slice(0, 8).map(x => '<div class="st-bar"><span class="t">' + esc(x[0]) + '</span><span class="b"><span style="width:' + (x[1] / mx * 100) + '%"></span></span><span class="v">' + num(x[1]) + '</span></div>').join('') + '</div>'; };
 		const svc = {}; p.svc.forEach(x => { svc[x.k + ' (' + x.ev + ' rend.)'] = x.n; });
 		b += bars('Szolgáltatásonként', svc) + bars('Nyomtatónként', p.printers) + bars('Eszközönként', p.dev);
-		if (p.top.length) b += '<h4 style="margin:12px 0 6px">Legtöbb nyomat</h4><ul class="st-ul">' + p.top.map(x => '<li><a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + '</span> <b>' + num(x.n) + '</b></li>').join('') + '</ul>';
+		if (p.top.length) b += '<h4 style="margin:12px 0 6px">Legtöbb nyomat</h4><ul class="st-ul">' + p.top.map(x => '<li><a href="#deals:' + Number(x.id) + '" data-pdeal="' + Number(x.id) + '">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + '</span> <b>' + num(x.n) + '</b></li>').join('') + '</ul>';
 		const mpa = (o.missing && o.missing.pa) ? o.missing.pa.length : Math.max(0, p.photo - p.events);
 		const np = Object.entries(p.noprint || {});
 		b += '<div class="st-sub" style="margin-top:6px">' + p.photo + ' nyomtatós rendezvény' + (np.length ? ' · ' + np.reduce((s, x) => s + x[1], 0) + ' nem nyomtatós: ' + np.map(x => esc(x[0]) + (x[1] > 1 ? ' ' + x[1] : '')).join(', ') : '') + '</div>';
@@ -881,7 +881,7 @@
 			b += '<div><span class="st-num">' + s.pct + '%</span> <span class="st-sub">elégedett · ' + tot + ' értékelés · ' + s.ratedEvents + ' / ' + s.events + ' rendezvény értékelve' + (op && op.sat.pct != null ? ' · előző időszak: ' + op.sat.pct + '%' : '') + '</span></div>';
 			b += '<div class="st-split">' + Object.entries(s.counts).map(x => '<span style="width:' + (x[1] / tot * 100) + '%;background:' + (col[x[0]] || '#9A8F80') + '" title="' + esc(x[0] + ': ' + x[1]) + '"></span>').join('') + '</div>';
 			b += '<div class="st-sub">' + Object.entries(s.counts).map(x => esc(x[0]) + ': <b>' + x[1] + '</b>').join(' · ') + '</div>';
-			if (s.bad.length) b += '<h4 style="margin:12px 0 6px">Nem „Elégedett” értékelések</h4><ul class="st-ul">' + s.bad.map(x => '<li><b>' + esc(x.v) + '</b> – <a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
+			if (s.bad.length) b += '<h4 style="margin:12px 0 6px">Nem „Elégedett” értékelések</h4><ul class="st-ul">' + s.bad.map(x => '<li><b>' + esc(x.v) + '</b> – <a href="#deals:' + Number(x.id) + '" data-pdeal="' + Number(x.id) + '">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
 			if (s.ratedEvents < s.events) b += miss((s.events - s.ratedEvents) + ' lezajlott rendezvénynél nincs elégedettségi értékelés (kezelői adatlap / Elszámolás → Ügyfél elégedettség).');
 			b += missList(o.missing && o.missing.sa, 'az elégedettségi értékelés');
 		}
@@ -891,7 +891,7 @@
 		else {
 			b += '<div class="st-sub">' + Object.entries(g.counts).map(x => '<span style="color:' + (col[x[0]] || 'var(--mid)') + ';font-weight:700">' + esc(x[0]) + '</span>: ' + x[1]).join(' · ') + '</div>';
 			b += missList(o.missing && o.missing.gm, 'a gépállapot');
-			if (g.bad.length) b += '<ul class="st-ul">' + g.bad.map(x => '<li><b>' + esc(x.v) + '</b>' + (x.dev ? ' (' + esc(x.dev) + ')' : '') + ' – <a href="' + esc(C.sm + x.id + '/detail') + '" target="_blank" rel="noopener">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
+			if (g.bad.length) b += '<ul class="st-ul">' + g.bad.map(x => '<li><b>' + esc(x.v) + '</b>' + (x.dev ? ' (' + esc(x.dev) + ')' : '') + ' – <a href="#deals:' + Number(x.id) + '" data-pdeal="' + Number(x.id) + '">' + esc(x.t) + '</a> <span class="st-sub">· ' + dshort(x.d) + (x.note ? ' · „' + esc(x.note) + '”' : '') + '</span></li>').join('') + '</ul>';
 		}
 		return card('Ügyfél-elégedettség és gépállapot', 'kezelői visszajelzések az Elszámolás fülről', b);
 	}

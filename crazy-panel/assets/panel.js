@@ -1133,6 +1133,8 @@
     const g = document.querySelector('.cpx-cal.v2'); if (!g || monthKey(date) !== S.month) return;
     g.querySelectorAll('.sl-mk').forEach(x => x.remove()); slotMonthMarks(g, S.month);
   }
+  /* v2.9.322: a panelen belüli deal-linkek (a régi Salesmate-linkek helyett) – a deal adatlapja nyílik meg */
+  document.addEventListener('click', ev => { const a = ev.target.closest && ev.target.closest('a[data-pdeal]'); if (!a || !window.CPCrm || !window.CPCrm.open || ev.metaKey || ev.ctrlKey) return; ev.preventDefault(); closeModal(); window.CPCrm.open(Number(a.dataset.pdeal)); });
   function closeModal() { const d = document.getElementById('cpx-modal'); if (d) { if (window.cpxSheetMo) window.cpxSheetMo.close(d); else { d.hidden = true; d.innerHTML = ''; } } }
   function capBox(label, used, cap, pend) {
     const free = cap - used;
@@ -1415,7 +1417,7 @@
     const sub = [e.time, kindLabel(e)].filter(Boolean).join(' · ');
     return '<tr class="g' + g + ' st-' + k.st + '" data-id="' + esc(e.id) + '">' +
       '<td class="td-d" data-l="Dátum"><b>' + dn + '</b><small>' + HU_DAYS[(d.getDay() + 6) % 7] + (k.dleft >= 0 && k.dleft <= 7 ? ' · ' + (k.dleft === 0 ? 'ma' : k.dleft + ' nap') : '') + '</small></td>' +
-      '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="' + esc(C.sm + dealOf(e) + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(who(e)) + '</a>' + dayTag(e) +
+      '<td class="td-n" data-l="Megrendelő"><div class="nm"><a href="#deals:' + Number(dealOf(e)) + '" data-pdeal="' + Number(dealOf(e)) + '" title="Deal megnyitása">' + esc(who(e)) + '</a>' + dayTag(e) +
       '<button type="button" class="nt ' + (k.t.note ? 'has' : '') + '" data-note title="' + esc(k.t.note || 'Megjegyzés hozzáadása') + '">' + (k.t.note ? '📝' : '+ megj.') + '</button></div><small>' + esc(sub) + (norm(e.stage) === 'szerződés kiküldve' ? ' · <span class="mut">szerződés kiküldve</span>' : '') + '</small>' + (k.t.note ? '<small class="ntx">' + esc(k.t.note) + '</small>' : '') + '</td>' +
       '<td class="td-c" data-l="Szerződés">' + tick('sz', k.sz, k.szAuto ? 'auto' : '', k.szAuto ? 'Salesmate szerint aláírva (' + e.stage + ')' : '') + '</td>' +
       '<td class="td-c" data-l="Template">' + tick('tp', k.tp) + (lzHas('sablon') ? '<button type="button" class="sbgo" data-sb title="Sablon elkészítése a Sablonkészítőben (lyukasztott PNG)">✎ sablon</button>' : '') + '</td>' +
@@ -1810,7 +1812,7 @@
       ['Kapcsolattartó', e.contact ? [e.contact.name, tel ? '<a href="tel:' + esc(tel) + '">' + esc(e.contact.phone) + '</a>' : '', e.contact.email].filter(Boolean).map((x, i) => i === 1 ? x : esc(x)).join(' · ') : '', true]
     ].concat(PORTAL ? window.CPPortal.info(S.portal[dealOf(e)]) : []).concat((e.extra || []).map(x => [x[0], x[1]]));
     return '<article class="wcard ' + e.state + '"><header><b>' + esc(e.title || ('Deal #' + dealOf(e))) + '</b>' + dayTag(e) + stateBadge(e) +
-      '<a class="smlink noprint" href="' + esc(C.sm + dealOf(e) + '/detail') + '" target="_blank" rel="noopener">Salesmate ↗</a></header>' +
+      '<a class="smlink noprint" href="#deals:' + Number(dealOf(e)) + '" data-pdeal="' + Number(dealOf(e)) + '">Deal megnyitása →</a></header>' +
       (e.state === 'booked' ? prepLine(e) : '') +
       (trk(e).note ? '<p class="note">📝 ' + esc(trk(e).note) + '</p>' : '') +
       (PORTAL ? window.CPPortal.flags(S.portal[dealOf(e)], 'munkalap') : '') +
@@ -2291,7 +2293,7 @@ function elRowHtml(L, g, locked) {
 	const locFromCal = L.useCal && locS !== (d.loc || '');
 	let who;
 	if (first) {
-		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="' + esc(C.sm + dealOf(d) + '/detail') + '" target="_blank" rel="noopener" title="Megnyitás a Salesmate-ben">' + esc(d.who) + '</a>' + dayTag(d)) + '</div>' +
+		who = '<div class="nm">' + (d.manual ? '<b>' + esc(d.who) + '</b><span class="el-tag">kézi</span>' : '<a href="#deals:' + Number(dealOf(d)) + '" data-pdeal="' + Number(dealOf(d)) + '" title="Deal megnyitása">' + esc(d.who) + '</a>' + dayTag(d)) + '</div>' +
 			'<small>' + esc(sub) + '</small>' + (PORTAL && !d.manual ? window.CPPortal.flags(((EL.cache[S.month] || {}).portal || {})[dealOf(d)], 'elszamolas') : '') + (locS ? '<small class="el-loc" title="' + esc(locS + (locFromCal ? '\n(naptár szerint; Salesmate: ' + (d.loc || '–') + ')' : '')) + '">' + (locFromCal ? '📅 ' : '') + esc(locS.length > 46 ? locS.slice(0, 44) + '…' : locS) + '</small>' : '') +
 			'<div class="el-acts"><button type="button" class="el-a" data-act="det" title="Részletek – minden adat szerkesztése">✎</button><button type="button" class="el-a" data-act="link" title="Kezelői adatlap linkjének másolása">Link ⧉</button>' + (locked ? '' : '<button type="button" class="el-a" data-act="add" title="Még egy kezelő ehhez a rendezvényhez">+ kezelő</button>' + (((EL.cache[S.month] || {}).store || {})[d.id] && EL.cache[S.month].store[d.id].hid ? '<button type="button" class="el-a" data-act="unhide" title="Visszakerül az elszámolásba">↺ visszaállítás</button>' : '<button type="button" class="el-a" data-act="hide" title="Kivétel az elszámolásból (pl. ha nem a mi kezelőnk dolgozott rajta) – a dealt nem érinti">× sor törlése</button>') +
 			(d.manual ? '<button type="button" class="el-a" data-act="medit">✎ tétel</button><button type="button" class="el-a" data-act="mdel">törlés</button>' : '')) + '</div>';
@@ -3033,7 +3035,7 @@ function elCsv() {
 				(al.length ? '<div class="tw-aamwrap"><table class="el-t tw-at"><thead><tr><th>Dátum</th><th>Ügyfél</th><th>Kezelő</th><th class="r">Csomag</th><th class="r">Kiszállás</th><th class="r">Várható</th><th></th></tr></thead><tbody>' +
 					al.map((a, n) => {
 						const kz = kezBySm(a.gk);
-						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="' + esc(C.sm + a.id + '/detail') + '" target="_blank" rel="noopener">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + (a.ct === 'KFT' ? '<small class="tw-pm" style="background:#E7F1FB;color:#1D4E89" title="KFT, helyszíni készpénz – az összeg bruttó (nettó ' + ft(a.net || 0) + ' + 27% ÁFA)">KFT KP · bruttó</small>' : '') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
+						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="#deals:' + Number(a.id) + '" data-pdeal="' + Number(a.id) + '">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + (a.ct === 'KFT' ? '<small class="tw-pm" style="background:#E7F1FB;color:#1D4E89" title="KFT, helyszíni készpénz – az összeg bruttó (nettó ' + ft(a.net || 0) + ' + 27% ÁFA)">KFT KP · bruttó</small>' : '') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
 							'<td class="r">' + ft(a.val) + '</td><td class="r">' + (a.kd ? ft(a.kd) : '–') + '</td><td class="r"><b>' + ft(a.val + a.kd) + '</b></td>' +
 							'<td class="tw-acts"><button class="cpx-btn sm" data-aam="' + n + '">Tárcába került ✓</button> <button class="cpx-btn ghost sm" data-skip="' + n + '" title="Kivétel a listából (pl. mégsem készpénzben fizetett)">Nem kell</button></td></tr>';
 					}).join('') + '</tbody></table></div>'
