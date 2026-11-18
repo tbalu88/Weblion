@@ -969,3 +969,12 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 
 /* v2.9.313: „Adatlap kitöltve” – zöld csempe */
 .crm-card.af{background:#EAF6EE;border-color:#A8D8B9}.crm-card.af:hover{border-color:#5FAE7E}
+/* v2.9.327: csempe helyi menü */
+.cx-menu{position:fixed;z-index:9999;min-width:230px;max-width:300px;background:#fff;border:1px solid #E2DED7;border-radius:12px;box-shadow:0 10px 30px rgba(20,28,51,.18),0 2px 6px rgba(20,28,51,.08);padding:6px;font:14px Inter,sans-serif;animation:cxIn .12s cubic-bezier(.2,.8,.2,1)}
+@keyframes cxIn{from{opacity:0;transform:translateY(-3px) scale(.98)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.cx-menu{animation:none}}
+.cx-menu .cx-h{display:flex;align-items:center;gap:6px;padding:6px 10px 8px;font-weight:700;font-size:12.5px;color:#5F5B55;border-bottom:1px solid #F0ECE6;margin-bottom:4px}.cx-menu .cx-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-menu button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;cursor:pointer;color:#1F1D1A;font:inherit;min-height:36px}
+.cx-menu button:hover,.cx-menu button:focus-visible{background:#F2EFEA;outline:0}.cx-menu button:disabled{color:#9A958D;cursor:default;background:none}
+.cx-menu hr{border:0;border-top:1px solid #F0ECE6;margin:4px 2px}.cx-menu .cx-back{width:auto;min-height:0;padding:0 6px;font-size:16px}.cx-sub{max-height:60vh;overflow:auto}
+

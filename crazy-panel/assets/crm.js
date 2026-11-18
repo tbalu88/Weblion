@@ -1222,6 +1222,51 @@
 	}
 	window.CPXSlotStorno = slotStorno;
 	/* áthelyezés: p = { to: szakasz } vagy { st: 'Won' | 'Lost' | 'Open' }; a Salesmate-be is ír */
+	/* v2.9.327: jobb kattintásos (telefonon hosszú nyomásos) menü a pipeline-csempén */
+	const CTX = { el: null, lp: 0, sup: 0 };
+	function ctxClose() { if (CTX.el) { CTX.el.remove(); CTX.el = null; } }
+	function ctxOpen(card, x, y) {
+		ctxClose();
+		const id = Number(card.dataset.id), r = ((S.board && S.board.rows) || []).find(q => q.id === id); if (!id || !r) return;
+		const it = (k, l, sub) => '<button type="button" role="menuitem" data-cx="' + k + '"' + (sub ? ' aria-haspopup="true"' : '') + '>' + esc(l) + (sub ? '<span aria-hidden="true">›</span>' : '') + '</button>';
+		const sep = '<hr>';
+		let h = '<div class="cx-h"><span class="cx-t">' + esc(shortTitle(r)) + '</span></div>' + it('open', 'Megnyitás') + it('tab', 'Megnyitás új lapon');
+		if (W) {
+			h += sep + it('stage', 'Áthelyezés másik szakaszba', 1) + (r.status === 'Open' ? it('won', 'Megnyert') + it('lost', 'Elveszett…') : it('reopen', 'Újranyitás')) + it('own', 'Felelős váltása', 1);
+		}
+		const canMail = window.CPMail && window.CPMail.compose && (!window.CPMail.canSend || window.CPMail.canSend());
+		if (canMail || C.mail) h += sep + (canMail ? it('mail', 'Levél írása az ügyfélnek') : '') + it('portal', 'Ügyfélportál-link másolása');
+		const m = document.createElement('div'); m.className = 'cx-menu'; m.setAttribute('role', 'menu'); m.innerHTML = h; document.body.appendChild(m); CTX.el = m;
+		const vw = innerWidth, vh = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
+		m.style.left = Math.max(8, Math.min(x, vw - mw - 8)) + 'px'; m.style.top = Math.max(8, Math.min(y, vh - mh - 8)) + 'px';
+		const sub = (list, cb) => { const ss = document.createElement('div'); ss.className = 'cx-sub'; ss.innerHTML = list.map(q => '<button type="button" role="menuitem" data-v="' + esc(q[0]) + '"' + (q[2] ? ' disabled' : '') + '>' + esc(q[1]) + (q[2] ? ' ✓' : '') + '</button>').join(''); m.innerHTML = '<div class="cx-h"><button type="button" class="cx-back" aria-label="Vissza">‹</button><span class="cx-t">' + esc(shortTitle(r)) + '</span></div>'; m.appendChild(ss); m.querySelector('.cx-back').onclick = () => ctxOpen(card, x, y); ss.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { ctxClose(); cb(b.dataset.v); }); const f = ss.querySelector('button:not([disabled])'); if (f) f.focus(); };
+		m.addEventListener('click', async ev => {
+			const b = ev.target.closest('[data-cx]'); if (!b) return;
+			const k = b.dataset.cx;
+			if (k === 'stage') return sub(STAGES.map(q => [q, q, q === r.stage]), v => doMove(id, { to: v }));
+			if (k === 'own') return sub(Object.keys(USERS).filter(u => USERS[u].a).map(u => [u, USERS[u].n, String(u) === String(r.own)]), async v => { try { await post('cp_crm_set', { id, f: 'owner_id', v }); toast('Felelős: ' + (USERS[v] ? USERS[v].n : v)); load(); } catch (er) { toast(er.message, true); } });
+			ctxClose();
+			if (k === 'open') openDeal(id);
+			else if (k === 'tab') window.open(location.pathname + location.search + '#deals:' + id, '_blank', 'noopener');
+			else if (k === 'won') doMove(id, { st: 'Won' });
+			else if (k === 'lost') doMove(id, { st: 'Lost' });
+			else if (k === 'reopen') doMove(id, { st: 'Open' });
+			else if (k === 'mail') window.CPMail.compose({ to: r.ce ? [r.ce] : [], subject: '', body: '', deal: id, dealTitle: r.title });
+			else if (k === 'portal') {
+				try { const q = await post('cp_portal_mail_link', { deal: id }); if (q.none || !q.url) { toast('Ehhez a dealhez még nincs ügyfélportál – a levélíróban a „Portál-link” gombbal hozható létre.', true); return; } await navigator.clipboard.writeText(q.url); toast('Portál-link a vágólapon.'); }
+				catch (er) { toast(er.message || 'Nem sikerült a másolás.', true); }
+			}
+		});
+		m.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ctxClose(); card.focus(); } if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); const L = [...m.querySelectorAll('button:not([disabled])')], i = L.indexOf(document.activeElement); L[(i + (ev.key === 'ArrowDown' ? 1 : -1) + L.length) % L.length].focus(); } });
+		const f0 = m.querySelector('[data-cx]'); if (f0) f0.focus();
+	}
+	document.addEventListener('contextmenu', e => { const c = e.target.closest && e.target.closest('.crm-board .crm-card[data-id]'); if (!c || e.shiftKey) return; e.preventDefault(); ctxOpen(c, e.clientX, e.clientY); });
+	document.addEventListener('mousedown', e => { if (CTX.el && !CTX.el.contains(e.target)) ctxClose(); }, true);
+	document.addEventListener('scroll', () => ctxClose(), true);
+	window.addEventListener('resize', ctxClose);
+	document.addEventListener('touchstart', e => { const c = e.target.closest && e.target.closest('.crm-board .crm-card[data-id]'); if (!c || e.touches.length > 1) return; const t = e.touches[0]; clearTimeout(CTX.lp); CTX.lp = setTimeout(() => { CTX.sup = Date.now(); ctxOpen(c, t.clientX, t.clientY); if (navigator.vibrate) navigator.vibrate(10); }, 550); }, { passive: true });
+	['touchend', 'touchmove', 'touchcancel'].forEach(n => document.addEventListener(n, () => clearTimeout(CTX.lp), { passive: true }));
+	document.addEventListener('click', e => { if (CTX.sup && Date.now() - CTX.sup < 700 && e.target.closest && e.target.closest('.crm-card')) { e.preventDefault(); e.stopPropagation(); CTX.sup = 0; } }, true);
 	async function doMove(id, p, title) {
 		const rows = S.board ? S.board.rows : [];
 		const r = rows.find(x => x.id === id);
