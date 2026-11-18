@@ -53,7 +53,7 @@ function cp_kz_ok() { return get_option('cp_kz_db_ver') === CP_KZ_DB_VER && func
 function cp_kz_cfg() {
 	$on = cp_kz_ok() && function_exists('cp_panel_can') && cp_panel_can('kezelok');
 	$adm = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
-	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
+	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'tr' => 1, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
 }
 function cp_kz_auth($admin = false) {
 	cp_el_auth();
@@ -267,3 +267,4 @@ function cp_kz_ajax_csv() {
 
 /* v2.9.57: interjú-időpontfoglalás (kezelő-jelentkezők) */
 require_once __DIR__ . '/interview.php';
+require_once __DIR__ . '/training.php'; /* v2.9.330: Betanulás-foglaló */

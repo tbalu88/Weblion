@@ -271,10 +271,10 @@
 	const cmText = b => [b.note ? 'Közös jegyzet' + (rateOf(b.rate) ? ' (' + rateOf(b.rate)[1] + ')' : '') + ': ' + b.note : ''].concat((b.cm || []).map(c => (c.who || '–') + (rateOf(c.rate) ? ' (' + rateOf(c.rate)[1] + ')' : '') + (c.body ? ': ' + c.body : ''))).filter(Boolean).join('\n');
 	const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 	/* a cím → nézet: #kezelok = lista, #kezelok:interju (vagy a régi értesítésekből #kezelok:iv), opcionálisan :<foglalás> */
-	function ivHash() { const m = /^#kezelok(?::(interju|iv|munkaido)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] === 'munkaido' ? 'work' : m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
+	function ivHash() { const m = /^#kezelok(?::(interju|iv|munkaido|betanulas)(?::(\d+))?)?$/.exec(location.hash); return m ? { v: m[1] === 'munkaido' ? 'work' : m[1] === 'betanulas' ? 'tr' : m[1] ? 'iv' : 'list', b: Number(m[2]) || 0 } : null; }
 	function nav(v, bid) {
 		ivFlushAll();
-		const url = v === 'iv' ? '#kezelok:interju' : v === 'work' ? '#kezelok:munkaido' : '#kezelok';
+		const url = v === 'iv' ? '#kezelok:interju' : v === 'work' ? '#kezelok:munkaido' : v === 'tr' ? '#kezelok:betanulas' : '#kezelok';
 		if (location.hash !== url) history.pushState({ cpKz: v }, '', url);
 		S.sub = v; if (bid) IV.focus = bid;
 		if (S.main && S.main.isConnected) view(S.main, true);
@@ -286,11 +286,12 @@
 		if (h.v !== S.sub || h.b) { ivFlushAll(); S.sub = h.v; if (h.b) IV.focus = h.b; view(S.main, true); }
 	});
 	/* értesítésből: „kezelok:interju”, „kezelok:iv”, „kezelok:interju:12” */
-	function deep(arg) { const m = /^(?:interju|iv)(?::(\d+))?$/.exec(String(arg || '')); if (m && K.iv) nav('iv', Number(m[1]) || 0); }
+	function deep(arg) { if (String(arg || '') === 'betanulas') { nav('tr'); return; } const m = /^(?:interju|iv)(?::(\d+))?$/.exec(String(arg || '')); if (m && K.iv) nav('iv', Number(m[1]) || 0); }
 	const ivOpen = () => nav('iv'); /* v2.9.85: a régi felugró ablak helyett az oldalra visz */
 	/* v2.9.258: harmadik nézet – Munkaidő (a szelfigépek naplójából) */
 	const vsw = () => '<nav class="crm-seg kz-vs" aria-label="Nézet"><a href="#kezelok" data-view="list"' + (S.sub === 'list' ? ' class="on" aria-current="page"' : '') + '>Lista</a>' +
 		(K.iv ? '<a href="#kezelok:interju" data-view="iv"' + (S.sub === 'iv' ? ' class="on" aria-current="page"' : '') + '>Interjú-időpontok</a>' : '') +
+		(K.tr ? '<a href="#kezelok:betanulas" data-view="tr"' + (S.sub === 'tr' ? ' class="on" aria-current="page"' : '') + '>Betanulás</a>' : '') +
 		'<a href="#kezelok:munkaido" data-view="work"' + (S.sub === 'work' ? ' class="on" aria-current="page"' : '') + '>Munkaidő</a></nav>';
 	function bindVsw(main) {
 		main.querySelectorAll('.kz-vs [data-view]').forEach(a => a.addEventListener('click', e => {
@@ -319,6 +320,55 @@
 		box.innerHTML = (P.length ? '<div class="wk-sum">' + P.map(p => '<span><b>' + esc(p.name) + '</b> ' + wkDur(p.min) + ' · ' + p.rows.length + ' rendezvény</span>').join('') + '</div>' + P.map(p => '<section class="wk-p"><h3>' + esc(p.name) + '<small>' + wkDur(p.min) + '</small></h3>' + tbl(p.rows) + '</section>').join('') : '') +
 			(N.length ? '<section class="wk-p"><h3>Nincs beosztott kezelő<small>' + N.length + ' rendezvény</small></h3>' + tbl(N) + '</section>' : '') +
 			(!P.length && !N.length ? '<p class="cpx-empty">Ebben a hónapban nem futott Crazy Booth gép.</p>' : '');
+	}
+	/* ------------------------------------------------------------ v2.9.330: Betanulás (csoportos, napokra; nyilvános oldal: /betanulas/) */
+	const TR = { d: null, set: false, busy: false };
+	function trView(main) {
+		main.innerHTML = '<div class="kz kz-trv">' + vsw() + '<div class="tr-b"><div class="cpx-empty">Betöltés…</div></div></div>';
+		bindVsw(main);
+		if (TR.d) trDraw();
+		trDo({});
+	}
+	async function trDo(params) {
+		if (TR.busy) return false; TR.busy = true;
+		try { TR.d = await post('cp_tr_admin', params); trDraw(); return true; } catch (e) { toast(e.message, true); if (!TR.d) { const b = S.main && S.main.querySelector('.tr-b'); if (b) b.innerHTML = '<div class="cpx-empty">' + esc(e.message) + '</div>'; } return false; } finally { TR.busy = false; }
+	}
+	function trDraw() {
+		const box = S.main && S.main.isConnected ? S.main.querySelector('.kz-trv .tr-b') : null; if (!box || !TR.d) return;
+		const d = TR.d, o = d.opts;
+		const live = L => L.filter(x => x.live);
+		let h = '<div class="tr-top"><div class="tr-url"><span>Jelentkezési link (kézzel küldd ki az alkalmasoknak):</span><code>' + esc(d.url) + '</code><button type="button" class="cpx-btn ghost" data-trcopy>Link másolása</button><a class="cpx-btn ghost" href="' + esc(d.url) + '" target="_blank" rel="noopener">Megnyitás ↗</a></div>' +
+			'<span class="tr-st ' + (o.on ? 'on' : 'off') + '">' + (o.on ? 'Jelentkezés nyitva' : 'Jelentkezés zárva') + '</span>' + (d.admin ? '<button type="button" class="cpx-btn ghost" data-trset>' + (TR.set ? 'Beállítások bezárása' : '⚙ Napok és beállítások') + '</button>' : '') + '</div>';
+		if (TR.set && d.admin) {
+			h += '<div class="tr-set"><label class="crm-chk"><input type="checkbox" data-tro="on"' + (o.on ? ' checked' : '') + '> Jelentkezés nyitva</label>' +
+				'<div class="tr-dl">' + o.days.map((x, i) => '<div class="tr-dr" data-i="' + i + '"><input type="date" data-k="d" value="' + esc(x.d) + '" aria-label="Nap"><input type="time" data-k="tm" value="' + esc(x.tm) + '" aria-label="Kezdés"><label>max. <input type="number" data-k="cap" min="1" max="50" value="' + (x.cap | 0) + '" aria-label="Létszám"> fő</label><button type="button" class="cpx-btn ghost" data-trdel="' + i + '" aria-label="Nap törlése">✕</button></div>').join('') + '</div>' +
+				'<button type="button" class="cpx-btn ghost" data-tradd>+ Új nap</button>' +
+				'<label class="tr-f">Helyszín<input type="text" data-tro="location" value="' + esc(o.location) + '"></label>' +
+				'<label class="tr-f">Megjegyzés a jelentkezőknek<textarea data-tro="note" rows="2">' + esc(o.note) + '</textarea></label>' +
+				'<div class="tr-sa"><button type="button" class="cpx-btn" data-trsave>Mentés</button></div></div>';
+		}
+		if (!d.days.length) h += '<div class="cpx-empty">Nincs beállított nap.</div>';
+		d.days.forEach(x => {
+			const L = live(x.list), gone = x.list.filter(y => !y.live), full = x.cap && L.length >= x.cap;
+			h += '<section class="tr-day' + (x.past ? ' past' : '') + '"><header><h3>' + esc(x.label) + '</h3><span class="tr-n' + (full ? ' full' : '') + '">' + L.length + (x.cap ? ' / ' + x.cap : '') + ' fő' + (full ? ' · betelt' : '') + '</span></header>' +
+				(L.length ? '<ol class="tr-l">' + L.map(y => '<li><b>' + esc(y.name) + '</b><span>' + esc(y.email) + '</span><small>' + esc(y.at) + '</small>' + (x.past ? '' : '<button type="button" class="cpx-btn ghost" data-trcx="' + y.id + '" data-n="' + esc(y.name) + '">Lemondás</button>') + '</li>').join('') + '</ol>' : '<p class="tr-e">Még senki nem jelentkezett.</p>') +
+				(gone.length ? '<details class="tr-g"><summary>Lemondta (' + gone.length + ')</summary><ul>' + gone.map(y => '<li>' + esc(y.name) + ' · ' + esc(y.email) + (y.cby ? ' · ' + esc(y.cby) : '') + '</li>').join('') + '</ul></details>' : '') + '</section>';
+		});
+		box.innerHTML = h;
+		const q = s => box.querySelector(s);
+		q('[data-trcopy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(d.url); toast('Link kimásolva.'); } catch (e) { toast('Nem sikerült másolni – jelöld ki a linket.', true); } });
+		const sb = q('[data-trset]'); if (sb) sb.addEventListener('click', () => { TR.set = !TR.set; trDraw(); });
+		box.querySelectorAll('[data-trcx]').forEach(b => b.addEventListener('click', async () => {
+			if (!(await (window.CPXConfirm ? window.CPXConfirm('Lemondod ' + b.dataset.n + ' jelentkezését? (Levelet nem kap róla.)') : Promise.resolve(confirm('Lemondod ' + b.dataset.n + ' jelentkezését?'))))) return;
+			if (await trDo({ do: 'cancel', id: b.dataset.trcx })) toast('Lemondva.');
+		}));
+		if (TR.set && d.admin) {
+			const read = () => ({ on: q('[data-tro="on"]').checked ? 1 : 0, title: o.title, location: q('[data-tro="location"]').value, note: q('[data-tro="note"]').value,
+				days: Array.from(box.querySelectorAll('.tr-dr')).map(r => ({ d: r.querySelector('[data-k="d"]').value, tm: r.querySelector('[data-k="tm"]').value, cap: Number(r.querySelector('[data-k="cap"]').value) || 4 })) });
+			q('[data-tradd]').addEventListener('click', () => { const v = read(); v.days.push({ d: '', tm: '10:00', cap: 4 }); TR.d.opts = Object.assign({}, o, v); trDraw(); });
+			box.querySelectorAll('[data-trdel]').forEach(b => b.addEventListener('click', () => { const v = read(); v.days.splice(Number(b.dataset.trdel), 1); TR.d.opts = Object.assign({}, o, v); trDraw(); }));
+			q('[data-trsave]').addEventListener('click', async () => { if (await trDo({ do: 'save', o: JSON.stringify(read()) })) toast('Mentve.'); });
+		}
 	}
 	function ivView(main) {
 		main.innerHTML = '<div class="kz kz-ivv">' + vsw() + '<div class="iv-pg"><div class="iv-b"><div class="cpx-empty">Betöltés…</div></div></div></div>';
@@ -563,6 +613,7 @@
 		if (h) { S.sub = h.v; if (h.b) IV.focus = h.b; }
 		if (!K.iv && S.sub === 'iv') S.sub = 'list';
 		if (S.sub === 'work') { if (location.hash !== '#kezelok:munkaido') history.replaceState(history.state, '', '#kezelok:munkaido'); return workView(main); }
+		if (S.sub === 'tr') { if (location.hash !== '#kezelok:betanulas') history.replaceState(history.state, '', '#kezelok:betanulas'); return trView(main); }
 		if (S.sub === 'iv') { if (location.hash !== '#kezelok:interju') history.replaceState(history.state, '', '#kezelok:interju'); return ivView(main); }
 		/* a jegyzetek változtak: a jelentkezők adatlapja frissen töltődik */
 		if (IV.changed) { IV.changed = false; keep = false; }
@@ -611,7 +662,7 @@
 		'.iv-fin{display:inline-block;margin-left:6px;font:600 11px Inter,sans-serif;border-radius:999px;padding:2px 8px;white-space:nowrap}.iv-fin.yes{background:#E3F4E8;color:#1E6B39}.iv-fin.no{background:#FBE6E4;color:#9B2A1F}.iv-fin.sg{background:#F0ECE6;color:var(--mu);font-weight:500}' +
 		'.iv-dec{display:inline-flex;border:1px solid #E7E2DA;border-radius:999px;overflow:hidden;margin-right:6px}.iv-dec button{border:0;background:#fff;padding:5px 10px;font:600 12px Inter,sans-serif;color:var(--mu);cursor:pointer;white-space:nowrap}.iv-dec button+button{border-left:1px solid #E7E2DA}.iv-dec button[aria-pressed=true][data-v=yes]{background:#1E7A3A;color:#fff}.iv-dec button[aria-pressed=true][data-v=no]{background:#B3261E;color:#fff}.iv-dec button:focus-visible,.iv-seg button:focus-visible{outline:2px solid #2F5BD8;outline-offset:1px}' +
 		'.kz-vs{margin:0 0 10px}.kz-vs a{border-radius:999px;padding:6px 14px;font:700 13px "Plus Jakarta Sans",sans-serif;color:var(--mu);text-decoration:none;white-space:nowrap}.kz-vs a.on{background:var(--n);color:#fff}.kz-vs a:not(.on):hover{color:var(--n)}.kz-vs a:focus-visible,.iv-rb:focus-visible,.iv-np:focus-visible{outline:2px solid #2F5BD8;outline-offset:2px}' +
-		'.iv-pg{max-width:900px}.iv-b{padding:2px 0 12px}.iv-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.iv-sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}.iv-sw input{width:18px;height:18px;accent-color:#2E7D32}.iv-sum{font-size:13px;color:#656973}' +
+		'.kz-trv .tr-b{max-width:900px;padding:2px 0 12px}.tr-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}.tr-url{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0;flex:1}.tr-url span{font-size:13px;color:var(--cpx-mu,#5B6275);width:100%}.tr-url code{background:var(--cpx-soft,#F1EDE7);padding:6px 10px;border-radius:8px;font-size:13px;overflow-wrap:anywhere;min-width:0}.tr-st{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap}.tr-st.on{background:#E3F4EB;color:#1F7A50}.tr-st.off{background:#FBE3E1;color:#B3261E}.tr-set{border:1px solid var(--cpx-li,#E7E2DA);border-radius:14px;padding:14px;margin:0 0 14px;display:grid;gap:10px}.tr-dl{display:grid;gap:8px}.tr-dr{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.tr-dr input[type=number]{width:64px}.tr-f{display:grid;gap:4px;font-size:13px}.tr-f input,.tr-f textarea{width:100%}.tr-sa{display:flex;justify-content:flex-end}.tr-day{border:1px solid var(--cpx-li,#E7E2DA);border-radius:14px;padding:12px 14px;margin:0 0 12px;background:var(--cpx-card,#fff)}.tr-day.past{opacity:.7}.tr-day header{display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}.tr-day h3{margin:0;font-size:16px}.tr-n{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}.tr-n.full{color:#B3261E}.tr-l{margin:10px 0 0;padding-left:22px;display:grid;gap:6px}.tr-l li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}.tr-l li span{overflow-wrap:anywhere;min-width:0;color:var(--cpx-mu,#5B6275)}.tr-l li small{color:var(--cpx-mu,#5B6275)}.tr-l li .cpx-btn{margin-left:auto;flex-shrink:0}.tr-e{margin:8px 0 0;color:var(--cpx-mu,#5B6275);font-size:14px}.tr-g{margin-top:8px;font-size:13px}.tr-g ul{margin:6px 0 0;padding-left:18px}' + '.iv-pg{max-width:900px}.iv-b{padding:2px 0 12px}.iv-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.iv-sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}.iv-sw input{width:18px;height:18px;accent-color:#2E7D32}.iv-sum{font-size:13px;color:#656973}' +
 		'.iv-link{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.iv-link input{flex:1;min-width:200px;border:1px solid #E6E3DE;border-radius:8px;padding:8px 10px;font:13px Inter,sans-serif;background:#FAF8F5}.iv-warn{background:#FFF4E5;color:#8A4B08;border-radius:10px;padding:8px 10px;font-size:13px;margin:0 0 10px}' +
 		'.iv-day h4{margin:16px 0 6px;font:700 14px "Plus Jakarta Sans",sans-serif}.iv-day h4 small{font:500 12px Inter,sans-serif;color:#656973;margin-left:6px}' +
 		'.iv-list{background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:hidden;font-size:13px}.iv-r{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 12px;padding:8px 12px;border-bottom:1px solid #F0ECE6;align-items:start}.iv-r:last-child{border-bottom:0}.iv-r.bk{background:#F3F9F4}.iv-r.bl{background:#F7F5F2;color:#8C8880}' +
