@@ -734,7 +734,7 @@
     '.cpx-cal.v2 .sl-mk{font-size:10px;padding:0 4px;line-height:15px;border-radius:5px;max-width:100%;overflow:hidden;text-overflow:clip}.cpx-cal.v2 .sl-mk i{display:none}}' +
     /* v2.9.115: beosztás */
     '.cpx-cal.slv .cpx-day.none{background:#FAF8F5;border-color:#EEE9E2}.cpx-cal.slv .cpx-day.ok{background:#E3F4E9;border-color:#BFE3CB}.cpx-cal.slv .cpx-day.mid{background:#FCEBCB;border-color:#F0C982}.cpx-cal.slv .cpx-day.full{background:#F9D5D0;border-color:#EBA59B}.cpx-cal.slv .cpx-day.past{opacity:.55}' +
-    '.cpx-cal.slv .sll{display:flex;align-items:baseline;gap:6px;font-size:12px;color:#3D4250}.cpx-cal.slv .sll span{min-width:46px}.cpx-cal.slv .sll b{color:#141C33}.cpx-cal.slv .sll i{font-style:normal;font-weight:700;color:#8A5300;font-size:11px}.cpx-cal.slv .slu{font:700 11px Inter,sans-serif;color:#8A5300}.cpx-cal.slv .slz{color:#B0ACA5;margin-top:auto}' +
+    '.cpx-cal.slv .sll{display:flex;align-items:baseline;gap:6px;font-size:12px;color:#3D4250}.cpx-cal.slv .sll span{min-width:46px}.cpx-cal.slv .sll b{color:#141C33}.cpx-cal.slv .sll i{font-style:normal;font-weight:700;color:#8A5300;font-size:11px}.cpx-cal.slv .slu{font:700 11px Inter,sans-serif;color:#8A5300}.cpx-cal.slv .slz{color:#B0ACA5;margin-top:auto}.cpx-cal.slv .sll i.fr{color:#1F7A50}.cpx-cal.slv .slf{font:600 11px/1.3 Inter,sans-serif;color:#1F7A50;margin:-2px 0 2px}' +
     '.cpx-caltb .seg.cm button.on{background:#141C33;color:#fff}' +
     '@media (max-width:760px){.cpx-cal.slv .sll span{display:none}.cpx-cal.slv .sll{font-size:11px}.cpx-cal.slv .slu{display:none}}' +
     '.sl-mk{font:700 11px Inter,sans-serif;border-radius:6px;padding:1px 6px;white-space:nowrap}.sl-mk.ok{background:#DDF3E6;color:#17663A}.sl-mk.mid{background:#FFF0D6;color:#8A5300}.sl-mk.no{background:#FDECEA;color:#B42318}' +
@@ -924,7 +924,7 @@
     try { r = await slotPost('cp_slot_month', { m: S.month }); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
     if (!wrap.isConnected) return;
     const [from, to] = monthRange(S.month), tdy = today();
-    let tot = 0, fin = 0, inv = 0, miss = 0, unk = 0;
+    let tot = 0, fin = 0, inv = 0, miss = 0, unk = 0, avl = 0;
     const grid = el('div', { class: 'cpx-cal v2 slv' });
     HU_DAYS.forEach((d, i) => grid.appendChild(el('div', { class: 'cpx-dow' + (i >= 5 ? ' we' : '') }, d)));
     const lead = (parseYmd(from).getDay() + 6) % 7;
@@ -934,17 +934,19 @@
       const date = S.month + '-' + pad(d), x = (r.x || {})[date], past = date < tdy;
       const wd = parseYmd(date).getDay(), we = wd === 0 || wd === 6;
       const n = x ? x.k + x.h : 0, f = x ? x.fk + x.fh : 0, iv = x ? x.ik + x.ih : 0, open = n - f;
-      if (!past) { tot += n; fin += f; inv += iv; miss += Math.max(0, open - iv); unk += x ? x.u : 0; }
-      const lvl = !n ? 'none' : open <= 0 ? 'ok' : (f + iv) > 0 ? 'mid' : 'full';
-      const cell = el('button', { class: 'cpx-day sl ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (we ? ' we' : ''), 'data-date': date, title: n ? huDate(date) + ': ' + n + ' slot, ' + f + ' véglegesítve, ' + iv + ' meghívás folyamatban' : huDate(date) + ': nincs rendezvény' });
-      const ln = (lab, need, done, pend) => need ? '<div class="sll"><span>' + lab + '</span><b>' + done + '/' + need + '</b>' + (pend ? '<i title="Meghívás folyamatban">+' + pend + '</i>' : '') + '</div>' : '';
+      /* v2.9.332: a napra ráérő, még rendezvényre nem tett emberek csökkentik a hiányt (csak be kell osztani őket) */
+      const pf = x ? (x.pfk || 0) + (x.pfh || 0) : 0, use = Math.min(Math.max(0, open), pf), lack = Math.max(0, open - use);
+      if (!past) { tot += n; fin += f; inv += iv; miss += Math.max(0, lack - iv); unk += x ? x.u : 0; avl += use; }
+      const lvl = !n ? 'none' : open <= 0 ? 'ok' : (f + iv + use) > 0 ? 'mid' : 'full';
+      const cell = el('button', { class: 'cpx-day sl ' + lvl + (past ? ' past' : '') + (date === tdy ? ' today' : '') + (we ? ' we' : ''), 'data-date': date, title: n ? huDate(date) + ': ' + n + ' slot, ' + f + ' véglegesítve, ' + iv + ' meghívás folyamatban' + (pf ? ', ' + pf + ' fő ráér (még nincs rendezvényre téve)' : '') : huDate(date) + ': nincs rendezvény' });
+      const ln = (lab, need, done, pend, free) => need ? '<div class="sll"><span>' + lab + '</span><b>' + done + '/' + need + '</b>' + (pend ? '<i title="Meghívás folyamatban">+' + pend + '</i>' : '') + (free ? '<i class="fr" title="Ráér, de még nincs rendezvényre téve">+' + free + ' ráér</i>' : '') + '</div>' : '';
       cell.innerHTML = '<div class="dn"><span>' + d + '</span>' + (date === tdy ? '<em class="tg">ma</em>' : '') + '</div>' +
-        (n ? '<div class="big"><b>' + Math.max(0, open) + '</b><span>' + (open > 0 ? 'hiányzik' : 'kész') + '<small> / ' + n + ' slot</small></span></div>' + ln('Kezelő', x.k, x.fk, x.ik) + ln('Host', x.h, x.fh, x.ih) + (x.u ? '<div class="slu" title="Ismeretlen helyszín – a Kezelő/Host igényt nézd át">? ' + x.u + ' helyszín</div>' : '') : '<div class="slz">—</div>');
+        (n ? '<div class="big"><b>' + (open <= 0 ? 0 : lack) + '</b><span>' + (open <= 0 ? 'kész' : lack > 0 ? 'hiányzik' : 'beosztásra vár') + '<small> / ' + n + ' slot</small></span></div>' + (use && open > 0 ? '<div class="slf">' + use + ' fő ráér – csak be kell osztani</div>' : '') + ln('Kezelő', x.k, x.fk, x.ik, x.pfk || 0) + ln('Host', x.h, x.fh, x.ih, x.pfh || 0) + (x.u ? '<div class="slu" title="Ismeretlen helyszín – a Kezelő/Host igényt nézd át">? ' + x.u + ' helyszín</div>' : '') : '<div class="slz">—</div>');
       cell.addEventListener('click', () => openSlotDay(date));
       grid.appendChild(cell);
     }
     wrap.innerHTML = '';
-    wrap.appendChild(el('div', { class: 'cpx-kpis' }, kpi('Slot a hónapban (mától)', tot) + kpi('Véglegesítve', fin) + kpi('Meghívás folyamatban', inv) + kpi('Még senki', miss) + kpi('Aktív kezelő / host', r.tk + ' / ' + r.th)));
+    wrap.appendChild(el('div', { class: 'cpx-kpis' }, kpi('Slot a hónapban (mától)', tot) + kpi('Véglegesítve', fin) + kpi('Meghívás folyamatban', inv) + kpi('Ráér, beosztásra vár', avl) + kpi('Még senki', miss) + kpi('Aktív kezelő / host', r.tk + ' / ' + r.th)));
     if (unk) wrap.appendChild(el('p', { class: 'cpx-help' }, '<b>' + unk + ' slotnál</b> a helyszínből nem derül ki, Budapest-e vagy vidék – a napra kattintva a „Kezelő kell / Host is mehet” címkével állítható.'));
     wrap.appendChild(grid);
   }

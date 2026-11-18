@@ -250,6 +250,13 @@ function cp_slot_month($m, $full = false) {
 		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT day, SUM(status = %s) a, SUM(status = %s) i FROM ' . cp_slot_t() . ' WHERE deal_id = 0 AND day BETWEEN %s AND %s GROUP BY day', 'accepted', 'invited', $m . '-01', $m . '-31'), ARRAY_A) as $r) {
 			if (!isset($out[$r['day']])) { continue; } $out[$r['day']][3] = (int) $r['a']; $out[$r['day']][4] = (int) $r['i']; $x[$r['day']]['pa'] = (int) $r['a']; $x[$r['day']]['pi'] = (int) $r['i'];
 		}
+		/* v2.9.332: a napra már ráérő, de még rendezvényre nem véglegesített emberek (pfk = kezelő, pfh = host) – ők a hiányt csökkentik, csak be kell osztani őket */
+		$KZ = function_exists('cp_kz_t') ? cp_kz_t() : ''; $T = cp_slot_t();
+		if ($KZ !== '') {
+			foreach ((array) $wpdb->get_results($wpdb->prepare("SELECT p.day, k.kind, COUNT(DISTINCT p.kz_id) n FROM $T p JOIN $KZ k ON k.id = p.kz_id WHERE p.deal_id = 0 AND p.status = 'accepted' AND p.day BETWEEN %s AND %s AND NOT EXISTS (SELECT 1 FROM $T f WHERE f.day = p.day AND f.kz_id = p.kz_id AND f.status = 'final') GROUP BY p.day, k.kind", $m . '-01', $m . '-31'), ARRAY_A) as $r) {
+				if (!isset($x[$r['day']])) { continue; } $x[$r['day']][$r['kind'] === 'host' ? 'pfh' : 'pfk'] = ($x[$r['day']][$r['kind'] === 'host' ? 'pfh' : 'pfk'] ?? 0) + (int) $r['n'];
+			}
+		}
 	}
 	if (!$full) { return $out; }
 	$tk = 0; $th = 0;
