@@ -1115,7 +1115,7 @@
   }
   /* ---------- 6. fázis: AI-kép (a panelből kapcsolható rendezvényenként; a szerver hívja a modellt – alap: Nano Banana 2.1) */
   /* 0.16.1: miért nem választható az AI (a beállításokban kiírva) */
-  const aiWhy = () => !B.ai ? 'frissítés kell' : !(S.cfg && S.cfg.boothKey) ? 'nincs gépkulcs' : !(S.cfg.event && S.cfg.event.ev) ? 'nincs rendezvény kiválasztva' : 'a deal Szelfigép-beállításában kapcsolható';
+  const aiWhy = () => !B.ai ? 'frissítés kell' : !(S.cfg && S.cfg.boothKey) ? 'nincs gépkulcs' : !(S.cfg.event && S.cfg.event.ev) ? 'nincs rendezvény kiválasztva' : S.remotePending ? 'a panel beállítása a kezdőképernyőn töltődik be' : 'a deal Szelfigép-beállításában kapcsolható';
   const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && U().ai && (U().ai.styles || []).length && S.cfg.event && S.cfg.event.ev);
   const aiWait = (scr, ms) => new Promise(res => { S.aiRes = res; clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === scr && S.aiRes) { const r = S.aiRes; S.aiRes = null; r(null); } }, ms); });
   const aiDone = v => { clearTimeout(S.idleT); const r = S.aiRes; S.aiRes = null; if (r) r(v); };
