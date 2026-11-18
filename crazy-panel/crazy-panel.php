@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.316');
+define('CP_PANEL_VER', '2.9.318');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -511,6 +511,16 @@ function cp_panel_normalize($rows) {
 		if ($date === '') { continue; }
 		$sp = cp_panel_str(cp_panel_get($r, $o['f_selfie']));
 		$spin = cp_panel_str(cp_panel_get($r, $o['f_spin']));
+		/* v2.9.317: ha a dealnek a panelben beállított „Szolgáltatás(ok)” listája van, az a mérvadó (pl. Szelfigép + VIP Spinner),
+		   a régi Salesmate-mezők helyett – így a kapacitás és a beosztás a panelben felvett spinnerrel is számol */
+		$psvc = array();
+		if (function_exists('cp_svc_on') && cp_svc_on() && function_exists('cp_svc_rows')) { $pr = cp_svc_rows(array((int) $id)); if (!empty($pr[(int) $id]['l'])) { $psvc = $pr[(int) $id]['l']; } }
+		if ($psvc) {
+			$spl = array_values(array_filter($psvc, function ($v) { return (bool) preg_match('/spinner/iu', $v); }));
+			$sel = array_values(array_filter($psvc, function ($v) { return (bool) preg_match('/^(szelfigép|hibrid)/iu', $v); }));
+			$spin = $spl ? ($spin !== '' ? $spin : implode(', ', $spl)) : '';
+			$sp = $sel ? ($sp !== '' ? $sp : implode(', ', $sel)) : ($spl ? '' : $sp);
+		}
 		$eo = cp_el_opts();
 		if (cp_svc_only_excluded(array($sp, $spin, $eo['f_svc'] !== '' ? cp_panel_get($r, $eo['f_svc']) : '', $eo['f_svc2'] !== '' ? cp_panel_get($r, $eo['f_svc2']) : ''))) { continue; }
 		$pc = cp_panel_get($r, 'primaryContact');
@@ -542,6 +552,7 @@ function cp_panel_normalize($rows) {
 			'selfie'  => $sp,
 			'spin'    => $spin,
 			'kind'    => ($spin !== '' && $sp === '') ? 'spin' : (($spin !== '' && $sp !== '') ? 'both' : 'selfie'),
+			'svcl'    => implode(', ', $psvc), /* v2.9.317: a panel szolgáltatáslistája (furgonigényhez is) */
 			'bg'      => cp_panel_bg_recent($id, cp_panel_str(cp_panel_get($r, $o['f_bg']))),
 			'loc'     => cp_panel_str(cp_panel_get($r, $o['f_loc'])),
 			'guests'  => cp_panel_str(cp_panel_get($r, $o['f_guests'])),

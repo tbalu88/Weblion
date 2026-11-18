@@ -885,15 +885,16 @@
     const bs = bgStatus(m, date);
     const dayBgs = I.ev.filter(e => e.bg);
     const dlg = document.getElementById('cpx-modal');
-    dlg.innerHTML = '<div class="cpx-sheet"><div class="cpx-sheet-h"><h3>' + esc(huDate(date)) + '</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
+    dlg.innerHTML = '<div class="cpx-sheet day"><div class="cpx-sheet-h"><h3>' + esc(huDate(date)) + '</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
       '<div class="cpx-cap">' +
       capBox('Szelfigép', I.selfie, I.capS, I.pSelfie) + capBox('360 Spinner', I.spin, I.capP, I.pSpin) +
       '<div class="cpx-subs"><span>Alvállalkozói slot erre a napra</span><div class="stepper"><button data-s="-1">−</button><b id="cpx-subn">' + I.subs + '</b><button data-s="1">+</button></div></div>' +
       '</div>' +
       /* v1.81: külön a foglalások és a függő ajánlatok; a sorra kattintva megnyílik a deal */
       ((I.pSelfie > Math.max(0, I.freeS) || I.pSpin > Math.max(0, I.freeP)) && date >= today() ? '<div class="cpx-dwarn"><b>Figyelem:</b> erre a napra több függő ajánlat van (' + (I.pSelfie + I.pSpin) + '), mint szabad gép (' + Math.max(0, I.freeS) + ' szelfigép, ' + Math.max(0, I.freeP) + ' spinner). Ha mind igent mond, nem fér bele – érdemes alvállalkozót bevonni vagy az ajánlatokat priorizálni.</div>' : '') +
-      '<div class="cpx-dsec"><h4>Foglalások (' + I.ev.filter(e => e.state === 'booked').length + ')</h4></div>' + (I.ev.some(e => e.state === 'booked') ? I.ev.filter(e => e.state === 'booked').map(evRow).join('') : '<p class="cpx-muted">Erre a napra még nincs foglalás.</p>') +
-      (I.ev.some(e => e.state !== 'booked') ? '<div class="cpx-dsec"><h4>Függő ajánlatok (' + I.ev.filter(e => e.state !== 'booked').length + ')</h4></div>' + I.ev.filter(e => e.state !== 'booked').map(evRow).join('') : '') +
+      /* v2.9.317: a foglalások és a függő ajánlatok külön, színezett dobozban */
+      '<section class="dg bk"><div class="dg-h"><b>Foglalások</b><span class="dg-n">' + I.ev.filter(e => e.state === 'booked').length + '</span><small>biztos – szerződés kiküldve vagy aláírva</small></div>' + (I.ev.some(e => e.state === 'booked') ? I.ev.filter(e => e.state === 'booked').map(evRow).join('') : '<p class="dg-e">Erre a napra még nincs foglalás.</p>') + '</section>' +
+      (I.ev.some(e => e.state !== 'booked') ? '<section class="dg pd"><div class="dg-h"><b>Függő ajánlatok</b><span class="dg-n">' + I.ev.filter(e => e.state !== 'booked').length + '</span><small>még nem biztos – ajánlat vagy adatlap</small></div>' + I.ev.filter(e => e.state !== 'booked').map(evRow).join('') + '</section>' : '') +
       (C.slot ? '<div class="sl-box" data-slots><div class="cpx-dsec"><h4>Beosztás</h4></div><p class="cpx-muted">Betöltés…</p></div>' : '') +
       '<h4>Hátterek ezen a napon</h4>' + (dayBgs.length ? dayBgs.map(e => '<div class="bgline"><span class="chip ' + (e.state === 'booked' ? 'taken' : 'pend') + '">' + esc(e.bg) + '</span><span>' + (e.state === 'booked' ? '<b>foglalt</b>' : '<b>csak ajánlatban</b> – még nem foglalt') + ' · ' + esc(e.title) + (partnerOf(e.bg) ? ' · <i>' + (e.state === 'booked' ? 'a párja is foglalt' : 'a párját is foglalná') + ': ' + esc(partnerOf(e.bg)) + '</i>' : '') + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra még senki nem választott hátteret.</p>') +
       '<div class="cpx-sheet-f"><button class="cpx-btn" id="cpx-goSheet">Napi munkalap</button><button class="cpx-btn ghost" id="cpx-goCheck">Gyors ellenőrzés erre a napra</button></div></div>';

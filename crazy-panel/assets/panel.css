@@ -789,3 +789,20 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 /* v2.9.181: offline jelzés */
 .cpx-off{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:10060;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;background:#B42318;color:#fff;border-radius:10px;padding:9px 14px;font:600 13.5px Inter,sans-serif;box-shadow:0 10px 30px -10px rgba(0,0,0,.4)}
 .cpx-off[hidden]{display:none}
+/* v2.9.317: napi ablak – Foglalások / Függő ajánlatok külön dobozban */
+.dg{border-radius:14px;padding:12px 12px 6px;margin:14px 0}
+.dg.bk{background:#EAF5EE;border:1px solid #C3E2CF}
+.dg.pd{background:#FFF6DC;border:1px solid #EBD38C}
+.dg-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 2px 10px}
+.dg-h b{font:700 15px Inter,sans-serif}
+.dg.bk .dg-h b{color:#17663A}.dg.pd .dg-h b{color:#7A5800}
+.dg-n{font:700 12px Inter,sans-serif;border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums;color:#fff}
+.dg.bk .dg-n{background:#2E7D4F}.dg.pd .dg-n{background:#B88A00}
+.dg-h small{font-size:12.5px;color:#5F5B55}
+.dg .evrow{background:#fff;border-left:0;border:1px solid rgba(20,28,51,.07);box-shadow:0 1px 2px rgba(20,28,51,.04)}
+.dg .evrow.link:hover{background:#fff;border-color:rgba(20,28,51,.18)}
+.dg-e{margin:0 2px 8px;color:#5F5B55;font-size:13.5px}
+/* v2.9.318: a napi ablak kétszer olyan széles; széles képernyőn a foglalások / ajánlatok két oszlopban */
+.cpx-sheet.day{max-width:1040px}
+@media (min-width:960px){.cpx-sheet.day .dg{display:grid;grid-template-columns:1fr 1fr;column-gap:8px}.cpx-sheet.day .dg-h,.cpx-sheet.day .dg-e{grid-column:1/-1}.cpx-sheet.day .dg .evrow{margin-bottom:8px}}
+

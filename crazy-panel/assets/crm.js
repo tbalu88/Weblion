@@ -2393,6 +2393,8 @@
 		const orig = {};
 		form.querySelectorAll('[data-k]').forEach(el => { orig[el.dataset.k] = read(el); });
 		sh.querySelector('[data-cancel]').onclick = () => openDeal(d.id);
+		/* v2.9.318: a fejléc X-e is működjön (a deal-oldalon belül a lap csak a saját fejlécének X-ét figyeli) – mint a Mégse */
+		const hx = sh.querySelector('.cpx-sheet-h [data-close]'); if (hx) hx.onclick = e => { e.preventDefault(); e.stopPropagation(); openDeal(d.id); };
 		form.addEventListener('submit', async e => {
 			e.preventDefault();
 			const ch = {}, cc = {};

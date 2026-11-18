@@ -128,7 +128,7 @@ function cp_slot_skill($kind, $txt) {
 
 /* v2.9.316: furgon kell-e a rendezvényre (a szolgáltatás alapján: spinner / VIP spinner, csocsó, selfie tükör, CatchIt, LED dance floor) */
 function cp_slot_van($e) {
-	$t = (string) ($e['title'] ?? '') . ' ' . (string) ($e['selfie'] ?? '') . ' ' . (string) ($e['spin'] ?? '');
+	$t = (string) ($e['title'] ?? '') . ' ' . (string) ($e['selfie'] ?? '') . ' ' . (string) ($e['spin'] ?? '') . ' ' . (string) ($e['svcl'] ?? '');
 	foreach ((array) ($e['extra'] ?? array()) as $x) { $t .= ' ' . (is_array($x) ? (string) ($x[1] ?? '') : (string) $x); }
 	return (bool) preg_match('/spinner|\b360\b|csocs|tükör|tukor|mirror|catch|\bled\b|dance\s*floor|táncparkett|tánctér/iu', $t);
 }
