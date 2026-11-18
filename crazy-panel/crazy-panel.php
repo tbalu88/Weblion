@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.320');
+define('CP_PANEL_VER', '2.9.321');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -513,8 +513,22 @@ function cp_panel_normalize($rows) {
 		$spin = cp_panel_str(cp_panel_get($r, $o['f_spin']));
 		/* v2.9.317: ha a dealnek a panelben beállított „Szolgáltatás(ok)” listája van, az a mérvadó (pl. Szelfigép + VIP Spinner),
 		   a régi Salesmate-mezők helyett – így a kapacitás és a beosztás a panelben felvett spinnerrel is számol */
-		$psvc = array();
+		$psvc = array(); $psvcx = array();
 		if (function_exists('cp_svc_on') && cp_svc_on() && function_exists('cp_svc_rows')) { $pr = cp_svc_rows(array((int) $id)); if (!empty($pr[(int) $id]['l'])) { $psvc = $pr[(int) $id]['l']; } }
+		/* v2.9.321: ha nincs panel-lista, a Salesmate szolgáltatás-mezőiből számolt lista (EventCrazy / Crazyphoto szolgáltatás(ok), További, Szolgáltatás) – csak kiegészít */
+		if (!$psvc && function_exists('cp_svc_derive')) {
+			$dd = array('title' => cp_panel_str(cp_panel_get($r, 'title')));
+			foreach (array('services_ec' => 'multiSelectCustomField3', 'services_cp' => 'multiSelectCustomField4', 'services_more' => 'multiSelectCustomField1', 'service' => 'textCustomField13', 'pkg_fix' => 'textCustomField18', 'pkg_v2' => 'textCustomField17') as $lk => $sk) {
+				$v = cp_panel_get($r, $sk); $v = is_array($v) ? implode(' | ', $v) : (string) $v;
+				$dd[$lk] = implode(' | ', array_filter(array_map('trim', preg_split('/\s*[,|]\s*/', $v))));
+			}
+			$dv = cp_svc_derive($dd);
+			if (!empty($dv['l']) && empty($dv['g'])) {
+				$psvcx = $dv['l'];
+				$spx = array_values(array_filter($psvcx, function ($v) { return (bool) preg_match('/spinner/iu', $v); }));
+				if ($spx && $spin === '') { $spin = implode(', ', $spx); }
+			}
+		}
 		if ($psvc) {
 			$spl = array_values(array_filter($psvc, function ($v) { return (bool) preg_match('/spinner/iu', $v); }));
 			$sel = array_values(array_filter($psvc, function ($v) { return (bool) preg_match('/^(szelfigép|hibrid)/iu', $v); }));
@@ -556,7 +570,7 @@ function cp_panel_normalize($rows) {
 			'selfie'  => $sp,
 			'spin'    => $spin,
 			'kind'    => ($spin !== '' && $sp === '') ? 'spin' : (($spin !== '' && $sp !== '') ? 'both' : 'selfie'),
-			'svcl'    => implode(', ', $psvc), /* v2.9.317: a panel szolgáltatáslistája (furgonigényhez is) */
+			'svcl'    => implode(', ', $psvc ?: ($psvcx ?? array())), /* v2.9.317: a panel szolgáltatáslistája (furgonigényhez is) */
 			'bg'      => cp_panel_bg_recent($id, cp_panel_str(cp_panel_get($r, $o['f_bg']))),
 			'loc'     => cp_panel_str(cp_panel_get($r, $o['f_loc'])),
 			'guests'  => cp_panel_str(cp_panel_get($r, $o['f_guests'])),

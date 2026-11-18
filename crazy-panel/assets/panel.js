@@ -1147,7 +1147,8 @@
     const k = chk(e);
     return '<div class="prep ' + k.st + '">' + (k.st === 'done' ? '✓ Minden megvan' : 'Hiányzik: ' + esc(k.miss.join(', '))) + '</div>';
   }
-  const kindLabel = e => e.kind === 'spin' ? '360 Spinner' : e.kind === 'both' ? 'Szelfi + Spinner' : 'Szelfigép';
+  /* v2.9.321: ha ismert a deal teljes szolgáltatáslistája (panel vagy Salesmate szolgáltatás-mezők), azt írja ki */
+  const kindLabel = e => e.svcl ? String(e.svcl).replace(/SpinnerClassic/g, 'Spinner') : e.kind === 'spin' ? '360 Spinner' : e.kind === 'both' ? 'Szelfi + Spinner' : 'Szelfigép';
   const stateBadge = e => e.state === 'booked' ? '<span class="badge ok">' + esc(e.won ? 'Megnyert' : e.stage) + '</span>' : '<span class="badge pend">' + esc(e.stage || 'Függő') + '</span>';
 
   /* ------------------------------------------------------------ hátterek */
