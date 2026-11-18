@@ -379,8 +379,11 @@ function cp_gcal_diff($to = '', $force = false) {
 		if (!empty($P['phone'])) { $cp = preg_replace('/\D/', '', (string) ($d['cm'] ?: $d['cp'])); $cc = preg_replace('/\D/', '', $P['phone']); if ($cc !== '' && substr($cc, -8) !== substr($cp, -8)) { $add('contact', $cp === '' ? 'Telefonszám csak a naptárban' : 'Telefonszám eltér', $P['phone'], (string) ($d['cm'] ?: $d['cp'])); } }
 		if (!empty($P['pay']) && !$same($P['pay'], (string) $d['pay_method'])) { $add('other', trim((string) $d['pay_method']) === '' ? 'Fizetés csak a naptárban' : 'Fizetés eltér', $P['pay'], (string) $d['pay_method']); }
 		if (!empty($P['guests']) && preg_match('/(\d+)/', $P['guests'], $m) && (int) $m[1] !== (int) $d['guests']) { $add('other', (int) $d['guests'] > 0 ? 'Létszám eltér' : 'Létszám csak a naptárban', (int) $m[1] . ' fő', (int) $d['guests'] > 0 ? (int) $d['guests'] . ' fő' : ''); }
-		if (!empty($P['album']) && !$same($P['album'], (string) $d['album'])) { $add('other', trim((string) $d['album']) === '' ? 'Album csak a naptárban' : 'Album eltér', $P['album'], (string) $d['album']); }
-		if (!empty($P['bg']) && !$same($P['bg'], (string) $d['background'])) { $add('other', trim((string) $d['background']) === '' ? 'Háttér csak a naptárban' : 'Háttér eltér', $P['bg'], (string) $d['background']); }
+		/* v2.9.325: azonos jelentésű értékek („Nincs” = „Nem kell”; „??” = „Még nem tudom”) nem számítanak eltérésnek */
+		$no = function ($v) { return (bool) preg_match('/^(nincs|nem|nem kell|-|–)$/u', cp_gcal_norm($v) === '' ? '-' : mb_strtolower(trim((string) $v))); };
+		$unk = function ($v) { $t = trim((string) $v); return $t === '' || (bool) preg_match('/^\?+$/', $t) || cp_gcal_norm($t) === 'meg nem tudom'; };
+		if (!empty($P['album']) && !$same($P['album'], (string) $d['album']) && !($no($P['album']) && $no((string) $d['album']))) { $add('other', trim((string) $d['album']) === '' ? 'Album csak a naptárban' : 'Album eltér', $P['album'], (string) $d['album']); }
+		if (!empty($P['bg']) && !$unk($P['bg']) && !$same($P['bg'], (string) $d['background'])) { $add('other', trim((string) $d['background']) === '' ? 'Háttér csak a naptárban' : 'Háttér eltér', $P['bg'], (string) $d['background']); }
 		/* Rendezvényinfó a kezelőnek (új mezők) – átvehető */
 		$FL = function_exists('cp_dinfo_fields') ? cp_dinfo_fields() : array();
 		foreach ($FL as $fk => $fx) { if (!empty($P[$fk]) && trim((string) ($di[$fk] ?? '')) !== trim((string) $P[$fk])) { $add('info', $fx[0] . (trim((string) ($di[$fk] ?? '')) === '' ? ' – csak a naptárban' : ' – eltér'), $P[$fk], (string) ($di[$fk] ?? ''), $fk); } }
