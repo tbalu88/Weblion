@@ -130,7 +130,7 @@ function cp_slot_skill($kind, $txt) {
 function cp_slot_van($e) {
 	$t = (string) ($e['title'] ?? '') . ' ' . (string) ($e['selfie'] ?? '') . ' ' . (string) ($e['spin'] ?? '');
 	foreach ((array) ($e['extra'] ?? array()) as $x) { $t .= ' ' . (is_array($x) ? (string) ($x[1] ?? '') : (string) $x); }
-	return (bool) preg_match('/spinner|\b360\b|csocs|tükör|tukor|mirror|catch|\bled\b|dance\s*floor|táncparkett/iu', $t);
+	return (bool) preg_match('/spinner|\b360\b|csocs|tükör|tukor|mirror|catch|\bled\b|dance\s*floor|táncparkett|tánctér/iu', $t);
 }
 /* egy nap slotjai a Kapacitás adataiból + a beosztások */
 /* v2.9.264: létszám slotonként (hány ember kell) – alapból 1; kulcs: deal|nap|slot */
