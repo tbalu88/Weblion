@@ -1013,6 +1013,8 @@ function cp_mail_ajax_draft_save() {
 	if (!is_array($in)) { cp_el_err('Hibás kérés.'); }
 	$all = cp_mail_drafts_get($me);
 	$id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($_POST['id'] ?? '')));
+	/* v2.9.329: már elküldött levél piszkozata (késve érkező automatikus mentés / bezáráskori jelzés) – nem jön vissza */
+	if ($id !== '') { $gone = get_transient('cp_mail_dsent_u' . $me); if (is_array($gone) && in_array($id, $gone, true)) { wp_send_json_success(array('id' => '', 'sent' => 1)); } }
 	/* v2.9.58: az idézett levél (akár több száz KB) változatlan → nem szűrjük újra (a tárolt, már szűrt változat marad; „qh” = a beküldött idézet lenyomata) */
 	$qraw = (string) ($in['quote'] ?? ''); $qh = md5($qraw);
 	$quote = $id !== '' && isset($all[$id]) && ($all[$id]['qh'] ?? '') === $qh ? (string) ($all[$id]['quote'] ?? '') : mb_substr(cp_mail_clean($qraw), 0, 300000);

@@ -2255,10 +2255,12 @@
 					return;
 				}
 			}
+			/* v2.9.329: a folyamatban lévő piszkozatmentés megvárása (a szerver a végleges azonosítót törli), küldés közben nincs mentés */
+			if (!test) { dsending = true; if (dbusy) { try { await dbusy; } catch (e) { /* tovább */ } } }
 			try {
 				const r = await post('cp_mail_send', { to: tl.join(','), cc: cc.get().join(','), bcc: bcc.get().join(','), subject: sj, body: body, deal: deal ? deal.id : '', thread: ctx.thread || '', sign: '', test: test ? 1 : '', att: atts.map(a => a.tok).join(','), sid: test ? '' : sendId, known: ctx.known || '', force: force ? 1 : '', draft: test ? '' : draftId, px: (q('[data-px]') || {}).checked === false ? '0' : '1' });
 				if (r.test) { toast('Próbalevél elküldve ide: ' + r.to); b.disabled = false; b.textContent = old; return; }
-				if (!r.test) { dsent = true; clearInterval(dtimer); }
+				if (!r.test) { dsent = true; clearInterval(dtimer); window.removeEventListener('pagehide', dhide); }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : '') + (r.pst ? ' ' + r.pst : ''), !!r.warn);
 				/* v1.84: a hívó (pl. „Ajánlat küldése” a dealen) értesítése a sikeres küldésről */
 				if (!ho && S.onSent) { const f = S.onSent; S.onSent = null; try { f(r); } catch (x) { /* a levél elment */ } }
@@ -2267,6 +2269,7 @@
 				/* v2.8.7: ha közben máshová léptél a panelben, nem ránt vissza a Levelezésbe */
 				else if (box.isConnected) open(r.thread);
 			} catch (e) {
+				dsending = false;
 				b.disabled = false; b.textContent = old;
 				/* v2.7.13: közben válasz / új levél jött a szálba – rákérdez, és csak megerősítés után küld */
 				if (e.code === 'newer') { if ((await ask(e.message + '\n\nMégis elküldöd a válaszodat? (Mégse: megnézem előbb a szálat – a levél itt marad.)'))) { doSend(false, true); } else { toast('A levél itt maradt – a szál a Beérkezettben megnyitható.'); } return; }
@@ -2307,10 +2310,10 @@
 		});
 		/* v2.9: automatikus mentés a szerverre (v2.9.58: 15 mp-enként – korábban 4 –, ha változott; a levélíró elhagyásakor is) */
 		const dstate = () => JSON.stringify({ to: to.get(), cc: cc.get(), bcc: bcc.get(), subject: q('[data-subj]').value, body: ed.get(), thread: ctx.thread || 0, tsubj: ctx.subj, quote: ctx.quote || '', deal: deal ? deal.id : 0, dealTitle: deal ? deal.title : '', known: ctx.known || 0, atts: atts.filter(a => a.tok).map(a => ({ n: a.n, size: a.size, tok: a.tok })) });
-		let dlast = dstate(), dsent = false, dbusy = null;
+		let dlast = dstate(), dsent = false, dsending = false, dbusy = null;
 		const dinit = dlast; /* v2.9.83: változott-e a megnyitás óta */
 		const dsave = async (force) => {
-			if (dsent) return draftId;
+			if (dsent || dsending) return draftId; /* v2.9.329: küldés közben / után nem ment (különben az elküldött levél piszkozatként visszajön) */
 			const st = dstate();
 			if (!force && st === dlast) return draftId;
 			if (dbusy) { try { await dbusy; } catch (e) { /* tovább */ } }
