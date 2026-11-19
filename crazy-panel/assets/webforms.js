@@ -41,7 +41,7 @@
 		var st = document.createElement('style'); st.id = 'cpwf-css';
 		st.textContent =
 			'.cpwf{--bg:#fff;--bd:#DFE1E6;--lb:#505f79;--tx:#333;--ph:#9aa0ab;--in:#fff;--ac:#f57e23;--bt:#fff;--br:20px;--rq:#e5484d;--ln:#f57e23;box-sizing:border-box;max-width:600px;margin:0 auto;background:var(--bg);color:var(--tx);border-radius:16px;padding:24px;font:15px/1.45 inherit;text-align:left}' +
-			'.cpwf *{box-sizing:border-box}.cpwf-f{margin:0 0 16px}.cpwf-l{display:block;font-weight:500;font-size:14px;color:var(--lb);margin:0 0 6px}.cpwf-l i{font-style:normal;color:var(--rq);margin-right:3px}' +
+			'.cpwf *{box-sizing:border-box}.cpwf-f{margin:0 0 16px}.cpwf-f[hidden]{display:none!important}.cpwf-l i[hidden]{display:none}.cpwf-l{display:block;font-weight:500;font-size:14px;color:var(--lb);margin:0 0 6px}.cpwf-l i{font-style:normal;color:var(--rq);margin-right:3px}' +
 			'.cpwf input[type=text],.cpwf input[type=email],.cpwf input[type=tel],.cpwf input[type=number],.cpwf input[type=date],.cpwf select,.cpwf textarea{display:block;width:100%;min-height:44px;margin:0;padding:10px 14px;font:16px/1.3 inherit;color:var(--tx);background:var(--in);border:1px solid var(--bd);border-radius:10px;box-shadow:none;outline:none;-webkit-appearance:none;appearance:none}' +
 			'.cpwf select{background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 15px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:36px}' +
 			'.cpwf textarea{min-height:70px;resize:vertical}.cpwf textarea.cpwf-big{min-height:130px}.cpwf ::placeholder{color:var(--ph);opacity:1}' +
@@ -206,12 +206,13 @@
 		var h = '<form class="cpwf ' + esc(f.theme || 'cp') + '" novalidate autocomplete="on" id="' + id + '">';
 		f.fields.forEach(function (x, i) {
 			if (x.hid) { return; }
-			var fid = id + '-' + i, req = x.req ? '<i>*</i>' : '';
-			h += '<div class="cpwf-f" data-n="' + esc(x.n) + '"><label class="cpwf-l" id="' + fid + '-l" for="' + fid + '">' + req + esc(x.l) + '</label>';
+			var fid = id + '-' + i, req = x.req ? '<i>*</i>' : (x.reqIf ? '<i data-ri hidden>*</i>' : '');
+			/* v2.9.338: feltételes mező (pl. DJ-adatok csak DJ választásakor) – kezdetben rejtve */
+			h += '<div class="cpwf-f" data-n="' + esc(x.n) + '"' + (x.if ? ' hidden' : '') + '><label class="cpwf-l" id="' + fid + '-l" for="' + fid + '">' + req + esc(x.l) + '</label>';
 			if (x.t === 'multi') {
 				h += '<div class="cpwf-ch" role="group" aria-label="' + esc(x.l) + '">' + (x.o || []).map(function (o, j) { return '<label><input type="checkbox" name="' + esc(x.n) + '" value="' + esc(o) + '"' + (j === 0 ? ' id="' + fid + '"' : '') + '>' + esc(o) + '</label>'; }).join('') + '</div>';
 			} else if (x.t === 'select') {
-				h += '<select id="' + fid + '" name="' + esc(x.n) + '"' + (x.req ? ' required' : '') + '><option value="">' + esc(x.ph || T(en, ['Válassz…', 'Choose…'])) + '</option>' + (x.o || []).map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select>';
+				h += '<select id="' + fid + '" name="' + esc(x.n) + '"' + (x.req ? ' required' : '') + '><option value="">' + esc(x.ph || T(en, ['Válassz…', 'Choose…'])) + '</option>' + (x.o || []).map(function (o, j) { return '<option value="' + esc(o) + '">' + esc((x.ol && x.ol[j]) || o) + '</option>'; }).join('') + '</select>';
 			} else if ((x.t === 'textarea' && x.ui !== 'line') || x.ui === 'area') {
 				/* v2.9.49: a megjelenés („ui”) független a mező típusától – a Megjegyzés nagy szövegdoboz, a Kuponkód egysoros */
 				h += '<textarea id="' + fid + '" name="' + esc(x.n) + '" rows="' + (x.ui === 'area' ? 5 : 2) + '"' + (x.ui === 'area' ? ' class="cpwf-big"' : '') + (x.t !== 'textarea' ? ' maxlength="500"' : '') + ' placeholder="' + esc(x.ph) + '"' + (x.req ? ' required' : '') + '></textarea>';
@@ -241,7 +242,7 @@
 			setFieldValue: function (n, v) {
 				var els = form.querySelectorAll('[name="' + n.replace(/"/g, '') + '"]');
 				if (!els.length) { obj._hidden[n] = v; return; }
-				if (els[0].type === 'checkbox') { var vs = Array.isArray(v) ? v : String(v).split(/\s*,\s*/); els.forEach(function (c) { c.checked = vs.indexOf(c.value) >= 0; }); return; }
+				if (els[0].type === 'checkbox') { var vs = Array.isArray(v) ? v : String(v).split(/\s*,\s*/); els.forEach(function (c) { c.checked = vs.indexOf(c.value) >= 0; }); syncIf(); return; }
 				var e = els[0];
 				if (e.tagName === 'SELECT' && !Array.prototype.some.call(e.options, function (o) { return o.value === String(v) || o.text === String(v); })) { return; }
 				e.value = String(v);
@@ -261,12 +262,24 @@
 				if (x.t === 'multi') { var a = []; form.querySelectorAll('[name="' + x.n + '"]:checked').forEach(function (c) { a.push(c.value); }); v[x.n] = a; return; }
 				var e = form.querySelector('[name="' + x.n + '"]'); v[x.n] = e ? e.value.trim() : '';
 			});
+			f.fields.forEach(function (x) { if (x.if && !condOk(x.if, v)) { v[x.n] = ''; } });
 			return v;
+		}
+		/* v2.9.338: feltétel – a megadott mező (pl. Szolgáltatások) tartalmazza-e az értéket (pl. DJ) */
+		function condOk(c, v) { var val = v[c.n]; if (Array.isArray(val)) { return val.indexOf(c.has) >= 0; } return String(val || '').split(/\s*,\s*/).indexOf(c.has) >= 0; }
+		function syncIf() {
+			var v = {}; f.fields.forEach(function (x) { if (x.t === 'multi') { var a = []; form.querySelectorAll('[name="' + x.n + '"]:checked').forEach(function (c) { a.push(c.value); }); v[x.n] = a; } });
+			f.fields.forEach(function (x) {
+				var b = form.querySelector('.cpwf-f[data-n="' + x.n + '"]'); if (!b) { return; }
+				if (x.if) { var on = condOk(x.if, v); b.hidden = !on; if (!on) { b.classList.remove('bad'); } }
+				if (x.reqIf) { var ri = b.querySelector('[data-ri]'); if (ri) { ri.hidden = !condOk(x.reqIf, v); } }
+			});
 		}
 		forms = forms.filter(function (o) { return document.contains(o._form); });
 		obj._form = form; forms.push(obj);
 		var t0 = Date.now(), busy = false, msg = form.querySelector('.cpwf-m');
 		function mark(n, text) { var b = form.querySelector('.cpwf-f[data-n="' + n + '"]'); if (!b) { return; } b.classList.toggle('bad', !!text); b.querySelector('.cpwf-e').textContent = text || ''; }
+		form.addEventListener('change', syncIf); syncIf();
 		form.addEventListener('input', function () { if (!form.querySelector('.bad')) { msg.hidden = true; } });
 		form.addEventListener('input', function (e) { var b = e.target.closest && e.target.closest('.cpwf-f'); if (b) { b.classList.remove('bad'); } if (e.target.name === '_pp') { e.target.closest('.cpwf-pp').classList.remove('bad'); } });
 		form.addEventListener('change', function (e) { var b = e.target.closest && e.target.closest('.cpwf-f'); if (b) { b.classList.remove('bad'); } if (e.target.name === '_pp') { e.target.closest('.cpwf-pp').classList.remove('bad'); } });
@@ -275,9 +288,9 @@
 			if (busy) { return; }
 			var v = values(), first = null, ok = true;
 			f.fields.forEach(function (x) {
-				if (x.hid) { return; }
-				var val = v[x.n], bad = '';
-				if (x.req && (Array.isArray(val) ? !val.length : val === '')) { bad = x.t === 'multi' ? T(en, ['Válassz legalább egyet.', 'Choose at least one.']) : T(en, ['Kötelező mező.', 'Required.']); }
+				if (x.hid || (x.if && !condOk(x.if, v))) { mark(x.n, ''); return; }
+				var val = v[x.n], bad = '', rq = x.req || (x.reqIf && condOk(x.reqIf, v));
+				if (rq && (Array.isArray(val) ? !val.length : val === '')) { bad = x.t === 'multi' ? T(en, ['Válassz legalább egyet.', 'Choose at least one.']) : T(en, ['Kötelező mező.', 'Required.']); }
 				else if (x.t === 'email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) { bad = T(en, ['Érvénytelen e-mail-cím.', 'Invalid email address.']); }
 				else if (x.t === 'date' && val && val < today()) { bad = T(en, ['Jövőbeli dátumot adj meg.', 'Please choose a future date.']); }
 				else if (x.t === 'int' && val !== '' && !(/^\d+$/.test(val) && +val >= 1 && +val <= 100000)) { bad = T(en, ['Adj meg egy 1 és 100 000 közötti egész számot.', 'Please enter a whole number between 1 and 100 000.']); }

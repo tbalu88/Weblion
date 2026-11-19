@@ -197,7 +197,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 			$kv = array();
 			/* v2.9.106: a Salesmate mezőnevek (Deal.intCustomField1…) helyett magyar címke; a dátum magyar formában */
 			static $LL = null; if ($LL === null) { $LL = function_exists('cp_lead_labels') ? cp_lead_labels() : array(); }
-			if (is_array($f)) { foreach ($f as $k => $v) { if (is_scalar($v) && trim((string) $v) !== '' && count($kv) < 14) {
+			if (is_array($f)) { foreach ($f as $k => $v) { if (is_scalar($v) && trim((string) $v) !== '' && count($kv) < 20) {
 				$lab = $LL[(string) $k] ?? preg_replace('/^(Deal|Contact|Company)\./', '', (string) $k);
 				$vv = (string) $v; if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $vv)) { $vv = str_replace('-', '. ', $vv) . '.'; }
 				$kv[] = array(mb_substr($lab, 0, 60), mb_substr($vv, 0, 300));

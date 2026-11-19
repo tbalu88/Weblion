@@ -96,7 +96,51 @@
     "n": "Deal.intCustomField1",
     "t": "int",
     "l": "Tervezett létszám",
-    "ph": "Hány fő várható a rendezvényen?"
+    "ph": "Hány fő várható a rendezvényen?",
+    "reqIf": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
+   },
+   {
+    "n": "X.djTime",
+    "t": "text",
+    "l": "DJ: időtartam (vendégérkezéstől a buli végéig)",
+    "ph": "pl. 18:00 – 02:00",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
+   },
+   {
+    "n": "X.djTech",
+    "t": "select",
+    "l": "DJ: hang- és fénytechnika",
+    "ph": "Kértek hang- és fénytechnikát?",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    },
+    "o": [
+     "Hang- és fénytechnikát is kérünk",
+     "Csak hangtechnikát kérünk",
+     "Csak fénytechnikát kérünk",
+     "Nem kérünk, a helyszín vagy más partner biztosítja"
+    ]
+   },
+   {
+    "n": "X.djSpecial",
+    "t": "text",
+    "ui": "area",
+    "l": "DJ: különleges kérések",
+    "ph": "Pl. megnyitóhoz plusz mikrofonok, zenekar / sztárvendég műsorának hangosítása, polgári szertartás hangosítása, projektoros vetítés… Ha nincs ilyen, írd: nincs",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
    },
    {
     "n": "Deal.textCustomField3",
@@ -697,7 +741,57 @@
     "n": "Deal.intCustomField1",
     "t": "int",
     "l": "Expected number of guests",
-    "ph": "How many guests are expected at the event?"
+    "ph": "How many guests are expected at the event?",
+    "reqIf": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
+   },
+   {
+    "n": "X.djTime",
+    "t": "text",
+    "l": "DJ: duration (from guest arrival to the end of the party)",
+    "ph": "e.g. 18:00 – 02:00",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
+   },
+   {
+    "n": "X.djTech",
+    "t": "select",
+    "l": "DJ: sound and lighting",
+    "ph": "Do you need sound and lighting equipment?",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    },
+    "o": [
+     "Hang- és fénytechnikát is kérünk",
+     "Csak hangtechnikát kérünk",
+     "Csak fénytechnikát kérünk",
+     "Nem kérünk, a helyszín vagy más partner biztosítja"
+    ],
+    "ol": [
+     "We need both sound and lighting",
+     "Sound only",
+     "Lighting only",
+     "No – the venue or another partner provides it"
+    ]
+   },
+   {
+    "n": "X.djSpecial",
+    "t": "text",
+    "ui": "area",
+    "l": "DJ: special requests",
+    "ph": "E.g. extra microphones for the opening, sound for a band / guest performer, sound for a civil wedding ceremony, projector… If none, write: none",
+    "req": 1,
+    "if": {
+     "n": "Deal.multiSelectCustomField3",
+     "has": "DJ"
+    }
    },
    {
     "n": "Deal.textCustomField3",

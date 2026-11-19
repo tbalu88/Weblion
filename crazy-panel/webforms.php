@@ -97,8 +97,12 @@ function cp_wf_ajax_send() {
 	$raw = json_decode((string) wp_unslash($_POST['v'] ?? ''), true);
 	if (!is_array($raw)) { wp_send_json(array('ok' => 0, 'err' => 'data'), 400); }
 	$pairs = array(); $errs = array();
+	/* v2.9.338: feltételes mezők (pl. DJ-adatok csak DJ választásakor, akkor kötelezően) */
+	$cond = function ($c) use ($raw) { if (!is_array($c)) { return true; } $val = $raw[$c['n']] ?? ''; $L = is_array($val) ? array_map('strval', $val) : array_map('trim', explode(',', (string) $val)); return in_array((string) $c['has'], $L, true); };
 	foreach ($def['fields'] as $f) {
 		$n = $f['n'];
+		if (!empty($f['if']) && !$cond($f['if'])) { continue; }
+		if (!empty($f['reqIf']) && $cond($f['reqIf'])) { $f['req'] = 1; }
 		$v = $raw[$n] ?? ($f['def'] ?? '');
 		if (!empty($f['hid']) && isset($f['def']) && !preg_match('/^Contact\.utm/', $n)) { $v = $f['def']; } /* rejtett mező: a beállított érték, nem a böngészőé */
 		if (is_array($v)) { $v = implode(', ', array_map('strval', $v)); }
@@ -118,6 +122,11 @@ function cp_wf_ajax_send() {
 		}
 		if ($v === '' && !empty($f['req']) && empty($f['hid'])) { $errs[$n] = $en ? 'Required.' : 'Kötelező mező.'; }
 		if ($v !== '') { $pairs[$n] = $v; }
+	}
+	/* v2.9.338: a DJ-adatok a Megjegyzésbe is (így a Salesmate deal-ben is látszanak; a teljes szöveg a panel megkeresésében marad) */
+	if (!$errs && isset($pairs['X.djTime'])) {
+		$dj = 'DJ – időtartam: ' . $pairs['X.djTime'] . "\nDJ – hang- és fénytechnika: " . ($pairs['X.djTech'] ?? '-') . "\nDJ – különleges kérések: " . ($pairs['X.djSpecial'] ?? '-');
+		$pairs['Deal.textCustomField3'] = mb_substr(trim(($pairs['Deal.textCustomField3'] ?? '') . "\n\n" . $dj), 0, 500);
 	}
 	if ($errs) { wp_send_json(array('ok' => 0, 'err' => 'fields', 'fields' => $errs, 'msg' => $en ? 'Please check the highlighted fields.' : 'Kérjük, nézd át a jelölt mezőket.'), 400); }
 	$pairs['Deal.title'] = str_replace('{{Contact.name}}', $pairs['Contact.name'] ?? '', (string) ($pairs['Deal.title'] ?? ''));
@@ -201,6 +210,7 @@ function cp_wf_mail($def, $pairs, $deal, $page, $shadow = false) {
 	$e = function ($v) { return esc_html((string) $v); };
 	$rows = '';
 	foreach ($def['fields'] as $f) {
+		if (!empty($f['if']) && (!isset($pairs[$f['n']]) || $pairs[$f['n']] === '')) { continue; } /* v2.9.338: a nem kért feltételes mező nem kell a levélbe */
 		$v = isset($pairs[$f['n']]) && $pairs[$f['n']] !== '' ? (string) $pairs[$f['n']] : '-';
 		$rows .= '<p style="margin:0 0 12px"><b>' . $e($f['l']) . ':</b><br>' . nl2br($e($v)) . '</p>';
 	}
