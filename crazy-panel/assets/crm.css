@@ -984,3 +984,6 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .d3-ess{margin:0 0 6px;font-size:13px;font-weight:600}.d3-ess.ok{color:#1F7A50}.d3-ess.no{color:var(--mu)}
 .d3-esa{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .d3-es .crm-dl dd{overflow-wrap:anywhere}
+/* v2.9.347: Gépek és hátterek */
+.d3-mrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.d3-mach .crm-f{display:grid;gap:4px;font-size:13px;margin:0 0 8px}.d3-mach .crm-f input{width:100%;min-width:0}

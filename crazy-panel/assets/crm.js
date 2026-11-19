@@ -317,6 +317,39 @@
 			(has ? '<dl class="crm-dl">' + ks.filter(k => V[k]).map(k => '<dt>' + esc(F[k][0]) + '</dt><dd' + (k === 'note' ? ' class="d3-din"' : '') + '>' + esc(V[k]) + '</dd>').join('') + '</dl>' : '<p class="cpx-muted">Még nincs kitöltve. Ide írd, amit eddig a naptárbejegyzésbe: tematika, dress code, galéria neve, építés, bontás, megjegyzés a kezelőnek.</p>') +
 			(V._at ? '<p class="crm-meta">Módosítva: ' + esc(huDT(V._at)) + (V._by ? ' (' + esc(V._by) + ')' : '') + '</p>' : '') + '</section>';
 	}
+	/* v2.9.347: Gépek és hátterek – szelfigépek / spinnerek száma, gépenkénti háttér (csak a panelben; a hátterek összefűzve a Salesmate-be is) */
+	function machSec(d, x) {
+		const m = x.mach; if (!m) return '';
+		const edit = W && !d.deleted_at ? '<button type="button" class="d3-gsync" data-medit title="Gépek és hátterek szerkesztése">✎ Szerkesztés</button>' : '';
+		const n = v => v == null ? '<span class="cpx-muted">alap (a szolgáltatás szerint)</span>' : v + ' db';
+		return '<section class="d3-c d3-mach" data-mach><h4 class="d3-adh">Gépek és hátterek' + edit + '</h4><dl class="crm-dl"><dt>Szelfigép</dt><dd>' + n(m.ns) + '</dd><dt>Spinner</dt><dd>' + n(m.np) + '</dd>' +
+			(m.bgs.length ? m.bgs.map((b, i) => '<dt>' + (m.bgs.length > 1 ? (i + 1) + '. gép háttere' : 'Háttér') + '</dt><dd>' + (b ? esc(b) : '<span class="cpx-muted">–</span>') + '</dd>').join('') : '') + '</dl>' +
+			(m.ns > 1 || m.np > 1 ? '<p class="crm-meta">Több gépes rendezvény – az ár egyedi, kézzel add meg.</p>' : '') + '</section>';
+	}
+	function machBind(sh, d, x) {
+		const sec = sh.querySelector('[data-mach]'); if (!sec) return;
+		const b = sec.querySelector('[data-medit]'); if (!b) return;
+		b.onclick = () => {
+			const m = x.mach, dl = 'cpbgl' + d.id;
+			const row = (i, v) => '<label class="crm-f">' + (i + 1) + '. szelfigép háttere<input data-mbg list="' + dl + '" value="' + esc(v || '') + '" maxlength="80" placeholder="Válassz vagy írd be"></label>';
+			const draw = () => { const k = Math.max(1, Number(sec.querySelector('[data-mns]').value) || 1); const cur = Array.from(sec.querySelectorAll('[data-mbg]')).map(i => i.value); sec.querySelector('[data-mbgs]').innerHTML = Array.from({ length: k }, (_, i) => row(i, cur[i] != null ? cur[i] : m.bgs[i])).join(''); };
+			sec.innerHTML = '<h4 class="d3-adh">Gépek és hátterek</h4><datalist id="' + dl + '">' + (x.bgl || []).map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' +
+				'<div class="d3-mrow"><label class="crm-f">Szelfigépek száma<input type="number" min="0" max="10" data-mns value="' + (m.ns == null ? '' : m.ns) + '" placeholder="alap"></label><label class="crm-f">Spinnerek száma<input type="number" min="0" max="10" data-mnp value="' + (m.np == null ? '' : m.np) + '" placeholder="alap"></label></div>' +
+				'<p class="crm-meta">Üresen hagyva a mostani működés marad (a szolgáltatás szerint 1 gép).</p><div data-mbgs></div>' +
+				'<div class="d3-esa"><button type="button" class="cpx-btn" data-msave>Mentés</button><button type="button" class="cpx-btn ghost" data-mcancel>Mégse</button></div>';
+			draw(); sec.querySelector('[data-mns]').addEventListener('input', draw);
+			sec.querySelector('[data-mcancel]').onclick = () => { sec.outerHTML = machSec(d, x); machBind(sh, d, x); };
+			sec.querySelector('[data-msave]').onclick = async e => {
+				const bt = e.currentTarget; bt.disabled = true;
+				const bgs = Array.from(sec.querySelectorAll('[data-mbg]')).map(i => i.value.trim());
+				try {
+					const r = await post('cp_dmach_save', { id: d.id, ns: sec.querySelector('[data-mns]').value.trim(), np: sec.querySelector('[data-mnp]').value.trim(), bgs: JSON.stringify(bgs) });
+					x.mach = r.mach; const nw = sh.querySelector('[data-mach]'); nw.outerHTML = machSec(d, x); machBind(sh, d, x);
+					toast(r.warn || 'Gépek és hátterek mentve.', !!r.warn);
+				} catch (er) { toast(er.message, true); bt.disabled = false; }
+			};
+		};
+	}
 	/* v2.9.344: Kezelői adatlap – rendezvénynaponként a kitöltő link (megnyitás, másolás) és a kezelők válaszai */
 	function esheetSec(x) {
 		const E = x.esheet || []; if (!E.length) return '';
@@ -2107,7 +2140,7 @@
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>' + (W && c && c.email && !d.deleted_at ? '<div class="d3-cos" data-cos></div>' : '')) + '</section>' +
 			'<section class="d3-c"><h4 class="d3-adh">Adatok' + (x.gcal_on && R.edit && d.event_d && !d.deleted_at ? '<button type="button" class="d3-gsync" data-gsync title="A cégnaptár bejegyzésének frissítése a deal és az ügyfél-adatlap mostani adataival (ha nincs, létrehozza)">📅 Naptárbejegyzés frissítése</button>' : '') + '</h4>' + fieldGroups(d, x.pinfo) +
-				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section>' + (x.dinfo ? dinfoSec(d, x) : '') + esheetSec(x) + '</aside>' +
+				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section>' + machSec(d, x) + (x.dinfo ? dinfoSec(d, x) : '') + esheetSec(x) + '</aside>' +
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok */
@@ -2180,7 +2213,7 @@
 		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
-		dinfoBind(sh, d, x);
+		dinfoBind(sh, d, x); machBind(sh, d, x);
 		const kbl = sh.querySelector('[data-kbl]');
 		if (window.CPKanban) window.CPKanban.linked(kbl, { deal: d.id });
 		/* v2.9.1: e-mail küldése a dealből – a levélíró a kontakt címével, a dealhez kötve */

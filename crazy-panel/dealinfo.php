@@ -41,6 +41,11 @@ function cp_dinfo_get($id) {
 	$out = array(); foreach (cp_dinfo_fields() as $k => $x) { $out[$k] = is_array($d) && isset($d[$k]) ? (string) $d[$k] : ''; }
 	return $out + array('_by' => $r ? (string) $r['by_user'] : '', '_at' => $r && function_exists('cp_crm_local') ? cp_crm_local((string) $r['updated_at']) : '');
 }
+function cp_dinfo_raw($id) {
+	global $wpdb; cp_dinfo_db();
+	$d = json_decode((string) $wpdb->get_var($wpdb->prepare('SELECT data FROM ' . cp_dinfo_t() . ' WHERE deal_id = %d', (int) $id)), true);
+	return is_array($d) ? $d : array();
+}
 /* részleges mentés: csak a megadott mezők változnak; üres érték törli a mezőt */
 function cp_dinfo_set($id, $vals, $who = '') {
 	global $wpdb; cp_dinfo_db();
@@ -51,7 +56,8 @@ function cp_dinfo_set($id, $vals, $who = '') {
 		if ($v !== $cur[$k]) { $cur[$k] = $v; $ch[] = $F[$k][0]; }
 	}
 	if (!$ch) { return $cur; }
-	$data = array(); foreach ($F as $k => $x) { if ($cur[$k] !== '') { $data[$k] = $cur[$k]; } }
+	/* v2.9.347: a sor többi adata (gépszám, hátterek) megmarad */
+	$data = cp_dinfo_raw($id); foreach ($F as $k => $x) { if ($cur[$k] !== '') { $data[$k] = $cur[$k]; } else { unset($data[$k]); } }
 	$wpdb->replace(cp_dinfo_t(), array('deal_id' => (int) $id, 'data' => wp_json_encode($data, JSON_UNESCAPED_UNICODE), 'by_user' => mb_substr($who !== '' ? $who : (function_exists('cp_panel_who') ? cp_panel_who() : ''), 0, 100), 'updated_at' => gmdate('Y-m-d H:i:s')));
 	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'dinfo', 'Rendezvényinfó módosítva', 'deal:' . (int) $id, implode(', ', $ch)); }
 	return cp_dinfo_get($id);
@@ -100,3 +106,69 @@ add_filter('cp_crm_deal_data', function ($x) {
 	if ($id) { $e = cp_dinfo_esheet($id); if ($e !== null) { $x['esheet'] = $e; } }
 	return $x;
 }, 22);
+
+/* ---------------------------------------------------------------- v2.9.347: gépek – szelfigépek és spinnerek száma, gépenkénti háttér
+   (a felhasználó döntése, 2026-11-19: csak a panelben; a Salesmate „Választott Fotófal” mezőjébe a hátterek összefűzve).
+   Nincs megadva (null) = a mostani működés: a szolgáltatás szerint 1 szelfigép és/vagy 1 spinner. */
+function cp_dmach_get($id) {
+	$d = cp_dinfo_raw($id);
+	return array('ns' => isset($d['ns']) ? (int) $d['ns'] : null, 'np' => isset($d['np']) ? (int) $d['np'] : null, 'bgs' => isset($d['bgs']) && is_array($d['bgs']) ? array_values(array_map('strval', $d['bgs'])) : array());
+}
+/* sok dealre egyszerre: id => array(ns|null, np|null) – csak ahol meg van adva */
+function cp_dmach_many($ids) {
+	global $wpdb; static $mem = array();
+	$ids = array_values(array_unique(array_filter(array_map('intval', (array) $ids)))); $out = array(); $need = array();
+	foreach ($ids as $i) { if (array_key_exists($i, $mem)) { if ($mem[$i]) { $out[$i] = $mem[$i]; } } else { $need[] = $i; } }
+	if ($need && cp_dinfo_db()) {
+		foreach (array_chunk($need, 500) as $ch) {
+			$got = array();
+			foreach ((array) $wpdb->get_results('SELECT deal_id, data FROM ' . cp_dinfo_t() . ' WHERE deal_id IN (' . implode(',', $ch) . ')', ARRAY_A) as $r) {
+				$d = json_decode((string) $r['data'], true); if (!is_array($d) || (!isset($d['ns']) && !isset($d['np']))) { continue; }
+				$got[(int) $r['deal_id']] = array(isset($d['ns']) ? (int) $d['ns'] : null, isset($d['np']) ? (int) $d['np'] : null);
+			}
+			foreach ($ch as $i) { $mem[$i] = $got[$i] ?? null; if (isset($got[$i])) { $out[$i] = $got[$i]; } }
+		}
+	}
+	return $out;
+}
+function cp_dmach_set($id, $ns, $np, $bgs, $who = '') {
+	global $wpdb; cp_dinfo_db();
+	$data = cp_dinfo_raw($id); $old = cp_dmach_get($id);
+	$norm = function ($v) { if ($v === null || $v === '') { return null; } $v = (int) $v; return max(0, min(10, $v)); };
+	$ns = $norm($ns); $np = $norm($np);
+	if ($ns === null) { unset($data['ns']); } else { $data['ns'] = $ns; }
+	if ($np === null) { unset($data['np']); } else { $data['np'] = $np; }
+	$B = array(); foreach (array_slice((array) $bgs, 0, 10) as $b) { $B[] = mb_substr(trim(sanitize_text_field((string) $b)), 0, 80); }
+	while ($B && end($B) === '') { array_pop($B); }
+	if ($B) { $data['bgs'] = $B; } else { unset($data['bgs']); }
+	$wpdb->replace(cp_dinfo_t(), array('deal_id' => (int) $id, 'data' => wp_json_encode($data, JSON_UNESCAPED_UNICODE), 'by_user' => mb_substr($who !== '' ? $who : (function_exists('cp_panel_who') ? cp_panel_who() : ''), 0, 100), 'updated_at' => gmdate('Y-m-d H:i:s')));
+	$new = cp_dmach_get($id); $warn = '';
+	/* a Salesmate háttérmezőbe a hátterek összefűzve (80 karakter) – csak ha változott */
+	$join = implode(' + ', array_filter($new['bgs'], 'strlen'));
+	if ($join !== implode(' + ', array_filter($old['bgs'], 'strlen')) && $join !== '' && function_exists('cp_crm_save_data')) {
+		$jv = mb_strlen($join) > 80 ? mb_substr($join, 0, 79) . '…' : $join;
+		$r = cp_crm_save_data((int) $id, array('background' => $jv), array());
+		if (is_wp_error($r)) { $warn = 'A hátterek a Salesmate-be nem kerültek át: ' . $r->get_error_message(); }
+	}
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'machines', 'Gépek / hátterek módosítva', 'deal:' . (int) $id, 'szelfigép: ' . ($new['ns'] === null ? 'alap' : $new['ns']) . ', spinner: ' . ($new['np'] === null ? 'alap' : $new['np']) . ($new['bgs'] ? ', hátterek: ' . implode(' + ', $new['bgs']) : '')); }
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	return array('mach' => $new, 'warn' => $warn);
+}
+add_action('wp_ajax_nopriv_cp_dmach_save', 'cp_dmach_ajax_save');
+add_action('wp_ajax_cp_dmach_save', 'cp_dmach_ajax_save');
+function cp_dmach_ajax_save() {
+	cp_el_auth();
+	cp_tab_need(array('deals'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$id = (int) ($_POST['id'] ?? 0);
+	$bgs = json_decode((string) wp_unslash($_POST['bgs'] ?? '[]'), true);
+	if ($id <= 0 || !is_array($bgs)) { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	if (!$wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id))) { cp_el_err('Nincs ilyen deal.', 404); }
+	wp_send_json_success(cp_dmach_set($id, wp_unslash($_POST['ns'] ?? ''), wp_unslash($_POST['np'] ?? ''), $bgs));
+}
+add_filter('cp_crm_deal_data', function ($x) {
+	$id = (int) ($x['deal']['id'] ?? 0);
+	if ($id) { $x['mach'] = cp_dmach_get($id); $x['bgl'] = function_exists('cp_panel_bg_list') ? array_map(function ($b) { return (string) $b['name']; }, cp_panel_bg_list()) : array(); }
+	return $x;
+}, 23);
