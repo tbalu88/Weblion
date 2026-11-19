@@ -211,6 +211,34 @@ function cp_gcal_plan($id, $day = '') {
 		'date' => $date, 'start' => $s, 'end' => $e, 'loc' => (string) $d['venue'], 'pen' => $pen, 'desc' => implode('<br>', $L), 'key' => $key, 'dn' => $dn, 'dof' => $dof);
 }
 
+/* v2.9.342: a panel által írt leírás frissítésekor a kollégák által kézzel beírt sorok nem veszhetnek el.
+   A régi leírás azon sorai, amelyek nincsenek az új leírásban, és nem a panel saját sorai (azonos címkével, pl. „Helyszín:”),
+   egy „Megjegyzések a naptárból” blokkba kerülnek a lábléc elé. A blokk a következő frissítéskor is megmarad. */
+define('CP_GCAL_KEEP_H', 'Megjegyzések a naptárból (kézzel beírva):');
+function cp_gcal_lines($html) {
+	$t = preg_replace('#<\s*(br|/p|/div|/li|/h\d)\s*/?>#i', "\n", (string) $html);
+	$t = html_entity_decode(wp_strip_all_tags($t, false), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	$o = array(); foreach (preg_split('/\R/u', $t) as $l) { $l = trim(preg_replace('/[\x{00a0}\s]+/u', ' ', $l)); if ($l !== '') { $o[] = $l; } }
+	return $o;
+}
+function cp_gcal_keep_manual($old, $new) {
+	$ol = cp_gcal_lines($old); if (!$ol) { return $new; }
+	$nl = cp_gcal_lines($new); $nset = array(); $nlab = array();
+	foreach ($nl as $l) { $nset[mb_strtolower($l)] = 1; if (preg_match('/^-?\s*([^:]{2,40}):/u', $l, $m)) { $nlab[mb_strtolower(trim($m[1]))] = 1; } }
+	$skip = '/^(-{5,}|━{3,}|egyéb:?$|az ügyfél adatlapjáról|📋|kezelői adatlap|https?:\/\/[^ ]*crazy-panel|bruttó = nettó|hosszabbítás nettó|készenlét nettó|áttelepítés nettó|' . preg_quote(mb_strtolower(CP_GCAL_KEEP_H), '/') . ')/iu';
+	$keep = array();
+	foreach ($ol as $l) {
+		$lc = mb_strtolower($l);
+		if (isset($nset[$lc]) || preg_match($skip, $lc)) { continue; }
+		if (preg_match('/^-?\s*([^:]{2,40}):/u', $l, $m) && isset($nlab[mb_strtolower(trim($m[1]))])) { continue; }
+		$keep[$lc] = $l;
+	}
+	if (!$keep) { return $new; }
+	$blk = '<br><b>' . esc_html(CP_GCAL_KEEP_H) . '</b><br>' . implode('<br>', array_map('esc_html', array_values($keep))) . '<br>';
+	$pos = strpos($new, '------------------------------------------------------------------------');
+	return $pos === false ? $new . '<br><br>' . $blk : substr($new, 0, $pos) . $blk . substr($new, $pos);
+}
+
 /* ------------------------------------------------------------ Naptár fül */
 add_action('wp_ajax_nopriv_cp_gcal_ev', 'cp_gcal_ajax_ev');
 add_action('wp_ajax_cp_gcal_ev', 'cp_gcal_ajax_ev');
@@ -589,6 +617,7 @@ function cp_gcal_pen_sync($dry = false) {
 			if (!$chg) { continue; }
 			$out['update'][] = $did; if ($dry) { continue; }
 			$b = cp_gcal_body($p); $b['summary'] = $e['t'];  /* a cím (ceruzás jelöléssel) marad – azt a fenti rész kezeli */
+			$b['description'] = cp_gcal_keep_manual($e['raw'], $p['desc']); /* v2.9.342: a kézzel beírt sorok megmaradnak */
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), $b);
 			if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
 			cp_gcal_wlog('bejegyzés frissítve (a deal változott)', $did, $e['t']);
