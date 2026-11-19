@@ -2500,6 +2500,9 @@
 		const ev = (k) => k === 'svc' ? ((x.svc && x.svc.l) || []).join(' | ') : k === 'ym' ? (d.ym || '') : editVal(d, k);
 		ED.forEach(sec => { h += '<h4>' + esc(sec[0]) + '</h4><div class="crm-eg">' + sec[1].map(f => field(f[0], f[1], f[2], ev(f[0]))).join('') + '</div>'; });
 		if (x.svc && (x.svc.x || []).length) h += '<p class="crm-ro">Régi szolgáltatás-szöveg a dealen: ' + esc(x.svc.x.join('; ')) + '</p>';
+		/* v2.9.350: Gépek – szelfigépek / spinnerek száma és a 2., 3. … gép háttere itt is (az 1. gépé a „Fotófal / háttér” mező) */
+		const M0 = x.mach || { ns: null, np: null, bgs: [] };
+		if (x.mach) h += '<h4>Gépek</h4><div class="crm-eg" data-mached><label class="crm-ef"><span>Szelfigépek száma</span><input type="number" min="0" max="10" data-mk="ns" value="' + (M0.ns == null ? '' : M0.ns) + '" placeholder="alap (1)"></label><label class="crm-ef"><span>Spinnerek száma</span><input type="number" min="0" max="10" data-mk="np" value="' + (M0.np == null ? '' : M0.np) + '" placeholder="alap"></label><div data-mxbg style="display:contents"></div></div><p class="crm-ro">Üresen hagyva marad a mostani működés (a szolgáltatás szerint 1 gép). Több gépnél az 1. gép háttere a „Fotófal / háttér” mező; az ár egyedi, kézzel add meg.</p>';
 		if (x.contact) h += '<h4>Kapcsolat</h4><div class="crm-eg" data-contact>' + CEDIT.map(f => field('c_' + f[0], f[1], f[2], (f[0] === 'mobile' ? c.mobile || c.phone : c[f[0]]) || '')).join('') + '</div>';
 		h += '<p class="crm-ro">Mentéskor csak a megváltozott mezők íródnak be, a Salesmate-be is (a Salesmate automatizmusai lefuthatnak). A változás a deal előzményeiben a neveddel jelenik meg.</p>';
 		h += '<div class="crm-ebar"><button class="cpx-btn" type="submit">Mentés</button><button class="cpx-btn ghost" type="button" data-cancel>Mégse</button><span class="crm-emsg" aria-live="polite"></span></div></form>';
@@ -2509,6 +2512,10 @@
 		const read = el => el.dataset.multi !== undefined ? Array.from(el.querySelectorAll('input:checked')).map(i => i.value).join(' | ') : el.value.trim();
 		const orig = {};
 		form.querySelectorAll('[data-k]').forEach(el => { orig[el.dataset.k] = read(el); });
+		const mxDraw = () => { const w = form.querySelector('[data-mxbg]'); if (!w) return; const n = Number(form.querySelector('[data-mk=ns]').value) || 0; const cur = Array.from(w.querySelectorAll('[data-mbg]')).map(i => i.value); w.innerHTML = Array.from({ length: Math.max(0, n - 1) }, (_, i) => '<label class="crm-ef"><span>' + (i + 2) + '. szelfigép háttere</span><input type="text" data-mbg maxlength="80" list="crm-n-bg2" value="' + esc(cur[i] != null ? cur[i] : (M0.bgs[i + 1] || '')) + '" placeholder="Válassz vagy írd be"></label>').join('') + (n > 1 ? '<datalist id="crm-n-bg2">' + (x.bgl || []).map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>' : ''); };
+		const mns = form.querySelector('[data-mk=ns]'); if (mns) { mns.addEventListener('input', mxDraw); mxDraw(); }
+		const machRead = () => { if (!mns) return null; const bgEl = form.querySelector('[data-k=background]'); const n = mns.value.trim(), p = form.querySelector('[data-mk=np]').value.trim(); const ex = Array.from(form.querySelectorAll('[data-mbg]')).map(i => i.value.trim()); const nn = Number(n) || 0; const bgs = nn > 1 ? [bgEl ? bgEl.value.trim() : (M0.bgs[0] || '')].concat(ex) : []; return { n, p, bgs }; };
+		const machOrig = JSON.stringify(machRead());
 		sh.querySelector('[data-cancel]').onclick = () => openDeal(d.id);
 		/* v2.9.318: a fejléc X-e is működjön (a deal-oldalon belül a lap csak a saját fejlécének X-ét figyeli) – mint a Mégse */
 		const hx = sh.querySelector('.cpx-sheet-h [data-close]'); if (hx) hx.onclick = e => { e.preventDefault(); e.stopPropagation(); openDeal(d.id); };
@@ -2517,11 +2524,13 @@
 			const ch = {}, cc = {};
 			form.querySelectorAll('[data-k]').forEach(el => { const k = el.dataset.k, v = read(el); if (v !== orig[k]) { if (k.indexOf('c_') === 0) cc[k.slice(2)] = v; else ch[k] = v; } });
 			const msg = sh.querySelector('.crm-emsg');
-			if (!Object.keys(ch).length && !Object.keys(cc).length) { msg.textContent = 'Nem változott semmi.'; return; }
+			const mr = machRead(), mch = mr && JSON.stringify(mr) !== machOrig;
+			if (!Object.keys(ch).length && !Object.keys(cc).length && !mch) { msg.textContent = 'Nem változott semmi.'; return; }
 			if (ch.title !== undefined && !ch.title) { msg.textContent = 'A név nem lehet üres.'; return; }
 			const btn = form.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = 'Mentés…'; msg.className = 'crm-emsg';
 			try {
-				const r = await post('cp_crm_save', { id: d.id, f: JSON.stringify(ch), c: JSON.stringify(cc) });
+				const r = Object.keys(ch).length || Object.keys(cc).length ? await post('cp_crm_save', { id: d.id, f: JSON.stringify(ch), c: JSON.stringify(cc) }) : { warn: '' };
+				if (mch) { const m = await post('cp_dmach_save', { id: d.id, ns: mr.n, np: mr.p, bgs: JSON.stringify(mr.bgs) }); if (m.warn) r.warn = (r.warn ? r.warn + ' · ' : '') + m.warn; }
 				toast(r.warn ? 'Mentve, de: ' + r.warn : (Object.keys(ch).every(k => k === 'svc') && !Object.keys(cc).length ? 'Mentve.' : 'Mentve – a Salesmate-ben is.'), !!r.warn);
 				if (S.mode === 'list') load(); else if (S.board) { const i = S.board.rows.findIndex(y => y.id === d.id); if (i >= 0 && r.row) { S.board.rows[i] = r.row; redrawBoard(); } }
 				openDeal(d.id);
