@@ -162,6 +162,7 @@
 		img: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>',
 		table: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/></svg>',
 		attach: '<svg viewBox="0 0 24 24"><path d="M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5"/></svg>',
+		lib: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5L12 11l2.5 2.5"/></svg>',
 		sign: '<svg viewBox="0 0 24 24"><path d="M3 17c3-6 5-9 6-8s-2 7 0 7 3-5 5-5-1 5 1 5 3-2 6-3"/></svg>',
 		portal: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
 		clear: '<svg viewBox="0 0 24 24"><path d="M6 5h12M12 5l-4 14M5 19h6M16 14l5 5M21 14l-5 5"/></svg>',
@@ -178,7 +179,7 @@
 	};
 	/* v2.9.202: alapsor + két lenyíló panel (A: szöveg, ¶: bekezdés), mint a Salesmate-ben */
 	const TOOLS = [['pA', 'Szövegformázás'], ['pP', 'Bekezdés'], ['|'],
-		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['portal', 'Ügyfélportál-link beszúrása (a dealhez)'], ['sign', 'Aláírás beszúrása'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
+		['link', 'Link beszúrása'], ['img', 'Kép beszúrása (webcímről)'], ['table', 'Táblázat beszúrása'], ['var', 'Változó beszúrása'], ['attach', 'Melléklet csatolása'], ['lib', 'Fájltár – gyakran küldött fájlok (nagyobbak Drive-linkként)'], ['portal', 'Ügyfélportál-link beszúrása (a dealhez)'], ['sign', 'Aláírás beszúrása'], ['|R'], ['code', 'HTML-nézet'], ['undo', 'Visszavonás'], ['redo', 'Újra']];
 	const TOOLS_A = [['bold', 'Félkövér (Ctrl/⌘+B)'], ['italic', 'Dőlt (Ctrl/⌘+I)'], ['underline', 'Aláhúzott (Ctrl/⌘+U)'], ['strike', 'Áthúzott'], ['|'], ['FF'], ['FS'], ['|'], ['color', 'Betűszín'], ['hilite', 'Kiemelés'], ['clear', 'Formázás törlése']];
 	const TOOLS_P = [['jl', 'Balra igazítás'], ['jc', 'Középre igazítás'], ['jr', 'Jobbra igazítás'], ['jf', 'Sorkizárt'], ['|'], ['ol', 'Számozott lista'], ['ul', 'Felsorolás'], ['|'], ['h2', 'Címsor'], ['p', 'Normál bekezdés'], ['quote', 'Idézet']];
 	const FC = [['#141C33', 'Sötétkék'], ['#000000', 'Fekete'], ['#6B6F78', 'Szürke'], ['#C53A24', 'Piros'], ['#E07A1F', 'Narancs'], ['#B8860B', 'Arany'], ['#1F7A50', 'Zöld'], ['#2F5BD8', 'Kék'], ['#7B3FBF', 'Lila']];
@@ -356,7 +357,7 @@
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 		host.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
 			const c = b.dataset.cmd;
-			if (c === 'attach' || c === 'portal') return; /* a levélíró kezeli (v1.54, v1.59) */
+			if (c === 'attach' || c === 'portal' || c === 'lib') return; /* a levélíró kezeli (v1.54, v1.59) */
 			if (c === 'code') { const on = code.hidden; if (on) { code.value = area.innerHTML; } else { area.innerHTML = code.value; } code.hidden = !on; area.hidden = on; b.classList.toggle('on', on); return; }
 			if (!code.hidden) return;
 			if (c === 'pA' || c === 'pP') { const k = c.slice(1); showP(pnl === k ? '-' : k); return; }
@@ -488,6 +489,8 @@
 				const sig = area.querySelector('.cp-sign'), sel = window.getSelection();
 				const at = sel && sel.rangeCount && area.contains(sel.anchorNode) ? sel.anchorNode : null;
 				if (sig && (!at || sig.contains(at) || (sig.compareDocumentPosition(at) & Node.DOCUMENT_POSITION_FOLLOWING))) { sig.insertAdjacentHTML('beforebegin', h); area.dispatchEvent(new Event('input', { bubbles: true })); return; }
+				/* v2.9.335: ha még nem kattintottak a szövegbe, a beszúrás a saját szöveg végére kerül (az idézett levél elé), nem a levél elejére */
+				if (!at && !range) { const qt = area.querySelector('blockquote, .cp-quote'); if (qt) qt.insertAdjacentHTML('beforebegin', h); else area.insertAdjacentHTML('beforeend', h); area.dispatchEvent(new Event('input', { bubbles: true })); return; }
 				area.focus(); exec('insertHTML', h);
 			},
 			isEmpty: () => !(code.hidden ? area.innerText : code.value.replace(/<[^>]+>/g, '')).trim()
@@ -2145,11 +2148,38 @@
 		if (draft && Array.isArray(draft.atts)) draft.atts.filter(a => a && a.tok).forEach(a => atts.push({ n: a.n, size: a.size || 0, tok: a.tok, err: '' }));
 		const attBox = document.createElement('div'); attBox.className = 'ml-attl'; q('[data-ed]').after(attBox);
 		const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
-		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : 'feltöltés…') + '</small>' + (a.err && a.file ? '<button type="button" class="ml-attr" data-aretry="' + i + '" title="Feltöltés újra">Újra</button>' : '') + '<button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); attBox.querySelectorAll('[data-aretry]').forEach(b => b.addEventListener('click', () => { const a = atts[Number(b.dataset.aretry)]; if (a) upSend(a); })); };
+		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + (a.big ? ' big' : '') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : a.big ? 'Drive-ra ' + (a.pct || 0) + '%' : 'feltöltés…') + '</small>' + (a.err && a.file ? '<button type="button" class="ml-attr" data-aretry="' + i + '" title="Feltöltés újra">Újra</button>' : '') + '<button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { const x = atts[Number(b.dataset.arm)]; if (x && x.xhr) { x.gone = true; x.xhr.abort(); } atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); attBox.querySelectorAll('[data-aretry]').forEach(b => b.addEventListener('click', () => { const a = atts[Number(b.dataset.aretry)]; if (a) upSend(a); })); };
 		if (atts.length) setTimeout(drawAtt, 0); /* v2.8.7: visszavont küldésből megmaradt mellékletek */
+		/* v2.9.335: feltöltés a céges Google Drive-ra – a panel indítja, a böngésző közvetlenül a Google-höz küldi (folyamatjelzéssel) */
+		const bigUp = async (file, to, holder, onP) => {
+			const st = await post('cp_mbig_start', { n: file.name, size: file.size, mime: file.type || 'application/octet-stream', to: to, origin: location.origin });
+			const res = await new Promise((ok, bad) => {
+				const x = new XMLHttpRequest(); if (holder) holder.xhr = x;
+				x.open('PUT', st.url); x.setRequestHeader('Content-Type', st.mime);
+				x.upload.onprogress = e => { if (e.lengthComputable && onP) onP(e.loaded / e.total); };
+				x.onload = () => { if (x.status === 200 || x.status === 201) { try { ok(JSON.parse(x.responseText)); } catch (e) { bad(new Error('a Drive válasza hibás')); } } else bad(new Error('a Drive nem fogadta (' + x.status + ')')); };
+				x.onerror = () => bad(new Error(navigator.onLine === false ? 'nincs internetkapcsolat' : 'megszakadt a feltöltés'));
+				x.onabort = () => bad(new Error('megszakítva'));
+				x.send(file);
+			});
+			if (holder) holder.xhr = null;
+			return post('cp_mbig_done', { id: res.id, to: to });
+		};
+		const bigBox = f => '<table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #DADCE0;border-radius:8px;margin:8px 0;border-collapse:separate"><tr><td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:14px;color:#202124">&#128206; <a href="' + esc(f.link) + '" target="_blank" style="color:#1A73E8;font-weight:bold;text-decoration:none">' + esc(f.n) + '</a><br><span style="font-size:12px;color:#5F6368">' + esc(kb(f.size || 0)) + ' · Google Drive – a letöltéshez kattints a fájl nevére</span></td></tr></table><p><br></p>';
 		const upload = async file => {
 			const a = { n: file.name, size: file.size, tok: '', err: '' }; atts.push(a); drawAtt();
-			if (file.size > 15 * 1048576) { a.err = 'túl nagy (max. 15 MB)'; drawAtt(); return; }
+			if (file.size > 15 * 1048576) {
+				/* v2.9.335: 15 MB fölött a céges Google Drive-ra (bárki megnyithatja a linkkel), a levélbe letöltődoboz kerül */
+				if (!(await ask('„' + file.name + '” ' + kb(file.size) + ' – nagyobb, mint amit levélben csatolni lehet (15 MB).\n\nFeltöltsem a céges Google Drive-ra, és letöltési linkként tegyem a levélbe? (Bárki megnyithatja, akinek a link megvan.)', { title: 'Nagy fájl', ok: 'Feltöltés a Drive-ra' }))) { a.err = 'túl nagy (max. 15 MB)'; drawAtt(); return; }
+				a.big = true; a.pct = 0; drawAtt();
+				try {
+					const f = await bigUp(file, 'mail', a, p => { a.pct = Math.floor(p * 100); drawAtt(); });
+					const i = atts.indexOf(a); if (i >= 0) atts.splice(i, 1); drawAtt();
+					if (a.gone) return;
+					ed.html(bigBox(f)); toast('„' + f.n + '” a Drive-on – a letöltési link a levélben.');
+				} catch (e) { if (a.gone) return; a.err = e.message || 'a feltöltés nem sikerült'; a.big = false; drawAtt(); }
+				return;
+			}
 			a.file = file; upSend(a);
 		};
 		/* v2.9.199: ha a szerver nem JSON-t ad (tárhely-hibaoldal, átmeneti túlterhelés), kétszer újrapróbálja, utána érthető hiba + Újra gomb */
@@ -2218,10 +2248,48 @@
 		}
 		pbSync();
 		if (S.autoPortal) { S.autoPortal = 0; if (deal && deal.id) setTimeout(() => insertPortal(), 50); }
+		/* v2.9.335: Fájltár – gyakran küldött fájlok a céges Drive-on; 15 MB-ig mellékletként, fölötte linkként */
+		const lb = box.querySelector('[data-cmd="lib"]');
+		if (lb) {
+			if (!(M.send && M.send.on)) lb.hidden = true;
+			let lw = null, LF = [], lq = '';
+			const ldraw = () => {
+				const L = LF.filter(f => !lq || fold(f.n).includes(fold(lq)));
+				lw.querySelector('[data-libl]').innerHTML = L.length ? L.map(f => '<div class="ml-lib-r"><span class="n" title="' + esc(f.n) + '">' + esc(f.n) + '</span><small>' + esc(kb(f.size || 0)) + (f.at ? ' · ' + esc(f.at) : '') + '</small><span class="b">' + (f.size && f.size <= 15 * 1048576 && f.mime.indexOf('application/vnd.google-apps.') !== 0 ? '<button type="button" class="cpx-btn ghost" data-libatt="' + esc(f.id) + '">Csatolás</button>' : '') + '<button type="button" class="cpx-btn ghost" data-liblink="' + esc(f.id) + '">Link</button></span></div>').join('') : '<p class="ml-lib-e">' + (LF.length ? 'Nincs találat.' : 'A Fájltár még üres. A „+ Feltöltés” gombbal tehetsz bele fájlt (pl. kiajánló).') + '</p>';
+			};
+			const lload = async () => { lw.querySelector('[data-libl]').innerHTML = '<p class="ml-lib-e">Betöltés…</p>'; try { const r = await post('cp_mbig_lib', {}); LF = r.files; lw.querySelector('[data-libdrv]').href = r.folder; ldraw(); } catch (e) { lw.querySelector('[data-libl]').innerHTML = '<p class="ml-lib-e err">' + esc(e.message) + '</p>'; } };
+			lb.addEventListener('click', () => {
+				if (lw) { lw.remove(); lw = null; return; }
+				lw = document.createElement('div'); lw.className = 'ml-lib'; lw.setAttribute('role', 'dialog'); lw.setAttribute('aria-label', 'Fájltár');
+				lw.innerHTML = '<div class="ml-lib-h"><b>Fájltár</b><input type="search" data-libq placeholder="Keresés a fájlok között" aria-label="Keresés"><button type="button" class="cpx-btn ghost" data-libup>+ Feltöltés</button><a class="cpx-btn ghost" data-libdrv target="_blank" rel="noopener" href="#">Drive ↗</a><button type="button" class="ml-lib-x" data-libx aria-label="Bezárás">×</button></div><p class="ml-lib-s" data-libs hidden></p><div class="ml-lib-l" data-libl></div>';
+				attBox.before(lw);
+				const fi2 = document.createElement('input'); fi2.type = 'file'; fi2.hidden = true; lw.appendChild(fi2);
+				lw.querySelector('[data-libx]').addEventListener('click', () => { lw.remove(); lw = null; });
+				lw.querySelector('[data-libq]').addEventListener('input', e => { lq = e.target.value.trim(); ldraw(); });
+				lw.querySelector('[data-libup]').addEventListener('click', () => fi2.click());
+				fi2.addEventListener('change', async () => {
+					const f = fi2.files && fi2.files[0]; fi2.value = ''; if (!f) return;
+					const sEl = lw.querySelector('[data-libs]'); sEl.hidden = false; sEl.textContent = '„' + f.name + '” feltöltése a Fájltárba… 0%';
+					try { await bigUp(f, 'lib', null, p => { sEl.textContent = '„' + f.name + '” feltöltése a Fájltárba… ' + Math.floor(p * 100) + '%'; }); sEl.hidden = true; toast('„' + f.name + '” a Fájltárban.'); lload(); }
+					catch (e) { sEl.textContent = 'A feltöltés nem sikerült: ' + e.message; }
+				});
+				lw.addEventListener('click', async e => {
+					const at = e.target.closest('[data-libatt]'), ln = e.target.closest('[data-liblink]'); if (!at && !ln) return;
+					const b = at || ln; b.disabled = true;
+					try {
+						const r = await post('cp_mbig_use', { id: b.dataset.libatt || b.dataset.liblink, as: at ? 'att' : 'link' });
+						if (r.att) { atts.push({ n: r.n, size: r.size, tok: r.tok, err: '' }); drawAtt(); toast('„' + r.n + '” csatolva.'); }
+						else { ed.html(bigBox(r)); toast('„' + r.n + '” letöltési linkje a levélben.'); }
+					} catch (x) { toast(x.message, true); }
+					b.disabled = false;
+				});
+				lload();
+			});
+		}
 		const ab = box.querySelector('[data-cmd="attach"]');
 		if (ab) {
 			if ((M.send && M.send.on)) {
-				ab.disabled = false; ab.title = 'Melléklet csatolása (fájlonként max. 15 MB, összesen 25 MB) – vagy húzd a fájlt a levélre';
+				ab.disabled = false; ab.title = 'Melléklet csatolása (15 MB-ig mellékletként, fölötte Google Drive-linkként) – vagy húzd a fájlt a levélre';
 				const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.hidden = true; box.appendChild(fi);
 				ab.addEventListener('click', () => fi.click());
 				fi.addEventListener('change', () => { Array.from(fi.files || []).forEach(upload); fi.value = ''; });

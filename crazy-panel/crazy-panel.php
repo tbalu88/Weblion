@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.334');
+define('CP_PANEL_VER', '2.9.335');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3851,6 +3851,7 @@ require_once __DIR__ . '/people-new.php'; /* v2.9.184: új kontakt / új cég a 
 require_once __DIR__ . '/watchdog.php';
 require_once __DIR__ . '/sm-local.php';
 require_once __DIR__ . '/gdrive-backup.php';
+require_once __DIR__ . '/mail-big.php'; /* v2.9.335: nagy mellékletek Drive-linkként, Fájltár */
 require_once __DIR__ . '/worklog.php';
 require_once __DIR__ . '/capacity.php';
 require_once __DIR__ . '/dynprice.php';

@@ -1106,3 +1106,14 @@ mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
 /* v2.9.210: a deal idővonaláról megnyitott levél rövid kiemelése a gyorsnézetben */
 .ml-msg.mlp-hit{box-shadow:0 0 0 2px #E8894A;transition:box-shadow .6s}
 .ml-msg{scroll-margin-top:10px}
+/* v2.9.335: Fájltár (gyakran küldött fájlok a céges Drive-on) és a Drive-ra töltött nagy melléklet */
+.ml-lib{border:1px solid var(--li);border-radius:12px;background:#fff;margin:8px 0;padding:10px 12px;display:grid;gap:8px}
+.ml-lib-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ml-lib-h b{font-size:14px}.ml-lib-h input{flex:1 1 180px;min-width:0}
+.ml-lib-x{margin-left:auto;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--mu);padding:2px 6px}
+.ml-lib-l{max-height:300px;overflow:auto;display:grid}
+.ml-lib-r{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--li)}.ml-lib-r:last-child{border-bottom:0}
+.ml-lib-r .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.ml-lib-r small{color:var(--mu);white-space:nowrap;font-variant-numeric:tabular-nums}.ml-lib-r .b{display:flex;gap:6px;flex-shrink:0}
+.ml-lib-e,.ml-lib-s{margin:0;font-size:13px;color:var(--mu)}.ml-lib-e.err{color:#B3261E}
+.ml-attc.big small{font-variant-numeric:tabular-nums}
+@media (max-width:600px){.ml-lib-r{flex-wrap:wrap}.ml-lib-r .n{flex-basis:100%;white-space:normal;overflow-wrap:anywhere}}
