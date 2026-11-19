@@ -306,7 +306,7 @@
 			var wait = Math.max(0, 3200 - (Date.now() - t0));
 			setTimeout(function () {
 				var b = new FormData();
-				b.append('action', 'cp_wf_send'); b.append('fid', W.formId); b.append('tk', d.tk); b.append('v', JSON.stringify(v));
+				b.append('action', 'cp_wf_send'); b.append('c', '1'); b.append('fid', W.formId); b.append('tk', d.tk); b.append('v', JSON.stringify(v));
 				b.append('page', location.href.slice(0, 250)); b.append('website', form.querySelector('[name=website]').value);
 				if (d.test) { b.append('test', TEST); }
 				fetch(AJ, { method: 'POST', body: b, credentials: 'omit' }).then(function (r) { return r.json().catch(function () { return { ok: 0 }; }); }).then(function (r) {
@@ -352,7 +352,7 @@
 			if (!W.formId) { return; }
 			var done = false, el;
 			var to = setTimeout(function () { if (!done) { done = true; passthrough(W); } }, 6000);
-			fetch(AJ + '?action=cp_wf_def&id=' + encodeURIComponent(W.formId) + (TEST ? '&test=' + encodeURIComponent(TEST) : ''), { credentials: 'omit', cache: 'no-store' })
+			fetch(AJ + '?action=cp_wf_def&c=1&id=' + encodeURIComponent(W.formId) + (TEST ? '&test=' + encodeURIComponent(TEST) : ''), { credentials: 'omit', cache: 'no-store' })
 				.then(function (r) { return r.json(); })
 				.then(function (d) {
 					if (done) { return; }

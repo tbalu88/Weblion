@@ -64,6 +64,8 @@ function cp_wf_ajax_def() {
 	$test = cp_wf_test_ok((string) wp_unslash($_GET['test'] ?? ''));
 	if (!$def || (!cp_wf_live($def) && !$test)) { wp_send_json(array('live' => 0)); }
 	$f = $def; unset($f['notify'], $f['feat']);
+	/* v2.9.338: a régi (gyorsítótárból jövő) szkript nem ismeri a feltételes mezőket – neki ezek nélkül adjuk (különben mindenkinek kötelezőnek mutatná) */
+	if (empty($_GET['c'])) { $f['fields'] = array_values(array_filter($f['fields'], function ($x) { return empty($x['if']); })); foreach ($f['fields'] as &$x) { unset($x['reqIf']); } unset($x); }
 	wp_send_json(array('live' => 1, 'test' => $test ? 1 : 0, 'tk' => cp_wf_tk($fid), 'form' => $f));
 }
 
@@ -98,7 +100,8 @@ function cp_wf_ajax_send() {
 	if (!is_array($raw)) { wp_send_json(array('ok' => 0, 'err' => 'data'), 400); }
 	$pairs = array(); $errs = array();
 	/* v2.9.338: feltételes mezők (pl. DJ-adatok csak DJ választásakor, akkor kötelezően) */
-	$cond = function ($c) use ($raw) { if (!is_array($c)) { return true; } $val = $raw[$c['n']] ?? ''; $L = is_array($val) ? array_map('strval', $val) : array_map('trim', explode(',', (string) $val)); return in_array((string) $c['has'], $L, true); };
+	$newc = !empty($_POST['c']); /* a régi (gyorsítótárból jövő) szkript nem küldi a feltételes mezőket – tőle nem kérjük számon */
+	$cond = function ($c) use ($raw, $newc) { if (!$newc) { return false; } if (!is_array($c)) { return true; } $val = $raw[$c['n']] ?? ''; $L = is_array($val) ? array_map('strval', $val) : array_map('trim', explode(',', (string) $val)); return in_array((string) $c['has'], $L, true); };
 	foreach ($def['fields'] as $f) {
 		$n = $f['n'];
 		if (!empty($f['if']) && !$cond($f['if'])) { continue; }
