@@ -1567,9 +1567,9 @@ function cp_st_compute($gran, $anchor, $cf = '', $ct = '') {
 		if (!isset($days[$r['event_d']])) { $days[$r['event_d']] = array('d' => $r['event_d'], 'selfie' => 0, 'spin' => 0, 'other' => 0, 'n' => 0); }
 		$days[$r['event_d']]['n']++;
 		/* a gépfoglaltság csak a fotóautomatára és a spinnerre értelmezett; a többi szolgáltatás „egyéb” */
-		if ($r['kind'] === 'spin') { $days[$r['event_d']]['spin']++; }
-		elseif ($r['kind'] === 'both') { $days[$r['event_d']]['spin']++; $days[$r['event_d']]['selfie']++; }
-		elseif ($r['kind'] === 'selfie') { $days[$r['event_d']]['selfie']++; }
+		/* v2.9.348: gépszámmal */
+		list($ns_, $np_) = function_exists('cp_dmach_n') && !empty($r['id']) ? cp_dmach_n((int) $r['id'], (string) $r['kind']) : array(in_array($r['kind'], array('selfie', 'both'), true) ? 1 : 0, in_array($r['kind'], array('spin', 'both'), true) ? 1 : 0);
+		if ($ns_ || $np_) { $days[$r['event_d']]['selfie'] += $ns_; $days[$r['event_d']]['spin'] += $np_; }
 		else { $days[$r['event_d']]['other']++; }
 	}
 	usort($days, function ($a, $b) use ($p) { $x = $a['selfie'] / max(1, (int) $p['cap_selfie']) + $a['spin'] / max(1, (int) $p['cap_spin']); $y = $b['selfie'] / max(1, (int) $p['cap_selfie']) + $b['spin'] / max(1, (int) $p['cap_spin']); return $y <=> $x ?: ($b['n'] - $a['n']) ?: strcmp($a['d'], $b['d']); });

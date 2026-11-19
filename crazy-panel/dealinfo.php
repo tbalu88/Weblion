@@ -131,6 +131,12 @@ function cp_dmach_many($ids) {
 	}
 	return $out;
 }
+/* egy deal gépszáma (szelfigép, spinner): a megadott, különben a szolgáltatás szerint (1 / 0) */
+function cp_dmach_n($deal, $kind) {
+	$m = cp_dmach_many(array((int) $deal))[(int) $deal] ?? array(null, null);
+	$s = in_array((string) $kind, array('selfie', 'both'), true) ? 1 : 0; $p = in_array((string) $kind, array('spin', 'both'), true) ? 1 : 0;
+	return array($m[0] !== null ? (int) $m[0] : $s, $m[1] !== null ? (int) $m[1] : $p);
+}
 function cp_dmach_set($id, $ns, $np, $bgs, $who = '') {
 	global $wpdb; cp_dinfo_db();
 	$data = cp_dinfo_raw($id); $old = cp_dmach_get($id);

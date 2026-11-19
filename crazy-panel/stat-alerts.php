@@ -206,8 +206,11 @@ function cp_st_alerts() {
 	}
 
 	/* 7) kapacitás: telt napok a következő 60 napban */
-	$cap = $wpdb->get_results($wpdb->prepare("SELECT event_d d, SUM(kind IN ('selfie','both')) s, SUM(kind IN ('spin','both')) p, COUNT(*) n FROM $D
-		WHERE event_d BETWEEN %s AND %s AND status <> 'Lost' AND (status = 'Won' OR signed_d IS NOT NULL OR LOWER(stage) IN ('" . implode("','", array_map('esc_sql', $booked)) . "')) GROUP BY event_d ORDER BY event_d", $today, gmdate('Y-m-d', strtotime($today . ' +60 days'))), ARRAY_A);
+	$cap = $wpdb->get_results($wpdb->prepare("SELECT id, event_d d, kind FROM $D
+		WHERE event_d BETWEEN %s AND %s AND status <> 'Lost' AND (status = 'Won' OR signed_d IS NOT NULL OR LOWER(stage) IN ('" . implode("','", array_map('esc_sql', $booked)) . "')) ORDER BY event_d", $today, gmdate('Y-m-d', strtotime($today . ' +60 days'))), ARRAY_A);
+	/* v2.9.348: naponként, gépszámmal (több szelfigép / spinner egy dealen) */
+	$agg = array(); foreach ((array) $cap as $r) { $d0 = $r['d']; if (!isset($agg[$d0])) { $agg[$d0] = array('d' => $d0, 's' => 0, 'p' => 0, 'n' => 0); } list($a1, $a2) = function_exists('cp_dmach_n') ? cp_dmach_n((int) $r['id'], (string) $r['kind']) : array(in_array($r['kind'], array('selfie', 'both'), true) ? 1 : 0, in_array($r['kind'], array('spin', 'both'), true) ? 1 : 0); $agg[$d0]['s'] += $a1; $agg[$d0]['p'] += $a2; $agg[$d0]['n']++; }
+	$cap = array_values($agg);
 	$full = array(); $near = array();
 	foreach ($cap as $c) {
 		$fs = (int) $c['s'] >= (int) $p['cap_selfie'];

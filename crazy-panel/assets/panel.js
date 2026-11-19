@@ -107,8 +107,9 @@
     const subs = c && c.subs[date] != null ? c.subs[date] : C.subsDef;
     let selfie = 0, spin = 0, pSelfie = 0, pSpin = 0;
     ev.forEach(e => {
-      const s = e.kind === 'selfie' || e.kind === 'both', p = e.kind === 'spin' || e.kind === 'both';
-      if (e.state === 'booked') { if (s) selfie++; if (p) spin++; } else { if (s) pSelfie++; if (p) pSpin++; }
+      /* v2.9.348: gépszámmal (2 gépes deal = 2 hely) */
+      const s = e.ns != null ? e.ns : (e.kind === 'selfie' || e.kind === 'both' ? 1 : 0), p = e.np != null ? e.np : (e.kind === 'spin' || e.kind === 'both' ? 1 : 0);
+      if (e.state === 'booked') { selfie += s; spin += p; } else { pSelfie += s; pSpin += p; }
     });
     const capS = C.capSelfie + subs;
     return { ev, subs, selfie, spin, pSelfie, pSpin, capS, capP: C.capSpin, freeS: capS - selfie, freeP: C.capSpin - spin };

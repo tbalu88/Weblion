@@ -38,8 +38,9 @@ function cp_cap_day($date, $cached_only = false) {
 	if ($evs === null) { return null; }
 	foreach ($evs as $e) {
 		if (($e['date'] ?? '') !== $date) { continue; }
-		$s = in_array($e['kind'] ?? '', array('selfie', 'both'), true); $p = in_array($e['kind'] ?? '', array('spin', 'both'), true);
-		if (($e['state'] ?? '') === 'booked') { $x['bs'] += $s ? 1 : 0; $x['bp'] += $p ? 1 : 0; } else { $x['ps'] += $s ? 1 : 0; $x['pp'] += $p ? 1 : 0; }
+		/* v2.9.348: gépszámmal (2 gépes deal = 2 hely) */
+		$s = isset($e['ns']) ? (int) $e['ns'] : (in_array($e['kind'] ?? '', array('selfie', 'both'), true) ? 1 : 0); $p = isset($e['np']) ? (int) $e['np'] : (in_array($e['kind'] ?? '', array('spin', 'both'), true) ? 1 : 0);
+		if (($e['state'] ?? '') === 'booked') { $x['bs'] += $s; $x['bp'] += $p; } else { $x['ps'] += $s; $x['pp'] += $p; }
 	}
 	$capS = (int) $o['cap_selfie'] + $sub; $capP = (int) $o['cap_spin'];
 	$fs = $capS - $x['bs']; $fp = $capP - $x['bp'];

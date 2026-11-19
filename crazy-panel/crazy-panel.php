@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.347');
+define('CP_PANEL_VER', '2.9.348');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -583,6 +583,8 @@ function cp_panel_normalize($rows) {
 			'extra'   => $ex,
 		) + (isset($r['_mday']) ? array('deal' => $r['_mday']['deal'], 'dn' => $r['_mday']['n'], 'dof' => $r['_mday']['of']) : array()); /* v2.9.70: többnapos: deal-azonosító, „n/N. nap” */
 	}
+	/* v2.9.348: gépszám dealenként (több szelfigép / spinner – Gépek és hátterek a dealen) */
+	if (function_exists('cp_dmach_many') && $out) { $ids = array(); foreach ($out as $e0) { $ids[] = (int) ($e0['deal'] ?? $e0['id']); } cp_dmach_many($ids); foreach ($out as &$e0) { list($e0['ns'], $e0['np']) = cp_dmach_n((int) ($e0['deal'] ?? $e0['id']), $e0['kind']); } unset($e0); }
 	usort($out, function ($a, $b) { return strcmp($a['date'] . $a['time'], $b['date'] . $b['time']); });
 	return $out;
 }
