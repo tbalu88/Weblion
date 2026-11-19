@@ -367,7 +367,11 @@ function cp_gcal_diff_run($from, $to, $force) {
 			$dk = cp_gcal_match_key($e, $dDate, $dId);
 			if ($dk !== '') { $d = $dId[(int) $dk]; $row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $it[] = array('k' => 'lost', 'm' => !empty($d['deleted_at']) ? 'A deal törölve van, a naptárban még szerepel' : 'A deal elveszett, a naptárban még szerepel'); }
 			elseif ($alt !== '') { $d = $aId[(int) $alt]; $row['deal'] = (int) $d['id']; $row['dt'] = (string) $d['title']; $row['stg'] = (string) $d['stage']; $it[] = array('k' => 'date', 'm' => 'Dátum eltér', 'cal' => $day, 'pan' => (string) $d['event_d']); }
-			else { $it[] = array('k' => 'nodeal', 'm' => 'Nincs hozzá deal a panelben (név vagy dátum alapján sem)'); }
+			else {
+				/* v2.9.340: belső bejegyzés (szabadság, OFF, megbeszélés…) – nem rendezvény, nem eltérés */
+				if (preg_match('/\b(off|szabi|szabadság|szabadsag|beteg|megbeszélés|meeting|leltár|raktár)\b/iu', (string) $e['t']) && !preg_match('/^\s*\[/u', (string) $e['t'])) { continue; }
+				$it[] = array('k' => 'nodeal', 'm' => 'Nincs hozzá deal a panelben (név vagy dátum alapján sem)');
+			}
 			$row['it'] = $it; $rows[] = $row; continue;
 		}
 		$seen[$key] = 1;
