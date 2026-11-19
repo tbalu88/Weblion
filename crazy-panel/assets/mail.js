@@ -279,6 +279,24 @@
 		/* v2.9.211: a kijelölés minden változáskor megjegyezve – jobbról balra kijelölve az egér a szövegdobozon kívül enged fel, ilyenkor a mouseup nem jött */
 		const selCh = () => { if (!area.isConnected) { document.removeEventListener('selectionchange', selCh); return; } const s = window.getSelection(); if (s.rangeCount && area.contains(s.anchorNode) && area.contains(s.focusNode)) range = s.getRangeAt(0).cloneRange(); };
 		document.addEventListener('selectionchange', selCh);
+		/* v2.9.334: beillesztett link → hivatkozás. Egyetlen cím: kijelölt szövegre illesztve a kijelölés lesz a link, különben maga a cím;
+		   sima szövegben (formázás nélkül) a benne lévő webcímek és e-mail-címek is hivatkozássá válnak */
+		area.addEventListener('paste', e => {
+			if (!code.hidden) return;
+			const cd = e.clipboardData; if (!cd) return;
+			const t = (cd.getData('text/plain') || '').trim(), one = linkOf(t), sel = window.getSelection();
+			if (one) {
+				e.preventDefault(); restore();
+				if (sel.rangeCount && !sel.isCollapsed && sel.toString().trim()) document.execCommand('createLink', false, one);
+				else document.execCommand('insertHTML', false, '<a href="' + esc(one) + '">' + esc(t) + '</a>&nbsp;');
+				keep(); area.dispatchEvent(new Event('input', { bubbles: true })); return;
+			}
+			if (cd.getData('text/html') || !t || !/(https?:\/\/|www\.|@)/i.test(t)) return;
+			const raw = cd.getData('text/plain');
+			const html = esc(raw).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)]|www\.[^\s<]+[^\s<.,;:!?)]|[^\s<>@&;]+@[^\s<>@]+\.[a-z]{2,})/gi, m => { const u = linkOf(m.replace(/&amp;/g, '&')); return u ? '<a href="' + esc(u) + '">' + m + '</a>' : m; }).replace(/\r?\n/g, '<br>');
+			e.preventDefault(); restore(); document.execCommand('insertHTML', false, html); keep();
+			area.dispatchEvent(new Event('input', { bubbles: true }));
+		});
 		/* v2.9.212: formázott szöveg beillesztése – a forrás formázása (méret, szín stb.) teljesen átjön */
 		area.addEventListener('paste', e => {
 			if (e.defaultPrevented || !code.hidden) return;
@@ -298,6 +316,17 @@
 			area.focus(); if (range) { s.removeAllRanges(); s.addRange(range); }
 		};
 		const exec = (c, v) => { restore(); document.execCommand(c, false, v == null ? null : v); keep(); };
+		/* webcím (https://…, www.…, domain.hu/…), e-mail-cím vagy telefonszám → hivatkozás címe; egyébként üres */
+		const linkOf = t => {
+			t = String(t || '').trim().replace(/[.,;:!?)]+$/, ''); if (!t || /\s/.test(t)) return '';
+			if (/^(https?:\/\/)[^\s]+\.[^\s]+$/i.test(t)) return t;
+			if (/^www\.[^\s]+\.[a-z]{2,}([\/?#][^\s]*)?$/i.test(t)) return 'https://' + t;
+			if (/^mailto:|^tel:/i.test(t)) return t;
+			if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(t)) return 'mailto:' + t;
+			if (/^[a-z0-9-]+(\.[a-z0-9-]+)*\.(hu|com|eu|net|org|io|info|de|at|co|uk|ro|sk)([\/?#][^\s]*)?$/i.test(t)) return 'https://' + t;
+			if (/^\+?[0-9][0-9 ()\/-]{6,}[0-9]$/.test(t) && t.replace(/\D/g, '').length >= 8) return 'tel:' + t.replace(/[^0-9+]/g, '');
+			return '';
+		};
 		/* v2.9.96: alapos formázástörlés – a böngésző „removeFormat”-ja a máshonnan (pl. jegyzetből, Wordből) bemásolt szöveg
 		   stílusait (span style, font, osztály, címsor, háttérszín) bent hagyja. A kijelölésen (ha nincs, a kurzor bekezdésén)
 		   minden betű- és színformázás törlődik; a bekezdések, sortörések, listák, táblázatok és linkek maradnak. */
@@ -338,7 +367,21 @@
 			if (M2[c]) { exec(M2[c]); return sync(); }
 			if (c === 'h2' || c === 'p') { exec('formatBlock', c); return sync(); }
 			if (c === 'quote') { exec('formatBlock', 'blockquote'); return sync(); }
-			if (c === 'link') { const u = window.prompt('A link címe (https://…):', 'https://'); if (u && /^(https?:|mailto:|tel:)/i.test(u.trim())) exec('createLink', u.trim()); return; }
+			if (c === 'link') {
+				/* v2.9.334: a kijelölt webcím / e-mail-cím / telefonszám kérdés nélkül hivatkozássá válik; egyébként rákérdez (a meglévő link címével) */
+				restore();
+				const sel = window.getSelection(), txt = sel.toString().trim();
+				const an = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement), cur = an && an.closest ? an.closest('a') : null;
+				const auto = linkOf(txt);
+				if (auto && !cur) { exec('createLink', auto); toast('Hivatkozássá alakítva: ' + auto); return sync(); }
+				const u0 = window.prompt(cur ? 'A link címe (üresen hagyva a link törlődik):' : 'A link címe (webcím, e-mail-cím vagy telefonszám):', cur ? cur.getAttribute('href') || '' : (auto || 'https://'));
+				if (u0 === null) return;
+				if (cur && !u0.trim()) { exec('unlink'); return sync(); }
+				const u = linkOf(u0.trim()) || (/^(https?:|mailto:|tel:)/i.test(u0.trim()) ? u0.trim() : '');
+				if (!u) { toast('Ez nem webcím, e-mail-cím vagy telefonszám.', true); return; }
+				if (txt || cur) exec('createLink', u); else exec('insertHTML', '<a href="' + esc(u) + '">' + esc(u.replace(/^mailto:|^tel:/i, '')) + '</a>');
+				return sync();
+			}
 			if (c === 'img') { const u = window.prompt('A kép webcíme (https://…):', 'https://'); if (u && /^https:\/\//i.test(u.trim())) exec('insertImage', u.trim()); return; }
 			if (c === 'table') return exec('insertHTML', '<table style="border-collapse:collapse;width:100%"><tbody><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr></tbody></table><p><br></p>');
 			if (c === 'sign') {
