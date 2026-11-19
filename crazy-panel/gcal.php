@@ -337,7 +337,7 @@ function cp_gcal_ajax_import() {
 	$L = json_decode((string) wp_unslash($_POST['items'] ?? ''), true);
 	if (!is_array($L) || !$L || count($L) > 200) { cp_el_err('Hibás kérés.'); }
 	$F = function_exists('cp_dinfo_fields') ? cp_dinfo_fields() : array();
-	$by = array(); foreach ($L as $x) { $id = (int) ($x['deal'] ?? 0); $f = (string) ($x['f'] ?? ''); $v = (string) ($x['v'] ?? ''); if ($id > 0 && (in_array($f, array('start', 'pay', 'guests', 'hours'), true) || isset($F[$f]))) { $by[$id][$f] = $v; } }
+	$by = array(); foreach ($L as $x) { $id = (int) ($x['deal'] ?? 0); $f = (string) ($x['f'] ?? ''); $v = (string) ($x['v'] ?? ''); if ($id > 0 && (in_array($f, array('start', 'pay', 'guests', 'hours', 'value'), true) || isset($F[$f]))) { $by[$id][$f] = $v; } }
 	$ok = 0; $err = array();
 	foreach ($by as $id => $vals) {
 		if (isset($vals['start'])) {
@@ -351,6 +351,7 @@ function cp_gcal_ajax_import() {
 		if (isset($vals['pay'])) { $pv = mb_substr(trim(sanitize_text_field($vals['pay'])), 0, 40); if ($pv !== '') { $sm['pay_method'] = $pv; } unset($vals['pay']); }
 		if (isset($vals['guests'])) { $gv = (int) $vals['guests']; if ($gv >= 1 && $gv <= 100000) { $sm['guests'] = $gv; } unset($vals['guests']); }
 		if (isset($vals['hours'])) { $hv = (int) $vals['hours']; if ($hv >= 1 && $hv <= 48) { $sm['hours'] = $hv; } unset($vals['hours']); }
+		if (isset($vals['value'])) { $vv = (int) $vals['value']; $cur = (float) $GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare('SELECT value FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id)); if ($vv >= 1000 && $vv <= 100000000 && $cur <= 0) { $sm['value'] = $vv; } elseif ($cur > 0) { $err[] = '#' . $id . ': a deal értéke közben kitöltődött – nem írtam felül'; } unset($vals['value']); }
 		if ($sm) { $r = cp_crm_save_data($id, $sm, array()); if (is_wp_error($r)) { $err[] = '#' . $id . ': ' . $r->get_error_message(); } else { $ok += count($sm); } }
 		if ($vals && function_exists('cp_dinfo_set')) { cp_dinfo_set($id, $vals); $ok += count($vals); }
 	}
@@ -439,7 +440,10 @@ function cp_gcal_diff_run($from, $to, $force) {
 			if ($pm !== '' && !$same($pm, (string) $d['pay_method'])) { $add('other', trim((string) $d['pay_method']) === '' ? 'Fizetés csak a naptárban' : 'Fizetés eltér', $P['pay'], (string) $d['pay_method'], 'pay', $pm); }
 			if (preg_match('/(\d{1,3}(?:[ .\x{00a0}]\d{3})+|\d{4,})\s*(?:Ft|HUF|forint)/iu', (string) $P['pay'], $am)) {
 				$amt = (int) preg_replace('/\D/', '', $am[1]); $val = (float) ($d['value'] ?? 0);
-				if ($amt > 0 && ($val <= 0 || (abs($amt - $val) > 2 && abs($amt - $val * 1.27) > 2))) { $add('other', $val > 0 ? 'Összeg eltér' : 'Összeg csak a naptárban', number_format($amt, 0, ',', ' ') . ' Ft', $val > 0 ? number_format($val, 0, ',', ' ') . ' Ft (deal értéke' . ' – nettó és bruttó szerint is eltér)' : ''); }
+				/* v2.9.343: üres deal-értéknél átvehető (a felhasználó döntése): alanyi adómentes (AAM) vagy nettó összeg úgy, ahogy van; ÁFA-s bruttónál csak jelzés */
+				$aam = (bool) preg_match('/\bAAM\b|alanyi/iu', (string) $P['pay']); $gross = (bool) preg_match('/brutt/iu', (string) $P['pay']);
+				$canv = $val <= 0 && ($aam || !$gross);
+				if ($amt > 0 && ($val <= 0 || (abs($amt - $val) > 2 && abs($amt - $val * 1.27) > 2))) { $add('other', $val > 0 ? 'Összeg eltér' : ($canv ? 'Összeg csak a naptárban' : 'Összeg csak a naptárban (bruttó, ÁFA-s – kézzel add meg a nettót)'), number_format($amt, 0, ',', ' ') . ' Ft', $val > 0 ? number_format($val, 0, ',', ' ') . ' Ft (deal értéke' . ' – nettó és bruttó szerint is eltér)' : '', $canv ? 'value' : '', (string) $amt); }
 			}
 		}
 		if (!empty($P['guests']) && preg_match('/(\d+)/', $P['guests'], $m) && (int) $m[1] !== (int) $d['guests']) { $add('other', (int) $d['guests'] > 0 ? 'Létszám eltér' : 'Létszám csak a naptárban', (int) $m[1] . ' fő', (int) $d['guests'] > 0 ? (int) $d['guests'] . ' fő' : '', (int) $m[1] > 0 && (int) $m[1] <= 100000 ? 'guests' : '', (string) (int) $m[1]); }
