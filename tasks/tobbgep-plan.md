@@ -17,11 +17,11 @@ szerződés / számla tétel, statisztika.
 - **Többnapos rendezvény:** a gépszám a dealre szól, minden napra ugyanannyi (napi eltérés később, ha kell).
 
 ## Feladatok (sorrendben, mindegyik után élesíthető állapot)
-1. **Adatmodell + deal adatlap** (dealinfo.php, crm.js): „Szelfigépek száma” mező és gépenkénti háttér a dealen;
+1. ✅ (2.9.347) **Adatmodell + deal adatlap** (dealinfo.php, crm.js): „Szelfigépek száma” mező és gépenkénti háttér a dealen;
    a Salesmate háttérmezőbe összefűzve. *Kész, ha:* a dealen beállítható, mentés után megmarad. *Teszt:* mock deal oldal.
-2. **Kapacitás** (capacity.php, panel.js): a nap foglaltsága a gépszámmal számol (2 gépes deal = 2 hely).
+2. ✅ (2.9.348) **Kapacitás** (capacity.php, panel.js): a nap foglaltsága a gépszámmal számol (2 gépes deal = 2 hely).
    *Kész, ha:* egy 2 gépes deal napján a szabad helyek 2-vel csökkennek. *Teszt:* PHP-próba élő adaton (csak olvasás).
-3. **Kezelő-slotok** (slots.php, panel.js): gépenként külön slot, a beosztás-naptár és a hiány-számítás ezzel számol.
+3. ✅ (2.9.349) **Kezelő-slotok** (slots.php, panel.js): gépenként külön slot, a beosztás-naptár és a hiány-számítás ezzel számol.
    *Kész, ha:* 2 gépes dealnél 2 slot jelenik meg, külön beosztható. *Teszt:* mock + élő olvasó próba.
 
    **Ellenőrzőpont A** – közös átnézés veletek egy valódi 2 gépes dealen.

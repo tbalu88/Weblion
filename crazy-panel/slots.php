@@ -89,6 +89,17 @@ function cp_slot_pool_join($aid) {
 	if ($pid && cp_slot_ics_sent((int) $r['id'])) { cp_slot_uid_link($pid, cp_slot_ics_uid($r)); cp_slot_ics_sent($pid, true); }
 }
 
+/* v2.9.349: a deal gépei slotokra bontva – gépenként egy slot. Kulcsok (a régiekkel azonosak az 1. gépnél):
+   szelfigép: s1, s2, …; spinner: p1 (csak spinner) / p2 (szelfi + spinner), majd egyesével tovább. Visszatérés: [[skey, kind, n, of], …] */
+function cp_slot_units($e) {
+	$kind = (string) ($e['kind'] ?? 'selfie'); $deal = (int) ($e['deal'] ?? $e['id']);
+	if (isset($e['ns'])) { $ns = (int) $e['ns']; $np = (int) $e['np']; } elseif (function_exists('cp_dmach_n')) { list($ns, $np) = cp_dmach_n($deal, $kind); } else { $ns = in_array($kind, array('selfie', 'both'), true) ? 1 : 0; $np = in_array($kind, array('spin', 'both'), true) ? 1 : 0; }
+	$u = array();
+	for ($j = 1; $j <= $ns; $j++) { $u[] = array('s' . $j, 'selfie', $j, $ns); }
+	$p0 = $kind === 'both' || ($ns > 0 && $kind !== 'spin') ? 2 : 1;
+	for ($j = 1; $j <= $np; $j++) { $u[] = array('p' . ($p0 + $j - 1), 'spin', $j, $np); }
+	return $u;
+}
 function cp_slot_states() { return array('invited' => 'Meghívva', 'accepted' => 'Ráér', 'declined' => 'Nem ér rá', 'final' => 'Véglegesítve', 'dropped' => 'Nem rá esett'); }
 /* a karácsonyi időszak (ilyenkor már ajánlatkérés után is meghívható) – HH-NN tól-ig, beállítható */
 function cp_slot_opts() { $o = get_option('cp_slot_opts', array()); return array_merge(array('xmas_from' => '11-15', 'xmas_to' => '12-31'), is_array($o) ? $o : array()); }
@@ -145,12 +156,11 @@ function cp_slot_day($day) {
 		if (($e['date'] ?? '') !== $day) { continue; }
 		$deal = (int) ($e['deal'] ?? $e['id']);
 		if ($deal <= 0) { continue; }
-		$kinds = ($e['kind'] ?? 'selfie') === 'both' ? array('selfie', 'spin') : array((string) ($e['kind'] ?? 'selfie'));
 		$bp = cp_slot_bp($e['loc'] ?? '');
 		$stage = (string) ($e['stage'] ?? '');
 		$contract = ($e['state'] ?? '') === 'booked' || preg_match('/szerz/iu', $stage);
-		foreach ($kinds as $i => $k) {
-			$skey = ($k === 'spin' ? 'p' : 's') . ($i + 1);
+		foreach (cp_slot_units($e) as $un) {
+			list($skey, $k, $mn, $mof) = $un;
 			$need = $k === 'spin' || $bp === false ? 'kezelo' : 'host';
 			$nk = $deal . '|' . $day . '|' . $skey;
 			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
@@ -158,7 +168,7 @@ function cp_slot_day($day) {
 				'need' => $need, 'need_set' => isset($need_o[$nk]) ? 1 : 0, 'cnt' => cp_slot_cnt($deal, $day, $skey), 'bp' => $bp === null ? -1 : ($bp ? 1 : 0),
 				'title' => (string) ($e['title'] ?? ''), 'stage' => $stage, 'booked' => ($e['state'] ?? '') === 'booked' ? 1 : 0,
 				'time' => (string) ($e['time'] ?? '') !== '' && is_array($e['win'] ?? null) && isset($e['win'][1]) ? (string) $e['time'] . '–' . sprintf('%02d:%02d', intdiv((int) $e['win'][1], 60) % 24, (int) $e['win'][1] % 60) : (string) ($e['time'] ?? ''), 'loc' => (string) ($e['loc'] ?? ''), 'svc' => (string) ($k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
-				'can_inv' => ($contract || cp_slot_xmas($day)) ? 1 : 0, 'van' => cp_slot_van($e) ? 1 : 0, 'asg' => array());
+				'can_inv' => ($contract || cp_slot_xmas($day)) ? 1 : 0, 'van' => cp_slot_van($e) ? 1 : 0, 'mn' => $mn, 'mof' => $mof, 'asg' => array());
 		}
 	}
 	/* beosztások */
@@ -219,10 +229,9 @@ function cp_slot_month($m, $full = false) {
 		$d = (string) ($e['date'] ?? ''); if ($d === '') { continue; }
 		if (!isset($out[$d])) { $out[$d] = array(0, 0, 0); $x[$d] = array('k' => 0, 'h' => 0, 'u' => 0, 'fk' => 0, 'fh' => 0, 'ik' => 0, 'ih' => 0, 'sp' => 0, 'b' => 0); }
 		$deal = (int) ($e['deal'] ?? $e['id']);
-		$kinds = ($e['kind'] ?? 'selfie') === 'both' ? array('selfie', 'spin') : array((string) ($e['kind'] ?? 'selfie'));
 		$bp = cp_slot_bp($e['loc'] ?? '');
-		foreach ($kinds as $i => $k) {
-			$skey = ($k === 'spin' ? 'p' : 's') . ($i + 1);
+		foreach (cp_slot_units($e) as $un) {
+			list($skey, $k) = $un;
 			$need = $k === 'spin' || $bp === false ? 'kezelo' : 'host';
 			$nk = $deal . '|' . $d . '|' . $skey;
 			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
