@@ -2151,7 +2151,7 @@
 		const drawAtt = () => { attBox.innerHTML = atts.map((a, i) => '<span class="ml-attc' + (a.err ? ' err' : a.tok ? '' : ' busy') + (a.big ? ' big' : '') + '">' + CLIP_I + esc(a.n) + ' <small>' + (a.err ? esc(a.err) : a.tok ? kb(a.size) : a.big ? 'Drive-ra ' + (a.pct || 0) + '%' : 'feltöltés…') + '</small>' + (a.err && a.file ? '<button type="button" class="ml-attr" data-aretry="' + i + '" title="Feltöltés újra">Újra</button>' : '') + '<button type="button" data-arm="' + i + '" aria-label="Eltávolítás">×</button></span>').join(''); attBox.querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', () => { const x = atts[Number(b.dataset.arm)]; if (x && x.xhr) { x.gone = true; x.xhr.abort(); } atts.splice(Number(b.dataset.arm), 1); drawAtt(); })); attBox.querySelectorAll('[data-aretry]').forEach(b => b.addEventListener('click', () => { const a = atts[Number(b.dataset.aretry)]; if (a) upSend(a); })); };
 		if (atts.length) setTimeout(drawAtt, 0); /* v2.8.7: visszavont küldésből megmaradt mellékletek */
 		/* v2.9.335: feltöltés a céges Google Drive-ra – a panel indítja, a böngésző közvetlenül a Google-höz küldi (folyamatjelzéssel) */
-		const bigUp = async (file, to, holder, onP) => {
+		const bigUp = async (file, to, holder, onP, noShare) => {
 			const st = await post('cp_mbig_start', { n: file.name, size: file.size, mime: file.type || 'application/octet-stream', to: to, origin: location.origin });
 			const res = await new Promise((ok, bad) => {
 				const x = new XMLHttpRequest(); if (holder) holder.xhr = x;
@@ -2163,6 +2163,7 @@
 				x.send(file);
 			});
 			if (holder) holder.xhr = null;
+			if (noShare) return { id: res.id }; /* v2.9.346: kerülőút a mellékletnek – nincs nyilvános megosztás */
 			return post('cp_mbig_done', { id: res.id, to: to });
 		};
 		const bigBox = f => '<table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #DADCE0;border-radius:8px;margin:8px 0;border-collapse:separate"><tr><td style="padding:10px 14px;font-family:Arial,sans-serif;font-size:14px;color:#202124">&#128206; <a href="' + esc(f.link) + '" target="_blank" style="color:#1A73E8;font-weight:bold;text-decoration:none">' + esc(f.n) + '</a><br><span style="font-size:12px;color:#5F6368">' + esc(kb(f.size || 0)) + ' · Google Drive – a letöltéshez kattints a fájl nevére</span></td></tr></table><p><br></p>';
@@ -2196,7 +2197,17 @@
 				if (j && j.success) { a.tok = j.data.tok; a.n = j.data.n; a.err = ''; a.file = null; drawAtt(); return; }
 				if (j) { a.err = (j.data && j.data.msg) || 'hiba'; break; } /* a panel válaszolt, de elutasította – nincs értelme újrapróbálni */
 				a.err = r.status === 413 ? 'túl nagy a tárhelynek' : 'a tárhely nem fogadta (HTTP ' + r.status + ')';
-				if (r.status === 413) break;
+				if (r.status === 413 || r.status === 403) break;
+			}
+			/* v2.9.346: ha a tárhely (tűzfala) nem fogadja a fájlt, kerülőút: a céges Drive-ra megy (megosztás nélkül), onnan a panel csatolja rendes mellékletként */
+			if (a.err && a.file && !/internetkapcsolat/.test(a.err)) {
+				const why = a.err; a.err = ''; a.big = true; a.pct = 0; drawAtt();
+				try {
+					const up = await bigUp(a.file, 'mail', a, p => { a.pct = Math.floor(p * 100); drawAtt(); }, true);
+					const r2 = await post('cp_mbig_use', { id: up.id, as: 'att' });
+					if (!r2.att) throw new Error('nem sikerült csatolni');
+					a.tok = r2.tok; a.n = r2.n; a.size = r2.size; a.big = false; a.file = null; a.err = '';
+				} catch (e) { a.big = false; if (!a.gone) a.err = why + ' – a kerülőút sem sikerült (' + (e.message || 'hiba') + ')'; }
 			}
 			drawAtt();
 		};
