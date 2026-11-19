@@ -317,7 +317,18 @@
 			(has ? '<dl class="crm-dl">' + ks.filter(k => V[k]).map(k => '<dt>' + esc(F[k][0]) + '</dt><dd' + (k === 'note' ? ' class="d3-din"' : '') + '>' + esc(V[k]) + '</dd>').join('') + '</dl>' : '<p class="cpx-muted">Még nincs kitöltve. Ide írd, amit eddig a naptárbejegyzésbe: tematika, dress code, galéria neve, építés, bontás, megjegyzés a kezelőnek.</p>') +
 			(V._at ? '<p class="crm-meta">Módosítva: ' + esc(huDT(V._at)) + (V._by ? ' (' + esc(V._by) + ')' : '') + '</p>' : '') + '</section>';
 	}
+	/* v2.9.344: Kezelői adatlap – rendezvénynaponként a kitöltő link (megnyitás, másolás) és a kezelők válaszai */
+	function esheetSec(x) {
+		const E = x.esheet || []; if (!E.length) return '';
+		const multi = E.length > 1;
+		return '<section class="d3-c d3-es"><h4 class="d3-adh">Kezelői adatlap</h4>' + E.map(e =>
+			'<div class="d3-esd">' + (multi ? '<div class="d3-esn">' + e.n + '. nap' + (e.day ? ' · ' + esc(e.day.replace(/-/g, '.')) + '.' : '') + '</div>' : '') +
+			'<p class="d3-ess ' + (e.filled ? 'ok' : 'no') + '">' + (e.filled ? '✓ Kitöltve' + (e.at ? ' · ' + esc(e.at) : '') : 'Még nincs kitöltve') + '</p>' +
+			e.rows.filter(r => r.kv.length).map(r => '<dl class="crm-dl">' + r.kv.map(p => '<dt>' + esc(p[0]) + '</dt><dd>' + esc(p[1]) + '</dd>').join('') + (r.ok ? '<dt>Ellenőrizve</dt><dd>✓ az iroda ellenőrizte</dd>' : '') + '</dl>').join('') +
+			'<div class="d3-esa"><a class="cpx-btn ghost" href="' + esc(e.link) + '" target="_blank" rel="noopener">Adatlap megnyitása ↗</a><button type="button" class="cpx-btn ghost" data-escopy="' + esc(e.link) + '">Link másolása</button></div></div>').join('') + '</section>';
+	}
 	function dinfoBind(sh, d, x) {
+		sh.querySelectorAll('[data-escopy]').forEach(b => { if (b.dataset.b) return; b.dataset.b = 1; b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.escopy); toast('A kezelői adatlap linkje a vágólapon.'); } catch (e) { toast('Nem sikerült másolni.', true); } }); });
 		const sec = sh.querySelector('[data-di]'); if (!sec) return;
 		const b = sec.querySelector('[data-diedit]'); if (!b) return;
 		b.addEventListener('click', () => {
@@ -2096,7 +2107,7 @@
 				(c.city ? '<dt>Város</dt><dd>' + esc(c.city) + '</dd>' : '') + (c.utm_source || c.utm_campaign ? '<dt>Honnan jött</dt><dd>' + esc([c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(' / ')) + '</dd>' : '') + '</dl>' : '<p class="cpx-muted">Nincs kontakt rendelve a deal-hez.</p>') + '</section>' +
 			'<section class="d3-c"><h4>Cég</h4>' + (co ? '<a href="#" class="d3-who" data-co="' + co.id + '"><span class="d3-av sq" style="background:' + avColor(co.id + 3) + '">' + esc(initials(co.name)) + '</span><span><b>' + esc(co.name) + '</b><small>' + ((x.co_deals || []).length) + ' deal · ' + ((x.co_contacts || []).length) + ' kontakt</small></span></a>' + (safeUrl(co.website) ? '<p class="d3-sub"><a href="' + esc(safeUrl(co.website)) + '" target="_blank" rel="noopener">' + esc(co.website) + ' ↗</a></p>' : '') : '<p class="cpx-muted">Nincs cég rendelve.</p>' + (W && c && c.email && !d.deleted_at ? '<div class="d3-cos" data-cos></div>' : '')) + '</section>' +
 			'<section class="d3-c"><h4 class="d3-adh">Adatok' + (x.gcal_on && R.edit && d.event_d && !d.deleted_at ? '<button type="button" class="d3-gsync" data-gsync title="A cégnaptár bejegyzésének frissítése a deal és az ügyfél-adatlap mostani adataival (ha nincs, létrehozza)">📅 Naptárbejegyzés frissítése</button>' : '') + '</h4>' + fieldGroups(d, x.pinfo) +
-				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section>' + (x.dinfo ? dinfoSec(d, x) : '') + '</aside>' +
+				'<p class="crm-meta">Létrehozva: ' + esc(huDT(d.created_at)) + (d.created_by_n ? ' (' + esc(d.created_by_n) + ')' : '') + '<br>Utolsó módosítás: ' + esc(huDT(d.modified_at)) + (d.modified_by_n ? ' (' + esc(d.modified_by_n) + ')' : '') + '</p></section>' + (x.dinfo ? dinfoSec(d, x) : '') + esheetSec(x) + '</aside>' +
 			/* közép: teendők és idővonal */
 			'<main class="d3-m">' + (W && !d.deleted_at ? '<div class="d3-comp" data-comp></div>' : '') + '<div data-kbq hidden class="crm-kbq"></div><div data-kbl class="crm-kbl"></div><div data-tl></div></main>' +
 			/* jobb: összkép, korábbi munkák, csapat, fájlok */

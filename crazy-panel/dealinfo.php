@@ -75,3 +75,28 @@ add_filter('cp_crm_deal_data', function ($x) {
 	if ($id) { $x['dinfo'] = cp_dinfo_get($id); $x['dinfoF'] = cp_dinfo_fields(); }
 	return $x;
 }, 21);
+
+/* v2.9.344: Kezelői adatlap a deal adatlapján – rendezvénynaponként a kitöltő link és a kezelők válaszai (csak olvasva; szerkeszteni az Elszámolásban) */
+function cp_dinfo_esheet($id) {
+	if (!function_exists('cp_el_link') || !function_exists('cp_el_st_get')) { return null; }
+	$keys = array(array((string) $id, (string) ($GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare('SELECT event_d FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id)) ?: ''), 1));
+	if (function_exists('cp_mday_get')) { $n = 0; foreach ((array) cp_mday_get($id) as $r) { $n++; if ($n === 1) { $keys[0][1] = (string) $r['day']; continue; } $keys[] = array($id . ':' . $r['day'], (string) $r['day'], $n); } }
+	$L = array('k' => 'Kezelő', 'ko' => 'Kezelő (kézi)', 'h' => 'Óraszám', 'hc' => 'Óraszám (kézi)', 'sv' => 'Szolgáltatás', 'sa' => 'Elégedettség', 'gm' => 'Gép működése', 'gmn' => 'Gép megjegyzés', 'pa' => 'Papír', 'pt' => 'Nyomtató', 'pk' => 'Parkolás', 'jt' => 'Jatt', 'rhx' => 'Hosszabbítás', 'no' => 'Megjegyzés');
+	$out = array();
+	foreach ($keys as $k) {
+		$st = cp_el_st_get($k[0]); $rows = array(); $at = 0;
+		foreach ((array) ($st['r'] ?? array()) as $r) {
+			if (!is_array($r)) { continue; }
+			$kv = array(); foreach ($L as $f => $lab) { if (isset($r[$f]) && trim((string) $r[$f]) !== '') { $kv[] = array($lab, (string) $r[$f]); } }
+			$filled = !empty($r['fu']); if ($filled) { $at = max($at, (int) $r['fu']); }
+			if ($kv || $filled) { $rows[] = array('kv' => $kv, 'filled' => $filled ? 1 : 0, 'ok' => !empty($r['ok']) ? 1 : 0, 'at' => $filled ? wp_date('Y.m.d. H:i', (int) $r['fu']) : ''); }
+		}
+		$out[] = array('key' => $k[0], 'day' => $k[1], 'n' => $k[2], 'link' => cp_el_link($k[0]), 'rows' => $rows, 'filled' => $at ? 1 : 0, 'at' => $at ? wp_date('Y.m.d. H:i', $at) : '');
+	}
+	return $out;
+}
+add_filter('cp_crm_deal_data', function ($x) {
+	$id = (int) ($x['deal']['id'] ?? 0);
+	if ($id) { $e = cp_dinfo_esheet($id); if ($e !== null) { $x['esheet'] = $e; } }
+	return $x;
+}, 22);

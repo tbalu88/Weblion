@@ -978,3 +978,9 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 .cx-menu button:hover,.cx-menu button:focus-visible{background:#F2EFEA;outline:0}.cx-menu button:disabled{color:#9A958D;cursor:default;background:none}
 .cx-menu hr{border:0;border-top:1px solid #F0ECE6;margin:4px 2px}.cx-menu .cx-back{width:auto;min-height:0;padding:0 6px;font-size:16px}.cx-sub{max-height:60vh;overflow:auto}
 
+/* v2.9.344: Kezelői adatlap szekció a deal adatlapján */
+.d3-esd+.d3-esd{border-top:1px solid var(--li);margin-top:10px;padding-top:10px}
+.d3-esn{font-weight:600;font-size:13px;margin:0 0 4px}
+.d3-ess{margin:0 0 6px;font-size:13px;font-weight:600}.d3-ess.ok{color:#1F7A50}.d3-ess.no{color:var(--mu)}
+.d3-esa{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.d3-es .crm-dl dd{overflow-wrap:anywhere}
