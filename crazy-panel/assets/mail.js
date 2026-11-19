@@ -2284,6 +2284,8 @@
 					b.disabled = false;
 				});
 				lload();
+				/* v2.9.337: a Fájltár a gombsor alatt nyílik – görgetés oda, hogy látszódjon, és a kereső kapja a fókuszt */
+				requestAnimationFrame(() => { lw.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); const qi = lw.querySelector('[data-libq]'); if (qi) qi.focus({ preventScroll: true }); });
 			});
 		}
 		const ab = box.querySelector('[data-cmd="attach"]');

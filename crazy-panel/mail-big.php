@@ -25,9 +25,23 @@ function cp_mbig_root() {
 	update_option('cp_mbig_root', $r, false);
 	return $r;
 }
+/* v2.9.337: a Fájltár a közös meghajtó „ECCloud” mappájában van (a felhasználó kérése); az ECCloud-ot nem hozzuk létre, csak megkeressük */
+function cp_mbig_eccloud() {
+	$c = (string) get_option('cp_mbig_eccloud', '');
+	if ($c !== '') { return $c; }
+	$root = cp_mbig_root(); if (is_wp_error($root)) { return $root; }
+	$q = cp_mdr_q($root) . " in parents and name = 'ECCloud' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+	$j = cp_mdr_json(cp_gdb_api('GET', CP_MBIG_API . '?' . http_build_query(array('q' => $q, 'fields' => 'files(id)', 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true', 'corpora' => 'allDrives'))));
+	if (is_wp_error($j)) { return $j; }
+	$id = (string) ($j['files'][0]['id'] ?? '');
+	if ($id === '') { return new WP_Error('mbig', 'Nem találom az „ECCloud” mappát a közös meghajtón.'); }
+	update_option('cp_mbig_eccloud', $id, false);
+	return $id;
+}
 function cp_mbig_folder($kind) {
 	$root = cp_mbig_root(); if (is_wp_error($root)) { return $root; }
-	return cp_mdr_folder($root, $kind === 'lib' ? 'EC - Fájltár' : 'EC - Levélmellékletek');
+	if ($kind === 'lib') { $ec = cp_mbig_eccloud(); if (is_wp_error($ec)) { return $ec; } return cp_mdr_folder($ec, 'EC - Fájltár'); }
+	return cp_mdr_folder($root, 'EC - Levélmellékletek');
 }
 function cp_mbig_auth() {
 	cp_el_auth();
