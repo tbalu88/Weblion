@@ -325,7 +325,8 @@ function cp_gcal_ajax_import() {
 }
 function cp_gcal_diff($to = '', $force = false) {
 	global $wpdb;
-	$from = wp_date('Y-m-d'); if ($to === '' || $to < $from) { $to = wp_date('Y') . '-12-31'; }
+	/* v2.9.339: a hónap elejétől (a felhasználó kérése: a teljes november is) */
+	$from = wp_date('Y-m-01'); if ($to === '' || $to < $from) { $to = wp_date('Y') . '-12-31'; }
 	/* v2.9.326: 10 perces gyorsítótár + zár – egyszerre csak egy számolás fusson (a nehéz kérés ne terhelje a szervert) */
 	$ck = 'cp_gcal_diff_' . md5($from . $to);
 	if (!$force) { $c = get_transient($ck); if (is_array($c)) { return $c + array('cached' => 1); } }
