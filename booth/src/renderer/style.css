@@ -414,3 +414,9 @@ button{font:inherit;cursor:pointer}
 .st-upd{margin:0}
 .st-f.srch .st-grp{display:flex}.st-f.srch .st-grp.st-hide{display:none!important}
 @media (max-width:900px){.st-tabs button{min-width:74px;height:64px;font-size:12px}.st-tabs button svg{width:24px;height:24px}.st-grp{padding:14px}}
+.pf-sum p{margin:0}
+.pf-sum ul{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:15px;font-weight:500}
+.pf-sum li{position:relative;padding-left:18px;overflow-wrap:anywhere}
+.pf-sum li::before{content:"";position:absolute;left:2px;top:.5em;width:8px;height:8px;border-radius:50%;background:#E5484D}
+.pf-sum li.mid{color:#F2C46B}.pf-sum li.mid::before{background:#E5A000}
+.pf-sum li.bad{color:#FF9B92}

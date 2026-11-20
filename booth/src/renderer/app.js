@@ -863,7 +863,7 @@
           const a = await call(B.aiStatus, S.cfg.event.ev);
           txt = (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + a.used + ' / ' + a.limit + ' kép felhasználva' + (a.left != null ? ' (még ' + a.left + ')' : '') + (a.imgs != null ? ' · AI-kredit: kb. ' + a.imgs + ' képre elég' : '');
           if (a.imgs == null) { st = 'mid'; txt += ' · az AI-kredit egyenlege most nem ismert – kérdezd az irodát'; }
-          if (a.imgs != null && a.imgs < 200) { st = a.imgs < 1 ? 'bad' : 'mid'; txt += a.imgs < 1 ? ' – elfogyott, szólj az irodának!' : ' – kevés egy rendezvényre, szólj az irodának'; }
+          if (a.imgs != null && a.imgs < 200) { st = a.imgs < 1 ? 'bad' : 'mid'; txt += a.imgs < 1 ? ' – elfogyott az AI-kredit, szólj az irodának!' : ' – kevés lesz az AI-kredit: kb. ' + a.imgs + ' képre elég (egy rendezvényre ~200 kell), szólj az irodának'; }
           if (a.left != null && a.left < 1) { st = 'bad'; txt += ' – a rendezvény AI-kerete elfogyott'; }
         } catch (e) { st = 'mid'; txt += ' · a kredit most nem kérdezhető le (' + e.message + ')'; }
       }
@@ -872,7 +872,11 @@
     if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;
-    box.innerHTML = '<p class="pf-sum ' + (bad ? 'bad' : mid ? 'mid' : 'ok') + '">' + (bad ? bad + ' hiba – javítsd indulás előtt' : mid ? 'Indulhat, ' + mid + ' figyelmeztetéssel' : 'Minden rendben – indulhat a fotózás') + '</p>' +
+    /* a hibák és a figyelmeztetések (pl. kevés AI-kredit) röviden az összegzés alatt is */
+    const why = x => { const t = String(x[2]), i = t.lastIndexOf(' – '); return i > 0 ? t.slice(i + 3) : t; };
+    const probs = L.filter(x => x[0] === 'bad').concat(L.filter(x => x[0] === 'mid'));
+    box.innerHTML = '<div class="pf-sum ' + (bad ? 'bad' : mid ? 'mid' : 'ok') + '"><p>' + (bad ? bad + ' hiba – javítsd indulás előtt' + (mid ? ', és ' + mid + ' figyelmeztetés' : '') : mid ? 'Indulhat, ' + mid + ' figyelmeztetéssel' : 'Minden rendben – indulhat a fotózás') + '</p>' +
+      (probs.length ? '<ul>' + probs.map(x => '<li class="' + x[0] + '"><b>' + esc(x[1]) + ':</b> ' + esc(why(x)) + '</li>').join('') + '</ul>' : '') + '</div>' +
       L.map(x => '<div class="pf-i ' + x[0] + '"><i></i><b>' + esc(x[1]) + '</b><span>' + esc(x[2]) + '</span></div>').join('');
   }
 
