@@ -50,7 +50,8 @@ let dccRun = null;
 /* 0.18.2: a digiCamControl ablakai (betöltő, főablak, élőkép) ne kerüljenek a vendég képernyője fölé – DSLR-módban,
    teljes képernyőn a Crazy Booth ablaka mindig felül van; indulás után visszakapja a fókuszt */
 function dccTop(noFocus) { try { if (!win || win.isDestroyed()) return; const on = cfg.camera === 'dcc' && (win.isFullScreen() || win.isKiosk()); win.setAlwaysOnTop(on, 'screen-saver'); if (on && noFocus !== true && !BrowserWindow.getAllWindows().some(w => w !== win && !w.isDestroyed() && w.isVisible() && w.getParentWindow() === win)) { win.moveTop(); win.focus(); } } catch (e) { /* */ } }
-const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
+const dccHide = () => { if (dccRun) dccRun.hide(cfg.camera === 'dcc' && !(cfg.ui && cfg.ui.dccShow)); };
+const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, dataDir: app.getPath('userData'), log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
   cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null });
@@ -65,7 +66,7 @@ ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, 
 ipcMain.handle('cfg:set', wrap(async c => {
   const keep = Object.keys(DEF);
   keep.forEach(k => { if (c && c[k] !== undefined) cfg[k] = c[k]; });
-  saveCfg(); makeCam(); dccTop(true); return cfg;
+  saveCfg(); makeCam(); dccTop(true); dccHide(); return cfg;
 }));
 ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); if (cfg.camera === 'dcc') { const e = await dccR().ensure(); if (e) log('digiCamControl: ' + e); } dccTop(); return cam.init(); }));
 /* v0.9: DSLR-beállítások (ISO, rekesz, záridő, expozíció-korrekció, fehéregyensúly) – digiCamControl */
@@ -172,7 +173,7 @@ app.whenReady().then(() => {
   const boot = async () => { if (!MOCK || process.argv.includes('--online')) { try { await ui.check(4000); } catch (e) { /* */ } } const e = (MOCK && !process.argv.includes('--online')) ? { file: path.join(__dirname, 'renderer', 'index.html'), v: 'helyi (fejlesztői)' } : ui.entry(); log('felület: ' + e.v); win.loadFile(e.file); };
   boot();
   setInterval(async () => { if (MOCK && !process.argv.includes('--online')) return; if (await ui.check(15000)) { uiPending = true; win.webContents.send('ui:ready'); } }, 15 * 60 * 1000);
-  dccR().watch(() => cfg.camera === 'dcc');
+  dccR().watch(() => cfg.camera === 'dcc'); dccHide();
   globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
   /* a kijelző ne aludjon el rendezvény közben */
   require('electron').powerSaveBlocker.start('prevent-display-sleep');

@@ -95,8 +95,46 @@ function make(o) {
     if (!WIN) return;
     setInterval(async () => { if (!isDcc() || busy || Date.now() - lastTry < 30000) return; if (!(await up(4000)) && !(await up(4000))) { const e = await ensure(); if (e) log('digiCamControl: ' + e); } }, 20000);
   }
+  /* 0.18.6: a digiCamControl ablakai ne látszódjanak – az élőképhez nyitva kell lenniük, ezért nem zárjuk be, hanem a
+     képernyőn kívülre tesszük őket (egy kis háttér-PowerShell figyeli, a Crazy Booth kilépésével ő is leáll).
+     Hibakereséshez: Kezelő → Kamera → „digiCamControl ablakainak mutatása”. */
+  let hider = null;
+  const PS = [
+    'param([int]$ParentPid)',
+    'Add-Type @"',
+    'using System; using System.Runtime.InteropServices;',
+    'public class CbW {',
+    '  public delegate bool EnumProc(IntPtr h, IntPtr l);',
+    '  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);',
+    '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+    '  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+    '  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);',
+    '  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);',
+    '  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }',
+    '}',
+    '"@',
+    'while ($true) {',
+    '  if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { break }',
+    '  $script:ids = @(Get-Process CameraControl -ErrorAction SilentlyContinue | ForEach-Object { [uint32]$_.Id })',
+    '  if ($script:ids.Count -gt 0) {',
+    '    $cb = [CbW+EnumProc]{ param($h, $l) $p = [uint32]0; [void][CbW]::GetWindowThreadProcessId($h, [ref]$p); if (($script:ids -contains $p) -and [CbW]::IsWindowVisible($h)) { $r = New-Object CbW+RECT; [void][CbW]::GetWindowRect($h, [ref]$r); if ($r.L -gt -20000) { [void][CbW]::SetWindowPos($h, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0015) } }; return $true }',
+    '    [void][CbW]::EnumWindows($cb, [IntPtr]::Zero)',
+    '  }',
+    '  Start-Sleep -Milliseconds 600',
+    '}', ''].join('\r\n');
+  function hide(on) {
+    if (!WIN) return;
+    if (!on) { if (hider) { try { hider.kill(); } catch (e) { /* */ } hider = null; log('digiCamControl ablakai: látszanak'); } return; }
+    if (hider) return;
+    try {
+      const f = path.join(o.dataDir || require('os').tmpdir(), 'dcc-rejt.ps1'); fs.writeFileSync(f, PS);
+      hider = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', f, '-ParentPid', String(process.pid)], { windowsHide: true, stdio: 'ignore' });
+      hider.on('exit', () => { hider = null; });
+      log('digiCamControl ablakai: rejtve');
+    } catch (e) { log('digiCamControl elrejtése: ' + e.message); }
+  }
   /* kilépéskor csak azt zárjuk be, amit mi indítottunk */
-  function stop() { if (started) { try { execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }
-  return { ensure, watch, stop, exe };
+  function stop() { hide(false); if (started) { try { execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }
+  return { ensure, watch, stop, exe, hide };
 }
 module.exports = { make };
