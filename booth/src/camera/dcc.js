@@ -31,21 +31,25 @@ function make(opts) {
       return get1(q, asBuf);
     }
   };
-  const get1 = async (q, asBuf) => {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), opts.timeout || 8000);
-    try {
-      const r = await fetch(base + q, { signal: ctl.signal, cache: 'no-store' });
-      if (!r.ok) throw new Error('digiCamControl HTTP ' + r.status);
-      return asBuf ? Buffer.from(await r.arrayBuffer()) : (await r.text()).trim();
-    } catch (e) {
-      if (e.name === 'AbortError') throw new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)');
-      const code = String((e.cause && e.cause.code) || '') + ' ' + String(e.message || e);
-      if (/ECONNREFUSED/.test(code)) { const x = new Error('A digiCamControl nem érhető el – a program most elindítja; ha nem sikerül, ellenőrizd a kamerát.'); x.refused = true; throw x; }
-      if (/fetch failed|ECONNRESET|socket|closed/i.test(code)) throw new Error('A digiCamControl megszakította a kapcsolatot (a kamera épp foglalt) – próbáld újra.');
-      throw e;
-    } finally { clearTimeout(t); }
-  };
+  /* 0.18.5: minden kérés saját, új kapcsolaton (agent: false) – a digiCamControl webszervere a megtartott (keep-alive)
+     kapcsolatot exponálás közben bontja, és ettől a fetch „megszakadt” hibát adott, pedig a kép elkészült */
+  const http = require('http');
+  const get1 = (q, asBuf) => new Promise((res, rej) => {
+    let done = false; const fin = (f, v) => { if (!done) { done = true; f(v); } };
+    const rq = http.get(base + q, { agent: false, headers: { Connection: 'close', 'Cache-Control': 'no-store' } }, r => {
+      const ch = []; r.on('data', c => ch.push(c));
+      r.on('end', () => { if (r.statusCode >= 400) return fin(rej, new Error('digiCamControl HTTP ' + r.statusCode)); const b = Buffer.concat(ch); fin(res, asBuf ? b : b.toString('utf8').trim()); });
+      r.on('error', e => fin(rej, mapErr(e)));
+    });
+    rq.setTimeout(opts.timeout || 8000, () => { rq.destroy(); fin(rej, new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)')); });
+    rq.on('error', e => fin(rej, mapErr(e)));
+  });
+  function mapErr(e) {
+    const code = String(e.code || '') + ' ' + String(e.message || e);
+    if (/ECONNREFUSED/.test(code)) { const x = new Error('A digiCamControl nem érhető el – a program most elindítja; ha nem sikerül, ellenőrizd a kamerát.'); x.refused = true; return x; }
+    if (/ECONNRESET|socket hang up|EPIPE|closed/i.test(code)) { const x = new Error('A digiCamControl megszakította a kapcsolatot (a kamera épp foglalt) – próbáld újra.'); x.reset = true; return x; }
+    return e;
+  }
   const enc = encodeURIComponent;
   let lvOn = false;
 
@@ -80,7 +84,8 @@ function make(opts) {
     /* exponálás → a kész JPG útvonala a gépen */
     async capture() {
       const before = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '');
-      await get('/?slc=capture&param1=&param2=');
+      /* 0.18.5: ha az exponálási kérés válasza megszakad, a kép attól még elkészülhet – megvárjuk (lastcaptured) */
+      try { await get('/?slc=capture&param1=&param2=', false, true); } catch (e) { if (!e.reset && !/nem válaszol/.test(e.message)) throw e; }
       const until = Date.now() + (opts.captureTimeout || 15000);
       while (Date.now() < until) {
         await new Promise(r => setTimeout(r, 250));
