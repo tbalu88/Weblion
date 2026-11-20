@@ -61,6 +61,13 @@ jobs:
           VER=$(node -p "require('./package.json').version")
           SRC=$(ls dist/*win*.zip dist/*.zip 2>/dev/null | grep -i -v mac | head -1)
           mkdir -p ../release && cp "$SRC" "../release/CrazyBooth-$VER-Windows-x64.zip"
+          # 0.18.3: kis frissítés – csak a programkód (app.asar, ~3 MB) és az adatai; a frissítő ezt tölti le, ha a motor nem változott
+          ASAR=$(ls dist/win-unpacked/resources/app.asar)
+          (cd "$(dirname "$ASAR")" && zip -9 -q "$GITHUB_WORKSPACE/release/CrazyBooth-$VER-app.zip" app.asar)
+          EV=$(node -p "require('electron/package.json').version")
+          SHA=$(sha256sum "../release/CrazyBooth-$VER-app.zip" | cut -c1-64)
+          printf '{"v":"%s","electron":"%s","sha256":"%s","dcc":true}\n' "$VER" "$EV" "$SHA" > "../release/CrazyBooth-$VER-app.json"
+          cat "../release/CrazyBooth-$VER-app.json"
           echo "VER=$VER" >> "$GITHUB_ENV"
           ls -la ../release
       - name: Kiadás (nyilvános letöltés)
@@ -69,9 +76,9 @@ jobs:
         run: |
           TAG="booth-v$VER"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" --clobber
+            gh release upload "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" "release/CrazyBooth-$VER-app.zip" "release/CrazyBooth-$VER-app.json" --clobber
           else
-            gh release create "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" --target "$GITHUB_SHA" \
+            gh release create "$TAG" "release/CrazyBooth-$VER-Windows-x64.zip" "release/CrazyBooth-$VER-app.zip" "release/CrazyBooth-$VER-app.json" --target "$GITHUB_SHA" \
               --title "Crazy Booth $VER (Windows)" \
               --notes "Kicsomagolás után a Crazy Booth.exe indítja. Telepítés nem kell."
           fi

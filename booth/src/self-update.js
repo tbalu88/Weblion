@@ -44,19 +44,33 @@ function make(o) {
     for (const x of L) {
       const v = x.tag_name.slice(7), a = (x.assets || []).find(z => want.test(z.name || ''));
       if (!a) continue;
-      if (!best || newer(v, best.v)) best = { v, url: a.browser_download_url, size: a.size || 0, sha: /^sha256:([a-f0-9]{64})$/.exec(a.digest || '') ? a.digest.slice(7) : '', notes: String(x.body || '').slice(0, 600), name: x.name || '' };
+      if (!best || newer(v, best.v)) best = { v, url: a.browser_download_url, size: a.size || 0, sha: /^sha256:([a-f0-9]{64})$/.exec(a.digest || '') ? a.digest.slice(7) : '', notes: String(x.body || '').slice(0, 600), name: x.name || '', assets: x.assets || [] };
     }
     const cur = app.getVersion();
     found = best && newer(best.v, cur) ? best : null;
-    return { cur, avail: found ? { v: found.v, size: found.size, notes: found.notes } : null, latest: best ? best.v : cur };
+    /* 0.18.3: kis frissítés – ha a motor (Electron) nem változott, csak a program kódja (app.asar, ~3 MB) jön le;
+       a teljes csomag (~200 MB) csak motorváltáskor, vagy ha a gépen hiányzik a beépített digiCamControl */
+    if (found) {
+      const aj = found.assets.find(z => /-app\.json$/.test(z.name || '')), az = found.assets.find(z => /-app\.zip$/.test(z.name || ''));
+      if (aj && az && process.resourcesPath) {
+        try {
+          const m = await (await fetch(aj.browser_download_url, { headers: { 'User-Agent': 'CrazyBooth/' + cur }, redirect: 'follow' })).json();
+          const dccOk = !WIN || !m.dcc || fs.existsSync(path.join(process.resourcesPath, 'dcc', 'CameraControl.exe'));
+          if (m && m.electron === process.versions.electron && dccOk && /^[a-f0-9]{64}$/.test(m.sha256 || '')) { found.small = { url: az.browser_download_url, size: az.size || 0, sha: m.sha256 }; }
+          else log('önfrissítés: teljes csomag kell (motor: ' + process.versions.electron + ' → ' + (m && m.electron) + (dccOk ? '' : ', hiányzik a digiCamControl') + ')');
+        } catch (e) { log('önfrissítés: a kis csomag adatai nem olvashatók – teljes csomag (' + e.message + ')'); }
+      }
+    }
+    return { cur, avail: found ? { v: found.v, size: found.small ? found.small.size : found.size, small: !!found.small, notes: found.notes } : null, latest: best ? best.v : cur };
   }
 
   async function download(onP) {
     if (!found) throw new Error('Előbb keresd meg a frissítést.');
-    const f = path.join(dir(), 'CrazyBooth-' + found.v + '.zip');
-    const r = await fetch(found.url, { headers: { 'User-Agent': 'CrazyBooth/' + app.getVersion() }, redirect: 'follow' });
+    const src = found.small || found;
+    const f = path.join(dir(), 'CrazyBooth-' + found.v + (found.small ? '-app' : '') + '.zip');
+    const r = await fetch(src.url, { headers: { 'User-Agent': 'CrazyBooth/' + app.getVersion() }, redirect: 'follow' });
     if (!r.ok || !r.body) throw new Error('A letöltés nem indult el (' + r.status + ').');
-    const total = Number(r.headers.get('content-length')) || found.size || 0;
+    const total = Number(r.headers.get('content-length')) || src.size || 0;
     const out = fs.createWriteStream(f), h = crypto.createHash('sha256'); let got = 0, last = 0;
     const rd = r.body.getReader();
     for (;;) {
@@ -67,7 +81,7 @@ function make(o) {
     }
     await new Promise((res, rej) => out.end(err => err ? rej(err) : res()));
     const sha = h.digest('hex');
-    if (found.sha && sha !== found.sha) { try { fs.unlinkSync(f); } catch (e) { /* */ } throw new Error('A letöltött fájl sérült (ellenőrzőösszeg). Próbáld újra.'); }
+    if (src.sha && sha !== src.sha) { try { fs.unlinkSync(f); } catch (e) { /* */ } throw new Error('A letöltött fájl sérült (ellenőrzőösszeg). Próbáld újra.'); }
     if (onP) onP(1);
     file = f; log('önfrissítés: letöltve ' + found.v + ' (' + Math.round(got / 1048576) + ' MB)');
     return { v: found.v, mb: Math.round(got / 1048576) };
@@ -76,6 +90,7 @@ function make(o) {
   /* kicsomagolás a program mellé, segédszkript, kilépés */
   function install() {
     if (!file || !found) throw new Error('Előbb töltsd le a frissítést.');
+    if (found.small && /-app\.zip$/.test(file)) return installSmall();
     const t = target();
     if (MAC && /\/AppTranslocation\//.test(t)) throw new Error('A program a Letöltések mappából fut. Húzd át az Alkalmazások mappába, és onnan indítsd.');
     if (!writable(t)) throw new Error('A program mappája nem írható (' + path.dirname(t) + '). ' + (MAC ? 'Tedd az Alkalmazások mappába, rendszergazda fiókkal.' : 'Tedd egy írható mappába (pl. a Dokumentumok alá).'));
@@ -117,6 +132,47 @@ function make(o) {
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
       /* 0.18.1: a szkript a programmappán kívülről fusson – a saját munkakönyvtárát a Windows nem engedi átnevezni */
       spawn('cmd.exe', ['/c', script, String(process.pid), t, NEW, ok, exe], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    }
+    setTimeout(() => app.quit(), 400);
+    return true;
+  }
+
+  /* 0.18.3: kis frissítés – csak a resources/app.asar cseréje (a motor, a digiCamControl és minden más marad) */
+  function installSmall() {
+    const res = process.resourcesPath, cur = path.join(res, 'app.asar');
+    if (!writable(cur)) throw new Error('A program mappája nem írható (' + res + ').');
+    const tmp = path.join(dir(), 'x-' + found.v); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
+    if (MAC) execFileSync('/usr/bin/ditto', ['-x', '-k', file, tmp]); else execFileSync('tar', ['-xf', file, '-C', tmp], { windowsHide: true });
+    const na = path.join(tmp, 'app.asar'); if (!fs.existsSync(na)) throw new Error('A csomagban nincs programkód.');
+    const NEW = cur + '.new'; try { fs.rmSync(NEW, { force: true }); } catch (e) { /* */ } fs.copyFileSync(na, NEW);
+    const ok = okFile(found.v); try { fs.unlinkSync(ok); } catch (e) { /* */ }
+    let script;
+    if (MAC) {
+      const appDir = target();
+      script = path.join(dir(), 'csere-app.sh');
+      fs.writeFileSync(script, ['#!/bin/bash', 'PID="$1"; CUR="$2"; NEW="$3"; OK="$4"; APP="$5"',
+        'cd /tmp; while kill -0 "$PID" 2>/dev/null; do sleep 1; done; sleep 1',
+        'rm -f "$CUR.old"; mv "$CUR" "$CUR.old" || { open "$APP"; exit 1; }',
+        'mv "$NEW" "$CUR" || { mv "$CUR.old" "$CUR"; open "$APP"; exit 1; }',
+        'xattr -cr "$APP" 2>/dev/null; codesign --force --deep --sign - "$APP" 2>/dev/null',
+        'open "$APP"',
+        'for i in $(seq 1 40); do if [ -f "$OK" ]; then rm -f "$CUR.old"; exit 0; fi; sleep 1; done',
+        'pkill -f "$APP/Contents/MacOS/" 2>/dev/null; sleep 2; rm -f "$CUR"; mv "$CUR.old" "$CUR"; codesign --force --deep --sign - "$APP" 2>/dev/null; open "$APP"', ''].join('\n'), { mode: 0o755 });
+      log('önfrissítés (kis csomag): csere indul ' + app.getVersion() + ' → ' + found.v);
+      spawn('/bin/bash', [script, String(process.pid), cur, NEW, ok, appDir], { cwd: dir(), detached: true, stdio: 'ignore' }).unref();
+    } else {
+      const exe = process.execPath, im = path.basename(exe);
+      script = path.join(dir(), 'csere-app.cmd');
+      fs.writeFileSync(script, ['@echo off', 'setlocal', 'set "PID=%~1"', 'set "CUR=%~2"', 'set "NEW=%~3"', 'set "OK=%~4"', 'set "EXE=%~5"', 'set "IM=%~6"', 'cd /d "%TEMP%"',
+        ':wait', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', 'timeout /t 2 /nobreak >nul',
+        'if exist "%CUR%.old" del /f /q "%CUR%.old"',
+        'set /a M=0', ':mv', 'move /y "%CUR%" "%CUR%.old" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
+        'move /y "%NEW%" "%CUR%" >nul || (move /y "%CUR%.old" "%CUR%" >nul & start "" "%EXE%" & exit /b 1)',
+        'start "" "%EXE%"',
+        'set /a N=0', ':chk', 'if exist "%OK%" (del /f /q "%CUR%.old" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 40 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
+        ':back', 'taskkill /F /IM "%IM%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'del /f /q "%CUR%"', 'move /y "%CUR%.old" "%CUR%" >nul', 'start "" "%EXE%"', ''].join('\r\n'));
+      log('önfrissítés (kis csomag): csere indul ' + app.getVersion() + ' → ' + found.v);
+      spawn('cmd.exe', ['/c', script, String(process.pid), cur, NEW, ok, exe, im], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
     }
     setTimeout(() => app.quit(), 400);
     return true;
