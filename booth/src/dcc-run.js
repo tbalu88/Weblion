@@ -75,8 +75,13 @@ function make(o) {
       branding(f); const changed = settings();
       if (o.onStart) o.onStart();
       if (await running()) {
-        if (!changed && started) return 'A digiCamControl fut, de a webszervere nem válaszol – várj pár másodpercet.';
-        log('digiCamControl újraindítása (webszerver bekapcsolva)'); await kill(); await new Promise(r => setTimeout(r, 1500));
+        /* 0.18.4: futó digiCamControlt csak akkor indítunk újra, ha a webszervere eddig ki volt kapcsolva; különben
+           (pl. exponálás közben foglalt) megvárjuk – az újraindítás megszakította a fotózást */
+        if (!changed) {
+          for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 750)); if (await up(2500)) return ''; }
+          return 'A digiCamControl fut, de a webszervere nem válaszol – ellenőrizd a kamerát (bekapcsolva, USB).';
+        }
+        log('digiCamControl újraindítása (a webszerver eddig ki volt kapcsolva)'); await kill(); await new Promise(r => setTimeout(r, 1500));
       }
       log('digiCamControl indítása: ' + f);
       try { const p = spawn(f, [], { cwd: path.dirname(f), detached: true, stdio: 'ignore' }); p.unref(); started = p; } catch (e) { return 'A digiCamControl nem indult el: ' + e.message; }
@@ -88,7 +93,7 @@ function make(o) {
   /* figyelő: ha DSLR-mód és a webszerver leállt, újraindítja (legfeljebb félpercenként) */
   function watch(isDcc) {
     if (!WIN) return;
-    setInterval(async () => { if (!isDcc() || busy || Date.now() - lastTry < 30000) return; if (!(await up())) { const e = await ensure(); if (e) log('digiCamControl: ' + e); } }, 20000);
+    setInterval(async () => { if (!isDcc() || busy || Date.now() - lastTry < 30000) return; if (!(await up(4000)) && !(await up(4000))) { const e = await ensure(); if (e) log('digiCamControl: ' + e); } }, 20000);
   }
   /* kilépéskor csak azt zárjuk be, amit mi indítottunk */
   function stop() { if (started) { try { execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }

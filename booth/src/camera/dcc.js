@@ -21,10 +21,11 @@ function make(opts) {
   const folder = opts.folder;
   /* 0.18.0: ha a webszerver nem érhető el, a beépített digiCamControlt elindítjuk, és egyszer újrapróbáljuk */
   let ensT = 0;
-  const get = async (q, asBuf) => {
+  const get = async (q, asBuf, noEnsure) => {
     try { return await get1(q, asBuf); }
     catch (e) {
-      if (!opts.ensure || !/nem érhető el/.test(e.message) || Date.now() - ensT < 20000) throw e;
+      /* 0.18.4: csak valódi „nem fut” (kapcsolat elutasítva) indítja el a digiCamControlt; az élőkép-hiba soha */
+      if (noEnsure || !opts.ensure || !e.refused || Date.now() - ensT < 20000) throw e;
       ensT = Date.now(); const msg = await opts.ensure();
       if (msg) throw new Error(msg);
       return get1(q, asBuf);
@@ -39,7 +40,9 @@ function make(opts) {
       return asBuf ? Buffer.from(await r.arrayBuffer()) : (await r.text()).trim();
     } catch (e) {
       if (e.name === 'AbortError') throw new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)');
-      if (/ECONNREFUSED|fetch failed/.test(String(e.message || e))) throw new Error('A digiCamControl nem érhető el – indítsd el, és kapcsold be a webszervert (5513).');
+      const code = String((e.cause && e.cause.code) || '') + ' ' + String(e.message || e);
+      if (/ECONNREFUSED/.test(code)) { const x = new Error('A digiCamControl nem érhető el – a program most elindítja; ha nem sikerül, ellenőrizd a kamerát.'); x.refused = true; throw x; }
+      if (/fetch failed|ECONNRESET|socket|closed/i.test(code)) throw new Error('A digiCamControl megszakította a kapcsolatot (a kamera épp foglalt) – próbáld újra.');
       throw e;
     } finally { clearTimeout(t); }
   };
@@ -56,7 +59,7 @@ function make(opts) {
     async liveStart() { if (!lvOn) { await get('/?CMD=LiveViewWnd_Show'); lvOn = true; } },
     async liveStop() { if (lvOn) { lvOn = false; try { await get('/?CMD=LiveViewWnd_Hide'); } catch (e) { /* mindegy */ } } },
     /* egy élőkép-képkocka JPG-ként (Buffer) */
-    async liveFrame() { return get('/liveview.jpg?t=' + Date.now(), true); },
+    async liveFrame() { return get('/liveview.jpg?t=' + Date.now(), true, true); },
     /* kamerabeállítások: a lehetséges értékek és a mostani érték */
     async props() {
       const out = {};
