@@ -397,7 +397,7 @@
     else if (act === 'presave') { const n = $('#pre-name').value.trim(); if (!n) { $('[data-stmsg]').textContent = 'Adj nevet a sablonnak.'; return; } const L = preLoad(), cfg = {}; PRE_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const ev = S.cfg.event && S.cfg.event.deal ? S.cfg.event : null; const i = L.findIndex(p => p.name === n); const p = { name: n, cfg, event: ev, at: Date.now() }; if (i >= 0) L[i] = p; else L.push(p); preStore(L); $('#pre-name').value = ''; preDraw(); $('[data-stmsg]').textContent = '„' + n + '” elmentve.'; }
     else if (act === 'export') { const cfg = {}; EXP_KEYS.forEach(k => { cfg[k] = S.cfg[k]; }); const blob = new Blob([JSON.stringify({ crazyBooth: 1, at: new Date().toISOString(), cfg, presets: preLoad() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crazy-booth-beallitasok.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); $('[data-stmsg]').textContent = 'Exportálva.'; }
     else if (act === 'gallery') { gallery(); }
-    else if (act === 'sboff') { sbOffline(); }
+    else if (act === 'sboff') { tpEdit(); }
     else if (act === 'sbclose') { show('settings'); tplInfo(); }
     else if (act === 'sbreset') {
       const ok = await ask('Vissza a panel sablonjára?', 'A gépen szerkesztett sablon törlődik erről a gépről, és újra a panelben mentett sablon lesz érvényes (ha van).', [['y', 'Igen, vissza a panel sablonjára', 'del'], ['', 'Mégse', 'ghost']]);
@@ -450,7 +450,7 @@
       const k = np ? np[1] : /^[0-9]$/.test(e.key) ? e.key : e.key === 'Backspace' ? '⌫' : (e.key === 'Enter' || e.code === 'NumpadEnter') ? '✓' : '';
       if (k) { e.preventDefault(); pinKey(k); return; }
     }
-    if (e.key === 'F2' && S.scr !== 'sbed') openSettings();
+    if (e.key === 'F2' && S.scr !== 'sbed' && S.scr !== 'tped') openSettings();
     if (e.key === 'Escape') { if (S.scr === 'live') cancelRun(); else if (S.scr === 'settings' || S.scr === 'gallery' || S.scr === 'modes') show('start'); else if (S.scr === 'photo') gallery(); }
   });
   $('[data-s=start]').addEventListener('click', e => { if (!e.target.closest('[data-act]') && !e.target.closest('[data-evp]')) startTap(); });
@@ -584,6 +584,41 @@
         if (!S.tpl) throw new Error('A mentett sablonban nem találtam fotóablakot.');
         $('[data-sbreset]').hidden = false; sbInfo({ png: 1 });
         B.log('sablon a gépen mentve (' + S.tpl.shots + ' fotó)');
+      }
+    });
+  }
+  /* ---------- 0.18.0: rétegalapú sablonszerkesztő (tpled.js) – a régi (kész sablonos) szerkesztő a „Kész sablonok” gombról érhető el */
+  async function sbFonts() {
+    try { if (!window.CB_SB_ASSETS) await loadScript('sablon-adat.js'); } catch (e) { return []; }
+    if (!document.getElementById('cb-sbfonts') && window.CB_SB_ASSETS.css) { const st = document.createElement('style'); st.id = 'cb-sbfonts'; st.textContent = window.CB_SB_ASSETS.css; document.head.appendChild(st); }
+    return [...new Set((String(window.CB_SB_ASSETS.css || '').match(/font-family:\s*'([^']+)'/g) || []).map(x => x.replace(/.*'([^']+)'.*/, '$1')))];
+  }
+  /* egy meglévő (csak PNG) sablonból kiinduló terv: a kép zárolt alsó réteg, a fotóablakok fölötte */
+  function tpFromPng() {
+    if (!S.tpl || !S.tpl.img) return null;
+    const im = S.tpl.img, W = im.naturalWidth || im.width, H = im.naturalHeight || im.height, land = W > H;
+    const d = BoothTplEd.preset(0, land), k = d.w / W, c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(im, 0, 0);
+    d.layers.push({ id: 'base', type: 'image', name: 'Eddigi sablon', src: c.toDataURL('image/png'), x: 0, y: 0, w: d.w, h: d.h, rot: 0, vis: 1, lock: 1, op: 1 });
+    S.tpl.holes.forEach((r, i) => { const n = (S.tpl.map[i] % 4) + 1; d.layers.push({ id: 'h' + i, type: 'photo', n, name: 'Fotó ' + n, x: Math.round(r[0] * k), y: Math.round(r[1] * k), w: Math.round(r[2] * k), h: Math.round(r[3] * k), rot: 0, vis: 1, lock: 0, r: 0, sw: 0, sc: '#FFFFFF' }); });
+    return d;
+  }
+  async function tpEdit() {
+    await ensureEvent();
+    const main = $('[data-tpmain]'); clearTimeout(S.idleT); show('tped');
+    const ev = S.cfg.event || {}, loc = await kvGet(sbKey()).catch(() => null), fonts = await sbFonts();
+    let url = ''; if (S.cfg.boothKey) { try { url = (await call(B.urls, ev.ev)).event; } catch (e) { url = ''; } }
+    BoothTplEd.view(main, {
+      doc: loc && loc.doc ? loc.doc : tpFromPng(), fonts, toast: m => note(m),
+      ev: { title: ev.deal ? ev.title : '', date: (ev.date || '').replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$1.$2.$3.'), url },
+      qr: async u => call(B.qr, u),
+      library: () => sbOffline(),
+      close: () => { show('settings'); tplInfo(); },
+      print: async png => { try { const pr = await printLocal(png, 1); note('Próbanyomat elküldve' + (pr ? ' (' + pName(pr) + ')' : '') + '.'); } catch (e) { err('Próbanyomat: ' + e.message); } },
+      save: async o => {
+        await kvSet(sbKey(), { png: o.png, doc: o.doc, at: Date.now() });
+        await loadTemplate(); tplInfo(); modeInfo();
+        if (!S.tpl) throw new Error('A mentett sablonban nem találtam fotóablakot.');
+        B.log('sablon a gépen mentve – rétegszerkesztő (' + S.tpl.shots + ' fotó)');
       }
     });
   }
