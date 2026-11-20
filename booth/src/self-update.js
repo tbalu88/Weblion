@@ -109,7 +109,7 @@ function make(o) {
         'mv "$NEW" "$APP" || { mv "$OLD" "$APP"; open "$APP"; exit 1; }',
         'xattr -cr "$APP" 2>/dev/null; codesign --force --deep --sign - "$APP" 2>/dev/null',
         'open "$APP"',
-        'for i in $(seq 1 40); do if [ -f "$OK" ]; then rm -rf "$OLD"; exit 0; fi; sleep 1; done',
+        'for i in $(seq 1 120); do if [ -f "$OK" ]; then rm -rf "$OLD"; exit 0; fi; sleep 1; done',
         'pkill -f "$APP/Contents/MacOS/" 2>/dev/null; sleep 2; rm -rf "$APP"; mv "$OLD" "$APP"; open "$APP"', ''].join('\n'), { mode: 0o755 });
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
       spawn('/bin/bash', [script, String(process.pid), t, NEW, ok], { cwd: dir(), detached: true, stdio: 'ignore' }).unref();
@@ -127,7 +127,7 @@ function make(o) {
         'set /a M=0', ':mv', 'move "%APP%" "%OLD%" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%APP%\\%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
         'move "%NEW%" "%APP%" >nul || (move "%OLD%" "%APP%" >nul & start "" "%APP%\\%EXE%" & exit /b 1)',
         'start "" "%APP%\\%EXE%"',
-        'set /a N=0', ':chk', 'if exist "%OK%" (rmdir /s /q "%OLD%" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 40 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
+        'set /a N=0', ':chk', 'if exist "%OK%" (rmdir /s /q "%OLD%" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 120 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
         ':back', 'taskkill /F /IM "%EXE%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'rmdir /s /q "%APP%"', 'move "%OLD%" "%APP%" >nul', 'start "" "%APP%\\%EXE%"', ''].join('\r\n'));
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
       /* 0.18.1: a szkript a programmappán kívülről fusson – a saját munkakönyvtárát a Windows nem engedi átnevezni */
@@ -156,7 +156,7 @@ function make(o) {
         'mv "$NEW" "$CUR" || { mv "$CUR.old" "$CUR"; open "$APP"; exit 1; }',
         'xattr -cr "$APP" 2>/dev/null; codesign --force --deep --sign - "$APP" 2>/dev/null',
         'open "$APP"',
-        'for i in $(seq 1 40); do if [ -f "$OK" ]; then rm -f "$CUR.old"; exit 0; fi; sleep 1; done',
+        'for i in $(seq 1 120); do if [ -f "$OK" ]; then rm -f "$CUR.old"; exit 0; fi; sleep 1; done',
         'pkill -f "$APP/Contents/MacOS/" 2>/dev/null; sleep 2; rm -f "$CUR"; mv "$CUR.old" "$CUR"; codesign --force --deep --sign - "$APP" 2>/dev/null; open "$APP"', ''].join('\n'), { mode: 0o755 });
       log('önfrissítés (kis csomag): csere indul ' + app.getVersion() + ' → ' + found.v);
       spawn('/bin/bash', [script, String(process.pid), cur, NEW, ok, appDir], { cwd: dir(), detached: true, stdio: 'ignore' }).unref();
@@ -169,7 +169,7 @@ function make(o) {
         'set /a M=0', ':mv', 'move /y "%CUR%" "%CUR%.old" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
         'move /y "%NEW%" "%CUR%" >nul || (move /y "%CUR%.old" "%CUR%" >nul & start "" "%EXE%" & exit /b 1)',
         'start "" "%EXE%"',
-        'set /a N=0', ':chk', 'if exist "%OK%" (del /f /q "%CUR%.old" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 40 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
+        'set /a N=0', ':chk', 'if exist "%OK%" (del /f /q "%CUR%.old" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 120 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
         ':back', 'taskkill /F /IM "%IM%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'del /f /q "%CUR%"', 'move /y "%CUR%.old" "%CUR%" >nul', 'start "" "%EXE%"', ''].join('\r\n'));
       log('önfrissítés (kis csomag): csere indul ' + app.getVersion() + ' → ' + found.v);
       spawn('cmd.exe', ['/c', script, String(process.pid), cur, NEW, ok, exe, im], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
