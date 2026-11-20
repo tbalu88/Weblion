@@ -987,3 +987,6 @@ dd.ik-on .ik-ed .ik-multi{height:auto}
 /* v2.9.347: Gépek és hátterek */
 .d3-mrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .d3-mach .crm-f{display:grid;gap:4px;font-size:13px;margin:0 0 8px}.d3-mach .crm-f input{width:100%;min-width:0}
+/* v2.9.352: Biztos foglalás gomb */
+.d3-ab.d3-sure{color:#1F4E9A}
+.d3-ab.d3-sure.on{background:#DDEBFF;border-color:#B9D1F5;color:#1F4E9A}

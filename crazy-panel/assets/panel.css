@@ -806,3 +806,8 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 .cpx-sheet.day{max-width:1040px}
 @media (min-width:960px){.cpx-sheet.day .dg{display:grid;grid-template-columns:1fr 1fr;column-gap:8px}.cpx-sheet.day .dg-h,.cpx-sheet.day .dg-e{grid-column:1/-1}.cpx-sheet.day .dg .evrow{margin-bottom:8px}}
 
+/* v2.9.352: Biztos foglalás */
+.badge.sure{background:#DDEBFF;color:#1F4E9A}
+.sure-l{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:13px;color:var(--mu,#6B7280)}
+.sure-l .cpx-btn.sm{min-height:32px;padding:0 14px;font-size:13px}
+.evrow.booked:has(.badge.sure){border-left-color:#3B6FD1}

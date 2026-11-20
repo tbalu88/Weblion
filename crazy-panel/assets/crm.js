@@ -1525,7 +1525,7 @@
 		else closePage(false);
 	});
 	const AIs = p => '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
-	const AI = { mail: AIs('<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>'), ok: AIs('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), no: AIs('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'), undo: AIs('<path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 12"/>'), edit: AIs('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), todo: AIs('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>'), ext: AIs('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>') };
+	const AI = { mail: AIs('<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>'), ok: AIs('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), no: AIs('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'), undo: AIs('<path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 12"/>'), edit: AIs('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'), todo: AIs('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>'), sure: AIs('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/><path d="M9 15l2 2 4-4"/>'), ext: AIs('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>') };
 	const ab = (cls, attr, ico, txt) => '<button type="button" class="d3-ab' + (cls ? ' ' + cls : '') + '" ' + attr + '>' + ico + '<span>' + txt + '</span></button>';
 	const head360 = (t, back, did, pp) => '<div class="cpx-sheet-h d3-h">' + (back ? '<button type="button" class="d3-back" data-back>← ' + esc(back.label) + '</button>' : '<button type="button" class="d3-back" data-close>← Vissza</button>') + '<h3>' + t + '</h3>' +
 		(did ? '<span class="d3-no" title="A deal egyedi sorszáma (a Salesmate-ben is ez)">#' + Number(did) + '</span><button type="button" class="cpx-btn ghost d3-link" data-dlink="' + Number(did) + '" title="A deal saját linkje – elküldhető, könyvjelzőzhető">🔗 <span>Link</span></button>' : '') +
@@ -2123,6 +2123,8 @@
 			'<div class="d3-top">' + stageBar(d) + '<div class="d3-acts' + (d.status === 'Open' ? ' open' : '') + '">' + stBadge(d) +
 			/* v1.78.8: egységes gombsor – azonos méret és stílus, vonalas ikonok */
 			(W && !d.deleted_at ? (d.status === 'Open' ? ab('d3-won', 'data-mvst="Won"', AI.ok, 'Megnyert') + ab('bad', 'data-mvst="Lost"', AI.no, 'Elvesztett') : ab('', 'data-mvst="Open"', AI.undo, 'Újranyitás')) : '') +
+			/* v2.9.352: „Biztos foglalás” – az ajánlat és a szerződés közötti szakaszban (Ajánlat kiküldve, Adatlap kiküldve, Adatlap kitöltve) */
+			(W && !d.deleted_at && d.status === 'Open' && ['ajánlat kiküldve', 'adatlap kiküldve', 'adatlap kitöltve'].includes(String(d.stage || '').toLowerCase()) ? (x.sure ? ab('d3-sure on', 'data-d3sure="0" title="Biztos foglalásnak jelölte: ' + esc(x.sure.by || '–') + (x.sure.at ? ', ' + esc(new Date(x.sure.at * 1000).toLocaleDateString('hu-HU')) : '') + ' – kattintva leveszed a jelölést"', AI.sure, 'Biztos foglalás ✓') : ab('d3-sure', 'data-d3sure="1" title="Tudjuk, hogy biztosan foglalni fognak, csak a szerződés lassú – foglalásnak számít a kapacitásban, a beosztásban, a háttérnél és a statisztikában"', AI.sure, 'Biztos foglalás')) : '') +
 			(R.edit && !d.deleted_at ? ab('pri', 'data-edit', AI.edit, 'Szerkesztés') : '') +
 			(window.CPMail && window.CPMail.canSend && window.CPMail.canSend() ? ab('', 'data-d3mail title="Új levél a deal kontaktjának (a levél a dealhez kötve)"', AI.mail, 'E-mail') : '') +
 			(window.CPKanban ? ab('', 'data-todo title="Teendő felvétele a Feladatokba"', AI.todo, 'Teendő') : '') +
@@ -2211,6 +2213,14 @@
 		/* v1.96: cégjavaslat a domainből / aláírásból / weboldalból – csak jóváhagyás után kerül a Salesmate-be */
 		const cos = sh.querySelector('[data-cos]');
 		if (cos) coSuggest(cos, d.id, () => openDeal(id, back));
+		const sb = sh.querySelector('[data-d3sure]');
+		if (sb) sb.addEventListener('click', async () => {
+			const on = sb.dataset.d3sure === '1';
+			if (!on && !(await (window.CPXConfirm ? window.CPXConfirm('A deal újra függő ajánlatként számít (kapacitás, beosztás, háttér, statisztika).', { title: 'Biztos foglalás jelölés levétele', ok: 'Levétel' }) : Promise.resolve(confirm('Leveszed a „Biztos foglalás” jelölést?'))))) return;
+			sb.disabled = true;
+			try { await post('cp_dsure_save', { id: d.id, on: on ? '1' : '' }); toast(on ? 'Biztos foglalásnak jelölve – a Kapacitásban a foglalások között látszik.' : 'Jelölés levéve.'); openDeal(d.id, back); }
+			catch (er) { toast(er.message, true); sb.disabled = false; }
+		});
 		const eb = sh.querySelector('[data-edit]');
 		if (eb) eb.addEventListener('click', () => editDeal(sh, x));
 		dinfoBind(sh, d, x); machBind(sh, d, x);

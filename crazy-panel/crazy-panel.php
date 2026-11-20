@@ -585,6 +585,12 @@ function cp_panel_normalize($rows) {
 	}
 	/* v2.9.348: gépszám dealenként (több szelfigép / spinner – Gépek és hátterek a dealen) */
 	if (function_exists('cp_dmach_many') && $out) { $ids = array(); foreach ($out as $e0) { $ids[] = (int) ($e0['deal'] ?? $e0['id']); } cp_dmach_many($ids); foreach ($out as &$e0) { list($e0['ns'], $e0['np']) = cp_dmach_n((int) ($e0['deal'] ?? $e0['id']), $e0['kind']); } unset($e0); }
+	/* v2.9.352: „Biztos foglalás” – a megjelölt függő ajánlat foglalásnak számít (kapacitás, slotok); a kártyán „sure” jelzés */
+	if (function_exists('cp_dsure_many') && $out) {
+		$ids = array(); foreach ($out as $e0) { if ($e0['state'] === 'pending') { $ids[] = (int) ($e0['deal'] ?? $e0['id']); } }
+		$sm = $ids ? cp_dsure_many($ids) : array();
+		if ($sm) { foreach ($out as &$e0) { $di = (int) ($e0['deal'] ?? $e0['id']); if ($e0['state'] === 'pending' && isset($sm[$di]) && cp_dsure_stage_ok($e0['stage'])) { $e0['state'] = 'booked'; $e0['sure'] = $sm[$di]; } } unset($e0); }
+	}
 	usort($out, function ($a, $b) { return strcmp($a['date'] . $a['time'], $b['date'] . $b['time']); });
 	return $out;
 }

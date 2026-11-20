@@ -448,12 +448,14 @@ function cp_st_signed_apply(&$rows, $backfill) {
 		$sin = implode(',', array_map(function ($i) { return "'" . (int) $i . "'"; }, $ids));
 		foreach ((array) $wpdb->get_results('SELECT deal_id, created_at FROM ' . cp_portal_t('portals') . " WHERE deal_id IN ($sin)", ARRAY_A) as $x) { $portal[(int) $x['deal_id']] = cp_st_local_d(strtotime($x['created_at'] . ' UTC')); }
 	}
+	$sure = function_exists('cp_dsure_many') ? cp_dsure_many($ids) : array();
 	$rank = array('seen' => 4, 'portal' => 3, 'won' => 2, 'nodate' => 0, '' => 0);
 	$today = cp_st_today();
 	foreach ($rows as &$r) {
 		$id = (int) $r['id'];
 		$o = isset($old[$id]) ? $old[$id] : array('signed_d' => null, 'signed_src' => '');
-		$is_signed = $r['status'] === 'Won' || ($r['status'] !== 'Lost' && in_array(cp_panel_lc($r['stage']), $signed, true));
+		/* v2.9.352: a „Biztos foglalás”-nak jelölt ajánlat a statisztikában foglalásnak (aláírtnak) számít */
+		$is_signed = $r['status'] === 'Won' || ($r['status'] !== 'Lost' && (in_array(cp_panel_lc($r['stage']), $signed, true) || (isset($sure[$id]) && cp_dsure_stage_ok($r['stage']))));
 		$cand = array();
 		if (!empty($o['signed_d']) && isset($rank[$o['signed_src']]) && $o['signed_src'] !== 'nodate') { $cand[$o['signed_src']] = $o['signed_d']; }
 		if ($is_signed) {

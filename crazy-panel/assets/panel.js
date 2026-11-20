@@ -894,7 +894,7 @@
       /* v1.81: külön a foglalások és a függő ajánlatok; a sorra kattintva megnyílik a deal */
       ((I.pSelfie > Math.max(0, I.freeS) || I.pSpin > Math.max(0, I.freeP)) && date >= today() ? '<div class="cpx-dwarn"><b>Figyelem:</b> erre a napra több függő ajánlat van (' + (I.pSelfie + I.pSpin) + '), mint szabad gép (' + Math.max(0, I.freeS) + ' szelfigép, ' + Math.max(0, I.freeP) + ' spinner). Ha mind igent mond, nem fér bele – érdemes alvállalkozót bevonni vagy az ajánlatokat priorizálni.</div>' : '') +
       /* v2.9.317: a foglalások és a függő ajánlatok külön, színezett dobozban */
-      '<section class="dg bk"><div class="dg-h"><b>Foglalások</b><span class="dg-n">' + I.ev.filter(e => e.state === 'booked').length + '</span><small>biztos – szerződés kiküldve vagy aláírva</small></div>' + (I.ev.some(e => e.state === 'booked') ? I.ev.filter(e => e.state === 'booked').map(evRow).join('') : '<p class="dg-e">Erre a napra még nincs foglalás.</p>') + '</section>' +
+      '<section class="dg bk"><div class="dg-h"><b>Foglalások</b><span class="dg-n">' + I.ev.filter(e => e.state === 'booked').length + '</span><small>biztos – szerződés kiküldve, aláírva vagy biztos foglalásnak jelölve</small></div>' + (I.ev.some(e => e.state === 'booked') ? I.ev.filter(e => e.state === 'booked').map(evRow).join('') : '<p class="dg-e">Erre a napra még nincs foglalás.</p>') + '</section>' +
       (I.ev.some(e => e.state !== 'booked') ? '<section class="dg pd"><div class="dg-h"><b>Függő ajánlatok</b><span class="dg-n">' + I.ev.filter(e => e.state !== 'booked').length + '</span><small>még nem biztos – ajánlat vagy adatlap</small></div>' + I.ev.filter(e => e.state !== 'booked').map(evRow).join('') + '</section>' : '') +
       (C.slot ? '<div class="sl-box" data-slots><div class="cpx-dsec"><h4>Beosztás</h4></div><p class="cpx-muted">Betöltés…</p></div>' : '') +
       '<h4>Hátterek ezen a napon</h4>' + (dayBgs.length ? dayBgs.map(e => '<div class="bgline"><span class="chip ' + (e.state === 'booked' ? 'taken' : 'pend') + '">' + esc(e.bg) + '</span><span>' + (e.state === 'booked' ? '<b>foglalt</b>' : '<b>csak ajánlatban</b> – még nem foglalt') + ' · ' + esc(e.title) + (partnerOf(e.bg) ? ' · <i>' + (e.state === 'booked' ? 'a párja is foglalt' : 'a párját is foglalná') + ': ' + esc(partnerOf(e.bg)) + '</i>' : '') + '</span></div>').join('') : '<p class="cpx-muted">Erre a napra még senki nem választott hátteret.</p>') +
@@ -902,6 +902,12 @@
     dlg.hidden = false;
     if (C.slot) slotLoad(dlg.querySelector('[data-slots]'), date);
     if (window.CPCrm && window.CPCrm.open) dlg.querySelectorAll('.evrow[data-deal]').forEach(r => { r.classList.add('link'); r.insertAdjacentHTML('afterbegin', '<span class="go">Deal megnyitása →</span>'); r.addEventListener('click', ev => { if (ev.target.closest('a,button,input,select')) return; closeModal(); window.CPCrm.open(Number(r.dataset.deal)); }); });
+    dlg.querySelectorAll('[data-sure]').forEach(b => b.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      if (!(await sureSave(b.dataset.sure, b.dataset.on === '1', b))) return;
+      delete S.cache[m]; try { await load(m); } catch (x) { /* állapotsor */ }
+      render(); openDay(date);
+    }));
     dlg.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', async () => {
       const n = Math.max(0, (I.subs || 0) + Number(b.dataset.s));
       b.disabled = true;
@@ -1146,7 +1152,26 @@
   function evRow(e) {
     return '<div class="evrow ' + e.state + '"' + (Number(dealOf(e)) > 0 ? ' data-deal="' + Number(dealOf(e)) + '"' : '') + '><div><b>' + esc(e.title || 'Deal #' + dealOf(e)) + '</b>' + dayTag(e) + ' ' + stateBadge(e) + '</div><small>' +
       [e.time, kindLabel(e), e.loc, e.bg ? 'Háttér: ' + e.bg : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
-      (e.state === 'booked' ? prepLine(e) : '') + '</div>';
+      (e.state === 'booked' ? prepLine(e) : '') + sureBtn(e) + '</div>';
+  }
+  /* v2.9.352: „Biztos foglalás” – a függő ajánlat (Ajánlat kiküldve, Adatlap kiküldve, Adatlap kitöltve) biztos munkának jelölhető */
+  const SURE_ST = ['ajánlat kiküldve', 'adatlap kiküldve', 'adatlap kitöltve'];
+  const sureOk = e => SURE_ST.includes(String(e.stage || '').toLowerCase());
+  function sureBtn(e) {
+    if (!(Number(dealOf(e)) > 0)) return '';
+    if (e.sure) return '<div class="sure-l"><span>Biztos foglalásnak jelölte: ' + esc(e.sure.by || '–') + (e.sure.at ? ', ' + esc(new Date(e.sure.at * 1000).toLocaleDateString('hu-HU')) : '') + '</span><button type="button" class="cpx-btn ghost sm" data-sure="' + Number(dealOf(e)) + '" data-on="0">Jelölés levétele</button></div>';
+    if (e.state !== 'booked' && sureOk(e)) return '<div class="sure-l"><button type="button" class="cpx-btn sm sure" data-sure="' + Number(dealOf(e)) + '" data-on="1" title="Tudjuk, hogy biztosan foglalni fognak – a szerződés még folyamatban. Foglalásnak számít: kapacitás, beosztás, háttér, statisztika.">Biztos foglalás</button></div>';
+    return '';
+  }
+  async function sureSave(id, on, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const fd = new FormData(); fd.append('action', 'cp_dsure_save'); fd.append('t', C.t); fd.append('id', id); fd.append('on', on ? '1' : '');
+      const r = await fetch(C.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
+      const j = await r.json();
+      if (!j.success) throw new Error((j.data && j.data.msg) || 'Mentési hiba');
+      return true;
+    } catch (x) { alert(x.message); if (btn) btn.disabled = false; return false; }
   }
   function prepLine(e) {
     const k = chk(e);
@@ -1154,7 +1179,7 @@
   }
   /* v2.9.321: ha ismert a deal teljes szolgáltatáslistája (panel vagy Salesmate szolgáltatás-mezők), azt írja ki */
   const kindLabel = e => e.svcl ? String(e.svcl).replace(/SpinnerClassic/g, 'Spinner') : e.kind === 'spin' ? '360 Spinner' : e.kind === 'both' ? 'Szelfi + Spinner' : 'Szelfigép';
-  const stateBadge = e => e.state === 'booked' ? '<span class="badge ok">' + esc(e.won ? 'Megnyert' : e.stage) + '</span>' : '<span class="badge pend">' + esc(e.stage || 'Függő') + '</span>';
+  const stateBadge = e => e.sure ? '<span class="badge sure" title="Biztos foglalásnak jelölve – a szerződés még folyamatban">Biztos · ' + esc(e.stage) + '</span>' : e.state === 'booked' ? '<span class="badge ok">' + esc(e.won ? 'Megnyert' : e.stage) + '</span>' : '<span class="badge pend">' + esc(e.stage || 'Függő') + '</span>';
 
   /* ------------------------------------------------------------ hátterek */
   function viewBackgrounds(main) {

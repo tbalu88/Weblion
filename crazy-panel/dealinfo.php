@@ -178,3 +178,56 @@ add_filter('cp_crm_deal_data', function ($x) {
 	if ($id) { $x['mach'] = cp_dmach_get($id); $x['bgl'] = function_exists('cp_panel_bg_list') ? array_map(function ($b) { return (string) $b['name']; }, cp_panel_bg_list()) : array(); }
 	return $x;
 }, 23);
+/* ---------------------------------------------------------------- v2.9.352: „Biztos foglalás” – a függő ajánlat (Ajánlat kiküldve,
+   Adatlap kiküldve, Adatlap kitöltve) megjelölhető biztos munkának (a felhasználó döntése, 2026-11-20): foglalásnak számít a kapacitásban,
+   a kezelő-slotokban, a háttér-foglaltságban és a statisztikában. Csak a panelben (a Salesmate-et nem írja). Magától megszűnik: csak ezekben
+   a szakaszokban hat – a „Szerződés kiküldve” szakasztól amúgy is foglalás, elveszett dealnél nem számít. */
+function cp_dsure_stages() { return array('ajánlat kiküldve', 'adatlap kiküldve', 'adatlap kitöltve'); }
+function cp_dsure_stage_ok($stage) { return in_array(cp_panel_lc((string) $stage), cp_dsure_stages(), true); }
+/* sok dealre: id => array('by' => …, 'at' => unix) – csak ahol be van jelölve */
+function cp_dsure_many($ids) {
+	global $wpdb; static $mem = array();
+	$ids = array_values(array_unique(array_filter(array_map('intval', (array) $ids)))); $out = array(); $need = array();
+	foreach ($ids as $i) { if (array_key_exists($i, $mem)) { if ($mem[$i]) { $out[$i] = $mem[$i]; } } else { $need[] = $i; } }
+	if ($need && cp_dinfo_db()) {
+		foreach (array_chunk($need, 500) as $ch) {
+			$got = array();
+			foreach ((array) $wpdb->get_results('SELECT deal_id, data FROM ' . cp_dinfo_t() . ' WHERE deal_id IN (' . implode(',', $ch) . ") AND data LIKE '%\"sure\"%'", ARRAY_A) as $r) {
+				$d = json_decode((string) $r['data'], true); if (!is_array($d) || empty($d['sure']) || !is_array($d['sure'])) { continue; }
+				$got[(int) $r['deal_id']] = array('by' => (string) ($d['sure']['by'] ?? ''), 'at' => (int) ($d['sure']['at'] ?? 0));
+			}
+			foreach ($ch as $i) { $mem[$i] = $got[$i] ?? null; if (isset($got[$i])) { $out[$i] = $got[$i]; } }
+		}
+	}
+	return $out;
+}
+function cp_dsure_get($id) { return cp_dsure_many(array((int) $id))[(int) $id] ?? null; }
+function cp_dsure_set($id, $on, $who = '') {
+	global $wpdb; cp_dinfo_db();
+	$who = $who !== '' ? $who : (function_exists('cp_panel_who') ? cp_panel_who() : '');
+	$data = cp_dinfo_raw($id);
+	if ($on) { $data['sure'] = array('by' => mb_substr($who, 0, 100), 'at' => time()); } else { unset($data['sure']); }
+	$wpdb->replace(cp_dinfo_t(), array('deal_id' => (int) $id, 'data' => wp_json_encode($data, JSON_UNESCAPED_UNICODE), 'by_user' => mb_substr($who, 0, 100), 'updated_at' => gmdate('Y-m-d H:i:s')));
+	if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'sure', $on ? 'Biztos foglalásnak jelölve' : 'Biztos foglalás jelölése levéve', 'deal:' . (int) $id, ''); }
+	if (function_exists('cp_panel_flush_cache')) { cp_panel_flush_cache(); }
+	return $on ? array('by' => mb_substr($who, 0, 100), 'at' => time()) : null;
+}
+add_action('wp_ajax_nopriv_cp_dsure_save', 'cp_dsure_ajax_save');
+add_action('wp_ajax_cp_dsure_save', 'cp_dsure_ajax_save');
+function cp_dsure_ajax_save() {
+	cp_el_auth();
+	cp_tab_need(array('deals', 'naptar'));
+	if ($_SERVER['REQUEST_METHOD'] !== 'POST') { cp_el_err('Hibás kérés.'); }
+	$id = (int) ($_POST['id'] ?? 0); $on = !empty($_POST['on']);
+	if ($id <= 0) { cp_el_err('Hibás kérés.'); }
+	global $wpdb;
+	$st = $wpdb->get_row($wpdb->prepare('SELECT stage, status FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A);
+	if (!$st) { cp_el_err('Nincs ilyen deal.', 404); }
+	if ($on && (!cp_dsure_stage_ok($st['stage']) || cp_panel_lc((string) $st['status']) === 'lost')) { cp_el_err('Biztos foglalásnak csak az „Ajánlat kiküldve”, „Adatlap kiküldve” vagy „Adatlap kitöltve” szakaszban lévő deal jelölhető.'); }
+	wp_send_json_success(array('sure' => cp_dsure_set($id, $on)));
+}
+add_filter('cp_crm_deal_data', function ($x) {
+	$id = (int) ($x['deal']['id'] ?? 0);
+	if ($id) { $x['sure'] = cp_dsure_get($id); }
+	return $x;
+}, 24);

@@ -42,7 +42,9 @@ function cp_portal_bg_taken($date, $except_deal = '', $win = null) {
 			if ($pipeline !== '' && $pl !== '' && $pl !== $pipeline) { continue; }
 			$status = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'status')));
 			$st = cp_panel_lc(cp_panel_str(cp_panel_get($r, 'stage')));
-			if ($status === 'lost' || !($status === 'won' || in_array($st, $booked, true))) { continue; }
+			/* v2.9.352: a „Biztos foglalás”-nak jelölt függő ajánlat háttere is foglalt */
+			$sure_ = !in_array($st, $booked, true) && function_exists('cp_dsure_stage_ok') && cp_dsure_stage_ok($st) && function_exists('cp_dsure_get') && cp_dsure_get((int) (function_exists('cp_mday_base') ? cp_mday_base($id) : $id));
+			if ($status === 'lost' || !($status === 'won' || in_array($st, $booked, true) || $sure_)) { continue; }
 			$bg = cp_panel_lc(cp_panel_str(cp_panel_get($r, $p['f_bg'])));
 			if ($bg !== '') { $rows[$id] = array('bg' => $bg, 'w' => function_exists('cp_bgw_row') ? cp_bgw_row($r) : null); }
 		}
