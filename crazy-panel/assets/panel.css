@@ -811,3 +811,12 @@ html[data-theme="dark"] .cpx-top img,html[data-theme="dark"] .cpx-top [style*="b
 .sure-l{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:13px;color:var(--mu,#6B7280)}
 .sure-l .cpx-btn.sm{min-height:32px;padding:0 14px;font-size:13px}
 .evrow.booked:has(.badge.sure){border-left-color:#3B6FD1}
+/* v2.9.353: hét-léptető telefonon – egy sorban: ‹ cím › Ma, alatta a Rács / Lista */
+.cpx-mnav h2.wk-lbl .s{display:none}
+@media (max-width:700px){
+  .cpx-mnav{flex-wrap:wrap;width:100%;gap:8px}
+  .cpx-mnav h2{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:17px}
+  .cpx-mnav h2.wk-lbl .l{display:none}.cpx-mnav h2.wk-lbl .s{display:inline}
+  .cpx-mnav>.cpx-btn{flex:none}
+  .cpx-mnav .seg.wkm{flex-basis:100%;margin-top:0}
+}

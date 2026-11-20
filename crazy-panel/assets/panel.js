@@ -810,7 +810,10 @@
     const d0 = parseYmd(days[0]), d6 = parseYmd(days[6]);
     const lbl = (d0.getFullYear() !== new Date().getFullYear() ? d0.getFullYear() + '. ' : '') + HU_MONTHS[d0.getMonth()] + ' ' + d0.getDate() + '. – ' + (d6.getMonth() !== d0.getMonth() ? HU_MONTHS[d6.getMonth()] + ' ' : '') + d6.getDate() + '.';
     const nav = el('div', { class: 'cpx-mnav' });
-    nav.innerHTML = '<button class="cpx-btn ghost" data-w="-7" aria-label="Előző hét">‹</button><h2>' + esc(lbl) + '</h2><button class="cpx-btn ghost" data-w="7" aria-label="Következő hét">›</button><button class="cpx-btn ghost cpx-today" data-w="0" title="Ugrás az aktuális hétre"' + (days.includes(tdy) ? ' disabled' : '') + '>Ma</button>';
+    /* v2.9.353: telefonon rövidített hónapnév (nov. 30. – dec. 6.), hogy egy sorban elférjen a léptetőkkel */
+    const HS = m => HU_MONTHS[m].slice(0, 3) + '.';
+    const lblS = HS(d0.getMonth()) + ' ' + d0.getDate() + '. – ' + (d6.getMonth() !== d0.getMonth() ? HS(d6.getMonth()) + ' ' : '') + d6.getDate() + '.';
+    nav.innerHTML = '<button class="cpx-btn ghost" data-w="-7" aria-label="Előző hét">‹</button><h2 class="wk-lbl"><span class="l">' + esc(lbl) + '</span><span class="s">' + esc(lblS) + '</span></h2><button class="cpx-btn ghost" data-w="7" aria-label="Következő hét">›</button><button class="cpx-btn ghost cpx-today" data-w="0" title="Ugrás az aktuális hétre"' + (days.includes(tdy) ? ' disabled' : '') + '>Ma</button>';
     /* v2.9.307: Lista | Rács (Google-naptár-szerű idősávos csempék) */
     S.wkMode = S.wkMode || (() => { try { return localStorage.getItem('cpx_wkm') || 'grid'; } catch (e) { return 'grid'; } })();
     nav.insertAdjacentHTML('beforeend', '<div class="seg wkm" role="group" aria-label="Heti nézet módja">' + [['grid', 'Rács'], ['list', 'Lista']].map(x => '<button type="button" data-wkm="' + x[0] + '" class="' + (S.wkMode === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>');
