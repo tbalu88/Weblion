@@ -855,7 +855,7 @@
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
     if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) {
       /* 0.17.1: a panel AI-kerete (felhasznált / keret) és a közös kredit; narancs, ha a kredit kevesebb, mint egy rendezvénynyi (200) képre elég */
-      let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs';
+      let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez újabb program kell (ezen a gépen: v' + (S.cfg.version || '?') + ') – telepítsd a 0.17.1-et, utána a programból frissül' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs';
       /* a kredit csak a 0.17.1-es programmal kérdezhető le – addig nem mutathatunk zöldet */
       if (aiReady() && !B.aiStatus) { st = 'mid'; txt += ' · az AI-kredit ezen a programváltozaton nem ellenőrizhető – frissíts: Gép fül → Program frissítése (0.17.1)'; }
       if (aiReady() && B.aiStatus) {
