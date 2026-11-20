@@ -727,6 +727,7 @@
     document.querySelectorAll('[data-pane]').forEach(p => p.classList.toggle('on', p.dataset.pane === t));
     if (t === 'ov') preflight();
     if (t === 'hw') updInfo();
+    const tb = document.querySelector('[data-tab="' + t + '"]'); if (tb && tb.scrollIntoView) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   $('[data-tabs]').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) tab(b.dataset.tab); });
   /* keresés: minden fülön, a találatok látszanak, a többi elrejtve */
@@ -736,9 +737,14 @@
     $('[data-form]').classList.toggle('srch', !!q);
     panes.forEach(p => {
       let ph = 0;
-      p.querySelectorAll(':scope > label, :scope > .st-row > label, :scope > .st-h, :scope > .st-b, :scope > .st-ev, :scope > .st-modes, :scope > .st-pre, :scope > .st-prel, :scope > p').forEach(el => {
-        const m = !q || norm(el.textContent + ' ' + [...el.querySelectorAll('input[placeholder]')].map(i => i.placeholder).join(' ')).includes(q);
-        el.classList.toggle('st-hide', !m); if (m && q) ph++;
+      /* 0.18: csoportokban (.st-grp); ha a csoport címe illik, az egész csoport látszik */
+      p.querySelectorAll('.st-grp').forEach(g => {
+        const h = g.querySelector(':scope > .st-h'), gm = !q || norm(h ? h.textContent : '').includes(q); let gh = 0;
+        g.querySelectorAll(':scope > label, :scope > .st-row > label, :scope > .st-b, :scope > .st-ev, :scope > .st-tpl, :scope > .st-modes, :scope > .st-pre, :scope > .st-prel, :scope > .st-upd, :scope > p').forEach(el => {
+          const m = gm || norm(el.textContent + ' ' + [...el.querySelectorAll('input[placeholder]')].map(i => i.placeholder).join(' ')).includes(q);
+          el.classList.toggle('st-hide', !m); if (m) gh++;
+        });
+        g.classList.toggle('st-hide', !!q && !gh); if (q) ph += gh;
       });
       p.classList.toggle('hit', !!ph); hit += ph;
     });
@@ -836,7 +842,7 @@
             const p = name ? pr.find(x => x.name === name) : (pr.find(x => x.def || x.isDefault) || pr[0]);
             if (!p) { add('bad', 'Nyomtató', name ? '„' + name + '” nem található' : 'nincs nyomtató'); return; }
             const st = prState(p), left = paperLeft(p.name), lp = left === null ? '' : ' · papír: ' + left + ' lap';
-            add(left === 0 ? 'bad' : st[0] === 'bad' ? 'bad' : (st[0] === 'mid' || (left !== null && left <= 30)) ? 'mid' : 'ok', 'Nyomtató', p.name + (name ? '' : ' (alapértelmezett)') + (st[1] ? ' · ' + st[1] : '') + lp + (left === null ? ' · a papír nincs számolva (Utána fül)' : ''));
+            add(left === 0 ? 'bad' : st[0] === 'bad' ? 'bad' : (st[0] === 'mid' || (left !== null && left <= 30)) ? 'mid' : 'ok', 'Nyomtató', p.name + (name ? '' : ' (alapértelmezett)') + (st[1] ? ' · ' + st[1] : '') + lp + (left === null ? ' · a papír nincs számolva (Nyomtatás fül)' : ''));
           });
         } catch (e) { add('bad', 'Nyomtató', e.message); }
       }
@@ -850,13 +856,16 @@
     if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) {
       /* 0.17.1: a panel AI-kerete (felhasznált / keret) és a közös kredit; narancs, ha a kredit kevesebb, mint egy rendezvénynyi (200) képre elég */
       let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs';
+      /* a kredit csak a 0.17.1-es programmal kérdezhető le – addig nem mutathatunk zöldet */
+      if (aiReady() && !B.aiStatus) { st = 'mid'; txt += ' · az AI-kredit ezen a programváltozaton nem ellenőrizhető – frissíts: Gép fül → Program frissítése (0.17.1)'; }
       if (aiReady() && B.aiStatus) {
         try {
           const a = await call(B.aiStatus, S.cfg.event.ev);
           txt = (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + a.used + ' / ' + a.limit + ' kép felhasználva' + (a.left != null ? ' (még ' + a.left + ')' : '') + (a.imgs != null ? ' · AI-kredit: kb. ' + a.imgs + ' képre elég' : '');
+          if (a.imgs == null) { st = 'mid'; txt += ' · az AI-kredit egyenlege most nem ismert – kérdezd az irodát'; }
           if (a.imgs != null && a.imgs < 200) { st = a.imgs < 1 ? 'bad' : 'mid'; txt += a.imgs < 1 ? ' – elfogyott, szólj az irodának!' : ' – kevés egy rendezvényre, szólj az irodának'; }
           if (a.left != null && a.left < 1) { st = 'bad'; txt += ' – a rendezvény AI-kerete elfogyott'; }
-        } catch (e) { txt += ' · a kredit most nem kérdezhető le (' + e.message + ')'; }
+        } catch (e) { st = 'mid'; txt += ' · a kredit most nem kérdezhető le (' + e.message + ')'; }
       }
       add(st, 'AI-kép', txt);
     }
