@@ -1287,7 +1287,7 @@
       const r = await call(B.updCheck);
       if (!r.avail) { updText('A program naprakész (' + esc(r.cur) + ').'); return; }
       S.updV = r.avail.v;
-      updText('Új változat érhető el: <b>' + esc(r.avail.v) + '</b> (most: ' + esc(r.cur) + ', ' + Math.round((r.avail.size || 0) / 1048576) + ' MB). A telepítés után a program magától újraindul – a beállítások, képek és sablonok megmaradnak. Rendezvény közben ne indítsd.');
+      updText('Új változat érhető el: <b>' + esc(r.avail.v) + '</b> (most: ' + esc(r.cur) + ', ' + (r.avail.small ? 'kis frissítés, csak a programkód: ' : 'teljes csomag: ') + Math.max(1, Math.round((r.avail.size || 0) / 1048576)) + ' MB). A telepítés után a program magától újraindul – a beállítások, képek és sablonok megmaradnak. Rendezvény közben ne indítsd.');
       g.hidden = false; g.textContent = 'Letöltés és telepítés (' + r.avail.v + ')';
     } catch (e) { updText('Nem sikerült a keresés: ' + esc(e.message)); }
   }
