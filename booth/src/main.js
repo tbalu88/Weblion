@@ -45,9 +45,12 @@ function dayDir() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return path.join(app.getPath('pictures'), 'CrazyBooth', d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()));
 }
+/* 0.18.0: beépített digiCamControl – DSLR-módban a program maga indítja és tartja életben (webszerverrel) */
+let dccRun = null;
+const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, log }));
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
-  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder });
+  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null });
 }
 const toDataUrl = (buf, mime) => 'data:' + (mime || 'image/jpeg') + ';base64,' + buf.toString('base64');
 const fromDataUrl = s => { const m = /^data:([^;]+);base64,(.*)$/s.exec(String(s || '')); if (!m) throw new Error('hibás kép'); return { mime: m[1], buf: Buffer.from(m[2], 'base64') }; };
@@ -61,7 +64,7 @@ ipcMain.handle('cfg:set', wrap(async c => {
   keep.forEach(k => { if (c && c[k] !== undefined) cfg[k] = c[k]; });
   saveCfg(); makeCam(); return cfg;
 }));
-ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); return cam.init(); }));
+ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); if (cfg.camera === 'dcc') { const e = await dccR().ensure(); if (e) log('digiCamControl: ' + e); } return cam.init(); }));
 /* v0.9: DSLR-beállítások (ISO, rekesz, záridő, expozíció-korrekció, fehéregyensúly) – digiCamControl */
 ipcMain.handle('cam:props', wrap(async () => { if (!cam) makeCam(); if (!cam.props) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.props(); }));
 ipcMain.handle('cam:set', wrap(async (p, v) => { if (!cam) makeCam(); if (!cam.setProp) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.setProp(p, v); }));
@@ -166,9 +169,11 @@ app.whenReady().then(() => {
   const boot = async () => { if (!MOCK || process.argv.includes('--online')) { try { await ui.check(4000); } catch (e) { /* */ } } const e = (MOCK && !process.argv.includes('--online')) ? { file: path.join(__dirname, 'renderer', 'index.html'), v: 'helyi (fejlesztői)' } : ui.entry(); log('felület: ' + e.v); win.loadFile(e.file); };
   boot();
   setInterval(async () => { if (MOCK && !process.argv.includes('--online')) return; if (await ui.check(15000)) { uiPending = true; win.webContents.send('ui:ready'); } }, 15 * 60 * 1000);
+  dccR().watch(() => cfg.camera === 'dcc');
   globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
   /* a kijelző ne aludjon el rendezvény közben */
   require('electron').powerSaveBlocker.start('prevent-display-sleep');
 });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => { if (dccRun) dccRun.stop(); });
 process.on('uncaughtException', e => log('KRITIKUS ' + (e && e.stack || e)));

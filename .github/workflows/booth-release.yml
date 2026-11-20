@@ -12,12 +12,44 @@ permissions:
   contents: write
 
 jobs:
+  # 0.18.0: a digiCamControl (MIT) beépítése – Windows-gépen csendben telepítjük, a programmappáját a csomagba tesszük
+  dcc:
+    if: contains(github.event.head_commit.message, '[booth-release]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: digiCamControl 2.1.7.0 letöltése és telepítése
+        shell: pwsh
+        run: |
+          curl.exe -sSL --retry 4 -o setup.exe "https://sourceforge.net/projects/digicamcontrol/files/digiCamControlsetup_2.1.7.0.exe/download"
+          $h = (Get-FileHash setup.exe -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne 'e1f47e28c5073fe190a77353af1496508cdce48f7390f516c666ad1ba365aecf') { throw "Hibás ellenőrzőösszeg: $h" }
+          $p = Start-Process .\setup.exe -ArgumentList '/quiet','/norestart' -Wait -PassThru
+          "telepítő kilépési kód: $($p.ExitCode)"
+          $d = @("$env:ProgramFiles\digiCamControl", "${env:ProgramFiles(x86)}\digiCamControl") | Where-Object { Test-Path "$_\CameraControl.exe" } | Select-Object -First 1
+          if (-not $d) { Get-ChildItem $env:ProgramFiles, ${env:ProgramFiles(x86)} | Out-String | Write-Host; throw 'Nincs CameraControl.exe' }
+          New-Item -ItemType Directory dcc | Out-Null
+          Copy-Item "$d\*" dcc -Recurse
+          curl.exe -sSL --retry 4 -o dcc\LICENSE-digiCamControl.txt "https://raw.githubusercontent.com/dukus/digiCamControl/master/LICENSE"
+          "méret: {0:N0} MB" -f ((Get-ChildItem dcc -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+          Get-ChildItem dcc -Filter *.exe | Select-Object Name | Out-String | Write-Host
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dcc
+          path: dcc
+          retention-days: 3
+
   windows-zip:
+    needs: dcc
     if: contains(github.event.head_commit.message, '[booth-release]')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: dcc
+          path: booth/vendor/dcc
       - uses: actions/setup-node@v5
         with:
           node-version: 22

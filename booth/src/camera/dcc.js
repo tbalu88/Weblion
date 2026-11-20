@@ -19,7 +19,18 @@ function parseList(t) {
 function make(opts) {
   const base = (opts.url || 'http://127.0.0.1:5513').replace(/\/+$/, '');
   const folder = opts.folder;
+  /* 0.18.0: ha a webszerver nem érhető el, a beépített digiCamControlt elindítjuk, és egyszer újrapróbáljuk */
+  let ensT = 0;
   const get = async (q, asBuf) => {
+    try { return await get1(q, asBuf); }
+    catch (e) {
+      if (!opts.ensure || !/nem érhető el/.test(e.message) || Date.now() - ensT < 20000) throw e;
+      ensT = Date.now(); const msg = await opts.ensure();
+      if (msg) throw new Error(msg);
+      return get1(q, asBuf);
+    }
+  };
+  const get1 = async (q, asBuf) => {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), opts.timeout || 8000);
     try {
