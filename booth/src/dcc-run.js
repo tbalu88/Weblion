@@ -37,19 +37,28 @@ function make(o) {
     try {
       if (fs.existsSync(js)) {
         const raw = fs.readFileSync(js, 'utf8').replace(/^\uFEFF/, ''); const j = JSON.parse(raw);
-        if (j.UseWebserver !== true || Number(j.WebserverPort) !== P || j.AllowWebserverActions === false) { j.UseWebserver = true; j.WebserverPort = P; j.AllowWebserverActions = true; fs.writeFileSync(js, JSON.stringify(j, null, 2)); changed = true; }
+        const W = { UseWebserver: true, WebserverPort: P, AllowWebserverActions: true, StartMinimized: true, MinimizeToTrayIcon: true, HideTrayNotifications: true };
+        if (Object.keys(W).some(k => j[k] !== W[k])) { Object.assign(j, W); fs.writeFileSync(js, JSON.stringify(j, null, 2)); changed = true; }
       } else if (fs.existsSync(xml)) {
         let s = fs.readFileSync(xml, 'utf8'); const s0 = s;
         const put = (k, v) => { const re = new RegExp('<' + k + '>[^<]*</' + k + '>'); s = re.test(s) ? s.replace(re, '<' + k + '>' + v + '</' + k + '>') : s.replace(/<\/Settings>\s*$/, '  <' + k + '>' + v + '</' + k + '>\r\n</Settings>'); };
-        put('UseWebserver', 'true'); put('WebserverPort', String(P)); put('AllowWebserverActions', 'true');
+        put('UseWebserver', 'true'); put('WebserverPort', String(P)); put('AllowWebserverActions', 'true'); put('StartMinimized', 'true'); put('MinimizeToTrayIcon', 'true'); put('HideTrayNotifications', 'true');
         if (s !== s0) { fs.writeFileSync(xml, s); changed = true; }
       } else {
         /* még sosem futott: rövid beállításfájl, a többi alapértéken marad (a JSON-os és az XML-es változat is beolvassa) */
-        fs.writeFileSync(xml, '<?xml version="1.0"?>\r\n<Settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\r\n  <UseWebserver>true</UseWebserver>\r\n  <WebserverPort>' + P + '</WebserverPort>\r\n  <AllowWebserverActions>true</AllowWebserverActions>\r\n</Settings>\r\n');
+        fs.writeFileSync(xml, '<?xml version="1.0"?>\r\n<Settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\r\n  <UseWebserver>true</UseWebserver>\r\n  <WebserverPort>' + P + '</WebserverPort>\r\n  <AllowWebserverActions>true</AllowWebserverActions>\r\n  <StartMinimized>true</StartMinimized>\r\n  <MinimizeToTrayIcon>true</MinimizeToTrayIcon>\r\n  <HideTrayNotifications>true</HideTrayNotifications>\r\n</Settings>\r\n');
         changed = true;
       }
     } catch (e) { log('digiCamControl beállítás: ' + e.message); }
     return changed;
+  }
+  /* 0.18.2: a beépített példány mellé Branding.xml – nincs betöltő- és üdvözlőképernyő, nincs frissítés-kérdés
+     (a digiCamControl a programmappájából olvassa; a hiányzó elemek az alapértéken maradnak) */
+  function branding(f) {
+    if (!process.resourcesPath || path.dirname(f) !== path.join(process.resourcesPath, 'dcc')) return;
+    const b = path.join(path.dirname(f), 'Branding.xml');
+    const x = '<?xml version="1.0"?>\r\n<Branding xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\r\n  <ShowStartupScreen>false</ShowStartupScreen>\r\n  <ShowStartupScreenAnimation>false</ShowStartupScreenAnimation>\r\n  <ShowWelcomeScreen>false</ShowWelcomeScreen>\r\n  <CheckForUpdate>false</CheckForUpdate>\r\n  <OnlineReference>false</OnlineReference>\r\n</Branding>\r\n';
+    try { if (!fs.existsSync(b) || fs.readFileSync(b, 'utf8') !== x) fs.writeFileSync(b, x); } catch (e) { log('digiCamControl Branding.xml: ' + e.message); }
   }
   const running = () => new Promise(res => execFile('tasklist', ['/FI', 'IMAGENAME eq CameraControl.exe', '/NH'], { windowsHide: true }, (e, out) => res(!e && /CameraControl\.exe/i.test(String(out)))));
   const kill = () => new Promise(res => execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }, () => res()));
@@ -63,14 +72,15 @@ function make(o) {
       lastTry = Date.now();
       const f = exe();
       if (!f) return 'A digiCamControl nincs a gépen – telepítsd a Crazy Booth 0.18-as vagy újabb csomagját, vagy a digiCamControlt.';
-      const changed = settings();
+      branding(f); const changed = settings();
+      if (o.onStart) o.onStart();
       if (await running()) {
         if (!changed && started) return 'A digiCamControl fut, de a webszervere nem válaszol – várj pár másodpercet.';
         log('digiCamControl újraindítása (webszerver bekapcsolva)'); await kill(); await new Promise(r => setTimeout(r, 1500));
       }
       log('digiCamControl indítása: ' + f);
       try { const p = spawn(f, [], { cwd: path.dirname(f), detached: true, stdio: 'ignore' }); p.unref(); started = p; } catch (e) { return 'A digiCamControl nem indult el: ' + e.message; }
-      for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 750)); if (await up(1500)) { log('digiCamControl webszerver kész (' + port() + ')'); return ''; } }
+      for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 750)); if (await up(1500)) { log('digiCamControl webszerver kész (' + port() + ')'); if (o.onReady) o.onReady(); return ''; } }
       return 'A digiCamControl elindult, de a webszervere nem válaszol (' + port() + '). Ha a Windows tűzfal rákérdezett, engedélyezd.';
     })();
     try { return await busy; } finally { busy = null; }

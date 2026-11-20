@@ -47,7 +47,10 @@ function dayDir() {
 }
 /* 0.18.0: beépített digiCamControl – DSLR-módban a program maga indítja és tartja életben (webszerverrel) */
 let dccRun = null;
-const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, log }));
+/* 0.18.2: a digiCamControl ablakai (betöltő, főablak, élőkép) ne kerüljenek a vendég képernyője fölé – DSLR-módban,
+   teljes képernyőn a Crazy Booth ablaka mindig felül van; indulás után visszakapja a fókuszt */
+function dccTop(noFocus) { try { if (!win || win.isDestroyed()) return; const on = cfg.camera === 'dcc' && (win.isFullScreen() || win.isKiosk()); win.setAlwaysOnTop(on, 'screen-saver'); if (on && noFocus !== true && !BrowserWindow.getAllWindows().some(w => w !== win && !w.isDestroyed() && w.isVisible() && w.getParentWindow() === win)) { win.moveTop(); win.focus(); } } catch (e) { /* */ } }
+const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
   cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null });
@@ -62,9 +65,9 @@ ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, 
 ipcMain.handle('cfg:set', wrap(async c => {
   const keep = Object.keys(DEF);
   keep.forEach(k => { if (c && c[k] !== undefined) cfg[k] = c[k]; });
-  saveCfg(); makeCam(); return cfg;
+  saveCfg(); makeCam(); dccTop(true); return cfg;
 }));
-ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); if (cfg.camera === 'dcc') { const e = await dccR().ensure(); if (e) log('digiCamControl: ' + e); } return cam.init(); }));
+ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); if (cfg.camera === 'dcc') { const e = await dccR().ensure(); if (e) log('digiCamControl: ' + e); } dccTop(); return cam.init(); }));
 /* v0.9: DSLR-beállítások (ISO, rekesz, záridő, expozíció-korrekció, fehéregyensúly) – digiCamControl */
 ipcMain.handle('cam:props', wrap(async () => { if (!cam) makeCam(); if (!cam.props) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.props(); }));
 ipcMain.handle('cam:set', wrap(async (p, v) => { if (!cam) makeCam(); if (!cam.setProp) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.setProp(p, v); }));
@@ -132,7 +135,7 @@ ipcMain.handle('upd:install', wrap(async () => U().install()));
 ipcMain.handle('ui:reload', wrap(async () => { const e = ui.entry(); uiPending = false; log('felület betöltése: ' + e.v); await win.loadFile(e.file); return e.v; }));
 ipcMain.handle('ui:info', wrap(async () => Object.assign(ui.entry(), { pending: uiPending, shell: app.getVersion() })));
 ipcMain.handle('win:isFull', wrap(async () => win.isFullScreen() || win.isKiosk()));
-ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win.isFullScreen() || win.isKiosk()) : !!on; win.setKiosk(f); win.setFullScreen(f); return f; }));
+ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win.isFullScreen() || win.isKiosk()) : !!on; win.setKiosk(f); win.setFullScreen(f); setTimeout(() => dccTop(true), 300); return f; }));
 
 /* ---------- ablak */
 app.whenReady().then(() => {
