@@ -36,5 +36,9 @@ contextBridge.exposeInMainWorld('booth', {
   isFullscreen: () => ipcRenderer.invoke('win:isFull'),
   reloadUi: () => ipcRenderer.invoke('ui:reload'),
   uiInfo: () => ipcRenderer.invoke('ui:info'),
-  onUiReady: cb => ipcRenderer.on('ui:ready', () => cb())
+  onUiReady: cb => ipcRenderer.on('ui:ready', () => cb()),
+  updCheck: () => ipcRenderer.invoke('upd:check'),
+  updDownload: () => ipcRenderer.invoke('upd:download'),
+  updInstall: () => ipcRenderer.invoke('upd:install'),
+  onUpdProgress: cb => ipcRenderer.on('upd:progress', (e, p) => cb(p))
 });

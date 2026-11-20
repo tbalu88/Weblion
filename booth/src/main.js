@@ -117,6 +117,12 @@ ipcMain.handle('cloud:status', wrap(async () => cloud.status()));
 ipcMain.handle('cloud:tok', wrap(async n => cloud.newTok(n || 10)));
 ipcMain.handle('cloud:urls', wrap(async (ev, ph) => ({ photo: ph ? cloud.photoUrl(ev, ph) : '', event: cloud.eventUrl(ev) })));
 ipcMain.handle('app:quit', wrap(async () => app.quit()));
+/* 0.17.0: önfrissítés – csak kézzel (Beállítások → Gép → Program frissítése) */
+let upd = null;
+const U = () => upd || (upd = require('./self-update').make({ app, log }));
+ipcMain.handle('upd:check', wrap(async () => U().check()));
+ipcMain.handle('upd:download', wrap(async () => U().download(p => { if (win && !win.isDestroyed()) win.webContents.send('upd:progress', p); })));
+ipcMain.handle('upd:install', wrap(async () => U().install()));
 /* teljes képernyő ki / be (a kezdőképernyő sarokgombja) */
 /* online felület: újratöltés, ha közben új változat érkezett (a felület hívja, amikor a kezdőképernyőn tétlen) */
 ipcMain.handle('ui:reload', wrap(async () => { const e = ui.entry(); uiPending = false; log('felület betöltése: ' + e.v); await win.loadFile(e.file); return e.v; }));
@@ -130,6 +136,7 @@ app.whenReady().then(() => {
   lan = require('./lan').make({ picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), log });
   cloud = require('./cloud').make({ dataDir: app.getPath('userData'), picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), key: () => cfg.boothKey, log });
   log('indítás ' + app.getVersion() + ' ' + process.platform + (MOCK ? ' (próbamód)' : ''));
+  setTimeout(() => { try { U().started(); } catch (e) { log('önfrissítés jelzés: ' + e.message); } }, 3000); /* az új változat visszajelez a cserélő szkriptnek */
   /* webkamera: Macen a rendszer engedélyt kér (Adatvédelem → Kamera); a felületnek a kamera / mikrofon kérését engedjük */
   if (MAC && systemPreferences.askForMediaAccess) { systemPreferences.askForMediaAccess('camera').then(ok => log('kamera-engedély: ' + ok)).catch(() => {}); }
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'media'));

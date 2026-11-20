@@ -353,6 +353,8 @@
     const a = e.target.closest('[data-act]'); if (!a) return;
     const act = a.dataset.act;
     if (act === 'print') print();
+    else if (act === 'updcheck') { updCheck(); }
+    else if (act === 'updgo') { updGo(); }
     else if (act === 'drawplay') { drawPlay(); }
     else if (act === 'drawqr') { drawQrToggle(); }
     else if (act === 'again') { clearTimeout(S.idleT); await commit(); run(S.mode); }
@@ -689,6 +691,7 @@
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     document.querySelectorAll('[data-pane]').forEach(p => p.classList.toggle('on', p.dataset.pane === t));
     if (t === 'ov') preflight();
+    if (t === 'hw') updInfo();
   }
   $('[data-tabs]').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) tab(b.dataset.tab); });
   /* keresés: minden fülön, a találatok látszanak, a többi elrejtve */
@@ -1209,6 +1212,35 @@
     const r = x.r;
     $('[data-busyt]').textContent = r.remote ? 'Elküldve! A rajzot a nyomtatónál veheted át' + (r.ahead ? ' (előtted ' + r.ahead + ' kép).' : '.') : 'Kész! Vedd ki a rajzot a nyomtatóból.' + (r.n < S.copies ? ' (' + r.n + ' példány – elérted a keretet)' : '');
     await sleep(r.remote ? 3500 : 2500); show('start'); warnings();
+  }
+  /* 0.17.0: a program önfrissítése – csak kézzel (Beállítások → Gép → Program frissítése) */
+  function updText(t) { const e = $('[data-updt]'); if (e) e.innerHTML = t; }
+  async function updInfo() {
+    const cur = (S.cfg && S.cfg.version) || '';
+    if (!B.updCheck) { updText('Jelenlegi változat: ' + esc(cur) + '. Az önfrissítéshez egyszer kézzel kell telepíteni a 0.17.0-s vagy újabb programot.'); const b = $('[data-act=updcheck]'); if (b) b.hidden = true; return false; }
+    updText('Jelenlegi változat: <b>' + esc(cur) + '</b>. Új változatot a „Frissítés keresése” gombbal tölthetsz le – magától nem frissül.'); return true;
+  }
+  async function updCheck() {
+    if (!(await updInfo())) return;
+    const g = $('[data-act=updgo]'); g.hidden = true; updText('Keresés…');
+    try {
+      const r = await call(B.updCheck);
+      if (!r.avail) { updText('A program naprakész (' + esc(r.cur) + ').'); return; }
+      S.updV = r.avail.v;
+      updText('Új változat érhető el: <b>' + esc(r.avail.v) + '</b> (most: ' + esc(r.cur) + ', ' + Math.round((r.avail.size || 0) / 1048576) + ' MB). A telepítés után a program magától újraindul – a beállítások, képek és sablonok megmaradnak. Rendezvény közben ne indítsd.');
+      g.hidden = false; g.textContent = 'Letöltés és telepítés (' + r.avail.v + ')';
+    } catch (e) { updText('Nem sikerült a keresés: ' + esc(e.message)); }
+  }
+  async function updGo() {
+    if (S.busy) { err('Fotózás közben nem lehet frissíteni.'); return; }
+    const g = $('[data-act=updgo]'), bar = $('[data-updbar]'); g.disabled = true;
+    bar.hidden = false; bar.firstElementChild.style.transform = 'scaleX(0)';
+    if (B.onUpdProgress && !S.updHook) { S.updHook = 1; B.onUpdProgress(p => { bar.firstElementChild.style.transform = 'scaleX(' + Math.min(1, p) + ')'; updText('Letöltés… ' + Math.round(p * 100) + '%'); }); }
+    try {
+      updText('Letöltés…'); await call(B.updDownload);
+      updText('Telepítés – a program pár másodpercre bezárul, majd az új változattal újraindul…');
+      await call(B.updInstall);
+    } catch (e) { g.disabled = false; bar.hidden = true; updText('A frissítés nem sikerült: ' + esc(e.message) + ' – a mostani változat marad.'); }
   }
   /* 0.16.0: AI-rajz a kész képernyőn – újrajátszás (a rögzített videó) és a videó QR-kódja */
   function drawBtns(on) {
