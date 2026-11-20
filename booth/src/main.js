@@ -106,6 +106,7 @@ ipcMain.handle('gal:del', wrap(async (ev, photos, both) => cloud.del(ev, photos,
 ipcMain.handle('cloud:guest', wrap(async d => cloud.guest(d)));
 ipcMain.handle('cloud:beat', wrap(async d => cloud.beat(d)));
 ipcMain.handle('cloud:ai', wrap(async d => cloud.ai(d)));
+ipcMain.handle('cloud:aistatus', wrap(async ev => cloud.aiStatus(ev)));
 /* v0.7: AirDrop / megosztás (Mac: a rendszer megosztás-menüje); helyi Wi-Fi-s QR-szerver */
 ipcMain.handle('share:mac', wrap(async f => { if (!MAC) throw new Error('Csak Macen'); const { ShareMenu } = require('electron'); if (!fs.existsSync(f)) throw new Error('A fájl nem található'); new ShareMenu({ filePaths: [f] }).popup({ window: win }); return true; }));
 ipcMain.handle('lan:start', wrap(async port => lan.start(port)));

@@ -812,7 +812,19 @@
     const ev = S.cfg.event; add(ev && ev.deal ? 'ok' : 'mid', 'Rendezvény', ev && ev.deal ? ev.title + ' · ' + (ev.date || '') : 'nincs kiválasztva (Rendezvény fül)');
     add(S.tpl ? 'ok' : 'mid', 'Sablon', S.tpl ? S.tplName + ' · ' + S.tpl.shots + ' fotó' : 'alap keret');
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
-    if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) add(!B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', 'AI-kép', !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs');
+    if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) {
+      /* 0.17.1: a panel AI-kerete (felhasznált / keret) és a közös kredit; narancs, ha a kredit kevesebb, mint egy rendezvénynyi (200) képre elég */
+      let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez a program 0.10.0-s vagy újabb változata kell' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs';
+      if (aiReady() && B.aiStatus) {
+        try {
+          const a = await call(B.aiStatus, S.cfg.event.ev);
+          txt = (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + a.used + ' / ' + a.limit + ' kép felhasználva' + (a.left != null ? ' (még ' + a.left + ')' : '') + (a.imgs != null ? ' · AI-kredit: kb. ' + a.imgs + ' képre elég' : '');
+          if (a.imgs != null && a.imgs < 200) { st = a.imgs < 1 ? 'bad' : 'mid'; txt += a.imgs < 1 ? ' – elfogyott, szólj az irodának!' : ' – kevés egy rendezvényre, szólj az irodának'; }
+          if (a.left != null && a.left < 1) { st = 'bad'; txt += ' – a rendezvény AI-kerete elfogyott'; }
+        } catch (e) { txt += ' · a kredit most nem kérdezhető le (' + e.message + ')'; }
+      }
+      add(st, 'AI-kép', txt);
+    }
     if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;

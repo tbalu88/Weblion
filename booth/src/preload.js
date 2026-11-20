@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('booth', {
   guest: d => ipcRenderer.invoke('cloud:guest', d),
   beat: d => ipcRenderer.invoke('cloud:beat', d),
   ai: d => ipcRenderer.invoke('cloud:ai', d),
+  aiStatus: ev => ipcRenderer.invoke('cloud:aistatus', ev),
   onChildClosed: fn => ipcRenderer.on('child:closed', () => fn()),
   camProps: () => ipcRenderer.invoke('cam:props'),
   camSet: (p, v) => ipcRenderer.invoke('cam:set', p, v),

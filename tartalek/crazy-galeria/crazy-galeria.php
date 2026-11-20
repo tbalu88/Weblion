@@ -604,6 +604,16 @@ add_action('rest_api_init', function () {
 		}),
 	));
 	/* a gép kérése: ev, deal, date, src (az eredeti fotó azonosítója), photo (az AI-kép új azonosítója), prompt, file (JPG) */
+	/* v0.11.1: a gép (gépkulccsal) lekérdezi a rendezvény AI-keretét és a közös kreditet – a kezelő Áttekintés fülén látszik */
+	register_rest_route('crazy-galeria/v1', '/ai-status', array('methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function (WP_REST_Request $req) {
+		$dev = cg_device(); if (!$dev) { return new WP_REST_Response(array('ok' => false, 'code' => 'key', 'message' => 'Ismeretlen vagy letiltott gépkulcs.'), 401); }
+		$ev = (string) $req->get_param('ev'); if (!cg_tok_ok($ev)) { return new WP_REST_Response(array('ok' => false, 'code' => 'bad', 'message' => 'Hibás azonosító.'), 400); }
+		$info = cg_ai_ev_info($ev); $b = cg_ai_balance(false);
+		/* egy kép átlagos ára az utolsó 50 sikeres hívásból (különben 0,055 $) */
+		$n = 0; $c = 0.0; foreach ((array) get_option('cg_ai_log', array()) as $l) { if (!empty($l['ok']) && isset($l['cost']) && (float) $l['cost'] > 0) { $n++; $c += (float) $l['cost']; if ($n >= 50) { break; } } }
+		$per = $n ? $c / $n : 0.055; $imgs = $b['bal'] === null ? null : (int) floor(max(0, (float) $b['bal']) / max(0.001, $per));
+		return array('ok' => true, 'on' => $info['on'] ? 1 : 0, 'limit' => $info['limit'], 'used' => $info['used'], 'left' => $info['limit'] > 0 ? max(0, $info['limit'] - $info['used']) : null, 'imgs' => $imgs, 'per' => round($per, 4));
+	}));
 	register_rest_route('crazy-galeria/v1', '/ai', array('methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function (WP_REST_Request $req) {
 		global $wpdb; @set_time_limit(150);
 		$t0 = microtime(true); $dev = cg_device();

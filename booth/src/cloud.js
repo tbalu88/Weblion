@@ -127,6 +127,17 @@ function make(o) {
       } catch (e) { if (e.name === 'AbortError') throw new Error('A panel nem válaszol'); throw e; } finally { clearTimeout(t); }
     },
     /* v0.10: AI-kép a galérián át (a szerver hívja a modellt, menti a galériába és visszaküldi). A hibakód a szövegben: […] */
+    /* 0.17.1: a rendezvény AI-kerete (felhasznált / keret) és a közös kredit (kb. hány képre elég) */
+    async aiStatus(ev) {
+      if (!o.key()) throw new Error('Nincs gépkulcs.');
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+      try {
+        const r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1/ai-status?ev=' + encodeURIComponent(String(ev || '')), { headers: hdr(), signal: ctl.signal });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.message || ('AI-állapot (' + r.status + ')'));
+        return j;
+      } catch (e) { if (e.name === 'AbortError') throw new Error('nem érhető el (nincs internet?)'); throw e; } finally { clearTimeout(t); }
+    },
     async ai(d) {
       if (!o.key()) throw new Error('Nincs gépkulcs. [key]');
       const m = /^data:([^;]+);base64,(.*)$/s.exec(String(d.jpeg || '')); if (!m) throw new Error('Hibás kép. [bad]');
