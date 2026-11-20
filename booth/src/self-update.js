@@ -4,7 +4,9 @@
  * Menete: letöltés (sha256-ellenőrzés) → kicsomagolás a program mellé („.new”) → a program kilép → egy kis segédszkript
  *   kicseréli a mappát / alkalmazást (Macen ad-hoc aláírással), elindítja az újat, és ha az 40 mp alatt nem jelez vissza,
  *   visszaállítja a régit. A beállítások, képek és a felület a felhasználói mappában vannak – a csere nem érinti őket. */
-const fs = require('fs');
+/* 0.18.1: az Electron „fs”-e az .asar fájlokat mappaként kezeli – a csomag kibontásához, törléséhez, áthelyezéséhez
+ * az eredeti fájlkezelő kell (különben EBUSY: rmdir …\resources\app.asar) */
+let fs; try { fs = require('original-fs'); } catch (e) { fs = require('fs'); }
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
@@ -95,7 +97,7 @@ function make(o) {
         'for i in $(seq 1 40); do if [ -f "$OK" ]; then rm -rf "$OLD"; exit 0; fi; sleep 1; done',
         'pkill -f "$APP/Contents/MacOS/" 2>/dev/null; sleep 2; rm -rf "$APP"; mv "$OLD" "$APP"; open "$APP"', ''].join('\n'), { mode: 0o755 });
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
-      spawn('/bin/bash', [script, String(process.pid), t, NEW, ok], { detached: true, stdio: 'ignore' }).unref();
+      spawn('/bin/bash', [script, String(process.pid), t, NEW, ok], { cwd: dir(), detached: true, stdio: 'ignore' }).unref();
     } else {
       /* a zip vagy közvetlenül a fájlokat, vagy egy mappát tartalmaz – ahol a .exe van, az az új programmappa */
       let src = tmp; if (!fs.readdirSync(tmp).some(n => /\.exe$/i.test(n))) { const sub = fs.readdirSync(tmp).map(n => path.join(tmp, n)).find(p => fs.statSync(p).isDirectory() && fs.readdirSync(p).some(n => /\.exe$/i.test(n))); if (sub) src = sub; }
@@ -106,13 +108,15 @@ function make(o) {
       fs.writeFileSync(script, ['@echo off', 'setlocal',
         'set "PID=%~1"', 'set "APP=%~2"', 'set "NEW=%~3"', 'set "OK=%~4"', 'set "EXE=%~5"', 'set "OLD=%APP%.old"',
         ':wait', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', 'timeout /t 2 /nobreak >nul',
-        'if exist "%OLD%" rmdir /s /q "%OLD%"', 'move "%APP%" "%OLD%" >nul || (start "" "%APP%\\%EXE%" & exit /b 1)',
+        'cd /d "%TEMP%"', 'if exist "%OLD%" rmdir /s /q "%OLD%"',
+        'set /a M=0', ':mv', 'move "%APP%" "%OLD%" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%APP%\\%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
         'move "%NEW%" "%APP%" >nul || (move "%OLD%" "%APP%" >nul & start "" "%APP%\\%EXE%" & exit /b 1)',
         'start "" "%APP%\\%EXE%"',
         'set /a N=0', ':chk', 'if exist "%OK%" (rmdir /s /q "%OLD%" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 40 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
         ':back', 'taskkill /F /IM "%EXE%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'rmdir /s /q "%APP%"', 'move "%OLD%" "%APP%" >nul', 'start "" "%APP%\\%EXE%"', ''].join('\r\n'));
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
-      spawn('cmd.exe', ['/c', script, String(process.pid), t, NEW, ok, exe], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      /* 0.18.1: a szkript a programmappán kívülről fusson – a saját munkakönyvtárát a Windows nem engedi átnevezni */
+      spawn('cmd.exe', ['/c', script, String(process.pid), t, NEW, ok, exe], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
     }
     setTimeout(() => app.quit(), 400);
     return true;
