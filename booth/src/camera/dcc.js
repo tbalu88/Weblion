@@ -91,6 +91,7 @@ function make(opts) {
         await new Promise(r => setTimeout(r, 250));
         const name = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '-');
         if (!name || name === '-' || name === before) continue;
+        if (/^HIBA/.test(name)) throw new Error('A kamera nem adott képet: ' + name.replace(/^HIBA:\s*/, '')); /* 0.19.0: a cbcam hibajelzése */
         const local = path.isAbsolute(name) ? name : path.join(folder, path.basename(name));
         if (fs.existsSync(local)) return local;
         /* ha nem a mi mappánkba mentett: letöltjük HTTP-n */

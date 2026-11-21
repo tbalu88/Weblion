@@ -145,6 +145,9 @@ function make(o) {
     if (MAC) execFileSync('/usr/bin/ditto', ['-x', '-k', file, tmp]); else execFileSync('tar', ['-xf', file, '-C', tmp], { windowsHide: true });
     const na = path.join(tmp, 'app.asar'); if (!fs.existsSync(na)) throw new Error('A csomagban nincs programkód.');
     const NEW = cur + '.new'; try { fs.rmSync(NEW, { force: true }); } catch (e) { /* */ } fs.copyFileSync(na, NEW);
+    /* 0.19.0: a csomagban lévő kamerakezelő-fájlok (dcc/cbcam.exe …) „.new” néven a helyükre; induláskor lépnek életbe */
+    const nd = path.join(tmp, 'dcc');
+    if (WIN && fs.existsSync(nd) && fs.existsSync(path.join(res, 'dcc'))) { for (const n of fs.readdirSync(nd)) { try { fs.copyFileSync(path.join(nd, n), path.join(res, 'dcc', n + '.new')); } catch (e) { log('önfrissítés: ' + n + ' nem másolható: ' + e.message); } } }
     const ok = okFile(found.v); try { fs.unlinkSync(ok); } catch (e) { /* */ }
     let script;
     if (MAC) {

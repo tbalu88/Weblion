@@ -51,7 +51,7 @@ let dccRun = null;
    teljes képernyőn a Crazy Booth ablaka mindig felül van; indulás után visszakapja a fókuszt */
 function dccTop(noFocus) { try { if (!win || win.isDestroyed()) return; const on = cfg.camera === 'dcc' && (win.isFullScreen() || win.isKiosk()); win.setAlwaysOnTop(on, 'screen-saver'); if (on && noFocus !== true && !BrowserWindow.getAllWindows().some(w => w !== win && !w.isDestroyed() && w.isVisible() && w.getParentWindow() === win)) { win.moveTop(); win.focus(); } } catch (e) { /* */ } }
 const dccHide = () => { if (dccRun) dccRun.hide(cfg.camera === 'dcc' && !(cfg.ui && cfg.ui.dccShow)); };
-const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, dataDir: app.getPath('userData'), log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
+const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, dataDir: app.getPath('userData'), gui: () => !!(cfg.ui && cfg.ui.dccShow), log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
   cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null });
@@ -64,9 +64,11 @@ const wrap = fn => async (ev, ...a) => { try { return { ok: true, v: await fn(..
 /* ---------- IPC */
 ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, mac: MAC, version: app.getVersion() })));
 ipcMain.handle('cfg:set', wrap(async c => {
-  const keep = Object.keys(DEF);
+  const keep = Object.keys(DEF), prevUi = cfg.ui;
   keep.forEach(k => { if (c && c[k] !== undefined) cfg[k] = c[k]; });
-  saveCfg(); makeCam(); dccTop(true); dccHide(); return cfg;
+  const guiWas = !!(prevUi && prevUi.dccShow), guiNow = !!(cfg.ui && cfg.ui.dccShow);
+  saveCfg(); makeCam(); dccTop(true); dccHide(); if (dccRun && guiWas !== guiNow) { dccRun.stop(); }
+  return cfg;
 }));
 ipcMain.handle('cam:init', wrap(async () => { if (!cam) makeCam(); if (cfg.camera === 'dcc') { const e = await dccR().ensure(); if (e) log('digiCamControl: ' + e); } dccTop(); return cam.init(); }));
 /* v0.9: DSLR-beállítások (ISO, rekesz, záridő, expozíció-korrekció, fehéregyensúly) – digiCamControl */

@@ -60,8 +60,28 @@ function make(o) {
     const x = '<?xml version="1.0"?>\r\n<Branding xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\r\n  <ShowStartupScreen>false</ShowStartupScreen>\r\n  <ShowStartupScreenAnimation>false</ShowStartupScreenAnimation>\r\n  <ShowWelcomeScreen>false</ShowWelcomeScreen>\r\n  <CheckForUpdate>false</CheckForUpdate>\r\n  <OnlineReference>false</OnlineReference>\r\n</Branding>\r\n';
     try { if (!fs.existsSync(b) || fs.readFileSync(b, 'utf8') !== x) fs.writeFileSync(b, x); } catch (e) { log('digiCamControl Branding.xml: ' + e.message); }
   }
-  const running = () => new Promise(res => execFile('tasklist', ['/FI', 'IMAGENAME eq CameraControl.exe', '/NH'], { windowsHide: true }, (e, out) => res(!e && /CameraControl\.exe/i.test(String(out)))));
-  const kill = () => new Promise(res => execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }, () => res()));
+  const running = (im) => new Promise(res => execFile('tasklist', ['/FI', 'IMAGENAME eq ' + (im || 'CameraControl.exe'), '/NH'], { windowsHide: true }, (e, out) => res(!e && String(out).toLowerCase().includes((im || 'CameraControl.exe').toLowerCase()))));
+  const kill = (im) => new Promise(res => execFile('taskkill', ['/IM', im || 'CameraControl.exe', '/F'], { windowsHide: true }, () => res()));
+  /* 0.19.0: ablak nélküli kamerakezelő (cbcam.exe) – a digiCamControl kamerakönyvtárával, a grafikus program nélkül;
+     ugyanazt a HTTP-felületet adja. Ha nincs a csomagban, vagy hibakereséshez a grafikus program kell (Kamera fül), a régi út marad. */
+  let mode = '';
+  const cbExe = () => { if (!process.resourcesPath || (o.gui && o.gui())) return ''; const f = path.join(process.resourcesPath, 'dcc', 'cbcam.exe'); return fs.existsSync(f) || fs.existsSync(f + '.new') ? f : ''; };
+  /* a kis frissítéssel érkezett új kamerakezelő („.new”) életbe léptetése – csak ha épp nem fut */
+  function promote(f) { const d = path.dirname(f); try { for (const n of fs.readdirSync(d)) { if (/^cbcam\.exe(\.config)?\.new$/i.test(n)) { const t = path.join(d, n.slice(0, -4)); try { fs.rmSync(t, { force: true }); } catch (e) { /* */ } fs.renameSync(path.join(d, n), t); log('kamerakezelő frissítve: ' + n.slice(0, -4)); } } } catch (e) { log('kamerakezelő frissítése: ' + e.message); } }
+  async function ensureCb(f) {
+    mode = 'cbcam';
+    if (await running('CameraControl.exe')) { log('a grafikus digiCamControl leállítása (a kamerát a cbcam kezeli)'); await kill('CameraControl.exe'); await new Promise(r => setTimeout(r, 1500)); }
+    if (await running('cbcam.exe')) {
+      for (let i = 0; i < 16; i++) { await new Promise(r => setTimeout(r, 750)); if (await up(2500)) return ''; }
+      log('a cbcam nem válaszol – újraindítás'); await kill('cbcam.exe'); await new Promise(r => setTimeout(r, 1000));
+    }
+    promote(f);
+    if (!fs.existsSync(f)) return 'A kamerakezelő (cbcam.exe) hiányzik.';
+    log('cbcam indítása: ' + f);
+    try { const p = spawn(f, [String(port()), String(process.pid), o.dataDir || path.dirname(f)], { cwd: path.dirname(f), windowsHide: true, stdio: 'ignore' }); started = p; p.on('exit', c => { log('cbcam kilépett (' + c + ')'); if (started === p) started = null; }); } catch (e) { return 'A kamerakezelő nem indult el: ' + e.message; }
+    for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 500)); if (await up(1500)) { log('cbcam kész (' + port() + ')'); if (o.onReady) o.onReady(); return ''; } }
+    return 'A kamerakezelő elindult, de nem válaszol (' + port() + ') – a napló: cbcam.log a program adatmappájában.';
+  }
 
   /* biztosítja, hogy a webszerver fusson; hibaüzenettel tér vissza, ha nem sikerült ('' = rendben) */
   async function ensure() {
@@ -70,6 +90,8 @@ function make(o) {
     if (busy) return busy;
     busy = (async () => {
       lastTry = Date.now();
+      const cb = cbExe(); if (cb) return ensureCb(cb);
+      mode = 'gui';
       const f = exe();
       if (!f) return 'A digiCamControl nincs a gépen – telepítsd a Crazy Booth 0.18-as vagy újabb csomagját, vagy a digiCamControlt.';
       branding(f); const changed = settings();
@@ -124,6 +146,7 @@ function make(o) {
     '}', ''].join('\r\n');
   function hide(on) {
     if (!WIN) return;
+    if (on && cbExe()) on = false; /* a cbcam-nak nincs ablaka */
     if (!on) { if (hider) { try { hider.kill(); } catch (e) { /* */ } hider = null; log('digiCamControl ablakai: látszanak'); } return; }
     if (hider) return;
     try {
@@ -134,7 +157,7 @@ function make(o) {
     } catch (e) { log('digiCamControl elrejtése: ' + e.message); }
   }
   /* kilépéskor csak azt zárjuk be, amit mi indítottunk */
-  function stop() { hide(false); if (started) { try { execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }
+  function stop() { hide(false); if (started) { try { if (mode === 'cbcam') started.kill(); else execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }
   return { ensure, watch, stop, exe, hide };
 }
 module.exports = { make };

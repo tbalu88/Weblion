@@ -18,6 +18,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: booth/cbcam
       - name: digiCamControl 2.1.7.0 letöltése és telepítése
         shell: pwsh
         run: |
@@ -33,6 +36,20 @@ jobs:
           curl.exe -sSL --retry 4 -o dcc\LICENSE-digiCamControl.txt "https://raw.githubusercontent.com/dukus/digiCamControl/master/LICENSE"
           "méret: {0:N0} MB" -f ((Get-ChildItem dcc -Recurse | Measure-Object Length -Sum).Sum / 1MB)
           Get-ChildItem dcc -Filter *.exe | Select-Object Name | Out-String | Write-Host
+      # 0.19.0: ablak nélküli kamerakezelő (cbcam.exe) a digiCamControl kamerakönyvtárával – ha nem fordul, a régi út marad
+      - name: cbcam.exe fordítása
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          $fw = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319"
+          $refs = @("$fw\System.dll", "$fw\System.Core.dll", "$fw\WPF\WindowsBase.dll", "dcc\CameraControl.Devices.dll")
+          Get-ChildItem dcc -Filter *.dll | Where-Object { $_.Name -match '^(PortableDeviceLib|Canon\.Eos\.Framework|log4net)' } | ForEach-Object { $refs += $_.FullName }
+          $r = ($refs | ForEach-Object { "/r:$_" })
+          & $csc /nologo /platform:x86 /target:exe /optimize+ /out:dcc\cbcam.exe $r booth\cbcam\cbcam.cs
+          if ($LASTEXITCODE -ne 0) { throw "a cbcam nem fordult le" }
+          if (Test-Path dcc\CameraControl.exe.config) { Copy-Item dcc\CameraControl.exe.config dcc\cbcam.exe.config }
+          Get-Item dcc\cbcam.exe | Select-Object Name, Length | Out-String | Write-Host
       - uses: actions/upload-artifact@v4
         with:
           name: dcc
@@ -64,6 +81,9 @@ jobs:
           # 0.18.3: kis frissítés – csak a programkód (app.asar, ~3 MB) és az adatai; a frissítő ezt tölti le, ha a motor nem változott
           ASAR=$(ls dist/win-unpacked/resources/app.asar)
           (cd "$(dirname "$ASAR")" && zip -9 -q "$GITHUB_WORKSPACE/release/CrazyBooth-$VER-app.zip" app.asar)
+          # 0.19.0: a kis csomagban a saját kamerakezelő (cbcam.exe, néhány kB) is benne van
+          (cd "$(dirname "$ASAR")" && for f in dcc/cbcam.exe dcc/cbcam.exe.config; do [ -f "$f" ] && zip -9 -q "$GITHUB_WORKSPACE/release/CrazyBooth-$VER-app.zip" "$f"; done; true)
+          unzip -l "../release/CrazyBooth-$VER-app.zip"
           EV=$(node -p "require('electron/package.json').version")
           SHA=$(sha256sum "../release/CrazyBooth-$VER-app.zip" | cut -c1-64)
           printf '{"v":"%s","electron":"%s","sha256":"%s","dcc":true}\n' "$VER" "$EV" "$SHA" > "../release/CrazyBooth-$VER-app.json"
