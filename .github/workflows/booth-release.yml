@@ -50,6 +50,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "a cbcam nem fordult le" }
           if (Test-Path dcc\CameraControl.exe.config) { Copy-Item dcc\CameraControl.exe.config dcc\cbcam.exe.config }
           Get-Item dcc\cbcam.exe | Select-Object Name, Length | Out-String | Write-Host
+          # füstpróba (kamera nélkül): betöltődnek-e a digiCamControl könyvtárai, és válaszol-e a HTTP-felület
+          $p = Start-Process dcc\cbcam.exe -ArgumentList '5599','0',"$env:RUNNER_TEMP\cbl" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 12
+          try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5599/ -TimeoutSec 10).Content | Write-Host } catch { Write-Host "nem válaszol: $_" }
+          Get-Content "$env:RUNNER_TEMP\cbl\cbcam.log" -ErrorAction SilentlyContinue | Write-Host
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         with:
           name: dcc
