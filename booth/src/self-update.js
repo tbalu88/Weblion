@@ -40,11 +40,15 @@ function make(o) {
     if (!r.ok) throw new Error('A kiadások listája nem érhető el (' + r.status + ').');
     const L = (await r.json()).filter(x => /^booth-v\d+\.\d+\.\d+$/.test(x.tag_name || '') && !x.draft && !x.prerelease);
     const want = MAC ? /-Mac-AppleSilicon\.zip$/ : /-Windows-x64\.zip$/;
-    let best = null;
+    /* 2026-11-21: a Mac-csomag nem minden kiadásnál készül – a kiadás akkor is jelölt, ha csak kis csomagja (programkód) van;
+       ha végül teljes csomag kell, a legújabb olyan kiadás jön, amelyikben van ehhez a géphez teljes csomag */
+    let best = null, bestFull = null;
+    const mk = (x, a) => ({ v: x.tag_name.slice(7), url: a ? a.browser_download_url : '', size: a ? a.size || 0 : 0, sha: a && /^sha256:([a-f0-9]{64})$/.exec(a.digest || '') ? a.digest.slice(7) : '', notes: String(x.body || '').slice(0, 600), name: x.name || '', assets: x.assets || [] });
     for (const x of L) {
       const v = x.tag_name.slice(7), a = (x.assets || []).find(z => want.test(z.name || ''));
-      if (!a) continue;
-      if (!best || newer(v, best.v)) best = { v, url: a.browser_download_url, size: a.size || 0, sha: /^sha256:([a-f0-9]{64})$/.exec(a.digest || '') ? a.digest.slice(7) : '', notes: String(x.body || '').slice(0, 600), name: x.name || '', assets: x.assets || [] };
+      const hasSmall = (x.assets || []).some(z => /-app\.zip$/.test(z.name || '')) && (x.assets || []).some(z => /-app\.json$/.test(z.name || ''));
+      if (a && (!bestFull || newer(v, bestFull.v))) bestFull = mk(x, a);
+      if ((a || hasSmall) && (!best || newer(v, best.v))) best = mk(x, a);
     }
     const cur = app.getVersion();
     found = best && newer(best.v, cur) ? best : null;
@@ -60,6 +64,8 @@ function make(o) {
           else log('önfrissítés: teljes csomag kell (motor: ' + process.versions.electron + ' → ' + (m && m.electron) + (dccOk ? '' : ', hiányzik a digiCamControl') + ')');
         } catch (e) { log('önfrissítés: a kis csomag adatai nem olvashatók – teljes csomag (' + e.message + ')'); }
       }
+      /* nincs kis csomag és ehhez a géphez nincs teljes csomag ebben a kiadásban → a legújabb teljes csomag (ha újabb) */
+      if (!found.small && !found.url) found = bestFull && newer(bestFull.v, cur) ? bestFull : null;
     }
     return { cur, avail: found ? { v: found.v, size: found.small ? found.small.size : found.size, small: !!found.small, notes: found.notes } : null, latest: best ? best.v : cur };
   }

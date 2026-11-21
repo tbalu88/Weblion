@@ -110,8 +110,11 @@ jobs:
           fi
           echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/CrazyBooth-$VER-Windows-x64.zip"
 
+  # 2026-11-21: a Mac-csomag csak kérésre („[booth-mac]” a commit-üzenetben) – a Windows a lényeg, és a Mac-gép percei
+  # tízszeresen számítanak; a Macek a kis csomagot (programkód) a Windows-kiadásból is megkapják
   mac-zip:
     needs: windows-zip
+    if: contains(github.event.head_commit.message, '[booth-mac]')
     runs-on: macos-26
     timeout-minutes: 30
     steps:
