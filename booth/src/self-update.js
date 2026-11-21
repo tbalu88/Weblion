@@ -33,9 +33,31 @@ function make(o) {
     try { const t = path.join(parent, '.cb-w-' + Date.now()); fs.mkdirSync(t); fs.rmdirSync(t); return true; } catch (e) { return false; }
   }
 
+  /* 0.19.3: a GitHub-tároló privát lett (2026-11-21) – a frissítés a saját szerverről (tartalék) jön: latest.json + a kis csomag.
+     A teljes csomag (motorváltáskor) kézi telepítés; ha a szerver nem érhető el, a GitHub a tartalék út. */
+  const DIST = 'https://tartalek.eventcrazy.hu/wp-content/plugins/crazy-booth-ui/';
+  async function checkDist() {
+    const r = await fetch(DIST + 'booth-latest.json?t=' + Date.now(), { headers: { 'User-Agent': 'CrazyBooth/' + app.getVersion() }, cache: 'no-store' });
+    if (!r.ok) throw new Error('A frissítési szerver nem érhető el (' + r.status + ').');
+    const m = await r.json(), cur = app.getVersion();
+    if (!m || !m.v || !newer(m.v, cur)) { found = null; return { cur, avail: null, latest: (m && m.v) || cur }; }
+    const dccOk = !WIN || !m.dcc || fs.existsSync(path.join(process.resourcesPath || '', 'dcc', 'CameraControl.exe'));
+    found = { v: m.v, notes: String(m.note || ''), url: '', size: 0, sha: '', assets: [] };
+    if (m.app && m.electron === process.versions.electron && dccOk && process.resourcesPath) found.small = { url: DIST + m.app.file, size: m.app.size || 0, sha: m.app.sha256 };
+    else {
+      const f = m.full && (MAC ? m.full.mac : m.full.win);
+      if (f && f.file) { found.url = DIST + f.file; found.size = f.size || 0; found.sha = f.sha256 || ''; }
+      else { found = null; throw new Error('Új változat: ' + m.v + ' – ehhez a géphez a teljes csomag kell (új motor' + (dccOk ? '' : ' / hiányzik a kamerakezelő') + '). Kérd az irodától a kézi telepítést.'); }
+    }
+    log('önfrissítés: ' + cur + ' → ' + m.v + (found.small ? ' (kis csomag)' : ' (teljes csomag)'));
+    return { cur, avail: { v: found.v, size: found.small ? found.small.size : found.size, small: !!found.small, notes: found.notes }, latest: m.v };
+  }
+
   async function check() {
     if (!MAC && !WIN) throw new Error('Ezen a rendszeren nincs önfrissítés.');
     if (MAC && process.arch !== 'arm64') throw new Error('Ehhez a Machez (Intel) nincs kiadás – kézzel kell telepíteni.');
+    try { return await checkDist(); }
+    catch (e) { if (/teljes csomag kell/.test(e.message)) throw e; log('önfrissítés: saját szerver – ' + e.message + '; GitHub-próba'); }
     const r = await fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=30', { headers: { 'User-Agent': 'CrazyBooth/' + app.getVersion(), Accept: 'application/vnd.github+json' } });
     if (!r.ok) throw new Error('A kiadások listája nem érhető el (' + r.status + ').');
     const L = (await r.json()).filter(x => /^booth-v\d+\.\d+\.\d+$/.test(x.tag_name || '') && !x.draft && !x.prerelease);
