@@ -7,7 +7,7 @@
  * A Salesmate-be semmi nem íródik.
  */
 if (!defined('ABSPATH')) { exit; }
-define('CP_BOOTH_GAL', 'https://tartalek.eventcrazy.hu/galeria/');
+define('CP_BOOTH_GAL', 'https://galeria.eventcrazy.hu/galeria/'); /* 2026-11-22: a galéria nyilvános címe (a régi tartalek-címek 301-gyel ide visznek) */
 
 function cp_booth_devs() { $d = get_option('cp_booth_devices', array()); return is_array($d) ? $d : array(); }
 function cp_booth_dev_by_hash($h) {
@@ -310,8 +310,8 @@ add_action('init', function () {
 	global $wpdb; $wpdb->query($wpdb->prepare('DELETE FROM ' . cp_bg_t() . ' WHERE created_at < %s', gmdate('Y-m-d H:i:s', time() - 60 * DAY_IN_SECONDS)));
 });
 function cp_bg_mail($row, $title) {
-	$url = 'https://tartalek.eventcrazy.hu/galeria/' . $row['ev'] . '/' . $row['photo'];
-	$gal = 'https://tartalek.eventcrazy.hu/galeria/' . $row['ev'] . '/';
+	$url = 'https://galeria.eventcrazy.hu/galeria/' . $row['ev'] . '/' . $row['photo'];
+	$gal = 'https://galeria.eventcrazy.hu/galeria/' . $row['ev'] . '/';
 	$hi = $row['name'] !== '' ? 'Kedves ' . esc_html($row['name']) . '!' : 'Szia!';
 	$t = $title !== '' ? esc_html($title) : 'a rendezvényen';
 	$body = '<p>' . $hi . '</p><p>Itt a fotód, ami ' . ($title !== '' ? 'a(z) <b>' . $t . '</b> rendezvényen' : 'a rendezvényen') . ' készült a szelfigépünkkel:</p>' .

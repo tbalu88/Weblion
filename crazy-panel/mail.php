@@ -171,7 +171,7 @@ function cp_mail_vars() {
 		'kiszallasi.dij'      => array('Kiszállási díj (Ft nélkül)', '10 000'),
 		'kontakt.azonosito'   => array('Kontakt azonosító', '12345'),
 		'deal.azonosito'      => array('Deal azonosító', '23456'),
-		'galeria.link'        => array('Fotógaléria linkje (szelfigép)', 'https://tartalek.eventcrazy.hu/galeria/…'), /* v2.9.241 */
+		'galeria.link'        => array('Fotógaléria linkje (szelfigép)', 'https://galeria.eventcrazy.hu/galeria/…'), /* v2.9.241 */
 	);
 }
 

@@ -5,7 +5,7 @@
  * Version: 0.3.0 (videó / boomerang / videós üzenet is; ZIP, jelszó, cím, elrejtés – a panelből kezelve)
  */
 if (!defined('ABSPATH')) { exit; }
-define('CG_VER', '0.11.0');
+define('CG_VER', '0.12.0');
 define('CG_KEEP_DAYS', 60);
 define('CG_PANEL', 'https://eventcrazy.hu/wp-json/crazy/v1/booth/verify');
 
@@ -13,6 +13,19 @@ function cg_t() { global $wpdb; return $wpdb->prefix . 'crazy_galeria'; }
 function cg_pt() { global $wpdb; return $wpdb->prefix . 'crazy_print'; }
 function cg_dir() { $u = wp_upload_dir(null, false); return trailingslashit($u['basedir']) . 'crazy-galeria'; }
 function cg_url() { $u = wp_upload_dir(null, false); return trailingslashit($u['baseurl']) . 'crazy-galeria'; }
+/* v0.12.0 (2026-11-22): a galéria nyilvános címe galeria.eventcrazy.hu (ugyanez a szerver). Minden új galérialink ezt kapja;
+   a régi tartalek.eventcrazy.hu/galeria/… címek véglegesen (301) ide irányítanak – a nyomatok QR-kódjai, a kiküldött linkek
+   így tovább működnek. A gépek feltöltése és a többi belső kapcsolat (REST, híd) a régi néven is változatlanul megy. */
+define('CG_PUBLIC', 'https://galeria.eventcrazy.hu');
+add_filter('home_url', function ($url, $path) { return is_string($path) && strpos($path, '/galeria') === 0 ? CG_PUBLIC . $path : $url; }, 10, 2);
+/* a galériaoldal a saját címéről hívja a REST-et (nem kell más címre átnyúlnia) */
+add_filter('rest_url', function ($url) { $h = strtolower((string) ($_SERVER['HTTP_HOST'] ?? '')); return in_array($h, array('galeria.eventcrazy.hu', 'ugyfel.eventcrazy.hu'), true) ? preg_replace('#^https?://[^/]+#', 'https://' . $h, $url) : $url; });
+add_action('init', function () {
+	$h = strtolower((string) ($_SERVER['HTTP_HOST'] ?? '')); $u = (string) ($_SERVER['REQUEST_URI'] ?? '');
+	if ($h === 'tartalek.eventcrazy.hu' && strpos($u, '/galeria/') === 0 && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', array('GET', 'HEAD'), true)) {
+		wp_redirect(CG_PUBLIC . $u, 301); exit;
+	}
+}, 0);
 function cg_tok_ok($s) { return is_string($s) && preg_match('/^[a-z0-9]{6,32}$/', $s); }
 /* v0.8.1: ideiglenes fájl – a WP saját tempnam-függvénye csak az admin-oldalon töltődik be, REST- és galéria-kérésben végzetes hiba lenne */
 function cg_tmp($ext) {

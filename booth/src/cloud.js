@@ -6,6 +6,7 @@ const QR = require('qrcode');
 
 const PANEL = 'https://eventcrazy.hu/wp-json/crazy/v1/booth';
 const GALLERY = 'https://tartalek.eventcrazy.hu';
+const PUBLIC = 'https://galeria.eventcrazy.hu';
 
 function make(o) {
   /* o: { dataDir, picDir, key: () => string, log } */
@@ -154,8 +155,9 @@ function make(o) {
       } catch (e) { if (e.name === 'AbortError') throw new Error('Az AI nem válaszolt időben. [timeout]'); throw e; } finally { clearTimeout(t); }
     },
     guest(d) { fs.writeFileSync(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), JSON.stringify(d)); setTimeout(pumpGuests, 200); return true; },
-    photoUrl: (ev, ph) => GALLERY + '/galeria/' + ev + '/' + ph,
-    eventUrl: ev => GALLERY + '/galeria/' + ev + '/',
+    /* 2026-11-22: a QR-kódokba a galéria nyilvános címe kerül (a feltöltés és a REST továbbra is a GALLERY címre megy) */
+    photoUrl: (ev, ph) => PUBLIC + '/galeria/' + ev + '/' + ph,
+    eventUrl: ev => PUBLIC + '/galeria/' + ev + '/',
     async events(date) { return (await api('/events?date=' + encodeURIComponent(date || ''))).events || []; },
     /* sablon: letöltés és helyi tárolás (rendezvény közben net nélkül is megvan) */
     async template(deal) {
