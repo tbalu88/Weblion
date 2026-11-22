@@ -482,6 +482,8 @@ function cp_imp_one($mb, $uid, $sent, $live = false, $folder = '') {
 	/* folyamatos beérkezés: az ügyfél új levele a szálat visszahozza a Beérkezett mappába, nyitottként */
 	if ($blocked && ($t['folder'] ?? '') !== 'spam') { $upd['prev_folder'] = (string) ($t['folder'] ?? ''); $upd['folder'] = 'spam'; $t['folder'] = 'spam'; }
 	if ($live && !$out && !$promo && $t['folder'] !== 'spam') { $upd['status'] = 'open'; $upd['folder'] = 'inbox'; }
+	/* v2.9.356: a lezárt rendszer- / promóciós szálba érkező új levél is újranyílik (a mappája marad, értesítés nincs) – eddig lezárva érkezett, és nem látszott */
+	elseif ($live && !$out && $promo && $t['folder'] !== 'spam') { $upd['status'] = 'open'; }
 	/* v1.99.2: az ügyfél új levele mindig olvasatlanná teszi a szálat – akkor is, ha késve kézbesítették (régebbi dátummal) */
 	if ($live && !$out && !$promo) { $upd['seen_at'] = null; }
 	if ($acc['att']) { $upd['has_attach'] = 1; }

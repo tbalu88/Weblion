@@ -553,6 +553,8 @@ function cp_mail_ajax_threads() {
 	elseif ($folder === 'all') { $w[] = "folder NOT IN ('trash','spam')"; }
 	elseif ($folder !== '') { $w[] = $wpdb->prepare('folder = %s', $folder); }
 	$tab = $qs ? 'all' : sanitize_key(wp_unslash($_POST['tab'] ?? 'open'));
+	/* v2.9.356: a Rendszerüzenetek és a Promóciók nem munkasor – ott minden levél látszik, a lezártak is (pl. a lezárt ellenőrző kód) */
+	if (in_array($folder, array('system', 'promo'), true)) { $tab = 'all'; }
 	if ($tab === 'open') { $w[] = "status = 'open'"; }
 	if ($tab === 'unassigned') { $w[] = 'assignee_uid IS NULL'; }
 	/* v1.88: „Csak olvasatlan” gyorsszűrő */

@@ -1117,3 +1117,4 @@ mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
 .ml-lib-e,.ml-lib-s{margin:0;font-size:13px;color:var(--mu)}.ml-lib-e.err{color:#B3261E}
 .ml-attc.big small{font-variant-numeric:tabular-nums}
 @media (max-width:600px){.ml-lib-r{flex-wrap:wrap}.ml-lib-r .n{flex-basis:100%;white-space:normal;overflow-wrap:anywhere}}
+.ml-alltag{display:inline-flex;align-items:center;padding:8px 0;font-size:13px} /* v2.9.356 */
