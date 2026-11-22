@@ -59,6 +59,8 @@
 	const svg = (d, c) => '<svg class="' + (c || 'kb-ic') + '" viewBox="0 0 24 24" aria-hidden="true">' + d + '</svg>';
 	const I = {
 		clock: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+		eye: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+		eyeoff: svg('<path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.6 3.3M6.3 7.5C3.9 9.3 2.5 12 2.5 12S6 18 12 18c1.6 0 3-.4 4.2-1"/><path d="M9.9 10a3 3 0 0 0 4.1 4.1"/>'),
 		desc: svg('<path d="M5 7h14M5 12h14M5 17h9"/>'),
 		com: svg('<path d="M5 5h14v10H9l-4 4z"/>'),
 		check: svg('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/>'),
@@ -89,6 +91,7 @@
 		const d = c.deal ? (links.deals || {})[c.deal] : null, th = c.th ? (links.threads || {})[c.th] : null;
 		const b = [];
 		if (c.due) b.push('<span class="kb-b due ' + dueCls(c) + '" title="Határidő">' + I.clock + esc(hd(c.due)) + '</span>');
+		if (c.priv) b.push('<span class="kb-b priv" title="Rejtett: csak a létrehozó és a felelősök látják">' + I.eyeoff + '</span>');
 		if (c.hasd) b.push('<span class="kb-b" title="Van leírása">' + I.desc + '</span>');
 		if (c.nc) b.push('<span class="kb-b" title="Hozzászólások">' + I.com + c.nc + '</span>');
 		if (c.cl[1]) b.push('<span class="kb-b' + (c.cl[0] === c.cl[1] ? ' ok' : '') + '" title="Ellenőrzőlista">' + I.check + c.cl[0] + '/' + c.cl[1] + '</span>');
@@ -416,7 +419,7 @@
 		const cl = c.checklist || [];
 		const pct = cl.length ? Math.round(cl.filter(i => i.d).length / cl.length * 100) : 0;
 		sh.innerHTML = '<div class="kb-sh">' +
-			'<div class="kb-shh"><textarea class="kb-title" rows="1" data-title maxlength="255">' + esc(c.title) + '</textarea><button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>' +
+			'<div class="kb-shh"><textarea class="kb-title" rows="1" data-title maxlength="255">' + esc(c.title) + '</textarea>' + (c.bk !== 'personal' && (c.canpriv || c.priv) ? '<button type="button" class="kb-priv' + (c.priv ? ' on' : '') + '" data-priv' + (c.canpriv ? '' : ' disabled') + ' aria-pressed="' + (c.priv ? 'true' : 'false') + '" title="' + (c.priv ? 'Rejtett: csak te' + (c.as.length ? ' és a felelősök' : '') + ' látod. Kattints, hogy mindenki lássa.' : 'Mindenki látja. Kattints az elrejtéshez – utána csak te és a felelősök látjátok.') + (c.canpriv ? '' : ' (csak a létrehozó állíthatja)') + '">' + (c.priv ? I.eyeoff : I.eye) + '<span>' + (c.priv ? 'Rejtett' : 'Mindenki látja') + '</span></button>' : '') + '<button class="cpx-x" type="button" data-close aria-label="Bezárás">×</button></div>' +
 			'<p class="kb-where">' + esc(c.bn) + (lists ? ' › <select data-list aria-label="Lista">' + lists.map(l => '<option value="' + l.id + '"' + (l.id === c.list ? ' selected' : '') + '>' + esc(l.n) + '</option>').join('') + '</select>' : '') + (c.arch ? ' · <b class="kb-archtag">archivált</b>' : '') + '</p>' +
 			'<div class="kb-row"><div class="kb-fld"><h5>Felelősök</h5><div class="kb-people">' + PEOPLE.filter(p => c.bk !== 'personal' || p.id === ME || c.as.includes(p.id)).map(p => '<button type="button" class="kb-pp' + (c.as.includes(p.id) ? ' on' : '') + '" data-as="' + p.id + '">' + av(p.id) + '<span>' + esc(p.n) + '</span></button>').join('') + (PEOPLE.length ? '' : '<span class="cpx-muted">Nincsenek személyes fiókok.</span>') + '</div>' + (c.bk === 'personal' ? '<small class="cpx-muted">Saját tábla: csak te látod. Kollégának szóló teendőt a Kollégák nézetben vagy egy csapattáblán vegyél fel.</small>' : '') + '</div>' +
 			'<div class="kb-fld"><h5>Határidő</h5><div class="kb-due"><input type="date" data-due value="' + esc(c.due) + '"><label class="kb-chk"><input type="checkbox" data-done' + (c.done ? ' checked' : '') + '> Kész</label>' + (c.due ? '<span class="kb-b due ' + dueCls(c) + '">' + (dueCls(c) === 'late' ? 'lejárt' : dueCls(c) === 'soon' ? 'hamarosan' : dueCls(c) === 'done' ? 'kész' : '') + '</span>' : '') + '</div></div></div>' +
@@ -471,6 +474,7 @@
 		sh.querySelector('[data-csend]').addEventListener('click', send);
 		ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
 		sh.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Törlöd a hozzászólást?')) return; try { const r = await post('cp_kb_comment', { del: b.dataset.cdel }); drawCard(sh, r); changed(sh, r); } catch (e) { toast(e.message, true); } }));
+		const pb = sh.querySelector('[data-priv]'); if (pb) pb.addEventListener('click', () => { if (!pb.disabled) save({ priv: c.priv ? '0' : '1' }); });
 		sh.querySelector('[data-arch]').addEventListener('click', async () => { if (!c.arch && !window.confirm('Archiválod a kártyát? (Az Archív nézetből visszaállítható.)')) return; const r = await save({ arch: c.arch ? 0 : 1 }); if (r && !c.arch) { closeSheet(); toast('Kártya archiválva.'); } });
 	}
 	/* hozzászólások és változások időrendben, a legfrissebb felül */

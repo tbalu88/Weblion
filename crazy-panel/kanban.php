@@ -8,7 +8,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_KB_DB_VER', '2');
+define('CP_KB_DB_VER', '3'); /* v2.9.355: priv (rejtett kártya) */
 
 function cp_kb_t($name) {
 	global $wpdb;
@@ -52,6 +52,7 @@ add_action('init', function () {
   labels varchar(120) NOT NULL DEFAULT '',
   due date NULL,
   done tinyint(1) NOT NULL DEFAULT 0,
+  priv tinyint(1) NOT NULL DEFAULT 0,
   checklist text NULL,
   deal_id bigint(20) unsigned NULL,
   thread_id bigint(20) unsigned NULL,
@@ -149,9 +150,22 @@ function cp_kb_board_ok($id) {
 function cp_kb_card_ok($id) {
 	global $wpdb;
 	$c = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_kb_t('cards') . ' WHERE id = %d', $id), ARRAY_A);
-	return $c && cp_kb_board_ok((int) $c['board_id']) ? $c : null;
+	return $c && cp_kb_board_ok((int) $c['board_id']) && cp_kb_can_see($c) ? $c : null;
 }
 
+/* v2.9.355: rejtett (privát) kártya – csak a létrehozója és a felelősei látják (a felhasználó kérése, 2026-11-22).
+   SQL-feltétel a kártya-táblára ($a = álnév, pl. 'c.'); amíg az adatbázis nincs frissítve, nincs szűrés. */
+function cp_kb_priv_ready() { return get_option('cp_kb_db_ver') === '3' || version_compare((string) get_option('cp_kb_db_ver'), '3', '>='); }
+function cp_kb_vis($a = '') {
+	if (!cp_kb_priv_ready()) { return '1=1'; }
+	$me = (int) cp_kb_me();
+	return '(' . $a . 'priv = 0' . ($me > 0 ? ' OR ' . $a . 'created_uid = ' . $me . ' OR FIND_IN_SET(' . $me . ', ' . $a . 'assignees)' : '') . ')';
+}
+function cp_kb_can_see($c) {
+	if (empty($c['priv'])) { return true; }
+	$me = (int) cp_kb_me();
+	return $me > 0 && ((int) $c['created_uid'] === $me || in_array($me, cp_kb_ids($c['assignees']), true));
+}
 function cp_kb_ids($csv) { return array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $csv))))); }
 
 function cp_kb_card_row($c, $ncom = null) {
@@ -162,7 +176,7 @@ function cp_kb_card_row($c, $ncom = null) {
 		'hasd' => trim((string) $c['descr']) !== '', 'as' => cp_kb_ids($c['assignees']), 'lb' => array_values(array_filter(explode(',', (string) $c['labels']))),
 		'due' => (string) $c['due'], 'done' => (int) $c['done'], 'cl' => array(count(array_filter($cl, function ($x) { return !empty($x['d']); })), count($cl)),
 		'deal' => $c['deal_id'] ? (int) $c['deal_id'] : 0, 'th' => $c['thread_id'] ? (int) $c['thread_id'] : 0, 'nc' => $ncom === null ? 0 : (int) $ncom,
-		'arch' => $c['archived_at'] ? 1 : 0,
+		'arch' => $c['archived_at'] ? 1 : 0, 'priv' => empty($c['priv']) ? 0 : 1,
 	);
 }
 
@@ -223,7 +237,7 @@ function cp_kb_ajax_board() {
 	if (!$b) { cp_el_err('Nincs ilyen tábla, vagy nincs hozzáférésed.', 404); }
 	$lists = (array) $wpdb->get_results($wpdb->prepare('SELECT id, name, pos FROM ' . cp_kb_t('lists') . ' WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id', $b['id']), ARRAY_A);
 	$arch = !empty($_POST['arch']);
-	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cp_kb_t('cards') . ' WHERE board_id = %d AND archived_at IS ' . ($arch ? 'NOT NULL' : 'NULL') . ' ORDER BY pos, id', $b['id']), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cp_kb_t('cards') . ' WHERE board_id = %d AND ' . cp_kb_vis() . ' AND archived_at IS ' . ($arch ? 'NOT NULL' : 'NULL') . ' ORDER BY pos, id', $b['id']), ARRAY_A);
 	$x = cp_kb_cards_out($rows);
 	wp_send_json_success(array('board' => array('id' => (int) $b['id'], 'n' => $b['name'], 'k' => $b['kind']), 'lists' => array_map(function ($l) { return array('id' => (int) $l['id'], 'n' => $l['name']); }, $lists), 'cards' => $x['cards'], 'links' => $x['links']));
 }
@@ -346,6 +360,7 @@ function cp_kb_card_full($id) {
 	$row['descr'] = (string) $c['descr'];
 	$row['checklist'] = is_array($cl) ? array_values($cl) : array();
 	$row['by'] = $c['created_by'];
+	$row['canpriv'] = cp_kb_priv_ready() && ((int) $c['created_uid'] <= 0 || (int) $c['created_uid'] === (int) cp_kb_me()) ? 1 : 0; /* v2.9.355 */
 	$row['at'] = cp_kb_local($c['created_at']);
 	$bb = $wpdb->get_row($wpdb->prepare('SELECT name, kind FROM ' . cp_kb_t('boards') . ' WHERE id = %d', $c['board_id']), ARRAY_A);
 	$row['bn'] = (string) ($bb['name'] ?? '');
@@ -386,6 +401,13 @@ function cp_kb_ajax_card_save() {
 	if (isset($_POST['deal'])) { $set['deal_id'] = ctype_digit((string) $_POST['deal']) && (int) $_POST['deal'] > 0 ? (int) $_POST['deal'] : null; }
 	if (isset($_POST['th'])) { $set['thread_id'] = ctype_digit((string) $_POST['th']) && (int) $_POST['th'] > 0 ? (int) $_POST['th'] : null; }
 	if (isset($_POST['arch'])) { $set['archived_at'] = !empty($_POST['arch']) && $_POST['arch'] !== '0' ? cp_kb_now() : null; }
+	/* v2.9.355: rejtett kártya – csak a létrehozó kapcsolhatja (régi, létrehozó nélküli kártyánál bárki, aki látja) */
+	$privLog = '';
+	if (isset($_POST['priv']) && cp_kb_priv_ready()) {
+		$pv = !empty($_POST['priv']) && $_POST['priv'] !== '0' ? 1 : 0;
+		if ($id > 0) { $c0 = cp_kb_card_ok($id); if ($c0 && (int) $c0['created_uid'] > 0 && (int) $c0['created_uid'] !== (int) cp_kb_me()) { cp_el_err('A kártya láthatóságát csak a létrehozója állíthatja.', 403); } if ($c0 && (int) $c0['priv'] !== $pv) { $privLog = $pv ? 'Elrejtette (csak a létrehozó és a felelősök látják)' : 'Láthatóvá tette mindenkinek'; } }
+		$set['priv'] = $pv;
+	}
 	if ($id === 0) {
 		$b = cp_kb_board_ok((int) ($_POST['board'] ?? 0));
 		if (!$b) { cp_el_err('Nincs ilyen tábla.', 404); }
@@ -418,7 +440,7 @@ function cp_kb_ajax_card_save() {
 			$lid = (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cp_kb_t('lists') . ' WHERE board_id = %d AND deleted_at IS NULL ORDER BY pos, id LIMIT 1', $c['board_id']));
 			if ($lid) { $set['list_id'] = $lid; $set['pos'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(MAX(pos), -1) + 1 FROM $C WHERE list_id = %d", $lid)); }
 		}
-		if ($set) { $set['updated_at'] = cp_kb_now(); $wpdb->update($C, $set, array('id' => $id)); cp_kb_diff($c, $set, $id); }
+		if ($set) { $set['updated_at'] = cp_kb_now(); $wpdb->update($C, $set, array('id' => $id)); cp_kb_diff($c, $set, $id); if ($privLog !== '') { cp_kb_log($id, $privLog); } }
 	}
 	wp_send_json_success(cp_kb_card_full($id));
 }
@@ -472,7 +494,7 @@ function cp_kb_mine_rows($me) {
 	if ($me <= 0) { return array(); }
 	$C = cp_kb_t('cards'); $B = cp_kb_t('boards');
 	$sql = "SELECT c.* FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL
-		WHERE c.archived_at IS NULL AND c.done = 0 AND (b.kind = 'team' OR b.owner_uid = %d)
+		WHERE c.archived_at IS NULL AND c.done = 0 AND " . cp_kb_vis('c.') . " AND (b.kind = 'team' OR b.owner_uid = %d)
 		AND (FIND_IN_SET(%d, c.assignees) OR c.id IN (SELECT card_id FROM " . cp_kb_t('comments') . " WHERE deleted_at IS NULL AND FIND_IN_SET(%d, mentions)))
 		ORDER BY c.due IS NULL, c.due, c.updated_at DESC LIMIT 200";
 	return (array) $wpdb->get_results($wpdb->prepare($sql, $me, $me, $me), ARRAY_A);
@@ -484,7 +506,7 @@ function cp_kb_mine_count() {
 	if ($me <= 0) { return 0; }
 	$C = cp_kb_t('cards'); $B = cp_kb_t('boards');
 	return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL
-		WHERE c.archived_at IS NULL AND c.done = 0 AND (b.kind = 'team' OR b.owner_uid = %d)
+		WHERE c.archived_at IS NULL AND c.done = 0 AND " . cp_kb_vis('c.') . " AND (b.kind = 'team' OR b.owner_uid = %d)
 		AND (FIND_IN_SET(%d, c.assignees) OR c.id IN (SELECT card_id FROM " . cp_kb_t('comments') . " WHERE deleted_at IS NULL AND FIND_IN_SET(%d, mentions)))", $me, $me, $me));
 }
 
@@ -522,7 +544,7 @@ function cp_kb_ajax_linked() {
 	if ($th > 0) { $w[] = $wpdb->prepare('c.thread_id = %d', $th); }
 	if (!$w) { wp_send_json_success(array('cards' => array())); }
 	$C = cp_kb_t('cards'); $B = cp_kb_t('boards'); $L = cp_kb_t('lists');
-	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT c.*, b.name bn, l.name ln FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL LEFT JOIN $L l ON l.id = c.list_id WHERE c.archived_at IS NULL AND (b.kind = 'team' OR (b.owner_uid = %d AND %d > 0)) AND (" . implode(' OR ', $w) . ') ORDER BY c.done, c.id DESC LIMIT 30', $me, $me), ARRAY_A);
+	$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT c.*, b.name bn, l.name ln FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL LEFT JOIN $L l ON l.id = c.list_id WHERE c.archived_at IS NULL AND " . cp_kb_vis('c.') . " AND (b.kind = 'team' OR (b.owner_uid = %d AND %d > 0)) AND (" . implode(' OR ', $w) . ') ORDER BY c.done, c.id DESC LIMIT 30', $me, $me), ARRAY_A);
 	wp_send_json_success(array('cards' => array_map(function ($c) { $r = cp_kb_card_row($c); $r['bn'] = $c['bn']; $r['ln'] = (string) $c['ln']; return $r; }, $rows)));
 }
 
@@ -562,7 +584,7 @@ function cp_kb_ajax_people() {
 	$C = cp_kb_t('cards'); $B = cp_kb_t('boards'); $L = cp_kb_t('lists');
 	$done = !empty($_POST['done']) ? '' : 'AND c.done = 0';
 	$rows = (array) $wpdb->get_results("SELECT c.*, b.name bn, l.name ln FROM $C c JOIN $B b ON b.id = c.board_id AND b.deleted_at IS NULL AND b.kind = 'team' LEFT JOIN $L l ON l.id = c.list_id
-		WHERE c.archived_at IS NULL AND c.assignees <> '' $done ORDER BY c.done, c.due IS NULL, c.due, c.pos, c.id LIMIT 600", ARRAY_A);
+		WHERE c.archived_at IS NULL AND c.assignees <> '' AND " . cp_kb_vis('c.') . " $done ORDER BY c.done, c.due IS NULL, c.due, c.pos, c.id LIMIT 600", ARRAY_A);
 	$x = cp_kb_cards_out($rows);
 	foreach ($x['cards'] as $i => &$c) { $c['bn'] = $rows[$i]['bn']; $c['ln'] = (string) $rows[$i]['ln']; }
 	unset($c);

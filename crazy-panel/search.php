@@ -94,7 +94,7 @@ function cp_srch_data($q, $f = array()) {
 		$me = function_exists('cp_kb_me') ? (int) cp_kb_me() : 0;
 		$kw = cp_srch_like("CONCAT_WS(' ', k.title, k.descr)", $words);
 		if (!empty($f['own']) && $me) { $kw .= $wpdb->prepare(' AND FIND_IN_SET(%d, k.assignees)', $me); }
-		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.done, k.due, b.name board, l.name list FROM ' . cp_kb_t('cards') . ' k JOIN ' . cp_kb_t('boards') . ' b ON b.id = k.board_id LEFT JOIN ' . cp_kb_t('lists') . " l ON l.id = k.list_id WHERE k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $kw ORDER BY k.done, k.id DESC LIMIT " . $L(6), $me, $me), ARRAY_A);
+		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.done, k.due, b.name board, l.name list FROM ' . cp_kb_t('cards') . ' k JOIN ' . cp_kb_t('boards') . ' b ON b.id = k.board_id LEFT JOIN ' . cp_kb_t('lists') . " l ON l.id = k.list_id WHERE k.archived_at IS NULL AND b.deleted_at IS NULL AND " . (function_exists('cp_kb_vis') ? cp_kb_vis('k.') : '1=1') . " AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $kw ORDER BY k.done, k.id DESC LIMIT " . $L(6), $me, $me), ARRAY_A);
 		foreach ($rows as $r) { $out['cards'][] = array('id' => (int) $r['id'], 'title' => $r['title'], 'done' => (int) $r['done'], 'due' => $r['due'], 'where' => trim($r['board'] . ' · ' . $r['list'], ' ·')); }
 	}
 	/* v1.53: jegyzetek – deal-jegyzetek (panel és Salesmate), a deal megjegyzés-mezői, levélszál-jegyzetek, kártya-hozzászólások, tevékenységek leírása */
@@ -143,7 +143,7 @@ function cp_srch_notes($words, $crm, $max = 10) {
 	if (function_exists('cp_kb_t') && get_option('cp_kb_db_ver') && cp_srch_can('feladatok')) {
 		$me = function_exists('cp_kb_me') ? (int) cp_kb_me() : 0;
 		$w = cp_srch_like('c.body', $words);
-		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT c.card_id, c.body, c.author, c.created_at, k.title FROM ' . cp_kb_t('comments') . ' c JOIN ' . cp_kb_t('cards') . ' k ON k.id = c.card_id JOIN ' . cp_kb_t('boards') . " b ON b.id = k.board_id WHERE c.deleted_at IS NULL AND k.archived_at IS NULL AND b.deleted_at IS NULL AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $w ORDER BY c.created_at DESC LIMIT 6", $me, $me), ARRAY_A) as $r) {
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT c.card_id, c.body, c.author, c.created_at, k.title FROM ' . cp_kb_t('comments') . ' c JOIN ' . cp_kb_t('cards') . ' k ON k.id = c.card_id JOIN ' . cp_kb_t('boards') . " b ON b.id = k.board_id WHERE c.deleted_at IS NULL AND k.archived_at IS NULL AND b.deleted_at IS NULL AND " . (function_exists('cp_kb_vis') ? cp_kb_vis('k.') : '1=1') . " AND (b.kind = 'team' OR (b.kind = 'personal' AND b.owner_uid = %d AND %d > 0)) AND $w ORDER BY c.created_at DESC LIMIT 6", $me, $me), ARRAY_A) as $r) {
 			$add('card', $r['card_id'], 'Kártya-hozzászólás', $r['title'], $r['body'], $r['author'], $r['created_at']);
 		}
 	}

@@ -180,7 +180,7 @@ add_filter('cp_crm_deal_data', function ($x) {
 	/* feladatkártyák */
 	$x['cards'] = array();
 	if (function_exists('cp_kb_t') && get_option('cp_kb_db_ver')) {
-		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.assignees, k.due, k.done, k.created_by, k.created_at, l.name list FROM ' . cp_kb_t('cards') . ' k LEFT JOIN ' . cp_kb_t('lists') . ' l ON l.id = k.list_id WHERE k.deal_id = %d AND k.archived_at IS NULL ORDER BY k.id DESC LIMIT 50', $id), ARRAY_A);
+		$rows = (array) $wpdb->get_results($wpdb->prepare('SELECT k.id, k.title, k.assignees, k.due, k.done, k.created_by, k.created_at, l.name list FROM ' . cp_kb_t('cards') . ' k LEFT JOIN ' . cp_kb_t('lists') . ' l ON l.id = k.list_id WHERE k.deal_id = %d AND k.archived_at IS NULL AND ' . (function_exists('cp_kb_vis') ? cp_kb_vis('k.') : '1=1') . ' ORDER BY k.id DESC LIMIT 50', $id), ARRAY_A);
 		foreach ($rows as $r) {
 			$as = array();
 			foreach (array_filter(array_map('intval', explode(',', (string) $r['assignees']))) as $u) { $p = function_exists('cp_pu_get') ? cp_pu_get($u) : null; if ($p) { $as[] = $p['n']; } }
