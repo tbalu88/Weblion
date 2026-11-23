@@ -123,8 +123,9 @@ function make(o) {
   function runCmd(script, args) {
     const q = a => '"' + String(a).replace(/"/g, '') + '"';
     const line = '"' + [script].concat(args).map(q).join(' ') + '"';
-    spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', line], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
-    log('önfrissítés: cserélő szkript elindítva');
+    /* 0.19.12: rejtett ablakkal (wincmd.js) – a „detached” cmd minden belső parancsa saját fekete ablakot nyitott */
+    void line; const how = require('./wincmd').run(script, args, dir());
+    log('önfrissítés: cserélő szkript elindítva (' + how + ')');
   }
   function install() {
     if (!file || !found) throw new Error('Előbb töltsd le a frissítést.');

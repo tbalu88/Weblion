@@ -23,6 +23,7 @@ jobs:
           sparse-checkout: |
             booth/cbcam
             booth/test
+            booth/src
       # az önfrissítés cserélő szkriptjének indítása szóközös útvonalból (a 0.19.5-ig ez nem működött)
       - name: Önfrissítés – szkriptindítás próbája
         shell: pwsh

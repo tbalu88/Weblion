@@ -112,7 +112,7 @@ function make(opts) {
       const before = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '');
       /* 0.18.5: ha az exponálási kérés válasza megszakad, a kép attól még elkészülhet – megvárjuk (lastcaptured) */
       try { await get('/?slc=capture&param1=&param2=', false, true); } catch (e) { if (!e.reset && !/nem válaszol/.test(e.message)) throw e; }
-      const until = Date.now() + (opts.captureTimeout || 15000);
+      const until = Date.now() + (opts.captureTimeout || 45000);
       while (Date.now() < until) {
         await new Promise(r => setTimeout(r, 250));
         const name = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '-');
@@ -126,7 +126,7 @@ function make(opts) {
         fs.writeFileSync(out, buf);
         return out;
       }
-      throw new Error('A kamera nem adott képet 15 mp alatt (fókusz? kártya? akku?)');
+      throw new Error('A kamera nem adott képet 45 mp alatt (fókusz? kártya? akku?)');
     }
   };
 }

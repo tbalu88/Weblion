@@ -184,7 +184,7 @@ class CbCam
             }
         }) { IsBackground = true }.Start();
         // biztonsági háló: ha 25 mp alatt nem jön kép, felszabadítjuk
-        new Thread(() => { Thread.Sleep(25000); if (capturing) { capturing = false; if (lastCaptured == "-") lastCaptured = "HIBA: nem jött kép"; Log("exponálás: időtúllépés"); } }) { IsBackground = true }.Start();
+        new Thread(() => { Thread.Sleep(50000); if (capturing) { capturing = false; if (lastCaptured == "-") lastCaptured = "HIBA: nem jött kép"; Log("exponálás: időtúllépés"); } }) { IsBackground = true }.Start();
     }
 
     static void OnPhoto(object sender, PhotoCapturedEventArgs e)
