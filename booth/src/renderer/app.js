@@ -68,15 +68,32 @@
     }
     v.hidden = true; im.hidden = false;
     await call(B.liveStart);
-    const tick = async () => {
-      if (S.scr !== 'live') return;
-      const r = await B.liveFrame();
-      if (r && r.ok && r.v) im.src = r.v;
-      S.lvT = setTimeout(tick, 70);
-    };
-    tick();
+    lvAttach(im, () => S.scr === 'live');
   }
-  async function liveOff() { clearTimeout(S.lvT); frameGuide(false); if (!WEB()) await B.liveStop(); }
+  /* 0.19.13: élőkép a tükörreflexes gépről – ha a beépített kamerakezelő fut, folyamatos képfolyam (MJPEG, egy kapcsolat,
+     a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
+  async function lvAttach(im, alive) {
+    clearTimeout(S.lvT); S.lvMj = false;
+    let u = null; try { if (B.liveUrl) { const r = await B.liveUrl(); u = r && r.ok && r.v; } } catch (e) { /* régi program */ }
+    if (u && alive()) {
+      S.lvMj = true;
+      im.onerror = () => { im.onerror = null; if (!S.lvMj) return; S.lvMj = false; if (alive()) poll(); };
+      im.src = u + '?t=' + Date.now();
+      return;
+    }
+    poll();
+    function poll() {
+      const tick = async () => {
+        if (!alive()) return;
+        const r = await B.liveFrame();
+        if (r && r.ok && r.v) { im.src = r.v; try { await im.decode(); } catch (e) { /* */ } }
+        S.lvT = setTimeout(tick, r && r.ok ? 15 : 200);
+      };
+      tick();
+    }
+  }
+  function lvDetach(im) { clearTimeout(S.lvT); if (S.lvMj && im) { S.lvMj = false; im.onerror = null; im.removeAttribute('src'); } }
+  async function liveOff() { lvDetach($('[data-lvimg]')); frameGuide(false); if (!WEB()) await B.liveStop(); }
   function mockFrame() {
     const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d');
     const gr = g.createLinearGradient(0, 0, 1500, 1000); gr.addColorStop(0, '#2F4A7A'); gr.addColorStop(1, '#E8894A'); g.fillStyle = gr; g.fillRect(0, 0, 1500, 1000);
@@ -1383,7 +1400,7 @@
       else if (!P.temperature) $('[data-evmsg]').textContent = 'Kézi fehéregyensúly (Kelvin): a 0.12-es programtól.';
       camRows();
     } catch (x) { $('[data-evmsg]').textContent = x.message; }
-    try { await call(B.liveStart); const tick = async () => { if (!S.evOpen) return; try { const f = await call(B.liveFrame); if (f) im.src = f; } catch (x) { /* következő */ } setTimeout(tick, 150); }; tick(); } catch (x) { $('[data-evmsg]').textContent = 'Élőkép: ' + x.message; }
+    try { await call(B.liveStart); lvAttach(im, () => S.evOpen); } catch (x) { $('[data-evmsg]').textContent = 'Élőkép: ' + x.message; }
   }
   function camStep(k, d) { const r = S.cp && S.cp[k]; if (!r) return; const i = r.idx + d; if (i < 0 || i >= r.values.length) return; camSet(k, i); }
   async function camSet(k, i) {
@@ -1444,7 +1461,7 @@
     if (W.wbMode === 'manual' && W.colorTemperature) c.colorTemperature = W.colorTemperature;
     try { await t.applyConstraints({ advanced: [c] }); } catch (x) { B.log('webkamera-beállítás: ' + x.message); }
   }
-  async function evClose() { S.evOpen = false; $('[data-evp]').hidden = true; if (!WEB()) { try { await call(B.liveStop); } catch (x) { /* mindegy */ } } }
+  async function evClose() { S.evOpen = false; lvDetach($('[data-evimg]')); $('[data-evp]').hidden = true; if (!WEB()) { try { await call(B.liveStop); } catch (x) { /* mindegy */ } } }
   const CAMP = [['iso', 'ISO', 'pl. 200'], ['aperture', 'Rekesz (f)', 'pl. 5.6'], ['shutterspeed', 'Záridő', 'pl. 1/125'], ['exposurecompensation', 'Expozíció-korrekció', 'pl. +0.3'], ['whitebalance', 'Fehéregyensúly', 'pl. Auto']];
   async function camRead() {
     const box = $('[data-camprops]');

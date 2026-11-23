@@ -5,6 +5,7 @@
 //   /?slc=set&param1=session.folder&param2=<mappa>
 //   /?CMD=LiveViewWnd_Show | LiveViewWnd_Hide
 //   /liveview.jpg                       → az utolsó élőkép-képkocka (JPG)
+//   /live.mjpg                          → folyamatos élőkép (multipart MJPEG)
 //   /?slc=list|get|set&param1=<iso|aperture|shutterspeed|exposurecompensation|whitebalance|camera.temperature>&param2=<érték>
 //   /?slc=capture                       → exponálás; /?slc=get&param1=lastcaptured → "-" amíg tart, utána a kész fájl útvonala
 //   /image/<név>                        → a mentett kép
@@ -128,7 +129,7 @@ class CbCam
         return d;
     }
 
-    // élőkép: külön szálon, ~12 kép/mp; exponálás alatt szünetel
+    // élőkép: külön szálon, a kamera tempójában; exponálás alatt szünetel
     static void LiveLoop()
     {
         while (true)
@@ -146,7 +147,7 @@ class CbCam
                     Buffer.BlockCopy(lv.ImageData, lv.ImageDataPosition, b, 0, b.Length);
                     lastFrame = b; lastFrameAt = DateTime.Now;
                 }
-                Thread.Sleep(80);
+                Thread.Sleep(15); // 0.19.13: 80 → 15 ms (a kamera tempója a határ)
             }
             catch (Exception e) { Log("élőkép: " + e.Message); Thread.Sleep(400); }
         }
@@ -244,6 +245,25 @@ class CbCam
                 string h; while (!string.IsNullOrEmpty(h = rd.ReadLine())) { }
                 string[] parts = first.Split(' ');
                 string url = parts.Length > 1 ? parts[1] : "/";
+                // 0.19.13: folyamatos élőkép (MJPEG) – a felület egyetlen kapcsolaton kapja a képkockákat, amint elkészülnek
+                if (url.StartsWith("/live.mjpg"))
+                {
+                    c.SendTimeout = 3000; lvWanted = true;
+                    byte[] mh = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=cbf\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
+                    ns.Write(mh, 0, mh.Length); ns.Flush();
+                    byte[] sent = null;
+                    while (lvWanted)
+                    {
+                        byte[] f = lastFrame;
+                        if (f != null && !object.ReferenceEquals(f, sent))
+                        {
+                            byte[] ph = Encoding.ASCII.GetBytes("--cbf\r\nContent-Type: image/jpeg\r\nContent-Length: " + f.Length + "\r\n\r\n");
+                            ns.Write(ph, 0, ph.Length); ns.Write(f, 0, f.Length); ns.Write(new byte[] { 13, 10 }, 0, 2); ns.Flush(); sent = f;
+                        }
+                        Thread.Sleep(8);
+                    }
+                    return;
+                }
                 int code = 200; string type = "text/plain; charset=utf-8"; byte[] body;
                 try { body = Route(url, ref type); }
                 catch (Exception e) { code = 500; body = Encoding.UTF8.GetBytes(e.Message); type = "text/plain; charset=utf-8"; }

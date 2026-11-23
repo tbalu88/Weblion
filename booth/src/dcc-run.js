@@ -164,6 +164,6 @@ function make(o) {
   }
   /* kilépéskor csak azt zárjuk be, amit mi indítottunk */
   function stop() { hide(false); if (started) { try { if (mode === 'cbcam') started.kill(); else execFile('taskkill', ['/IM', 'CameraControl.exe', '/F'], { windowsHide: true }); } catch (e) { /* */ } started = null; } }
-  return { ensure, watch, stop, exe, hide };
+  return { ensure, watch, stop, exe, hide, mode: () => mode };
 }
 module.exports = { make };

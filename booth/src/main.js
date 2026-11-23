@@ -82,6 +82,8 @@ ipcMain.handle('cam:props', wrap(async () => { if (!cam) makeCam(); if (!cam.pro
 ipcMain.handle('cam:set', wrap(async (p, v) => { if (!cam) makeCam(); if (!cam.setProp) throw new Error('Ehhez a kamerához nincs beállítás (csak DSLR, digiCamControl).'); return cam.setProp(p, v); }));
 ipcMain.handle('cam:liveStart', wrap(async () => cam.liveStart()));
 ipcMain.handle('cam:liveStop', wrap(async () => cam.liveStop()));
+/* 0.19.13: a beépített kamerakezelő (cbcam) folyamatos élőképének címe (MJPEG) – különben null, és a felület képkockánként kér */
+ipcMain.handle('cam:liveUrl', wrap(async () => (cfg.camera === 'dcc' && dccRun && dccRun.mode() === 'cbcam') ? String(cfg.dccUrl || 'http://127.0.0.1:5513').replace(/\/+$/, '') + '/live.mjpg' : null));
 ipcMain.handle('cam:liveFrame', wrap(async () => { const b = await cam.liveFrame(); return b ? toDataUrl(b) : null; }));
 ipcMain.handle('cam:capture', wrap(async () => { const f = await cam.capture(); log('fotó: ' + f); return f ? toDataUrl(fs.readFileSync(f)) : null; }));
 ipcMain.handle('shot:save', wrap(async dataUrl => {

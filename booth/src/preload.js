@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('booth', {
   camInit: () => ipcRenderer.invoke('cam:init'),
   liveStart: () => ipcRenderer.invoke('cam:liveStart'),
   liveStop: () => ipcRenderer.invoke('cam:liveStop'),
+  liveUrl: () => ipcRenderer.invoke('cam:liveUrl'),         /* 0.19.13: folyamatos élőkép címe vagy null */
   liveFrame: () => ipcRenderer.invoke('cam:liveFrame'),     /* data:image/jpeg URL vagy null */
   capture: () => ipcRenderer.invoke('cam:capture'),         /* data:image/jpeg URL (a teljes felbontású kép) vagy null (próbamód) */
   saveShot: dataUrl => ipcRenderer.invoke('shot:save', dataUrl),
