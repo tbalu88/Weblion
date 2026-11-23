@@ -38,7 +38,7 @@ function make(opts) {
     let done = false; const fin = (f, v) => { if (!done) { done = true; f(v); } };
     const rq = http.get(base + q, { agent: false, headers: { Connection: 'close', 'Cache-Control': 'no-store' } }, r => {
       const ch = []; r.on('data', c => ch.push(c));
-      r.on('end', () => { if (r.statusCode >= 400) return fin(rej, new Error('digiCamControl HTTP ' + r.statusCode)); const b = Buffer.concat(ch); fin(res, asBuf ? b : b.toString('utf8').trim()); });
+      r.on('end', () => { const b = Buffer.concat(ch); if (r.statusCode >= 400) { const m = asBuf ? '' : b.toString('utf8').trim().slice(0, 200); return fin(rej, new Error(m && !/^</.test(m) ? 'Kamera: ' + m : 'A kamerakezelő hibát jelzett (' + r.statusCode + ')')); } fin(res, asBuf ? b : b.toString('utf8').trim()); });
       r.on('error', e => fin(rej, mapErr(e)));
     });
     rq.setTimeout(opts.timeout || 8000, () => { rq.destroy(); fin(rej, new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)')); });

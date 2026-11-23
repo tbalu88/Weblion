@@ -1,4 +1,4 @@
-// Crazy Booth – cbcam: ablak nélküli DSLR-kezelő (0.19.0).
+// Crazy Booth – cbcam: ablak nélküli DSLR-kezelő (0.19.0; 0.19.4: üzenetkezelős kameraszál – Canon).
 // A digiCamControl kamerakezelő könyvtárát (CameraControl.Devices, MIT, Duka István) használja, a grafikus program nélkül.
 // Ugyanazt a HTTP-felületet adja a 127.0.0.1-en, mint a digiCamControl webszervere – a Crazy Booth camera/dcc.js változatlanul hívja:
 //   /                                   → "OK" (él-e)
@@ -19,6 +19,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Windows.Threading;
 using CameraControl.Devices;
 using CameraControl.Devices.Classes;
 
@@ -26,6 +27,11 @@ class CbCam
 {
     static CameraDeviceManager dm;
     static readonly object camLock = new object();
+    // 0.19.4: minden kameraművelet egy saját STA-szálon, üzenetkezeléssel (Dispatcher) fut – a Canon EDSDK (és a WIA)
+    // a „kép elkészült” eseményt Windows-üzenetként küldi; üzenetkezelés nélkül az exponálás után nem jött át a kép
+    static Dispatcher camD;
+    static T OnCam<T>(Func<T> f) { return camD.CheckAccess() ? f() : camD.Invoke(f); }
+    static void OnCam(Action a) { if (camD.CheckAccess()) a(); else camD.Invoke(a); }
     static string folder = Path.Combine(Path.GetTempPath(), "cbcam");
     static string lastCaptured = "";
     static volatile bool capturing = false;
@@ -65,7 +71,10 @@ class CbCam
                 }
             }) { IsBackground = true }.Start();
         }
-        Connect();
+        ManualResetEvent ready = new ManualResetEvent(false);
+        Thread ct = new Thread(() => { camD = Dispatcher.CurrentDispatcher; try { Connect(); } catch (Exception e) { Log("indulás: " + e.Message); } ready.Set(); Dispatcher.Run(); });
+        ct.SetApartmentState(ApartmentState.STA); ct.IsBackground = true; ct.Start();
+        ready.WaitOne();
         new Thread(LiveLoop) { IsBackground = true }.Start();
         TcpListener srv = new TcpListener(IPAddress.Loopback, port);
         try { srv.Start(); }
@@ -80,8 +89,7 @@ class CbCam
 
     static void Shutdown()
     {
-        try { lock (camLock) { if (Cam() != null && lvOn) Cam().StopLiveView(); } } catch { }
-        try { if (dm != null) dm.CloseAll(); } catch { }
+        try { OnCam(() => { if (Cam() != null && lvOn) Cam().StopLiveView(); if (dm != null) dm.CloseAll(); }); } catch { }
     }
 
     static ICameraDevice Cam()
@@ -115,7 +123,7 @@ class CbCam
     static ICameraDevice NeedCam()
     {
         ICameraDevice d = Cam();
-        if (d == null && (DateTime.Now - lastConnectTry).TotalSeconds > 4) { Connect(); d = Cam(); }
+        if (d == null && (DateTime.Now - lastConnectTry).TotalSeconds > 4) { OnCam(Connect); d = Cam(); }
         if (d == null) throw new Exception("Nincs csatlakoztatott fényképező (be van kapcsolva, USB-n csatlakozik?)");
         return d;
     }
@@ -130,16 +138,13 @@ class CbCam
                 if (!lvWanted || capturing) { Thread.Sleep(60); continue; }
                 ICameraDevice d = Cam();
                 if (d == null) { Thread.Sleep(500); continue; }
-                lock (camLock)
+                if (!lvOn) { OnCam(() => d.StartLiveView()); lvOn = true; Thread.Sleep(300); }
+                LiveViewData lv = OnCam(() => d.GetLiveViewImage());
+                if (lv != null && lv.ImageData != null && lv.ImageData.Length > lv.ImageDataPosition)
                 {
-                    if (!lvOn) { d.StartLiveView(); lvOn = true; Thread.Sleep(300); }
-                    LiveViewData lv = d.GetLiveViewImage();
-                    if (lv != null && lv.ImageData != null && lv.ImageData.Length > lv.ImageDataPosition)
-                    {
-                        byte[] b = new byte[lv.ImageData.Length - lv.ImageDataPosition];
-                        Buffer.BlockCopy(lv.ImageData, lv.ImageDataPosition, b, 0, b.Length);
-                        lastFrame = b; lastFrameAt = DateTime.Now;
-                    }
+                    byte[] b = new byte[lv.ImageData.Length - lv.ImageDataPosition];
+                    Buffer.BlockCopy(lv.ImageData, lv.ImageDataPosition, b, 0, b.Length);
+                    lastFrame = b; lastFrameAt = DateTime.Now;
                 }
                 Thread.Sleep(80);
             }
@@ -149,7 +154,8 @@ class CbCam
 
     static void LiveStop()
     {
-        lock (camLock) { try { ICameraDevice d = Cam(); if (d != null && lvOn) d.StopLiveView(); } catch (Exception e) { Log("élőkép leállítása: " + e.Message); } lvOn = false; }
+        try { OnCam(() => { ICameraDevice d = Cam(); if (d != null && lvOn) d.StopLiveView(); }); } catch (Exception e) { Log("élőkép leállítása: " + e.Message); }
+        lvOn = false;
     }
 
     static void Capture()
@@ -163,12 +169,12 @@ class CbCam
             {
                 bool wasLv = lvOn;
                 if (wasLv) { LiveStop(); Thread.Sleep(250); }
-                lock (camLock)
+                OnCam(() =>
                 {
                     d.IsBusy = true;
                     try { d.CaptureInSdRam = d.GetCapability(CapabilityEnum.CaptureInRam); } catch { }
                     d.CapturePhoto();
-                }
+                });
                 Log("exponálás elindítva");
             }
             catch (Exception e)
@@ -183,7 +189,8 @@ class CbCam
 
     static void OnPhoto(object sender, PhotoCapturedEventArgs e)
     {
-        new Thread(() =>
+        Log("kép elkészült a kamerán: " + (e.FileName ?? "?"));
+        camD.BeginInvoke(new Action(() =>
         {
             try
             {
@@ -201,7 +208,7 @@ class CbCam
             }
             catch (Exception ex) { Log("képátvitel hiba: " + ex.Message); lastCaptured = "HIBA: " + ex.Message; try { e.CameraDevice.IsBusy = false; } catch { } }
             finally { capturing = false; }
-        }) { IsBackground = true }.Start();
+        }));
     }
 
     static PropertyValue<long> Prop(ICameraDevice d, string p)
@@ -297,13 +304,13 @@ class CbCam
             if (slc == "get" && p1.Equals("lastcaptured", StringComparison.OrdinalIgnoreCase)) return T(lastCaptured);
             if (slc == "set" && p1.Equals("session.folder", StringComparison.OrdinalIgnoreCase)) { if (p2 != "") { folder = p2; Directory.CreateDirectory(folder); } return T("OK"); }
             ICameraDevice d = NeedCam();
-            PropertyValue<long> pv = Prop(d, p1);
+            PropertyValue<long> pv = OnCam(() => Prop(d, p1));
             if (pv == null) return T(slc == "list" ? "[]" : "");
-            if (slc == "list") { type = "application/json; charset=utf-8"; return T("[" + string.Join(",", pv.Values.Select(Esc).ToArray()) + "]"); }
-            if (slc == "get") return T(pv.Value ?? "");
+            if (slc == "list") { type = "application/json; charset=utf-8"; string[] vals = OnCam(() => pv.Values.ToArray()); return T("[" + string.Join(",", vals.Select(Esc).ToArray()) + "]"); }
+            if (slc == "get") return T(OnCam(() => pv.Value) ?? "");
             if (slc == "set")
             {
-                lock (camLock) { pv.SetValue(p2); }
+                OnCam(() => pv.SetValue(p2));
                 return T("OK");
             }
         }
