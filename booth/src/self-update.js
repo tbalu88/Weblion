@@ -160,7 +160,7 @@ function make(o) {
       script = path.join(dir(), 'csere.cmd');
       fs.writeFileSync(script, ['@echo off', 'setlocal',
         'set "PID=%~1"', 'set "APP=%~2"', 'set "NEW=%~3"', 'set "OK=%~4"', 'set "EXE=%~5"', 'set "OLD=%APP%.old"',
-        'set /a W=0', ':wait', 'set /a W+=1', 'if %W% GEQ 30 (taskkill /F /PID %PID% >nul 2>&1 & timeout /t 2 /nobreak >nul & goto waited)', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', ':waited', 'timeout /t 2 /nobreak >nul',
+        'set /a W=0', ':wait', 'set /a W+=1', 'if %W% GEQ 30 (taskkill /F /PID %PID% >nul 2>&1 & timeout /t 2 /nobreak >nul & goto waited)', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', ':waited', 'taskkill /F /IM "%EXE%" >nul 2>&1', 'timeout /t 2 /nobreak >nul',
         'cd /d "%TEMP%"', 'if exist "%OLD%" rmdir /s /q "%OLD%"',
         'set /a M=0', ':mv', 'move "%APP%" "%OLD%" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%APP%\\%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
         'move "%NEW%" "%APP%" >nul || (move "%OLD%" "%APP%" >nul & start "" "%APP%\\%EXE%" & exit /b 1)',
@@ -171,6 +171,8 @@ function make(o) {
       /* 0.18.1: a szkript a programmappán kívülről fusson – a saját munkakönyvtárát a Windows nem engedi átnevezni */
       runCmd(script, [String(process.pid), t, NEW, ok, exe]);
     }
+    /* 0.19.10: a szkript a régi folyamat után minden más futó Crazy Booth-példányt is leállít – egy második (régi)
+       példány fogta az egypéldányos zárat, így az új változat azonnal kilépett, és 2 perc múlva visszaállt a régi */
     /* 0.19.8: ha a program 3 mp alatt nem zár be magától (pl. egy háttérfolyamat tartja), kényszerített kilépés */
     setTimeout(() => { app.quit(); setTimeout(() => app.exit(0), 3000); }, 400);
     return true;
@@ -206,7 +208,7 @@ function make(o) {
       const exe = process.execPath, im = path.basename(exe);
       script = path.join(dir(), 'csere-app.cmd');
       fs.writeFileSync(script, ['@echo off', 'setlocal', 'set "PID=%~1"', 'set "CUR=%~2"', 'set "NEW=%~3"', 'set "OK=%~4"', 'set "EXE=%~5"', 'set "IM=%~6"', 'cd /d "%TEMP%"',
-        'set /a W=0', ':wait', 'set /a W+=1', 'if %W% GEQ 30 (taskkill /F /PID %PID% >nul 2>&1 & timeout /t 2 /nobreak >nul & goto waited)', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', ':waited', 'timeout /t 2 /nobreak >nul',
+        'set /a W=0', ':wait', 'set /a W+=1', 'if %W% GEQ 30 (taskkill /F /PID %PID% >nul 2>&1 & timeout /t 2 /nobreak >nul & goto waited)', 'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul && (timeout /t 1 /nobreak >nul & goto wait)', ':waited', 'taskkill /F /IM "%IM%" >nul 2>&1', 'timeout /t 2 /nobreak >nul',
         'if exist "%CUR%.old" del /f /q "%CUR%.old"',
         'set /a M=0', ':mv', 'move /y "%CUR%" "%CUR%.old" >nul && goto moved', 'set /a M+=1', 'if %M% GEQ 15 (start "" "%EXE%" & exit /b 1)', 'timeout /t 2 /nobreak >nul', 'goto mv', ':moved',
         'move /y "%NEW%" "%CUR%" >nul || (move /y "%CUR%.old" "%CUR%" >nul & start "" "%EXE%" & exit /b 1)',
