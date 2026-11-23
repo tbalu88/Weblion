@@ -719,7 +719,7 @@
   });
   function camRows() { const f = $('[data-form]'), web = f.elements.camera.value !== 'dcc'; f.querySelectorAll('[data-web]').forEach(x => { x.hidden = !web; }); f.querySelectorAll('[data-dcc]').forEach(x => { x.hidden = web; }); }
   $('[data-form]').elements.camera.addEventListener('change', camRows);
-  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : 'Nikon D5300 · ') + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
+  function modeInfo() { $('[data-modeinfo]').textContent = (S.cfg.mock ? 'Próbamód · ' : WEB() ? 'Webkamera · ' : ((S.camName || 'Tükörreflexes gép') + ' · ')) + (S.tpl ? 'sablon (' + S.tpl.shots + ' fotó)' : (Number(S.cfg.shots) >= 3 ? '3 képes csík' : '1 kép')) + (S.cfg.event && S.cfg.event.deal ? ' · ' + S.cfg.event.title : '') + (S.cfg.boothKey ? '' : ' · ⚠ nincs gépkulcs: QR és online galéria kikapcsolva (F2)'); }
   /* ---------- kezelőpult: fülek a vendég útja szerint, keresés, indulás előtti ellenőrzés, szünet */
   function tab(t) {
     $('[data-stq]').value = ''; search('');
@@ -827,7 +827,7 @@
     if (S.cfg.mock) add('mid', 'Próbamód', 'a program próbamódban fut – éles rendezvény előtt indítsd normálisan');
     try {
       if (WEB()) { const st = await webStream(); const s0 = st.getVideoTracks()[0]; const t = s0.getSettings(); add('ok', 'Kamera', (s0.label || 'webkamera') + ' · ' + (t.width || '?') + '×' + (t.height || '?')); }
-      else { await call(B.camInit); add('ok', 'Kamera', 'Nikon D5300 csatlakozik'); }
+      else { const r = await call(B.camInit); S.camName = typeof r === 'string' && r ? r : ''; add('ok', 'Kamera', S.camName ? S.camName + ' csatlakozva' : 'tükörreflexes gép (digiCamControl) csatlakozik'); }
     } catch (e) { add(S.cfg.mock ? 'mid' : 'bad', 'Kamera', e.message); }
     const ms = modeList(), clips = ms.filter(k => MODES[k].clip);
     if (clips.length) add(window.MediaRecorder ? 'ok' : 'bad', 'Videó', window.MediaRecorder ? (window.BoothClips.pickMime().indexOf('mp4') >= 0 ? 'MP4' : 'WebM') + ' formátumban' : 'ezen a gépen nem készíthető videó');

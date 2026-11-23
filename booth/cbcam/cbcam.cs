@@ -314,7 +314,7 @@ class CbCam
                 return T("OK");
             }
         }
-        if (path == "/" || path == "") return T("OK" + (Cam() == null ? " (nincs kamera)" : ""));
+        if (path == "/" || path == "") { var c0 = Cam(); string nm = ""; try { nm = c0 == null ? "" : (c0.DeviceName ?? ""); } catch { } return T("OK" + (c0 == null ? " (nincs kamera)" : (nm != "" ? " | " + nm : ""))); }
         return null;
     }
 }

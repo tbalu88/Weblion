@@ -82,6 +82,8 @@ function make(opts) {
     async init() {
       fs.mkdirSync(folder, { recursive: true });
       await get('/?slc=set&param1=session.folder&param2=' + enc(folder));
+      /* 0.19.10: a beépített kamerakezelő (cbcam) a gyökérre „OK | <kameranév>”-vel felel – a felület ezt mutatja */
+      try { const m = /^OK \| (.+)$/.exec(String(await get('/', false, true)).trim()); if (m) return m[1].slice(0, 60); } catch (e) { /* */ }
       return true;
     },
     async liveStart() { if (!lvOn) { await get('/?CMD=LiveViewWnd_Show'); lvOn = true; } },
