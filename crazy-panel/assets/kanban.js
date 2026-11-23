@@ -430,7 +430,7 @@
 				'</div><div data-dpick hidden></div></div>' +
 			'<div class="kb-fld"><h5>Leírás</h5><textarea class="kb-desc" data-desc rows="' + Math.min(12, Math.max(3, (c.descr.match(/\n/g) || []).length + 2)) + '" placeholder="Részletek, teendők, linkek…">' + esc(c.descr) + '</textarea><div class="kb-dsave" hidden><button type="button" class="cpx-btn" data-dsave>Mentés</button><button type="button" class="kb-tb" data-dcancel>Mégse</button></div></div>' +
 			'<div class="kb-fld"><h5>Ellenőrzőlista' + (cl.length ? ' <small>' + pct + '%</small>' : '') + '</h5>' + (cl.length ? '<div class="kb-prog"><span style="width:' + pct + '%"></span></div>' : '') +
-				'<ul class="kb-cl">' + cl.map((it, i) => '<li class="' + (it.d ? 'd' : '') + '"><label><input type="checkbox" data-cli="' + i + '"' + (it.d ? ' checked' : '') + '><span>' + esc(it.t) + '</span></label><button type="button" class="kb-tb sm" data-cldel="' + i + '" title="Törlés">' + I.x + '</button></li>').join('') + '</ul>' +
+				'<ul class="kb-cl">' + cl.map((it, i) => '<li class="' + (it.d ? 'd' : '') + '"><input type="checkbox" data-cli="' + i + '"' + (it.d ? ' checked' : '') + ' aria-label="Kész: ' + esc(it.t) + '"><span class="kb-clt" data-cledit="' + i + '" tabindex="0" role="button" title="Kattints a szerkesztéshez">' + esc(it.t) + '</span><button type="button" class="kb-tb sm" data-cldel="' + i + '" title="Törlés">' + I.x + '</button></li>').join('') + '</ul>' +
 				'<div class="kb-cladd"><input type="text" data-clnew placeholder="Új elem… (Enter)" maxlength="200"></div></div>' +
 			'<div class="kb-fld"><h5>Hozzászólások és változásnapló <label class="kb-chk kb-actt"><input type="checkbox" data-acts' + (S.hideActs ? '' : ' checked') + '> változások</label></h5><div class="kb-cmp"><textarea rows="2" data-com placeholder="Írj hozzászólást – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: küldés)"></textarea><div class="kb-mpop" hidden></div><button type="button" class="cpx-btn" data-csend>Küldés</button></div>' +
 				'<ul class="kb-coms">' + feed(x).map(it => it.a ? (S.hideActs ? '' : '<li class="kb-act"><span class="kb-dot"></span><div><b>' + esc(it.a.author || '–') + '</b> ' + esc(it.a.text) + ' <small>' + esc(ago(it.a.created_at)) + '</small></div></li>') : (m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + '<p>' + nl2br(m.body) + '</p></div></li>')(it.m)).join('') + '</ul></div>' +
@@ -454,6 +454,20 @@
 		sh.querySelector('[data-dcancel]').addEventListener('click', () => { ds.value = c.descr; dbar.hidden = true; });
 		const setCl = l => save({ checklist: JSON.stringify(l) });
 		sh.querySelectorAll('[data-cli]').forEach(b => b.addEventListener('change', () => { const l = cl.map(z => Object.assign({}, z)); l[Number(b.dataset.cli)].d = b.checked ? 1 : 0; setCl(l); }));
+		/* v2.9.358: ellenőrzőlista-elem szerkesztése – kattintás a szövegre: Enter / kilépés ment, Esc elvet */
+		sh.querySelectorAll('[data-cledit]').forEach(sp => {
+			const go = () => {
+				if (sp.querySelector('input')) return;
+				const i = Number(sp.dataset.cledit), old = cl[i].t, inp = document.createElement('input');
+				inp.type = 'text'; inp.maxLength = 200; inp.value = old; inp.className = 'kb-cledit'; sp.textContent = ''; sp.appendChild(inp); inp.focus(); inp.select();
+				let done = false;
+				const fin = keep => { if (done) return; done = true; const v = inp.value.trim(); if (keep && v && v !== old) { const l = cl.map(z => Object.assign({}, z)); l[i].t = v; setCl(l); } else { sp.textContent = old; } };
+				inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fin(true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(false); } });
+				inp.addEventListener('blur', () => fin(true));
+			};
+			sp.addEventListener('click', go);
+			sp.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); go(); } });
+		});
 		sh.querySelectorAll('[data-cldel]').forEach(b => b.addEventListener('click', () => { const l = cl.slice(); l.splice(Number(b.dataset.cldel), 1); setCl(l); }));
 		const cn = sh.querySelector('[data-clnew]');
 		cn.addEventListener('keydown', async e => { if (e.key === 'Enter' && cn.value.trim()) { e.preventDefault(); const r = await setCl(cl.concat([{ t: cn.value.trim(), d: 0 }])); if (r) { const n2 = document.querySelector('.kb-sheet [data-clnew]'); if (n2) n2.focus(); } } });

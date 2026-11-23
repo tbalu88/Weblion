@@ -185,3 +185,9 @@
 .kb-priv .kb-ic{width:16px;height:16px}
 .kb-b.priv{color:#4A5163}
 @media (max-width:560px){.kb-priv span{display:none}.kb-priv{padding:0 9px}}
+/* v2.9.358: ellenőrzőlista – a szöveg kattintással szerkeszthető */
+.kb-cl li>input[type=checkbox]{flex:none;margin:0 2px 0 0;cursor:pointer}
+.kb-clt{flex:1;min-width:0;cursor:text;border-radius:6px;padding:3px 6px;margin:-3px 0;overflow-wrap:anywhere}
+.kb-clt:hover{background:#F3F1EC}
+.kb-clt:focus-visible{outline:2px solid #E8894A;outline-offset:1px}
+.kb-cledit{width:100%;height:30px;border:1.5px solid #2F5BD8;border-radius:6px;padding:0 8px;font:inherit;box-sizing:border-box}
