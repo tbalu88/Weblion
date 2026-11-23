@@ -45,19 +45,28 @@ function make(opts) {
       so.write('GET ' + (BU.pathname.replace(/\/$/, '') + q) + ' HTTP/1.0\r\nHost: ' + BU.host + '\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n');
     });
     const tm = setTimeout(() => fin(rej, new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)')), opts.timeout || 8000);
-    so.on('data', c => ch.push(c));
-    so.on('error', e => fin(rej, mapErr(e)));
-    so.on('close', () => {
-      if (done) return;
+    /* 0.19.7: a válasz kész, ha megjött a fejlécben jelzett hosszúságú törzs (vagy a darabolt – chunked – törzs vége);
+       a digiCamControl webszervere a kapcsolatot nem zárja le, ezért a lezárásra várni időtúllépés volt */
+    const parse = (final) => {
       const all = Buffer.concat(ch), he = all.indexOf('\r\n\r\n');
-      if (he < 0) return fin(rej, mapErr({ code: 'ECONNRESET', message: 'üres válasz' }));
-      const head = all.slice(0, he).toString('latin1'), b = all.slice(he + 4);
+      if (he < 0) return final ? fin(rej, mapErr({ code: 'ECONNRESET', message: 'üres válasz' })) : null;
+      const head = all.slice(0, he).toString('latin1'), raw = all.slice(he + 4);
       const m = /^HTTP\/\d\.\d\s+(\d{3})/.exec(head), code = m ? Number(m[1]) : 0;
-      /* ha a fejléc hosszt ad meg, és a törzs hosszabb, levágjuk (az első érték számít) */
-      const cl = /\r\ncontent-length:\s*(\d+)/i.exec(head), body = cl && b.length > Number(cl[1]) ? b.slice(0, Number(cl[1])) : b;
+      let body = null;
+      const cl = /\r\ncontent-length:\s*(\d+)/i.exec(head);
+      if (/\r\ntransfer-encoding:\s*chunked/i.test(head)) {
+        const parts = []; let k = 0, ok = false;
+        for (;;) { const e = raw.indexOf('\r\n', k); if (e < 0) break; const n = parseInt(raw.slice(k, e).toString('latin1'), 16); if (isNaN(n)) break; if (n === 0) { ok = true; break; } if (raw.length < e + 2 + n + 2) break; parts.push(raw.slice(e + 2, e + 2 + n)); k = e + 2 + n + 2; }
+        if (ok) body = Buffer.concat(parts); else if (final) body = Buffer.concat(parts);
+      } else if (cl) { const n = Number(cl[1]); if (raw.length >= n) body = raw.slice(0, n); else if (final) body = raw; }
+      else if (final) body = raw;
+      if (body === null) return null;
       if (!code || code >= 400) { const t = asBuf ? '' : body.toString('utf8').trim().slice(0, 200); return fin(rej, new Error(t && !/^</.test(t) ? 'Kamera: ' + t : 'A kamerakezelő hibát jelzett (' + (code || '?') + ')')); }
-      fin(res, asBuf ? body : body.toString('utf8').trim());
-    });
+      return fin(res, asBuf ? body : body.toString('utf8').trim());
+    };
+    so.on('data', c => { ch.push(c); parse(false); });
+    so.on('error', e => fin(rej, mapErr(e)));
+    so.on('close', () => { if (!done) parse(true); });
   });
   function mapErr(e) {
     const code = String(e.code || '') + ' ' + String(e.message || e);
