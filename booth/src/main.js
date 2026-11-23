@@ -5,6 +5,9 @@ const path = require('path');
 
 const MOCK = process.argv.includes('--mock');
 const MAC = process.platform === 'darwin';
+/* 0.19.9: egyszerre csak egy példány fusson – két példány egymás kamerakezelőjét állította le (kilépéskor) és indította újra;
+   a második indítás az elsőt hozza előre */
+if (!MOCK && !app.requestSingleInstanceLock()) app.exit(0);
 const CFG_FILE = () => path.join(app.getPath('userData'), 'config.json');
 const LOG_FILE = () => path.join(app.getPath('userData'), 'booth.log');
 const DEF = {
@@ -59,7 +62,10 @@ function makeCam() {
 const toDataUrl = (buf, mime) => 'data:' + (mime || 'image/jpeg') + ';base64,' + buf.toString('base64');
 const fromDataUrl = s => { const m = /^data:([^;]+);base64,(.*)$/s.exec(String(s || '')); if (!m) throw new Error('hibás kép'); return { mime: m[1], buf: Buffer.from(m[2], 'base64') }; };
 /* az ipcMain.handle első paramétere az esemény – a felület adatai utána jönnek */
-const wrap = fn => async (ev, ...a) => { try { return { ok: true, v: await fn(...a) }; } catch (e) { log('HIBA ' + (e && e.stack || e)); return { ok: false, err: String(e && e.message || e) }; } };
+/* 0.19.9: ugyanaz a hiba 10 mp-en belül csak egyszer kerül a naplóba (az élőkép másodpercenként sokszor kér) */
+let lastErr = '', lastErrT = 0;
+const logErr = e => { const m = String(e && e.message || e); if (m === lastErr && Date.now() - lastErrT < 10000) return; lastErr = m; lastErrT = Date.now(); log('HIBA ' + (e && e.stack || e)); };
+const wrap = fn => async (ev, ...a) => { try { return { ok: true, v: await fn(...a) }; } catch (e) { logErr(e); return { ok: false, err: String(e && e.message || e) }; } };
 
 /* ---------- IPC */
 ipcMain.handle('cfg:get', wrap(async () => Object.assign({}, cfg, { mock: MOCK, mac: MAC, version: app.getVersion() })));
@@ -141,6 +147,7 @@ ipcMain.handle('win:isFull', wrap(async () => win.isFullScreen() || win.isKiosk(
 ipcMain.handle('win:full', wrap(async on => { const f = on === undefined ? !(win.isFullScreen() || win.isKiosk()) : !!on; win.setKiosk(f); win.setFullScreen(f); setTimeout(() => dccTop(true), 300); return f; }));
 
 /* ---------- ablak */
+app.on('second-instance', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } } catch (e) { /* */ } });
 app.whenReady().then(() => {
   loadCfg(); makeCam();
   lan = require('./lan').make({ picDir: () => path.join(app.getPath('pictures'), 'CrazyBooth'), log });

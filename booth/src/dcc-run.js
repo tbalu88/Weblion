@@ -23,10 +23,16 @@ function make(o) {
     for (const v of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432']) if (process.env[v]) C.push(path.join(process.env[v], 'digiCamControl', 'CameraControl.exe'));
     return C.find(f => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } }) || '';
   }
-  async function up(ms) {
-    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 2500);
-    try { const r = await fetch('http://' + host() + ':' + port() + '/', { signal: ctl.signal, cache: 'no-store' }); return r.status > 0; }
-    catch (e) { return false; } finally { clearTimeout(t); }
+  /* 0.19.9: nyers kapcsolattal – a digiCamControl webszervere kétszer küld „Content-Length” fejlécet, amitől a fetch
+     hibát dobott, így a futó, válaszoló programot „nem válaszol”-nak láttuk; elég, ha HTTP-válasz érkezik */
+  function up(ms) {
+    return new Promise(res => {
+      let done = false; const fin = v => { if (!done) { done = true; clearTimeout(t); try { so.destroy(); } catch (e) { /* */ } res(v); } };
+      const so = require('net').connect({ host: host(), port: port() }, () => so.write('GET / HTTP/1.0\r\nHost: ' + host() + '\r\nConnection: close\r\n\r\n'));
+      const t = setTimeout(() => fin(false), ms || 2500);
+      so.on('data', d => fin(/^HTTP\//.test(d.toString('latin1', 0, 5))));
+      so.on('error', () => fin(false)); so.on('close', () => fin(false));
+    });
   }
   /* a webszerver bekapcsolása a beállításfájlban; true, ha változtattunk */
   function settings() {
