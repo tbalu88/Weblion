@@ -33,16 +33,31 @@ function make(opts) {
   };
   /* 0.18.5: minden kérés saját, új kapcsolaton (agent: false) – a digiCamControl webszervere a megtartott (keep-alive)
      kapcsolatot exponálás közben bontja, és ettől a fetch „megszakadt” hibát adott, pedig a kép elkészült */
-  const http = require('http');
+  /* 0.19.5: saját, egyszerű HTTP-kérés nyers kapcsolaton – a digiCamControl webszervere hibás válaszfejlécet küld
+     (kétszer „Content-Length”), amit a Node szigorú HTTP-elemzője elutasít („Parse Error: Duplicate Content-Length”).
+     Minden kérés új kapcsolat (Connection: close), a válasz a kapcsolat lezárásáig tart. */
+  const net = require('net');
+  const BU = new URL(base);
   const get1 = (q, asBuf) => new Promise((res, rej) => {
-    let done = false; const fin = (f, v) => { if (!done) { done = true; f(v); } };
-    const rq = http.get(base + q, { agent: false, headers: { Connection: 'close', 'Cache-Control': 'no-store' } }, r => {
-      const ch = []; r.on('data', c => ch.push(c));
-      r.on('end', () => { const b = Buffer.concat(ch); if (r.statusCode >= 400) { const m = asBuf ? '' : b.toString('utf8').trim().slice(0, 200); return fin(rej, new Error(m && !/^</.test(m) ? 'Kamera: ' + m : 'A kamerakezelő hibát jelzett (' + r.statusCode + ')')); } fin(res, asBuf ? b : b.toString('utf8').trim()); });
-      r.on('error', e => fin(rej, mapErr(e)));
+    let done = false; const fin = (f, v) => { if (!done) { done = true; clearTimeout(tm); try { so.destroy(); } catch (e) { /* */ } f(v); } };
+    const ch = [];
+    const so = net.connect({ host: BU.hostname, port: Number(BU.port) || 80 }, () => {
+      so.write('GET ' + (BU.pathname.replace(/\/$/, '') + q) + ' HTTP/1.0\r\nHost: ' + BU.host + '\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n');
     });
-    rq.setTimeout(opts.timeout || 8000, () => { rq.destroy(); fin(rej, new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)')); });
-    rq.on('error', e => fin(rej, mapErr(e)));
+    const tm = setTimeout(() => fin(rej, new Error('A digiCamControl nem válaszol (fut a program, be van kapcsolva a webszerver?)')), opts.timeout || 8000);
+    so.on('data', c => ch.push(c));
+    so.on('error', e => fin(rej, mapErr(e)));
+    so.on('close', () => {
+      if (done) return;
+      const all = Buffer.concat(ch), he = all.indexOf('\r\n\r\n');
+      if (he < 0) return fin(rej, mapErr({ code: 'ECONNRESET', message: 'üres válasz' }));
+      const head = all.slice(0, he).toString('latin1'), b = all.slice(he + 4);
+      const m = /^HTTP\/\d\.\d\s+(\d{3})/.exec(head), code = m ? Number(m[1]) : 0;
+      /* ha a fejléc hosszt ad meg, és a törzs hosszabb, levágjuk (az első érték számít) */
+      const cl = /\r\ncontent-length:\s*(\d+)/i.exec(head), body = cl && b.length > Number(cl[1]) ? b.slice(0, Number(cl[1])) : b;
+      if (!code || code >= 400) { const t = asBuf ? '' : body.toString('utf8').trim().slice(0, 200); return fin(rej, new Error(t && !/^</.test(t) ? 'Kamera: ' + t : 'A kamerakezelő hibát jelzett (' + (code || '?') + ')')); }
+      fin(res, asBuf ? body : body.toString('utf8').trim());
+    });
   });
   function mapErr(e) {
     const code = String(e.code || '') + ' ' + String(e.message || e);
