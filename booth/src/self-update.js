@@ -116,6 +116,16 @@ function make(o) {
   }
 
   /* kicsomagolás a program mellé, segédszkript, kilépés */
+  /* 0.19.6: a cserélő szkript indítása Windowson. A szkript útvonalában szóköz van („…\\Crazy Booth\\upd\\…”), és a cmd.exe
+     a Node által idézőjelezett „/c "szkript" "arg" …” sorból az első és az utolsó idézőjelet levágta – a szkript el sem indult,
+     a program bezárult, és a régi változat maradt. Most: cmd /d /s /c ""szkript" "arg1" …"" szó szerint átadva (a /s pontosan
+     a külső idézőjelpárt veszi le). */
+  function runCmd(script, args) {
+    const q = a => '"' + String(a).replace(/"/g, '') + '"';
+    const line = '"' + [script].concat(args).map(q).join(' ') + '"';
+    spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', line], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
+    log('önfrissítés: cserélő szkript elindítva');
+  }
   function install() {
     if (!file || !found) throw new Error('Előbb töltsd le a frissítést.');
     if (found.small && /-app\.zip$/.test(file)) return installSmall();
@@ -159,7 +169,7 @@ function make(o) {
         ':back', 'taskkill /F /IM "%EXE%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'rmdir /s /q "%APP%"', 'move "%OLD%" "%APP%" >nul', 'start "" "%APP%\\%EXE%"', ''].join('\r\n'));
       log('önfrissítés: csere indul ' + app.getVersion() + ' → ' + found.v);
       /* 0.18.1: a szkript a programmappán kívülről fusson – a saját munkakönyvtárát a Windows nem engedi átnevezni */
-      spawn('cmd.exe', ['/c', script, String(process.pid), t, NEW, ok, exe], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      runCmd(script, [String(process.pid), t, NEW, ok, exe]);
     }
     setTimeout(() => app.quit(), 400);
     return true;
@@ -203,7 +213,7 @@ function make(o) {
         'set /a N=0', ':chk', 'if exist "%OK%" (del /f /q "%CUR%.old" & exit /b 0)', 'set /a N+=1', 'if %N% GEQ 120 goto back', 'timeout /t 1 /nobreak >nul', 'goto chk',
         ':back', 'taskkill /F /IM "%IM%" >nul 2>&1', 'timeout /t 2 /nobreak >nul', 'del /f /q "%CUR%"', 'move /y "%CUR%.old" "%CUR%" >nul', 'start "" "%EXE%"', ''].join('\r\n'));
       log('önfrissítés (kis csomag): csere indul ' + app.getVersion() + ' → ' + found.v);
-      spawn('cmd.exe', ['/c', script, String(process.pid), cur, NEW, ok, exe, im], { cwd: dir(), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      runCmd(script, [String(process.pid), cur, NEW, ok, exe, im]);
     }
     setTimeout(() => app.quit(), 400);
     return true;
