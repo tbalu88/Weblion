@@ -20,7 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          sparse-checkout: booth/cbcam
+          sparse-checkout: |
+            booth/cbcam
+            booth/test
+      # az önfrissítés cserélő szkriptjének indítása szóközös útvonalból (a 0.19.5-ig ez nem működött)
+      - name: Önfrissítés – szkriptindítás próbája
+        shell: pwsh
+        run: node booth/test/wincmd-test.js
       - name: digiCamControl 2.1.7.0 letöltése és telepítése
         shell: pwsh
         run: |
