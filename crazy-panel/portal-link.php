@@ -119,6 +119,8 @@ add_filter('cp_crm_deal_data', function ($x) {
 		$tin = strtolower((string) (cp_portal_opts()['test_inbox'] ?? ''));
 		foreach ((array) cp_portal_notifications($p->id) as $n) {
 			$t = explode(':', (string) $n->type)[0];
+			/* v2.9.366: kézi kiküldésnél a „welcome” csak belső jelölés (az automatikus üdvözlőt a meghívó helyettesíti) – nem levél, nem hiba */
+			if ($t === 'welcome' && strpos((string) $n->result, 'meghívó (kézi kiküldés)') !== false) { continue; }
 			$tst = $n->channel === 'email' && ($tin !== '' && stripos((string) $n->result, $tin) !== false);
 			$ev[] = array('at' => wp_date('Y-m-d H:i', cp_portal_db_ts($n->sent_at)), 'text' => ($N[$t] ?? ('Portál: ' . $t)) . ($tst ? ' – nem ment ki (teszt üzemmód)' : ($n->channel === 'email' && strpos((string) $n->result, 'ok') !== 0 && $n->result !== '' ? ' – nem ment ki' : '')), 'ch' => (string) $n->channel, 'ok' => strpos((string) $n->result, 'ok') === 0 || $n->result === '' ? 1 : 0);
 		}
