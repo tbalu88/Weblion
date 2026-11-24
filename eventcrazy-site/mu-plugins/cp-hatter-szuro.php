@@ -54,7 +54,9 @@ add_action('wp_footer', function () {
     }
     var h = (location.hash || '').slice(1); if (h && cnt[h]) set(h);
   }
+  /* több ponton is próbálkozik (a lusta betöltésű / később kirajzolt elemek miatt); a második futás már nem tesz semmit */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+  window.addEventListener('load', run); setTimeout(run, 1500); setTimeout(run, 4000);
 })();
 
 CPBGJS
