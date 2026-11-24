@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.360');
+define('CP_PANEL_VER', '2.9.361');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -48,12 +48,12 @@ function cp_panel_defaults() {
 		'f_paid'        => '',
 		'f_hx'          => '',
 		'stage_write'   => 1,
-		'backgrounds'   => "Absztrakt\nArany\nArany 2\nArt Deco\nBokeh\nBokeh 2\nBokeh 3\nBokeh 4\nBokeh 5\nBőr\nCandy\nDeszka\nDeszka 2\nEsküvő\nFehér\nFények\nGatsby\nGraffiti\nHollywood\nKarácsony\nKarácsony 2\nKarácsony 3\nKarácsony 4\nLevelek\nLevelek 2\nMárvány\nPezsgő\nPink\nPolygon\nPolygon 2\nRosé\nSelyem\nShimmer\nTégla\nVárosi\nZebra\nZöld",
+		'backgrounds'   => "Absztrakt\nArany\nArany 2\nArt Deco\nBokeh\nBokeh 2\nBokeh 3\nBokeh 4\nBokeh 5\nBőr\nCandy\nDeszka\nDeszka 2\nEsküvő\nFehér\nFények\nGatsby\nGraffiti\nHollywood\nKarácsony\nKarácsony 2\nKarácsony 3\nKarácsony 4\nLevelek\nLevelek 2\nMárvány\nPezsgő\nPink\nPolygon\nPolygon 2\nRosé\nSelyem\nShimmer\nTégla\nVárosi\nZebra\nZöld\nKarácsony 6\nKarácsony 7\nBokeh 6\nBokeh 7\nBokeh 8\nEukaliptusz\nArt Deco 2\nVárosi 2\nVintage\nZöld 2",
 		'cache_min'     => 5,
 		'bg_url'        => 'https://crazyphoto.hu/valaszthato-hatterek/',
 		'bg_write'      => 1,
 		/* kétoldalas (pillowcase) hátterek: egy fizikai háttér két grafikával – az egyik foglalása a párját is foglalja aznapra */
-		'bg_pairs'      => "Arany - Levelek 2\nArany 2 - Karácsony 3\nArt Deco - Levelek\nBokeh - Bokeh 2\nBokeh 4 - Shimmer\nBőr - Deszka\nCandy - Absztrakt\nDeszka 2 - Tégla\nEsküvő - Karácsony\nGatsby - Hollywood\nPink - Karácsony 2\nPezsgő - Márvány\nRosé - Selyem\nVárosi - Polygon\nZebra - Graffiti\nZöld - Fehér\nFények - Levelek 3\nKarácsony 5 - Bokeh 5\nKarácsony 4 - Márvány 2",
+		'bg_pairs'      => "Arany - Levelek 2\nArany 2 - Karácsony 3\nArt Deco - Levelek\nBokeh - Bokeh 2\nBokeh 4 - Shimmer\nBőr - Deszka\nCandy - Absztrakt\nDeszka 2 - Tégla\nEsküvő - Karácsony\nGatsby - Hollywood\nPink - Karácsony 2\nPezsgő - Márvány\nRosé - Selyem\nVárosi - Polygon\nZebra - Graffiti\nZöld - Fehér\nFények - Levelek 3\nKarácsony 5 - Bokeh 5\nKarácsony 4 - Márvány 2\nKarácsony 6 - Eukaliptusz\nKarácsony 7 - Art Deco 2\nBokeh 6 - Városi 2\nBokeh 7 - Vintage\nBokeh 8 - Zöld 2",
 		'search_mode'   => 'auto',
 		'reply_sign'    => "Üdvözlettel:\nCrazyphoto csapat\nhttps://crazyphoto.hu",
 		'openai_key'    => '',
