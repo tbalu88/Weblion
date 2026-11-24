@@ -83,7 +83,11 @@ function make(opts) {
       fs.mkdirSync(folder, { recursive: true });
       await get('/?slc=set&param1=session.folder&param2=' + enc(folder));
       /* 0.19.10: a beépített kamerakezelő (cbcam) a gyökérre „OK | <kameranév>”-vel felel – a felület ezt mutatja */
-      try { const m = /^OK \| (.+)$/.exec(String(await get('/', false, true)).trim()); if (m) return m[1].slice(0, 60); } catch (e) { /* */ }
+      /* 0.19.14: a beépített kamerakezelő „OK (nincs kamera)”-val jelzi, ha a gép ki van kapcsolva / nincs bedugva – ez hiba az Áttekintésben */
+      let root = '';
+      try { root = String(await get('/', false, true)).trim(); } catch (e) { /* a grafikus digiCamControl gyökere nem ilyen – nem dönt */ }
+      if (/nincs kamera/i.test(root)) throw new Error('A fényképezőgép nem csatlakozik – kapcsold be, és nézd meg az USB-kábelt.');
+      const m = /^OK \| (.+)$/.exec(root); if (m) return m[1].slice(0, 60);
       return true;
     },
     async liveStart() { if (!lvOn) { await get('/?CMD=LiveViewWnd_Show'); lvOn = true; } },

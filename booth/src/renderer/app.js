@@ -838,9 +838,15 @@
   Object.values(CLR).forEach(id => $('#' + id).addEventListener('input', clrLbl));
 
   /* indulás előtti ellenőrzés */
-  async function preflight() {
+  /* 0.19.14: az Áttekintés magától frissül, amíg nyitva van (20 mp-enként, csendben – a régi eredmény látszik a frissítésig) */
+  setInterval(() => { if (S.scr === 'settings' && document.querySelector('[data-pane="ov"].on') && !S.pfBusy) preflight(true); }, 20000);
+  async function preflight(quiet) {
+    if (S.pfBusy) return; S.pfBusy = true;
+    try { await preflight1(quiet); } finally { S.pfBusy = false; }
+  }
+  async function preflight1(quiet) {
     const box = $('[data-preflight]'), L = [], add = (st, t, d) => L.push([st, t, d || '']);
-    box.innerHTML = '<p class="st-up">Ellenőrzés…</p>';
+    if (!quiet || !box.children.length) box.innerHTML = '<p class="st-up">Ellenőrzés…</p>';
     if (S.cfg.mock) add('mid', 'Próbamód', 'a program próbamódban fut – éles rendezvény előtt indítsd normálisan');
     try {
       if (WEB()) { const st = await webStream(); const s0 = st.getVideoTracks()[0]; const t = s0.getSettings(); add('ok', 'Kamera', (s0.label || 'webkamera') + ' · ' + (t.width || '?') + '×' + (t.height || '?')); }
