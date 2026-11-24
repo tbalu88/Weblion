@@ -1118,3 +1118,9 @@ mark.cp-hl.cur{background:#FFA51F;box-shadow:0 0 0 2px #FFA51F}
 .ml-attc.big small{font-variant-numeric:tabular-nums}
 @media (max-width:600px){.ml-lib-r{flex-wrap:wrap}.ml-lib-r .n{flex-basis:100%;white-space:normal;overflow-wrap:anywhere}}
 .ml-alltag{display:inline-flex;align-items:center;padding:8px 0;font-size:13px} /* v2.9.356 */
+/* v2.9.363: Megnyert / Elvesztett – teli zöld és teli piros gomb; keskeny kártyán egymás alatt */
+.ml-dcard{container-type:inline-size}
+.ml-dbtn.won,.ml-dbtn.lost{color:#fff;border-color:transparent;padding:6px 14px;white-space:nowrap}
+.ml-dbtn.won{background:#1E7A4C}.ml-dbtn.won:hover{background:#17663A;border-color:transparent;color:#fff}
+.ml-dbtn.lost{background:#C2392F}.ml-dbtn.lost:hover{background:#A82F26;border-color:transparent;color:#fff}
+@container (max-width:620px){.ml-dcard>.ml-dact{flex-direction:column;align-items:stretch}.ml-dcard>.ml-dact .ml-dbtn{text-align:center}}
