@@ -84,12 +84,14 @@ function cp_gcal_ajax_deal_sync() {
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($hit['id']), array(), $body);
 			if (is_wp_error($r)) { cp_el_err('Nem sikerült frissíteni: ' . $r->get_error_message(), 502); }
 			$res[] = 'frissítve (' . str_replace('-', '.', $day) . '.)';
+			if (function_exists('cp_gcal_wts_set')) { cp_gcal_wts_set($hit['id'], $r); } /* v2.9.364: a gombos frissítés a panel írása */
 			cp_gcal_wlog('bejegyzés frissítve (gombbal)', $id, $p['title']);
 		} else {
 			$r = cp_gcal_req('POST', '/events', array(), $body);
 			if (is_wp_error($r)) { cp_el_err('Nem sikerült létrehozni: ' . $r->get_error_message(), 502); }
 			$made[(string) $p['key']] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
 			$res[] = 'létrehozva (' . str_replace('-', '.', $day) . '.)';
+			if (function_exists('cp_gcal_wts_set')) { cp_gcal_wts_set((string) ($r['id'] ?? ''), $r); }
 			cp_gcal_wlog('bejegyzés létrehozva (gombbal)', $id, $p['title']);
 		}
 	}

@@ -91,7 +91,7 @@ function cp_gcal_events($from, $to, $force = false) {
 			$g = array();
 			foreach ((array) ($e['attendees'] ?? array()) as $x) { if (!empty($x['resource'])) { continue; } $g[] = array('n' => (string) ($x['displayName'] ?? ''), 'e' => (string) ($x['email'] ?? ''), 'st' => (string) ($x['responseStatus'] ?? '')); }
 			$out[] = array('id' => (string) $e['id'], 't' => (string) ($e['summary'] ?? '(nincs cím)'), 's' => $s, 'e' => $en, 'ad' => $ad, 'loc' => (string) ($e['location'] ?? ''), 'raw' => (string) ($e['description'] ?? ''),
-				'link' => (string) ($e['htmlLink'] ?? ''), 'col' => (string) ($e['colorId'] ?? ''), 'g' => $g);
+				'link' => (string) ($e['htmlLink'] ?? ''), 'col' => (string) ($e['colorId'] ?? ''), 'g' => $g, 'upd' => (string) ($e['updated'] ?? ''));
 		}
 		$q['pageToken'] = (string) ($r['nextPageToken'] ?? '');
 	} while ($q['pageToken'] !== '' && ++$page < 5);
@@ -517,6 +517,22 @@ function cp_gcal_wlog($a, $deal, $t) {
 	array_unshift($l, array('at' => time(), 'a' => $a, 'deal' => (int) $deal, 't' => mb_substr((string) $t, 0, 160)));
 	update_option('cp_gcal_wlog', array_slice($l, 0, 150), false);
 }
+/* v2.9.364: kézi módosítás felismerése. A panel minden saját írása után megjegyzi a bejegyzés tartalmának ujjlenyomatát
+   (leírás szövege, kezdés, vége, helyszín – a cím és a vendégek visszaigazolása nem számít). Ha a naptárban a tartalom ettől eltér,
+   azt valaki kézzel módosította: onnantól a panel nem írja felül (a kollégák változtatása marad).
+   A még meg nem jegyzett bejegyzéseknél az első szinkron a mostani állapotot menti kiindulásnak. */
+function cp_gcal_sig($desc, $s, $e, $loc) { return md5(implode("\n", cp_gcal_lines($desc)) . '|' . $s . '|' . $e . '|' . trim((string) $loc)); }
+function cp_gcal_sig_ev($e) { return cp_gcal_sig($e['raw'] ?? '', $e['s'] ?? '', $e['e'] ?? '', $e['loc'] ?? ''); }
+function cp_gcal_sig_api($r) {
+	if (!is_array($r) || empty($r['id'])) { return ''; }
+	$ad = empty($r['start']['dateTime']); $s = cp_gcal_local($r['start'] ?? array()); $en = cp_gcal_local($r['end'] ?? array());
+	if ($ad && $en !== '') { $en = gmdate('Y-m-d', strtotime($en . ' 00:00:00 UTC') - DAY_IN_SECONDS); }
+	return cp_gcal_sig((string) ($r['description'] ?? ''), $s, $en, (string) ($r['location'] ?? ''));
+}
+function cp_gcal_wts_get() { $w = get_option('cp_gcal_wts', array()); return is_array($w) ? $w : array(); }
+function cp_gcal_wts_put($eid, $sig) { if ($eid === '' || $sig === '') { return; } $w = cp_gcal_wts_get(); $w[$eid] = $sig; update_option('cp_gcal_wts', $w, false); }
+function cp_gcal_wts_set($eid, $r) { cp_gcal_wts_put((string) $eid, is_array($r) ? cp_gcal_sig_api($r) : ''); }
+function cp_gcal_manual($e) { $w = cp_gcal_wts_get(); $sg = cp_gcal_sig_ev($e); if (!isset($w[$e['id']])) { cp_gcal_wts_put($e['id'], $sg); return false; } return $w[$e['id']] !== $sg; }
 function cp_gcal_body($p) {
 	$tz = wp_timezone();
 	$b = array('summary' => $p['title'], 'location' => $p['loc'], 'description' => $p['desc']);
@@ -555,6 +571,7 @@ function cp_gcal_pen_sync($dry = false) {
 		if ($dry) { continue; }
 		$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($e['id']), array(), array('summary' => $new));
 		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+		if (!cp_gcal_manual($e)) { cp_gcal_wts_set($e['id'], $r); }
 		cp_gcal_wlog($k === 'add' ? 'ceruzás fel' : 'ceruzás le', $id, $new);
 	}
 	$made = get_option('cp_gcal_made', array()); if (!is_array($made)) { $made = array(); }
@@ -571,6 +588,7 @@ function cp_gcal_pen_sync($dry = false) {
 		$r = cp_gcal_req('POST', '/events', array(), cp_gcal_body($p));
 		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
 		$made[$id] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
+		cp_gcal_wts_set((string) ($r['id'] ?? ''), $r);
 		cp_gcal_wlog('bejegyzés létrehozva', $id, $p['title']);
 	}
 	/* v2.9.71: többnapos rendezvény 2..n. napja – külön bejegyzés napi kulccsal (cp_gcal_made['<deal>:<nap>']), ha a deal már
@@ -584,11 +602,12 @@ function cp_gcal_pen_sync($dry = false) {
 		$r = cp_gcal_req('POST', '/events', array(), cp_gcal_body($p));
 		if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
 		$made[$key] = (string) ($r['id'] ?? '1'); update_option('cp_gcal_made', $made, false);
+		cp_gcal_wts_set((string) ($r['id'] ?? ''), $r);
 		cp_gcal_wlog('bejegyzés létrehozva (' . $x['dn'] . '/' . $x['dof'] . '. nap)', (int) $key, $p['title']);
 	}
 	/* v1.93: a panel által létrehozott bejegyzések követik a deal változását (dátum, kezdés, óraszám, helyszín, leírás);
 	   elvesztett dealnél „[ELVESZETT]” jelölés kerül a cím elé (nem töröljük). A kézzel felvett bejegyzésekhez nem nyúlunk. */
-	$out['update'] = array(); $out['lost'] = array();
+	$out['update'] = array(); $out['lost'] = array(); $out['manual'] = array();
 	if ($made && !$out['err']) {
 		$byEv = array(); foreach ($ev as $e) { $byEv[$e['id']] = $e; }
 		$ids = array_values(array_unique(array_map('intval', array_keys($made)))); /* v2.9.71: a napi kulcsból a deal */
@@ -613,17 +632,27 @@ function cp_gcal_pen_sync($dry = false) {
 				$nt = '[ELVESZETT] ' . cp_gcal_unpen($e['t']);
 				$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), array('summary' => $nt));
 				if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+				cp_gcal_wts_set($eid, $r);
 				cp_gcal_wlog('elvesztett deal jelölve', $did, $nt); continue;
 			}
 			$p = cp_gcal_plan($did, $mday); if (!$p || $p['date'] === '') { continue; }
 			$chg = substr($e['s'], 0, 10) !== $p['date'] || ($p['start'] !== '' && ($e['ad'] || substr($e['s'], 11, 5) !== $p['start'])) || ($p['start'] === '' && !$e['ad'])
 				|| ($p['end'] !== '' && $p['end'] !== '24:00' && !$e['ad'] && substr($e['e'], 11, 5) !== $p['end']) || trim($e['loc']) !== trim((string) $p['loc']);
+			$man = cp_gcal_manual($e);
 			if (!$chg) { continue; }
+			if ($man) {
+				$out['manual'][] = $did;
+				$ml = get_option('cp_gcal_manlog', array()); if (!is_array($ml)) { $ml = array(); }
+				$sig = cp_gcal_sig_ev($e) . '|' . $p['date'] . $p['start'] . $p['end'] . $p['loc'];
+				if (($ml[$eid] ?? '') !== $sig && !$dry) { $ml[$eid] = $sig; update_option('cp_gcal_manlog', $ml, false); cp_gcal_wlog('nem írtam felül – a naptárban kézzel módosították (a deal eltér)', $did, $e['t']); }
+				continue;
+			}
 			$out['update'][] = $did; if ($dry) { continue; }
 			$b = cp_gcal_body($p); $b['summary'] = $e['t'];  /* a cím (ceruzás jelöléssel) marad – azt a fenti rész kezeli */
 			$b['description'] = cp_gcal_keep_manual($e['raw'], $p['desc']); /* v2.9.342: a kézzel beírt sorok megmaradnak */
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), $b);
 			if (is_wp_error($r)) { $out['err'][] = $r->get_error_message(); break; }
+			cp_gcal_wts_set($eid, $r);
 			cp_gcal_wlog('bejegyzés frissítve (a deal változott)', $did, $e['t']);
 		}
 	}
