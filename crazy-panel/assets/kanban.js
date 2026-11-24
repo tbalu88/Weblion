@@ -71,6 +71,7 @@
 		dots: svg('<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>', 'kb-ic fill'),
 		plus: svg('<path d="M12 5v14M5 12h14"/>'),
 		x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+		pen: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
 		people: svg('<circle cx="8" cy="8.5" r="2.8"/><circle cx="16.5" cy="8.5" r="2.8"/><path d="M2.5 19c.5-3 2.6-4.6 5.5-4.6s5 1.6 5.5 4.6M12.5 15.2c1-.5 2.4-.8 4-.8 2.9 0 5 1.6 5.5 4.6"/>'),
 		user: svg('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>'),
 		tag: svg('<path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.3"/>'),
@@ -433,7 +434,7 @@
 				'<ul class="kb-cl">' + cl.map((it, i) => '<li class="' + (it.d ? 'd' : '') + '"><input type="checkbox" data-cli="' + i + '"' + (it.d ? ' checked' : '') + ' aria-label="Kész: ' + esc(it.t) + '"><span class="kb-clt" data-cledit="' + i + '" tabindex="0" role="button" title="Kattints a szerkesztéshez">' + esc(it.t) + '</span><button type="button" class="kb-tb sm" data-cldel="' + i + '" title="Törlés">' + I.x + '</button></li>').join('') + '</ul>' +
 				'<div class="kb-cladd"><input type="text" data-clnew placeholder="Új elem… (Enter)" maxlength="200"></div></div>' +
 			'<div class="kb-fld"><h5>Hozzászólások és változásnapló <label class="kb-chk kb-actt"><input type="checkbox" data-acts' + (S.hideActs ? '' : ' checked') + '> változások</label></h5><div class="kb-cmp"><textarea rows="2" data-com placeholder="Írj hozzászólást – @ jellel megemlítheted a kollégáidat. (Ctrl+Enter: küldés)"></textarea><div class="kb-mpop" hidden></div><button type="button" class="cpx-btn" data-csend>Küldés</button></div>' +
-				'<ul class="kb-coms">' + feed(x).map(it => it.a ? (S.hideActs ? '' : '<li class="kb-act"><span class="kb-dot"></span><div><b>' + esc(it.a.author || '–') + '</b> ' + esc(it.a.text) + ' <small>' + esc(ago(it.a.created_at)) + '</small></div></li>') : (m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + '<p>' + nl2br(m.body) + '</p></div></li>')(it.m)).join('') + '</ul></div>' +
+				'<ul class="kb-coms">' + feed(x).map(it => it.a ? (S.hideActs ? '' : '<li class="kb-act"><span class="kb-dot"></span><div><b>' + esc(it.a.author || '–') + '</b> ' + esc(it.a.text) + ' <small>' + esc(ago(it.a.created_at)) + '</small></div></li>') : (m => '<li><span class="kb-av" style="background:' + avc(m.author) + '">' + esc(ini(m.author)) + '</span><div><b>' + esc(m.author || '–') + '</b> <small>' + esc(ago(m.created_at)) + '</small>' + (m.author_uid === ME || K.admin ? '<button type="button" class="kb-tb sm" data-cdel="' + m.id + '" title="Törlés">' + I.x + '</button>' : '') + (m.author_uid === ME ? '<button type="button" class="kb-tb sm" data-cedit="' + m.id + '" title="Szerkesztés">' + I.pen + '</button>' : '') + '<p' + (m.author_uid === ME ? ' data-cbody="' + m.id + '" title="Dupla kattintás: szerkesztés"' : '') + '>' + nl2br(m.body) + '</p></div></li>')(it.m)).join('') + '</ul></div>' +
 			'<div class="kb-shf"><small class="cpx-muted">Létrehozta: ' + esc(c.by || '–') + ' · ' + esc(ago(c.at)) + '</small><span class="crm-bgap"></span>' +
 				'<button type="button" class="cpx-btn ghost' + (c.arch ? '' : ' bad') + '" data-arch>' + (c.arch ? 'Visszaállítás' : 'Archiválás') + '</button></div></div>';
 		const save = async p => { try { const r = await post('cp_kb_card_save', Object.assign({ id: c.id }, p)); if (sh.isConnected) drawCard(sh, r); changed(sh, r); return r; } catch (e) { toast(e.message, true); return null; } };
@@ -487,6 +488,23 @@
 		const send = async () => { const b = ta.value.trim(); if (!b) return; ta.disabled = true; try { const r = await post('cp_kb_comment', { card: c.id, body: b }); if (sh.isConnected) drawCard(sh, r); changed(sh, r); } catch (e) { toast(e.message, true); ta.disabled = false; } };
 		sh.querySelector('[data-csend]').addEventListener('click', send);
 		ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+		/* v2.9.362: saját hozzászólás szerkesztése – ceruza vagy dupla kattintás; Ctrl+Enter: mentés, Esc: mégse */
+		const cEdit = id => {
+			const p = sh.querySelector('[data-cbody="' + id + '"]'); if (!p || p.dataset.ed) return;
+			const m = (x.comments || []).find(z => String(z.id) === String(id)); if (!m) return;
+			p.dataset.ed = '1';
+			const w = document.createElement('div'); w.className = 'kb-cedit';
+			w.innerHTML = '<textarea rows="3" maxlength="4000"></textarea><div><button type="button" class="cpx-btn sm" data-cesave>Mentés</button><button type="button" class="cpx-btn ghost sm" data-cex>Mégse</button></div>';
+			const t = w.querySelector('textarea'); t.value = m.body || ''; p.replaceWith(w); t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+			mention(t, sh.querySelector('.kb-mpop'));
+			const cancel = () => { w.replaceWith(p); delete p.dataset.ed; };
+			const ok = async () => { const b = t.value.trim(); if (!b) { toast('Üres hozzászólás – törölni az × gombbal lehet.', true); return; } if (b === (m.body || '').trim()) { cancel(); return; } t.disabled = true; try { const r = await post('cp_kb_comment', { edit: id, body: b }); drawCard(sh, r); changed(sh, r); } catch (e) { t.disabled = false; toast(e.message, true); } };
+			w.querySelector('[data-cesave]').addEventListener('click', ok);
+			w.querySelector('[data-cex]').addEventListener('click', cancel);
+			t.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ok(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); } });
+		};
+		sh.querySelectorAll('[data-cedit]').forEach(b => b.addEventListener('click', () => cEdit(b.dataset.cedit)));
+		sh.querySelectorAll('[data-cbody]').forEach(p => p.addEventListener('dblclick', () => cEdit(p.dataset.cbody)));
 		sh.querySelectorAll('[data-cdel]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Törlöd a hozzászólást?')) return; try { const r = await post('cp_kb_comment', { del: b.dataset.cdel }); drawCard(sh, r); changed(sh, r); } catch (e) { toast(e.message, true); } }));
 		const pb = sh.querySelector('[data-priv]'); if (pb) pb.addEventListener('click', () => { if (!pb.disabled) save({ priv: c.priv ? '0' : '1' }); });
 		sh.querySelector('[data-arch]').addEventListener('click', async () => { if (!c.arch && !window.confirm('Archiválod a kártyát? (Az Archív nézetből visszaállítható.)')) return; const r = await save({ arch: c.arch ? 0 : 1 }); if (r && !c.arch) { closeSheet(); toast('Kártya archiválva.'); } });

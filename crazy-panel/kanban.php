@@ -476,6 +476,20 @@ function cp_kb_ajax_comment() {
 		$wpdb->update($M, array('deleted_at' => cp_kb_now()), array('id' => (int) $m['id']));
 		wp_send_json_success(cp_kb_card_full((int) $m['card_id']));
 	}
+	/* v2.9.362: saját hozzászólás szerkesztése (csak a szerzőé); az újonnan megemlített kollégák értesítést kapnak */
+	if (!empty($_POST['edit'])) {
+		$m = $wpdb->get_row($wpdb->prepare("SELECT * FROM $M WHERE id = %d AND deleted_at IS NULL", (int) $_POST['edit']), ARRAY_A);
+		$c = $m ? cp_kb_card_ok((int) $m['card_id']) : null;
+		if (!$m || !$c) { cp_el_err('Nincs ilyen hozzászólás.', 404); }
+		if ((int) $m['author_uid'] !== cp_kb_me()) { cp_el_err('Csak a saját hozzászólásodat szerkesztheted.', 403); }
+		$body = trim(mb_substr(sanitize_textarea_field(wp_unslash($_POST['body'] ?? '')), 0, 4000));
+		if ($body === '') { cp_el_err('Üres hozzászólás.'); }
+		$old = array_filter(array_map('intval', explode(',', (string) $m['mentions']))); $men = array();
+		foreach (cp_kb_people() as $p) { if (mb_stripos($body, '@' . $p['n']) !== false) { $men[] = $p['id']; } }
+		$wpdb->update($M, array('body' => $body, 'mentions' => implode(',', $men)), array('id' => (int) $m['id']));
+		foreach (array_diff($men, $old) as $u) { if (function_exists('cp_notify')) { cp_notify($u, 'kb_mention', 'megemlített a(z) ' . cp_kb_q($c['title']) . ' kártyán: ' . (function_exists('cp_nt_quote') ? cp_nt_quote($body) : ''), 'feladatok:' . (int) $c['id']); } }
+		wp_send_json_success(cp_kb_card_full((int) $c['id']));
+	}
 	$c = cp_kb_card_ok((int) ($_POST['card'] ?? 0));
 	if (!$c) { cp_el_err('Nincs ilyen kártya.', 404); }
 	$body = trim(mb_substr(sanitize_textarea_field(wp_unslash($_POST['body'] ?? '')), 0, 4000));

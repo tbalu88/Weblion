@@ -191,3 +191,6 @@
 .kb-clt:hover{background:#F3F1EC}
 .kb-clt:focus-visible{outline:2px solid #E8894A;outline-offset:1px}
 .kb-cledit{width:100%;height:30px;border:1.5px solid #2F5BD8;border-radius:6px;padding:0 8px;font:inherit;box-sizing:border-box}
+
+.kb-cedit{margin-top:4px}.kb-cedit textarea{width:100%;box-sizing:border-box;border:1.5px solid #2F5BD8;border-radius:8px;padding:7px 10px;font:inherit;line-height:1.45;resize:vertical}.kb-cedit div{display:flex;gap:6px;margin-top:6px}
+.kb-coms p[data-cbody]{cursor:text}
