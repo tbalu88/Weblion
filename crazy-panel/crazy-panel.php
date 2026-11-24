@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.364');
+define('CP_PANEL_VER', '2.9.365');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -895,6 +895,16 @@ function cp_panel_render_app() {
 	echo '</body></html>';
 }
 
+/* v2.9.365: jegelt hátterek (a felhasználó kérése, 2026-11-24: még nem érkeztek meg) – a határidőig nem jelennek meg
+   a panel háttérlistájában, az ügyfél-adatlapon és az ajánlatkérő űrlapon; utána maguktól visszakerülnek */
+function cp_bg_frozen() {
+	static $f = null;
+	if ($f === null) {
+		$f = time() < strtotime('2026-11-30 00:00:00 Europe/Budapest')
+			? array('karácsony 6', 'karácsony 7', 'art deco 2', 'bokeh 6', 'bokeh 7', 'bokeh 8', 'eukaliptusz', 'vintage', 'zöld 2', 'városi 2') : array();
+	}
+	return $f;
+}
 function cp_panel_bg_list() {
 	$o = cp_panel_opts();
 	$qty = array();
@@ -911,13 +921,13 @@ function cp_panel_bg_list() {
 	$web = cp_panel_web_bgs();
 	foreach ($web['list'] as $b) {
 		$k = cp_panel_lc($b['name']);
-		if (isset($seen[$k])) { continue; }
+		if (isset($seen[$k]) || in_array($k, cp_bg_frozen(), true)) { continue; }
 		$seen[$k] = 1;
 		$out[] = array('name' => $b['name'], 'qty' => isset($qty[$k]) ? $qty[$k] : 1, 'img' => $b['img'], 'web' => 1);
 	}
 	foreach ($extra as $n) {
 		$k = cp_panel_lc($n);
-		if (isset($seen[$k])) { continue; }
+		if (isset($seen[$k]) || in_array($k, cp_bg_frozen(), true)) { continue; }
 		$seen[$k] = 1;
 		$out[] = array('name' => $n, 'qty' => $qty[$k], 'img' => '', 'web' => 0);
 	}

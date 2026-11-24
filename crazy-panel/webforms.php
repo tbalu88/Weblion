@@ -24,6 +24,14 @@ define('CP_WF_VER', '1');
 function cp_wf_defs() {
 	static $d = null;
 	if ($d === null) { $d = json_decode((string) @file_get_contents(__DIR__ . '/webforms-defs.json'), true); if (!is_array($d)) { $d = array(); } }
+	/* v2.9.365: a jegelt hátterek (cp_bg_frozen) a határidőig nem választhatók az űrlapon */
+	static $fz = false;
+	if (!$fz && function_exists('cp_bg_frozen') && cp_bg_frozen()) {
+		$fz = true;
+		foreach ($d as &$f) { foreach ((array) ($f['fields'] ?? array()) as $i => $fl) { if (isset($fl['o']) && is_array($fl['o']) && in_array('Arany 2', $fl['o'], true)) {
+			$f['fields'][$i]['o'] = array_values(array_filter($fl['o'], function ($x) { return !in_array(mb_strtolower((string) $x), cp_bg_frozen(), true); }));
+		} } } unset($f);
+	}
 	return $d;
 }
 function cp_wf_def($fid) { $d = cp_wf_defs(); return isset($d[$fid]) ? $d[$fid] : null; }
