@@ -51,16 +51,24 @@ add_action('wp_footer', function () {
       var b = document.createElement('button'); b.type = 'button'; b.className = 'cpbg-b'; b.dataset.cat = c[0];
       b.innerHTML = c[1] + ' <span>' + (c[0] === 'all' ? cells.length : cnt[c[0]]) + '</span>';
       b.setAttribute('aria-pressed', c[0] === 'all' ? 'true' : 'false');
-      b.addEventListener('click', function () { set(c[0]); });
       bar.appendChild(b);
     });
     wrap.insertBefore(bar, wrap.firstChild);
+    /* a kattintást az ablak szintjén, elsőként fogjuk meg: a crazyphoto „kattints a kedvencedre” szkriptje a rácson belüli kattintásokat elnyeli */
+    /* a WP Rocket JS-késleltetése az első kattintást elnyeli (azzal tölti be a többi szkriptet) – ezért a pointerup-ra (egér, ujj) is reagálunk */
+    var hit = function (e) { var b = e.target && e.target.closest ? e.target.closest('.cpbg-bar .cpbg-b') : null; if (!b) return; if (e.type === 'pointerup' && e.button !== 0) return; if (e.type === 'click') { e.preventDefault(); e.stopImmediatePropagation(); } set(b.dataset.cat); };
+    window.addEventListener('pointerup', hit, true); window.addEventListener('click', hit, true);
+    /* a gyorsító (WP Rocket) a betöltés után lecserélheti a DOM-részeket – ezért a szűrés mindig a lapon éppen lévő elemekből dolgozik */
     function set(k) {
-      [].forEach.call(bar.children, function (b) { b.setAttribute('aria-pressed', b.dataset.cat === k ? 'true' : 'false'); });
-      cells.forEach(function (x) { x.el.classList.toggle('cpbg-off', k !== 'all' && x.cats.indexOf(k) < 0); });
+      [].forEach.call(document.querySelectorAll('.cpbg-bar .cpbg-b'), function (b) { b.setAttribute('aria-pressed', b.dataset.cat === k ? 'true' : 'false'); });
+      [].forEach.call(document.querySelectorAll('.elementor-widget-image figcaption'), function (c) {
+        var col = c.closest('.elementor-column'); if (!col || col.classList.contains('cpbg-ice')) return;
+        var cats = MAP[norm(c.textContent)] || [];
+        col.classList.toggle('cpbg-off', k !== 'all' && cats.indexOf(k) < 0);
+      });
       try { history.replaceState(null, '', k === 'all' ? location.pathname + location.search : '#' + k); } catch (e) { /* */ }
-      var top = bar.getBoundingClientRect().top; if (top < 0) window.scrollBy(0, top - 90);
-      if (window.dispatchEvent) window.dispatchEvent(new Event('scroll')); /* a lusta betöltésű képek induljanak el */
+      var bb = document.querySelector('.cpbg-bar'); var top = bb ? bb.getBoundingClientRect().top : 0; if (top < 0) window.scrollBy(0, top - 90);
+      if (window.dispatchEvent) window.dispatchEvent(new Event('scroll'));
     }
     var h = (location.hash || '').slice(1); if (h && cnt[h]) set(h);
   }
