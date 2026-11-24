@@ -59,30 +59,56 @@
 	/* v2.9.255: a Galériák gyűjtőoldal is hívja – deal nélküli galériánál a token (ev); onChange: a lista frissítése a módosítás után */
 	async function galManage(deal, ev, onChange) {
 		const who = deal ? { deal } : { ev: String(ev || '') };
-		const box = sheet(sheetHead('Fotógaléria kezelése') + '<div class="gm" data-gm><p class="cpx-muted">Betöltés…</p></div>');
-		if (!box) return;
-		box.querySelector('[data-close]').addEventListener('click', hideModal);
-		const body = box.querySelector('[data-gm]');
-		/* v2.9.359: a képre kattintás KIJELÖL (nem rejt el azonnal); a kijelöltekre: Elrejtés · Visszaállítás · Törlés.
-		   Szűrő: Összes / Látható / Elrejtett – így látszik, hová kerültek az elrejtett képek. */
-		const sel = new Set(); let flt = 'all';
+		/* v2.9.360: teljes képernyős galériaoldal (nem felugró ablak): felül rögzített sáv (vissza, cím, linkek, beállítások),
+		   alatta rögzített eszközsor (szűrő, kijelölés, műveletek, képméret), a képek a teljes szélességben.
+		   Bezárás: ← Vissza, Esc vagy a böngésző Vissza gombja. Shift+kattintás: tartomány kijelölése. */
+		document.querySelectorAll('.gmp').forEach(x => x.remove());
+		const page = document.createElement('div');
+		page.className = 'gmp'; page.setAttribute('role', 'dialog'); page.setAttribute('aria-modal', 'true'); page.setAttribute('aria-label', 'Fotógaléria kezelése');
+		page.innerHTML = '<div class="gmp-in" data-gm><p class="cpx-muted gmp-load">Betöltés…</p></div>';
+		document.body.appendChild(page); document.body.classList.add('gmp-on');
+		const body = page.querySelector('[data-gm]');
+		let closed = false;
+		const close = fromPop => {
+			if (closed) return; closed = true;
+			page.remove(); document.body.classList.remove('gmp-on'); document.removeEventListener('keydown', onKey); window.removeEventListener('popstate', onPop);
+			if (!fromPop && history.state && history.state.gmp) history.back();
+		};
+		const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.cpx-ask, .cpx-confirm')) { e.preventDefault(); close(); } };
+		const onPop = () => close(true);
+		document.addEventListener('keydown', onKey);
+		try { history.pushState({ gmp: 1 }, '', location.href); } catch (e) { /* */ }
+		window.addEventListener('popstate', onPop);
+		const sel = new Set(); let flt = 'all', setOpen = false, last = -1;
+		let size = (() => { try { return localStorage.getItem('cp_gm_size') || 'm'; } catch (e) { return 'm'; } })();
 		const draw = g => {
+			const y = page.scrollTop;
 			const n = g.photos.length, h = g.photos.filter(p => p.hidden).length;
 			for (const ph of [...sel]) if (!g.photos.some(p => p.photo === ph)) sel.delete(ph);
 			if (flt === 'off' && !h) flt = 'all';
 			const shown = g.photos.filter(p => flt === 'all' || (flt === 'off' ? p.hidden : !p.hidden));
-			body.innerHTML = '<div class="gm-set"><label>Galéria címe (a galéria tetején látszik)<input type="text" id="gm-title" maxlength="120" placeholder="pl. Anna & Péter esküvője · 2026.11.29." value="' + esc(g.title || '') + '"></label>' +
+			body.innerHTML =
+				'<header class="gmp-top"><button type="button" class="gmp-back" data-gmx aria-label="Vissza">←</button>' +
+				'<div class="gmp-t"><h2 title="' + esc(g.title || '') + '">' + esc(g.title || 'Fotógaléria') + '</h2><p>' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + (g.has_pw ? ' · jelszóval védett' : '') + '</p></div>' +
+				'<div class="gmp-a"><a class="cpx-btn ghost sm" href="' + esc(g.url) + '" target="_blank" rel="noopener">Galéria megnyitása ↗</a>' + (g.station ? '<a class="cpx-btn ghost sm" href="' + esc(g.station) + '" target="_blank" rel="noopener" title="Tabletre a helyszínen: a legfrissebb képek, QR-ral letölthetők">Megosztó állomás ↗</a>' : '') +
+				'<button type="button" class="cpx-btn ghost sm" data-gmset aria-expanded="' + setOpen + '">Beállítások ' + (setOpen ? '▴' : '▾') + '</button></div></header>' +
+				'<section class="gm-set gmp-set"' + (setOpen ? '' : ' hidden') + '><label>Galéria címe (a galéria tetején látszik)<input type="text" id="gm-title" maxlength="120" placeholder="pl. Anna & Péter esküvője · 2026.11.29." value="' + esc(g.title || '') + '"></label>' +
 				'<label>Jelszó az összes fotóhoz ' + (g.has_pw ? '<b class="gm-pw">beállítva</b>' : '<span class="cpx-muted">(nincs – bárki láthatja, akinél a link van)</span>') + '<input type="text" id="gm-pw" autocomplete="off" placeholder="' + (g.has_pw ? 'új jelszó – vagy hagyd üresen és kattints a Jelszó törlésére' : 'pl. annapeter2026') + '"></label>' +
 				'<label>Webhook <span class="cpx-muted">(nem kötelező: minden új képnél értesítés az ügyfél rendszerébe – csak a kép linkje megy, személyes adat nem)</span><input type="url" id="gm-hook" autocomplete="off" placeholder="https://…" value="' + esc(g.hook || '') + '"></label>' +
-				'<div class="gm-b"><button type="button" class="cpx-btn sm" data-gmsave>Mentés</button>' + (g.has_pw ? '<button type="button" class="cpx-btn ghost sm" data-gmnopw>Jelszó törlése</button>' : '') + '<a class="cpx-btn ghost sm" href="' + esc(g.url) + '" target="_blank" rel="noopener">Galéria megnyitása ↗</a>' + (g.station ? '<a class="cpx-btn ghost sm" href="' + esc(g.station) + '" target="_blank" rel="noopener" title="Tabletre a helyszínen: a legfrissebb képek, QR-ral letölthetők">Megosztó állomás ↗</a>' : '') + '</div>' +
-				'<p class="cpx-muted gm-n">' + n + ' kép' + (h ? ' · ' + h + ' elrejtve' : '') + '. Az elrejtett kép nem látszik a közös galériában és a diavetítésen, de a vendég a saját QR-kódjával továbbra is eléri. Kattints a képekre a kijelöléshez.</p>' +
-				(h ? '<div class="gm-f" role="group" aria-label="Szűrés">' + [['all', 'Összes (' + n + ')'], ['on', 'Látható (' + (n - h) + ')'], ['off', 'Elrejtett (' + h + ')']].map(f => '<button type="button" data-gmf="' + f[0] + '" aria-pressed="' + (flt === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' : '') +
-				'<div class="gm-tb" data-gmtb></div></div>' +
-				'<div class="gm-grid selm">' + shown.map(p => '<button type="button" class="' + (p.hidden ? 'off' : '') + (sel.has(p.photo) ? ' sel' : '') + '" data-gmph="' + esc(p.photo) + '" style="background-image:url(\'' + esc(p.thumb) + '\')" aria-pressed="' + (sel.has(p.photo) ? 'true' : 'false') + '" title="' + (p.hidden ? 'Elrejtve – ' : '') + 'kattints a kijelöléshez">' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + (shown.length ? '' : '<p class="cpx-muted">Nincs ilyen kép.</p>') + '</div>';
+				'<div class="gm-b"><button type="button" class="cpx-btn sm" data-gmsave>Mentés</button>' + (g.has_pw ? '<button type="button" class="cpx-btn ghost sm" data-gmnopw>Jelszó törlése</button>' : '') + '</div></section>' +
+				'<div class="gmp-bar">' + (h ? '<div class="gm-f" role="group" aria-label="Szűrés">' + [['all', 'Összes (' + n + ')'], ['on', 'Látható (' + (n - h) + ')'], ['off', 'Elrejtett (' + h + ')']].map(f => '<button type="button" data-gmf="' + f[0] + '" aria-pressed="' + (flt === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' : '') +
+				'<div class="gm-tb" data-gmtb></div>' +
+				'<div class="gm-f gmp-sz" role="group" aria-label="Képméret">' + [['s', 'Kicsi'], ['m', 'Közepes'], ['l', 'Nagy']].map(f => '<button type="button" data-gmsz="' + f[0] + '" aria-pressed="' + (size === f[0]) + '">' + f[1] + '</button>').join('') + '</div></div>' +
+				'<p class="cpx-muted gmp-hint">Kattints a képekre a kijelöléshez (Shift+kattintás: tartomány). Az elrejtett kép nem látszik a közös galériában és a diavetítésen, de a vendég a saját QR-kódjával továbbra is eléri.</p>' +
+				'<div class="gm-grid selm gmp-g sz-' + size + '">' + shown.map((p, k) => '<button type="button" class="' + (p.hidden ? 'off' : '') + (sel.has(p.photo) ? ' sel' : '') + '" data-gmph="' + esc(p.photo) + '" data-k="' + k + '" style="background-image:url(\'' + esc(p.thumb) + '\')" aria-pressed="' + (sel.has(p.photo) ? 'true' : 'false') + '" title="' + (p.hidden ? 'Elrejtve – ' : '') + 'kattints a kijelöléshez">' + (p.hidden ? '<i>elrejtve</i>' : '') + '</button>').join('') + (shown.length ? '' : '<p class="cpx-muted">' + (n ? 'Nincs ilyen kép.' : 'Még nincs kép a galériában.') + '</p>') + '</div>';
+			page.scrollTop = y;
 			const save = async extra => { try { draw(await post('cp_booth_gal', Object.assign({}, who, extra))); toast('Mentve.'); if (onChange) onChange(); } catch (e) { toast(e.message, true); } };
+			body.querySelector('[data-gmx]').addEventListener('click', () => close());
+			body.querySelector('[data-gmset]').addEventListener('click', () => { setOpen = !setOpen; draw(g); });
 			body.querySelector('[data-gmsave]').addEventListener('click', () => { const o = { title: body.querySelector('#gm-title').value.trim(), hook: body.querySelector('#gm-hook').value.trim() }; if (o.hook && !/^https:\/\/\S+$/.test(o.hook)) { toast('A webhook címe https://-sel kezdődjön.', true); return; } const pw = body.querySelector('#gm-pw').value.trim(); if (pw) o.password = pw; save(o); });
 			const np = body.querySelector('[data-gmnopw]'); if (np) np.addEventListener('click', () => save({ password: '' }));
-			body.querySelectorAll('[data-gmf]').forEach(b => b.addEventListener('click', () => { flt = b.dataset.gmf; draw(g); }));
+			body.querySelectorAll('[data-gmf]').forEach(b => b.addEventListener('click', () => { flt = b.dataset.gmf; last = -1; draw(g); }));
+			body.querySelectorAll('[data-gmsz]').forEach(b => b.addEventListener('click', () => { size = b.dataset.gmsz; try { localStorage.setItem('cp_gm_size', size); } catch (e) { /* */ } draw(g); }));
 			const tb = body.querySelector('[data-gmtb]');
 			const mark = () => body.querySelectorAll('[data-gmph]').forEach(b => { const on = sel.has(b.dataset.gmph); b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
 			const busy = (btn, t) => { tb.querySelectorAll('button').forEach(x => { x.disabled = true; }); btn.textContent = t; };
@@ -90,17 +116,19 @@
 				if (!n) { tb.innerHTML = ''; return; }
 				const k = sel.size, L = g.photos.filter(p => sel.has(p.photo)), kOn = L.filter(p => !p.hidden).length, kOff = k - kOn;
 				const allShown = shown.length && shown.every(p => sel.has(p.photo));
-				tb.innerHTML = (k ? '<b>' + k + ' kijelölve</b>' : '<span class="cpx-muted">Nincs kijelölt kép.</span>') +
-					(shown.length ? '<button type="button" class="cpx-btn ghost sm" data-gmall>' + (allShown ? 'Egyik sem' : 'Mind kijelölése (' + shown.length + ')') + '</button>' : '') +
+				tb.innerHTML = (k ? '<b>' + k + ' kijelölve</b>' : '<span class="cpx-muted">Nincs kijelölt kép</span>') +
+					(shown.length ? '<button type="button" class="cpx-btn ghost sm" data-gmall>' + (allShown ? 'Kijelölés megszüntetése' : 'Mind kijelölése (' + shown.length + ')') + '</button>' : '') +
+					(k && !allShown ? '<button type="button" class="cpx-btn ghost sm" data-gmnone>Kijelölés megszüntetése</button>' : '') +
 					(kOn ? '<button type="button" class="cpx-btn ghost sm" data-gmhide="1">Elrejtés (' + kOn + ')</button>' : '') +
 					(kOff ? '<button type="button" class="cpx-btn ghost sm" data-gmhide="0">Visszaállítás (' + kOff + ')</button>' : '') +
-					(k ? '<button type="button" class="cpx-btn danger sm" data-gmdel>Törlés véglegesen (' + k + ')</button>' : '');
+					(k ? '<button type="button" class="cpx-btn sm gmp-del" data-gmdel>Törlés véglegesen (' + k + ')</button>' : '');
 				const all = tb.querySelector('[data-gmall]');
 				if (all) all.addEventListener('click', () => { if (allShown) shown.forEach(p => sel.delete(p.photo)); else shown.forEach(p => sel.add(p.photo)); mark(); tbDraw(); });
+				const none = tb.querySelector('[data-gmnone]'); if (none) none.addEventListener('click', () => { sel.clear(); last = -1; mark(); tbDraw(); });
 				tb.querySelectorAll('[data-gmhide]').forEach(b => b.addEventListener('click', async () => {
 					const hid = b.dataset.gmhide === '1', ids = L.filter(p => !!p.hidden !== hid).map(p => p.photo); if (!ids.length) return;
 					busy(b, hid ? 'Elrejtés…' : 'Visszaállítás…');
-					try { const r = await post('cp_booth_gal', Object.assign({}, who, { hide: ids.join(','), hidden: hid ? 1 : 0 })); sel.clear(); draw(r); toast((r.changed_n || ids.length) + ' kép ' + (hid ? 'elrejtve.' : 'visszaállítva.')); if (onChange) onChange(); }
+					try { const r = await post('cp_booth_gal', Object.assign({}, who, { hide: ids.join(','), hidden: hid ? 1 : 0 })); sel.clear(); last = -1; draw(r); toast((r.changed_n || ids.length) + ' kép ' + (hid ? 'elrejtve.' : 'visszaállítva.')); if (onChange) onChange(); }
 					catch (e) { toast(e.message, true); draw(g); }
 				}));
 				const del = tb.querySelector('[data-gmdel]');
@@ -110,14 +138,19 @@
 					const ok = window.CPXAsk ? await window.CPXAsk({ title: ids.length + ' kép végleges törlése', text: txt, ok: 'Törlés véglegesen', cancel: 'Mégse', danger: true }) : window.confirm(txt);
 					if (!ok) return;
 					busy(del, 'Törlés…');
-					try { const r = await post('cp_booth_gal', Object.assign({}, who, { del: ids.join(',') })); sel.clear(); draw(r); toast((r.deleted_n || 0) + ' kép törölve.'); if (onChange) onChange(); }
+					try { const r = await post('cp_booth_gal', Object.assign({}, who, { del: ids.join(',') })); sel.clear(); last = -1; draw(r); toast((r.deleted_n || 0) + ' kép törölve.'); if (onChange) onChange(); }
 					catch (e) { toast(e.message, true); draw(g); }
 				});
 			};
 			tbDraw();
-			body.querySelectorAll('[data-gmph]').forEach(b => b.addEventListener('click', () => { const ph = b.dataset.gmph; if (sel.has(ph)) sel.delete(ph); else sel.add(ph); mark(); tbDraw(); }));
+			body.querySelectorAll('[data-gmph]').forEach(b => b.addEventListener('click', e => {
+				const k = Number(b.dataset.k), ph = b.dataset.gmph;
+				if (e.shiftKey && last >= 0 && last !== k) { const on = !sel.has(ph); const [a, z] = last < k ? [last, k] : [k, last]; for (let q = a; q <= z; q++) { const id = shown[q] && shown[q].photo; if (id) { if (on) sel.add(id); else sel.delete(id); } } }
+				else if (sel.has(ph)) sel.delete(ph); else sel.add(ph);
+				last = k; mark(); tbDraw();
+			}));
 		};
-		try { draw(await post('cp_booth_gal', who)); } catch (e) { body.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; }
+		try { draw(await post('cp_booth_gal', who)); } catch (e) { body.innerHTML = '<header class="gmp-top"><button type="button" class="gmp-back" data-gmx aria-label="Vissza">←</button><div class="gmp-t"><h2>Fotógaléria</h2></div></header><p class="cpx-empty err">' + esc(e.message) + '</p>'; body.querySelector('[data-gmx]').addEventListener('click', () => close()); }
 	}
 	/* ---------- v2.9.246: Crazy Booth – gépállapot, statisztika, ügyfélriport, beállítások a gépekre, sorsolás */
 	const BOOTH_MODES = [['photo', 'Fotó'], ['glam', 'Glam'], ['group', 'Csoportkép'], ['gif', 'GIF'], ['boom', 'Boomerang'], ['video', 'Videó'], ['slow', 'Lassított'], ['spin', '360°'], ['guestbook', 'Videóüzenet'], ['ai', 'AI-kép'], ['aidraw', 'AI-rajz (élő)']];
