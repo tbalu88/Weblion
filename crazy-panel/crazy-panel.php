@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.366');
+define('CP_PANEL_VER', '2.9.367');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -809,6 +809,7 @@ function cp_panel_render_app() {
 		'capSpin'  => (int) $o['cap_spin'],
 		'subsDef'  => (int) $o['subs_default'],
 		'bgs'      => cp_panel_bg_list(),
+		'bgsAll'   => cp_bg_frozen() ? cp_panel_bg_list(true) : null, /* v2.9.367: a Háttérkatalógus a jegelteket is mutatja */
 		'bgPairs'  => cp_panel_bg_pairs(),
 		'sign'     => (string) $o['reply_sign'],
 		'logout'   => home_url('/' . trim($o['slug'], '/') . '/?kilep=1'),
@@ -905,7 +906,8 @@ function cp_bg_frozen() {
 	}
 	return $f;
 }
-function cp_panel_bg_list() {
+/* $ice = true: a jegelt hátterek is (jelölve) – csak a panel Háttérkatalógusa kéri (v2.9.367) */
+function cp_panel_bg_list($ice = false) {
 	$o = cp_panel_opts();
 	$qty = array();
 	$extra = array();
@@ -921,15 +923,17 @@ function cp_panel_bg_list() {
 	$web = cp_panel_web_bgs();
 	foreach ($web['list'] as $b) {
 		$k = cp_panel_lc($b['name']);
-		if (isset($seen[$k]) || in_array($k, cp_bg_frozen(), true)) { continue; }
+		$fz = in_array($k, cp_bg_frozen(), true);
+		if (isset($seen[$k]) || ($fz && !$ice)) { continue; }
 		$seen[$k] = 1;
-		$out[] = array('name' => $b['name'], 'qty' => isset($qty[$k]) ? $qty[$k] : 1, 'img' => $b['img'], 'web' => 1);
+		$out[] = array('ice' => $fz ? 1 : 0, 'name' => $b['name'], 'qty' => isset($qty[$k]) ? $qty[$k] : 1, 'img' => $b['img'], 'web' => 1);
 	}
 	foreach ($extra as $n) {
 		$k = cp_panel_lc($n);
-		if (isset($seen[$k]) || in_array($k, cp_bg_frozen(), true)) { continue; }
+		$fz = in_array($k, cp_bg_frozen(), true);
+		if (isset($seen[$k]) || ($fz && !$ice)) { continue; }
 		$seen[$k] = 1;
-		$out[] = array('name' => $n, 'qty' => $qty[$k], 'img' => '', 'web' => 0);
+		$out[] = array('ice' => $fz ? 1 : 0, 'name' => $n, 'qty' => $qty[$k], 'img' => '', 'web' => 0);
 	}
 	return $out;
 }

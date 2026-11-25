@@ -11,7 +11,7 @@
 
 	/* a hátterek és a párok összefésülése: minden pár egyszer, a listában nem szereplő párnév jelölve */
 	function model() {
-		const bgs = Array.isArray(C.bgs) ? C.bgs : [];
+		const bgs = Array.isArray(C.bgsAll) ? C.bgsAll : Array.isArray(C.bgs) ? C.bgs : []; /* v2.9.367: a jegelt hátterek is (jelölve) */
 		const by = new Map(bgs.map(b => [lc(b.name), b]));
 		const P = C.bgPairs || {};
 		const pairs = [], inPair = new Set(), unknown = [];
@@ -31,7 +31,7 @@
 	const hit = (b, q) => !q || fold(b.name).includes(q);
 	const pic = (b, cls) => '<button type="button" class="bc-img' + (cls ? ' ' + cls : '') + '"' + (b.img ? ' data-zoom="' + esc(b.img) + '" data-zn="' + esc(b.name) + '"' : ' disabled') + ' aria-label="' + esc(b.name) + ' – nagyítás">' +
 		(b.img ? '<img src="' + esc(b.img) + '" alt="" loading="lazy">' : '<span>' + (b.missing ? 'nincs a háttérlistában' : 'nincs kép') + '</span>') + '</button>';
-	const qty = b => Number(b.qty) > 1 ? '<i class="bc-qty" title="Ennyi darab van belőle">' + Number(b.qty) + ' db</i>' : '';
+	const qty = b => (Number(b.qty) > 1 ? '<i class="bc-qty" title="Ennyi darab van belőle">' + Number(b.qty) + ' db</i>' : '') + (b.ice ? '<i class="bc-qty bc-ice" title="Még nem érkezett meg – a weboldalon, az adatlapon és az űrlapon még nem látszik">jegelve</i>' : '');
 
 	function view(main) {
 		S.main = main;
@@ -105,7 +105,7 @@
 		'.bc-side,.bc-one{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;position:relative}.bc-side b,.bc-one b{font-size:13px;font-weight:700;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
 		'.bc-link{flex:none;width:30px;height:30px;border-radius:50%;background:#FBEBDD;color:#C2621A;display:flex;align-items:center;justify-content:center;font:800 15px Inter,sans-serif}' +
 		'.bc-img{display:block;width:100%;aspect-ratio:1/1;border:0;padding:0;border-radius:10px;overflow:hidden;background:#F1EFEB;cursor:zoom-in}.bc-img[disabled]{cursor:default}.bc-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}.bc-img:hover img{transform:scale(1.04)}' +
-		'.bc-img span{display:flex;height:100%;align-items:center;justify-content:center;color:#656973;font-size:12px;padding:6px;text-align:center}.bc-qty{position:absolute;top:6px;right:6px;background:rgba(20,28,51,.75);color:#fff;font:600 11px Inter,sans-serif;font-style:normal;border-radius:999px;padding:1px 7px}' +
+		'.bc-img span{display:flex;height:100%;align-items:center;justify-content:center;color:#656973;font-size:12px;padding:6px;text-align:center}.bc-qty{position:absolute;top:6px;right:6px;background:rgba(20,28,51,.75);color:#fff;font:600 11px Inter,sans-serif;font-style:normal;border-radius:999px;padding:1px 7px}.bc-qty.bc-ice{background:#2F5BD8;color:#fff;left:6px;right:auto}' +
 		'.bc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.bc-one{background:#fff;border:1px solid #E6E3DE;border-radius:12px;padding:8px}' +
 		'.bc-t{border-collapse:collapse;background:#fff;border:1px solid #E6E3DE;border-radius:12px;overflow:hidden;font-size:13.5px;min-width:min(560px,100%)}.bc-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#656973;padding:8px 12px;background:#FAF8F5;border-bottom:1px solid #E6E3DE}.bc-t td{padding:7px 12px;border-bottom:1px solid #F0ECE6}.bc-t td:first-child{color:#656973;width:36px}.bc-t td:nth-child(3){color:#C2621A;font-weight:800;width:30px;text-align:center}' +
 		'.bc-miss{color:#AE2E24}.bc-list{columns:4 180px;margin:0;padding:0 0 0 18px;font-size:13.5px;line-height:1.8}.bc-list small{color:#656973}' +
