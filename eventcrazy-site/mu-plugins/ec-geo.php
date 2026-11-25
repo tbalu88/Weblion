@@ -6,6 +6,9 @@
  * 2) IndexNow: új vagy módosított oldal/bejegyzés azonnali bejelentése a Bingnek és társainak (a ChatGPT keresője és a
  *    Copilot a Bing indexéből dolgozik). A kulcsfájl a /<kulcs>.txt címen érhető el; első futáskor egyszer az összes
  *    közzétett oldal bejelentésre kerül.
+ * 3) Cégadat: a Yoast Organization adatát egészíti ki (valódi logó, cégnév, elérhetőség, profilok, LocalBusiness típus),
+ *    így egyetlen, teljes cégadat van az oldalon (korábban egy külön Elementor-kódrészlet adott egy második példányt).
+ * Az angol (Polylang) szolgáltatásoldalak a magyar párjuk alapján angol Service adatot kapnak.
  * Kikapcsolás: a fájl törlése (vagy átnevezése).
  */
 if (!defined('ABSPATH')) { exit; }
@@ -40,24 +43,80 @@ function ec_geo_services() {
 		'elozene-rendezvenyre' => array('Élőzene rendezvényre (akusztikus duó)', 'Élőzene', 'Akusztikus duó élőzene rendezvényekre.'),
 	);
 }
+/* angol nevek és leírások (kulcs: a magyar oldal slugja) */
+function ec_geo_services_en() {
+	return array(
+		'szelfigep-berles' => array('Photo booth rental', 'Photo booth rental', 'Photo booth rental for events with instant prints, a custom photo template and a choice of backgrounds.'),
+		'eventcrazy-selfie-light' => array('Selfie Stand', 'Photo booth rental', 'A compact photo booth with a distinctive look, with or without a printer.'),
+		'szelfidroid-szelfirobot-berles-ceges-rendezvenyre' => array('Selfie robot rental', 'Photo booth rental', 'Selfie robot rental for corporate events.'),
+		'eventcrazy-selfie-tukor' => array('Selfie mirror rental', 'Photo booth rental', 'A full-length, interactive photo mirror with every feature of the photo booth.'),
+		'eventcrazy-360-spinner-360-szelfi' => array('360 Spinner rental', '360 video booth rental', 'The Classic Spinner films groups of 3–5 people in slow-motion 360° video, ready to view and share instantly.'),
+		'vip-spinner-berles-budapest' => array('VIP Spinner rental', '360 video booth rental', 'An interactive smart dance floor with disco lights, a fog machine and 360° selfie video.'),
+		'eventcrazy-overhead-spinner' => array('Overhead Spinner rental', '360 video booth rental', 'Slow-motion 360° video in a 3-metre circle – a favourite for larger groups.'),
+		'eventcrazy-greenbox-fotozas' => array('Greenbox photography', 'Event photography', 'Photos with interchangeable digital backgrounds using greenbox technology.'),
+		'eventcrazy-ai-fotozas' => array('AI photography', 'AI photo booth', 'Face-swap AI photos: the guest’s face appears on the picture of a celebrity of their choice.'),
+		'eventcrazy-ai-karikatura' => array('AI caricature', 'AI photo booth', 'Funny caricatures in seconds, made with artificial intelligence.'),
+		'eventcrazy-digitalis-karikatura' => array('Digital caricature', 'Caricature drawing for events', 'Our artists draw personalised caricatures of the guests in minutes.'),
+		'eventcrazy-rendezvenyfotozas' => array('Event photography', 'Event photography', 'Professional event photography for companies, weddings and exclusive events.'),
+		'eventcrazy-rendezvenyfilm' => array('Event film', 'Event video production', 'Event films by a professional crew for weddings, corporate events and conferences.'),
+		'eventcrazy-vr-elmeny-argumented-reality-vr-games' => array('VR experience', 'Event activity', 'A virtual reality experience for events in which participants actively play.'),
+		'eventcrazy-karaoke' => array('Karaoke', 'Event activity', 'Karaoke for events.'),
+		'eventcrazy-led-tancter' => array('LED dance floor rental', 'Event technology', 'An interactive smart LED dance floor for events.'),
+		'eventcrazy-crazylight' => array('CrazyLight', 'Event activity', 'A reaction game for events, with a chance to beat the record.'),
+		'eventcrazy-mindflex' => array('Mindflex', 'Event activity', 'A game controlled by brain power for corporate events, festivals and team building.'),
+		'eventcrazy-crazycatch' => array('CrazyCatch', 'Event activity', 'A reflex game for events: catch it before it drops.'),
+		'ulofoci-berles' => array('Seated football (Subsoccer) rental', 'Event activity', 'Seated football (Subsoccer) rental for events.'),
+		'csocso-berles' => array('Foosball table rental', 'Event activity', 'Foosball table rental for events.'),
+		'xxl-csocso-berles' => array('XXL foosball rental', 'Event activity', 'XXL foosball rental for events and team building.'),
+		'smink-fonas-rendezvenyre' => array('Crazy Beauty – festival make-up and braiding', 'Event activity', 'Festival make-up, glitter tattoos and hair braiding on site at your event.'),
+		'crazy-dj' => array('Crazy DJ', 'DJ service', 'A professional DJ for corporate parties, weddings and birthdays, with sound and lighting equipment and a microphone.'),
+		'elozene-rendezvenyre' => array('Live music for events (acoustic duo)', 'Live music', 'Acoustic duo live music for events.'),
+	);
+}
 add_action('wp_head', function () {
 	if (is_admin() || !is_singular()) { return; }
-	$slug = trim((string) wp_parse_url(get_permalink(), PHP_URL_PATH), '/');
-	$M = ec_geo_services();
+	$id = get_queried_object_id();
+	$lang = function_exists('pll_get_post_language') ? (string) pll_get_post_language($id) : 'hu';
+	$hid = ($lang === 'en' && function_exists('pll_get_post')) ? (int) pll_get_post($id, 'hu') : $id;
+	if (!$hid) { return; }
+	$slug = trim((string) wp_parse_url(get_permalink($hid), PHP_URL_PATH), '/');
+	$M = $lang === 'en' ? ec_geo_services_en() : ec_geo_services();
 	if (!isset($M[$slug])) { return; }
+	if ($lang !== 'en') { $lang = 'hu'; }
 	list($name, $type, $desc) = $M[$slug];
-	$url = home_url('/' . $slug . '/');
+	$url = $hid === $id ? home_url('/' . $slug . '/') : get_permalink($id);
 	$o = array(
 		'@context' => 'https://schema.org', '@type' => 'Service', '@id' => $url . '#service',
 		'name' => $name, 'serviceType' => $type, 'description' => $desc, 'url' => $url,
 		'provider' => array('@id' => home_url('/#organization')),
-		'areaServed' => array('@type' => 'Country', 'name' => 'Magyarország'),
-		'audience' => array('@type' => 'Audience', 'audienceType' => 'Céges és privát rendezvények: esküvő, születésnap, céges buli, csapatépítő, konferencia, fesztivál'),
+		'areaServed' => array('@type' => 'Country', 'name' => $lang === 'en' ? 'Hungary' : 'Magyarország'),
+		'audience' => array('@type' => 'Audience', 'audienceType' => $lang === 'en' ? 'Corporate and private events: weddings, birthdays, company parties, team building, conferences, festivals' : 'Céges és privát rendezvények: esküvő, születésnap, céges buli, csapatépítő, konferencia, fesztivál'),
 		'availableChannel' => array('@type' => 'ServiceChannel', 'serviceUrl' => $url, 'servicePhone' => '+36308441791', 'availableLanguage' => array('hu', 'en')),
-		'inLanguage' => 'hu',
+		'inLanguage' => $lang,
 	);
 	echo '<script type="application/ld+json" id="ec-geo-service">' . wp_json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "</script>\n";
 }, 30);
+
+/* ------------------------------------------------------------ 3) Cégadat (Yoast Organization kiegészítése) */
+add_filter('wpseo_schema_organization', function ($d) {
+	if (!is_array($d)) { return $d; }
+	$logo = home_url('/wp-content/uploads/2021/09/eventcrazy_logo_hor.png');
+	$d['@type'] = array('Organization', 'LocalBusiness');
+	$d['name'] = 'EventCrazy';
+	$d['legalName'] = 'Insignis Plus Kft.';
+	$d['description'] = 'Prémium fotó- és élménymegoldások bérbeadása céges és privát rendezvényekre: fotóautomaták, 360°-os spinnerek, AI-fotózás, rendezvényfotózás és -film, interaktív aktivitások.';
+	$d['logo'] = array('@type' => 'ImageObject', '@id' => home_url('/#/schema/logo/image/'), 'url' => $logo, 'contentUrl' => $logo, 'caption' => 'EventCrazy', 'inLanguage' => 'hu');
+	$d['image'] = array('@id' => home_url('/#/schema/logo/image/'));
+	$d['email'] = 'info@eventcrazy.hu';
+	$d['telephone'] = '+36308441791';
+	$d['taxID'] = '25095632-2-43';
+	$d['address'] = array('@type' => 'PostalAddress', 'addressLocality' => 'Budapest', 'addressCountry' => 'HU');
+	$d['areaServed'] = array('@type' => 'Country', 'name' => 'Magyarország');
+	$d['contactPoint'] = array('@type' => 'ContactPoint', 'contactType' => 'customer service', 'telephone' => '+36308441791', 'email' => 'info@eventcrazy.hu', 'availableLanguage' => array('hu', 'en'));
+	$d['knowsLanguage'] = array('hu', 'en');
+	$d['sameAs'] = array_values(array_unique(array_merge((array) ($d['sameAs'] ?? array()), array('https://www.facebook.com/eventcrazyhun', 'https://www.instagram.com/eventcrazy_'))));
+	return $d;
+}, 20);
 
 /* ------------------------------------------------------------ 2) IndexNow */
 function ec_geo_key() {
