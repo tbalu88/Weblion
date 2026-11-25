@@ -770,7 +770,7 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed', 'drawVideo', 'dccShow'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed', 'drawVideo', 'dccShow', 'lvShoot'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
   const UI_PRN = ['printScale', 'printDx', 'printDy'];
   const verGe = (a, b) => { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return true; };
   const prOpt = () => { const u = Object.assign({}, UI_DEF, U()); return { paper: u.paperSize, fit: u.printFit, scale: u.printScale, dx: u.printDx, dy: u.printDy }; };

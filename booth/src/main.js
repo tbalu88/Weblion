@@ -57,7 +57,7 @@ const dccHide = () => { if (dccRun) dccRun.hide(cfg.camera === 'dcc' && !(cfg.ui
 const dccR = () => dccRun || (dccRun = require('./dcc-run').make({ url: () => cfg.dccUrl, dataDir: app.getPath('userData'), gui: () => !!(cfg.ui && cfg.ui.dccShow), log, onStart: () => { dccTop(); setTimeout(dccTop, 3000); }, onReady: () => { dccTop(); setTimeout(dccTop, 2000); setTimeout(dccTop, 8000); } }));
 function makeCam() {
   const folder = path.join(dayDir(), 'nyers');
-  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null });
+  cam = (cfg.camera === 'dcc' ? require('./camera/dcc') : require('./camera/webcam')).make({ url: cfg.dccUrl, folder, ensure: cfg.camera === 'dcc' ? () => dccR().ensure() : null, lvShoot: () => !!(cfg.ui && cfg.ui.lvShoot) });
 }
 const toDataUrl = (buf, mime) => 'data:' + (mime || 'image/jpeg') + ';base64,' + buf.toString('base64');
 const fromDataUrl = s => { const m = /^data:([^;]+);base64,(.*)$/s.exec(String(s || '')); if (!m) throw new Error('hibás kép'); return { mime: m[1], buf: Buffer.from(m[2], 'base64') }; };

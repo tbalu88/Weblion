@@ -159,7 +159,8 @@ class CbCam
         lvOn = false;
     }
 
-    static void Capture()
+    // keepLv: az élőkép nem áll le az exponálás előtt (a tükör fent marad – egy csattanás); 0.19.15
+    static void Capture(bool keepLv = false)
     {
         ICameraDevice d = NeedCam();
         if (capturing) throw new Exception("Az előző exponálás még tart.");
@@ -169,7 +170,8 @@ class CbCam
             try
             {
                 bool wasLv = lvOn;
-                if (wasLv) { LiveStop(); Thread.Sleep(250); }
+                if (wasLv && !keepLv) { LiveStop(); Thread.Sleep(250); }
+                Log("exponálás " + (wasLv && keepLv ? "élőképből" : "élőkép nélkül"));
                 OnCam(() =>
                 {
                     d.IsBusy = true;
@@ -320,7 +322,7 @@ class CbCam
         {
             string slc = q["slc"].ToLowerInvariant();
             string p1 = q.ContainsKey("param1") ? q["param1"] : "", p2 = q.ContainsKey("param2") ? q["param2"] : "";
-            if (slc == "capture") { Capture(); return T("OK"); }
+            if (slc == "capture") { Capture(p1 == "lv"); return T("OK"); }
             if (slc == "get" && p1.Equals("lastcaptured", StringComparison.OrdinalIgnoreCase)) return T(lastCaptured);
             if (slc == "set" && p1.Equals("session.folder", StringComparison.OrdinalIgnoreCase)) { if (p2 != "") { folder = p2; Directory.CreateDirectory(folder); } return T("OK"); }
             ICameraDevice d = NeedCam();

@@ -115,7 +115,8 @@ function make(opts) {
     async capture() {
       const before = await get('/?slc=get&param1=lastcaptured&param2=').catch(() => '');
       /* 0.18.5: ha az exponálási kérés válasza megszakad, a kép attól még elkészülhet – megvárjuk (lastcaptured) */
-      try { await get('/?slc=capture&param1=&param2=', false, true); } catch (e) { if (!e.reset && !/nem válaszol/.test(e.message)) throw e; }
+      /* 0.19.15: „lv” = exponálás az élőképből (a tükör fent marad – Canonon 1 csattanás 3–4 helyett); a grafikus digiCamControl figyelmen kívül hagyja */
+      try { await get('/?slc=capture&param1=' + (opts.lvShoot && opts.lvShoot() ? 'lv' : '') + '&param2=', false, true); } catch (e) { if (!e.reset && !/nem válaszol/.test(e.message)) throw e; }
       const until = Date.now() + (opts.captureTimeout || 45000);
       while (Date.now() < until) {
         await new Promise(r => setTimeout(r, 250));
