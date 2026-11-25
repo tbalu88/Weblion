@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.367');
+define('CP_PANEL_VER', '2.9.368');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -962,7 +962,7 @@ function cp_panel_bg_partner($name) {
 /* a párlistában szereplő, de a háttérlistában nem található nevek (a beállításoknál figyelmeztetés) */
 function cp_panel_bg_pairs_unknown() {
 	$known = array();
-	foreach (cp_panel_bg_list() as $b) { $known[cp_panel_lc($b['name'])] = 1; }
+	foreach (cp_panel_bg_list(true) as $b) { $known[cp_panel_lc($b['name'])] = 1; }
 	$out = array();
 	foreach (cp_panel_bg_pairs() as $k => $partner) { if (!isset($known[$k])) { $out[] = cp_panel_bg_partner($partner); } }
 	return array_values(array_unique($out));
