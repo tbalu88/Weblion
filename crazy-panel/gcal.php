@@ -529,10 +529,15 @@ function cp_gcal_sig_api($r) {
 	if ($ad && $en !== '') { $en = gmdate('Y-m-d', strtotime($en . ' 00:00:00 UTC') - DAY_IN_SECONDS); }
 	return cp_gcal_sig((string) ($r['description'] ?? ''), $s, $en, (string) ($r['location'] ?? ''));
 }
+/* v2.9.381: bejegyzésenként külön opcióban (cp_gcw_<md5>) – a közös tömb egyidejű írásnál (szinkron + gomb) elveszíthetett tételeket,
+   és a hiányzó alap miatt a panel a kézzel módosított bejegyzést is felülírta. A régi közös tömb olvasható marad (átmenet). */
 function cp_gcal_wts_get() { $w = get_option('cp_gcal_wts', array()); return is_array($w) ? $w : array(); }
-function cp_gcal_wts_put($eid, $sig) { if ($eid === '' || $sig === '') { return; } $w = cp_gcal_wts_get(); $w[$eid] = $sig; update_option('cp_gcal_wts', $w, false); }
+function cp_gcal_wts_key($eid) { return 'cp_gcw_' . md5((string) $eid); }
+function cp_gcal_wts_one($eid) { $v = get_option(cp_gcal_wts_key($eid), null); if (is_string($v) && $v !== '') { return $v; } $w = cp_gcal_wts_get(); return isset($w[$eid]) ? (string) $w[$eid] : null; }
+function cp_gcal_wts_put($eid, $sig) { if ($eid === '' || $sig === '') { return; } update_option(cp_gcal_wts_key($eid), $sig, false); }
 function cp_gcal_wts_set($eid, $r) { cp_gcal_wts_put((string) $eid, is_array($r) ? cp_gcal_sig_api($r) : ''); }
-function cp_gcal_manual($e) { $w = cp_gcal_wts_get(); $sg = cp_gcal_sig_ev($e); if (!isset($w[$e['id']])) { cp_gcal_wts_put($e['id'], $sg); return false; } return $w[$e['id']] !== $sg; }
+/* ha nincs megjegyzett alap: most mentjük, de ebben a körben kézi módosításnak tekintjük (nem írjuk felül – a következő körtől összevethető) */
+function cp_gcal_manual($e) { $sg = cp_gcal_sig_ev($e); $w = cp_gcal_wts_one($e['id']); if ($w === null) { cp_gcal_wts_put($e['id'], $sg); return true; } return $w !== $sg; }
 function cp_gcal_body($p) {
 	$tz = wp_timezone();
 	$b = array('summary' => $p['title'], 'location' => $p['loc'], 'description' => $p['desc']);
