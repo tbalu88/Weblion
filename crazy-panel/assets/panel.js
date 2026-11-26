@@ -56,7 +56,7 @@
   /* v1.28: a Statisztikák csak az admin fióknak (az irodai fióknál C.st.on hamis) */
   if (!['naptar', 'kovetes', 'hatterek', 'hatterkat', 'beallitasok', 'ellenorzes', 'munkalap', 'elszamolas', 'tarca', 'sablon'].concat(C.st && C.st.on ? ['stat'] : [], C.crm && C.crm.on ? ['deals', 'kapcsolatok'] : [], C.mail && C.mail.on ? ['mail'] : [], C.kb && C.kb.on ? ['feladatok'] : [], C.fl && C.fl.on ? ['flows'] : [], C.au && C.au.on ? ['naplo'] : [], C.dash && C.dash.on ? ['kezdolap'] : [], C.gcal && C.gcal.on ? ['gnaptar'] : [], C.wl && C.wl.on ? ['munkanaplo'] : [], C.kz && C.kz.on ? ['kezelok'] : [], C.nt && C.nt.on ? ['ertesitesek'] : [], C.gal ? ['galeriak'] : [], C.wh ? ['raktar'] : [], C.aic ? ['aikredit'] : [], C.sup && C.sup.on ? ['sugo'] : []).filter(CAN).includes(S.tab)) S.tab = HOME;
   const d0 = new Date();
-  if (d0.getMonth() >= 9) { /* okt–dec: alapból december */ S.month = d0.getFullYear() + '-12'; }
+  /* v2.9.378: mindig az aktuális hónap nyílik meg (korábban okt–dec között alapból a december) */
 
   function monthRange(m) {
     const [y, mo] = m.split('-').map(Number);
