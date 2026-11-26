@@ -9,10 +9,10 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_KZ_DB_VER', '3'); /* v2.9.151: 3 = elérhetőség (avail) */
+define('CP_KZ_DB_VER', '4'); /* v2.9.151: 3 = elérhetőség (avail); v2.9.372: 4 = díjak (fees) – egy kezelő-adatbázis az elszámolással */
 function cp_kz_t() { global $wpdb; return $wpdb->prefix . 'crazy_kezelok'; }
 /* v2.6.1: csoport, gépenkénti tudás, autó, felvételi lépések (az új kezelői táblázat szerint) */
-function cp_kz_kinds() { return array('kezelo' => 'Kezelők', 'host' => 'Host/Hostess', 'jelentkezo' => 'Jelentkezők'); }
+function cp_kz_kinds() { return array('kezelo' => 'Kezelők', 'host' => 'Host/Hostess', 'jelentkezo' => 'Jelentkezők', 'egyeb' => 'Egyéb'); }
 function cp_kz_skills() { return array('selfie' => 'Selfie', 'spinner' => 'Spinner', 'stand' => 'Stand', 'tukor' => 'Tükör', 'robot' => 'Robot', 'vr' => 'VR', 'overhead' => 'Overhead', 'vip' => 'VIP', 'catchit' => 'Catch It'); }
 function cp_kz_procs() { return array('phone' => 'Telefonos egyeztetés', 'interview' => 'Személyes interjú', 'trial' => 'Próbamunka'); }
 function cp_kz_csv_ok($v, $allowed) { return implode(',', array_values(array_intersect(array_keys($allowed), array_map('trim', explode(',', (string) $v))))); }
@@ -30,6 +30,7 @@ add_action('init', function () {
   sens text NULL,
   sens_have varchar(120) NOT NULL DEFAULT '',
   el_id varchar(40) NOT NULL DEFAULT '',
+  fees text NULL,
   kind varchar(12) NOT NULL DEFAULT 'kezelo',
   car varchar(12) NOT NULL DEFAULT '',
   has_car tinyint(1) NOT NULL DEFAULT 0,
@@ -53,7 +54,7 @@ function cp_kz_ok() { return get_option('cp_kz_db_ver') === CP_KZ_DB_VER && func
 function cp_kz_cfg() {
 	$on = cp_kz_ok() && function_exists('cp_panel_can') && cp_panel_can('kezelok');
 	$adm = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
-	return array('on' => $on, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'tr' => 1, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
+	return array('on' => $on, 'merged' => cp_kz_merged() ? 1 : 0, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'tr' => 1, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
 }
 function cp_kz_auth($admin = false) {
 	cp_el_auth();
@@ -188,7 +189,7 @@ function cp_kz_ajax_save() {
 	}
 	if (array_key_exists('flag', $f)) { $set['flag'] = in_array($f['flag'], array('', 'red', 'yellow', 'green'), true) ? $f['flag'] : ''; }
 	if (array_key_exists('active', $f)) { $set['active'] = empty($f['active']) ? 0 : 1; }
-	if (array_key_exists('el_id', $f)) { $set['el_id'] = sanitize_key((string) $f['el_id']); }
+	if (array_key_exists('el_id', $f) && !cp_kz_merged()) { $set['el_id'] = sanitize_key((string) $f['el_id']); } /* v2.9.372: összefésülve az azonosító fix */
 	if (array_key_exists('kind', $f)) { $set['kind'] = isset(cp_kz_kinds()[$f['kind']]) ? $f['kind'] : 'kezelo'; }
 	if (array_key_exists('car', $f)) { $set['car'] = in_array($f['car'], array('', 'szemely', 'teher'), true) ? $f['car'] : ''; }
 	if (array_key_exists('has_car', $f)) { $set['has_car'] = empty($f['has_car']) ? 0 : 1; }
@@ -210,7 +211,7 @@ function cp_kz_ajax_save() {
 	if ($id) { $wpdb->update($T, $set, array('id' => $id)); }
 	else {
 		if (empty($set['name'])) { cp_el_err('Add meg a nevet.'); }
-		if (!isset($set['el_id'])) { $set['el_id'] = cp_kz_el_guess($set['name']); }
+		if (!isset($set['el_id']) && !cp_kz_merged()) { $set['el_id'] = cp_kz_el_guess($set['name']); }
 		$wpdb->insert($T, $set + array('created_at' => gmdate('Y-m-d H:i:s'), 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T")));
 		$id = (int) $wpdb->insert_id;
 	}
@@ -268,3 +269,94 @@ function cp_kz_ajax_csv() {
 /* v2.9.57: interjú-időpontfoglalás (kezelő-jelentkezők) */
 require_once __DIR__ . '/interview.php';
 require_once __DIR__ . '/training.php'; /* v2.9.330: Betanulás-foglaló */
+
+/* =====================================================================
+ * v2.9.372 – EGY KEZELŐ-ADATBÁZIS (a felhasználó döntése, 2026-11-26)
+ * A Kezelők fül táblája a közös forrás: a Kezelői elszámolás „Kezelők és díjak” listája innen épül (a díjak a `fees` oszlopban:
+ * role, sm = Salesmate-név, em = naptár-e-mail, rate, pack, hxr, bp, km, sup, min). Az elszámolási azonosító (el_id) változatlan,
+ * így a régi elszámolási sorok és lezárt hónapok ugyanarra az emberre mutatnak. A közös név a Kezelők fülön lévő név.
+ * Az összefésülés egyszeri (cp_kz_merge_run), mentéssel: cp_el_kezelok_bak_20261126 opció + <tábla>_bak20261126.
+ * ===================================================================== */
+function cp_kz_merged() { return get_option('cp_kz_merged') === '1' && get_option('cp_kz_db_ver') === CP_KZ_DB_VER; }
+function cp_kz_fee_keys() { return array('rate', 'pack', 'hxr', 'bp', 'km', 'sup', 'min'); }
+function cp_kz_el_list($reset = false) {
+	static $c = null;
+	if ($reset) { $c = null; return array(); }
+	if ($c !== null) { return $c; }
+	global $wpdb; $T = cp_kz_t();
+	$roles = function_exists('cp_el_roles') ? cp_el_roles() : array();
+	$out = array();
+	foreach ((array) $wpdb->get_results("SELECT id, name, kind, email, el_id, fees, active FROM $T WHERE kind <> 'jelentkezo' ORDER BY pos, name", ARRAY_A) as $r) {
+		$f = json_decode((string) $r['fees'], true); if (!is_array($f)) { $f = array(); }
+		$role = isset($f['role'], $roles[$f['role']]) ? $f['role'] : ($r['kind'] === 'host' ? 'host' : 'kezelo');
+		$eid = (string) $r['el_id'];
+		if ($eid === '') { $eid = 'kz' . (int) $r['id']; $wpdb->update($T, array('el_id' => $eid), array('id' => (int) $r['id'])); }
+		$x = array('id' => $eid, 'name' => (string) $r['name'], 'sm' => (string) (($f['sm'] ?? '') !== '' ? $f['sm'] : $r['name']), 'role' => $role, 'act' => (int) $r['active'], 'em' => (string) ($f['em'] ?? ''), 'kz' => (int) $r['id']);
+		foreach (cp_kz_fee_keys() as $k) { $x[$k] = isset($f[$k]) && $f[$k] !== '' ? (int) $f[$k] : (int) ($roles[$role][$k] ?? 0); }
+		$out[] = $x;
+	}
+	return $c = $out;
+}
+/* mentés az elszámolás „Kezelők és díjak” ablakából: $rec = EL-formátum; $id = el_id ('' = új) */
+function cp_kz_el_save($id, $rec) {
+	global $wpdb; $T = cp_kz_t();
+	$fees = array('role' => $rec['role'], 'sm' => $rec['sm'], 'em' => $rec['em'] ?? '');
+	foreach (cp_kz_fee_keys() as $k) { $fees[$k] = (int) $rec[$k]; }
+	$now = gmdate('Y-m-d H:i:s'); $who = mb_substr(cp_kz_who(), 0, 100);
+	$set = array('name' => $rec['name'], 'active' => (int) $rec['act'], 'fees' => wp_json_encode($fees, JSON_UNESCAPED_UNICODE), 'updated_at' => $now, 'updated_by' => $who);
+	if ($id !== '') {
+		$kid = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $T WHERE el_id = %s LIMIT 1", $id));
+		if (!$kid) { return new WP_Error('nf', 'Nem található kezelő.'); }
+		$wpdb->update($T, $set, array('id' => $kid));
+	} else {
+		$id = 'k' . strtolower(wp_generate_password(6, false, false));
+		$wpdb->insert($T, $set + array('el_id' => $id, 'kind' => $rec['role'] === 'host' ? 'host' : 'kezelo', 'created_at' => $now, 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T")));
+	}
+	cp_kz_el_list(true);
+	return $id;
+}
+/* egyszeri összefésülés; $go = false: csak jelent */
+function cp_kz_merge_run($go = false) {
+	global $wpdb; $T = cp_kz_t();
+	if (get_option('cp_kz_db_ver') !== CP_KZ_DB_VER) { return array('err' => 'A tábla még nincs frissítve.'); }
+	$el = get_option('cp_el_kezelok', array()); if (!is_array($el)) { $el = array(); }
+	$rows = (array) $wpdb->get_results("SELECT id, name, kind, el_id, active FROM $T", ARRAY_A);
+	$norm = function ($s) { $s = mb_strtolower(trim((string) $s)); return function_exists('remove_accents') ? remove_accents($s) : $s; };
+	$byEl = array(); foreach ($rows as $r) { if ($r['el_id'] !== '') { $byEl[$r['el_id']] = $r; } }
+	$egyeb = array('beugros', 'knukpps', 'kiv2snq', 'knbgn9n'); /* Beugrós, Fenyő, Henrik, fotós/videós */
+	$log = array(); $now = gmdate('Y-m-d H:i:s');
+	if ($go) {
+		if (get_option('cp_el_kezelok_bak_20261126') === false) { add_option('cp_el_kezelok_bak_20261126', $el, '', false); }
+		$bt = $T . '_bak20261126';
+		if (!$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $bt))) { $wpdb->query("CREATE TABLE $bt AS SELECT * FROM $T"); }
+	}
+	foreach ($el as $e) {
+		$eid = (string) $e['id'];
+		$fees = array('role' => $e['role'], 'sm' => (string) ($e['sm'] ?? ''), 'em' => (string) ($e['em'] ?? ''));
+		foreach (cp_kz_fee_keys() as $k) { $fees[$k] = (int) ($e[$k] ?? 0); }
+		$fj = wp_json_encode($fees, JSON_UNESCAPED_UNICODE);
+		$r = $byEl[$eid] ?? null;
+		if (!$r) { foreach ($rows as $x) { if ($x['el_id'] === '' && $x['kind'] !== 'jelentkezo' && $norm($x['name']) === $norm($e['name'])) { $r = $x; break; } } }
+		if ($r) {
+			$act = ((int) $r['active'] || !empty($e['act'])) ? 1 : 0;
+			$log[] = 'összekötve: ' . $e['name'] . ' → ' . $r['name'] . ' (#' . $r['id'] . ')' . ($act !== (int) $r['active'] ? ', aktív lett' : '');
+			if ($go) { $wpdb->update($T, array('el_id' => $eid, 'fees' => $fj, 'active' => $act, 'updated_at' => $now, 'updated_by' => 'összefésülés'), array('id' => (int) $r['id'])); }
+		} else {
+			$kind = in_array($eid, $egyeb, true) ? 'egyeb' : ($e['role'] === 'host' ? 'host' : 'kezelo');
+			$log[] = 'új a Kezelők fülön: ' . $e['name'] . ' (' . $kind . ')';
+			if ($go) { $wpdb->insert($T, array('name' => (string) $e['name'], 'kind' => $kind, 'el_id' => $eid, 'fees' => $fj, 'active' => empty($e['act']) ? 0 : 1, 'created_at' => $now, 'updated_at' => $now, 'updated_by' => 'összefésülés', 'pos' => (int) $wpdb->get_var("SELECT COALESCE(MAX(pos), 0) + 1 FROM $T"))); }
+		}
+	}
+	$elIds = array_map(function ($e) { return (string) $e['id']; }, $el);
+	foreach ($rows as $r) {
+		if ($r['kind'] === 'jelentkezo') { continue; }
+		if ($r['el_id'] !== '' && in_array($r['el_id'], $elIds, true)) { continue; }
+		$matched = false; foreach ($el as $e) { if ($norm($e['name']) === $norm($r['name'])) { $matched = true; } }
+		if ($matched) { continue; }
+		$log[] = 'alapdíjat kap (' . ($r['kind'] === 'host' ? 'host' : 'kezelő') . '): ' . $r['name'] . ((int) $r['active'] ? '' : ' (inaktív)');
+		if ($go) { $wpdb->update($T, array('el_id' => 'kz' . (int) $r['id'], 'fees' => wp_json_encode(array('role' => $r['kind'] === 'host' ? 'host' : 'kezelo', 'sm' => (string) $r['name']), JSON_UNESCAPED_UNICODE)), array('id' => (int) $r['id'])); }
+	}
+	if ($go) { update_option('cp_kz_merged', '1', true); cp_kz_el_list(true); }
+	return array('log' => $log, 'go' => $go ? 1 : 0);
+}
+

@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.371');
+define('CP_PANEL_VER', '2.9.372');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -1667,6 +1667,7 @@ function cp_el_seed() {
 }
 
 function cp_el_kez_all() {
+	if (function_exists('cp_kz_merged') && cp_kz_merged()) { return cp_kz_el_list(); } /* v2.9.372: egy adatbázis – a Kezelők fül táblája */
 	$l = get_option(CP_EL_KEZ, null);
 	if (!is_array($l) || !$l) {
 		$l = cp_el_seed();
@@ -2380,6 +2381,11 @@ function cp_el_ajax_kez() {
 	$id = sanitize_key(cp_el_s($in, 'id'));
 	foreach ($list as $k) {
 		if ($k['id'] !== $id && cp_panel_lc($k['name']) === cp_panel_lc($name)) { cp_el_err('Már van ilyen nevű kezelő.'); }
+	}
+	if (function_exists('cp_kz_merged') && cp_kz_merged()) {
+		$nid = cp_kz_el_save($id, $rec);
+		if (is_wp_error($nid)) { cp_el_err($nid->get_error_message(), 404); }
+		wp_send_json_success(array('kez' => cp_el_kez_all(), 'id' => $nid));
 	}
 	if ($id === '') {
 		$id = 'k' . strtolower(wp_generate_password(6, false, false));
