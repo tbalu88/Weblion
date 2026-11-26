@@ -297,7 +297,8 @@
 				: '<div class="cpx-empty">Ebben a csoportban nincs eltérés.</div>') + '</div>';
 		m.innerHTML = h + '</div>'; bind(); bindDiff(m);
 		/* v2.9.386: az átvételi sáv lebeg (követi a görgetést), a panel ragadós fejléce alatt */
-		const tp = document.querySelector('.cpx-top'); m.style.setProperty('--gc-st', ((tp && getComputedStyle(tp).position === 'sticky' ? tp.offsetHeight : 0) + 8) + 'px');
+		/* v2.9.387: csak a vízszintes (felső) fejléc magassága számít – az oldalsávos elrendezésben a .cpx-top a teljes magas oldalsáv, az eddig a képernyő alá tolta a sávot */
+		const tp = document.querySelector('.cpx-top'), tr = tp ? tp.getBoundingClientRect() : null; const hh = tr && getComputedStyle(tp).position === 'sticky' && tr.width > window.innerWidth / 2 && tr.height < 200 ? tr.height : 0; m.style.setProperty('--gc-st', (hh + 8) + 'px');
 	}
 	function bindDiff(m) {
 		m.querySelectorAll('[data-df]').forEach(b => b.addEventListener('click', () => { S.dF = b.dataset.df; draw(); }));
