@@ -81,6 +81,7 @@ function cp_gcal_ajax_deal_sync() {
 		$body = cp_gcal_body($p);
 		if ($hit) {
 			if (function_exists('cp_gcal_snap')) { cp_gcal_snap($hit, 'gombbal frissítve'); } /* v2.9.382 */
+			if (function_exists('cp_gcal_keep_manual')) { $body['description'] = cp_gcal_keep_manual($hit['raw'] ?? '', $p['desc']); } /* v2.9.383: a gomb is megtartja a kézzel beírt sorokat */
 			$body['summary'] = cp_gcal_pen($hit['t']) ? CP_GCAL_PEN . cp_gcal_unpen($p['title']) : $p['title'];
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($hit['id']), array(), $body);
 			if (is_wp_error($r)) { cp_el_err('Nem sikerült frissíteni: ' . $r->get_error_message(), 502); }
