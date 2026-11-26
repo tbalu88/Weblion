@@ -593,6 +593,7 @@ a{color:var(--ot)}
 @media (max-width:760px){.tw-wrap{max-height:none}.tw-badge>b{font-size:20px}}
 @media print{.tw-badge,.tw-aam .tw-acts,.tw-t .tw-acts{display:none!important}}
 .tw-at small.tw-pm{color:#8A5A10;font-weight:600}
+.tw-at .tw-ct{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:0 6px;margin-left:2px}.tw-at .tw-ct.ev{background:#E3F4EB;color:#1F7A50}.tw-at .tw-ct.kft{background:#EEF4FF;color:#2F4A7A}
 /* v1.9.6: jobban elkülönülő tárca-oszlopok */
 .tw-t th{border-left:1px solid rgba(255,255,255,.14)}
 .tw-t th:first-child{border-left:0}

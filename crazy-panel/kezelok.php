@@ -54,7 +54,7 @@ function cp_kz_ok() { return get_option('cp_kz_db_ver') === CP_KZ_DB_VER && func
 function cp_kz_cfg() {
 	$on = cp_kz_ok() && function_exists('cp_panel_can') && cp_panel_can('kezelok');
 	$adm = function_exists('cp_panel_is_admin') && cp_panel_is_admin();
-	return array('on' => $on, 'merged' => cp_kz_merged() ? 1 : 0, 'admin' => $adm, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'tr' => 1, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
+	return array('on' => $on, 'merged' => cp_kz_merged() ? 1 : 0, 'admin' => $adm, 'sensok' => cp_kz_sens_ok() ? 1 : 0, 'sens' => cp_kz_sens_keys(), 'kinds' => cp_kz_kinds(), 'skills' => cp_kz_skills(), 'procs' => cp_kz_procs(), 'iv' => function_exists('cp_iv_ok') && cp_iv_ok() ? 1 : 0, 'tr' => 1, 'csv' => $on && $adm ? admin_url('admin-ajax.php?action=cp_kz_csv&n=' . wp_create_nonce('cp_kz_csv')) : '');
 }
 function cp_kz_auth($admin = false) {
 	cp_el_auth();
@@ -62,6 +62,8 @@ function cp_kz_auth($admin = false) {
 	if ($admin) { cp_admin_need(); }
 }
 function cp_kz_sens_get($row) { $j = json_decode((string) cp_st_dec((string) $row['sens']), true); return is_array($j) ? $j : array(); }
+/* v2.9.377: a személyes azonosítók megtekintése / szerkesztése: admin, vagy akinek a Láthatóságban engedélyezve van („Kezelők személyes adatai”) */
+function cp_kz_sens_ok() { return (function_exists('cp_panel_is_admin') && cp_panel_is_admin()) || (function_exists('cp_panel_can') && cp_panel_can('kzszem')); }
 function cp_kz_who() { return function_exists('cp_panel_who') ? cp_panel_who() : ''; }
 
 /* a Kezelői elszámolás kezelőjének azonosítója név alapján (ékezet / sorrend nélkül, vagy keresztnév + vezetéknév kezdőbetűje) */
@@ -155,7 +157,7 @@ add_action('wp_ajax_cp_kz_list', 'cp_kz_ajax_list');
 function cp_kz_ajax_list() {
 	cp_kz_auth();
 	global $wpdb;
-	$reveal = !empty($_POST['reveal']) && cp_panel_is_admin();
+	$reveal = !empty($_POST['reveal']) && cp_kz_sens_ok();
 	$rows = (array) $wpdb->get_results('SELECT * FROM ' . cp_kz_t() . ' ORDER BY pos, name', ARRAY_A);
 	if ($reveal && function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'kz_reveal', 'Kezelők személyes adatainak megtekintése', '', count($rows) . ' kezelő'); }
 	$el = function_exists('cp_el_kez_all') ? array_map(function ($k) { return array('id' => (string) $k['id'], 'name' => $k['name'], 'role' => $k['role']); }, cp_el_kez_all()) : array();
@@ -200,7 +202,7 @@ function cp_kz_ajax_save() {
 	/* személyes azonosítók: csak admin */
 	$sk = array_intersect(array_keys($f), array_keys(cp_kz_sens_keys()));
 	if ($sk) {
-		if (!cp_panel_is_admin()) { cp_el_err('A személyes adatokat csak admin módosíthatja.', 403); }
+		if (!cp_kz_sens_ok()) { cp_el_err('A személyes adatokat csak admin vagy erre jogosult felhasználó módosíthatja (Beállítások → Láthatóság → „Kezelők személyes adatai”).', 403); }
 		$cur = $row ? cp_kz_sens_get($row) : array();
 		foreach ($sk as $k) { $v = mb_substr(trim(sanitize_text_field((string) $f[$k])), 0, $k === 'address' ? 255 : 120); if ($v === '') { unset($cur[$k]); } else { $cur[$k] = $v; } }
 		$set['sens'] = $cur ? cp_st_enc(wp_json_encode($cur, JSON_UNESCAPED_UNICODE)) : '';
@@ -217,7 +219,7 @@ function cp_kz_ajax_save() {
 	}
 	if (function_exists('cp_audit_add')) { $L = cp_kz_sens_keys() + array('name' => 'név', 'email' => 'e-mail', 'phone' => 'telefon', 'plate' => 'rendszám', 'note' => 'megjegyzés', 'avail' => 'elérhetőség', 'flag' => 'jelölés', 'active' => 'aktív', 'el_id' => 'elszámolás', 'kind' => 'csoport', 'car' => 'autó típusa', 'has_car' => 'autó', 'skills' => 'tudás', 'proc' => 'felvételi lépések', 'extra' => 'egyéb'); cp_audit_add('rendszer', 'kz_save', 'Kezelő adatainak módosítása', 'kezelo:' . $id, ($row ? $row['name'] : ($set['name'] ?? '')) . ': ' . implode(', ', array_map(function ($k) use ($L) { return $L[$k] ?? $k; }, array_keys(array_diff_key($f, array('note_base' => 1)))))); }
 	$r = $wpdb->get_row($wpdb->prepare("SELECT * FROM $T WHERE id = %d", $id), ARRAY_A);
-	wp_send_json_success(array('row' => cp_kz_out($r, cp_panel_is_admin() && !empty($_POST['reveal']))));
+	wp_send_json_success(array('row' => cp_kz_out($r, cp_kz_sens_ok() && !empty($_POST['reveal']))));
 }
 /* v2.6.3: sorrend (húzással) – a kapott azonosítók sorrendjében */
 add_action('wp_ajax_nopriv_cp_kz_order', 'cp_kz_ajax_order');

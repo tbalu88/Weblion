@@ -40,10 +40,10 @@
 		if (sens && !S.reveal) {
 			const has = (x.have || []).includes(k);
 			/* v2.9.167: kattintásra (adminnak) megjelennek a személyes adatok, és a mező szerkeszthető */
-			return '<td class="kz-s ' + (has ? 'ok' : 'no') + (K.admin ? ' kz-srev' : '') + '"' + (K.admin ? ' data-srev role="button" tabindex="0"' : '') + ' title="' + (K.admin ? (has ? 'Megadva' : 'Hiányzik') + ' – kattints a szerkesztéshez (a személyes adatok megjelennek, naplózva)' : (has ? 'Megadva – csak admin láthatja és módosíthatja' : 'Hiányzik – csak admin adhatja meg')) + '">' + (has ? '•••' : 'hiányzik') + '</td>';
+			return '<td class="kz-s ' + (has ? 'ok' : 'no') + (K.sensok ? ' kz-srev' : '') + '"' + (K.sensok ? ' data-srev role="button" tabindex="0"' : '') + ' title="' + (K.sensok ? (has ? 'Megadva' : 'Hiányzik') + ' – kattints a szerkesztéshez (a személyes adatok megjelennek, naplózva)' : (has ? 'Megadva – csak admin láthatja és módosíthatja' : 'Hiányzik – csak admin adhatja meg')) + '">' + (has ? '•••' : 'hiányzik') + '</td>';
 		}
 		const v = sens ? ((x.sens || {})[k] || '') : (x[k] || '');
-		const ro = sens && !K.admin;
+		const ro = sens && !K.sensok;
 		return '<td' + (sens ? ' class="kz-sv"' : '') + '><input type="' + type + '" data-f="' + k + '" value="' + esc(v) + '"' + (ro ? ' readonly' : '') + ' aria-label="' + esc(c[1]) + '"' + (k === 'name' ? ' required' : '') + '></td>';
 	}
 	function draw() {
@@ -620,7 +620,7 @@
 		if (IV.changed) { IV.changed = false; keep = false; }
 		main.innerHTML = '<div class="kz">' + vsw() + '<div class="kz-h"><div class="crm-seg kz-seg"></div><input type="search" data-q placeholder="Keresés: név, e-mail, telefon, rendszám" value="' + esc(S.q) + '" aria-label="Keresés">' +
 			'<label class="crm-chk"><input type="checkbox" data-inact' + (S.inact ? ' checked' : '') + '> Inaktívak is</label>' +
-			(K.admin ? '<button type="button" class="cpx-btn ghost" data-rev>' + (S.reveal ? '🔒 Személyes adatok elrejtése' : '🔓 Személyes adatok megjelenítése') + '</button>' + (K.csv ? '<a class="cpx-btn ghost" href="' + esc(K.csv + '&t=' + encodeURIComponent(C.t || '')) + '" title="Minden adat letöltése (CSV) – naplózva">⬇ CSV</a>' : '') : '') +
+			(K.sensok ? '<button type="button" class="cpx-btn ghost" data-rev>' + (S.reveal ? '🔒 Személyes adatok elrejtése' : '🔓 Személyes adatok megjelenítése') + '</button>' + (K.csv ? '<a class="cpx-btn ghost" href="' + esc(K.csv + '&t=' + encodeURIComponent(C.t || '')) + '" title="Minden adat letöltése (CSV) – naplózva">⬇ CSV</a>' : '') : '') +
 			(S.edit ? '<button type="button" class="cpx-btn ghost" data-new>+ Új</button>' : '') + '<button type="button" class="cpx-btn' + (S.edit ? ' kz-on' : '') + '" data-edit>' + (S.edit ? '✓ Kész' : '✎ Szerkesztés') + '</button></div>' +
 			'<p class="kz-help">' + (S.edit ? '<b>Szerkesztés:</b> kattints a mezőbe, írd át – Enterre vagy máshova kattintva mentődik. A pipák is itt állíthatók. Ha végeztél: <b>✓ Kész</b>.' : 'A lista csak olvasható. Módosításhoz: <b>✎ Szerkesztés</b>.') + '</p><div class="kz-body"><div class="cpx-empty">Betöltés…</div></div></div>';
 		bindVsw(main);
