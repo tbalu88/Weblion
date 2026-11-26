@@ -13,6 +13,8 @@
 	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 	const S = { boards: null, mineN: 0, cur: null, data: null, q: '', onlyMine: false, arch: false, main: null, err: '', seq: 0 };
 	try { S.hideActs = localStorage.getItem('cpkb_hideacts') === '1'; } catch (e) { /* privát mód */ }
+	S.pFold = []; S.pOrd = [];
+	try { const v = JSON.parse(localStorage.getItem('cpkb_pcol') || '{}'); if (Array.isArray(v.fold)) S.pFold = v.fold.map(Number).filter(Boolean); if (Array.isArray(v.ord)) S.pOrd = v.ord.map(Number).filter(Boolean); } catch (e) { /* privát mód */ }
 	try { const v = localStorage.getItem('cpkb_cur'); if (v) S.cur = v === 'mine' || v === 'people' ? v : Number(v); } catch (e) { /* privát mód */ }
 
 	async function post(action, params) {
@@ -322,16 +324,54 @@
 		}
 		const x = S.pData, q = fold(S.q);
 		const vis = c => !q || fold(c.title + ' ' + c.bn + ' ' + c.ln).includes(q);
-		const order = PEOPLE.slice().sort((a, b) => (a.id === ME ? -1 : b.id === ME ? 1 : a.n.localeCompare(b.n, 'hu')));
-		body.innerHTML = '<p class="kb-hint">Itt mindenki látja, kinek mi a teendője (a csapattáblákról). Új teendőt bárki adhat bárkinek az oszlop alján; a kártyát másik kolléga oszlopába húzva átadod neki. A saját (lakatos) táblák kártyái itt nem látszanak.</p>' +
+		/* sorrend: a saját (húzással beállított) sorrend, az újak a végén; alapból én elöl, utána ABC */
+		const def = PEOPLE.slice().sort((a, b) => (a.id === ME ? -1 : b.id === ME ? 1 : a.n.localeCompare(b.n, 'hu')));
+		const pos = id => { const i = S.pOrd.indexOf(id); return i < 0 ? 1e6 + def.findIndex(p => p.id === id) : i; };
+		const order = def.slice().sort((a, b) => pos(a.id) - pos(b.id));
+		body.innerHTML = '<p class="kb-hint">Itt mindenki látja, kinek mi a teendője (a csapattáblákról). Új teendőt bárki adhat bárkinek az oszlop alján; a kártyát másik kolléga oszlopába húzva átadod neki. Az oszlopot a ‹ gombbal becsukhatod, a fejlécénél fogva pedig áthelyezheted (ezt a böngésződ megjegyzi). A saját (lakatos) táblák kártyái itt nem látszanak.</p>' +
 			'<div class="kb-lists">' + order.map(p => {
-				const cs = x.cards.filter(c => c.as.includes(p.id));
-				return '<section class="kb-list person' + (p.id === ME ? ' me' : '') + '" data-person="' + p.id + '"><header>' + av(p.id) + '<h3>' + esc(p.n) + (p.id === ME ? ' (te)' : '') + '</h3><small>' + cs.filter(c => !c.done).length + '</small></header>' +
+				const cs = x.cards.filter(c => c.as.includes(p.id)), open = cs.filter(c => !c.done).length;
+				if (S.pFold.includes(p.id)) return '<section class="kb-list person folded' + (p.id === ME ? ' me' : '') + '" data-person="' + p.id + '"><button type="button" class="kb-unfold" data-pfold="' + p.id + '" data-pdrop="' + p.id + '" draggable="true" title="Oszlop kinyitása (húzva áthelyezhető)">' + av(p.id) + '<span>' + esc(p.n) + (p.id === ME ? ' (te)' : '') + '</span><b>' + open + '</b></button></section>';
+				return '<section class="kb-list person' + (p.id === ME ? ' me' : '') + '" data-person="' + p.id + '"><header class="kb-phead" draggable="true" title="Húzd az oszlop áthelyezéséhez">' + av(p.id) + '<h3>' + esc(p.n) + (p.id === ME ? ' (te)' : '') + '</h3><small>' + open + '</small><button type="button" class="kb-tb kb-pfold" data-pfold="' + p.id + '" title="Oszlop összecsukása" aria-label="Összecsukás: ' + esc(p.n) + '">‹</button></header>' +
 					'<div class="kb-cards" data-pdrop="' + p.id + '">' + cs.filter(vis).map(c => tile(c, x.links, 'people').replace('draggable="false"', 'draggable="true"')).join('') + '</div>' +
 					'<footer><button type="button" class="kb-addc" data-padd>' + I.plus + 'Teendő ' + esc(p.id === ME ? 'magamnak' : p.n.split(' ').slice(-1)[0] + ' részére') + '</button></footer></section>';
 			}).join('') + '</div>';
 		body.querySelectorAll('[data-card]').forEach(el => el.addEventListener('click', () => { if (!el._dragged) openCard(Number(el.dataset.card)); }));
 		body.querySelectorAll('[data-padd]').forEach(b => b.addEventListener('click', () => personAdd(b.closest('.kb-list'))));
+		/* oszlop összecsukása / kinyitása (böngészőnként megjegyezve, mint a Deal-eknél) */
+		body.querySelectorAll('[data-pfold]').forEach(b => b.addEventListener('click', e => {
+			e.stopPropagation(); if (b._dragged) return;
+			const id = Number(b.dataset.pfold); S.pFold = S.pFold.includes(id) ? S.pFold.filter(v => v !== id) : S.pFold.concat([id]);
+			pSave(); drawPeople();
+		}));
+		/* oszlopok átrendezése húzással (a fejlécnél / az összecsukott sávnál fogva) */
+		let col = null;
+		const lists = body.querySelector('.kb-lists');
+		const mark = () => lists.querySelectorAll('.kb-ins').forEach(z => z.classList.remove('kb-ins', 'after'));
+		body.querySelectorAll('.kb-phead, .kb-unfold').forEach(h => {
+			h.addEventListener('dragstart', e => {
+				if (e.target.closest && e.target.closest('.kb-card')) return;
+				col = h.closest('[data-person]'); h._dragged = true; e.dataTransfer.effectAllowed = 'move';
+				try { e.dataTransfer.setData('text/plain', 'col'); } catch (er) { /* régi böngésző */ }
+				setTimeout(() => col && col.classList.add('kb-coldrag'), 0);
+			});
+			h.addEventListener('dragend', () => { if (col) col.classList.remove('kb-coldrag'); col = null; mark(); setTimeout(() => { h._dragged = false; }, 50); });
+		});
+		body.querySelectorAll('.kb-list.person').forEach(sec => {
+			sec.addEventListener('dragover', e => {
+				if (!col || sec === col) return;
+				e.preventDefault(); mark();
+				const r = sec.getBoundingClientRect(); sec.classList.add('kb-ins'); if (e.clientX > r.left + r.width / 2) sec.classList.add('after');
+			});
+			sec.addEventListener('drop', e => {
+				if (!col || sec === col) return;
+				e.preventDefault();
+				const after = sec.classList.contains('after'); mark();
+				if (after) sec.after(col); else sec.before(col);
+				S.pOrd = Array.from(lists.querySelectorAll('[data-person]')).map(z => Number(z.dataset.person));
+				pSave(); col.classList.remove('kb-coldrag'); col = null;
+			});
+		});
 		/* húzás másik kolléga oszlopába = átadás (a felelősök között a régi helyére az új kerül) */
 		let drag = null, from = 0;
 		body.querySelectorAll('.kb-card[draggable="true"]').forEach(el => {
@@ -353,6 +393,7 @@
 			});
 		});
 	}
+	function pSave() { try { localStorage.setItem('cpkb_pcol', JSON.stringify({ fold: S.pFold, ord: S.pOrd })); } catch (e) { /* privát mód */ } }
 	function personAdd(sec) {
 		const uid = Number(sec.dataset.person), f = sec.querySelector('footer');
 		f.innerHTML = '<div class="kb-newc"><textarea rows="2" placeholder="Mi a teendő? (Enter: mentés, Esc: mégse)"></textarea><div class="kb-pdue"><input type="date" title="Határidő (nem kötelező)"><button type="button" class="cpx-btn" data-save>Kiosztás</button><button type="button" class="kb-tb" data-cancel>' + I.x + '</button></div></div>';

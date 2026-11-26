@@ -170,6 +170,23 @@
 .kb-list.person header{gap:8px}
 .kb-list.person header .kb-av{margin:0;border:0;width:26px;height:26px}
 .kb-list.person.me{background:#E9EEF9}
+/* Kollégák: összecsukás és oszlop-átrendezés */
+.kb-phead{cursor:grab}
+.kb-phead:active{cursor:grabbing}
+.kb-pfold{margin-left:2px;font-size:15px;line-height:1;opacity:.55}
+.kb-phead:hover .kb-pfold,.kb-pfold:focus-visible{opacity:1}
+.kb-list.person.folded{flex:0 0 46px;max-width:46px;background:none}
+.kb-unfold{width:46px;min-height:240px;border:1.5px dashed #DDD7CE;background:#EFEDE9;border-radius:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;color:var(--ink)}
+.kb-list.person.me .kb-unfold{background:#E9EEF9}
+.kb-unfold .kb-av{margin:0;border:0;width:26px;height:26px;flex:0 0 auto}
+.kb-unfold>span{writing-mode:vertical-rl;transform:rotate(180deg);font:600 13px Inter,sans-serif;white-space:nowrap}
+.kb-unfold b{font-size:12px;background:#fff;border-radius:999px;padding:2px 7px;color:var(--mu);font-weight:600}
+.kb-unfold:hover{border-color:var(--o)}
+.kb-unfold.over{background:#F7DEC8;border-color:var(--o)}
+.kb-list.person.kb-coldrag{opacity:.4}
+.kb-list.person.kb-ins{box-shadow:-3px 0 0 0 var(--o)}
+.kb-list.person.kb-ins.after{box-shadow:3px 0 0 0 var(--o)}
+@media (prefers-reduced-motion:no-preference){.kb-list.person{transition:opacity .15s ease}}
 .kb-pdue{display:flex;gap:6px;align-items:center;margin-top:6px}
 .kb-pdue input[type=date]{height:30px;border:1.5px solid var(--li);border-radius:8px;padding:0 6px;font-size:12.5px;flex:1;min-width:0}
 /* v1.40: gyors felvétel – kinek */
