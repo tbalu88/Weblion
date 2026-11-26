@@ -245,9 +245,7 @@ function cp_crm_row($m, $r, $via) {
 		/* csak a fő pipeline (a „Todo” és az „Ügynökség megkeresések” nem kell) */
 		$main = cp_panel_lc(cp_panel_opts()['pipeline']);
 		if ($row['pipeline'] !== '' && $main !== '' && cp_panel_lc($row['pipeline']) !== $main) { return null; }
-		$pk = '';
-		foreach (array('pkg_fix', 'pkg_v2', 'pkg_old', 'spinner_pkg', 'melange_pkg') as $k) { if ($row[$k] !== '') { $pk = $row[$k]; break; } }
-		$row['package'] = mb_substr(trim(preg_replace('/\s*\|\s*[\d.\s]+Ft\s*$/u', '', $pk)), 0, 120);
+		$row['package'] = cp_crm_pkg($row);
 		if (function_exists('cp_dm_row')) { cp_dm_row($row); } /* v2.9.222: „csak hónap” dátum */
 	}
 	$row['raw'] = wp_json_encode($r, JSON_UNESCAPED_UNICODE);
@@ -276,6 +274,21 @@ function cp_crm_users($refresh = false) {
 	return $list;
 }
 
+/* v2.9.385: a deal csomagja. A szelfigép-csomag mezőit (Választott csomag / csomag2 / _old) a Salesmate-űrlap Spinner-kérésnél is
+   kitölti (pl. „Medium - 4 óra - Korlátlan”); ha a szolgáltatások között nincs szelfigép / hibrid, ezek nem számítanak. */
+function cp_crm_pkg($row) {
+	$sv = array();
+	foreach (array('services_ec', 'services_cp', 'services_more', 'service') as $f) {
+		foreach (explode(' | ', (string) ($row[$f] ?? '')) as $v) { if (trim($v) === '') { continue; } $sv[] = $v; if (function_exists('cp_svc_map_one')) { foreach (cp_svc_map_one($v)[0] as $x) { $sv[] = $x; } } }
+	}
+	$noSel = $sv && !preg_grep('/^(szelfigép|hibrid)|szelfig/iu', $sv);
+	$pk = '';
+	foreach (array('pkg_fix', 'pkg_v2', 'pkg_old', 'spinner_pkg', 'melange_pkg') as $k) {
+		if ($noSel && in_array($k, array('pkg_fix', 'pkg_v2', 'pkg_old'), true)) { continue; }
+		if ((string) ($row[$k] ?? '') !== '') { $pk = (string) $row[$k]; break; }
+	}
+	return mb_substr(trim(preg_replace('/\s*\|\s*[\d.\s]+Ft\s*$/u', '', $pk)), 0, 120);
+}
 function cp_crm_user_name($id) {
 	if (!$id) { return ''; }
 	$l = cp_crm_users();
