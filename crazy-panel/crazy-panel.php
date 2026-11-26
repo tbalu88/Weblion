@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.383');
+define('CP_PANEL_VER', '2.9.384');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3893,6 +3893,7 @@ require_once __DIR__ . '/monitor.php'; /* v2.9.302: tartalék szerver és AI-kre
 require_once __DIR__ . '/portal-link.php';
 require_once __DIR__ . '/dashboard.php';
 require_once __DIR__ . '/gcal.php';
+require_once __DIR__ . '/gcal-ver.php';
 require_once __DIR__ . '/billing.php';
 require_once __DIR__ . '/contract.php';
 require_once __DIR__ . '/mail-html.php';

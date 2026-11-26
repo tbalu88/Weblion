@@ -77,9 +77,10 @@
 		const [y, mo] = S.month.split('-').map(Number);
 		const v = curView();
 		let h = '<div class="gc"><div class="gc-top"><div class="gc-nav"><button type="button" class="cpx-btn ghost" data-nav="-1" aria-label="Előző hónap">‹</button><h2>' + y + '. ' + HU_M[mo - 1] + '</h2><button type="button" class="cpx-btn ghost" data-nav="1" aria-label="Következő hónap">›</button><button type="button" class="cpx-btn ghost" data-nav="0">Ma</button></div>' +
-			'<div class="gc-tools"><div class="gc-seg"><button type="button" data-v="month" class="' + (v === 'month' ? 'on' : '') + '">Hónap</button><button type="button" data-v="list" class="' + (v === 'list' ? 'on' : '') + '">Lista</button><button type="button" data-v="diff" class="' + (v === 'diff' ? 'on' : '') + '" title="Eltérések a naptár és a panel között, mától az év végéig">Eltérések</button></div>' +
+			'<div class="gc-tools"><div class="gc-seg"><button type="button" data-v="month" class="' + (v === 'month' ? 'on' : '') + '">Hónap</button><button type="button" data-v="list" class="' + (v === 'list' ? 'on' : '') + '">Lista</button><button type="button" data-v="diff" class="' + (v === 'diff' ? 'on' : '') + '" title="Eltérések a naptár és a panel között, mától az év végéig">Eltérések</button><button type="button" data-v="hist" class="' + (v === 'hist' ? 'on' : '') + '" title="A bejegyzések mentett változatai, visszaállítás">Előzmények</button></div>' +
 			'<button type="button" class="cpx-btn ghost" data-ref title="Frissítés a Google Naptárból">' + ico('refresh') + '<span>Frissítés</span></button></div></div>';
 		if (v === 'diff') { drawDiff(m, h); return; }
+		if (v === 'hist') { drawHist(m, h); return; }
 		if (S.x && S.x.ok === false) {
 			const adm = C.ajax ? String(C.ajax).replace(/admin-ajax\.php.*$/, 'options-general.php?page=cp-gcal') : '';
 			h += '<div class="gc-setup"><h3>A Google Naptár még nincs bekötve</h3><p>A panel az EventCrazy naptárat egy Google „szolgáltatásfiókkal” éri el. A bekötés egyszeri, kb. 10 perc.</p>' +
@@ -158,11 +159,12 @@
 			(e.g && e.g.length ? '<div class="gc-g"><b>Kezelők, meghívottak</b><ul>' + e.g.map(g => '<li>' + esc(g.n || g.e) + ' <small>' + esc(st[g.st] || '') + '</small></li>').join('') + '</ul></div>' : '') +
 			(e.desc ? '<div class="gc-desc">' + e.desc + '</div>' : '<p class="gc-sm">Nincs leírás.</p>') +
 			(e.deal ? '<details class="gc-plan" data-plan="' + e.deal + '" data-pday="' + (e.dof ? esc(String(e.s).slice(0, 10)) : '') + '"><summary>Mit írna a panel ebbe a bejegyzésbe? (az átállás után)</summary><div class="gc-pb">Betöltés…</div></details>' : '') +
-			'</div><footer>' + (e.link ? '<a class="cpx-btn ghost" href="' + esc(e.link) + '" target="_blank" rel="noopener">Megnyitás a Google Naptárban ↗</a>' : '') + '</footer></div>';
+			'</div><footer><button type="button" class="cpx-btn ghost" data-hist>Előzmények</button>' + (e.link ? '<a class="cpx-btn ghost" href="' + esc(e.link) + '" target="_blank" rel="noopener">Megnyitás a Google Naptárban ↗</a>' : '') + '</footer></div>';
 		document.body.appendChild(w);
 		w.querySelectorAll('.gc-desc a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
 		w.querySelectorAll('[data-x]').forEach(b => b.addEventListener('click', closeModal));
 		w.querySelectorAll('[data-deal]').forEach(b => b.addEventListener('click', () => openDeal(b.dataset.deal)));
+		w.querySelectorAll('[data-hist]').forEach(b => b.addEventListener('click', () => openHist(e.id, e.t)));
 		const pl = w.querySelector('[data-plan]');
 		if (pl) pl.addEventListener('toggle', async () => {
 			if (!pl.open || pl.dataset.done) return;
@@ -173,6 +175,94 @@
 		});
 		document.addEventListener('keydown', onKey);
 	}
+
+
+	/* ------------------------------------------------------------ v2.9.384: változatok (mentés minden módosítás után) és visszaállítás */
+	const fts = ts => { if (!ts) return ''; const d = new Date(ts * 1000), y = d.getFullYear() !== new Date().getFullYear(); return (y ? d.getFullYear() + '. ' : '') + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) + '. ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+	const unpen = t => String(t || '').replace(/^\s*(\[ceruzás\]|✏️?)\s*/i, '').trim();
+	const vWhen = v => (v.ad ? String(v.s).slice(0, 10).replace(/-/g, '.') + '. egész nap' + (v.e && v.e.slice(0, 10) !== v.s.slice(0, 10) ? ' – ' + v.e.slice(0, 10).replace(/-/g, '.') + '.' : '') : String(v.s).slice(0, 10).replace(/-/g, '.') + '. ' + hm(v.s) + (hm(v.e) ? '–' + hm(v.e) : ''));
+	const SRC = { 'kézi módosítás': 'man', 'panel írta': 'pan', 'első mentés': 'first', 'visszaállítva': 'rest', 'tömeges visszaállítás': 'rest', 'visszaállítás előtt': 'first', 'törölve a naptárból': 'del', 'panel törölte': 'del', 'újra létrehozva': 'rest' };
+	const srcChip = v => '<span class="gv-src ' + (SRC[v.src] || 'pan') + '">' + esc(v.src) + '</span>' + (v.who ? ' <small class="gv-who">' + esc(v.who) + '</small>' : '');
+	function vChanges(v, o) {
+		if (!o) return [];
+		const c = [];
+		if (v.del !== o.del) return [v.del ? 'törölve' : 'újra megvan'];
+		if (unpen(v.t) !== unpen(o.t)) c.push('cím');
+		if (v.s !== o.s || v.e !== o.e || v.ad !== o.ad) c.push('időpont');
+		if ((v.loc || '').trim() !== (o.loc || '').trim()) c.push('helyszín');
+		if ((v.lines || []).join('\n') !== (o.lines || []).join('\n')) c.push('leírás');
+		return c;
+	}
+	function vBody(v, o) {
+		const cur = v.lines || [], old = o ? (o.lines || []) : null;
+		const oset = new Set(old || []), nset = new Set(cur);
+		const rows = cur.map(l => '<li' + (old && !oset.has(l) ? ' class="add"' : '') + '>' + esc(l) + '</li>').concat(old ? old.filter(l => !nset.has(l)).map(l => '<li class="rm">' + esc(l) + '</li>') : []);
+		return '<p><b>Cím:</b> ' + esc(v.t) + '</p><p><b>Időpont:</b> ' + esc(vWhen(v)) + '</p>' + (v.loc ? '<p><b>Helyszín:</b> ' + esc(v.loc) + '</p>' : '') +
+			(rows.length ? '<ul class="gv-lines">' + rows.join('') + '</ul>' + (old ? '<p class="gc-sm"><span class="gv-lg add">zöld: új sor</span> <span class="gv-lg rm">áthúzott: törölt sor</span> (az előző változathoz képest)</p>' : '') : '<p class="gc-sm">Nincs leírás.</p>');
+	}
+	async function openHist(eid, title) {
+		closeModal();
+		const w = document.createElement('div');
+		w.id = 'gc-mod'; w.className = 'gc-mod';
+		w.innerHTML = '<div class="gc-bg" data-x></div><div class="gc-card" role="dialog" aria-modal="true" aria-label="Előzmények"><header><h3>Előzmények: ' + esc(title || '') + '</h3><button type="button" class="gc-x" data-x aria-label="Bezárás">✕</button></header><div class="gc-body"><p class="gc-sm">Betöltés…</p></div><footer></footer></div>';
+		document.body.appendChild(w);
+		w.querySelectorAll('[data-x]').forEach(b => b.addEventListener('click', closeModal));
+		document.addEventListener('keydown', onKey);
+		const body = w.querySelector('.gc-body');
+		let x;
+		try { x = await post('cp_gv_hist', { eid }); } catch (err) { body.innerHTML = '<p class="cpx-empty err">' + esc(err.message) + '</p>'; return; }
+		const V = x.v || [];
+		if (!V.length) { body.innerHTML = '<p class="gc-sm">Ehhez a bejegyzéshez még nincs mentett változat. A panel 5 percenként menti a változásokat.</p>'; return; }
+		body.innerHTML = '<p class="gc-sm">A panel minden módosítás után ment (a Google Naptárban kézzel végzett módosítást legfeljebb 5 percen belül). Bejegyzésenként az utolsó ' + x.keep + ' változat marad meg, ' + x.days + ' napig. A legfelső a mostani állapot.</p>' +
+			'<ol class="gv-list">' + V.map((v, i) => { const o = V[i + 1], ch = vChanges(v, o);
+				return '<li class="gv-it' + (v.del ? ' del' : '') + '"><details' + (i === 0 ? ' open' : '') + '><summary><span class="gv-at">' + esc(fts(v.at)) + '</span>' + srcChip(v) + (i === 0 ? ' <span class="gv-now">' + (v.del ? 'törölve' : 'mostani') + '</span>' : '') +
+					(ch.length ? '<span class="gv-ch">változott: ' + esc(ch.join(', ')) + '</span>' : '') + '</summary><div class="gv-b">' + (v.gup && v.src === 'kézi módosítás' ? '<p class="gc-sm">A Google Naptár szerint módosítva: ' + esc(fts(v.gup)) + '</p>' : '') + vBody(v, o) +
+					(x.can && !v.del && (i > 0 || V[0].del) ? '<p><button type="button" class="cpx-btn" data-rv="' + v.id + '">Visszaállítás erre a változatra</button></p>' : '') + '</div></details></li>'; }).join('') + '</ol>' +
+			(x.can ? '' : '<p class="gc-sm">Visszaállítani az admin és az tud, akinek a „Naptár visszaállítása” engedélyt megadták.</p>');
+		body.querySelectorAll('[data-rv]').forEach(b => b.addEventListener('click', async () => {
+			const v = V.find(z => String(z.id) === b.dataset.rv);
+			if (!v || !window.confirm('A bejegyzés visszaáll a ' + fts(v.at) + '-i állapotra (cím, leírás, időpont, helyszín). A mostani állapot is megmarad az előzmények között. Mehet?')) return;
+			b.disabled = true; b.textContent = 'Visszaállítás…';
+			try { await post('cp_gv_restore', { vid: v.id }); closeModal(); load(true); if (curView() === 'hist') { S.hist = null; draw(); } openHist(eid, title); }
+			catch (err) { window.alert(err.message); b.disabled = false; b.textContent = 'Visszaállítás erre a változatra'; }
+		}));
+	}
+	async function loadHist() {
+		S.hErr = '';
+		try { S.hist = await post('cp_gv_feed', {}); } catch (e) { S.hErr = e.message; S.hist = null; }
+		if (active() && curView() === 'hist') draw();
+	}
+	function drawHist(m, h) {
+		const H = S.hist;
+		if (!H && !S.hErr) { loadHist(); m.innerHTML = h + '<div class="cpx-empty">Előzmények betöltése…</div></div>'; bind(); return; }
+		if (!H) { m.innerHTML = h + '<div class="cpx-empty err">' + esc(S.hErr) + '</div></div>'; bind(); return; }
+		const now = new Date(Date.now() - 3600000), dv = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+		h += '<div class="gv">' + '<p class="gc-dinfo">A panel minden naptárbejegyzésről mentést készít, amikor az módosul (kézzel a Google Naptárban vagy a panel által). Mentés ' + (H.since ? esc(fts(H.since)) + ' óta' : 'még nincs') + ', ' + H.n + ' bejegyzésről. Egy bejegyzés változatait az adatlapján vagy lent az „Előzmények” gombbal nézheted meg.</p>' +
+			(H.can ? '<div class="gv-mass"><b>Tömeges visszaállítás</b><span>Minden bejegyzés, amely az alábbi időpont óta módosult, visszaáll az akkori állapotára. Előbb előnézetet kapsz, és kiválaszthatod, melyik álljon vissza.</span><label>Időpont <input type="datetime-local" data-mts value="' + esc(S.mts || dv) + '"></label><button type="button" class="cpx-btn ghost" data-mprev>Előnézet</button></div>' +
+				(S.mass ? '<div class="gv-mp">' + (S.mass.length ? '<p><b>' + S.mass.length + ' bejegyzés</b> állna vissza:</p><ul>' + S.mass.map(x => '<li><label><input type="checkbox" data-mv="' + x.vid + '"' + (S.mSel[x.vid] !== false ? ' checked' : '') + '> <span><b>' + esc(String(x.s).slice(5, 10).replace('-', '.')) + '.</b> ' + esc(x.t) + '<small>vissza erre: ' + esc(fts(x.tat)) + ' · utolsó változás: ' + esc(fts(x.cat)) + ', ' + esc(x.cdel ? 'törölve' : x.csrc) + (x.cwho ? ' (' + esc(x.cwho) + ')' : '') + '</small></span></label></li>').join('') + '</ul><button type="button" class="cpx-btn" data-mgo>Kijelöltek visszaállítása (' + S.mass.filter(x => S.mSel[x.vid] !== false).length + ')</button>' : '<p>Ez óta az időpont óta egyik bejegyzés sem változott (vagy nincs korábbi mentés róla).</p>') + '</div>' : '') : '') +
+			'<h3 class="gv-h">Legutóbbi változások</h3>' + ((H.v || []).length ? '<div class="gv-feed">' + H.v.map(v => '<div class="gv-fr"><span class="gv-at">' + esc(fts(v.at)) + '</span><span class="gv-ft"><b>' + esc(v.t) + '</b><small>' + esc(vWhen(v)) + '</small></span><span>' + srcChip(v) + '</span><button type="button" class="cpx-btn ghost" data-fh="' + esc(v.eid) + '" data-ft="' + esc(v.t) + '">Előzmények</button></div>').join('') + '</div>' : '<div class="cpx-empty">Még nem volt változás a mentés indulása óta.</div>') + '</div>';
+		m.innerHTML = h + '</div>'; bind();
+		m.querySelectorAll('[data-fh]').forEach(b => b.addEventListener('click', () => openHist(b.dataset.fh, b.dataset.ft)));
+		const ts = m.querySelector('[data-mts]'); if (ts) ts.addEventListener('change', () => { S.mts = ts.value; S.mass = null; draw(); });
+		const mp = m.querySelector('[data-mprev]');
+		if (mp) mp.addEventListener('click', async () => {
+			S.mts = ts.value; const t = Math.floor(new Date(ts.value).getTime() / 1000); if (!t) return;
+			mp.disabled = true; mp.textContent = 'Keresés…';
+			try { S.mass = (await post('cp_gv_mass', { ts: t })).list; S.mSel = {}; } catch (e) { window.alert(e.message); }
+			draw();
+		});
+		m.querySelectorAll('[data-mv]').forEach(c => c.addEventListener('change', () => { S.mSel[c.dataset.mv] = c.checked; draw(); }));
+		const mg = m.querySelector('[data-mgo]');
+		if (mg) mg.addEventListener('click', async () => {
+			const vids = S.mass.filter(x => S.mSel[x.vid] !== false).map(x => x.vid);
+			if (!vids.length || !window.confirm(vids.length + ' naptárbejegyzés visszaáll a ' + S.mts.replace('T', ' ') + ' előtti állapotára. A mostani állapotuk is megmarad az előzmények között. Mehet?')) return;
+			mg.disabled = true; mg.textContent = 'Visszaállítás…';
+			try { const r = await post('cp_gv_mass', { ts: Math.floor(new Date(S.mts).getTime() / 1000), go: 1, vids: JSON.stringify(vids) }); window.alert(r.ok + ' bejegyzés visszaállítva.' + (r.err.length ? '\n\nNem sikerült:\n' + r.err.join('\n') : '')); }
+			catch (e) { window.alert(e.message); }
+			S.mass = null; S.hist = null; load(true); draw();
+		});
+	}
+	S.mSel = {};
 
 	function status(s) {
 		if (!s) return;
@@ -241,6 +331,13 @@
 		'.gc-dr a{color:#141C33;font-weight:600;text-decoration:none;overflow-wrap:anywhere}.gc-dr a:hover{text-decoration:underline}.gc-dr small{display:block;color:#8A857D;font-size:12px}.gc-dd{font-weight:700;font-variant-numeric:tabular-nums}.gc-mu{color:#A09A91}' +
 		'.gc-imp{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:#EEF2FA;border:1px solid #D3DCEF;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13.5px}.gc-imp span{flex:1 1 320px}.gc-di.imp{display:flex;gap:8px;align-items:flex-start}.gc-ck input{width:18px;height:18px;margin:1px 0 0;accent-color:#141C33;cursor:pointer}.gc-di.info{background:#EAF5EE}' + '.gc-dit{display:flex;flex-direction:column;gap:4px}.gc-di{border-radius:8px;padding:4px 8px;background:#F1EEE9}.gc-di b{font-weight:600}.gc-di em{font-style:normal;color:#5F5B55;overflow-wrap:anywhere}.gc-di.nodeal,.gc-di.lost,.gc-di.noev{background:#FDECEA;color:#8C1D18}.gc-di.date{background:#FFF3C4}' +
 		'@media (max-width:760px){.gc-dhd{display:none}.gc-dr{grid-template-columns:1fr;gap:4px}}' +
+		'.gv{max-width:1000px}.gv-h{font:700 15px Inter,sans-serif;margin:16px 0 8px}.gv-mass{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:#EEF2FA;border:1px solid #D3DCEF;border-radius:12px;padding:10px 14px;font-size:13.5px}.gv-mass span{flex:1 1 320px}.gv-mass input{font:14px Inter,sans-serif;padding:5px 8px;border:1px solid #C9CFDC;border-radius:8px}' +
+		'.gv-mp{background:#fff;border:1px solid #E6E2DC;border-radius:12px;padding:10px 14px;margin-top:8px;font-size:13.5px}.gv-mp ul{list-style:none;margin:0 0 10px;padding:0;max-height:420px;overflow:auto}.gv-mp li label{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid #F0ECE6;cursor:pointer}.gv-mp li span{min-width:0;overflow-wrap:anywhere}.gv-mp small{display:block;color:#8A857D;font-size:12px}.gv-mp input{width:18px;height:18px;flex:none;accent-color:#141C33}' +
+		'.gv-feed{background:#fff;border:1px solid #E6E2DC;border-radius:14px;overflow:hidden}.gv-fr{display:grid;grid-template-columns:110px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 14px;border-top:1px solid #F0ECE6;font-size:13.5px}.gv-fr:first-child{border-top:0}.gv-ft{min-width:0}.gv-ft b{font-weight:600;overflow-wrap:anywhere}.gv-ft small{display:block;color:#8A857D;font-size:12px}' +
+		'.gv-at{font-variant-numeric:tabular-nums;font-weight:600;color:#4A5163;white-space:nowrap}.gv-src{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap;background:#EEF0F4;color:#4A5163}.gv-src.man{background:#FFF1CC;color:#7A5600}.gv-src.pan{background:#E3ECFB;color:#1F4E9E}.gv-src.rest{background:#DDF3E4;color:#1D6B3C}.gv-src.del{background:#FDECEA;color:#9B2C1F}.gv-who{color:#8A857D}' +
+		'.gv-list{list-style:none;margin:8px 0 0;padding:0}.gv-it{border:1px solid #EEEAE4;border-radius:12px;margin:0 0 8px}.gv-it summary{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 12px;cursor:pointer}.gv-now{background:#141C33;color:#fff;border-radius:999px;padding:1px 8px;font-size:11.5px}.gv-ch{flex-basis:100%;color:#656973;font-size:12.5px}.gv-b{padding:0 12px 10px}' +
+		'.gv-lines{margin:6px 0;padding-left:18px;overflow-wrap:anywhere}.gv-lines li.add,.gv-lg.add{background:#DDF3E4}.gv-lines li.rm,.gv-lg.rm{background:#FDECEA;text-decoration:line-through;color:#9B2C1F}.gv-lg{padding:0 4px;border-radius:4px}' +
+		'@media (max-width:760px){.gv-fr{grid-template-columns:1fr auto;gap:4px 10px}.gv-fr .gv-at{grid-column:1/-1}}' +
 		'.gc-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}' +
 		'.gc-nav{display:flex;align-items:center;gap:6px}.gc-nav h2{margin:0 6px;font:700 20px "Plus Jakarta Sans",Inter,sans-serif;min-width:150px;text-align:center}' +
 		'.gc-tools{display:flex;gap:8px;align-items:center}' +

@@ -53,6 +53,7 @@ function cp_gcal_req($method, $path, $query = array(), $body = null) {
 	if ($code === 404) { return new WP_Error('cp_gcal', 'A naptár nem található – ellenőrizd a naptár azonosítóját, és hogy meg van-e osztva a szolgáltatásfiókkal.'); }
 	if ($code === 403) { return new WP_Error('cp_gcal', 'Nincs jogosultság a naptárhoz – oszd meg a naptárat a szolgáltatásfiókkal („Módosíthatja az eseményeket”).'); }
 	if ($code >= 300) { return new WP_Error('cp_gcal', 'Google Naptár hiba (' . $code . '): ' . sanitize_text_field((string) ($j['error']['message'] ?? ''))); }
+	if ($method !== 'GET' && function_exists('cp_gv_after_write')) { cp_gv_after_write($method, $path, is_array($j) ? $j : array()); } /* v2.9.384: változatmentés */
 	return is_array($j) ? $j : array();
 }
 
@@ -545,6 +546,7 @@ function cp_gcal_snap($e, $why = '') {
 	$k = 'cp_gcb_' . md5((string) $e['id']); $l = get_option($k, array()); if (!is_array($l)) { $l = array(); }
 	array_unshift($l, array('at' => time(), 'why' => $why, 't' => (string) ($e['t'] ?? ''), 'raw' => (string) ($e['raw'] ?? ''), 's' => (string) ($e['s'] ?? ''), 'e' => (string) ($e['e'] ?? ''), 'ad' => !empty($e['ad']) ? 1 : 0, 'loc' => (string) ($e['loc'] ?? '')));
 	update_option($k, array_slice($l, 0, 5), false);
+	if (function_exists('cp_gv_add')) { cp_gv_add($e, 'kézi módosítás', 'Google Naptár'); } /* v2.9.384: a felülírás előtti állapot a változatok közé is */
 }
 function cp_gcal_body($p) {
 	$tz = wp_timezone();
