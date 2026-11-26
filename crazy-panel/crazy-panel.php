@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.372');
+define('CP_PANEL_VER', '2.9.373');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -4126,7 +4126,7 @@ function cp_tw_aam_deals($o, $force) {
 	if ($e['f_gk'] !== '') { $fields[] = 'deal.' . $e['f_gk']; }
 	$fields = array_values(array_unique($fields));
 	// a cp_panel_d_ előtag miatt a panel gyorsítótár-ürítése ezt is törli
-	$ck = 'cp_panel_d_tw' . md5('v4|' . (string) ($o['kft_on'] ?? 1) . '|' . $from . $to . wp_json_encode($fields) . $o['pay_val'] . '|' . $o['ev_val']);
+	$ck = 'cp_panel_d_tw' . md5('v5|' . (string) ($o['kft_on'] ?? 1) . '|' . $from . $to . wp_json_encode($fields) . $o['pay_val'] . '|' . $o['ev_val']);
 	$c = $force ? false : get_transient($ck);
 	if (!is_array($c) || !isset($c['loose'])) {
 		$info = null;
@@ -4152,7 +4152,8 @@ function cp_tw_aam_deals($o, $force) {
 			$pm = trim(cp_panel_str(cp_panel_get($r, $o['f_pay'])));
 			$sk = $pm === '' ? '(nincs kitöltve)' : $pm;
 			$stats[$sk] = isset($stats[$sk]) ? $stats[$sk] + 1 : 1;
-			$isPay = cp_panel_lc($pm) === $pv;
+			/* v2.9.373: a Salesmate-ben „Helyszínen készpénzben” írásmód is van – minden ezzel kezdődő érték helyszíni készpénz */
+			$lpm = cp_panel_lc($pm); $isPay = $lpm === $pv || ($pv !== '' && mb_strpos($lpm, $pv) === 0);
 			/* v2.9.305: a mentett szerződés fizetési módja is számít („helyszínen készpénzben”) – a fizetési mód mezőt ritkán töltik */
 			if (!$isPay) { $ctd = get_option('cp_ct_d' . (int) $id); if (is_array($ctd) && (($ctd['st']['pay'] ?? '') === 'cash')) { $isPay = true; if ($pm === '') { $pm = 'helyszínen készpénz (szerződés)'; } } }
 			/* „laza” mód: EV + helyszíni készpénz VAGY üres fizetési mód; más fizetési móddal (utalás, kártya) soha */
