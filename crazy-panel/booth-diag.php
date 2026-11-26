@@ -57,6 +57,12 @@ add_action('rest_api_init', function () {
 		$log = (string) ($j['log'] ?? ''); $log = mb_substr(wp_check_invalid_utf8($log, true), -150000);
 		$log = preg_replace('/cb_[A-Za-z0-9]{30,}/', '[gépkulcs]', $log); /* biztonsági háló: kulcs ne maradjon a naplóban */
 		global $wpdb;
+		/* v2.9.391: gépenként egyetlen, mindig friss naplófájl. A gép csak az előző küldés óta írt sorokat küldi; ezeket az
+		   eddigi naplóhoz fűzzük (legfeljebb 150 ezer karakter marad), és a gép régebbi bejegyzéseiből a napló törlődik. */
+		$who = $d ? $wpdb->prepare('dev = %s', (string) $d['id']) : $wpdb->prepare("dev = '' AND inst = %s", $inst);
+		$prev = array_key_exists('full', $j) && empty($j['full']) ? /* a régi felület (full nélkül) mindig a teljes véget küldi: az felülír */ (string) $wpdb->get_var('SELECT log FROM ' . cp_bdg_t() . ' WHERE ' . $who . " AND log <> '' ORDER BY id DESC LIMIT 1") : '';
+		if ($prev !== '') { $log = $log === '' ? $prev : rtrim($prev, "\n") . "\n" . $log; $log = mb_substr($log, -150000); }
+		$wpdb->query('UPDATE ' . cp_bdg_t() . " SET log = '' WHERE " . $who . " AND log <> ''");
 		$wpdb->insert(cp_bdg_t(), array('at' => time(), 'dev' => $d ? (string) $d['id'] : '', 'inst' => $inst, 'name' => $d ? (string) $d['name'] : 'Azonosítatlan gép (' . substr($inst, 0, 6) . ')',
 			'reasons' => wp_json_encode($reasons, JSON_UNESCAPED_UNICODE), 'meta' => wp_json_encode($meta, JSON_UNESCAPED_UNICODE), 'log' => $log));
 		if ($d) { cp_bdg_req_take((string) $d['id']); }

@@ -1171,7 +1171,7 @@
     const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
     const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
       err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
-    try { const r = await call(B.beat, body); if (r && r.diag) diagNow('a panel kérte'); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
+    try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
   }
   setInterval(beat, 60000); setTimeout(beat, 6000);
   /* a panelből (deal adatlap → Szelfigép → Beállítások a gépekre) mentett beállítások: csak a kezdőképernyőn, fotózás közben soha */
@@ -1530,15 +1530,25 @@
     try {
       const c = S.cfg || {}, key = String(c.boothKey || '');
       let log = await diagLog(); if (key.length >= 8) log = log.split(key).join('[gépkulcs]');
+      /* 2026-11-26: csak az előző küldés óta írt sorok (a panel kérésére a teljes vég, legfeljebb 120 ezer karakter);
+         az első küldésnél az utolsó 30 ezer karakter. Így egy küldés jellemzően néhány kB. */
+      let since = ''; try { since = localStorage.getItem('cb_diag_ts') || ''; } catch (e) { since = ''; }
+      const full = D.full; D.full = false;
+      const tsOf = l => (/^(\d{4}-\d\d-\d\dT[\d:.]+Z)\s/.exec(l) || [])[1] || '';
+      let lastTs = ''; log.split('\n').forEach(l => { const t = tsOf(l); if (t) lastTs = t; });
+      if (!full) {
+        if (since) { const L = log.split('\n'); let i = L.findIndex(l => { const t = tsOf(l); return t && t > since; }); log = i < 0 ? '' : L.slice(i).join('\n'); }
+        else log = log.slice(-30000);
+      }
       let st = {}; try { const r = await B.cloudStatus(); if (r && r.ok) st = r.v || {}; } catch (e) { st = {}; }
       const body = { inst: diagInst(), reasons, ver: String(c.version || '') + (S.uiVer ? '/' + S.uiVer : ''), os: navigator.userAgent.slice(0, 200), mac: !!c.mac,
         key: key ? (key.length >= 20 ? 'van' : 'rövid') : 'nincs', cam: c.camera || '', camOk: !S.cfg ? null : WEB() ? !!(S.stream && S.stream.getVideoTracks().some(t => t.readyState === 'live')) : null,
-        net: navigator.onLine, scr: S.scr, event: c.event ? { deal: c.event.deal || 0, title: c.event.title || '', date: c.event.date || '' } : null, queue: st.queued || 0, upErr: st.err || '', log };
+        net: navigator.onLine, scr: S.scr, event: c.event ? { deal: c.event.deal || 0, title: c.event.title || '', date: c.event.date || '' } : null, queue: st.queued || 0, upErr: st.err || '', log, full: full || !since };
       const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 30000);
       const r = await fetch(DIAG_URL, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, key ? { 'X-Booth-Key': key } : {}), body: JSON.stringify(body), signal: ctl.signal });
       clearTimeout(to);
       if (!r.ok && r.status !== 429) throw new Error('HTTP ' + r.status);
-      try { localStorage.removeItem('cb_diag_p'); } catch (e) { /* */ }
+      try { localStorage.removeItem('cb_diag_p'); if (lastTs) localStorage.setItem('cb_diag_ts', lastTs); } catch (e) { /* */ }
     } catch (e) {
       try { localStorage.setItem('cb_diag_p', JSON.stringify(reasons)); } catch (x) { /* */ }
       clearTimeout(D.r); D.r = setTimeout(() => { if (!D.t) diagSend(); }, 120000);
@@ -1546,6 +1556,6 @@
   }
   window.addEventListener('error', e => diagSoon('JS-hiba: ' + (e.message || '') + ' ' + (e.filename || '').split(/[\\/]/).pop() + ':' + (e.lineno || '')));
   window.addEventListener('unhandledrejection', e => diagSoon('JS-hiba: ' + String(e.reason && e.reason.message || e.reason)));
-  setTimeout(() => diagNow('indítás'), 30000);
+  setTimeout(() => diagSoon('indítás'), 10000); /* az indulás utáni hibákkal együtt, egy küldésben (kb. 30 mp múlva) */
   (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); (U().startWindowed ? B.fullscreen(false) : B.isFullscreen()).then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); evShow(); await initCam(); })().catch(e => err(e.message));
 })();
