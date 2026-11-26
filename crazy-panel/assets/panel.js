@@ -716,7 +716,7 @@
     '.wg-dh{border:0;border-left:1px solid #F0ECE6;background:none;padding:8px 6px 7px;text-align:center;cursor:pointer;font:inherit;color:#141C33;display:flex;flex-direction:column;align-items:center;gap:1px}.wg-dh span{font:600 11.5px Inter,sans-serif;color:#6B6F78;text-transform:uppercase}.wg-dh b{font:800 20px "Plus Jakarta Sans",sans-serif;line-height:1.1;width:34px;height:34px;display:grid;place-items:center;border-radius:50%}.wg-dh.today b{background:#141C33;color:#fff}.wg-dh small{font-size:11px;color:#6B6F78;font-variant-numeric:tabular-nums}.wg-dh.full small{color:#B42318;font-weight:700}.wg-dh.mid small{color:#8A5300;font-weight:600}.wg-dh.past{opacity:.6}.wg-dh:hover{background:#FAF8F5}.wg-dh .dpc{margin:2px 0 0}' +
     '.wg-ac{border-left:1px solid #F0ECE6;padding:4px;display:flex;flex-direction:column;gap:3px;min-height:30px}.wg-gut{position:relative;font-size:10.5px;color:#8A8F99;text-align:right;padding-right:6px}.wg-all .wg-gut{display:flex;align-items:center;justify-content:flex-end}.wg-gut small{font-size:10px;line-height:1.1}' +
     '.wg-body{display:grid;grid-template-columns:56px repeat(7,minmax(0,1fr));position:relative}.wg-body .wg-gut span{position:absolute;right:6px;transform:translateY(-6px);font-variant-numeric:tabular-nums}.wg-col{position:relative;border-left:1px solid #F0ECE6;cursor:pointer}.wg-col.today{background:#FBFAF5}.wg-col i{position:absolute;left:0;right:0;border-top:1px solid #F2EFEA}.wg-col u{position:absolute;left:-1px;right:0;border-top:2px solid #E5484D;z-index:2}.wg-col u::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#E5484D}' +
-    '.wg-ev{position:absolute;box-sizing:border-box;border-radius:7px;padding:3px 6px;font-size:11.5px;line-height:1.25;overflow:hidden;cursor:pointer;z-index:1;background:#DDEBFB;border:1px solid #9CC3EE;color:#0E3A66}.wg-ac .wg-ev{position:static}.wg-ev b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wg-ev small{display:block;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.wg-ev{position:absolute;box-sizing:border-box;border-radius:7px;padding:3px 6px;font-size:11.5px;line-height:1.25;overflow:hidden;cursor:pointer;z-index:1;background:#DDEBFB;border:1px solid #9CC3EE;color:#0E3A66}.wg-ac .wg-ev{position:static}.wg-ev b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wg-ev small{display:block;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wg-ev small.wg-kz{opacity:1;font-weight:600}.wg-ev small.wg-kz::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:4px;vertical-align:1px}' +
     '.wg-ev.sp{background:#EADCF7;border-color:#C6A6EA;color:#47206E}.wg-ev.pd{background:#fff;border:1.5px dashed #E0B451;color:#5E4300}.wg-ev:hover{filter:brightness(.97);box-shadow:0 2px 8px rgba(20,28,51,.12);z-index:2}.wg-ev:focus-visible{outline:2px solid #141C33;outline-offset:1px}' +
     '.dpc{display:inline-block;font:700 10.5px Inter,sans-serif;border-radius:6px;padding:1px 6px;margin-left:6px;font-variant-numeric:tabular-nums;white-space:nowrap;vertical-align:1px}.dpc.dn{background:#E3F4E9;color:#14532D}.dpc.up{background:#FCEBCB;color:#7A4A00}.dpc.full{background:#F9D5D0;color:#8C1D18}.cpx-day .ft{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}' +
     '.cpx-week{display:flex;flex-direction:column;gap:8px}.wk-d{background:#fff;border:1.5px solid #E6E2DC;border-radius:12px;overflow:hidden}.wk-d.ok{border-color:#BFE3CB}.wk-d.mid{border-color:#F0C982}.wk-d.full{border-color:#EBA59B}.wk-d.past{opacity:.6}.wk-d.today{box-shadow:0 0 0 2.5px #141C33}.wk-d.risk{box-shadow:inset 0 0 0 2px #D97706}.wk-d.dim{opacity:.25}' +
@@ -825,7 +825,14 @@
     const wrap = el('div', { class: 'cpx-week' }); main.appendChild(wrap);
     if (miss.length) { wrap.innerHTML = '<div class="cpx-empty">Betöltés…</div>'; try { await Promise.all(miss.map(m => load(m))); } catch (e) { wrap.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; } if (!wrap.isConnected) return; wrap.innerHTML = ''; }
     let bk = 0, pd = 0;
-    if (S.wkMode === 'grid') { weekGrid(wrap, days, tdy); return; }
+    if (S.wkMode === 'grid') {
+      weekGrid(wrap, days, tdy);
+      /* v2.9.371: a beosztott kezelők nevei a csempéken (a hónap beosztás-adataiból) */
+      if (C.slot && !(S.slotw && ms.every(m => S.slotw[m]))) {
+        try { for (const m of ms) { const r = await slotPost('cp_slot_month', { m }); S.slotm = S.slotm || {}; S.slotm[m] = r.d || {}; S.slotw = S.slotw || {}; S.slotw[m] = r.w || {}; } if (wrap.isConnected && S.calView === 'week') render(); } catch (e) { /* nélküle is működik */ }
+      }
+      return;
+    }
     wrap.innerHTML = days.map(date => {
       const I = dayInfo(monthKey(date), date), past = date < tdy, wd = parseYmd(date).getDay();
       const lvl = I.freeS <= 0 ? 'full' : I.freeS <= 2 ? 'mid' : 'ok';
@@ -845,7 +852,7 @@
     wrap.querySelectorAll('[data-wd]').forEach(b => b.addEventListener('click', () => openDay(b.dataset.wd)));
     wrap.querySelectorAll('[data-wdeal]').forEach(r => { const go = () => window.CPCrm.open(Number(r.dataset.wdeal)); r.addEventListener('click', go); r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }); });
     if (C.slot && !(S.slotm && ms.every(m => S.slotm[m]))) {
-      try { for (const m of ms) { const r = await slotPost('cp_slot_month', { m }); S.slotm = S.slotm || {}; S.slotm[m] = r.d || {}; } if (wrap.isConnected && S.calView === 'week') render(); } catch (e) { /* nélküle is működik */ }
+      try { for (const m of ms) { const r = await slotPost('cp_slot_month', { m }); S.slotm = S.slotm || {}; S.slotm[m] = r.d || {}; S.slotw = S.slotw || {}; S.slotw[m] = r.w || {}; } if (wrap.isConnected && S.calView === 'week') render(); } catch (e) { /* nélküle is működik */ }
     }
   }
   /* v2.9.307: heti rács – a Google Naptár mintájára: 7 oszlop, órasávok, az események a kezdés + óraszám szerinti csempék
@@ -863,19 +870,20 @@
     let bk = 0, pd = 0;
     cols.forEach(c => c.I.ev.forEach(e => { if (e.state === 'booked') bk++; else pd++; }));
     const hm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
-    const tile = (x, abs) => { const e = x.e, d = Number(dealOf(e)) > 0 ? Number(dealOf(e)) : 0;
+    const tile = (x, abs, date) => { const e = x.e, d = Number(dealOf(e)) > 0 ? Number(dealOf(e)) : 0;
+      const kz = d && S.slotw && S.slotw[monthKey(date)] ? (S.slotw[monthKey(date)][d + '|' + date] || []) : [];
       const sty = abs ? 'top:' + ((x.st - minH * 60) / 60 * H) + 'px;height:' + Math.max(24, (x.en - x.st) / 60 * H - 2) + 'px;left:calc(' + (x.lane * 100 / x.n) + '% + 2px);width:calc(' + (100 / x.n) + '% - 4px)' : '';
       return '<div class="wg-ev ' + (e.state === 'booked' ? 'bk' : 'pd') + (e.kind === 'spin' ? ' sp' : '') + '"' + (sty ? ' style="' + sty + '"' : '') + (d ? ' data-wdeal="' + d + '" tabindex="0" role="button"' : '') + ' title="' + esc((e.title || '') + (x.st !== null ? '\n' + hm(x.st) + '–' + hm(x.en) : '') + (e.loc ? '\n' + e.loc : '') + '\n' + kindLabel(e) + (e.state === 'booked' ? '' : ' · függő ajánlat')) + '">' +
-        '<b>' + esc(shortEv(e)) + '</b><small>' + (x.st !== null ? esc(hm(x.st) + '–' + hm(x.en)) + ' · ' : '') + esc(kindLabel(e)) + '</small>' + (e.loc && abs && (x.en - x.st) >= 120 ? '<small>' + esc(e.loc) + '</small>' : '') + '</div>'; };
+        '<b>' + esc(shortEv(e)) + '</b><small>' + (x.st !== null ? esc(hm(x.st) + '–' + hm(x.en)) + ' · ' : '') + esc(kindLabel(e)) + '</small>' + (kz.length ? '<small class="wg-kz" title="Beosztva: ' + esc(kz.join(', ')) + '">' + esc(kz.join(', ')) + '</small>' : '') + (e.loc && abs && (x.en - x.st) >= 120 ? '<small>' + esc(e.loc) + '</small>' : '') + '</div>'; };
     const now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
     const head = cols.map(c => { const wd = parseYmd(c.date).getDay(), I = c.I; return '<button type="button" class="wg-dh' + (c.date === tdy ? ' today' : '') + (c.date < tdy ? ' past' : '') + ' ' + (I.freeS <= 0 ? 'full' : I.freeS <= 2 ? 'mid' : 'ok') + '" data-wd="' + c.date + '"><span>' + HU_DAYS[(wd + 6) % 7] + '</span><b>' + parseYmd(c.date).getDate() + '</b><small>' + Math.max(0, I.freeS) + ' szabad' + (I.pSelfie + I.pSpin ? ' · ' + (I.pSelfie + I.pSpin) + ' függő' : '') + '</small>' + dpChip(dpDay(I, c.date)) + '</button>'; }).join('');
     const hasAll = cols.some(c => c.allday.length);
     wrap.innerHTML = '<div class="cpx-kpis">' + kpi('Foglalás a héten', bk) + kpi('Függő ajánlat', pd) + '</div>' +
       '<div class="wg"><div class="wg-in"><div class="wg-head"><div class="wg-gut"></div>' + head + '</div>' +
-      (hasAll ? '<div class="wg-all"><div class="wg-gut"><small>időpont nélkül</small></div>' + cols.map(c => '<div class="wg-ac">' + c.allday.map(x => tile(x, false)).join('') + '</div>').join('') + '</div>' : '') +
+      (hasAll ? '<div class="wg-all"><div class="wg-gut"><small>időpont nélkül</small></div>' + cols.map(c => '<div class="wg-ac">' + c.allday.map(x => tile(x, false, c.date)).join('') + '</div>').join('') + '</div>' : '') +
       '<div class="wg-body" style="height:' + ((maxH - minH) * H) + 'px"><div class="wg-gut">' + Array.from({ length: maxH - minH }, (_, i) => '<span style="top:' + (i * H) + 'px">' + String((minH + i) % 24).padStart(2, '0') + ':00</span>').join('') + '</div>' +
         cols.map(c => '<div class="wg-col' + (c.date === tdy ? ' today' : '') + '" data-wdc="' + c.date + '">' + Array.from({ length: maxH - minH }, (_, i) => '<i style="top:' + (i * H) + 'px"></i>').join('') +
-          (c.date === tdy && nowM >= minH * 60 && nowM <= maxH * 60 ? '<u style="top:' + ((nowM - minH * 60) / 60 * H) + 'px"></u>' : '') + c.timed.map(x => tile(x, true)).join('') + '</div>').join('') + '</div></div></div>';
+          (c.date === tdy && nowM >= minH * 60 && nowM <= maxH * 60 ? '<u style="top:' + ((nowM - minH * 60) / 60 * H) + 'px"></u>' : '') + c.timed.map(x => tile(x, true, c.date)).join('') + '</div>').join('') + '</div></div></div>';
     wrap.querySelectorAll('[data-wd]').forEach(b => b.addEventListener('click', () => openDay(b.dataset.wd)));
     wrap.querySelectorAll('[data-wdeal]').forEach(r => { const go = ev => { ev.stopPropagation(); if (window.CPCrm && window.CPCrm.open) window.CPCrm.open(Number(r.dataset.wdeal)); }; r.addEventListener('click', go); r.addEventListener('keydown', ev => { if (ev.key === 'Enter') go(ev); }); });
     wrap.querySelectorAll('[data-wdc]').forEach(c => c.addEventListener('click', ev => { if (!ev.target.closest('.wg-ev')) openDay(c.dataset.wdc); }));
@@ -1141,6 +1149,7 @@
     }
   }
   function slotMonthRefresh(date) {
+    if (S.slotw) delete S.slotw[monthKey(date)]; /* v2.9.371: a heti rács neveit is frissíteni kell */
     if (S.calMode === 'slot') { if (S.tab === 'naptar' && monthKey(date) === S.month && document.querySelector('.cpx-cal.slv')) render(); return; }
     const g = document.querySelector('.cpx-cal.v2'); if (!g || monthKey(date) !== S.month) return;
     g.querySelectorAll('.sl-mk').forEach(x => x.remove()); slotMonthMarks(g, S.month);

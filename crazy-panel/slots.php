@@ -268,9 +268,20 @@ function cp_slot_month($m, $full = false) {
 		}
 	}
 	if (!$full) { return $out; }
+	/* v2.9.371: a véglegesített (beosztott) emberek rendezvényenként – a heti rács csempéin látszik; csak a deal mostani gépsoraihoz tartozók */
+	$who = array();
+	if (cp_slot_db_ok() && function_exists('cp_kz_t')) {
+		$valid = $slotNeed + $pend;
+		foreach ((array) $wpdb->get_results($wpdb->prepare('SELECT p.day, p.deal_id, p.skey, k.name FROM ' . cp_slot_t() . ' p JOIN ' . cp_kz_t() . " k ON k.id = p.kz_id WHERE p.status = 'final' AND p.deal_id > 0 AND p.day BETWEEN %s AND %s ORDER BY p.skey, k.name", $m . '-01', $m . '-31'), ARRAY_A) as $r) {
+			if (!isset($valid[$r['deal_id'] . '|' . $r['day'] . '|' . $r['skey']])) { continue; }
+			$wk = $r['deal_id'] . '|' . $r['day'];
+			if (!isset($who[$wk])) { $who[$wk] = array(); }
+			if (!in_array($r['name'], $who[$wk], true)) { $who[$wk][] = (string) $r['name']; }
+		}
+	}
 	$tk = 0; $th = 0;
 	if (function_exists('cp_kz_t')) { foreach ((array) $wpdb->get_results('SELECT kind, COUNT(*) n FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host') GROUP BY kind", ARRAY_A) as $r) { if ($r['kind'] === 'kezelo') { $tk = (int) $r['n']; } else { $th = (int) $r['n']; } } }
-	return array('d' => $out, 'x' => $x, 'tk' => $tk, 'th' => $th);
+	return array('d' => $out, 'x' => $x, 'tk' => $tk, 'th' => $th, 'w' => (object) $who);
 }
 
 function cp_slot_auth() {
