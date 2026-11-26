@@ -258,7 +258,6 @@ function cp_booth_admin() {
 	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form>';
 	cp_booth_admin_ai();
 	if (function_exists('cp_blog_admin')) { cp_blog_admin(); }
-	if (function_exists('cp_bdg_admin')) { cp_bdg_admin(); } /* v2.9.388: hibanaplók */
 	echo '</div>';
 }
 /* v2.9.287: AI-kredit a panel Eszközök csoportjában – egyenleg (OpenRouter), havi felhasználás, feltöltés linkje */

@@ -65,27 +65,45 @@ add_action('rest_api_init', function () {
 	}));
 });
 
-/* WP admin → Beállítások → Crazy Booth gépek: a beérkezett naplók + bekérés */
-function cp_bdg_admin() {
-	if (!cp_bdg_ok() || !current_user_can('manage_options')) { return; }
+/* v2.9.389: Crazy panel → Napló → Szelfigépek (a WordPress-admin helyett). Jogosultság: mint a Napló fül. */
+add_action('wp_ajax_nopriv_cp_bdg_list', 'cp_bdg_ajax_list'); add_action('wp_ajax_cp_bdg_list', 'cp_bdg_ajax_list');
+add_action('wp_ajax_nopriv_cp_bdg_log', 'cp_bdg_ajax_log'); add_action('wp_ajax_cp_bdg_log', 'cp_bdg_ajax_log');
+add_action('wp_ajax_nopriv_cp_bdg_ask', 'cp_bdg_ajax_ask'); add_action('wp_ajax_cp_bdg_ask', 'cp_bdg_ajax_ask');
+function cp_bdg_guard() {
+	cp_el_auth();
+	if (!function_exists('cp_panel_can') || !cp_panel_can('naplo')) { cp_el_err('A Napló nincs engedélyezve a fiókodnak (Beállítások → Láthatóság).', 403); }
+	if (!cp_bdg_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
+}
+function cp_bdg_ajax_list() {
+	cp_bdg_guard();
 	global $wpdb;
-	if (!empty($_POST['cp_bdg_nonce']) && wp_verify_nonce($_POST['cp_bdg_nonce'], 'cp_bdg') && !empty($_POST['bdg_req'])) {
-		$r = cp_bdg_req_all(); $r[sanitize_key(wp_unslash($_POST['bdg_req']))] = time(); update_option('cp_bdg_req', $r, false);
-		echo '<div class="notice notice-success"><p>Bekérve – a gép a következő jelentkezéskor (1 percen belül, ha be van kapcsolva) küldi.</p></div>';
+	$dev = sanitize_text_field(wp_unslash($_POST['dev'] ?? ''));
+	$w = $dev === '' ? '' : ($dev === 'anon' ? " WHERE dev = ''" : $wpdb->prepare(' WHERE dev = %s', $dev));
+	$rows = array();
+	foreach ((array) $wpdb->get_results('SELECT id, at, dev, inst, name, reasons, meta, CHAR_LENGTH(log) AS ln FROM ' . cp_bdg_t() . $w . ' ORDER BY id DESC LIMIT 150', ARRAY_A) as $x) {
+		$rows[] = array('id' => (int) $x['id'], 'at' => (int) $x['at'], 'dev' => (string) $x['dev'], 'name' => (string) $x['name'], 'r' => json_decode((string) $x['reasons'], true) ?: array(), 'm' => json_decode((string) $x['meta'], true) ?: new stdClass(), 'ln' => (int) $x['ln']);
 	}
-	echo '<h2 style="margin-top:28px">Hibanaplók a gépekről</h2><p>A gépek indításkor, minden hibánál és kérésre maguktól küldik (14 napig őrizzük). Gépkulcs nélkül is: ilyenkor „Azonosítatlan gép”.</p>';
-	echo '<form method="post">'; wp_nonce_field('cp_bdg', 'cp_bdg_nonce');
-	$req = cp_bdg_req_all();
-	foreach (cp_booth_devs() as $id => $dv) { if ($id === 'panel') { continue; } echo '<button class="button" name="bdg_req" value="' . esc_attr($id) . '" style="margin:0 6px 6px 0">Napló bekérése: ' . esc_html($dv['name']) . (isset($req[$id]) ? ' (kérve)' : '') . '</button>'; }
-	echo '</form>';
-	$rows = $wpdb->get_results('SELECT * FROM ' . cp_bdg_t() . ' ORDER BY id DESC LIMIT 60', ARRAY_A);
-	if (!$rows) { echo '<p>Még nem érkezett napló.</p>'; return; }
-	echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th style="width:120px">Mikor</th><th style="width:170px">Gép</th><th>Ok / állapot</th></tr></thead><tbody>';
-	foreach ($rows as $x) {
-		$m = json_decode((string) $x['meta'], true) ?: array(); $rs = json_decode((string) $x['reasons'], true) ?: array();
-		$st = 'v' . ($m['ver'] ?? '?') . ' · gépkulcs: ' . ($m['key'] ?? '?') . (!empty($m['keybad']) ? ' (a panel nem fogadta el)' : '') . ' · kamera: ' . ($m['cam'] ?? '') . ($m['camOk'] === false ? ' (nincs kép)' : '') . ' · net: ' . (!empty($m['net']) ? 'van' : 'nincs') . (!empty($m['event']['title']) ? ' · rendezvény: ' . $m['event']['title'] : '') . (!empty($m['queue']) ? ' · feltöltésre vár: ' . (int) $m['queue'] : '');
-		echo '<tr><td>' . esc_html(wp_date('m.d. H:i:s', (int) $x['at'])) . '</td><td>' . esc_html($x['name']) . '</td><td><div>' . esc_html(implode(' | ', $rs)) . '</div><small>' . esc_html($st) . '</small>' .
-			($x['log'] !== '' ? '<details><summary>Napló (' . number_format_i18n(mb_strlen((string) $x['log'])) . ' karakter)</summary><pre style="max-height:420px;overflow:auto;white-space:pre-wrap;font-size:11px;background:#f6f7f7;padding:8px">' . esc_html(mb_substr((string) $x['log'], -40000)) . '</pre></details>' : '') . '</td></tr>';
+	$req = cp_bdg_req_all(); $devs = array();
+	foreach (cp_booth_devs() as $id => $d) {
+		if ($id === 'panel') { continue; }
+		$b = function_exists('cp_booth_beat_get') ? cp_booth_beat_get($id) : null;
+		$devs[] = array('id' => (string) $id, 'name' => (string) $d['name'], 'off' => !empty($d['off']), 'seen' => (int) ($d['seen'] ?? 0), 'beat' => $b ? (int) $b['t'] : 0, 'ver' => $b ? (string) $b['ver'] : '', 'req' => (int) ($req[$id] ?? 0),
+			'last' => (int) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_bdg_t() . ' WHERE dev = %s', $id)));
 	}
-	echo '</tbody></table>';
+	wp_send_json_success(array('rows' => $rows, 'devs' => $devs, 'anon' => (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_bdg_t() . " WHERE dev = ''"), 'now' => time()));
+}
+function cp_bdg_ajax_log() {
+	cp_bdg_guard();
+	global $wpdb;
+	$l = $wpdb->get_var($wpdb->prepare('SELECT log FROM ' . cp_bdg_t() . ' WHERE id = %d', (int) ($_POST['id'] ?? 0)));
+	if ($l === null) { cp_el_err('Nincs ilyen napló.', 404); }
+	wp_send_json_success(array('log' => (string) $l));
+}
+function cp_bdg_ajax_ask() {
+	cp_bdg_guard();
+	$id = sanitize_text_field(wp_unslash($_POST['dev'] ?? '')); $devs = cp_booth_devs();
+	if (!isset($devs[$id]) || $id === 'panel') { cp_el_err('Nincs ilyen gép.', 404); }
+	$r = cp_bdg_req_all(); $r[$id] = time(); update_option('cp_bdg_req', $r, false);
+	if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'booth_diag', 'Szelfigép-napló bekérve: ' . $devs[$id]['name'], '', ''); }
+	wp_send_json_success(array('ok' => 1));
 }

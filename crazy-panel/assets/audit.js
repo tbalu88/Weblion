@@ -47,9 +47,9 @@
 	/* v2.9.88: nézetváltó – Műveletek (a napló) | Panelhasználat (ki mennyi időt töltött a panelben, mikor) */
 	/* v2.9.89: saját címek – #naplo = Műveletek, #naplo:hasznalat = Panelhasználat (könyvjelzőzhető, küldhető) */
 	/* v2.9.145: #naplo:elemzes = Elemzés */
-	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : m === 'srv' ? '#naplo:szerver' : '#naplo';
-	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes|szerver))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : m[1] === 'szerver' ? 'srv' : 'log') : null; }
-	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' && S.mode !== 'srv' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a><a href="#naplo:szerver" data-mode="srv"' + (S.mode === 'srv' ? ' class="on" aria-current="page"' : '') + '>Szerver</a></nav>';
+	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : m === 'srv' ? '#naplo:szerver' : m === 'gep' ? '#naplo:szelfigepek' : '#naplo';
+	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes|szerver|szelfigepek))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : m[1] === 'szerver' ? 'srv' : m[1] === 'szelfigepek' ? 'gep' : 'log') : null; }
+	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' && S.mode !== 'srv' && S.mode !== 'gep' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a><a href="#naplo:szerver" data-mode="srv"' + (S.mode === 'srv' ? ' class="on" aria-current="page"' : '') + '>Szerver</a><a href="#naplo:szelfigepek" data-mode="gep"' + (S.mode === 'gep' ? ' class="on" aria-current="page"' : '') + '>Szelfigépek</a></nav>';
 	function nav(mode) {
 		S.mode = mode;
 		try { localStorage.setItem('cpx_au_mode', mode); } catch (e) { /* privát mód */ }
@@ -73,6 +73,7 @@
 		if (S.mode === 'use') { useView(main); return; }
 		if (S.mode === 'an') { anView(main); return; }
 		if (S.mode === 'srv') { srvView(main); return; }
+		if (S.mode === 'gep') { gView(main); return; }
 		main.innerHTML = '<div class="au"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>Ki, mikor, mit csinált a panelben: deal-ek, levelezés, feladatok, elszámolás, tárca, be- és kilépés. Csak az adminok látják; a bejegyzéseket nem lehet módosítani, 2 év után törlődnek.</p></div>' +
 			'<div class="au-f"><select data-f="who"><option value="">Mindenki</option></select><select data-f="area">' + AREAS.map(a => '<option value="' + a[0] + '">' + a[1] + '</option>').join('') + '</select>' +
 			'<label>Ettől <input type="date" data-f="from"></label><label>Eddig <input type="date" data-f="to"></label><input type="search" data-f="q" placeholder="Keresés (pl. deal neve)…">' +
@@ -193,6 +194,49 @@
 		A.err = ''; A.d = r;
 		box.innerHTML = anWeek(r.week) + anResp(r.resp) + anFunnel(r.funnel) + anUnans(r.unans) + anLoadH(r.load) + anUse(r.use) + anEff(r.eff) + anLost(r.lost) + anRot(r.rot) + anRep(r.rep) + '<p class="an-ft">Számolva: ' + esc(r.at) + ' · 10 percig tárolt eredmény; a ↻ frissítés újraszámol.</p>';
 		box.querySelectorAll('.au-go').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.k, Number(a.dataset.id)); }));
+	}
+
+	/* v2.9.389: Szelfigépek – a gépek maguktól küldött hibanaplói (indításkor, hibánál, kérésre), 14 napig */
+	const G = { dev: '', open: {}, t: 0 };
+	const ago = s => { if (!s) return '–'; const d = Math.max(0, Math.round(Date.now() / 1000 - s)); return d < 90 ? 'most' : d < 3600 ? Math.round(d / 60) + ' perce' : d < 86400 ? Math.round(d / 3600) + ' órája' : Math.round(d / 86400) + ' napja'; };
+	const dt = s => { if (!s) return ''; const d = new Date(s * 1000), p = n => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '.' + p(d.getDate()) + '. ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+	function gView(main) {
+		main.innerHTML = '<div class="au gp"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>A szelfigépek (Crazy Booth) maguktól küldik a naplójukat: indításkor, minden hibánál (kamera, panelkapcsolat, rendezvénylista, nyomtatás) és ha itt bekéred. Gépkulcs nélkül is – akkor „Azonosítatlan gép”. 14 napig őrizzük.</p></div>' +
+			'<div class="au-f"><select data-gdev><option value="">Minden gép</option></select><button type="button" class="cpx-btn ghost sm" data-gre>↻ Frissítés</button></div><div class="gp-devs"></div><div class="au-box"><div class="cpx-muted">Betöltés…</div></div></div>';
+		bindSeg(main);
+		main.querySelector('[data-gre]').addEventListener('click', () => gLoad());
+		main.querySelector('[data-gdev]').addEventListener('change', e => { G.dev = e.target.value; gLoad(); });
+		gLoad();
+		clearInterval(G.t); G.t = setInterval(() => { if (!main.isConnected || S.mode !== 'gep') { clearInterval(G.t); return; } if (!document.hidden) gLoad(true); }, 30000);
+	}
+	function gState(m) {
+		const c = [];
+		c.push('<span class="gp-c">v' + esc(m.ver || '?') + '</span>');
+		c.push('<span class="gp-c ' + (m.key === 'van' && !m.keybad ? 'ok' : 'bad') + '">gépkulcs: ' + esc(m.keybad ? 'a panel nem fogadta el' : m.key || '?') + '</span>');
+		c.push('<span class="gp-c ' + (m.camOk === false ? 'bad' : '') + '">kamera: ' + esc(m.cam === 'dcc' ? 'DSLR' : m.cam === 'webcam' ? 'webkamera' : (m.cam || '?')) + (m.camOk === false ? ', nincs kép' : '') + '</span>');
+		c.push('<span class="gp-c ' + (m.net ? '' : 'bad') + '">net: ' + (m.net ? 'van' : 'nincs') + '</span>');
+		if (m.event && m.event.title) c.push('<span class="gp-c">' + esc(m.event.title) + '</span>');
+		if (m.queue) c.push('<span class="gp-c bad">feltöltésre vár: ' + m.queue + '</span>');
+		if (m.upErr) c.push('<span class="gp-c bad">feltöltés: ' + esc(m.upErr) + '</span>');
+		return c.join('');
+	}
+	async function gLoad(quiet) {
+		const main = S.main; if (!main || !main.isConnected || S.mode !== 'gep') return;
+		const box = main.querySelector('.au-box'), dbox = main.querySelector('.gp-devs');
+		let r; try { r = await post('cp_bdg_list', { dev: G.dev }); } catch (e) { if (!quiet) box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		if (!main.isConnected || S.mode !== 'gep') return;
+		const sel = main.querySelector('[data-gdev]');
+		sel.innerHTML = '<option value="">Minden gép</option>' + r.devs.map(d => '<option value="' + esc(d.id) + '"' + (G.dev === d.id ? ' selected' : '') + '>' + esc(d.name) + '</option>').join('') + (r.anon ? '<option value="anon"' + (G.dev === 'anon' ? ' selected' : '') + '>Azonosítatlan gépek (' + r.anon + ')</option>' : '');
+		dbox.innerHTML = r.devs.map(d => { const on = d.beat && r.now - d.beat < 180;
+			return '<div class="gp-d' + (d.off ? ' off' : '') + '"><b><i class="' + (on ? 'on' : '') + '"></i>' + esc(d.name) + '</b><small>' + (on ? 'be van kapcsolva' : 'utoljára jelentkezett: ' + esc(ago(Math.max(d.seen, d.beat)))) + (d.ver ? ' · v' + esc(d.ver.split('/')[0]) : '') + '</small><small>utolsó napló: ' + esc(ago(d.last)) + '</small>' +
+				(d.off ? '<small>letiltva</small>' : '<button type="button" class="cpx-btn ghost sm" data-gask="' + esc(d.id) + '"' + (d.req ? ' disabled' : '') + '>' + (d.req ? 'Bekérve – vár a gépre' : 'Napló bekérése') + '</button>') + '</div>'; }).join('');
+		dbox.querySelectorAll('[data-gask]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Bekérve – vár a gépre'; try { await post('cp_bdg_ask', { dev: b.dataset.gask }); } catch (e) { b.disabled = false; b.textContent = e.message; } }));
+		if (!r.rows.length) { box.innerHTML = '<div class="cpx-empty">Még nem érkezett napló' + (G.dev ? ' erről a gépről' : '') + '. A gépek a következő indításkor maguktól küldik.</div>'; return; }
+		box.innerHTML = '<div class="au-tw"><table class="au-t gp-t"><thead><tr><th>Mikor</th><th>Gép</th><th>Ok és állapot</th></tr></thead><tbody>' + r.rows.map(x =>
+			'<tr><td class="gp-at">' + esc(dt(x.at)) + '<small>' + esc(ago(x.at)) + '</small></td><td>' + esc(x.name) + '</td><td><div class="gp-r">' + (x.r || []).map(t => '<div' + (/hiba|nem |nincs|sikertelen|lejárt|időtúllépés/i.test(t) ? ' class="bad"' : '') + '>' + esc(t) + '</div>').join('') + '</div><div class="gp-cs">' + gState(x.m || {}) + '</div>' +
+			(x.ln ? '<details data-glog="' + x.id + '"' + (G.open[x.id] ? ' open' : '') + '><summary>Napló (' + x.ln.toLocaleString('hu-HU') + ' karakter)</summary><pre class="gp-log">Betöltés…</pre></details>' : '') + '</td></tr>').join('') + '</tbody></table></div>';
+		box.querySelectorAll('[data-glog]').forEach(d => { const ld = async () => { if (!d.open || d.dataset.done) return; d.dataset.done = 1; const pre = d.querySelector('pre'); try { const l = (await post('cp_bdg_log', { id: d.dataset.glog })).log; pre.textContent = l; pre.innerHTML = pre.innerHTML.replace(/^(.*(?:HIBA|KRITIKUS|hiba|Error|error).*)$/gm, '<mark>$1</mark>'); pre.scrollTop = pre.scrollHeight; } catch (e) { pre.textContent = e.message; } };
+			d.addEventListener('toggle', () => { G.open[d.dataset.glog] = d.open; ld(); }); ld(); });
 	}
 	/* v2.9.236: Szerver – OPcache és terhelés (csak olvasás) */
 	function srvView(main) {
@@ -445,6 +489,10 @@
 		'.an-two{display:grid;grid-template-columns:3fr 2fr;gap:14px;background:#fff;border:1px solid var(--li);border-radius:12px;padding:12px}.an-l{font-size:12px;color:var(--mu)}.an-cols{display:flex;gap:4px;align-items:flex-end;height:150px;margin-top:6px}.an-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;height:100%}.an-cb{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}.an-cb i{display:block;width:30%;border-radius:2px 2px 0 0;min-height:1px}.an-cb .in,.an-lg .in{background:#2F5BD8}.an-cb .out,.an-lg .out{background:#7FA2F0}.an-cb .act,.an-lg .act{background:#F2A33A}.an-col small{font-size:10.5px;color:var(--mu)}' +
 		'.an-h4{font:700 13px Inter,sans-serif;margin:12px 0 2px}.an-pairs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.an-pairs span{background:#fff;border:1px solid var(--li);border-radius:999px;padding:3px 10px;font-size:12px}.an-one{grid-template-columns:1fr}.an-cb .op,.an-lg .op{background:#BFD0F6}.an-cb .ac,.an-lg .ac{background:#2F5BD8}.an-col .an-pc{font-size:9.5px}.an-cb .op .ac{width:auto;border-radius:0}.an-hr{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}.an-hr span{overflow-wrap:anywhere}.an-hr small{color:var(--mu)}.an-lw{grid-template-columns:3fr 2fr}.an-lw>div:last-child .an-hr{grid-template-columns:minmax(0,1fr) auto auto}.an-sm{height:70px}.cpx-main:has(.au-ut),.cpx-main:has(.au.an){max-width:none}.au:has(.au-ut),.au.an{max-width:min(1600px,100%)}.au-ut .au-dc{max-width:520px}.au-ut td.au-who small.au-dom{display:none}@media (max-width:760px){.au-ut td.au-who small.au-dom{display:block}}.an-wk{grid-template-columns:repeat(4,minmax(0,1fr))}.an-wk b{font-size:19px}.an-wk b i{font-style:normal;font-size:11px;margin-left:6px;vertical-align:3px}.an-wk i.up{color:#1F9D55}.an-wk i.dn{color:#B42318}.an-wk small{display:block;font-size:11px;color:var(--mu);margin-top:2px}' +
 		'.srv-st{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;border-radius:12px;padding:10px 14px;margin-bottom:8px;font-size:13px}.srv-st b{font:800 15px \"Plus Jakarta Sans\",sans-serif}.srv-st.ok{background:#E6F4EA;color:#1E5B34}.srv-st.mid{background:#FFF4DE;color:#7A4A0B}.srv-st.bad{background:#FBE3E1;color:#8E2A22}' +
+		'.gp-devs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:0 0 10px}.gp-d{background:#fff;border:1px solid var(--li);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;min-width:0}.gp-d.off{opacity:.55}.gp-d b{font-size:14px;overflow-wrap:anywhere}.gp-d b i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#C9C4BB;margin-right:6px;vertical-align:1px}.gp-d b i.on{background:#17A34A;box-shadow:0 0 0 3px #DDF3E6}.gp-d small{color:var(--mu);font-size:12px}.gp-d .cpx-btn{margin-top:4px}' +
+		'.gp-t td{vertical-align:top}.gp-at{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}.gp-at small{display:block;font-weight:400;color:var(--mu);font-size:11.5px}.gp-r div{font-size:13px;overflow-wrap:anywhere}.gp-r .bad{color:#9B2C1F;font-weight:600}.gp-cs{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 2px}.gp-c{background:#F1EFEA;border-radius:999px;padding:1px 8px;font-size:11.5px;color:#4A5163;overflow-wrap:anywhere}.gp-c.ok{background:#E6F4EA;color:#1E5B34}.gp-c.bad{background:#FDECEA;color:#9B2C1F}' +
+		'.gp-t details summary{cursor:pointer;font-size:12.5px;color:#2F5BD8;margin-top:4px}.gp-log{max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#F7F6F3;border:1px solid var(--li);border-radius:8px;padding:8px 10px;margin:6px 0 0}.gp-log mark{background:#FDECEA;color:#9B2C1F}' +
+		'@media (max-width:760px){.gp-t th:nth-child(2),.gp-t td:nth-child(2){display:none}}' +
 		'.srv-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#F5F3EF;margin:0 0 12px}.srv-bar i{display:block;height:100%}.srv-bar .u{background:#2F5BD8}.srv-bar .w{background:#D9534F}.srv-bar .f{background:#1F9D55}' +
 		'.srv-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.srv-t td{padding:4px 8px;font-size:12.5px;font-variant-numeric:tabular-nums}.an-kpi small{display:block;color:var(--mu);font-size:11.5px;margin-top:2px}' +
 		'@media (max-width:760px){.srv-two{grid-template-columns:1fr}.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';
