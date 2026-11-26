@@ -91,13 +91,37 @@ function cp_slot_pool_join($aid) {
 
 /* v2.9.349: a deal gépei slotokra bontva – gépenként egy slot. Kulcsok (a régiekkel azonosak az 1. gépnél):
    szelfigép: s1, s2, …; spinner: p1 (csak spinner) / p2 (szelfi + spinner), majd egyesével tovább. Visszatérés: [[skey, kind, n, of], …] */
+/* v2.9.375: a nem gépes szolgáltatások saját slotja (a felhasználó döntése, 2026-11-26: gépes fotós szolgáltatások, hostos aktivitások,
+   csak kiszállítást igénylők; a külső szakemberek – DJ, élőzene, fotós / videós, karikaturista, Crazy Beauty – nem): szolgáltatás => [kulcs, tudás, címke] */
+function cp_slot_svc_map() {
+	return array(
+		'Selfie Tükör' => array('xtuk', 'tukor', 'Selfie Tükör'), 'SzelfiRobot' => array('xrob', 'robot', 'SzelfiRobot'), 'SelfieLight' => array('xsl', 'stand', 'SelfieLight'),
+		'AI fotózás' => array('xaif', '', 'AI fotózás'), 'AI Karikatúra' => array('xaik', '', 'AI karikatúra'), 'Greenbox' => array('xgb', '', 'Greenbox'),
+		'Hashtag Printing' => array('xhp', '', 'Hashtag Printing'), 'TattooPrinting' => array('xtp', '', 'Tattoo Printing'),
+		'VR Élmény' => array('xvr', 'vr', 'VR élmény'), 'Mindflex' => array('xmf', '', 'Mindflex'), 'CrazyCatch' => array('xcc', 'catchit', 'CrazyCatch'), 'CrazyLight' => array('xcl', '', 'CrazyLight'),
+		'Karaoke' => array('xkar', '', 'Karaoke'), 'LED Tánctér' => array('xled', '', 'LED tánctér'),
+		'Csocsó / Foosball' => array('xcso', '', 'Csocsó'), 'XXL csocsó / XXL Foosball' => array('xxxl', '', 'XXL csocsó'), 'Ülőfoci / Seated Football' => array('xulo', '', 'Ülőfoci'),
+	);
+}
+function cp_slot_svc_of($e) {
+	$out = array(); $M = cp_slot_svc_map();
+	foreach (array_map('trim', explode(',', (string) ($e['svcl'] ?? ''))) as $v) { if ($v !== '' && isset($M[$v])) { $out[$M[$v][0]] = $M[$v]; } }
+	return array_values($out);
+}
 function cp_slot_units($e) {
 	$kind = (string) ($e['kind'] ?? 'selfie'); $deal = (int) ($e['deal'] ?? $e['id']);
 	if (isset($e['ns'])) { $ns = (int) $e['ns']; $np = (int) $e['np']; } elseif (function_exists('cp_dmach_n')) { list($ns, $np) = cp_dmach_n($deal, $kind); } else { $ns = in_array($kind, array('selfie', 'both'), true) ? 1 : 0; $np = in_array($kind, array('spin', 'both'), true) ? 1 : 0; }
+	$sv = cp_slot_svc_of($e);
+	/* csak szolgáltatás (pl. LED tánctér) – nincs szelfigép a listában és a csomagmezőben sem: nem nyit szelfigép-slotot (kivéve, ha kézzel beállították a gépszámot) */
+	if ($sv && $kind === 'selfie' && trim((string) ($e['selfie'] ?? '')) === '' && !preg_match('/(^|,\s*)(szelfigép|hibrid)/iu', (string) ($e['svcl'] ?? ''))) {
+		$ex = function_exists('cp_dmach_many') ? (cp_dmach_many(array($deal))[$deal] ?? array(null, null)) : array(null, null);
+		if ($ex[0] === null && !isset($e['ns'])) { $ns = 0; }
+	}
 	$u = array();
 	for ($j = 1; $j <= $ns; $j++) { $u[] = array('s' . $j, 'selfie', $j, $ns); }
 	$p0 = $kind === 'both' || ($ns > 0 && $kind !== 'spin') ? 2 : 1;
 	for ($j = 1; $j <= $np; $j++) { $u[] = array('p' . ($p0 + $j - 1), 'spin', $j, $np); }
+	foreach ($sv as $x) { $u[] = array($x[0], 'svc', 1, 1, $x[2], $x[1]); }
 	return $u;
 }
 function cp_slot_states() { return array('invited' => 'Meghívva', 'accepted' => 'Ráér', 'declined' => 'Nem ér rá', 'final' => 'Véglegesítve', 'dropped' => 'Nem rá esett'); }
@@ -164,7 +188,7 @@ function cp_slot_day($day) {
 			$need = $k === 'spin' || $bp === false ? 'kezelo' : 'host';
 			$nk = $deal . '|' . $day . '|' . $skey;
 			if (isset($need_o[$nk])) { $need = $need_o[$nk] === 'kezelo' ? 'kezelo' : 'host'; }
-			$slots[] = array('deal' => $deal, 'skey' => $skey, 'kind' => $k, 'skill' => cp_slot_skill($k, $k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
+			$slots[] = array('deal' => $deal, 'skey' => $skey, 'kind' => $k, 'lbl' => (string) ($un[4] ?? ''), 'skill' => $k === 'svc' ? (string) ($un[5] ?? '') : cp_slot_skill($k, $k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
 				'need' => $need, 'need_set' => isset($need_o[$nk]) ? 1 : 0, 'cnt' => cp_slot_cnt($deal, $day, $skey), 'bp' => $bp === null ? -1 : ($bp ? 1 : 0),
 				'title' => (string) ($e['title'] ?? ''), 'stage' => $stage, 'booked' => ($e['state'] ?? '') === 'booked' ? 1 : 0,
 				'time' => (string) ($e['time'] ?? '') !== '' && is_array($e['win'] ?? null) && isset($e['win'][1]) ? (string) $e['time'] . '–' . sprintf('%02d:%02d', intdiv((int) $e['win'][1], 60) % 24, (int) $e['win'][1] % 60) : (string) ($e['time'] ?? ''), 'loc' => (string) ($e['loc'] ?? ''), 'svc' => (string) ($k === 'spin' ? ($e['spin'] ?? '') : ($e['selfie'] ?? '')),
@@ -192,7 +216,7 @@ function cp_slot_day($day) {
 	/* v2.9.308: a rendezvény csak „Szerződés kiküldve”-től felfelé igényel embert; a függő ajánlat slotja csak akkor marad, ha már van rá beosztás */
 	$slots = array_values(array_filter($slots, function ($s) { if ($s['booked']) { return true; } foreach ($s['asg'] as $a) { if (!in_array($a['st'], array('declined', 'dropped'), true)) { return true; } } return false; }));
 	/* v2.9.298: a nap köre – a napi meghívások + akit (régebben) közvetlenül egy rendezvényre osztottak be */
-	$ttl = array(); foreach ($slots as $s0) { $ttl[$s0['deal'] . '|' . $s0['skey']] = ($s0['title'] !== '' ? $s0['title'] : 'Deal #' . $s0['deal']) . ($s0['kind'] === 'spin' ? ' (spinner)' : ''); }
+	$ttl = array(); foreach ($slots as $s0) { $ttl[$s0['deal'] . '|' . $s0['skey']] = ($s0['title'] !== '' ? $s0['title'] : 'Deal #' . $s0['deal']) . ($s0['kind'] === 'spin' ? ' (spinner)' : ($s0['lbl'] !== '' ? ' (' . $s0['lbl'] . ')' : '')); }
 	$pool = array(); $inpool = array();
 	foreach ($poolr as $r) {
 		$kid = (int) $r['kz_id']; $k = $kz[$kid] ?? null; $inpool[$kid] = 1;
@@ -689,7 +713,10 @@ add_action('init', function () {
 }, 1);
 
 /* ------------------------------------------------------------ v2.9.117: a beosztás a dealen és a kezelő adatlapján */
-function cp_slot_lbl($skey) { return $skey !== '' && $skey[0] === 'p' ? '360 Spinner' : 'Szelfigép'; }
+function cp_slot_lbl($skey) {
+	if ($skey !== '' && $skey[0] === 'x') { foreach (cp_slot_svc_map() as $x) { if ($x[0] === $skey) { return $x[2]; } } }
+	return $skey !== '' && $skey[0] === 'p' ? '360 Spinner' : 'Szelfigép';
+}
 function cp_slot_for_deal($deal) {
 	if (!cp_slot_db_ok() || !function_exists('cp_kz_t')) { return array(); }
 	global $wpdb;
