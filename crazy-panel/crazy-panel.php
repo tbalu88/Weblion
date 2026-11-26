@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.369');
+define('CP_PANEL_VER', '2.9.370');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -527,6 +527,10 @@ function cp_panel_normalize($rows) {
 				$psvcx = $dv['l'];
 				$spx = array_values(array_filter($psvcx, function ($v) { return (bool) preg_match('/spinner/iu', $v); }));
 				if ($spx && $spin === '') { $spin = implode(', ', $spx); }
+				/* v2.9.370: ha a szolgáltatás-mezők szerint csak Spinner van (szelfigép / hibrid nincs), a szelfigép-csomagmező nem tesz szelfigépet a rendezvényre:
+				 * a webes űrlap a „Választott csomag” mezőt Spinner-kérésnél is kitöltheti (pl. „Mini - 3 óra - Korlátlan”), és ebből dupla (szelfigép + spinner) foglalás lett */
+				$selx = array_values(array_filter($psvcx, function ($v) { return (bool) preg_match('/^(szelfigép|hibrid)/iu', $v); }));
+				if ($spx && !$selx) { $sp = ''; }
 			}
 		}
 		if ($psvc) {
