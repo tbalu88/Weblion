@@ -3072,11 +3072,11 @@ function elCsv() {
 
 			const al = d.aam || [];
 			aam.innerHTML = '<h3>Kezelőknél lévő AAM- és KFT KP-befizetések <small class="cpx-muted">(Salesmate: ' + (d.aamMode === 'loose' ? 'EV, helyszíni készpénz vagy üres fizetési mód; KFT + helyszíni készpénz' : 'EV vagy KFT + helyszínen készpénz') + ', ' + esc(String(d.aamFrom || '').replace(/-/g, '.')) + '. óta: ' + (+d.aamTotal || 0) + ' deal, ebből ' + Math.max(0, (+d.aamTotal || 0) - al.length) + ' már rendezve)</small></h3>' +
-				(al.length ? '<div class="tw-aamwrap"><table class="el-t tw-at"><thead><tr><th>Dátum</th><th>Ügyfél</th><th>Kezelő</th><th class="r">Csomag</th><th class="r">Kiszállás</th><th class="r">Várható</th><th></th></tr></thead><tbody>' +
+				(al.length ? '<div class="tw-aamwrap"><table class="el-t tw-at"><thead><tr><th>Dátum</th><th>Ügyfél</th><th>Kezelő</th><th class="r">Csomag</th><th class="r">Kiszállás</th><th class="r">Hosszabbítás</th><th class="r">Várható</th><th></th></tr></thead><tbody>' +
 					al.map((a, n) => {
 						const kz = kezBySm(a.gk);
 						return '<tr><td class="td-d">' + twDot(a.date) + '</td><td><a href="#deals:' + Number(a.id) + '" data-pdeal="' + Number(a.id) + '">' + esc(a.who) + '</a><small class="mu">' + esc(a.stage) + '</small>' + (a.pm ? '' : '<small class="tw-pm">fizetési mód nincs kitöltve</small>') + (a.ct === 'KFT' ? '<small class="tw-pm" style="background:#E7F1FB;color:#1D4E89" title="KFT, helyszíni készpénz – az összeg bruttó (nettó ' + ft(a.net || 0) + ' + 27% ÁFA)">KFT KP · bruttó</small>' : '') + '</td><td>' + esc(kz ? kz.name : (a.gk || '–')) + '</td>' +
-							'<td class="r">' + ft(a.val) + '</td><td class="r">' + (a.kd ? ft(a.kd) : '–') + '</td><td class="r"><b>' + ft(a.val + a.kd) + '</b></td>' +
+							'<td class="r">' + ft(a.val) + '</td><td class="r">' + (a.kd ? ft(a.kd) : '–') + '</td><td class="r">' + (a.hxa ? ft(a.hxa) + '<small class="mu">' + String(a.hx).replace('.', ',') + ' óra</small>' : '–') + '</td><td class="r"><b>' + ft(a.val + a.kd + (a.hxa || 0)) + '</b></td>' +
 							'<td class="tw-acts"><button class="cpx-btn sm" data-aam="' + n + '">Tárcába került ✓</button> <button class="cpx-btn ghost sm" data-skip="' + n + '" title="Kivétel a listából (pl. mégsem készpénzben fizetett)">Nem kell</button></td></tr>';
 					}).join('') + '</tbody></table></div>'
 					: '<p class="cpx-muted">Nincs függő AAM-befizetés – minden helyszíni készpénzes EV-s rendezvény pénze a tárcában van.</p>');
@@ -3216,9 +3216,9 @@ function elCsv() {
 		const dlg = document.getElementById('cpx-modal');
 		const kz = kezBySm(x.gk);
 		dlg.innerHTML = '<div class="cpx-sheet narrow"><div class="cpx-sheet-h"><h3>AAM-befizetés a tárcába</h3><button class="cpx-x" data-close aria-label="Bezárás">×</button></div>' +
-			'<p><b>' + esc(x.who) + '</b> – rendezvény: ' + esc(x.date.replace(/-/g, '.')) + '.<br><span class="cpx-muted">Csomag (deal értéke): ' + ft(x.val) + (x.kd ? ' · kiszállási díj: ' + ft(x.kd) : '') + '</span></p>' +
+			'<p><b>' + esc(x.who) + '</b> – rendezvény: ' + esc(x.date.replace(/-/g, '.')) + '.<br><span class="cpx-muted">Csomag (deal értéke): ' + ft(x.val) + (x.kd ? ' · kiszállási díj: ' + ft(x.kd) : '') + (x.hxa ? ' · hosszabbítás (' + String(x.hx).replace('.', ',') + ' óra): ' + ft(x.hxa) : '') + '</span></p>' +
 			'<div class="el-grid"><label>Tárcába került<input type="date" id="ta-d" value="' + today() + '"></label>' +
-			'<label>Átadott összeg (Ft)<input id="ta-a" inputmode="numeric" autocomplete="off" value="' + (x.val + x.kd) + '"></label>' +
+			'<label>Átadott összeg (Ft)<input id="ta-a" inputmode="numeric" autocomplete="off" value="' + (x.val + x.kd + (x.hxa || 0)) + '"></label>' +
 			'<label>Ki hozta<input id="ta-k" list="tw-kl2" maxlength="60" value="' + esc(kz ? kz.name : (x.gk || '')) + '"></label>' +
 			'<label class="wide">Megjegyzés<input id="ta-n" maxlength="300" placeholder="pl. + 3500 visszajáró"></label></div>' + twKezList('tw-kl2') +
 			'<p class="cpx-muted">Az összeget írd át, ha a kezelő mást adott le (pl. kiszállás nélkül, visszajáróval).</p>' +

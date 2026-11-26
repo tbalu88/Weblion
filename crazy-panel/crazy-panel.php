@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.373');
+define('CP_PANEL_VER', '2.9.374');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3924,6 +3924,7 @@ function cp_tw_defaults() {
 		'aam_from' => '2026-09-01',
 		'aam_mode' => 'strict',
 		'aam_skip' => array(),
+		'hx_rate'  => 30000, /* v2.9.374: helyszíni hosszabbítás díja (Ft / óra, a szerződések szerint) – AAM-nál ennyi, KFT KP-nál +27% ÁFA */
 		'key'      => '',
 	);
 }
@@ -4124,6 +4125,7 @@ function cp_tw_aam_deals($o, $force) {
 	$fields = array('deal.id', 'deal.title', 'deal.status', 'deal.stage', 'deal.dealValue', 'deal.primaryContact', 'deal.' . $p['f_date'], 'deal.' . $o['f_pay'], 'deal.' . $o['f_ev']);
 	if ($e['f_kd'] !== '') { $fields[] = 'deal.' . $e['f_kd']; }
 	if ($e['f_gk'] !== '') { $fields[] = 'deal.' . $e['f_gk']; }
+	if ($p['f_hx'] !== '') { $fields[] = 'deal.' . $p['f_hx']; } /* v2.9.374: hosszabbítás (Követés) */
 	$fields = array_values(array_unique($fields));
 	// a cp_panel_d_ előtag miatt a panel gyorsítótár-ürítése ezt is törli
 	$ck = 'cp_panel_d_tw' . md5('v5|' . (string) ($o['kft_on'] ?? 1) . '|' . $from . $to . wp_json_encode($fields) . $o['pay_val'] . '|' . $o['ev_val']);
@@ -4174,6 +4176,7 @@ function cp_tw_aam_deals($o, $force) {
 				'stage' => cp_panel_str(cp_panel_get($r, 'stage')),
 				'pm'    => $pm,
 				'ct'    => $isK ? 'KFT' : 'EV',
+				'hxs'   => $p['f_hx'] !== '' ? cp_panel_hx_parse(cp_panel_get($r, $p['f_hx'])) : '',
 			);
 			/* v2.9.304: KFT KP – a deal értéke és a kiszállási díj nettó, a helyszínen bruttót (+27% ÁFA) fizetnek */
 			if ($isK) { $item['net'] = $item['val'] + $item['kd']; $item['val'] = (int) round($item['val'] * 1.27); $item['kd'] = (int) round($item['kd'] * 1.27); }
@@ -4236,11 +4239,21 @@ function cp_tw_payload($force) {
 	$mode = $o['aam_mode'] === 'loose' ? 'loose' : 'strict';
 	$src = ($mode === 'loose' && isset($aam['loose'])) ? $aam['loose'] : $aam['list'];
 	$pending = cp_tw_pending($o, $src, $led);
+	/* v2.9.374: helyszínen beszedett hosszabbítás – a kezelői adatlap (sor: rhx), a Követés / Salesmate mező vagy a deal hosszabbítás-állapota közül a legnagyobb */
+	foreach ($pending as &$px) {
+		$h = (float) ($px['hxs'] ?? 0);
+		$st = function_exists('cp_el_st_get') ? cp_el_st_get((string) $px['id']) : array();
+		if (isset($st['hx']) && $st['hx'] !== '') { $h = max($h, (float) $st['hx']); }
+		foreach ((array) ($st['r'] ?? array()) as $rw) { if (isset($rw['rhx']) && $rw['rhx'] !== '') { $h = max($h, (float) $rw['rhx']); } }
+		$rate = (int) ($o['hx_rate'] ?? 30000);
+		$px['hx'] = $h; $px['hxa'] = $h > 0 ? (int) round($h * $rate * ($px['ct'] === 'KFT' ? 1.27 : 1)) : 0;
+	}
+	unset($px);
 	$bal = 0;
 	foreach ($led as $x) { $bal += (int) $x['a']; }
 	foreach ($der as $x) { $bal += (int) $x['a']; }
 	$aamOpen = 0;
-	foreach ($pending as $x) { $aamOpen += (int) $x['val'] + (int) $x['kd']; }
+	foreach ($pending as $x) { $aamOpen += (int) $x['val'] + (int) $x['kd'] + (int) ($x['hxa'] ?? 0); }
 	$base = cp_tw_base();
 	return array(
 		'ledger'  => $led,
