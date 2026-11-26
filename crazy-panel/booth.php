@@ -258,6 +258,7 @@ function cp_booth_admin() {
 	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form>';
 	cp_booth_admin_ai();
 	if (function_exists('cp_blog_admin')) { cp_blog_admin(); }
+	if (function_exists('cp_bdg_admin')) { cp_bdg_admin(); } /* v2.9.388: hibanaplók */
 	echo '</div>';
 }
 /* v2.9.287: AI-kredit a panel Eszközök csoportjában – egyenleg (OpenRouter), havi felhasználás, feltöltés linkje */
@@ -469,7 +470,7 @@ add_action('rest_api_init', function () {
 		/* a nyomatok száma dealenként és gépenként (a riporthoz: a legnagyobb jelentett érték marad meg) */
 		if ($deal && $b['prints']) { $p = get_option('cp_booth_prints', array()); if (!is_array($p)) { $p = array(); } $k = (string) $deal; if ((int) ($p[$k][$d['id']] ?? 0) < $b['prints']) { $p[$k][$d['id']] = $b['prints']; update_option('cp_booth_prints', $p, false); } }
 		$c = $deal ? cp_booth_dcfg_get($deal) : null;
-		return array('ok' => true, 'cfg' => $c ? $c['cfg'] : null, 'at' => $c ? (int) $c['at'] : 0);
+		return array('ok' => true, 'cfg' => $c ? $c['cfg'] : null, 'at' => $c ? (int) $c['at'] : 0, 'diag' => isset(cp_bdg_req_all()[(string) $d['id']]) ? 1 : 0); /* v2.9.388: a panel kérte a naplót */
 	}));
 });
 /* a deal statisztikája a galériából (5 percig tárolva) */

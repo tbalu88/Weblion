@@ -16,7 +16,7 @@
   /* online felület: ha új változat jött, a kezdőképernyőn (tétlenül) töltjük újra */
   function uiSwap() { if (S.busy || S.scr !== 'start' || !B.reloadUi) return; S.uiNew = false; setTimeout(() => { if (!S.busy && S.scr === 'start') B.reloadUi(); else S.uiNew = true; }, 1500); }
   if (B.onUiReady) B.onUiReady(() => { S.uiNew = true; uiSwap(); });
-  function err(m) { S.lastErr = { m: String(m), t: Date.now() }; const e = $('[data-err]'); e.classList.remove('ok'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); }
+  function err(m) { S.lastErr = { m: String(m), t: Date.now() }; const e = $('[data-err]'); e.classList.remove('ok'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; }, 6000); B.log('hiba: ' + m); diagSoon('hiba: ' + m); }
   /* v0.11: semleges (nem hiba) visszajelzés ugyanott */
   function note(m) { const e = $('[data-err]'); e.classList.add('ok'); e.textContent = m; e.hidden = false; clearTimeout(err.t); err.t = setTimeout(() => { e.hidden = true; e.classList.remove('ok'); }, 7000); B.log(m); }
   /* v0.11: megerősítő ablak nagy gombokkal; btns: [[érték, felirat, osztály]] → a választott érték, vagy null (Mégse, Esc, háttér) */
@@ -539,7 +539,7 @@
         '<label><input type="radio" name="evpick" value="-1"' + (!cur.deal ? ' checked' : '') + '> <span>Kézi (rendezvény nélkül)</span></label>';
       S.evList = list.map(e => Object.assign({ date }, e));
       msg.textContent = list.length ? '' : 'Erre a napra nincs foglalt rendezvény.';
-    } catch (x) { msg.textContent = x.message; S.evList = []; box.innerHTML = '<label><input type="radio" name="evpick" value="-1" checked> <span>Kézi (rendezvény nélkül)</span></label>'; }
+    } catch (x) { msg.textContent = x.message; diagSoon('rendezvénylista: ' + x.message); S.evList = []; box.innerHTML = '<label><input type="radio" name="evpick" value="-1" checked> <span>Kézi (rendezvény nélkül)</span></label>'; }
   }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   /* ---------- galéria a gépen */
@@ -1165,7 +1165,7 @@
     const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
     const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
       err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
-    try { const r = await call(B.beat, body); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ }
+    try { const r = await call(B.beat, body); if (r && r.diag) diagNow('a panel kérte'); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
   }
   setInterval(beat, 60000); setTimeout(beat, 6000);
   /* a panelből (deal adatlap → Szelfigép → Beállítások a gépekre) mentett beállítások: csak a kezdőképernyőn, fotózás közben soha */
@@ -1486,5 +1486,57 @@
     for (const [k, v] of Object.entries(vals || {})) { if (!v || (k === 'temperature' && !/kelvin/i.test((vals || {}).whitebalance || ''))) continue; try { await call(B.camSet, k, v); good[k] = v; } catch (e) { errs.push(e.message); } }
     return { errs, good };
   }
+
+  /* ---------- 2026-11-26: hibanapló a panelbe (automatikus, kattintás nélkül)
+   * Indításkor, minden hibánál (legfeljebb percenként egyszer, az utána jövő sorokat is megvárva) és ha a panel kéri,
+   * elküldi a program naplójának végét (booth.log), a verziót és az állapotot. Gépkulcs nélkül / hibás kulccsal is
+   * (azonosítatlan gépként). A gépkulcs a küldés előtt kikerül a naplóból. Net nélkül megjegyzi, és 2 percenként újrapróbálja. */
+  const DIAG_URL = 'https://eventcrazy.hu/wp-json/crazy/v1/booth/diag';
+  const D = { t: 0, last: 0, why: [], busy: false };
+  function diagInst() { try { let v = localStorage.getItem('cb_inst'); if (!v) { v = Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('cb_inst', v); } return v; } catch (e) { return 'nols'; } }
+  function diagSoon(why) {
+    if (D.why.length < 20) D.why.push(new Date().toLocaleTimeString('hu-HU') + ' ' + String(why).slice(0, 300));
+    if (D.t) return;
+    const wait = Math.max(20000, 60000 - (Date.now() - D.last));
+    D.t = setTimeout(() => { D.t = 0; diagSend(); }, wait);
+  }
+  function diagNow(why) { D.why.push(new Date().toLocaleTimeString('hu-HU') + ' ' + why); clearTimeout(D.t); D.t = 0; diagSend(); }
+  async function diagLog() {
+    if (!B.uiInfo || !B.readImage) return '';
+    try {
+      const r = await B.uiInfo(); const f = r && r.ok && r.v && r.v.online ? String(r.v.file) : '';
+      const m = /^(.*)[\\/]ui[\\/]current[\\/]index\.html$/.exec(f); if (!m) return '';
+      const sep = f.indexOf('\\') >= 0 ? '\\' : '/';
+      const x = await B.readImage(m[1] + sep + 'booth.log'); if (!x || !x.ok) return '';
+      const b64 = String(x.v).replace(/^data:[^,]*,/, ''); const bin = atob(b64.length > 400000 ? b64.slice(-(400000 - (400000 % 4))) : b64);
+      const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      let t = new TextDecoder('utf-8').decode(u8); t = t.slice(t.indexOf('\n') + 1);
+      return t.slice(-120000);
+    } catch (e) { return 'naplóolvasási hiba: ' + e.message; }
+  }
+  async function diagSend() {
+    if (D.busy) return; D.busy = true; D.last = Date.now();
+    const why = D.why.splice(0); let pend = []; try { pend = JSON.parse(localStorage.getItem('cb_diag_p') || '[]'); } catch (e) { pend = []; }
+    const reasons = pend.concat(why).slice(-30);
+    try {
+      const c = S.cfg || {}, key = String(c.boothKey || '');
+      let log = await diagLog(); if (key.length >= 8) log = log.split(key).join('[gépkulcs]');
+      let st = {}; try { const r = await B.cloudStatus(); if (r && r.ok) st = r.v || {}; } catch (e) { st = {}; }
+      const body = { inst: diagInst(), reasons, ver: String(c.version || '') + (S.uiVer ? '/' + S.uiVer : ''), os: navigator.userAgent.slice(0, 200), mac: !!c.mac,
+        key: key ? (key.length >= 20 ? 'van' : 'rövid') : 'nincs', cam: c.camera || '', camOk: !S.cfg ? null : WEB() ? !!(S.stream && S.stream.getVideoTracks().some(t => t.readyState === 'live')) : null,
+        net: navigator.onLine, scr: S.scr, event: c.event ? { deal: c.event.deal || 0, title: c.event.title || '', date: c.event.date || '' } : null, queue: st.queued || 0, upErr: st.err || '', log };
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 30000);
+      const r = await fetch(DIAG_URL, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, key ? { 'X-Booth-Key': key } : {}), body: JSON.stringify(body), signal: ctl.signal });
+      clearTimeout(to);
+      if (!r.ok && r.status !== 429) throw new Error('HTTP ' + r.status);
+      try { localStorage.removeItem('cb_diag_p'); } catch (e) { /* */ }
+    } catch (e) {
+      try { localStorage.setItem('cb_diag_p', JSON.stringify(reasons)); } catch (x) { /* */ }
+      clearTimeout(D.r); D.r = setTimeout(() => { if (!D.t) diagSend(); }, 120000);
+    } finally { D.busy = false; }
+  }
+  window.addEventListener('error', e => diagSoon('JS-hiba: ' + (e.message || '') + ' ' + (e.filename || '').split(/[\\/]/).pop() + ':' + (e.lineno || '')));
+  window.addEventListener('unhandledrejection', e => diagSoon('JS-hiba: ' + String(e.reason && e.reason.message || e.reason)));
+  setTimeout(() => diagNow('indítás'), 30000);
   (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); (U().startWindowed ? B.fullscreen(false) : B.isFullscreen()).then(r => { if (r && r.ok) $('[data-act=fs] span').textContent = r.v ? 'Teljes képernyő ki' : 'Teljes képernyő be'; }); evShow(); await initCam(); })().catch(e => err(e.message));
 })();
