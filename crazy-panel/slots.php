@@ -112,8 +112,8 @@ function cp_slot_units($e) {
 	$kind = (string) ($e['kind'] ?? 'selfie'); $deal = (int) ($e['deal'] ?? $e['id']);
 	if (isset($e['ns'])) { $ns = (int) $e['ns']; $np = (int) $e['np']; } elseif (function_exists('cp_dmach_n')) { list($ns, $np) = cp_dmach_n($deal, $kind); } else { $ns = in_array($kind, array('selfie', 'both'), true) ? 1 : 0; $np = in_array($kind, array('spin', 'both'), true) ? 1 : 0; }
 	$sv = cp_slot_svc_of($e);
-	/* csak szolgáltatás (pl. LED tánctér) – nincs szelfigép a listában és a csomagmezőben sem: nem nyit szelfigép-slotot (kivéve, ha kézzel beállították a gépszámot) */
-	if ($sv && $kind === 'selfie' && trim((string) ($e['selfie'] ?? '')) === '' && !preg_match('/(^|,\s*)(szelfigép|hibrid)/iu', (string) ($e['svcl'] ?? ''))) {
+	/* csak szolgáltatás (pl. AI karikatúra, LED tánctér) – a szolgáltatáslistában nincs szelfigép / hibrid (a csomagmezőt az űrlap gyakran kitölti, az nem számít): nem nyit szelfigép-slotot (kivéve, ha kézzel beállították a gépszámot) */
+	if ($sv && $kind === 'selfie' && !preg_match('/(^|,\s*)(szelfigép|hibrid)/iu', (string) ($e['svcl'] ?? ''))) {
 		$ex = function_exists('cp_dmach_many') ? (cp_dmach_many(array($deal))[$deal] ?? array(null, null)) : array(null, null);
 		if ($ex[0] === null && !isset($e['ns'])) { $ns = 0; }
 	}
