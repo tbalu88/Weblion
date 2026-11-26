@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.375');
+define('CP_PANEL_VER', '2.9.376');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -4253,7 +4253,7 @@ function cp_tw_payload($force) {
 	foreach ($led as $x) { $bal += (int) $x['a']; }
 	foreach ($der as $x) { $bal += (int) $x['a']; }
 	$aamOpen = 0;
-	foreach ($pending as $x) { $aamOpen += (int) $x['val'] + (int) $x['kd'] + (int) ($x['hxa'] ?? 0); }
+	foreach ($pending as $x) { $aamOpen += (int) $x['val'] + (int) ($x['hxa'] ?? 0); } /* v2.9.376: a deal értéke (szerződés) már tartalmazza a kiszállást – nem adjuk hozzá még egyszer */
 	$base = cp_tw_base();
 	return array(
 		'ledger'  => $led,
