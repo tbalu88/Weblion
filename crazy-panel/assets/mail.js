@@ -7,6 +7,8 @@
 	const VARS = M.vars || {};
 	const BOXES = M.boxes || [];
 
+	/* v2.9.380: van-e saját aláírás a levélben (az idézett előzményben – blockquote, .cpq, .gmail_quote – lévő aláírás nem számít) */
+	const ownSig = h => { if (!/cp-sign/.test(h || '')) return false; const t0 = document.createElement('div'); t0.innerHTML = h; t0.querySelectorAll('blockquote, .cpq, .gmail_quote').forEach(z => z.remove()); return !!t0.querySelector('.cp-sign'); };
 	const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 	const S = { view: 'inbox', folder: 'inbox', box: '', tpls: null, cur: null, main: null, err: '', loading: false, sel: new Set(), last: 0, rows: [], so: 'new', reading: false };
@@ -386,7 +388,7 @@
 			if (c === 'img') { const u = window.prompt('A kép webcíme (https://…):', 'https://'); if (u && /^https:\/\//i.test(u.trim())) exec('insertImage', u.trim()); return; }
 			if (c === 'table') return exec('insertHTML', '<table style="border-collapse:collapse;width:100%"><tbody><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr><tr><td style="border:1px solid #ccc;padding:6px">&nbsp;</td><td style="border:1px solid #ccc;padding:6px">&nbsp;</td></tr></tbody></table><p><br></p>');
 			if (c === 'sign') {
-				if (M.sig) { if (area.innerHTML.indexOf('cp-sign') >= 0) { toast('Az aláírás már a levélben van.'); return; } return exec('insertHTML', '<div class="cp-sign">' + M.sig + '</div>'); }
+				if (M.sig) { if (ownSig(area.innerHTML)) { toast('Az aláírás már a levélben van.'); return; } return exec('insertHTML', '<div class="cp-sign">' + M.sig + '</div>'); }
 				if (M.send && M.send.on) { toast('Még nincs aláírásod – az admin állítja be (Beállítások → Felhasználók → Aláírás).', true); return; }
 				let sig = '';
 				try { sig = localStorage.getItem('cpmail_sig') || ''; } catch (e) { /* privát mód */ }
@@ -2101,7 +2103,8 @@
 		if (ctx.thread) { const cmp0 = box.querySelector('.ml-compose'); if (cmp0) cmp0.insertAdjacentHTML('afterbegin', '<div class="ml-pres" data-pres hidden></div>'); if (!PR.known[ctx.thread] && ctx.known) PR.known[ctx.thread] = ctx.known; setTimeout(presPing, 50); }
 		/* v1.58: az aláírás írás közben a levélben van (válasznál az idézett levél fölött), mint a Salesmate-ben */
 		const SIG = M.sig ? '<div class="cp-sign">' + M.sig + '</div>' : '';
-		const withSig = b => { b = b || ''; if (!SIG || /cp-sign/.test(b)) return b; if (ctx.quote && b.indexOf(ctx.quote) >= 0) return b.replace(ctx.quote, SIG + ctx.quote); return b + SIG; };
+		/* v2.9.380: csak a saját (idézeten kívüli) aláírás számít – az idézett levélben lévő kolléga-aláírás nem */
+		const withSig = b => { b = b || ''; if (!SIG || ownSig(b.replace(ctx.quote || '\u0000', ''))) return b; if (ctx.quote && b.indexOf(ctx.quote) >= 0) return b.replace(ctx.quote, SIG + ctx.quote); return b + SIG; };
 		const ed = editor(q('[data-ed]'), withSig(draft ? (draft.quote && draft.body === draft.quote ? '<p><br></p>' + draft.body : draft.body) : '<p><br></p>'));
 		/* v2.9.203: a formázó gombsor mindig látszik (a görgetőben a Küldés-sáv fölé tapad) – a sáv magassága CSS-változóban */
 		{ const sb = q('.ml-send'); if (sb) { const hostEl = sb.closest('.ml-compose') || box, sh = () => hostEl.style.setProperty('--mlsh', sb.offsetHeight + 'px'); sh(); if (window.ResizeObserver) new ResizeObserver(sh).observe(sb); } }
