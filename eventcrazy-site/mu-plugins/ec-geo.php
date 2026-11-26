@@ -109,7 +109,7 @@ add_filter('wpseo_schema_organization', function ($d) {
 	$d['image'] = array('@id' => home_url('/#/schema/logo/image/'));
 	$d['email'] = 'info@eventcrazy.hu';
 	$d['telephone'] = '+36308441791';
-	$d['taxID'] = '25095632-2-43';
+	$d['taxID'] = '25095632-2-03';
 	$d['address'] = array('@type' => 'PostalAddress', 'addressLocality' => 'Budapest', 'addressCountry' => 'HU');
 	$d['areaServed'] = array('@type' => 'Country', 'name' => 'Magyarország');
 	$d['contactPoint'] = array('@type' => 'ContactPoint', 'contactType' => 'customer service', 'telephone' => '+36308441791', 'email' => 'info@eventcrazy.hu', 'availableLanguage' => array('hu', 'en'));
