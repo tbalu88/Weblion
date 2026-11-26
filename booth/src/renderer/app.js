@@ -679,6 +679,11 @@
     if (WEB() && S.stream && !S.stream.getVideoTracks().some(t => t.readyState === 'live')) L.push(['A kamera kapcsolata megszakadt – húzd ki és dugd vissza, vagy indítsd újra a programot', '']);
     if (!remote() && !isStation()) printList().forEach(n => { const l = paperLeft(n); if (l === 0) L.push(['Elfogyott a papír' + (printList().length > 1 ? ' (' + pName(n) + ')' : '') + ' – szólj a kezelőnek', '']); else if (l !== null && l <= 30) L.push(['Kevés a papír: ' + l + ' lap' + (printList().length > 1 ? ' (' + pName(n) + ')' : ''), 'mid']); });
     const d = new Date(); if (d.getFullYear() < 2026) L.push(['A gép órája rossz (' + d.toLocaleDateString('hu-HU') + ') – a képek dátuma hibás lesz', '']);
+    /* 2026-11-26: a nyomtató állapota a kezdőképernyőn is (ki van kapcsolva, kifogyott) – csak ha van nyomtatós mód */
+    if (!remote() && !isStation() && B.printers && modeList().some(k => !MODES[k].clip)) {
+      try { const pr = ((await B.printers()).v) || []; printList().forEach(name => { const p = name ? pr.find(x => x.name === name) : (pr.find(x => x.def || x.isDefault) || pr[0]); if (!p) { if (name) L.push(['Nyomtató nem található: ' + name, '']); return; } const st = prState(p); if (st[0] === 'bad') L.push(['Nyomtató (' + pName(p.name) + '): ' + st[1], '']); }); } catch (e) { /* */ }
+    }
+    diagProblems('kezdőképernyő', L.filter(x => !x[1]).map(x => x[0]));
     const w = $('[data-warn]'); w.innerHTML = L.map(x => '<span class="' + x[1] + '">⚠ ' + esc(x[0]) + '</span>').join(''); w.hidden = !L.length;
   }
   setInterval(() => { if (S.scr === 'start') warnings(); }, 20000);
@@ -895,6 +900,7 @@
     if (U().remoteAt) add('ok', 'Panel-beállítás', 'a deal adatlapjáról, ' + new Date(U().remoteAt * 1000).toLocaleString('hu-HU'));
     const d = new Date(); add(d.getFullYear() < 2026 ? 'bad' : 'ok', 'Óra', d.toLocaleString('hu-HU'));
     const bad = L.filter(x => x[0] === 'bad').length, mid = L.filter(x => x[0] === 'mid').length;
+    diagProblems('áttekintés', L.filter(x => x[0] === 'bad' && x[1] !== 'Próbamód').map(x => x[1] + ': ' + x[2])); /* 2026-11-26: a hibák a panel naplójába is */
     /* a hibák és a figyelmeztetések (pl. kevés AI-kredit) röviden az összegzés alatt is */
     const why = x => { const t = String(x[2]), i = t.lastIndexOf(' – '); return i > 0 ? t.slice(i + 3) : t; };
     const probs = L.filter(x => x[0] === 'bad').concat(L.filter(x => x[0] === 'mid'));
@@ -1500,6 +1506,9 @@
     const wait = Math.max(20000, 60000 - (Date.now() - D.last));
     D.t = setTimeout(() => { D.t = 0; diagSend(); }, wait);
   }
+  /* figyelmeztetéslista → napló: csak ha változott (ugyanaz a hiba 20 mp-enként nem megy újra) */
+  const DSIG = {};
+  function diagProblems(src, list) { const sig = (list || []).join(' · '); if (!sig) { DSIG[src] = ''; return; } if (DSIG[src] === sig) return; DSIG[src] = sig; diagSoon(src + ' – hiba: ' + sig); }
   function diagNow(why) { D.why.push(new Date().toLocaleTimeString('hu-HU') + ' ' + why); clearTimeout(D.t); D.t = 0; diagSend(); }
   async function diagLog() {
     if (!B.uiInfo || !B.readImage) return '';
