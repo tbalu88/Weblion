@@ -80,6 +80,7 @@ function cp_gcal_ajax_deal_sync() {
 		foreach ($ev as $e) { if (cp_gcal_match_key($e, $bd, $bi) === (string) $p['key']) { $hit = $e; break; } }
 		$body = cp_gcal_body($p);
 		if ($hit) {
+			if (function_exists('cp_gcal_snap')) { cp_gcal_snap($hit, 'gombbal frissítve'); } /* v2.9.382 */
 			$body['summary'] = cp_gcal_pen($hit['t']) ? CP_GCAL_PEN . cp_gcal_unpen($p['title']) : $p['title'];
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($hit['id']), array(), $body);
 			if (is_wp_error($r)) { cp_el_err('Nem sikerült frissíteni: ' . $r->get_error_message(), 502); }

@@ -538,6 +538,14 @@ function cp_gcal_wts_put($eid, $sig) { if ($eid === '' || $sig === '') { return;
 function cp_gcal_wts_set($eid, $r) { cp_gcal_wts_put((string) $eid, is_array($r) ? cp_gcal_sig_api($r) : ''); }
 /* ha nincs megjegyzett alap: most mentjük, de ebben a körben kézi módosításnak tekintjük (nem írjuk felül – a következő körtől összevethető) */
 function cp_gcal_manual($e) { $sg = cp_gcal_sig_ev($e); $w = cp_gcal_wts_one($e['id']); if ($w === null) { cp_gcal_wts_put($e['id'], $sg); return true; } return $w !== $sg; }
+/* v2.9.382: minden panel-felülírás előtt mentés a bejegyzés addigi tartalmáról (cím, leírás, idő, helyszín; bejegyzésenként az utolsó 5),
+   hogy egy téves felülírás visszaállítható legyen (a Google Naptár nem őriz korábbi változatot) */
+function cp_gcal_snap($e, $why = '') {
+	if (empty($e['id'])) { return; }
+	$k = 'cp_gcb_' . md5((string) $e['id']); $l = get_option($k, array()); if (!is_array($l)) { $l = array(); }
+	array_unshift($l, array('at' => time(), 'why' => $why, 't' => (string) ($e['t'] ?? ''), 'raw' => (string) ($e['raw'] ?? ''), 's' => (string) ($e['s'] ?? ''), 'e' => (string) ($e['e'] ?? ''), 'ad' => !empty($e['ad']) ? 1 : 0, 'loc' => (string) ($e['loc'] ?? '')));
+	update_option($k, array_slice($l, 0, 5), false);
+}
 function cp_gcal_body($p) {
 	$tz = wp_timezone();
 	$b = array('summary' => $p['title'], 'location' => $p['loc'], 'description' => $p['desc']);
@@ -653,6 +661,7 @@ function cp_gcal_pen_sync($dry = false) {
 				continue;
 			}
 			$out['update'][] = $did; if ($dry) { continue; }
+			cp_gcal_snap($e, 'deal változott');
 			$b = cp_gcal_body($p); $b['summary'] = $e['t'];  /* a cím (ceruzás jelöléssel) marad – azt a fenti rész kezeli */
 			$b['description'] = cp_gcal_keep_manual($e['raw'], $p['desc']); /* v2.9.342: a kézzel beírt sorok megmaradnak */
 			$r = cp_gcal_req('PATCH', '/events/' . rawurlencode($eid), array(), $b);
