@@ -115,7 +115,7 @@ function cp_slot_units($e) {
 	/* csak szolgáltatás (pl. AI karikatúra, LED tánctér) – a szolgáltatáslistában nincs szelfigép / hibrid (a csomagmezőt az űrlap gyakran kitölti, az nem számít): nem nyit szelfigép-slotot (kivéve, ha kézzel beállították a gépszámot) */
 	if ($sv && $kind === 'selfie' && !preg_match('/(^|,\s*)(szelfigép|hibrid)/iu', (string) ($e['svcl'] ?? ''))) {
 		$ex = function_exists('cp_dmach_many') ? (cp_dmach_many(array($deal))[$deal] ?? array(null, null)) : array(null, null);
-		if ($ex[0] === null && !isset($e['ns'])) { $ns = 0; }
+		if ($ex[0] === null) { $ns = 0; } /* az $e['ns'] mindig ki van töltve (alapérték is), ezért csak a kézi beállítás számít */
 	}
 	$u = array();
 	for ($j = 1; $j <= $ns; $j++) { $u[] = array('s' . $j, 'selfie', $j, $ns); }
