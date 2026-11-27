@@ -111,7 +111,7 @@
     /* v2.9.395: magánszemélynél (EV-s számlázás) nincs halasztott fizetés */
     var pm = byKey('pay_method'), ctp = byKey('client_type');
     if (pm) {
-      var priv = !!ctp && read(ctp) === 'magan';
+      var priv = !!ctp && read(ctp) === 'magan' && !pm.hasAttribute('data-post-ok');
       $all(pm, 'input[value="post"]').forEach(function (r) { var l = r.closest('label'); if (l) l.hidden = priv; if (priv && r.checked) r.checked = false; });
     }
   }

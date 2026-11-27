@@ -168,6 +168,7 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 	if (!empty($f['show_if'])) {
 		$sif = ' data-show-if-field="' . esc_attr($f['show_if'][0] . '=' . $f['show_if'][1]) . '"' . (cp_portal_field_active($f, $answers + (array) cp_portal_prefill($portal), $portal) ? '' : ' hidden');
 	}
+	if ($k === 'pay_method' && function_exists('cp_ct_post_ok') && !empty($portal->deal_id) && cp_ct_post_ok((int) $portal->deal_id)) { $sif .= ' data-post-ok="1"'; } /* v2.9.397 */
 	$h = '<div class="cpp-field' . ($req ? ' req' : '') . (!empty($f['sub']) ? ' sub' : '') . '" id="f-' . esc_attr($k) . '" data-field="' . esc_attr($k) . '" data-kind="' . esc_attr($kind) . '" data-q="' . esc_attr($f['q']) . '"' . $sif . '>';
 	if ($kind === 'consent') {
 		$on = is_array($val) && !empty($val['given']);

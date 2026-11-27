@@ -98,6 +98,8 @@ function cp_ct_pay_fixed($portal) {
 	return $c[$id];
 }
 /* az adatlapon választható módok: a helyszíni készpénz csak ott, ahol minden szolgáltatás engedi (mint a szerződésben) */
+/* v2.9.397: magánszemélynél (EV) a halasztott fizetés csak akkor választható, ha a szerződésszerkesztőben engedjük */
+function cp_ct_post_ok($deal) { $c = get_option('cp_ct_d' . (int) $deal); return is_array($c) && !empty($c['st']['post_ok']); }
 /* v2.9.396: a helyszíni készpénz mindig választható (a felhasználó döntése, 2026-11-27) */
 function cp_ct_pay_opts($portal, $opts) {
 	return $opts;
@@ -135,7 +137,7 @@ function cp_ct_prefill($id) {
 	/* v2.9.78: a fizetési mód opcionális – ha a dealben nincs megadva, üresen marad, és a szerződésben a vevő jelöli be */
 	$pay = strpos($pm, 'kész') !== false ? 'cash' : (strpos($pm, 'előre') !== false || strpos($pm, 'elore') !== false ? 'pre' : (preg_match('/halaszt|utólag|utolag|8 nap/u', $pm) ? 'post' : ''));
 	/* v2.9.395: ha a dealen nincs, az ügyfél adatlapon választott módja (magánszemélynél – EV-s számlázás – halasztott nem lehet) */
-	if ($pay === '') { $pv = $g('pay_method'); if (in_array($pv, array('pre', 'post', 'cash'), true) && !($pv === 'post' && $cl['type'] === 'magan')) { $pay = $pv; } }
+	if ($pay === '') { $pv = $g('pay_method'); if (in_array($pv, array('pre', 'post', 'cash'), true) && !($pv === 'post' && $cl['type'] === 'magan' && !cp_ct_post_ok((int) $id))) { $pay = $pv; } }
 	$city = ''; if (preg_match('/\b\d{4}\s+([^\s,]+)/u', $venue ?: (string) $d['venue'], $m)) { $city = $m[1]; }
 	/* v2.9.71: többnapos rendezvény – minden nap a saját kezdésével, végével (kezdés + óraszám) és – ha eltér – helyszínével */
 	$days = array();
@@ -280,7 +282,7 @@ function cp_ct_build($st) {
 	}
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
 	/* v2.9.394: kiválasztott fizetési módnál csak az látszik; ha nincs kiválasztva, a vevő jelöli be a felsoroltak közül */
-	foreach ($T['pay'] as $k => $t) { if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } if ($st['pay'] === '' && $k === 'post' && $c['type'] === 'magan') { continue; } /* EV: nincs halasztott */ $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
+	foreach ($T['pay'] as $k => $t) { if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } if ($st['pay'] === '' && $k === 'post' && $c['type'] === 'magan' && empty($st['post_ok'])) { continue; } /* EV: nincs halasztott */ $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
 	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'gridh'); }
 	$p($G['late_interest']);
@@ -449,7 +451,7 @@ function cp_ct_state_in() {
 		'client' => array('type' => ($c['type'] ?? '') === 'magan' ? 'magan' : 'ceg', 'company' => $s($c['company'] ?? ''), 'seat' => $s($c['seat'] ?? ''), 'reg' => $s($c['reg'] ?? '', 40), 'tax' => $s($c['tax'] ?? '', 40), 'signer' => $s($c['signer'] ?? ''), 'name' => $s($c['name'] ?? ''), 'address' => $s($c['address'] ?? '')),
 		'contact' => array('name' => $s($st['contact']['name'] ?? ''), 'tel' => $s($st['contact']['tel'] ?? '', 40)),
 		'venue' => $s($st['venue'] ?? ''), 'date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($st['date'] ?? '')) ? $st['date'] : '', 'start' => $s($st['start'] ?? '', 10), 'end' => $s($st['end'] ?? '', 10),
-		'svc' => array(), 'days' => array(), 'travel_city' => $s($st['travel_city'] ?? '', 80), 'travel' => max(0, (float) ($st['travel'] ?? 0)), 'pay' => in_array($st['pay'] ?? '', array('pre', 'post', 'cash'), true) ? $st['pay'] : '', /* v2.9.78: üres = a vevő jelöli */
+		'svc' => array(), 'days' => array(), 'travel_city' => $s($st['travel_city'] ?? '', 80), 'travel' => max(0, (float) ($st['travel'] ?? 0)), 'pay' => in_array($st['pay'] ?? '', array('pre', 'post', 'cash'), true) ? $st['pay'] : '', 'post_ok' => !empty($st['post_ok']) ? 1 : 0, /* v2.9.397: EV-nél is engedjük a halasztott fizetést */ /* v2.9.78: üres = a vevő jelöli */
 		'cdate' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($st['cdate'] ?? '')) ? $st['cdate'] : wp_date('Y-m-d'), 'place' => $s($st['place'] ?? 'Budapest', 60) ?: 'Budapest', 'note' => mb_substr(sanitize_textarea_field((string) ($st['note'] ?? '')), 0, 3000));
 	/* v2.9.71: többnapos rendezvény napjai */
 	foreach (array_slice((array) ($st['days'] ?? array()), 0, 62) as $x) { if (is_array($x) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($x['d'] ?? ''))) { $out['days'][] = array('d' => $x['d'], 'start' => $s($x['start'] ?? '', 10), 'end' => $s($x['end'] ?? '', 10), 'venue' => $s($x['venue'] ?? '', 255)); } }
