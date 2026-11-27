@@ -676,6 +676,11 @@ function cp_crm_ajax_opts() {
 		$kn = array_map('strval', (array) $wpdb->get_col('SELECT name FROM ' . cp_kz_t() . " WHERE active = 1 AND kind IN ('kezelo','host') AND name <> '' ORDER BY kind = 'host', name"));
 		$out['operator'] = array_values(array_unique(array_merge($kn, (array) ($out['operator'] ?? array()))));
 	}
+	/* v2.9.400: a háttér-javaslatok a teljes háttérkatalógusból (eddig csak a dealekben leggyakrabban használt 30 – az új / ritkább hátterek, pl. Karácsony 5, Bokeh 5, hiányoztak), utána a katalógusban nem szereplő régi értékek */
+	if (function_exists('cp_panel_bg_list')) {
+		$cat = array(); foreach (cp_panel_bg_list(true) as $b) { $cat[] = (string) $b['name']; }
+		if ($cat) { $lc = array_map('cp_panel_lc', $cat); foreach ((array) ($out['background'] ?? array()) as $v) { if (!in_array(cp_panel_lc($v), $lc, true)) { $cat[] = $v; } } $out['background'] = $cat; }
+	}
 	if (function_exists('cp_svc_on') && cp_svc_on()) { $out['svc'] = cp_svc_list(); } /* v2.9.218 */
 	wp_send_json_success(array('vals' => $out));
 }
