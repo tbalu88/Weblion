@@ -1332,7 +1332,8 @@
      fotózás közben soha; az eredményt a következő állapotjelentés viszi vissza (upd_res), a siker a frissített verzióból látszik */
   async function remoteUpd() {
     if (S.updRun) return;
-    if (S.busy || (S.scr !== 'start' && S.scr !== 'station')) { S.updRes = 'vár: a gép épp használatban van'; return; }
+    /* 2026-11-27: a Kezelő menüből és a galériából is frissít (csak fotózás közben nem) */
+    if (S.busy || !['start', 'station', 'settings', 'gallery', 'photo'].includes(S.scr)) { S.updRes = 'vár: a gép épp fotóz – a kezdőképernyőn frissít'; return; }
     if (!B.updCheck) { S.updRes = 'hiba: ehhez a programhoz kézi telepítés kell (0.17.0 vagy újabb)'; return; }
     S.updRun = 1; S.updRes = 'keresés';
     try {
