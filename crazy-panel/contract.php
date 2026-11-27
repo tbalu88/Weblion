@@ -98,12 +98,8 @@ function cp_ct_pay_fixed($portal) {
 	return $c[$id];
 }
 /* az adatlapon választható módok: a helyszíni készpénz csak ott, ahol minden szolgáltatás engedi (mint a szerződésben) */
+/* v2.9.396: a helyszíni készpénz mindig választható (a felhasználó döntése, 2026-11-27) */
 function cp_ct_pay_opts($portal, $opts) {
-	$id = is_object($portal) ? (int) ($portal->deal_id ?? 0) : 0;
-	if ($id && function_exists('cp_crm_t')) {
-		global $wpdb; $d = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A);
-		if ($d) { $L = cp_ct_lib(); $keys = cp_ct_guess($d); $cash = true; $any = false; foreach ($keys as $k) { if (!isset($L['services'][$k])) { continue; } $any = true; if (empty($L['services'][$k]['cash'])) { $cash = false; } } if ($any && !$cash) { unset($opts['cash']); } }
-	}
 	return $opts;
 }
 function cp_ct_prefill($id) {
@@ -284,7 +280,7 @@ function cp_ct_build($st) {
 	}
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
 	/* v2.9.394: kiválasztott fizetési módnál csak az látszik; ha nincs kiválasztva, a vevő jelöli be a felsoroltak közül */
-	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } if ($st['pay'] === '' && $k === 'post' && $c['type'] === 'magan') { continue; } /* EV: nincs halasztott */ $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
+	foreach ($T['pay'] as $k => $t) { if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } if ($st['pay'] === '' && $k === 'post' && $c['type'] === 'magan') { continue; } /* EV: nincs halasztott */ $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
 	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'gridh'); }
 	$p($G['late_interest']);
