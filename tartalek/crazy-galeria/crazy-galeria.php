@@ -646,6 +646,9 @@ add_action('rest_api_init', function () {
 		if ($wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s', $ev, $ph))) { return new WP_REST_Response(array('ok' => false, 'code' => 'dup', 'message' => 'Ez a kép már elkészült.'), 409); }
 		$prompt = trim(wp_strip_all_tags((string) $req->get_param('prompt')));
 		if ($prompt === '' || mb_strlen($prompt) > 2000) { return $fail('bad', 'Hiányzó vagy túl hosszú utasítás.', 400); }
+		/* 2026-11-27: a felhasználó kérése – AI-képen soha ne legyen felirat: a feliratot kérő mondatok kikerülnek, és a végére tiltás kerül */
+		$prompt = trim(preg_replace('/[^.]*\b(write|put the masthead|cover lines?|caption|title "|the date "|name plate)\b[^.]*\.\s*/i', '', $prompt));
+		$prompt = trim(preg_replace('/\s*No (other )?text\.?/i', '', $prompt)) . ' IMPORTANT: the image must contain no text at all – no letters, words, numbers, titles, names, dates, logos, signatures or watermarks.';
 		$f = $req->get_file_params(); $f = $f['file'] ?? null;
 		if (!$f || !is_uploaded_file($f['tmp_name']) || $f['size'] > 15 * 1048576) { return $fail('bad', 'Hiányzó vagy túl nagy kép.', 400); }
 		$inf = @getimagesize($f['tmp_name']);

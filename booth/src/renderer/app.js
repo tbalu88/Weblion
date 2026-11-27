@@ -1236,7 +1236,7 @@
      a panelben a dealen beállított stílusok érvényesek. Jogosultság a dealen nem kell (a galéria szerver visszaállításig engedi). */
   const aiCat = () => ((S.aip || lsGet('cb_aip', null) || {}).list) || [];
   const aiSelKeys = () => { const ev = S.cfg && S.cfg.event && S.cfg.event.ev, m = U().aiSel || {}; return ev && Array.isArray(m[ev]) ? m[ev] : null; };
-  const aiStyles = () => { const sel = aiSelKeys(); if (sel) { const c = aiCat(); return sel.map(k => c.find(x => x.k === k)).filter(Boolean); } return (U().ai && U().ai.styles) || []; };
+  const aiStyles = () => { const sel = aiSelKeys(); if (sel) { const c = aiCat(); return sel.map(k => c.find(x => x.k === k)).filter(Boolean); } const c = aiCat(); return ((U().ai && U().ai.styles) || []).map(x => Object.assign({}, x, (c.find(y => y.k === x.k) || {}).prompt ? { prompt: c.find(y => y.k === x.k).prompt } : {})); }; /* a dealen mentett stílus is a friss (felirat nélküli) promptot kapja */
   const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && aiStyles().length && S.cfg.event && S.cfg.event.ev);
   const aiWait = (scr, ms) => new Promise(res => { S.aiRes = res; clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === scr && S.aiRes) { const r = S.aiRes; S.aiRes = null; r(null); } }, ms); });
   const aiDone = v => { clearTimeout(S.idleT); const r = S.aiRes; S.aiRes = null; if (r) r(v); };

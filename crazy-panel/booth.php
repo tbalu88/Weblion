@@ -445,14 +445,15 @@ function cp_booth_dcfg_clean($in) {
 	return $o;
 }
 /* AI-stílusok (angol prompt – a modellek így a legpontosabbak). Helyettesítők: {nev} vendég neve, {rendezveny} a rendezvény, {datum} dátum */
+/* 2026-11-27: a felhasználó kérése – az AI-képeken soha ne legyen felirat (cím, név, dátum, logó) */
 function cp_booth_ai_presets() {
 	$keep = ' Keep every person recognizable and keep the same number of people.';
 	return array(
-		'karikatura' => array('Karikatúra', 'Convert this photo into a funny street-artist caricature with exaggerated faces: big heads and small bodies, humorous expressions and playful details. Coloured drawing that looks sketched by a street artist on canvas. Clean white or lightly textured paper background, no graffiti – classic caricature art seen in tourist spots and city streets.' . $keep . ' Do not add any text, letters, signatures, logos or watermarks.'),
-		'magazin' => array('Magazinborító', 'Turn this photo into a glossy fashion magazine cover with professional studio lighting, elegant retouching and a stylish layout.' . $keep . ' Put the masthead "CRAZY" at the top and two short Hungarian cover lines about an unforgettable party. No other text.'),
-		'plakat' => array('Filmplakát', 'Turn this photo into a dramatic Hollywood blockbuster movie poster with cinematic lighting and an epic background.' . $keep . ' Write the title "{rendezveny}" in large letters and the date "{datum}" at the bottom. No other text.'),
-		'kartya' => array('Gyűjtőkártya', 'Turn this photo into a collectible fantasy trading card illustration with an ornate golden frame and a glowing magical background.' . $keep . ' Write "{nev}" on the name plate at the bottom. No other text.'),
-		'portre' => array('Céges portré', 'Create a professional corporate headshot from this photo: neutral light grey studio background, soft studio lighting, smart business attire and natural retouching. Keep the face and identity exactly the same and keep the same number of people. No text.'),
+		'karikatura' => array('Karikatúra', 'Convert this photo into a funny street-artist caricature with exaggerated faces: big heads and small bodies, humorous expressions and playful details. Coloured drawing that looks sketched by a street artist on canvas. Clean white or lightly textured paper background, no graffiti – classic caricature art seen in tourist spots and city streets.' . $keep . ' Do not add any text, letters, numbers, titles, names, dates, logos or watermarks anywhere in the image.'),
+		'magazin' => array('Magazinborító', 'Turn this photo into a glossy fashion magazine cover with professional studio lighting, elegant retouching and a stylish layout.' . $keep . ' Do not add any text, letters, numbers, titles, names, dates, logos or watermarks anywhere in the image.'),
+		'plakat' => array('Filmplakát', 'Turn this photo into a dramatic Hollywood blockbuster movie poster with cinematic lighting and an epic background.' . $keep . ' Do not add any text, letters, numbers, titles, names, dates, logos or watermarks anywhere in the image.'),
+		'kartya' => array('Gyűjtőkártya', 'Turn this photo into a collectible fantasy trading card illustration with an ornate golden frame and a glowing magical background.' . $keep . ' Leave the name plate at the bottom empty.' . ' Do not add any text, letters, numbers, titles, names, dates, logos or watermarks anywhere in the image.'),
+		'portre' => array('Céges portré', 'Create a professional corporate headshot from this photo: neutral light grey studio background, soft studio lighting, smart business attire and natural retouching. Keep the face and identity exactly the same and keep the same number of people.' . ' Do not add any text, letters, numbers, titles, names, dates, logos or watermarks anywhere in the image.'),
 	);
 }
 /* általános kérés a galériához a panel kulcsával (pl. /ai-setup) */
