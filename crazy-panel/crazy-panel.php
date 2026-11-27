@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.403');
+define('CP_PANEL_VER', '2.9.404');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -844,7 +844,7 @@ function cp_panel_render_app() {
 		'gcal'       => array('on' => function_exists('cp_gcal_ajax_ev') && cp_panel_can_x('gnaptar')),
 		'bil'        => array('on' => function_exists('cp_bil_ajax_deal') && cp_panel_can_x('szamlazas')),
 		'ct'         => array('on' => function_exists('cp_ct_ajax_get') && cp_panel_can_x('deals')),
-		'au'         => array('on' => function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_can('naplo')), /* v2.9.311: Láthatóságból állítható (alapból adminok) */
+		'au'         => array('on' => (function_exists('cp_audit_db_ok') && cp_audit_db_ok() && cp_panel_can('naplo')) || cp_panel_can('gepnaplo'), 'full' => cp_panel_can('naplo')), /* v2.9.404: Szelfigép-naplók külön jog (gepnaplo) – akkor csak az a nézet */ /* v2.9.311: Láthatóságból állítható (alapból adminok) */
 		'wl'         => function_exists('cp_wl_cfg') ? cp_wl_cfg() : array('on' => false),
 		'kz'         => function_exists('cp_kz_cfg') ? cp_kz_cfg() : array('on' => false),
 		'logi'       => function_exists('cp_logi_db_ok') && cp_logi_db_ok() && cp_panel_can_x('naptar') && cp_panel_can_x('logisztika') ? 1 : 0, /* v2.9.118: Logisztika fül */
@@ -854,7 +854,7 @@ function cp_panel_render_app() {
 		'wh'         => function_exists('cp_wh_ajax_data') && cp_panel_can_x('deals') ? 1 : 0, /* v2.9.259: Raktár */
 		'dp'         => function_exists('cp_dp_cfg') && cp_panel_can_x('naptar') ? cp_dp_cfg() : array('on' => 0), /* v2.9.290: dinamikus ár – napi címkék */
 		'slot'       => function_exists('cp_slot_db_ok') && cp_slot_db_ok() && function_exists('cp_kz_t') && cp_panel_can_x('naptar') ? 1 : 0, /* v2.9.115: beosztás a Kapacitás napjain */
-		'tabs'       => function_exists('cp_panel_tabs_allowed') ? cp_panel_tabs_allowed() : null,
+		'tabs'       => function_exists('cp_panel_tabs_allowed') ? (in_array('gepnaplo', cp_panel_tabs_allowed(), true) && !in_array('naplo', cp_panel_tabs_allowed(), true) ? array_merge(cp_panel_tabs_allowed(), array('naplo')) : cp_panel_tabs_allowed()) : null,
 		'nt'         => array('on' => function_exists('cp_nt_db_ok') && cp_nt_db_ok() && function_exists('cp_pu_current_id') && cp_pu_current_id() > 0),
 		'pwa'        => function_exists('cp_pwa_cfg') ? cp_pwa_cfg() : array('on' => false),
 	);

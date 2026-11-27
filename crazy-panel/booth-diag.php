@@ -77,7 +77,7 @@ add_action('wp_ajax_nopriv_cp_bdg_log', 'cp_bdg_ajax_log'); add_action('wp_ajax_
 add_action('wp_ajax_nopriv_cp_bdg_ask', 'cp_bdg_ajax_ask'); add_action('wp_ajax_cp_bdg_ask', 'cp_bdg_ajax_ask');
 function cp_bdg_guard() {
 	cp_el_auth();
-	if (!function_exists('cp_panel_can') || !cp_panel_can('naplo')) { cp_el_err('A Napló nincs engedélyezve a fiókodnak (Beállítások → Láthatóság).', 403); }
+	if (!function_exists('cp_panel_can') || !(cp_panel_can('naplo') || cp_panel_can('gepnaplo'))) { cp_el_err('A szelfigép-naplók nincsenek engedélyezve a fiókodnak (Beállítások → Láthatóság).', 403); }
 	if (!cp_bdg_ok()) { cp_el_err('Az adatbázis még készül.', 503); }
 }
 function cp_bdg_ajax_list() {

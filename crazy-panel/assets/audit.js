@@ -49,7 +49,7 @@
 	/* v2.9.145: #naplo:elemzes = Elemzés */
 	const auUrl = m => m === 'use' ? '#naplo:hasznalat' : m === 'an' ? '#naplo:elemzes' : m === 'srv' ? '#naplo:szerver' : m === 'gep' ? '#naplo:szelfigepek' : '#naplo';
 	function auHash() { const m = /^#naplo(?::(hasznalat|elemzes|szerver|szelfigepek))?$/.exec(location.hash); return m ? (m[1] === 'hasznalat' ? 'use' : m[1] === 'elemzes' ? 'an' : m[1] === 'szerver' ? 'srv' : m[1] === 'szelfigepek' ? 'gep' : 'log') : null; }
-	const segH = () => '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' && S.mode !== 'srv' && S.mode !== 'gep' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a><a href="#naplo:szerver" data-mode="srv"' + (S.mode === 'srv' ? ' class="on" aria-current="page"' : '') + '>Szerver</a><a href="#naplo:szelfigepek" data-mode="gep"' + (S.mode === 'gep' ? ' class="on" aria-current="page"' : '') + '>Szelfigépek</a></nav>';
+	const segH = () => C.au.full === false ? '' : '<nav class="crm-seg au-seg" aria-label="Nézet"><a href="#naplo" data-mode="log"' + (S.mode !== 'use' && S.mode !== 'an' && S.mode !== 'srv' && S.mode !== 'gep' ? ' class="on" aria-current="page"' : '') + '>Műveletek</a><a href="#naplo:hasznalat" data-mode="use"' + (S.mode === 'use' ? ' class="on" aria-current="page"' : '') + '>Panelhasználat</a><a href="#naplo:elemzes" data-mode="an"' + (S.mode === 'an' ? ' class="on" aria-current="page"' : '') + '>Elemzés</a><a href="#naplo:szerver" data-mode="srv"' + (S.mode === 'srv' ? ' class="on" aria-current="page"' : '') + '>Szerver</a><a href="#naplo:szelfigepek" data-mode="gep"' + (S.mode === 'gep' ? ' class="on" aria-current="page"' : '') + '>Szelfigépek</a></nav>';
 	function nav(mode) {
 		S.mode = mode;
 		try { localStorage.setItem('cpx_au_mode', mode); } catch (e) { /* privát mód */ }
@@ -68,6 +68,7 @@
 		S.main = main;
 		const h = S.force || auHash(); S.force = null;
 		if (h) S.mode = h;
+		if (C.au.full === false) S.mode = 'gep'; /* v2.9.404: csak „Szelfigép-naplók” joga van – csak ez a nézet */
 		if (!S.mode) { try { S.mode = localStorage.getItem('cpx_au_mode') || 'log'; } catch (e) { S.mode = 'log'; } }
 		if (location.hash !== auUrl(S.mode) && /^#naplo(:|$)/.test(location.hash || '#naplo')) history.replaceState(history.state, '', auUrl(S.mode));
 		if (S.mode === 'use') { useView(main); return; }
@@ -201,7 +202,7 @@
 	const ago = s => { if (!s) return '–'; const d = Math.max(0, Math.round(Date.now() / 1000 - s)); return d < 90 ? 'most' : d < 3600 ? Math.round(d / 60) + ' perce' : d < 86400 ? Math.round(d / 3600) + ' órája' : Math.round(d / 86400) + ' napja'; };
 	const dt = s => { if (!s) return ''; const d = new Date(s * 1000), p = n => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '.' + p(d.getDate()) + '. ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
 	function gView(main) {
-		main.innerHTML = '<div class="au gp"><div class="au-head"><div class="au-ht"><h2>Napló</h2>' + segH() + '</div><p>A szelfigépek (Crazy Booth) maguktól küldik a naplójukat: indításkor, minden hibánál (kamera, panelkapcsolat, rendezvénylista, nyomtatás) és ha itt bekéred. Gépkulcs nélkül is – akkor „Azonosítatlan gép”. 14 napig őrizzük.</p></div>' +
+		main.innerHTML = '<div class="au gp"><div class="au-head"><div class="au-ht"><h2>' + (C.au.full === false ? 'Szelfigép-naplók' : 'Napló') + '</h2>' + segH() + '</div><p>A szelfigépek (Crazy Booth) maguktól küldik a naplójukat: indításkor, minden hibánál (kamera, panelkapcsolat, rendezvénylista, nyomtatás) és ha itt bekéred. Gépkulcs nélkül is – akkor „Azonosítatlan gép”. 14 napig őrizzük.</p></div>' +
 			'<div class="au-f"><select data-gdev><option value="">Minden gép</option></select><button type="button" class="cpx-btn ghost sm" data-gre>↻ Frissítés</button></div><div class="gp-devs"></div><div class="au-box"><div class="cpx-muted">Betöltés…</div></div></div>';
 		bindSeg(main);
 		main.querySelector('[data-gre]').addEventListener('click', () => gLoad());
@@ -450,7 +451,7 @@
 		box.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { S.p = Math.max(0, S.p + Number(b.dataset.pg)); load(); main.scrollIntoView && window.scrollTo(0, 0); }));
 	}
 	function status(s) { if (S.mode === 'an') { s.textContent = A.err || (A.d ? 'Számolva: ' + A.d.at : ''); s.className = 'cpx-status' + (A.err ? ' err' : ''); return; } if (S.mode === 'use') { s.textContent = U.err || ''; s.className = 'cpx-status' + (U.err ? ' err' : ''); return; } s.textContent = S.err || (S.data ? S.data.total + ' naplóbejegyzés' : ''); s.className = 'cpx-status' + (S.err ? ' err' : ''); }
-	async function refresh() { if (S.main && S.main.isConnected) { if (S.mode === 'an') await anLoad(true); else if (S.mode === 'use') await useLoad(); else await load(); } }
+	async function refresh() { if (S.main && S.main.isConnected) { if (S.mode === 'gep') await gLoad(); else if (S.mode === 'an') await anLoad(true); else if (S.mode === 'use') await useLoad(); else await load(); } }
 	/* értesítésből vagy linkből: „naplo:hasznalat” */
 	function deep(arg) { if (String(arg || '') === 'hasznalat') nav('use'); if (String(arg || '') === 'elemzes') nav('an'); }
 	window.CPAudit = { view, status, refresh, deep };
