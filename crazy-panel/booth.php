@@ -481,7 +481,7 @@ add_action('rest_api_init', function () {
 		/* a nyomatok száma dealenként és gépenként (a riporthoz: a legnagyobb jelentett érték marad meg) */
 		if ($deal && $b['prints']) { $p = get_option('cp_booth_prints', array()); if (!is_array($p)) { $p = array(); } $k = (string) $deal; if ((int) ($p[$k][$d['id']] ?? 0) < $b['prints']) { $p[$k][$d['id']] = $b['prints']; update_option('cp_booth_prints', $p, false); } }
 		$c = $deal ? cp_booth_dcfg_get($deal) : null;
-		return array('ok' => true, 'cfg' => $c ? $c['cfg'] : null, 'at' => $c ? (int) $c['at'] : 0, 'diag' => isset(cp_bdg_req_all()[(string) $d['id']]) ? 1 : 0); /* v2.9.388: a panel kérte a naplót */
+		return array('ok' => true, 'cfg' => $c ? $c['cfg'] : null, 'at' => $c ? (int) $c['at'] : 0, 'diag' => isset(cp_bdg_req_all()[(string) $d['id']]) ? 1 : 0, 'upd' => function_exists('cp_bdg_upd_beat') && cp_bdg_upd_beat((string) $d['id'], $b['ver'], mb_substr(sanitize_text_field((string) ($j['upd_res'] ?? '')), 0, 160)) ? 1 : 0); /* v2.9.402 */ /* v2.9.388: a panel kérte a naplót */
 	}));
 });
 /* a deal statisztikája a galériából (5 percig tárolva) */

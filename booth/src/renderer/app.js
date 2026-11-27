@@ -1170,8 +1170,8 @@
     const cam = isStation() ? null : WEB() ? (S.stream ? S.stream.getVideoTracks().some(t => t.readyState === 'live') : null) : true;
     const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
     const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
-      err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
-    try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
+      upd_res: S.updRes || '', err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
+    try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r && r.upd) remoteUpd(); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
   }
   setInterval(beat, 60000); setTimeout(beat, 6000);
   /* a panelből (deal adatlap → Szelfigép → Beállítások a gépekre) mentett beállítások: csak a kezdőképernyőn, fotózás közben soha */
@@ -1319,6 +1319,22 @@
       updText('Új változat érhető el: <b>' + esc(r.avail.v) + '</b> (most: ' + esc(r.cur) + ', ' + (r.avail.small ? 'kis frissítés, csak a programkód: ' : 'teljes csomag: ') + Math.max(1, Math.round((r.avail.size || 0) / 1048576)) + ' MB). A telepítés után a program magától újraindul – a beállítások, képek és sablonok megmaradnak. Rendezvény közben ne indítsd.');
       g.hidden = false; g.textContent = 'Letöltés és telepítés (' + r.avail.v + ')';
     } catch (e) { updText('Nem sikerült a keresés: ' + esc(e.message)); }
+  }
+  /* 2026-11-27: a panelből kért programfrissítés (Napló → Szelfigépek → „Program frissítése”) – csak tétlen kezdőképernyőn,
+     fotózás közben soha; az eredményt a következő állapotjelentés viszi vissza (upd_res), a siker a frissített verzióból látszik */
+  async function remoteUpd() {
+    if (S.updRun) return;
+    if (S.busy || (S.scr !== 'start' && S.scr !== 'station')) { S.updRes = 'vár: a gép épp használatban van'; return; }
+    if (!B.updCheck) { S.updRes = 'hiba: ehhez a programhoz kézi telepítés kell (0.17.0 vagy újabb)'; return; }
+    S.updRun = 1; S.updRes = 'keresés';
+    try {
+      const r = await call(B.updCheck);
+      if (!r.avail) { S.updRes = 'naprakész: ' + r.cur; S.updRun = 0; beat(); return; }
+      S.updRes = 'letöltés: ' + r.cur + ' → ' + r.avail.v; beat(); B.log('panelből kért frissítés: ' + r.cur + ' → ' + r.avail.v);
+      await call(B.updDownload);
+      S.updRes = 'telepítés: ' + r.avail.v; await beat();
+      await call(B.updInstall);
+    } catch (e) { S.updRes = 'hiba: ' + e.message; S.updRun = 0; diagSoon('programfrissítés: ' + e.message); beat(); }
   }
   async function updGo() {
     if (S.busy) { err('Fotózás közben nem lehet frissíteni.'); return; }

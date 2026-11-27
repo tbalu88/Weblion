@@ -93,7 +93,8 @@ function cp_bdg_ajax_list() {
 	foreach (cp_booth_devs() as $id => $d) {
 		if ($id === 'panel') { continue; }
 		$b = function_exists('cp_booth_beat_get') ? cp_booth_beat_get($id) : null;
-		$devs[] = array('id' => (string) $id, 'name' => (string) $d['name'], 'off' => !empty($d['off']), 'seen' => (int) ($d['seen'] ?? 0), 'beat' => $b ? (int) $b['t'] : 0, 'ver' => $b ? (string) $b['ver'] : '', 'req' => (int) ($req[$id] ?? 0),
+		$up = cp_bdg_upd_all()[$id] ?? null;
+		$devs[] = array('id' => (string) $id, 'name' => (string) $d['name'], 'off' => !empty($d['off']), 'seen' => (int) ($d['seen'] ?? 0), 'beat' => $b ? (int) $b['t'] : 0, 'ver' => $b ? (string) $b['ver'] : '', 'req' => (int) ($req[$id] ?? 0), 'upd' => $up ? array('res' => (string) $up['res'], 'at' => (int) $up['res_at'], 'done' => (int) $up['done']) : null,
 			'last' => (int) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_bdg_t() . ' WHERE dev = %s', $id)));
 	}
 	wp_send_json_success(array('rows' => $rows, 'devs' => $devs, 'anon' => (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_bdg_t() . " WHERE dev = ''"), 'now' => time()));
@@ -113,3 +114,31 @@ function cp_bdg_ajax_ask() {
 	if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'booth_diag', 'Szelfigép-napló bekérve: ' . $devs[$id]['name'], '', ''); }
 	wp_send_json_success(array('ok' => 1));
 }
+
+/* ------------------------------------------------------------ v2.9.402: programfrissítés a panelből (távolról, visszaigazolással)
+ * A kérés a gép következő állapotjelentésére (1 percen belül) megy ki; a gép csak tétlen kezdőképernyőn frissít. Az állapotot
+ * (keresés / letöltés / telepítés / hiba / naprakész) a jelentésekben küldi; a sikert az jelzi, hogy a gép újabb verzióval jelentkezik. */
+function cp_bdg_upd_all() { $u = get_option('cp_bdg_upd', array()); return is_array($u) ? $u : array(); }
+function cp_bdg_shell($ver) { return preg_replace('/\/.*$/', '', (string) $ver); }
+add_action('wp_ajax_nopriv_cp_bdg_upd', 'cp_bdg_ajax_upd'); add_action('wp_ajax_cp_bdg_upd', 'cp_bdg_ajax_upd');
+function cp_bdg_ajax_upd() {
+	cp_bdg_guard();
+	$id = sanitize_text_field(wp_unslash($_POST['dev'] ?? '')); $devs = cp_booth_devs();
+	if (!isset($devs[$id]) || $id === 'panel') { cp_el_err('Nincs ilyen gép.', 404); }
+	$b = function_exists('cp_booth_beat_get') ? cp_booth_beat_get($id) : null;
+	$u = cp_bdg_upd_all(); $u[$id] = array('at' => time(), 'from' => $b ? cp_bdg_shell($b['ver']) : '', 'by' => function_exists('cp_panel_who') ? cp_panel_who() : '', 'res' => 'kérve', 'res_at' => time(), 'done' => 0, 'to' => '');
+	update_option('cp_bdg_upd', $u, false);
+	if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'booth_upd', 'Szelfigép-programfrissítés kérve: ' . $devs[$id]['name'], '', ''); }
+	wp_send_json_success(array('ok' => 1));
+}
+/* az állapotjelentésből (booth.php /beat hívja): eredmény rögzítése, és kell-e még kérni */
+function cp_bdg_upd_beat($dev, $ver, $res) {
+	$u = cp_bdg_upd_all(); if (empty($u[$dev]) || !empty($u[$dev]['done'])) { return false; }
+	$x = $u[$dev]; $sv = cp_bdg_shell($ver); $ch = false;
+	if ($x['from'] !== '' && $sv !== '' && $sv !== $x['from'] && version_compare($sv, $x['from'], '>')) { $x['done'] = 1; $x['to'] = $sv; $x['res'] = 'sikeres: ' . $x['from'] . ' → ' . $sv; $x['res_at'] = time(); $ch = true; }
+	elseif ($res !== '' && $res !== $x['res']) { $x['res'] = mb_substr($res, 0, 160); $x['res_at'] = time(); $ch = true; if (strpos($res, 'naprakész') === 0 || strpos($res, 'hiba') === 0) { $x['done'] = strpos($res, 'naprakész') === 0 ? 1 : 2; } }
+	if (!$x['done'] && time() - (int) $x['at'] > 6 * HOUR_IN_SECONDS) { $x['done'] = 2; $x['res'] = 'lejárt: a gép 6 órán belül nem frissült'; $x['res_at'] = time(); $ch = true; }
+	if ($ch) { $u[$dev] = $x; update_option('cp_bdg_upd', $u, false); }
+	return !$x['done'] && strpos((string) $x['res'], 'telepítés') !== 0 && strpos((string) $x['res'], 'letöltés') !== 0;
+}
+
