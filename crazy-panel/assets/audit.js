@@ -201,12 +201,14 @@
 	const G = { dev: '', open: {}, t: 0 };
 	const ago = s => { if (!s) return '–'; const d = Math.max(0, Math.round(Date.now() / 1000 - s)); return d < 90 ? 'most' : d < 3600 ? Math.round(d / 60) + ' perce' : d < 86400 ? Math.round(d / 3600) + ' órája' : Math.round(d / 86400) + ' napja'; };
 	const dt = s => { if (!s) return ''; const d = new Date(s * 1000), p = n => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '.' + p(d.getDate()) + '. ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+	/* v2.9.408: gépenkénti nézet – minden gép egy sáv (állapot, gombok), lenyitva az eseményei (az ismétlődők összevonva) és a teljes napló.
+	   10+ gépnél is követhető: elöl a futó, majd a hibás gépek. */
 	function gView(main) {
-		main.innerHTML = '<div class="au gp"><div class="au-head"><div class="au-ht"><h2>' + (C.au.full === false ? 'Szelfigép-naplók' : 'Napló') + '</h2>' + segH() + '</div><p>A szelfigépek (Crazy Booth) maguktól küldik a naplójukat: indításkor, minden hibánál (kamera, panelkapcsolat, rendezvénylista, nyomtatás) és ha itt bekéred. Gépkulcs nélkül is – akkor „Azonosítatlan gép”. 14 napig őrizzük.</p></div>' +
-			'<div class="au-f"><select data-gdev><option value="">Minden gép</option></select><button type="button" class="cpx-btn ghost sm" data-gre>↻ Frissítés</button></div><div class="gp-devs"></div><div class="au-box"><div class="cpx-muted">Betöltés…</div></div></div>';
+		main.innerHTML = '<div class="au gp"><div class="au-head"><div class="au-ht"><h2>' + (C.au.full === false ? 'Szelfigép-naplók' : 'Napló') + '</h2>' + segH() + '</div><p>A szelfigépek (Crazy Booth) maguktól küldik a naplójukat: indításkor, minden hibánál (kamera, panelkapcsolat, rendezvénylista, nyomtatás) és ha itt bekéred. Gépenként lenyitható; 14 napig őrizzük.</p></div>' +
+			'<div class="au-f"><span class="gp-sum" data-gsum></span><button type="button" class="cpx-btn ghost sm" data-gall>Mind lenyit</button><button type="button" class="cpx-btn ghost sm" data-gre>↻ Frissítés</button></div><div class="gp-list"><div class="cpx-muted">Betöltés…</div></div></div>';
 		bindSeg(main);
 		main.querySelector('[data-gre]').addEventListener('click', () => gLoad());
-		main.querySelector('[data-gdev]').addEventListener('change', e => { G.dev = e.target.value; gLoad(); });
+		main.querySelector('[data-gall]').addEventListener('click', e => { const ds = [...main.querySelectorAll('.gp-list details.gp-ev')], open = !ds.every(d => d.open); ds.forEach(d => { d.open = open; G.open['ev:' + d.dataset.gev] = open; }); e.target.textContent = open ? 'Mind becsuk' : 'Mind lenyit'; });
 		gLoad();
 		clearInterval(G.t); G.t = setInterval(() => { if (!main.isConnected || S.mode !== 'gep') { clearInterval(G.t); return; } if (!document.hidden) gLoad(true); }, 30000);
 	}
@@ -221,30 +223,53 @@
 		if (m.upErr) c.push('<span class="gp-c bad">feltöltés: ' + esc(m.upErr) + '</span>');
 		return c.join('');
 	}
+	const BAD = /hiba|nem |nincs|sikertelen|lejárt|időtúllépés|failed/i;
+	/* egy gép eseményei időrendben (újabb elöl), az egymás utáni azonos szövegek összevonva */
+	function gEvents(rows) {
+		const out = [];
+		rows.forEach(x => (x.r || []).slice().reverse().forEach(t => {
+			const m = /^(\d\d:\d\d(?::\d\d)?)\s+(.*)$/.exec(String(t)), tm = m ? m[1].slice(0, 5) : dt(x.at).slice(-5), tx = m ? m[2] : String(t), last = out[out.length - 1];
+			if (last && last.tx === tx) { last.n++; last.from = tm; } else out.push({ tx, n: 1, to: tm, from: tm, day: dt(x.at).slice(0, 6) });
+		}));
+		return out;
+	}
 	async function gLoad(quiet) {
 		const main = S.main; if (!main || !main.isConnected || S.mode !== 'gep') return;
-		const box = main.querySelector('.au-box'), dbox = main.querySelector('.gp-devs');
-		let r; try { r = await post('cp_bdg_list', { dev: G.dev }); } catch (e) { if (!quiet) box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
+		const box = main.querySelector('.gp-list');
+		let r; try { r = await post('cp_bdg_list', {}); } catch (e) { if (!quiet) box.innerHTML = '<div class="cpx-empty err">' + esc(e.message) + '</div>'; return; }
 		if (!main.isConnected || S.mode !== 'gep') return;
-		const sel = main.querySelector('[data-gdev]');
-		sel.innerHTML = '<option value="">Minden gép</option>' + r.devs.map(d => '<option value="' + esc(d.id) + '"' + (G.dev === d.id ? ' selected' : '') + '>' + esc(d.name) + '</option>').join('') + (r.anon ? '<option value="anon"' + (G.dev === 'anon' ? ' selected' : '') + '>Azonosítatlan gépek (' + r.anon + ')</option>' : '');
-		dbox.innerHTML = r.devs.map(d => { const on = d.beat && r.now - d.beat < 100; /* a gép percenként jelez: 100 mp-en túl már nem fut (vagy alszik) */
-			return '<div class="gp-d' + (d.off ? ' off' : '') + '"><b><i class="' + (on ? 'on' : '') + '"></i>' + esc(d.name) + '</b><small>' + (on ? 'fut · utolsó jel: ' + (r.now - d.beat) + ' mp-e' : 'nem fut · utoljára jelentkezett: ' + esc(d.beat || d.seen ? dt(Math.max(d.seen, d.beat)) + ' (' + ago(Math.max(d.seen, d.beat)) + ')' : '–')) + (d.ver ? ' · v' + esc(d.ver.split('/')[0]) : '') + '</small><small>utolsó napló: ' + esc(ago(d.last)) + '</small>' +
-				(d.upd ? '<small class="gp-upd ' + (d.upd.done === 1 && /^sikeres/.test(d.upd.res) ? 'ok' : d.upd.done === 2 ? 'bad' : '') + '">Frissítés: ' + esc(d.upd.res) + ' · ' + esc(ago(d.upd.at)) + '</small>' : '') +
-				(d.off ? '<small>letiltva</small>' : '<span class="gp-btns"><button type="button" class="cpx-btn ghost sm" data-gask="' + esc(d.id) + '"' + (d.req ? ' disabled' : '') + '>' + (d.req ? 'Bekérve – vár a gépre' : 'Napló bekérése') + '</button><button type="button" class="cpx-btn ghost sm" data-gupd="' + esc(d.id) + '"' + (d.upd && !d.upd.done ? ' disabled' : '') + '>' + (d.upd && !d.upd.done ? 'Frissítés folyamatban' : 'Program frissítése') + '</button></span>') + '</div>'; }).join('');
-		dbox.querySelectorAll('[data-gupd]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Frissíted a gépen a Crazy Booth programot a legújabb változatra? A gép csak akkor frissít, ha épp nem fotóznak (kezdőképernyőn), a program pár másodpercre bezárul és újraindul.')) return; b.disabled = true; b.textContent = 'Frissítés kérve'; try { await post('cp_bdg_upd', { dev: b.dataset.gupd }); gLoad(true); } catch (e) { b.disabled = false; b.textContent = e.message; } }));
-		dbox.querySelectorAll('[data-gask]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Bekérve – vár a gépre'; try { await post('cp_bdg_ask', { dev: b.dataset.gask }); } catch (e) { b.disabled = false; b.textContent = e.message; } }));
-		/* v2.9.403: az automatikus frissítés csak akkor rajzolja újra a listát, ha változott (iPhone-on a magasságugrástól a lenti menüsáv a képernyő közepére került) */
-		const sig = JSON.stringify(r.rows.map(x => [x.id, x.at, x.ln, x.r, x.m]));
-		if (quiet && sig === G.sig) return;
+		const by = {}; r.rows.forEach(x => { const k = x.dev || ('anon:' + x.name); (by[k] = by[k] || []).push(x); });
+		const list = r.devs.map(d => Object.assign({}, d, { rows: by[d.id] || [] }));
+		Object.keys(by).filter(k => k.indexOf('anon:') === 0).forEach(k => list.push({ id: k, name: by[k][0].name, anon: 1, rows: by[k], beat: 0, seen: by[k][0].at }));
+		const hour = r.now - 3600, on = d => d.beat && r.now - d.beat < 100, badN = d => d.rows.filter(x => x.at > hour).reduce((n, x) => n + (x.r || []).filter(t => BAD.test(t)).length, 0);
+		list.forEach(d => { d.on = on(d); d.bad = badN(d); d.lastAt = Math.max(d.beat || 0, d.seen || 0, d.rows[0] ? d.rows[0].at : 0); });
+		list.sort((a, b) => (b.on - a.on) || ((b.bad > 0) - (a.bad > 0)) || (b.lastAt - a.lastAt));
+		const nOn = list.filter(d => d.on).length, nBad = list.filter(d => d.on && d.bad).length;
+		main.querySelector('[data-gsum]').innerHTML = '<b>' + nOn + '</b> gép fut' + (nBad ? ' · <b class="bad">' + nBad + ' gépnél</b> hiba az elmúlt órában' : ' · az elmúlt órában nem volt hiba');
+		const sig = JSON.stringify(list.map(d => [d.id, d.on, d.ver, d.req, d.upd, d.off, d.rows.map(x => [x.id, x.ln])]));
+		if (quiet && sig === G.sig) { list.forEach(d => { const s = box.querySelector('[data-gm="' + CSS.escape(d.id) + '"] .gp-ago'); if (s) s.textContent = d.on ? 'fut · utolsó jel: ' + (r.now - d.beat) + ' mp-e' : 'nem fut · ' + (d.lastAt ? ago(d.lastAt) : '–'); }); return; }
 		G.sig = sig; G.logs = G.logs || {};
 		if (box.offsetHeight) box.style.minHeight = box.offsetHeight + 'px';
-		if (!r.rows.length) { box.innerHTML = '<div class="cpx-empty">Még nem érkezett napló' + (G.dev ? ' erről a gépről' : '') + '. A gépek a következő indításkor maguktól küldik.</div>'; return; }
-		box.innerHTML = '<div class="au-tw"><table class="au-t gp-t"><thead><tr><th>Mikor</th><th>Gép</th><th>Ok és állapot</th></tr></thead><tbody>' + r.rows.map(x =>
-			'<tr><td class="gp-at">' + esc(dt(x.at)) + '<small>' + esc(ago(x.at)) + '</small></td><td>' + esc(x.name) + '</td><td><div class="gp-r">' + (x.r || []).map(t => '<div' + (/hiba|nem |nincs|sikertelen|lejárt|időtúllépés/i.test(t) ? ' class="bad"' : '') + '>' + esc(t) + '</div>').join('') + '</div><div class="gp-cs">' + gState(x.m || {}) + '</div>' +
-			(x.ln ? '<details data-glog="' + x.id + '" data-gln="' + x.ln + '"' + (G.open[x.id] ? ' open' : '') + '><summary>Napló (' + x.ln.toLocaleString('hu-HU') + ' karakter)</summary><pre class="gp-log">Betöltés…</pre></details>' : '') + '</td></tr>').join('') + '</tbody></table></div>';
-		box.querySelectorAll('[data-glog]').forEach(d => { const ld = async () => { if (!d.open || d.dataset.done) return; d.dataset.done = 1; const pre = d.querySelector('pre'), id = d.dataset.glog, ln = d.dataset.gln, c = G.logs[id]; if (c && c.ln === ln) { pre.innerHTML = c.h; pre.scrollTop = pre.scrollHeight; return; } try { const l = (await post('cp_bdg_log', { id: id })).log; pre.textContent = l; pre.innerHTML = pre.innerHTML.replace(/^(.*(?:HIBA|KRITIKUS|hiba|Error|error).*)$/gm, '<mark>$1</mark>'); G.logs = { [id]: { ln: ln, h: pre.innerHTML } }; pre.scrollTop = pre.scrollHeight; } catch (e) { pre.textContent = e.message; } };
-			d.addEventListener('toggle', () => { G.open[d.dataset.glog] = d.open; ld(); }); ld(); });
+		box.innerHTML = list.length ? list.map(d => {
+			const ev = gEvents(d.rows), lr = d.rows.find(x => x.ln), m = (d.rows[0] && d.rows[0].m) || {};
+			const head = '<div class="gp-mh"><b><i class="' + (d.on ? 'on' : '') + '"></i>' + esc(d.name) + '</b>' +
+				'<small class="gp-ago">' + (d.on ? 'fut · utolsó jel: ' + (r.now - d.beat) + ' mp-e' : 'nem fut · ' + (d.lastAt ? esc(dt(d.lastAt)) + ' (' + esc(ago(d.lastAt)) + ')' : 'még nem jelentkezett')) + (d.ver ? ' · v' + esc(String(d.ver).split('/')[0]) : '') + '</small>' +
+				(d.bad ? '<span class="gp-bad">' + d.bad + ' hiba az elmúlt órában</span>' : '') +
+				(d.off ? '<small>letiltva</small>' : d.anon ? '<small>gépkulcs nélkül</small>' : '<span class="gp-btns"><button type="button" class="cpx-btn ghost sm" data-gask="' + esc(d.id) + '"' + (d.req ? ' disabled' : '') + '>' + (d.req ? 'Bekérve – vár a gépre' : 'Napló bekérése') + '</button><button type="button" class="cpx-btn ghost sm" data-gupd="' + esc(d.id) + '"' + (d.upd && !d.upd.done ? ' disabled' : '') + '>' + (d.upd && !d.upd.done ? 'Frissítés folyamatban' : 'Program frissítése') + '</button></span>') + '</div>' +
+				(d.upd ? '<small class="gp-upd ' + (d.upd.done === 1 && /^sikeres/.test(d.upd.res) ? 'ok' : d.upd.done === 2 ? 'bad' : '') + '">Frissítés: ' + esc(d.upd.res) + ' · ' + esc(ago(d.upd.at)) + '</small>' : '') +
+				(d.rows[0] ? '<div class="gp-cs">' + gState(m) + '</div>' : '');
+			const evs = ev.slice(0, 40).map(e => '<li' + (BAD.test(e.tx) ? ' class="bad"' : '') + '><time>' + esc(e.n > 1 && e.from !== e.to ? e.from + '–' + e.to : e.to) + '</time><span>' + (e.n > 1 ? '<em>' + e.n + '×</em> ' : '') + esc(e.tx) + '</span></li>').join('');
+			const first = ev[0];
+			return '<section class="gp-m' + (d.on ? '' : ' off') + (d.bad ? ' hasbad' : '') + '" data-gm="' + esc(d.id) + '">' + head +
+				(ev.length ? '<details class="gp-ev" data-gev="' + esc(d.id) + '"' + (G.open['ev:' + d.id] ? ' open' : '') + '><summary>Események (' + ev.length + ')<span class="gp-last' + (BAD.test(first.tx) ? ' bad' : '') + '">utolsó: ' + esc(first.to + ' ' + first.tx) + '</span></summary><ol class="gp-evl">' + evs + '</ol>' +
+					(lr ? '<details class="gp-lg" data-glog="' + lr.id + '" data-gln="' + lr.ln + '"' + (G.open['log:' + d.id] ? ' open' : '') + ' data-gd="' + esc(d.id) + '"><summary>Teljes napló (' + lr.ln.toLocaleString('hu-HU') + ' karakter)</summary><pre class="gp-log">Betöltés…</pre></details>' : '') + '</details>'
+					: '<p class="gp-none">Még nem érkezett napló erről a gépről.</p>') + '</section>';
+		}).join('') : '<div class="cpx-empty">Nincs még szelfigép a panelben.</div>';
+		box.querySelectorAll('[data-gupd]').forEach(b => b.addEventListener('click', async () => { if (!window.confirm('Frissíted a gépen a Crazy Booth programot a legújabb változatra? A gép csak akkor frissít, ha épp nem fotóznak, a program pár másodpercre bezárul és újraindul.')) return; b.disabled = true; b.textContent = 'Frissítés kérve'; try { await post('cp_bdg_upd', { dev: b.dataset.gupd }); G.sig = ''; gLoad(true); } catch (e) { b.disabled = false; b.textContent = e.message; } }));
+		box.querySelectorAll('[data-gask]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Bekérve – vár a gépre'; try { await post('cp_bdg_ask', { dev: b.dataset.gask }); } catch (e) { b.disabled = false; b.textContent = e.message; } }));
+		box.querySelectorAll('details.gp-ev').forEach(d => d.addEventListener('toggle', () => { G.open['ev:' + d.dataset.gev] = d.open; }));
+		box.querySelectorAll('[data-glog]').forEach(d => { const ld = async () => { if (!d.open || d.dataset.done) return; d.dataset.done = 1; const pre = d.querySelector('pre'), id = d.dataset.glog, ln = d.dataset.gln, c = G.logs[id]; if (c && c.ln === ln) { pre.innerHTML = c.h; pre.scrollTop = pre.scrollHeight; return; } try { const l = (await post('cp_bdg_log', { id: id })).log; pre.textContent = l; pre.innerHTML = pre.innerHTML.replace(/^(.*(?:HIBA|KRITIKUS|hiba|Error|error).*)$/gm, '<mark>$1</mark>'); G.logs[id] = { ln: ln, h: pre.innerHTML }; pre.scrollTop = pre.scrollHeight; } catch (e) { pre.textContent = e.message; } };
+			d.addEventListener('toggle', () => { G.open['log:' + d.dataset.gd] = d.open; ld(); }); ld(); });
 		box.style.minHeight = '';
 	}
 	/* v2.9.236: Szerver – OPcache és terhelés (csak olvasás) */
@@ -502,6 +527,16 @@
 		'.gp-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.gp-upd{font-weight:600}.gp-upd.ok{color:#1E5B34!important}.gp-upd.bad{color:#9B2C1F!important}.gp-t td{vertical-align:top}.gp-at{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}.gp-at small{display:block;font-weight:400;color:var(--mu);font-size:11.5px}.gp-r div{font-size:13px;overflow-wrap:anywhere}.gp-r .bad{color:#9B2C1F;font-weight:600}.gp-cs{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 2px}.gp-c{background:#F1EFEA;border-radius:999px;padding:1px 8px;font-size:11.5px;color:#4A5163;overflow-wrap:anywhere}.gp-c.ok{background:#E6F4EA;color:#1E5B34}.gp-c.bad{background:#FDECEA;color:#9B2C1F}' +
 		'.gp-t details summary{cursor:pointer;font-size:12.5px;color:#2F5BD8;margin-top:4px}.gp-log{max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#F7F6F3;border:1px solid var(--li);border-radius:8px;padding:8px 10px;margin:6px 0 0}.gp-log mark{background:#FDECEA;color:#9B2C1F}' +
 		'@media (max-width:760px){.gp-t th:nth-child(2),.gp-t td:nth-child(2){display:none}}' +
+		/* v2.9.408: gépenkénti sávok */
+		'.gp-sum{font-size:13.5px;color:var(--mu);margin-right:auto}.gp-sum b{color:var(--ink,#1A1F2B)}.gp-sum b.bad{color:#9B2C1F}' +
+		'.gp-list{display:flex;flex-direction:column;gap:10px}.gp-m{background:#fff;border:1px solid var(--li);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}.gp-m.off{background:#FBFAF8}.gp-m.hasbad{border-color:#F0C9C4}' +
+		'.gp-mh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}.gp-mh>b{font-size:15px;display:flex;align-items:center;overflow-wrap:anywhere}.gp-mh>b i{display:inline-block;flex-shrink:0;width:9px;height:9px;border-radius:50%;background:#C9C4BB;margin-right:8px}.gp-mh>b i.on{background:#17A34A;box-shadow:0 0 0 3px #DDF3E6}' +
+		'.gp-mh small{color:var(--mu);font-size:12.5px;font-variant-numeric:tabular-nums}.gp-mh .gp-btns{margin:0 0 0 auto}.gp-bad{background:#FDECEA;color:#9B2C1F;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}' +
+		'.gp-m .gp-cs{margin:0}.gp-m .gp-upd{font-size:12.5px;color:var(--mu)}.gp-none{margin:0;font-size:12.5px;color:var(--mu)}' +
+		'.gp-ev>summary{cursor:pointer;font-size:13px;font-weight:600;color:#2F5BD8;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}.gp-last{font-weight:400;color:var(--mu);font-size:12.5px;overflow-wrap:anywhere}.gp-last.bad{color:#9B2C1F}' +
+		'.gp-evl{list-style:none;margin:8px 0 4px;padding:0;border-top:1px solid var(--li);max-height:360px;overflow:auto}.gp-evl li{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;padding:5px 2px;border-bottom:1px solid #F1EFEA;font-size:13px}.gp-evl time{color:var(--mu);font-variant-numeric:tabular-nums;white-space:nowrap}.gp-evl span{overflow-wrap:anywhere}.gp-evl li.bad span{color:#9B2C1F}.gp-evl em{font-style:normal;font-weight:700;background:#F1EFEA;border-radius:6px;padding:0 6px;margin-right:2px}' +
+		'.gp-lg>summary{cursor:pointer;font-size:12.5px;color:#2F5BD8;margin-top:6px}' +
+		'@media (max-width:760px){.gp-mh .gp-btns{margin-left:0;width:100%}.gp-evl li{grid-template-columns:78px minmax(0,1fr)}}' +
 		'.srv-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#F5F3EF;margin:0 0 12px}.srv-bar i{display:block;height:100%}.srv-bar .u{background:#2F5BD8}.srv-bar .w{background:#D9534F}.srv-bar .f{background:#1F9D55}' +
 		'.srv-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.srv-t td{padding:4px 8px;font-size:12.5px;font-variant-numeric:tabular-nums}.an-kpi small{display:block;color:var(--mu);font-size:11.5px;margin-top:2px}' +
 		'@media (max-width:760px){.srv-two{grid-template-columns:1fr}.an-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.an-two{grid-template-columns:1fr}.an-t th:nth-child(n+6),.an-t td:nth-child(n+6){display:none}}';

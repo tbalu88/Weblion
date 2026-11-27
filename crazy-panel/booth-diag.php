@@ -86,7 +86,10 @@ function cp_bdg_ajax_list() {
 	$dev = sanitize_text_field(wp_unslash($_POST['dev'] ?? ''));
 	$w = $dev === '' ? '' : ($dev === 'anon' ? " WHERE dev = ''" : $wpdb->prepare(' WHERE dev = %s', $dev));
 	$rows = array();
-	foreach ((array) $wpdb->get_results('SELECT id, at, dev, inst, name, reasons, meta, CHAR_LENGTH(log) AS ln FROM ' . cp_bdg_t() . $w . ' ORDER BY id DESC LIMIT 150', ARRAY_A) as $x) {
+	/* v2.9.408: gépenként legfeljebb 80 bejegyzés (10+ gépnél se szorítsa ki egy beszédes gép a többit) */
+	$cap = array();
+	foreach ((array) $wpdb->get_results('SELECT id, at, dev, inst, name, reasons, meta, CHAR_LENGTH(log) AS ln FROM ' . cp_bdg_t() . $w . ' ORDER BY id DESC LIMIT 3000', ARRAY_A) as $x) {
+		$gk = $x['dev'] !== '' ? $x['dev'] : 'i:' . $x['inst']; $cap[$gk] = ($cap[$gk] ?? 0) + 1; if ($cap[$gk] > 80) { continue; }
 		$rows[] = array('id' => (int) $x['id'], 'at' => (int) $x['at'], 'dev' => (string) $x['dev'], 'name' => (string) $x['name'], 'r' => json_decode((string) $x['reasons'], true) ?: array(), 'm' => json_decode((string) $x['meta'], true) ?: new stdClass(), 'ln' => (int) $x['ln']);
 	}
 	$req = cp_bdg_req_all(); $devs = array();
