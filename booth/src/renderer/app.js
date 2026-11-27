@@ -1286,7 +1286,9 @@
     const ev = S.cfg.event, src = await call(B.newTok, 10), aiId = await call(B.newTok, 10);
     const w0 = img.naturalWidth, h0 = img.naturalHeight, k = Math.min(1, 1600 / Math.max(w0, h0)), c = document.createElement('canvas');
     c.width = Math.round(w0 * k); c.height = Math.round(h0 * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    const r = await call(B.ai, { ev: ev.ev, deal: ev.deal || 0, date: ev.date || '', src, photo: aiId, prompt: fillPrompt(st.prompt), jpeg: c.toDataURL('image/jpeg', 0.9) });
+    const req = { ev: ev.ev, deal: ev.deal || 0, date: ev.date || '', src, photo: aiId, prompt: fillPrompt(st.prompt), jpeg: c.toDataURL('image/jpeg', 0.9) };
+    /* 2026-11-27: akadozó helyszíni netnél (fetch failed) még egyszer próbáljuk, mielőtt az eredeti fotó jönne */
+    let r; try { r = await call(B.ai, req); } catch (e) { if (!/fetch failed|nem érhető el|ECONN|ETIMEDOUT|socket/i.test(e.message)) throw e; B.log('AI: hálózati hiba, újrapróbálás – ' + e.message); await sleep(2500); r = await call(B.ai, req); }
     clearInterval(S.aiT); busyBar(1);
     const ai = await loadImg(r.img);
     S.lastPhoto = r.photo || aiId; S.aiInfo = { left: r.left, style: st.label };
