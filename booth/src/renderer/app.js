@@ -435,7 +435,7 @@
     else if (act === 'cpdn' || act === 'cpup') { e.stopPropagation(); camStep(a.dataset.k, act === 'cpup' ? 1 : -1); }
     else if (act === 'evclose') { e.stopPropagation(); evClose(); }
     else if (act === 'fsgo') { e.stopPropagation(); await B.fullscreen(true); fsSync(); }
-    else if (act === 'menu') { e.stopPropagation(); openSettings(); } /* 2026-11-27: a sarokgomb a Kezelő menüt nyitja (PIN-nel) */
+    else if (act === 'menu') { e.stopPropagation(); B.fullscreen(false).then(() => setTimeout(fsSync, 300)).catch(() => {}); openSettings(); } /* a Menü mindig ablakos nézetbe vált (a felhasználó kérése) */ /* 2026-11-27: a sarokgomb a Kezelő menüt nyitja (PIN-nel) */
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
       ['camera', 'dccUrl', 'camId', 'camRes'].forEach(k => { o[k] = f.elements[k].value; });
