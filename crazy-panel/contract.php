@@ -86,6 +86,26 @@ function cp_ct_guess($d) {
 	if ($has('/smink|makeup|fodrász/u')) { $out[] = 'crazymakeup'; }
 	return array_values(array_unique($out));
 }
+/* v2.9.395: a dealen (a kollégák által) kiválasztott fizetési mód: 'pre' | 'post' | 'cash' | '' */
+function cp_ct_pay_code($pm) {
+	$pm = mb_strtolower((string) $pm);
+	return strpos($pm, 'kész') !== false ? 'cash' : (strpos($pm, 'előre') !== false || strpos($pm, 'elore') !== false ? 'pre' : (preg_match('/halaszt|utólag|utolag|8 nap/u', $pm) ? 'post' : ''));
+}
+function cp_ct_pay_fixed($portal) {
+	static $c = array();
+	$id = is_object($portal) ? (int) ($portal->deal_id ?? 0) : 0; if (!$id || !function_exists('cp_crm_t')) { return ''; }
+	if (!isset($c[$id])) { global $wpdb; $c[$id] = cp_ct_pay_code($wpdb->get_var($wpdb->prepare('SELECT pay_method FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id))); }
+	return $c[$id];
+}
+/* az adatlapon választható módok: a helyszíni készpénz csak ott, ahol minden szolgáltatás engedi (mint a szerződésben) */
+function cp_ct_pay_opts($portal, $opts) {
+	$id = is_object($portal) ? (int) ($portal->deal_id ?? 0) : 0;
+	if ($id && function_exists('cp_crm_t')) {
+		global $wpdb; $d = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cp_crm_t('deals') . ' WHERE id = %d', $id), ARRAY_A);
+		if ($d) { $L = cp_ct_lib(); $keys = cp_ct_guess($d); $cash = true; $any = false; foreach ($keys as $k) { if (!isset($L['services'][$k])) { continue; } $any = true; if (empty($L['services'][$k]['cash'])) { $cash = false; } } if ($any && !$cash) { unset($opts['cash']); } }
+	}
+	return $opts;
+}
 function cp_ct_prefill($id) {
 	global $wpdb;
 	$d = $wpdb->get_row($wpdb->prepare('SELECT d.*, c.name cn, c.email ce, c.phone cp, c.mobile cm, c.city ccity, co.name con FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . ' c ON c.id = d.contact_id LEFT JOIN ' . cp_crm_t('companies') . ' co ON co.id = d.company_id WHERE d.id = %d', $id), ARRAY_A);
@@ -118,6 +138,8 @@ function cp_ct_prefill($id) {
 	$pm = mb_strtolower((string) $d['pay_method']);
 	/* v2.9.78: a fizetési mód opcionális – ha a dealben nincs megadva, üresen marad, és a szerződésben a vevő jelöli be */
 	$pay = strpos($pm, 'kész') !== false ? 'cash' : (strpos($pm, 'előre') !== false || strpos($pm, 'elore') !== false ? 'pre' : (preg_match('/halaszt|utólag|utolag|8 nap/u', $pm) ? 'post' : ''));
+	/* v2.9.395: ha a dealen nincs, az ügyfél adatlapon választott módja (magánszemélynél – EV-s számlázás – halasztott nem lehet) */
+	if ($pay === '') { $pv = $g('pay_method'); if (in_array($pv, array('pre', 'post', 'cash'), true) && !($pv === 'post' && $cl['type'] === 'magan')) { $pay = $pv; } }
 	$city = ''; if (preg_match('/\b\d{4}\s+([^\s,]+)/u', $venue ?: (string) $d['venue'], $m)) { $city = $m[1]; }
 	/* v2.9.71: többnapos rendezvény – minden nap a saját kezdésével, végével (kezdés + óraszám) és – ha eltér – helyszínével */
 	$days = array();
@@ -262,7 +284,7 @@ function cp_ct_build($st) {
 	}
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
 	/* v2.9.394: kiválasztott fizetési módnál csak az látszik; ha nincs kiválasztva, a vevő jelöli be a felsoroltak közül */
-	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
+	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } if ($st['pay'] === '' && $k === 'post' && $c['type'] === 'magan') { continue; } /* EV: nincs halasztott */ $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
 	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'gridh'); }
 	$p($G['late_interest']);

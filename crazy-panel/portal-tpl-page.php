@@ -182,6 +182,8 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 	if ($k === 'onsite_contact' && !$locked) {
 		$h .= '<label class="cpp-same"><input type="checkbox" data-same-as-client> Ugyanaz, mint a megrendelő (kitöltöm az adataival)</label>';
 	}
+	if ($k === 'pay_method' && function_exists('cp_ct_pay_opts')) { $f['options'] = cp_ct_pay_opts($portal, $f['options']); } /* v2.9.395 */
+	if ($k === 'client_type' && function_exists('cp_ct_pay_fixed')) { $fx = cp_ct_pay_fixed($portal); if ($fx !== '') { $PL = array('pre' => 'előre utalással', 'post' => 'halasztott fizetéssel, 8 napos fizetési határidővel', 'cash' => 'helyszínen készpénzben'); $f['note'] = trim(($f['note'] ?? '') . ' Fizetési mód (a foglalás szerint): ' . $PL[$fx] . '.'); } }
 	if ($kind === 'fixed') {
 		$pkg = isset($portal->sm['package']) ? trim(preg_replace('/\s*,\s*/u', ', ', (string) $portal->sm['package'])) : '';
 		$hrs = isset($portal->sm['hours']) ? (float) $portal->sm['hours'] : 0;

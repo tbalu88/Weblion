@@ -108,6 +108,12 @@
       var src = byKey(x[0]);
       fd.hidden = !src || read(src) !== x[1];
     });
+    /* v2.9.395: magánszemélynél (EV-s számlázás) nincs halasztott fizetés */
+    var pm = byKey('pay_method'), ctp = byKey('client_type');
+    if (pm) {
+      var priv = !!ctp && read(ctp) === 'magan';
+      $all(pm, 'input[value="post"]').forEach(function (r) { var l = r.closest('label'); if (l) l.hidden = priv; if (priv && r.checked) r.checked = false; });
+    }
   }
   function banner(msg) {
     var st = document.getElementById('cpp-status');

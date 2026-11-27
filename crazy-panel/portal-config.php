@@ -166,6 +166,13 @@ function cp_portal_fields() {
 				'po'            => array('label' => 'Megrendelésszám / PO (nem kötelező)', 'kind' => 'text', 'max' => 60),
 			),
 		),
+		/* v2.9.395: fizetési mód (a szerződésbe kerül). Magánszemélynél (EV-s számlázás) nincs halasztott fizetés; a helyszíni
+		   készpénz csak ott, ahol a szolgáltatás engedi. Ha a dealen a kollégák már kiválasztották, itt nem kérdezzük (fix). */
+		'pay_method' => array(
+			'stage' => 'a', 'q' => 'pay', 'qlabel' => 'Fizetési mód', 'section' => 'megrendelo', 'required' => true, 'pay' => 1,
+			'label' => 'Fizetési mód', 'help' => 'Ez kerül a szerződésbe.',
+			'kind' => 'enum', 'options' => array('pre' => 'Előre utalással', 'post' => 'Halasztott fizetéssel, 8 napos fizetési határidővel', 'cash' => 'Helyszínen készpénzben'),
+		),
 		'event_date' => array(
 			'stage' => 'a', 'q' => 'event_date', 'qlabel' => 'A rendezvény dátuma', 'section' => 'rendezveny', 'required' => true,
 			'label' => 'A rendezvény dátuma',
@@ -348,6 +355,7 @@ function cp_portal_field_active($f, $answers, $portal = null) {
 
 /* a szolgáltatáshoz kötött mező (svc) releváns-e ennél a portálnál; portál nélkül (pl. összesítők) mindig igen */
 function cp_portal_field_svc_ok($f, $portal) {
+	if (!empty($f['pay']) && $portal && function_exists('cp_ct_pay_fixed') && cp_ct_pay_fixed($portal) !== '') { return false; } /* v2.9.395: a dealen már kiválasztott fizetési mód fix */
 	if (empty($f['svc']) || !$portal || !function_exists('cp_portal_bg_enabled')) { return true; }
 	return $f['svc'] !== 'selfie' || cp_portal_bg_enabled($portal);
 }
