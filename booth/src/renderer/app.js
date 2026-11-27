@@ -775,11 +775,11 @@
   $('[data-stq]').addEventListener('input', e => search(e.target.value));
 
   /* a felület saját beállításai (cfg.ui) */
-  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed', 'drawVideo', 'dccShow', 'lvShoot'], UI_SEL = ['paperSize', 'printFit', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
+  const UI_NUM = ['cdNext', 'groupCd', 'videoSec', 'gbSec', 'paperRoll', 'spinSec', 'spinCd', 'drawSec'], UI_CHK = ['bestOf', 'retake', 'music', 'getReady', 'frameGuide', 'station', 'shareQr', 'shareEmail', 'airdrop', 'formBefore', 'osk', 'sticker', 'spinVertical', 'pinOff', 'startWindowed', 'drawVideo', 'dccShow', 'lvShoot'], UI_SEL = ['paperSize', 'printFit', 'printLand', 'printMode', 'printWhere', 'askName', 'lanQr', 'stickerGrid', 'stickerPrinter', 'spinCam'], UI_LIM = ['limitPhoto', 'limitEvent', 'stickerBleed'], UI_TXT = ['questions', 'consentText', 'lanSsid'];
   const UI_PRN = ['printScale', 'printDx', 'printDy'];
   const verGe = (a, b) => { const x = String(a || '0').split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return true; };
   const prOpt = () => { const u = Object.assign({}, UI_DEF, U()); return { paper: u.paperSize, fit: u.printFit, scale: u.printScale, dx: u.printDx, dy: u.printDy }; };
-  const UI_DEF = { drawSec: 20, drawVideo: true, cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
+  const UI_DEF = { drawSec: 20, drawVideo: true, cdNext: 2, groupCd: 6, videoSec: 10, gbSec: 30, paperRoll: 400, bestOf: false, retake: true, music: false, getReady: true, frameGuide: true, station: false, printMode: 'one', printWhere: 'local', limitPhoto: 0, limitEvent: 0, paperSize: '4x6', printLand: '', printFit: 'cover', printScale: 100, printDx: 0, printDy: 0, shareQr: true, shareEmail: false, airdrop: false, formBefore: false, osk: true, askName: 'opt', lanQr: 'off', sticker: false, stickerGrid: '4', stickerPrinter: '', stickerBleed: 1.5, spinSec: 8, spinCd: 5, spinVertical: true, spinCam: '', pinOff: false, startWindowed: false, questions: '', consentText: '', lanSsid: '' };
   const CLR = { b: 'u-cb', c: 'u-cc', s: 'u-cs', w: 'u-cw' };
   const clrLbl = () => Object.keys(CLR).forEach(k => { const v = Number($('#' + CLR[k]).value) || 0; $('[data-cv=' + k + ']').textContent = v > 0 ? '+' + v : String(v); });
   function uiForm() {
@@ -948,7 +948,12 @@
   /* színkorrekció (a nyomtató „színprofilja”): fényerő, kontraszt, telítettség, melegség – -10…+10 */
   const colorAdj = () => Object.assign({ b: 0, c: 0, s: 0, w: 0 }, U().color || {});
   /* nyomtatás a helyi nyomtató(k)on: sorrend a mód szerint, hiba / papírhiány esetén a következő */
+  /* 0.19.17: fekvő kép nyomtatása – „land”: fekvő lapként, elforgatás nélkül (Windows-alapértelmezés: a DNP-meghajtó a
+     programból elforgatva küldött képet visszaforgatta és levágta); „rot”: elforgatva, álló lapként (Mac-alapértelmezés) */
+  const landMode = cv => cv.width > cv.height && verGe(S.cfg.version, '0.19.17') && (U().printLand || (S.cfg.mac ? 'rot' : 'land')) === 'land';
+  const prepPrint = (cv, adj) => { const l = landMode(cv); return { url: BoothCompose.toPrint(cv, adj, l), land: l }; };
   async function printLocal(dataUrl, copies) {
+    let land = false; if (dataUrl && typeof dataUrl === 'object') { land = !!dataUrl.land; dataUrl = dataUrl.url; }
     const L = printList(), mode = U().printMode || 'one';
     let order = L.slice();
     if (mode === 'rr' && L.length > 1) { const i = (lsGet('cb_rr', 0) || 0) % L.length; order = L.slice(i).concat(L.slice(0, i)); lsSet('cb_rr', i + 1); }
@@ -958,7 +963,7 @@
       const left = paperLeft(name);
       if (left !== null && left < copies && order.length > 1) { last = new Error(pName(name) + ': kevés a papír'); continue; }
       try {
-        await call(B.print, dataUrl, Object.assign(prOpt(), { copies, printer: name || undefined }));
+        await call(B.print, dataUrl, Object.assign(prOpt(), { copies, printer: name || undefined, land }));
         paperUse(name, copies); B.log('nyomtatva: ' + pName(name) + ' ×' + copies + (left !== null ? ' (papír: ' + Math.max(0, left - copies) + ')' : ''));
         return name;
       } catch (e) { last = e; B.log('nyomtatási hiba (' + pName(name) + '): ' + e.message); if (mode === 'one') break; }
@@ -977,7 +982,7 @@
       counted(photo, a.n);
       return { remote: true, ahead: r.ahead || 0, n: a.n };
     }
-    const name = await printLocal(BoothCompose.toPrint(canvas, colorAdj()), a.n);
+    const name = await printLocal(prepPrint(canvas, colorAdj()), a.n);
     counted(photo, a.n);
     return { name, n: a.n };
   }
@@ -1042,7 +1047,7 @@
         $('[data-stlast]').src = j.img;
         try {
           const img = await loadImg(j.img), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
-          const name = await printLocal(BoothCompose.toPrint(c, colorAdj()), j.copies);
+          const name = await printLocal(prepPrint(c, colorAdj()), j.copies);
           await call(B.printq, 'POST', '/print/' + j.id, { status: 'done', msg: pName(name) });
           S.stDone = (S.stDone || 0) + j.copies; $('[data-stdone]').textContent = S.stDone;
           st.textContent = 'Kinyomtatva – várom a következőt'; st.className = 'st-state ok';

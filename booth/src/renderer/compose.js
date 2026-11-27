@@ -67,8 +67,8 @@
   }
   /* a nyomtatóra mindig álló 4×6" megy: a fekvő képet elforgatjuk.
    * adj (v0.6): színkorrekció a nyomtatóhoz – { b fényerő, c kontraszt, s telítettség, w melegség }, mind -10…+10 */
-  function toPrint(cv, adj) {
-    const a = adj || {}, b = Number(a.b) || 0, c = Number(a.c) || 0, s = Number(a.s) || 0, w = Number(a.w) || 0, land = cv.width > cv.height;
+  function toPrint(cv, adj, keepLand) {
+    const a = adj || {}, b = Number(a.b) || 0, c = Number(a.c) || 0, s = Number(a.s) || 0, w = Number(a.w) || 0, land = cv.width > cv.height && !keepLand;
     if (!land && !b && !c && !s && !w) return cv.toDataURL('image/jpeg', 0.95);
     const p = document.createElement('canvas'); p.width = land ? cv.height : cv.width; p.height = land ? cv.width : cv.height;
     const g = p.getContext('2d');
