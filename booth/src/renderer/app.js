@@ -1245,6 +1245,15 @@
     const nm = (S.guestPre && S.guestPre.name) || (S.aiName || '') || 'EventCrazy';
     return String(p || '').replace(/\{nev\}|\{név\}/gi, nm).replace(/\{rendezveny\}|\{rendezvény\}/gi, ttl || 'EventCrazy').replace(/\{datum\}|\{dátum\}/gi, d ? d + '.' : today());
   }
+  /* 2026-11-27: AI-stílusok piktogramja és rövid leírása a választóképernyőn */
+  const AI_ICO = {
+    karikatura: ['<circle cx="12" cy="9" r="6"/><path d="M9.6 8.2v.6M14.4 8.2v.6"/><path d="M9.4 11.2c1.5 1.4 3.7 1.4 5.2 0"/><path d="M8.5 21c.6-2.6 1.9-4 3.5-4s2.9 1.4 3.5 4"/>', 'vicces, rajzolt'],
+    magazin: ['<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M8 6.5h8"/><circle cx="12" cy="11.5" r="2.3"/><path d="M8.3 18c.6-2 1.9-3.2 3.7-3.2s3.1 1.2 3.7 3.2"/>', 'divatlap címlapján'],
+    plakat: ['<path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 10l1.2-5 15 1.4L19.6 10"/><path d="M9.6 5.5 8.6 10M14.6 6 13.6 10"/>', 'mozis hangulat'],
+    kartya: ['<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.2-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z"/><path d="M9.5 18h5"/>', 'fantasy kártya'],
+    portre: ['<circle cx="12" cy="8" r="3.5"/><path d="M5 21c.8-4 3.6-6 7-6s6.2 2 7 6"/><path d="M11.2 15.2 12 17l.8-1.8M12 17l-.9 3.6M12 17l.9 3.6"/>', 'profi stúdiófotó'],
+    x: ['<path d="M5 19l3-9 9-6 3 3-6 9z"/><path d="M14 6l4 4"/><path d="M5 19l4-1"/>', '']
+  };
   async function runAi(draw) {
     if (S.busy || S.scr === 'aiok') return;
     /* 2026-11-27: a hozzájárulási képernyő a felhasználó kérésére kikerült – azonnal indul a fotó */
@@ -1257,8 +1266,8 @@
       img = await shoot('photo'); await liveOff();
       const L = aiStyles(); let st = L[0];
       if (L.length > 1) {
-        $('[data-aistyles]').innerHTML = L.map((x, i) => '<button type="button" class="mt" data-ais="' + i + '"><b>' + esc(x.label) + '</b></button>').join('');
-        $('[data-aistyles]').style.setProperty('--n', Math.min(3, L.length));
+        $('[data-aistyles]').innerHTML = L.map((x, i) => { const a = AI_ICO[x.k] || AI_ICO.x; return '<button type="button" class="mt" data-ais="' + i + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + a[0] + '</svg><b>' + esc(x.label) + '</b>' + (a[1] ? '<small>' + a[1] + '</small>' : '') + '</button>'; }).join('');
+        $('[data-aistyles]').dataset.n = L.length;
         show('aistyle');
         const i = await aiWait('aistyle', 25000);
         st = L[i == null ? 0 : i];

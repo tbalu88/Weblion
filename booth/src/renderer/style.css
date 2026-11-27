@@ -294,7 +294,13 @@ button{font:inherit;cursor:pointer}
 .aiok .aiok-q{color:#fff;font-size:3.4vh;font-weight:700}
 .aiok-b{display:flex;gap:2vh;justify-content:center;flex-wrap:wrap}.aiok-b .big{flex:1 1 30vh;padding:0 3vh}
 [data-s=aistyle]{flex-direction:column;align-items:center;justify-content:center;gap:5vh;background:radial-gradient(circle at 50% 40%,#1E2848 0%,var(--n) 70%);padding:4vh}
-[data-s=aistyle] .mt{aspect-ratio:auto;min-height:16vh}
+/* 2026-11-27: AI-stílusválasztó – egyforma csempék, a hiányos sor középre zárva, egységes betűméret, piktogrammal */
+[data-s=aistyle] .md{display:flex;flex-wrap:wrap;justify-content:center;gap:3vh;max-width:min(94vw,calc(3 * 30vh + 2 * 3vh))}
+[data-s=aistyle] .md[data-n="4"]{max-width:min(94vw,calc(2 * 30vh + 3vh))}
+[data-s=aistyle] .mt{flex:0 0 30vh;width:30vh;aspect-ratio:auto;height:28vh;gap:1.4vh;padding:2.4vh 1.6vh}
+[data-s=aistyle] .mt svg{width:9vh;height:9vh;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+[data-s=aistyle] .mt b{font-size:2.8vh;line-height:1.15;white-space:nowrap}
+[data-s=aistyle] .mt small{font-size:1.9vh;line-height:1.2}
 /* 0.15.0: AI-rajz – a rajzolás képernyője */
 [data-s=draw]{align-items:center;justify-content:center;background:#0e1220}
 .drw{display:flex;flex-direction:column;align-items:center;gap:2vh}
