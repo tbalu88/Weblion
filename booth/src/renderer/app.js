@@ -1303,6 +1303,8 @@
     const o = { title: (S.cfg.event && S.cfg.event.deal && S.cfg.event.title) || S.cfg.title || 'EventCrazy', date: today() };
     if ((U().ai || {}).out === 'both') BoothCompose.pair(cv, orig, ai, o);
     else BoothCompose.compose(cv, [ai], Object.assign({ tpl: S.tpl && S.tpl.shots === 1 ? S.tpl : null }, o));
+    /* 2026-11-27: ha a rendezvénynek van (egyablakos) sablonja, a galériába is a sablonos AI-kép kerül (felülírja a nyers AI-képet) */
+    if ((U().ai || {}).out !== 'both' && S.tpl && S.tpl.shots === 1 && S.lastPhoto && S.cfg.event) { const ev = S.cfg.event; call(B.keep, ev.ev, ev.deal || 0, ev.date || '', S.lastPhoto, cv.toDataURL('image/jpeg', 0.92), { kind: 'aiframed' }).catch(e => B.log('sablonos AI-kép mentése: ' + e.message)); }
     S.shots = [ai]; S.pool = null; S.pick = false; S.pending = null; S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
   }
   function aiReview(noAuto) {

@@ -171,7 +171,21 @@ function cg_upload(WP_REST_Request $req) {
 	if (!$dev) { return new WP_REST_Response(array('ok' => false, 'message' => 'Ismeretlen vagy letiltott gépkulcs.'), 401); }
 	$ev = (string) $req->get_param('ev'); $ph = (string) $req->get_param('photo');
 	if (!cg_tok_ok($ev) || !cg_tok_ok($ph)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Hibás azonosító.'), 400); }
-	if ($wpdb->get_var($wpdb->prepare('SELECT id FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s', $ev, $ph))) { return array('ok' => true, 'dup' => true, 'url' => home_url('/galeria/' . $ev . '/' . $ph)); }
+	$ex = $wpdb->get_row($wpdb->prepare('SELECT id, kind FROM ' . cg_t() . ' WHERE ev = %s AND photo = %s', $ev, $ph));
+	/* 2026-11-27: a gép az AI-képet a rendezvény sablonjával is feltölti (kind=aiframed) – ez felülírja a szerver nyers AI-képét */
+	if ($ex && $ex->kind === 'ai' && (string) $req->get_param('kind') === 'aiframed') {
+		$fp = $req->get_file_params(); $f = isset($fp['file']) ? $fp['file'] : null;
+		if (!$f || !empty($f['error']) || !is_uploaded_file($f['tmp_name']) || (int) $f['size'] > 25 * MB_IN_BYTES) { return new WP_REST_Response(array('ok' => false, 'message' => 'Nincs fájl.'), 400); }
+		$info = @getimagesize($f['tmp_name']); if (!$info || !in_array($info[2], array(IMAGETYPE_JPEG, IMAGETYPE_PNG), true)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Csak JPG / PNG.'), 415); }
+		$dir = cg_dir() . '/' . $ev; $ed = wp_get_image_editor($f['tmp_name']);
+		if (is_wp_error($ed)) { return new WP_REST_Response(array('ok' => false, 'message' => 'A kép nem dolgozható fel.'), 415); }
+		$ed->resize(2000, 2000, false); $ed->set_quality(86); $sv = $ed->save($dir . '/' . $ph . '.jpg', 'image/jpeg');
+		if (is_wp_error($sv)) { return new WP_REST_Response(array('ok' => false, 'message' => 'Mentési hiba.'), 500); }
+		$th = wp_get_image_editor($sv['path']); if (!is_wp_error($th)) { $th->resize(480, 480, false); $th->set_quality(78); $th->save($dir . '/' . $ph . '_t.jpg', 'image/jpeg'); }
+		$wpdb->update(cg_t(), array('w' => (int) $sv['width'], 'h' => (int) $sv['height'], 'bytes' => (int) @filesize($sv['path'])), array('id' => (int) $ex->id));
+		return array('ok' => true, 'replaced' => true, 'url' => home_url('/galeria/' . $ev . '/' . $ph));
+	}
+	if ($ex) { return array('ok' => true, 'dup' => true, 'url' => home_url('/galeria/' . $ev . '/' . $ph)); }
 	$fp = $req->get_file_params(); $f = isset($fp['file']) ? $fp['file'] : null;
 	if (!$f || !empty($f['error']) || !is_uploaded_file($f['tmp_name'])) { return new WP_REST_Response(array('ok' => false, 'message' => 'Nincs fájl.'), 400); }
 	/* v0.3: videó (MP4 / WebM) – a fájl tartalma alapján ellenőrizve, eredeti formában tárolva; a borítókép külön („poster”) */
