@@ -551,7 +551,13 @@
     const grid = $('[data-glgrid]');
     const L = (await B.list(ev.ev)).v || [];
     const fu = f => encodeURI('file://' + f.replace(/\\/g, '/')).replace(/'/g, '%27');
-    grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '"' + (p.video ? ' data-v="1" class="vid"' : '') + ' style="background-image:url(\'' + fu(p.video ? (p.poster || '') : p.file) + '\')"></button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
+    grid.innerHTML = L.length ? L.map(p => '<button type="button" data-ph="' + p.photo + '" data-f="' + esc(p.file) + '"' + (p.video ? ' data-v="1" class="vid"' : '') + ' style="background-image:url(\'' + fu(p.video ? (p.poster || '') : p.file) + '\')">' + (p.video ? '<video muted loop playsinline preload="none" data-vs="' + esc(fu(p.file)) + '"></video>' : '') + '</button>').join('') : '<p>Még nincs kép ezen a rendezvényen.</p>';
+    /* 2026-11-27: a videók (pl. az AI-rajz) a rácsban maguktól, némán, ismétlődve játszódnak, ha látszanak – egyszerre legfeljebb 8 */
+    if (S.glIo) S.glIo.disconnect();
+    S.glIo = new IntersectionObserver(es => es.forEach(x => { const v = x.target;
+      if (x.isIntersecting && grid.querySelectorAll('video.pl').length < 8) { if (!v.src) v.src = v.dataset.vs; v.play().then(() => { v.classList.add('pl'); v.parentNode.classList.add('pl'); }).catch(() => {}); }
+      else if (!x.isIntersecting) { v.pause(); v.classList.remove('pl'); v.parentNode.classList.remove('pl'); } }), { threshold: 0.4 });
+    grid.querySelectorAll('video[data-vs]').forEach(v => S.glIo.observe(v));
     grid.querySelectorAll('[data-ph]').forEach(b => { const i = new Image(); i.onload = () => b.classList.toggle('land', i.naturalWidth > i.naturalHeight); i.src = b.style.backgroundImage.slice(5, -2); });
     if (S.gsel) { const have = new Set(L.map(p => p.photo)); [...S.gsel].forEach(x => { if (!have.has(x)) S.gsel.delete(x); }); }
     glMark(); glTb();

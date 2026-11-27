@@ -421,3 +421,7 @@ button{font:inherit;cursor:pointer}
 .pf-sum li::before{content:"";position:absolute;left:2px;top:.5em;width:8px;height:8px;border-radius:50%;background:#E5484D}
 .pf-sum li.mid{color:#F2C46B}.pf-sum li.mid::before{background:#E5A000}
 .pf-sum li.bad{color:#FF9B92}
+
+/* 2026-11-27: videók a galériarácsban maguktól játszódnak */
+.gl-grid button video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;pointer-events:none}
+.gl-grid:not(.selm) button.vid.pl::after{opacity:0}
