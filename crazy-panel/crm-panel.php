@@ -328,7 +328,26 @@ function cp_crm_deal_data($id) {
 	$acts = $wpdb->get_results('SELECT id, title, type, owner_id, due_at, duration, completed, completed_at, description, related_id, related_module FROM ' . cp_crm_t('activities') . " WHERE deleted_at IS NULL" . cp_crm_act_hide_sql() . " AND ($aw) ORDER BY due_at DESC LIMIT 50", ARRAY_A);
 	foreach ($acts as &$a) { $a['due_at'] = cp_crm_local($a['due_at']); $a['completed_at'] = cp_crm_local($a['completed_at']); $a['owner'] = cp_crm_user_name($a['owner_id']); }
 	unset($a);
-	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
+	$hist = $wpdb->get_results($wpdb->prepare('SELECT field, old_val, new_val, by_user, at, src FROM ' . cp_crm_t('history') . ' WHERE deal_id = %d ORDER BY at DESC, id DESC LIMIT 100', $id), ARRAY_A);
+	/* v2.9.393: a panel a Salesmate-be egyetlen API-felhasználó nevében ír, ezért a Salesmate a panelben végzett műveleteket
+	   (létrehozás, jegyzet…) neki tulajdonítja. Ha a dealt a panelben hozták létre, a létrehozó a panel szerinti kolléga, és
+	   az API-felhasználó nevén jött Salesmate-változásokat a 5 percen belüli panelművelet végzőjéhez írjuk. */
+	$api = (string) get_option('cp_crm_api_name', '');
+	foreach ($hist as $h0) { if ($h0['field'] === 'created' && $h0['src'] === 'panel' && $h0['by_user'] !== '') {
+		$an = cp_crm_user_name($deal['created_by']);
+		if ($an !== '' && $an !== $api) { $api = $an; update_option('cp_crm_api_name', $api, false); }
+		$deal['created_by_n'] = $h0['by_user'];
+	} }
+	if ($api !== '') {
+		$pan = array(); foreach ($hist as $h0) { if ($h0['src'] === 'panel' && $h0['by_user'] !== '' && $h0['by_user'] !== $api) { $pan[] = array(strtotime($h0['at'] . ' UTC'), $h0['by_user']); } }
+		foreach ($hist as &$h0) {
+			if ($h0['src'] !== 'salesmate' || $h0['by_user'] !== $api) { continue; }
+			$t0 = strtotime($h0['at'] . ' UTC'); $best = null;
+			foreach ($pan as $p0) { $dd = abs($p0[0] - $t0); if ($dd <= 300 && ($best === null || $dd < $best[0])) { $best = array($dd, $p0[1]); } }
+			if ($best) { $h0['by_user'] = $best[1]; }
+		}
+		unset($h0);
+	}
 	foreach ($hist as &$h) {
 		$h['at'] = cp_crm_local($h['at']);
 		/* v2.9.4: a kezdés időpontja a táblában világidőben (UTC) van – a változásnaplóban helyi időben, másodperc nélkül */
