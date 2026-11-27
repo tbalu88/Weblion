@@ -68,7 +68,7 @@ button{font:inherit;cursor:pointer}
 .brand,.tap b,.tap span{text-shadow:0 2px 14px rgba(0,0,0,.45)}
 .bgm::after{content:"";position:absolute;inset:0;background:rgba(10,14,26,.45)}
 [data-s=start]>*:not(.bgm){position:relative;z-index:1}
-[data-s=start]>.fsbtn,[data-s=start]>.galbtn,[data-s=start]>.warn,[data-s=start]>.mode{position:absolute}
+[data-s=start]>.fsbtn,[data-s=start]>.fsq,[data-s=start]>.galbtn,[data-s=start]>.warn,[data-s=start]>.mode{position:absolute}
 [data-s=start]>.evbtn{position:absolute;bottom:2vh;right:2vh}[data-s=start]>.evp{position:absolute;inset:0;z-index:6}
 .fsbtn{position:absolute;top:2vh;right:2vh;z-index:3;display:flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:var(--mu);font-size:15px}
 .fsbtn:hover{color:#fff;border-color:rgba(255,255,255,.35)}
