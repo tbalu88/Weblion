@@ -400,7 +400,7 @@
     else if (act === 'testprint') { const keep = S.cfg.ui; S.cfg.ui = uiCollect(); $('[data-stmsg]').textContent = 'Próbanyomat indul…'; try { await testPrint(a.dataset.name); $('[data-stmsg]').textContent = 'Próbanyomat elküldve: ' + a.dataset.name + '.'; await prForm(); } catch (x) { $('[data-stmsg]').textContent = x.message; } finally { S.cfg.ui = keep; } }
     else if (act === 'clrreset') { Object.values(CLR).forEach(id => { $('#' + id).value = 0; }); clrLbl(); }
     else if (act === 'pfre') { preflight(); }
-    else if (act === 'fstoggle') { const r = await B.fullscreen(); if (r && r.ok) $('[data-stmsg]').textContent = r.v ? 'Teljes képernyő bekapcsolva.' : 'Ablakos nézet.'; }
+    else if (act === 'fstoggle') { const r = await B.fullscreen(); if (r && r.ok) $('[data-stmsg]').textContent = r.v ? 'Teljes képernyő bekapcsolva.' : 'Ablakos nézet.'; fsSync(); }
     else if (act === 'standby') { standby(); }
     else if (act === 'musicclear') { await kvSet('music', null); musicInfo(); $('[data-stmsg]').textContent = 'Zene törölve.'; }
     else if (act === 'defaults') { if (!window.confirm('Visszaállítod a fotózási, nyomtatási és mód-beállításokat az alapértékekre? (A gépkulcs, a PIN, a rendezvény és a kamera marad.)')) return; try { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { countdown: 3, shots: 1, copies: 1, autoPrint: false, reviewSec: 25, mirror: true, ui: {} })); await fillForm(); $('[data-stmsg]').textContent = 'Alapértékek visszaállítva.'; } catch (x) { $('[data-stmsg]').textContent = x.message; } }
@@ -434,6 +434,7 @@
     else if (act === 'ev') { e.stopPropagation(); evOpen(); }
     else if (act === 'cpdn' || act === 'cpup') { e.stopPropagation(); camStep(a.dataset.k, act === 'cpup' ? 1 : -1); }
     else if (act === 'evclose') { e.stopPropagation(); evClose(); }
+    else if (act === 'fsgo') { e.stopPropagation(); await B.fullscreen(true); fsSync(); }
     else if (act === 'menu') { e.stopPropagation(); openSettings(); } /* 2026-11-27: a sarokgomb a Kezelő menüt nyitja (PIN-nel) */
     else if (act === 'save') {
       const f = $('[data-form]'), o = {};
@@ -1339,6 +1340,9 @@
     try { const f = await B.isFullscreen(); lsSet('cb_resume', { fs: !!(f && f.ok && f.v), at: Date.now() }); } catch (e) { /* */ }
   }
   function updUnprep() { const o = document.querySelector('.updov'); if (o) o.remove(); lsSet('cb_resume', null); }
+  /* 2026-11-27: ablakos nézetben a bal felső sarokban teljes képernyő gomb */
+  async function fsSync() { try { const r = await B.isFullscreen(); const b = $('[data-act=fsgo]'); if (b) b.hidden = !(r && r.ok && !r.v); } catch (e) { /* */ } }
+  window.addEventListener('resize', () => { clearTimeout(S.fsT); S.fsT = setTimeout(fsSync, 300); });
   async function remoteUpd() {
     if (S.updRun) return;
     /* 2026-11-27: a Kezelő menüből és a galériából is frissít (csak fotózás közben nem) */
@@ -1591,5 +1595,5 @@
   window.addEventListener('error', e => diagSoon('JS-hiba: ' + (e.message || '') + ' ' + (e.filename || '').split(/[\\/]/).pop() + ':' + (e.lineno || '')));
   window.addEventListener('unhandledrejection', e => diagSoon('JS-hiba: ' + String(e.reason && e.reason.message || e.reason)));
   setTimeout(() => diagSoon('indítás'), 10000); /* az indulás utáni hibákkal együtt, egy küldésben (kb. 30 mp múlva) */
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); { const rs = lsGet('cb_resume', null); lsSet('cb_resume', null); B.fullscreen(rs && Date.now() - rs.at < 15 * 60000 ? !!rs.fs : !!U().startFull).catch(() => {}); if (rs) B.log('újraindulás frissítés után – folytatás' + (rs.fs ? ' teljes képernyőn' : '')); } /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); { const rs = lsGet('cb_resume', null); lsSet('cb_resume', null); B.fullscreen(rs && Date.now() - rs.at < 15 * 60000 ? !!rs.fs : !!U().startFull).then(() => setTimeout(fsSync, 400)).catch(() => {}); if (rs) B.log('újraindulás frissítés után – folytatás' + (rs.fs ? ' teljes képernyőn' : '')); } /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
 })();

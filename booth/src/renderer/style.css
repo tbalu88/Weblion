@@ -428,3 +428,6 @@ button{font:inherit;cursor:pointer}
 .updov{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:rgba(14,18,32,.92)}
 .updov b{font:800 clamp(28px,4.6vw,56px)/1.15 'Plus Jakarta Sans',Inter,sans-serif;color:#FF4D4F}
 .updov span{font-size:clamp(16px,1.8vw,22px);color:#E6E8EE;max-width:760px}
+.fsq{position:absolute;top:2vh;left:2vh;z-index:3;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+.fsq[hidden]{display:none}.fsq:hover{border-color:rgba(255,255,255,.4)}
+.fsq svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
