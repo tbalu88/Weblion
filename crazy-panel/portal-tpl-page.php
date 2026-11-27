@@ -231,6 +231,11 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 		}
 	}
 	if (!empty($f['note'])) { $h .= '<p class="cpp-note">' . esc_html($f['note']) . '</p>'; }
+	/* v2.9.398: magánszemélynél (EV) a halasztott fizetés már a szerveren rejtve (a JS a típusváltáskor kezeli) */
+	if ($k === 'pay_method') {
+		$pre = (array) cp_portal_prefill($portal); $ctp = isset($answers['client_type']) && is_string($answers['client_type']) ? $answers['client_type'] : (isset($pre['client_type']) && is_string($pre['client_type']) ? $pre['client_type'] : '');
+		if ($ctp === 'magan' && strpos($sif, 'data-post-ok') === false) { $h = str_replace('<label><input type="radio" name="pay_method" value="post"', '<label hidden><input type="radio" name="pay_method" value="post"', $h); }
+	}
 	$h .= '<p class="cpp-ferr" role="alert" hidden></p></div>';
 	return $h;
 }
