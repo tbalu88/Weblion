@@ -14,6 +14,10 @@ function make(o) {
   fs.mkdirSync(qdir, { recursive: true }); fs.mkdirSync(tdir, { recursive: true });
   const tok = n => crypto.randomBytes(16).toString('base64').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, n);
   const hdr = () => ({ 'X-Booth-Key': o.key() || '' });
+  /* 0.19.16: a sor elemei atomikusan íródnak (ideiglenes fájl + átnevezés), és a sérült / üres elemet (pl. áramszünet vagy
+     kényszerített kilépés után) félretesszük (.hibas), hogy ne akassza meg a mögötte várakozókat */
+  const putJ = (f, obj) => { const t = f + '.' + process.pid + '.tmp'; fs.writeFileSync(t, JSON.stringify(obj)); fs.renameSync(t, f); };
+  const getJ = (dir, f) => { try { const raw = fs.readFileSync(path.join(dir, f), 'utf8').replace(/^\uFEFF/, ''); return JSON.parse(raw); } catch (e) { try { fs.renameSync(path.join(dir, f), path.join(dir, f + '.hibas')); } catch (x) { /* */ } o.log('sérült sorelem félretéve: ' + f + ' (' + e.message + ')'); return null; } };
   async function api(p) {
     if (!o.key()) throw new Error('Nincs megadva gépkulcs (Beállítások → Gépkulcs).');
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
@@ -30,8 +34,8 @@ function make(o) {
     if (busy || !o.key()) return; busy = true;
     try {
       for (const f of fs.readdirSync(qdir).filter(x => x.endsWith('.json')).sort()) {
-        const j = JSON.parse(fs.readFileSync(path.join(qdir, f), 'utf8'));
-        if (!fs.existsSync(j.file)) { fs.unlinkSync(path.join(qdir, f)); continue; }
+        const j = getJ(qdir, f); if (!j) continue;
+        if (!j.file || !fs.existsSync(j.file)) { fs.unlinkSync(path.join(qdir, f)); continue; }
         const fd = new FormData();
         ['ev', 'photo', 'date'].forEach(k => fd.append(k, String(j[k] || '')));
         fd.append('deal', String(j.deal || 0));
@@ -60,7 +64,7 @@ function make(o) {
     if (gbusy || !o.key()) return; gbusy = true;
     try {
       for (const f of fs.readdirSync(gdir).filter(x => x.endsWith('.json')).sort()) {
-        const body = fs.readFileSync(path.join(gdir, f), 'utf8');
+        const jb = getJ(gdir, f); if (!jb) continue; const body = JSON.stringify(jb);
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 45000);
         let r;
         try { r = await fetch(PANEL + '/guest', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr()), body, signal: ctl.signal }); }
@@ -83,7 +87,7 @@ function make(o) {
     dbusy = true; const denied = [];
     try {
       for (const f of fs.readdirSync(ddir).filter(x => x.endsWith('.json')).sort()) {
-        const j = JSON.parse(fs.readFileSync(path.join(ddir, f), 'utf8'));
+        const j = getJ(ddir, f); if (!j) continue;
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
         let r;
         try { r = await fetch(GALLERY + '/wp-json/crazy-galeria/v1/delete', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, hdr()), body: new URLSearchParams({ ev: j.ev, photos: j.photos.join(',') }).toString(), signal: ctl.signal }); }
@@ -154,7 +158,7 @@ function make(o) {
         return j;
       } catch (e) { if (e.name === 'AbortError') throw new Error('Az AI nem válaszolt időben. [timeout]'); throw e; } finally { clearTimeout(t); }
     },
-    guest(d) { fs.writeFileSync(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), JSON.stringify(d)); setTimeout(pumpGuests, 200); return true; },
+    guest(d) { putJ(path.join(gdir, Date.now() + '-' + tok(6) + '.json'), d); setTimeout(pumpGuests, 200); return true; },
     /* 2026-11-22: a QR-kódokba a galéria nyilvános címe kerül (a feltöltés és a REST továbbra is a GALLERY címre megy) */
     photoUrl: (ev, ph) => PUBLIC + '/galeria/' + ev + '/' + ph,
     eventUrl: ev => PUBLIC + '/galeria/' + ev + '/',
@@ -183,7 +187,7 @@ function make(o) {
       fs.writeFileSync(file, Buffer.from(String(dataUrl).split(',')[1], 'base64'));
       let poster = '';
       if (meta.poster) { poster = path.join(dir, photo + '_p.jpg'); fs.writeFileSync(poster, Buffer.from(String(meta.poster).split(',')[1], 'base64')); }
-      fs.writeFileSync(path.join(qdir, Date.now() + '-' + photo + '.json'), JSON.stringify({ ev, deal, date, photo, file, poster, kind: meta.kind || (ext === 'jpg' ? 'photo' : 'video') }));
+      putJ(path.join(qdir, Date.now() + '-' + photo + '.json'), { ev, deal, date, photo, file, poster, kind: meta.kind || (ext === 'jpg' ? 'photo' : 'video') });
       setTimeout(pump, 200);
       return file;
     },
@@ -212,7 +216,7 @@ function make(o) {
       for (const f of fs.readdirSync(qdir).filter(x => x.endsWith('.json'))) { try { const j = JSON.parse(fs.readFileSync(path.join(qdir, f), 'utf8')); if (j.ev === ev && done.includes(j.photo)) fs.unlinkSync(path.join(qdir, f)); } catch (e) { /* sérült sorfájl: a feltöltő kezeli */ } }
       let cloud = 'off', denied = [];
       if (cloudToo && done.length && o.key()) {
-        for (let i = 0; i < done.length; i += 500) fs.writeFileSync(path.join(ddir, Date.now() + '-' + i + '-' + ev + '.json'), JSON.stringify({ ev, photos: done.slice(i, i + 500) }));
+        for (let i = 0; i < done.length; i += 500) putJ(path.join(ddir, Date.now() + '-' + i + '-' + ev + '.json'), { ev, photos: done.slice(i, i + 500) });
         const r = await Promise.race([pumpDel(), new Promise(res => setTimeout(() => res(null), 20000))]);
         cloud = r && !r.left ? 'done' : 'queued'; denied = (r && r.denied) || [];
       }
