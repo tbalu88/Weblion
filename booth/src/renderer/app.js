@@ -1330,6 +1330,15 @@
   }
   /* 2026-11-27: a panelből kért programfrissítés (Napló → Szelfigépek → „Program frissítése”) – csak tétlen kezdőképernyőn,
      fotózás közben soha; az eredményt a következő állapotjelentés viszi vissza (upd_res), a siker a frissített verzióból látszik */
+  /* 2026-11-27: frissítés előtt piros felirat a képernyőn, és megjegyezzük a teljes képernyős állapotot – újraindulás után
+     minden onnan folytatódik (a rendezvény, a sablon, a módok és a beállítások amúgy is megmaradnak a gépen) */
+  async function updPrep(v) {
+    let o = document.querySelector('.updov');
+    if (!o) { o = document.createElement('div'); o.className = 'updov'; document.body.appendChild(o); }
+    o.innerHTML = '<b>A program frissítés miatt újraindul</b><span>' + esc(v ? 'Új változat: ' + v + ' · ' : '') + 'pár másodperc, utána minden onnan folytatódik, ahol abbahagytad.</span>';
+    try { const f = await B.isFullscreen(); lsSet('cb_resume', { fs: !!(f && f.ok && f.v), at: Date.now() }); } catch (e) { /* */ }
+  }
+  function updUnprep() { const o = document.querySelector('.updov'); if (o) o.remove(); lsSet('cb_resume', null); }
   async function remoteUpd() {
     if (S.updRun) return;
     /* 2026-11-27: a Kezelő menüből és a galériából is frissít (csak fotózás közben nem) */
@@ -1339,11 +1348,11 @@
     try {
       const r = await call(B.updCheck);
       if (!r.avail) { S.updRes = 'naprakész: ' + r.cur; S.updRun = 0; beat(); return; }
-      S.updRes = 'letöltés: ' + r.cur + ' → ' + r.avail.v; beat(); B.log('panelből kért frissítés: ' + r.cur + ' → ' + r.avail.v);
+      S.updRes = 'letöltés: ' + r.cur + ' → ' + r.avail.v; beat(); B.log('panelből kért frissítés: ' + r.cur + ' → ' + r.avail.v); await updPrep(r.avail.v);
       await call(B.updDownload);
       S.updRes = 'telepítés: ' + r.avail.v; await beat();
       await call(B.updInstall);
-    } catch (e) { S.updRes = 'hiba: ' + e.message; S.updRun = 0; diagSoon('programfrissítés: ' + e.message); beat(); }
+    } catch (e) { updUnprep(); S.updRes = 'hiba: ' + e.message; S.updRun = 0; diagSoon('programfrissítés: ' + e.message); beat(); }
   }
   async function updGo() {
     if (S.busy) { err('Fotózás közben nem lehet frissíteni.'); return; }
@@ -1352,9 +1361,9 @@
     if (B.onUpdProgress && !S.updHook) { S.updHook = 1; B.onUpdProgress(p => { bar.firstElementChild.style.transform = 'scaleX(' + Math.min(1, p) + ')'; updText('Letöltés… ' + Math.round(p * 100) + '%'); }); }
     try {
       updText('Letöltés…'); await call(B.updDownload);
-      updText('Telepítés – a program pár másodpercre bezárul, majd az új változattal újraindul…');
+      updText('Telepítés – a program pár másodpercre bezárul, majd az új változattal újraindul…'); await updPrep('');
       await call(B.updInstall);
-    } catch (e) { g.disabled = false; bar.hidden = true; updText('A frissítés nem sikerült: ' + esc(e.message) + ' – a mostani változat marad.'); }
+    } catch (e) { updUnprep(); g.disabled = false; bar.hidden = true; updText('A frissítés nem sikerült: ' + esc(e.message) + ' – a mostani változat marad.'); }
   }
   /* 0.16.0: AI-rajz a kész képernyőn – újrajátszás (a rögzített videó) és a videó QR-kódja */
   function drawBtns(on) {
@@ -1582,5 +1591,5 @@
   window.addEventListener('error', e => diagSoon('JS-hiba: ' + (e.message || '') + ' ' + (e.filename || '').split(/[\\/]/).pop() + ':' + (e.lineno || '')));
   window.addEventListener('unhandledrejection', e => diagSoon('JS-hiba: ' + String(e.reason && e.reason.message || e.reason)));
   setTimeout(() => diagSoon('indítás'), 10000); /* az indulás utáni hibákkal együtt, egy küldésben (kb. 30 mp múlva) */
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); B.fullscreen(!!U().startFull).catch(() => {}); /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); { const rs = lsGet('cb_resume', null); lsSet('cb_resume', null); B.fullscreen(rs && Date.now() - rs.at < 15 * 60000 ? !!rs.fs : !!U().startFull).catch(() => {}); if (rs) B.log('újraindulás frissítés után – folytatás' + (rs.fs ? ' teljes képernyőn' : '')); } /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
 })();
