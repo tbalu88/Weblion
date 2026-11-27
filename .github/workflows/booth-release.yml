@@ -28,6 +28,10 @@ jobs:
       - name: Önfrissítés – szkriptindítás próbája
         shell: pwsh
         run: node booth/test/wincmd-test.js
+      # 0.19.18: Windows-nyomtatás (System.Drawing) – szkript, hibaág, és PDF-nyomtatóra fájlba
+      - name: Nyomtatás – PowerShell-szkript próbája
+        shell: pwsh
+        run: node booth/test/winprint-test.js
       - name: digiCamControl 2.1.7.0 letöltése és telepítése
         shell: pwsh
         run: |

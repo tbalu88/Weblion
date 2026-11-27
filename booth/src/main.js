@@ -96,15 +96,75 @@ ipcMain.handle('shot:save', wrap(async dataUrl => {
 /* v0.6: a nyomtató állapota is (Mac/CUPS: printer-state 3 tétlen, 4 nyomtat, 5 leállt; printer-state-reasons pl. media-empty, offline-report) */
 ipcMain.handle('print:list', wrap(async () => (await win.webContents.getPrintersAsync()).map(p => { const op = p.options || {}; return { name: p.name, def: !!p.isDefault, status: p.status, state: op['printer-state'] || '', reasons: op['printer-state-reasons'] || '' }; })));
 /* nyomtatás: 4×6" (DNP DS620); a 2×6"-os csíkvágást a nyomtató-meghajtó papírmérete adja („PR (4x6) 2inch cut”) */
+/* 0.19.18: Windowson a nyomtatás a Windows saját nyomtatási rendszerén megy (System.Drawing.PrintDocument), nem a Chromiumon át:
+   a DNP-meghajtóval a Chromium álló lapra tette a fekvő képet, a lap fele fekete maradt. A lapméretet és -irányt a meghajtó beállítása adja,
+   a kép a lap irányához forog és kitölti (cover) vagy belefér (contain); nagyítás, eltolás mm-ben. Visszaút: ui.printEngine = 'chromium'. */
+const WINPRINT_PS = [
+  '$ErrorActionPreference = "Stop"',
+  'Add-Type -AssemblyName System.Drawing',
+  '$im = [System.Drawing.Image]::FromFile($env:CB_IMG)',
+  'try {',
+  '  $pd = New-Object System.Drawing.Printing.PrintDocument',
+  '  if ($env:CB_PRN) { $pd.PrinterSettings.PrinterName = $env:CB_PRN }',
+  '  if (-not $pd.PrinterSettings.IsValid) { throw ("nincs ilyen nyomtató: " + $env:CB_PRN) }',
+  '  $pd.DocumentName = "Crazy Booth"',
+  '  $pd.PrintController = New-Object System.Drawing.Printing.StandardPrintController',
+  '  $pd.OriginAtMargins = $false',
+  '  $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)',
+  '  $pd.PrinterSettings.Copies = [int16]$env:CB_COPIES',
+  '  if ($env:CB_FILE) { $pd.PrinterSettings.PrintToFile = $true; $pd.PrinterSettings.PrintFileName = $env:CB_FILE }',
+  '  $b = $pd.DefaultPageSettings.Bounds',
+  '  if (($im.Width -gt $im.Height) -ne ($b.Width -gt $b.Height)) { $im.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone) }',
+  '  $script:info = ""',
+  '  $pd.add_PrintPage({ param($s, $e)',
+  '    $g = $e.Graphics',
+  '    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic',
+  '    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality',
+  '    $pb = $e.PageBounds; $W = [double]$pb.Width; $H = [double]$pb.Height',
+  '    $hx = [double]$e.PageSettings.HardMarginX; $hy = [double]$e.PageSettings.HardMarginY',
+  '    $k = if ($env:CB_FIT -eq "contain") { [Math]::Min($W / $im.Width, $H / $im.Height) } else { [Math]::Max($W / $im.Width, $H / $im.Height) }',
+  '    $k = $k * [double]$env:CB_SCALE',
+  '    $dw = $im.Width * $k; $dh = $im.Height * $k',
+  '    $mm = 100 / 25.4',
+  '    $x = ($W - $dw) / 2 - $hx + [double]$env:CB_DX * $mm; $y = ($H - $dh) / 2 - $hy + [double]$env:CB_DY * $mm',
+  '    $g.Clear([System.Drawing.Color]::White)',
+  '    $g.DrawImage($im, [single]$x, [single]$y, [single]$dw, [single]$dh)',
+  '    $script:info = ("lap: " + $e.PageSettings.PaperSize.PaperName + " " + $W + "x" + $H + " (1/100 in), " + $(if ($e.PageSettings.Landscape) { "fekvő" } else { "álló" }) + ", margó " + $hx + "/" + $hy)',
+  '    $e.HasMorePages = $false',
+  '  })',
+  '  $pd.Print()',
+  '  Write-Output $script:info',
+  '} finally { $im.Dispose() }'
+].join('\r\n');
+function winPrint(dataUrl, o) {
+  const m = /^data:image\/[a-z]+;base64,(.*)$/s.exec(String(dataUrl || '')); if (!m) return Promise.reject(new Error('Hibás nyomtatási kép.'));
+  const dir = app.getPath('userData'), ps1 = path.join(dir, 'cbprint.ps1'), img = path.join(app.getPath('temp'), 'cb-print-' + Date.now() + '.jpg');
+  if (!fs.existsSync(ps1) || fs.readFileSync(ps1, 'utf8') !== '﻿' + WINPRINT_PS) fs.writeFileSync(ps1, '﻿' + WINPRINT_PS, 'utf8'); /* BOM: a PowerShell 5 így olvassa helyesen az ékezeteket */
+  fs.writeFileSync(img, Buffer.from(m[1], 'base64'));
+  const env = Object.assign({}, process.env, { CB_IMG: img, CB_PRN: o.printer || '', CB_COPIES: String(o.copies), CB_FIT: o.fit, CB_SCALE: String(o.sc), CB_DX: String(o.dx), CB_DY: String(o.dy) });
+  return new Promise(res => {
+    require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1], { env, windowsHide: true, timeout: 90000 }, (err, out, er) => {
+      try { fs.unlinkSync(img); } catch (e) { /* */ }
+      res(err ? { ok: false, why: (String(er || '').trim().split(/\r?\n/).slice(0, 3).join(' ') || err.message).slice(0, 300) } : { ok: true, info: String(out || '').trim() });
+    });
+  });
+}
 ipcMain.handle('print:do', wrap(async (dataUrl, o) => {
   o = o || {};
-  /* 0.19.16: nem offscreen ablak – Windowson az offscreen ablakból nyomtatva a lap egy része fekete / üres lehetett */
-  const pw = new BrowserWindow({ show: false, width: 800, height: 1200, webPreferences: { backgroundThrottling: false } });
   /* v0.14: papírméret, kitöltés, nagyítás és eltolás a beállítások Nyomtató fülén */
   /* 0.19.17: o.land – fekvő kép fekvő lapként (Windowson a DNP-meghajtó így kezeli helyesen), elforgatás nélkül */
   const PS = { '4x6': [4, 6], '5x7': [5, 7], '6x8': [6, 8] }, sz0 = PS[o.paper] || PS['4x6'], land = !!o.land, sz = land ? [sz0[1], sz0[0]] : sz0;
   const fit = o.fit === 'contain' ? 'contain' : 'cover', sc = Math.min(110, Math.max(90, Number(o.scale) || 100)) / 100;
   const dx = Math.min(5, Math.max(-5, Number(o.dx) || 0)), dy = Math.min(5, Math.max(-5, Number(o.dy) || 0));
+  const copies0 = Math.max(1, Math.min(10, Number(o.copies || cfg.copies) || 1));
+  if (process.platform === 'win32' && !MOCK && o.engine !== 'chromium') {
+    const r = await winPrint(dataUrl, { printer: o.printer || cfg.printer || '', copies: copies0, fit, sc, dx, dy });
+    log('nyomtatás (Windows): ' + (r.ok ? 'ok' : 'hiba ' + r.why) + ' x' + copies0 + ' (' + fit + (sc !== 1 || dx || dy ? ', ' + Math.round(sc * 100) + '%, ' + dx + '/' + dy + ' mm' : '') + (r.info ? '; ' + r.info : '') + ')');
+    if (!r.ok) throw new Error('A nyomtatás nem sikerült: ' + r.why);
+    return true;
+  }
+  /* 0.19.16: nem offscreen ablak – Windowson az offscreen ablakból nyomtatva a lap egy része fekete / üres lehetett */
+  const pw = new BrowserWindow({ show: false, width: 800, height: 1200, webPreferences: { backgroundThrottling: false } });
   const html = '<!doctype html><html><head><style>@page{size:' + sz[0] + 'in ' + sz[1] + 'in;margin:0}html,body{margin:0;padding:0;background:#fff;overflow:hidden;width:' + sz[0] + 'in;height:' + sz[1] + 'in}img{display:block;width:' + sz[0] + 'in;height:' + sz[1] + 'in;object-fit:' + fit + ';transform:translate(' + dx + 'mm,' + dy + 'mm) scale(' + sc + ');transform-origin:center}</style></head><body><img src="' + dataUrl + '"></body></html>';
   await pw.loadURL('data:text/html;base64,' + Buffer.from(html).toString('base64'));
   await pw.webContents.executeJavaScript('new Promise(r => { const i = document.images[0]; if (!i || i.complete) r(1); else { i.onload = () => r(1); i.onerror = () => r(0); } })').catch(() => {}); /* a kép biztosan betöltött */
