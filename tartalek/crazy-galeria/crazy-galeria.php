@@ -567,6 +567,9 @@ function cg_ai_ev_info($ev) {
 	$row = $wpdb->get_row($wpdb->prepare('SELECT COUNT(*) n, COALESCE(SUM(cost),0) c FROM ' . cg_t() . " WHERE ev = %s AND kind = 'ai'", $ev));
 	return array('on' => !empty($a['on']), 'limit' => (int) ($a['limit'] ?? 300), 'used' => (int) ($row ? $row->n : 0) + (int) ($a['del_n'] ?? 0), 'cost' => round((float) ($row ? $row->c : 0) + (float) ($a['del_cost'] ?? 0), 3));
 }
+/* 2026-11-27: visszaállításig a gépkulccsal rendelkező gép bármely rendezvényen kérhet AI-képet (nem kell a dealen bekapcsolni);
+   kikapcsolás: update_option('cg_ai_open', '0'). A rendezvényenkénti keret (alapból 300 kép) továbbra is érvényes. */
+function cg_ai_open() { return get_option('cg_ai_open', '1') === '1'; }
 function cg_ai_log($e) { $L = get_option('cg_ai_log', array()); if (!is_array($L)) { $L = array(); } array_unshift($L, $e); update_option('cg_ai_log', array_slice($L, 0, 300), false); }
 function cg_ai_ratio($w, $h) { $r = $h ? $w / $h : 1; foreach (array(array(1.6, '16:9'), array(1.4, '3:2'), array(1.15, '4:3'), array(0.87, '1:1'), array(0.72, '3:4'), array(0.6, '2:3')) as $x) { if ($r >= $x[0]) { return $x[1]; } } return '9:16'; }
 /* egy kép az OpenRouteren át: visszaad array(png-bájtok, költség) vagy WP_Error */
@@ -625,7 +628,7 @@ add_action('rest_api_init', function () {
 		/* egy kép átlagos ára az utolsó 50 sikeres hívásból (különben 0,055 $) */
 		$n = 0; $c = 0.0; foreach ((array) get_option('cg_ai_log', array()) as $l) { if (!empty($l['ok']) && isset($l['cost']) && (float) $l['cost'] > 0) { $n++; $c += (float) $l['cost']; if ($n >= 50) { break; } } }
 		$per = $n ? $c / $n : 0.055; $imgs = $b['bal'] === null ? null : (int) floor(max(0, (float) $b['bal']) / max(0.001, $per));
-		return array('ok' => true, 'on' => $info['on'] ? 1 : 0, 'limit' => $info['limit'], 'used' => $info['used'], 'left' => $info['limit'] > 0 ? max(0, $info['limit'] - $info['used']) : null, 'imgs' => $imgs, 'per' => round($per, 4));
+		return array('ok' => true, 'on' => ($info['on'] || cg_ai_open()) ? 1 : 0, 'limit' => $info['limit'], 'used' => $info['used'], 'left' => $info['limit'] > 0 ? max(0, $info['limit'] - $info['used']) : null, 'imgs' => $imgs, 'per' => round($per, 4));
 	}));
 	register_rest_route('crazy-galeria/v1', '/ai', array('methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function (WP_REST_Request $req) {
 		global $wpdb; @set_time_limit(150);
@@ -635,7 +638,7 @@ add_action('rest_api_init', function () {
 		$ev = (string) $req->get_param('ev'); $ph = (string) $req->get_param('photo');
 		if (!cg_tok_ok($ev) || !cg_tok_ok($ph)) { return new WP_REST_Response(array('ok' => false, 'code' => 'bad', 'message' => 'Hibás azonosító.'), 400); }
 		$info = cg_ai_ev_info($ev);
-		if (!$info['on']) { return $fail('off', 'Ezen a rendezvényen nincs bekapcsolva az AI.', 403); }
+		if (!$info['on'] && !cg_ai_open()) { return $fail('off', 'Ezen a rendezvényen nincs bekapcsolva az AI.', 403); }
 		if ($info['limit'] > 0 && $info['used'] >= $info['limit']) { return $fail('limit', 'Elfogyott a rendezvény AI-kerete.', 429); }
 		$rk = 'cg_ai_rate_' . md5($dev); $rn = (int) get_transient($rk);
 		if ($rn >= 120) { return $fail('rate', 'Túl sok AI-kérés ebből a gépből – próbáld pár perc múlva.', 429); }

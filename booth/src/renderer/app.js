@@ -335,6 +335,7 @@
     if (U().pinOff) { $('[data-pinbox]').hidden = true; $('[data-form]').hidden = false; tab('ov'); fillForm().then(preflight).catch(e => err(e.message)); }
   }
   async function fillForm() {
+    aiSelRender();
     const f = $('[data-form]'), c = S.cfg;
     ['camera', 'dccUrl', 'shots', 'countdown', 'copies', 'reviewSec', 'camRes'].forEach(k => { f.elements[k].value = c[k]; });
     f.elements.autoPrint.checked = !!c.autoPrint; f.elements.mirror.checked = c.mirror !== false; f.elements.pin.value = '';
@@ -817,8 +818,13 @@
     const rec = !!(window.MediaRecorder && window.BoothClips);
     $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => { const dis = (MODES[k].clip && !rec) || ((k === 'ai' || k === 'aidraw') && !aiReady()); return '<label class="mchk' + (dis ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + ((k === 'ai' || k === 'aidraw') && !aiReady() ? aiWhy() : MODES[k].sub) + '</small></label>'; }).join('');
   }
+  function aiSelRender() {
+    const box = $('[data-aisel]'); if (!box) return; const c = aiCat(), sel = aiSelKeys(), cur = sel || ((U().ai && U().ai.styles) || []).map(x => x.k);
+    box.innerHTML = c.length ? c.map(x => '<label class="chk"><input type="checkbox" data-aik="' + esc(x.k) + '"' + (cur.includes(x.k) ? ' checked' : '') + '> ' + esc(x.label) + '</label>').join('') : '<p class="st-up">A stílusok listája a panelkapcsolat után jelenik meg (gépkulcs és internet kell).</p>';
+  }
   function uiCollect() {
     const u = Object.assign({}, U());
+    { const ev = S.cfg.event && S.cfg.event.ev, cbs = document.querySelectorAll('[data-aisel] [data-aik]'); if (ev && cbs.length) { u.aiSel = Object.assign({}, u.aiSel || {}); u.aiSel[ev] = [...cbs].filter(x => x.checked).map(x => x.dataset.aik); const ks = Object.keys(u.aiSel); if (ks.length > 30) delete u.aiSel[ks[0]]; } }
     UI_NUM.forEach(k => { const v = Number($('#u-' + k).value); if (v > 0) u[k] = v; });
     UI_CHK.forEach(k => { u[k] = $('#u-' + k).checked; });
     UI_SEL.forEach(k => { u[k] = $('#u-' + k).value; });
@@ -896,13 +902,13 @@
     add('ok', 'Módok', ms.map(k => MODES[k].name).join(', '));
     if ((U().modes || []).some(k => k === 'ai' || k === 'aidraw')) {
       /* 0.17.1: a panel AI-kerete (felhasznált / keret) és a közös kredit; narancs, ha a kredit kevesebb, mint egy rendezvénynyi (200) képre elég */
-      let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez újabb program kell (ezen a gépen: v' + (S.cfg.version || '?') + ') – telepítsd a 0.17.1-et, utána a programból frissül' : aiReady() ? (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + (U().ai.limit || 300) + ' kép (a panelből)' : 'a panelben nincs stílus beállítva, vagy nincs rendezvény / gépkulcs';
+      let st = !B.ai ? 'bad' : aiReady() ? 'ok' : 'mid', txt = !B.ai ? 'ehhez újabb program kell (ezen a gépen: v' + (S.cfg.version || '?') + ') – telepítsd a 0.17.1-et, utána a programból frissül' : aiReady() ? aiStyles().map(x => x.label).join(', ') + (aiSelKeys() ? ' (a gépen választva)' : ' (a panelből)') : 'nincs AI-stílus kiválasztva (Kezelő → Módok → AI-kép), vagy nincs rendezvény / gépkulcs';
       /* a kredit csak a 0.17.1-es programmal kérdezhető le – addig nem mutathatunk zöldet */
       if (aiReady() && !B.aiStatus) { st = 'mid'; txt += ' · az AI-kredit ezen a programváltozaton nem ellenőrizhető – frissíts: Gép fül → Program frissítése (0.17.1)'; }
       if (aiReady() && B.aiStatus) {
         try {
           const a = await call(B.aiStatus, S.cfg.event.ev);
-          txt = (U().ai.styles || []).map(x => x.label).join(', ') + ' · keret: ' + a.used + ' / ' + a.limit + ' kép felhasználva' + (a.left != null ? ' (még ' + a.left + ')' : '') + (a.imgs != null ? ' · AI-kredit: kb. ' + a.imgs + ' képre elég' : '');
+          txt = aiStyles().map(x => x.label).join(', ') + ' · keret: ' + a.used + ' / ' + a.limit + ' kép felhasználva' + (a.left != null ? ' (még ' + a.left + ')' : '') + (a.imgs != null ? ' · AI-kredit: kb. ' + a.imgs + ' képre elég' : '');
           if (a.imgs == null) { st = 'mid'; txt += ' · az AI-kredit egyenlege most nem ismert – kérdezd az irodát'; }
           if (a.imgs != null && a.imgs < 200) { st = a.imgs < 1 ? 'bad' : 'mid'; txt += a.imgs < 1 ? ' – elfogyott az AI-kredit, szólj az irodának!' : ' – kevés lesz az AI-kredit: kb. ' + a.imgs + ' képre elég (egy rendezvényre ~200 kell), szólj az irodának'; }
           if (a.left != null && a.left < 1) { st = 'bad'; txt += ' – a rendezvény AI-kerete elfogyott'; }
@@ -1188,8 +1194,8 @@
     const cam = isStation() ? null : WEB() ? (S.stream ? S.stream.getVideoTracks().some(t => t.readyState === 'live') : null) : true;
     const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
     const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
-      upd_res: S.updRes || '', err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
-    try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r && r.upd) remoteUpd(); if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
+      aipv: (S.aip || lsGet('cb_aip', null) || {}).v || '', upd_res: S.updRes || '', err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
+    try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r && r.upd) remoteUpd(); if (r && r.aip && r.aip.list) { S.aip = r.aip; lsSet('cb_aip', r.aip); } if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
   }
   setInterval(beat, 60000); setTimeout(beat, 6000);
   /* a panelből (deal adatlap → Szelfigép → Beállítások a gépekre) mentett beállítások: csak a kezdőképernyőn, fotózás közben soha */
@@ -1226,7 +1232,12 @@
   /* ---------- 6. fázis: AI-kép (a panelből kapcsolható rendezvényenként; a szerver hívja a modellt – alap: Nano Banana 2.1) */
   /* 0.16.1: miért nem választható az AI (a beállításokban kiírva) */
   const aiWhy = () => !B.ai ? 'frissítés kell' : !(S.cfg && S.cfg.boothKey) ? 'nincs gépkulcs' : !(S.cfg.event && S.cfg.event.ev) ? 'nincs rendezvény kiválasztva' : S.remotePending ? 'a panel beállítása a kezdőképernyőn töltődik be' : 'a deal Szelfigép-beállításában kapcsolható';
-  const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && U().ai && (U().ai.styles || []).length && S.cfg.event && S.cfg.event.ev);
+  /* 2026-11-27: az AI-stílusokat a kezelő a gépen választja ki rendezvényenként (Kezelő → Módok → AI-kép); ha itt nincs választás,
+     a panelben a dealen beállított stílusok érvényesek. Jogosultság a dealen nem kell (a galéria szerver visszaállításig engedi). */
+  const aiCat = () => ((S.aip || lsGet('cb_aip', null) || {}).list) || [];
+  const aiSelKeys = () => { const ev = S.cfg && S.cfg.event && S.cfg.event.ev, m = U().aiSel || {}; return ev && Array.isArray(m[ev]) ? m[ev] : null; };
+  const aiStyles = () => { const sel = aiSelKeys(); if (sel) { const c = aiCat(); return sel.map(k => c.find(x => x.k === k)).filter(Boolean); } return (U().ai && U().ai.styles) || []; };
+  const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && aiStyles().length && S.cfg.event && S.cfg.event.ev);
   const aiWait = (scr, ms) => new Promise(res => { S.aiRes = res; clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === scr && S.aiRes) { const r = S.aiRes; S.aiRes = null; r(null); } }, ms); });
   const aiDone = v => { clearTimeout(S.idleT); const r = S.aiRes; S.aiRes = null; if (r) r(v); };
   function fillPrompt(p) {
@@ -1244,7 +1255,7 @@
       show('live'); await liveOn();
       pose('Mosolyt! Ebből rajzolunk.'); await countdown(cdSec('ai')); pose('');
       img = await shoot('photo'); await liveOff();
-      const L = U().ai.styles; let st = L[0];
+      const L = aiStyles(); let st = L[0];
       if (L.length > 1) {
         $('[data-aistyles]').innerHTML = L.map((x, i) => '<button type="button" class="mt" data-ais="' + i + '"><b>' + esc(x.label) + '</b></button>').join('');
         $('[data-aistyles]').style.setProperty('--n', Math.min(3, L.length));
@@ -1270,8 +1281,7 @@
     clearInterval(S.aiT); busyBar(1);
     const ai = await loadImg(r.img);
     S.lastPhoto = r.photo || aiId; S.aiInfo = { left: r.left, style: st.label };
-    /* az eredeti is a galériába kerül (sima fotóként), az AI-kép helyben is megmarad (újranyomtatáshoz) */
-    call(B.keep, ev.ev, ev.deal || 0, ev.date || '', src, img.src, {}).catch(() => {});
+    /* 2026-11-27: csak az AI-kép marad meg (az eredeti nem kerül a galériába – a felhasználó kérése); helyben is megvan (újranyomtatáshoz) */
     call(B.keep, ev.ev, ev.deal || 0, ev.date || '', S.lastPhoto, r.img, { kind: 'ai' }).catch(() => {});
     if (S.guestPre) { const d = S.guestPre; S.guestPre = null; submitGuest(d, S.lastPhoto, !!d.email && !!U().shareEmail).catch(() => {}); }
     if (draw) await drawAi(img, ai); else reviewAi(img, ai);
@@ -1280,7 +1290,7 @@
   function aiOut(orig, ai) {
     const cv = $('[data-out]'), vo = $('[data-outv]'); vo.hidden = true; vo.removeAttribute('src'); cv.hidden = false;
     const o = { title: (S.cfg.event && S.cfg.event.deal && S.cfg.event.title) || S.cfg.title || 'EventCrazy', date: today() };
-    if (U().ai.out === 'both') BoothCompose.pair(cv, orig, ai, o);
+    if ((U().ai || {}).out === 'both') BoothCompose.pair(cv, orig, ai, o);
     else BoothCompose.compose(cv, [ai], Object.assign({ tpl: S.tpl && S.tpl.shots === 1 ? S.tpl : null }, o));
     S.shots = [ai]; S.pool = null; S.pick = false; S.pending = null; S.copies = Number(S.cfg.copies) || 1; $('[data-cpn]').textContent = S.copies;
   }
