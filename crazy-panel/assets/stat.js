@@ -225,9 +225,62 @@
 		});
 	}
 
+
+	/* v2.9.392: Hirdetésfiókok – kampányok állapota és beállításai, változásnapló, figyelmeztetések (csak olvas) */
+	const AW = { d: null, err: '', f: '' };
+	const awDt = s => { const d = new Date(s * 1000), p = n => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '.' + p(d.getDate()) + '. ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+	const awAgo = s => { const m = Math.round((Date.now() / 1000 - s) / 60); return m < 2 ? 'most' : m < 90 ? m + ' perce' : Math.round(m / 60) + ' órája'; };
+	const GST = { ENABLED: ['fut', 'ok'], PAUSED: ['szünetel', 'off'], ACTIVE: ['fut', 'ok'], ARCHIVED: ['archivált', 'off'] };
+	const PST = { ELIGIBLE: 'megjelenik', LIMITED: 'korlátozott', NOT_ELIGIBLE: 'nem jelenik meg', PAUSED: 'szünetel', PENDING: 'még nem indult', ENDED: 'lejárt', LEARNING: 'tanul', MISCONFIGURED: 'hibás beállítás', REMOVED: 'törölve' };
+	const MST = { ACTIVE: 'fut', PAUSED: 'szünetel', CAMPAIGN_PAUSED: 'szünetel', ADSET_PAUSED: 'készletek szünetelnek', DISAPPROVED: 'elutasítva', WITH_ISSUES: 'hibás', PENDING_REVIEW: 'ellenőrzés alatt', IN_PROCESS: 'feldolgozás', PENDING_BILLING_INFO: 'számlázás hiányzik' };
+	const BID = { MAXIMIZE_CONVERSIONS: 'Konverziók max.', MAXIMIZE_CONVERSION_VALUE: 'Konv. érték max.', TARGET_CPA: 'Cél-CPA', TARGET_ROAS: 'Cél-ROAS', TARGET_SPEND: 'Kattintások max.', MANUAL_CPC: 'Kézi CPC', TARGET_IMPRESSION_SHARE: 'Megj. arány' };
+	const GEO = { PRESENCE: 'Jelenlét', PRESENCE_OR_INTEREST: 'Jelenlét vagy érdeklődés', SEARCH_INTEREST: 'Érdeklődés' };
+	const hasUtm = x => /utm_(source|campaign)/i.test(x || '');
+	async function awLoad() {
+		AW.err = '';
+		try { AW.d = await post('cp_aw_data', {}); } catch (e) { AW.err = e.message; }
+		if (S.adsv && S.main) awView(S.main);
+	}
+	function awView(main) {
+		const D = AW.d;
+		let h = '<div class="aw"><div class="st-head"><div class="st-nav"><button class="cpx-btn ghost" data-awback>‹ Statisztikák</button><h2>Hirdetésfiókok</h2><button class="cpx-btn ghost" data-awre>↻ Frissítés</button></div></div>' +
+			'<p class="aw-note">Csak olvas: a Google Ads-fiókok szkriptje és a Meta-kapcsolat óránként küldi a kampányok állapotát, beállításait és a fiókok változási előzményeit. Az eltérésekről a panel maga is naplót ír („figyelő”).</p>';
+		if (!D) { main.innerHTML = h + (AW.err ? '<div class="cpx-empty err">' + esc(AW.err) + '</div>' : '<div class="cpx-empty">Betöltés…</div>') + '</div>'; awBind(main); if (!AW.err) awLoad(); return; }
+		const A = D.alerts || [];
+		h += '<section class="aw-sec"><h3>Figyelmeztetések</h3>' + (A.length ? '<ul class="aw-al">' + A.map(a => '<li class="' + a.lvl + '"><b>' + esc(a.acct) + (a.camp ? ' · ' + esc(a.camp) : '') + '</b><span>' + esc(a.msg) + '</span></li>').join('') + '</ul>' : '<p class="aw-ok">Nincs figyelmeztetés: a futó kampányok rendben vannak.</p>') + '</section>';
+		const gs = D.snaps.filter(x => x.src === 'google'), ms = D.snaps.filter(x => x.src === 'meta');
+		if (!gs.length) h += '<div class="st-warn"><b>A Google-fiókokból még nem jött kampánybeállítás.</b> Ehhez a lenti 2. változatú szkript kell mindkét Google Ads-fiókban.</div>';
+		gs.concat(ms).forEach(sn => {
+			const G = sn.src === 'google', act = (sn.list || []).filter(c => G ? c.st !== 'REMOVED' : true).sort((a, b) => (a.st === 'ENABLED' || a.st === 'ACTIVE' ? 0 : 1) - (b.st === 'ENABLED' || b.st === 'ACTIVE' ? 0 : 1) || a.name.localeCompare(b.name, 'hu'));
+			h += '<section class="aw-sec"><h3>' + (G ? 'Google Ads' : 'Meta') + ' · ' + esc(sn.name || sn.acct) + ' <small>frissítve ' + esc(awAgo(sn.at)) + (G && sn.cust ? ' · automatikus címkézés: ' + (sn.cust.auto ? 'be' : '<b class="bad">ki</b>') + ' · fiókszintű utótag: ' + (sn.cust.sfx ? (hasUtm(sn.cust.sfx) ? 'UTM ✓' : esc(sn.cust.sfx)) : 'nincs') : '') + '</small></h3>' +
+				'<div class="au-tw"><table class="au-t aw-t"><thead><tr><th>Kampány</th><th>Állapot</th><th class="r">Napi keret</th>' + (G ? '<th>Licit</th><th>Hálózat</th><th>Hely</th><th>UTM</th>' : '<th>Cél</th><th>Elutasított</th>') + '</tr></thead><tbody>' +
+				(act.length ? act.map(c => { const s = (G ? GST : GST)[c.st] || [c.st, ''];
+					const sub = G ? (c.st === 'ENABLED' ? (PST[c.pst] || c.pst || '') : '') : (c.serv && c.serv !== c.st ? (MST[c.serv] || c.serv) : '');
+					return '<tr class="' + (s[1] === 'off' ? 'off' : '') + '"><td>' + esc(c.name) + (c.type ? '<small>' + esc(c.type) + '</small>' : '') + '</td><td><span class="aw-s ' + s[1] + '">' + esc(G ? s[0] : (MST[c.st] || c.st)) + '</span>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</td>' +
+						'<td class="r">' + (c.bud != null ? num(c.bud) + ' Ft' : (c.life ? 'teljes: ' + num(c.life) + ' Ft' : '–')) + '</td>' +
+						(G ? '<td>' + esc(BID[c.bid] || c.bid || '') + '</td><td>' + esc(c.net || '') + '</td><td>' + esc(GEO[c.geo] || c.geo || '') + '</td><td>' + (hasUtm(c.sfx) || (sn.cust && hasUtm(sn.cust.sfx)) ? '✓' : '<b class="bad">nincs</b>') + '</td>'
+							: '<td>' + esc((c.obj || '').replace(/^OUTCOME_/, '').toLowerCase()) + '</td><td>' + (c.bad ? '<b class="bad">' + c.bad + '</b>' : '–') + '</td>') + '</tr>'; }).join('') : '<tr><td colspan="7" class="aw-mu">Nincs kampány.</td></tr>') + '</tbody></table></div></section>';
+		});
+		const CH = (D.changes || []).filter(c => !AW.f || c.src === AW.f);
+		const srcL = { google: 'Google', meta: 'Meta', 'figyelő': 'panel (figyelő)' };
+		h += '<section class="aw-sec"><h3>Változások (30 nap)</h3><div class="aw-f">' + [['', 'Mind'], ['google', 'Google'], ['meta', 'Meta'], ['figyelő', 'Panel (figyelő)']].map(x => '<button class="cpx-btn ghost sm' + (AW.f === x[0] ? ' on' : '') + '" data-awf="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+			(CH.length ? '<div class="au-tw"><table class="au-t aw-t"><thead><tr><th>Mikor</th><th>Forrás</th><th>Ki</th><th>Mi</th><th>Kampány / elem</th></tr></thead><tbody>' + CH.slice(0, 300).map(c => '<tr><td class="aw-at">' + esc(awDt(c.t)) + '</td><td>' + esc(srcL[c.src] || c.src) + '</td><td>' + esc(c.who || '–') + '</td><td>' + esc(c.what) + (c.detail ? '<small>' + esc(c.detail) + '</small>' : '') + '</td><td>' + esc(c.obj || '') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="aw-mu">Ebben az időszakban nem volt változás' + (AW.f ? ' ebből a forrásból' : '') + '. (A Google-változások a 2. változatú szkript telepítése után jelennek meg, visszamenőleg 14 napra.)</p>') + '</section>';
+		h += '<section class="aw-sec"><details class="aw-sc"><summary><b>Google Ads-szkript (2. változat) – telepítés</b></summary><ol><li>Nyisd meg a Google Ads-fiókot (EventCrazy, utána a CrazyPhoto is), felül: <b>Eszközök → Tömeges műveletek → Szkriptek</b>.</li><li>Nyisd meg a meglévő „Crazy panel” szkriptet (amelyik óránként fut).</li><li>A régi kódból <b>másold ki a <code>var KEY = …</code> sort</b> (a saját kulcsod).</li><li>Töröld a teljes régi kódot, és illeszd be helyette az alábbit (Másolás gomb).</li><li>Írd vissza a <code>var KEY = …</code> sort a sajátodra.</li><li>Mentés, majd <b>Előnézet</b> vagy <b>Futtatás</b> – ha engedélyt kér, engedélyezd (csak olvas és a panelnek küld). Az ütemezés maradjon <b>óránként</b>.</li></ol>' +
+			'<p><button class="cpx-btn sm" data-awcopy>Másolás</button></p><pre class="aw-code">' + esc(D.script || '') + '</pre></details></section>';
+		main.innerHTML = h + '</div>';
+		awBind(main);
+	}
+	function awBind(main) {
+		const q = s => main.querySelector(s);
+		if (q('[data-awback]')) q('[data-awback]').onclick = () => { S.adsv = false; draw(); };
+		if (q('[data-awre]')) q('[data-awre]').onclick = () => { AW.d = null; awView(main); };
+		main.querySelectorAll('[data-awf]').forEach(b => { b.onclick = () => { AW.f = b.dataset.awf; awView(main); }; });
+		const cp = q('[data-awcopy]'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(AW.d.script); cp.textContent = 'Kimásolva ✓'; } catch (e) { const r = document.createRange(); r.selectNodeContents(q('.aw-code')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); cp.textContent = 'Kijelölve – Ctrl/Cmd+C'; } };
+	}
 	function draw() {
 		const main = S.main;
 		if (!main) return;
+		if (S.adsv) { awView(main); return; }
 		const d = S.data;
 		if (!d) {
 			main.innerHTML = '<div class="cpx-empty err">' + esc(S.err || 'Nem sikerült betölteni.') + '<br><button class="cpx-btn" id="st-retry">Újra</button></div>';
@@ -239,7 +292,7 @@
 		let h = '<div class="st-sticky" id="st-sticky"><div class="st-head"><div class="st-seg" role="tablist">' + GRANS.map(g => '<button data-g="' + g[0] + '" class="' + (S.gran === g[0] ? 'on' : '') + '">' + g[1] + '</button>').join('') + '</div>' +
 			'<div class="st-nav"><button class="cpx-btn ghost" data-d="-1" aria-label="Előző időszak">‹</button><h2>' + esc(periodLabel(d.gran, d.from, d.to)) + '</h2><button class="cpx-btn ghost" data-d="1" aria-label="Következő időszak">›</button>' +
 			'<button class="cpx-btn ghost" data-now' + (d.from <= d.today && d.to >= d.today ? ' disabled' : '') + '>Most</button>' +
-			'<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>' +
+			'<button class="cpx-btn ghost" data-adsv title="Kampányok állapota, beállításai, változásnapló (Google + Meta)">Hirdetésfiókok</button>' + '<button class="cpx-btn ghost st-edit-btn' + (S.edit ? ' on' : '') + '" data-edit title="Csempék áthelyezése, átméretezése, elrejtése">' + (S.edit ? 'Kész' : 'Elrendezés') + '</button></div></div>' +
 			(S.gran === 'custom' ? '<form class="st-range" id="st-range"><label>Kezdete<input type="date" name="cf" value="' + esc(S.cf) + '" max="' + esc(S.ct) + '" required></label><label>Vége<input type="date" name="ct" value="' + esc(S.ct) + '" required></label>' +
 				'<span class="st-range-q">' + [['7', '7 nap'], ['30', '30 nap'], ['90', '90 nap'], ['ytd', 'Év eleje óta'], ['ly', 'Tavaly']].map(q => '<button type="button" class="cpx-btn ghost sm" data-q="' + q[0] + '">' + q[1] + '</button>').join('') + '</span>' +
 				'<button class="cpx-btn sm" type="submit">Mutasd</button></form>' : '') +
@@ -312,6 +365,7 @@
 		stickyTop();
 		main.querySelector('#st-yoy').onchange = e => { S.yoy = e.target.checked; drawTrend(); };
 		main.querySelector('[data-edit]').onclick = () => { S.edit = !S.edit; draw(); };
+		main.querySelector('[data-adsv]').onclick = () => { S.adsv = true; draw(); };
 		bindLi(main);
 		layoutApply(main);
 		if (S.edit) layoutEdit(main);

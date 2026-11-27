@@ -824,6 +824,7 @@ function cp_st_meta_sync($force = false) {
 	/* amíg az előzmény töltődik, a következő kör ne várjon 50 percet */
 	foreach ($acts as $act) { if (isset($st['meta_bf_' . $act]) && $st['meta_bf_' . $act] !== 'kesz') { $st['meta_at'] = time() - 45 * MINUTE_IN_SECONDS; } }
 	cp_st_state_set($st);
+	if (function_exists('cp_aw_meta_sync')) { cp_aw_meta_sync($tok, $ver, $acts); } /* v2.9.392: kampányállapot + tevékenységek */
 	return 'Meta: ' . ($msgs ? array_sum($msgs) . ' kampánynap' : '') . ($errs ? ' HIBA ' . $st['meta_err'] : '');
 }
 
@@ -919,6 +920,7 @@ function cp_st_rest_ads(WP_REST_Request $req) {
 	}
 	$acct = isset($b['acct']) ? preg_replace('/[^0-9]/', '', (string) $b['acct']) : '';
 	$n = cp_st_ads_replace('google', $from, $to, $rows, $acct !== '' ? $acct . ':' : '');
+	if (function_exists('cp_aw_google_in')) { cp_aw_google_in($acct, $b); } /* v2.9.392: kampánybeállítások + változások */
 	$st = cp_st_state();
 	$st['gads_at'] = time();
 	$st['gads_n'] = $n;
@@ -1886,7 +1888,7 @@ function cp_st_admin_page() {
 }
 
 function cp_st_gads_script() {
-	return "/* Crazy panel – Google Ads költség küldése (óránként futtasd) */\n"
+	return "/* Crazy panel – Google Ads költség, kampánybeállítások és változási előzmények küldése (óránként futtasd) – 2. változat */\n"
 		. "var URL = '" . rest_url('crazy-panel/v1/ads') . "';\n"
 		. "var KEY = 'IDE_MÁSOLD_A_KULCSOT';\n"
 		. "var DAYS = 7; // az ELSŐ kézi futtatásnál írd át 400-ra (előzmények), utána állítsd vissza 7-re\n\n"
@@ -1906,9 +1908,40 @@ function cp_st_gads_script() {
 		. "      spend: Number(r.metrics.costMicros || 0) / 1e6, clicks: Number(r.metrics.clicks || 0),\n"
 		. "      impr: Number(r.metrics.impressions || 0), conv: Number(r.metrics.conversions || 0) });\n"
 		. "  }\n"
+		. "  /* 2. változat (2026-11-27): a kampányok beállításai, a fiók URL-beállításai és a változási előzmények is (csak olvas) */\n"
+		. "  var camps = [], cust = null, changes = [];\n"
+		. "  try {\n"
+		. "    var ci = AdsApp.search('SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, ' +\n"
+		. "      'campaign.primary_status_reasons, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign_budget.amount_micros, ' +\n"
+		. "      'campaign.network_settings.target_search_network, campaign.network_settings.target_partner_search_network, ' +\n"
+		. "      'campaign.network_settings.target_content_network, campaign.geo_target_type_setting.positive_geo_target_type, ' +\n"
+		. "      \"campaign.final_url_suffix FROM campaign WHERE campaign.status != 'REMOVED'\");\n"
+		. "    while (ci.hasNext()) { var c = ci.next(), cc = c.campaign, ns = cc.networkSettings || {};\n"
+		. "      camps.push({ id: String(cc.id), name: cc.name, status: cc.status, serving: cc.servingStatus, pstatus: cc.primaryStatus,\n"
+		. "        preasons: cc.primaryStatusReasons || [], type: cc.advertisingChannelType, bidding: cc.biddingStrategyType,\n"
+		. "        budget: c.campaignBudget && c.campaignBudget.amountMicros ? Number(c.campaignBudget.amountMicros) / 1e6 : null,\n"
+		. "        search: !!ns.targetSearchNetwork, partners: !!ns.targetPartnerSearchNetwork, display: !!ns.targetContentNetwork,\n"
+		. "        geo: cc.geoTargetTypeSetting ? cc.geoTargetTypeSetting.positiveGeoTargetType : '', suffix: cc.finalUrlSuffix || '' }); }\n"
+		. "  } catch (e) { Logger.log('Kampánybeállítások: ' + e); }\n"
+		. "  try {\n"
+		. "    var cu = AdsApp.search('SELECT customer.final_url_suffix, customer.tracking_url_template, customer.auto_tagging_enabled FROM customer');\n"
+		. "    if (cu.hasNext()) { var x = cu.next().customer; cust = { suffix: x.finalUrlSuffix || '', template: x.trackingUrlTemplate || '', autotag: !!x.autoTaggingEnabled }; }\n"
+		. "  } catch (e) { Logger.log('Fiókbeállítások: ' + e); }\n"
+		. "  try {\n"
+		. "    var cf = Utilities.formatDate(new Date(now.getTime() - 14 * 864e5), tz, 'yyyy-MM-dd');\n"
+		. "    var ct = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss');\n"
+		. "    var ch = AdsApp.search('SELECT change_event.change_date_time, change_event.user_email, change_event.client_type, ' +\n"
+		. "      'change_event.change_resource_type, change_event.resource_change_operation, change_event.changed_fields, campaign.name, ad_group.name ' +\n"
+		. "      \"FROM change_event WHERE change_event.change_date_time >= '\" + cf + \"' AND change_event.change_date_time <= '\" + ct + \"' \" +\n"
+		. "      'ORDER BY change_event.change_date_time DESC LIMIT 1000');\n"
+		. "    while (ch.hasNext()) { var r2 = ch.next(), ev = r2.changeEvent;\n"
+		. "      changes.push({ t: ev.changeDateTime, who: ev.userEmail || '', client: ev.clientType, res: ev.changeResourceType, op: ev.resourceChangeOperation,\n"
+		. "        fields: ev.changedFields && ev.changedFields.paths ? ev.changedFields.paths.join(',') : String(ev.changedFields || ''), camp: r2.campaign ? r2.campaign.name : '', group: r2.adGroup ? r2.adGroup.name : '' }); }\n"
+		. "  } catch (e) { Logger.log('Változási előzmények: ' + e); }\n"
 		. "  var res = UrlFetchApp.fetch(URL, { method: 'post', contentType: 'application/json',\n"
 		. "    headers: { 'X-CP-Key': KEY }, muteHttpExceptions: true,\n"
-		. "    payload: JSON.stringify({ acct: AdsApp.currentAccount().getCustomerId(), from: from, to: to, rows: rows }) });\n"
+		. "    payload: JSON.stringify({ acct: AdsApp.currentAccount().getCustomerId(), acctName: AdsApp.currentAccount().getName(), tz: tz,\n"
+		. "      from: from, to: to, rows: rows, camps: camps, cust: cust, changes: changes }) });\n"
 		. "  Logger.log(res.getResponseCode() + ' ' + res.getContentText());\n"
 		. "  if (res.getResponseCode() !== 200) { throw new Error('A küldés nem sikerült: ' + res.getContentText()); }\n"
 		. "}\n";

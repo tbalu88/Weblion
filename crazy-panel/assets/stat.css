@@ -164,3 +164,15 @@ body:has(.st-dragging),body:has(.st-resizing){user-select:none}
 @media (max-width:760px){body.mn-on:not(.mn-hide) .st-toast{bottom:calc(76px + env(safe-area-inset-bottom))}}
 /* v2.9.23: a felszámoló számok ne ugráljanak szélességben */
 .st-kpi b,.st-al-big{font-variant-numeric:tabular-nums}
+
+/* v2.9.392: Hirdetésfiókok */
+.aw{max-width:1200px}.aw .st-nav h2{margin:0 8px}.aw-note{color:var(--mu);font-size:13px;margin:0 0 12px;max-width:820px}
+.aw-sec{margin:0 0 18px}.aw-sec h3{font:700 15px "Plus Jakarta Sans",sans-serif;margin:0 0 8px}.aw-sec h3 small{font:400 12px Inter,sans-serif;color:var(--mu);margin-left:6px}
+.aw-al{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}.aw-al li{display:flex;flex-wrap:wrap;gap:2px 10px;border-radius:10px;padding:8px 12px;font-size:13px;background:#FFF4DE;color:#6B4708}.aw-al li.bad{background:#FDECEA;color:#9B2C1F}.aw-al b{overflow-wrap:anywhere}.aw-al span{overflow-wrap:anywhere}
+.aw-ok{background:#E6F4EA;color:#1E5B34;border-radius:10px;padding:8px 12px;font-size:13px;margin:0}
+.aw-t td{vertical-align:top;font-size:13px}.aw-t td small{display:block;color:var(--mu);font-size:11.5px}.aw-t tr.off td{opacity:.6}.aw-t .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.aw-at{white-space:nowrap;font-variant-numeric:tabular-nums}
+.aw-s{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;background:#F1EFEA;color:#4A5163}.aw-s.ok{background:#E6F4EA;color:#1E5B34}.aw .bad{color:#9B2C1F}
+.aw-f{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.aw-f .on{background:#141C33;color:#fff;border-color:#141C33}.aw-mu{color:var(--mu);font-size:13px}
+.aw-sc summary{cursor:pointer}.aw-sc ol{font-size:13px;line-height:1.55;padding-left:20px;max-width:820px}.aw-code{max-height:360px;overflow:auto;background:#F7F6F3;border:1px solid var(--li);border-radius:8px;padding:10px;font:11.5px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+@media (max-width:760px){.aw-t th:nth-child(n+5),.aw-t td:nth-child(n+5){display:none}}
+.aw .au-tw{background:#fff;border:1px solid var(--li);border-radius:12px;overflow:auto}.aw .au-t{width:100%;border-collapse:collapse}.aw .au-t th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--mu);font-weight:700;padding:8px 10px;background:#F7F5F1;white-space:nowrap}.aw .au-t td{padding:8px 10px;border-top:1px solid #F0ECE6;overflow-wrap:anywhere}

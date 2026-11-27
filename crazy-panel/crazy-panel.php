@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.391');
+define('CP_PANEL_VER', '2.9.392');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -3831,7 +3831,8 @@ function cp_el_img_route() {
 require_once __DIR__ . '/bg-window.php'; /* v2.9.232: háttér 2 órás időablak-szabály */
 require_once __DIR__ . '/booth.php'; /* v2.9.238: Crazy Booth szelfigépek */
 require_once __DIR__ . '/booth-log.php'; /* v2.9.256: gépnapló + riasztás */
-require_once __DIR__ . '/booth-diag.php'; /* v2.9.388: hibanaplók a gépekről */
+require_once __DIR__ . '/booth-diag.php';
+require_once __DIR__ . '/ads-watch.php'; /* v2.9.392: hirdetésfiókok figyelése */ /* v2.9.388: hibanaplók a gépekről */
 require_once __DIR__ . '/raktar.php'; /* v2.9.259: raktár */
 require_once __DIR__ . '/portal.php';
 require_once __DIR__ . '/sablon.php';
