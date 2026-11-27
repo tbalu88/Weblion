@@ -15,7 +15,7 @@
     <div class="mode" data-modeinfo></div>
     <button type="button" class="galbtn" data-act="gallery">▦ <span>Galéria</span></button>
     <div class="warn" data-warn hidden></div>
-    <button type="button" class="fsbtn" data-act="fs" title="Teljes képernyő ki / be">⤢ <span>Teljes képernyő ki</span></button>
+    <button type="button" class="fsbtn" data-act="menu" title="Kezelő menü (beállítások)">☰ <span>Menü</span></button>
     <button type="button" class="evbtn" data-act="ev" title="Kamerabeállítás élőképpel">☀ <span data-evval>Kamera</span></button>
     <div class="evp" data-evp hidden>
       <div class="evp-in">
@@ -403,7 +403,8 @@
               <label>Gépkulcs (panel: Beállítások → Crazy Booth gépek) <input name="boothKey" autocomplete="off" spellcheck="false" placeholder="cb_…"></label>
               <label>Új PIN <input name="pin" inputmode="numeric" maxlength="8"></label>
               <label class="chk"><input id="u-pinOff" type="checkbox"> PIN nélkül nyíljon a Kezelő (csak tesztelés idejére – rendezvényen kapcsold vissza!)</label>
-              <label class="chk"><input id="u-startWindowed" type="checkbox"> Indulás ablakban (nem teljes képernyőn)</label>
+              <label class="chk"><input id="u-startFull" type="checkbox"> Indulás teljes képernyőn (alapból ablakban indul)</label>
+              <div class="st-row"><button type="button" class="ghost" data-act="fstoggle">⤢ Teljes képernyő ki / be</button></div>
             </section>
             <section class="st-grp">
               <h3 class="st-h"><svg><use href="#i-upd"/></svg>Program frissítése</h3>
