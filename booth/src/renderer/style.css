@@ -431,3 +431,4 @@ button{font:inherit;cursor:pointer}
 .fsq{position:absolute;top:2vh;left:2vh;z-index:3;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
 .fsq[hidden]{display:none}.fsq:hover{border-color:rgba(255,255,255,.4)}
 .fsq svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+body.win .corner{display:none}

@@ -1341,7 +1341,7 @@
   }
   function updUnprep() { const o = document.querySelector('.updov'); if (o) o.remove(); lsSet('cb_resume', null); }
   /* 2026-11-27: ablakos nézetben a bal felső sarokban teljes képernyő gomb */
-  async function fsSync() { try { const r = await B.isFullscreen(); const b = $('[data-act=fsgo]'); if (b) b.hidden = !(r && r.ok && !r.v); } catch (e) { /* */ } }
+  async function fsSync() { try { const r = await B.isFullscreen(); const b = $('[data-act=fsgo]'), w = !!(r && r.ok && !r.v); if (b) b.hidden = !w; document.body.classList.toggle('win', w); /* ablakban a rejtett sarok-zóna nem takarja a gombot */ } catch (e) { /* */ } }
   window.addEventListener('resize', () => { clearTimeout(S.fsT); S.fsT = setTimeout(fsSync, 300); });
   async function remoteUpd() {
     if (S.updRun) return;
