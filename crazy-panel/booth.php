@@ -236,25 +236,37 @@ function cp_booth_ajax_gal_list() {
 add_action('admin_menu', function () { add_options_page('Crazy Booth gépek', 'Crazy Booth gépek', 'manage_options', 'cp-booth', 'cp_booth_admin'); });
 function cp_booth_admin() {
 	if (!current_user_can('manage_options')) { return; }
-	$devs = cp_booth_devs(); $newkey = '';
+	$devs = cp_booth_devs(); $newkey = ''; $note = '';
+	/* v2.9.401: a kulcs titkosítva is tárolódik (visszanézhető); a régi gépeknél csak a lenyomat van meg – ott „Új kulcs” kell */
+	$enc = function ($k) { return function_exists('cp_st_enc') ? cp_st_enc($k) : ''; };
 	if (!empty($_POST['cp_booth_nonce']) && wp_verify_nonce($_POST['cp_booth_nonce'], 'cp_booth')) {
 		if (!empty($_POST['add']) && trim((string) $_POST['name']) !== '') {
 			$newkey = 'cb_' . wp_generate_password(40, false, false);
 			$id = 'd' . time() . wp_rand(10, 99);
-			$devs[$id] = array('name' => sanitize_text_field(wp_unslash($_POST['name'])), 'h' => hash('sha256', $newkey), 'at' => time(), 'seen' => 0, 'off' => 0);
+			$devs[$id] = array('name' => sanitize_text_field(wp_unslash($_POST['name'])), 'h' => hash('sha256', $newkey), 'enc' => $enc($newkey), 'at' => time(), 'seen' => 0, 'off' => 0);
 		}
-		if (!empty($_POST['toggle']) && isset($devs[$_POST['toggle']])) { $devs[$_POST['toggle']]['off'] = empty($devs[$_POST['toggle']]['off']) ? 1 : 0; }
+		$tg = sanitize_key(wp_unslash($_POST['toggle'] ?? '')); if ($tg !== '' && isset($devs[$tg])) { $devs[$tg]['off'] = empty($devs[$tg]['off']) ? 1 : 0; }
+		$rk = sanitize_key(wp_unslash($_POST['rekey'] ?? ''));
+		if ($rk !== '' && isset($devs[$rk]) && $rk !== 'panel') { $newkey = 'cb_' . wp_generate_password(40, false, false); $devs[$rk]['h'] = hash('sha256', $newkey); $devs[$rk]['enc'] = $enc($newkey); $note = 'Új kulcs készült „' . $devs[$rk]['name'] . '” géphez – a régi kulcs már nem működik, az újat írd be a gépen (F2 → Gépkulcs).'; }
+		$dl = sanitize_key(wp_unslash($_POST['del'] ?? ''));
+		if ($dl !== '' && isset($devs[$dl]) && $dl !== 'panel') { $note = '„' . $devs[$dl]['name'] . '” törölve – a kulcsa már nem működik.'; unset($devs[$dl]); delete_transient('cp_bb_' . $dl); if (function_exists('cp_audit_add')) { cp_audit_add('rendszer', 'booth_del', 'Szelfigép törölve', '', $note); } }
 		update_option('cp_booth_devices', $devs, false);
 	}
-	echo '<div class="wrap"><h1>Crazy Booth gépek</h1><p>Minden szelfigép saját kulcsot kap. A kulcsot a gép Beállításaiban (F2) kell megadni. A kulcs <b>csak most</b> látszik – ha elveszik, készíts újat, a régit tiltsd le.</p>';
-	if ($newkey !== '') { echo '<div class="notice notice-success"><p><b>Az új gép kulcsa:</b> <code style="font-size:15px;user-select:all">' . esc_html($newkey) . '</code></p></div>'; }
+	echo '<div class="wrap"><h1>Crazy Booth gépek</h1><p>Minden szelfigép saját kulcsot kap. A kulcsot a gép Beállításaiban (F2) kell megadni. A kulcs a „Megjelenítés” gombbal bármikor visszanézhető (a 2026.11.27. előtt készült kulcsok nem – ott „Új kulcs” kell, és az újat be kell írni a gépen).</p>';
+	if ($note !== '') { echo '<div class="notice notice-warning"><p>' . esc_html($note) . '</p></div>'; }
+	if ($newkey !== '') { echo '<div class="notice notice-success"><p><b>A kulcs:</b> <code style="font-size:15px;user-select:all">' . esc_html($newkey) . '</code></p></div>'; }
 	echo '<form method="post">'; wp_nonce_field('cp_booth', 'cp_booth_nonce');
-	echo '<table class="widefat striped" style="max-width:820px"><thead><tr><th>Gép</th><th>Létrehozva</th><th>Utoljára jelentkezett</th><th>Állapot</th><th></th></tr></thead><tbody>';
+	echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th>Gép</th><th>Létrehozva</th><th>Utoljára jelentkezett</th><th>Állapot</th><th>Gépkulcs</th><th></th></tr></thead><tbody>';
 	foreach ($devs as $id => $d) {
-		if ($id === 'panel') { echo '<tr><td>Panel (belső – a galéria kezeléséhez)</td><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $d['at'])) . '</td><td>' . ($d['seen'] ? esc_html(wp_date('Y.m.d. H:i', (int) $d['seen'])) : '–') . '</td><td>aktív</td><td></td></tr>'; continue; }
-		echo '<tr><td>' . esc_html($d['name']) . '</td><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $d['at'])) . '</td><td>' . ($d['seen'] ? esc_html(wp_date('Y.m.d. H:i', (int) $d['seen'])) : '–') . '</td><td>' . (empty($d['off']) ? 'aktív' : '<b>letiltva</b>') . '</td><td><button class="button" name="toggle" value="' . esc_attr($id) . '">' . (empty($d['off']) ? 'Letiltás' : 'Engedélyezés') . '</button></td></tr>';
+		if ($id === 'panel') { echo '<tr><td>Panel (belső – a galéria kezeléséhez)</td><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $d['at'])) . '</td><td>' . ($d['seen'] ? esc_html(wp_date('Y.m.d. H:i', (int) $d['seen'])) : '–') . '</td><td>aktív</td><td>–</td><td></td></tr>'; continue; }
+		$k = !empty($d['enc']) && function_exists('cp_st_dec') ? (string) cp_st_dec($d['enc']) : '';
+		$kc = $k !== '' ? '<button type="button" class="button" onclick="var c=this.nextElementSibling;c.hidden=!c.hidden;this.textContent=c.hidden?\'Megjelenítés\':\'Elrejtés\'">Megjelenítés</button><code hidden style="user-select:all;margin-left:6px">' . esc_html($k) . '</code>' : '<span style="color:#787c82">nem visszanézhető</span>';
+		echo '<tr><td>' . esc_html($d['name']) . '</td><td>' . esc_html(wp_date('Y.m.d. H:i', (int) $d['at'])) . '</td><td>' . ($d['seen'] ? esc_html(wp_date('Y.m.d. H:i', (int) $d['seen'])) : '–') . '</td><td>' . (empty($d['off']) ? 'aktív' : '<b>letiltva</b>') . '</td><td>' . $kc . '</td><td style="white-space:nowrap">' .
+			'<button class="button" name="toggle" value="' . esc_attr($id) . '">' . (empty($d['off']) ? 'Letiltás' : 'Engedélyezés') . '</button> ' .
+			'<button class="button" name="rekey" value="' . esc_attr($id) . '" onclick="return confirm(\'Új kulcsot készítesz ehhez a géphez? A régi kulcs azonnal megszűnik, a gépen az újat kell beírni.\')">Új kulcs</button> ' .
+			'<button class="button button-link-delete" name="del" value="' . esc_attr($id) . '" onclick="return confirm(\'Biztosan törlöd ezt a gépet? A kulcsa azonnal megszűnik. (A képei a galériában megmaradnak.)\')">Törlés</button></td></tr>';
 	}
-	if (!$devs) { echo '<tr><td colspan="5">Még nincs gép.</td></tr>'; }
+	if (!$devs) { echo '<tr><td colspan="6">Még nincs gép.</td></tr>'; }
 	echo '</tbody></table><p><input name="name" placeholder="pl. Szelfigép 1 (Mac)" class="regular-text"> <button class="button button-primary" name="add" value="1">Új gép + kulcs</button></p></form>';
 	cp_booth_admin_ai();
 	if (function_exists('cp_blog_admin')) { cp_blog_admin(); }
