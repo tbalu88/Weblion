@@ -1429,10 +1429,13 @@
     box.innerHTML = Object.entries(S.cp).map(([k, r]) => {
       const v = r.values[r.idx] != null ? r.values[r.idx] : '–';
       if (r.kind === 'select') return '<div class="evp-r' + (r.off ? ' off' : '') + '"><span>' + esc(r.label) + '</span><select data-cpsel="' + k + '">' + r.values.map((o, i) => '<option value="' + i + '"' + (i === r.idx ? ' selected' : '') + '>' + esc(r.show ? r.show(o) : o) + '</option>').join('') + '</select></div>';
-      return '<div class="evp-r' + (r.off ? ' off' : '') + '"><span>' + esc(r.label) + '</span><button type="button" data-act="cpdn" data-k="' + k + '"' + (r.idx <= 0 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' le">‹</button><b>' + esc(r.show ? r.show(v) : v) + '</b><button type="button" data-act="cpup" data-k="' + k + '"' + (r.idx >= r.values.length - 1 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' fel">›</button></div>';
+      return '<div class="evp-r' + (r.off ? ' off' : '') + '"><span>' + esc(r.label) + '</span><button type="button" data-act="cpdn" data-k="' + k + '"' + (r.idx <= 0 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' le">‹</button><b>' + esc(r.show ? r.show(v) : v) + '</b><button type="button" data-act="cpup" data-k="' + k + '"' + (r.idx >= r.values.length - 1 ? ' disabled' : '') + ' aria-label="' + esc(r.label) + ' fel">›</button>' +
+        /* 2026-11-27: a kézi fehéregyensúlyhoz csúszka is (gyors állítás); a gépre elengedéskor megy ki */
+        ((k === 'temperature' || k === 'colorTemperature') && r.values.length > 2 ? '<input type="range" class="evp-sl" min="0" max="' + (r.values.length - 1) + '" step="1" value="' + r.idx + '" data-cprange="' + k + '" aria-label="' + esc(r.label) + ' csúszka">' : '') + '</div>';
     }).join('');
   }
-  $('[data-evrows]').addEventListener('change', e => { const sel = e.target.closest('[data-cpsel]'); if (sel) camSet(sel.dataset.cpsel, Number(sel.value)); });
+  $('[data-evrows]').addEventListener('change', e => { const sel = e.target.closest('[data-cpsel]'); if (sel) camSet(sel.dataset.cpsel, Number(sel.value)); const rg = e.target.closest('[data-cprange]'); if (rg) camSet(rg.dataset.cprange, Number(rg.value)); });
+  $('[data-evrows]').addEventListener('input', e => { const rg = e.target.closest('[data-cprange]'); if (!rg) return; const r = S.cp && S.cp[rg.dataset.cprange]; if (!r) return; const v = r.values[Number(rg.value)]; const b = rg.parentNode.querySelector('b'); if (b) b.textContent = r.show ? r.show(v) : v; });
   async function evOpen() {
     const p = $('[data-evp]'), v = $('[data-evv]'), im = $('[data-evimg]'); p.hidden = false; $('[data-evmsg]').textContent = ''; S.evOpen = true; S.cp = null; camRows();
     if (WEB()) {
