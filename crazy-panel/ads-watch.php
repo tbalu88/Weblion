@@ -118,6 +118,10 @@ function cp_aw_meta_sync($tok, $ver, $acts) {
 	$errs = array();
 	foreach ($acts as $act) {
 		$base = 'https://graph.facebook.com/' . $ver . '/act_' . $act;
+		/* a keretek a pénznem legkisebb egységében jönnek: HUF-nál (és pl. JPY-nál) nincs váltóegység, máshol /100 */
+		$cur = get_transient('cp_aw_cur_' . $act);
+		if (!$cur) { $ci = wp_remote_get($base . '?fields=currency', array('timeout' => 20, 'headers' => array('Authorization' => 'Bearer ' . $tok))); $cj = is_wp_error($ci) ? null : json_decode(wp_remote_retrieve_body($ci), true); $cur = is_array($cj) && !empty($cj['currency']) ? (string) $cj['currency'] : 'HUF'; set_transient('cp_aw_cur_' . $act, $cur, DAY_IN_SECONDS); }
+		$div = in_array($cur, array('HUF', 'JPY', 'KRW', 'CLP', 'COP', 'CRC', 'ISK', 'IDR', 'PYG', 'TWD', 'VND'), true) ? 1 : 100;
 		$camps = cp_aw_meta_get($tok, $base . '/campaigns?' . http_build_query(array('fields' => 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,issues_info,stop_time', 'limit' => 200)));
 		if (is_string($camps)) { $errs[] = 'act_' . $act . ': ' . $camps; continue; }
 		$sets = cp_aw_meta_get($tok, $base . '/adsets?' . http_build_query(array('fields' => 'campaign_id,daily_budget,lifetime_budget,effective_status', 'limit' => 500)));
@@ -130,7 +134,7 @@ function cp_aw_meta_sync($tok, $ver, $acts) {
 			$bud = !empty($c['daily_budget']) ? (int) $c['daily_budget'] : ($sb[$c['id']] ?? null);
 			$iss = array(); foreach ((array) ($c['issues_info'] ?? array()) as $x) { $iss[] = cp_aw_clip($x['error_summary'] ?? ($x['error_message'] ?? ''), 160); }
 			$list[] = array('id' => cp_aw_clip($c['id'], 30), 'name' => cp_aw_clip($c['name'] ?? ''), 'st' => cp_aw_clip($c['status'] ?? '', 20), 'serv' => cp_aw_clip($c['effective_status'] ?? '', 30),
-				'obj' => cp_aw_clip($c['objective'] ?? '', 40), 'bud' => $bud !== null ? (int) round($bud / 100) : null, 'life' => !empty($c['lifetime_budget']) ? (int) round($c['lifetime_budget'] / 100) : null,
+				'obj' => cp_aw_clip($c['objective'] ?? '', 40), 'bud' => $bud !== null ? (int) round($bud / $div) : null, 'life' => !empty($c['lifetime_budget']) ? (int) round($c['lifetime_budget'] / $div) : null,
 				'bad' => (int) ($bad[$c['id']] ?? 0), 'iss' => implode(' · ', array_filter($iss)), 'stop' => cp_aw_clip($c['stop_time'] ?? '', 30));
 		}
 		cp_aw_snap_put('meta:' . $act, '', $list);
