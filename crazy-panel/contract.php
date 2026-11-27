@@ -261,7 +261,8 @@ function cp_ct_build($st) {
 		$p(sprintf($T['fee1'], $money($sum), $words));
 	}
 	$cash = !array_filter($sel, function ($s) { return !$s['cash']; });
-	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
+	/* v2.9.394: kiválasztott fizetési módnál csak az látszik; ha nincs kiválasztva, a vevő jelöli be a felsoroltak közül */
+	foreach ($T['pay'] as $k => $t) { if ($k === 'cash' && !$cash) { continue; } if ($st['pay'] !== '' && $st['pay'] !== $k) { continue; } $out[] = array('chk', ($st['pay'] === $k ? '☒ ' : '☐ ') . $t); }
 	$tr = (float) $st['travel'];
 	if ($tr > 0) { $p($T['trI']); $out[] = array('t', array($T['trH'], array($st['travel_city'], $money($tr))), 'gridh'); }
 	$p($G['late_interest']);
