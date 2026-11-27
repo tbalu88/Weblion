@@ -512,7 +512,12 @@
       await call(B.saveConfig, { event: S.cfg.event });
     }
   }
+  /* 2026-11-27: a sablon betöltésének eredménye a naplóba is (a panel Szelfigépek nézetében látszik) */
   async function loadTemplate() {
+    await loadTemplate0();
+    try { B.log('sablon: ' + (S.tpl ? S.tplName + ' (' + S.tpl.shots + ' fotó)' : 'nincs – alap keret') + ' · rendezvény: ' + ((S.cfg.event && S.cfg.event.title) || '–')); } catch (e) { /* */ }
+  }
+  async function loadTemplate0() {
     S.tpl = null;
     const e = S.cfg.event;
     /* v0.11: a gépen (internet nélkül is) szerkesztett sablon elsőbbséget kap ennél a rendezvénynél */
