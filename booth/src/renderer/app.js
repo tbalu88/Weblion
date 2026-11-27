@@ -1223,7 +1223,7 @@
   }
   async function runAi(draw) {
     if (S.busy || S.scr === 'aiok') return;
-    /* hozzájárulás: külső feldolgozó + 18 év (a modell szolgáltatójának feltétele) – még a foglaltság előtt dől el */
+    /* hozzájárulás: külső feldolgozó (a 18 éves kérdést a felhasználó kérésére kivettük, 2026-11-27) – még a foglaltság előtt dől el */
     show('aiok');
     const ok = await aiWait('aiok', 30000);
     if (ok === false) return run(modeList().find(k => !MODES[k].clip && k !== 'ai' && k !== 'aidraw') || 'photo');

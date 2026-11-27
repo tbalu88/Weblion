@@ -102,8 +102,12 @@ function cp_bdg_ajax_list() {
 function cp_bdg_ajax_log() {
 	cp_bdg_guard();
 	global $wpdb;
-	$l = $wpdb->get_var($wpdb->prepare('SELECT log FROM ' . cp_bdg_t() . ' WHERE id = %d', (int) ($_POST['id'] ?? 0)));
-	if ($l === null) { cp_el_err('Nincs ilyen napló.', 404); }
+	$row = $wpdb->get_row($wpdb->prepare('SELECT dev, inst, log FROM ' . cp_bdg_t() . ' WHERE id = %d', (int) ($_POST['id'] ?? 0)), ARRAY_A);
+	if (!$row) { cp_el_err('Nincs ilyen napló.', 404); }
+	$l = (string) $row['log'];
+	/* v2.9.405: gépenként egy friss napló van – ha közben újabb érkezett, a régi sorból átkerült oda; ilyenkor azt adjuk */
+	if ($l === '') { $who = $row['dev'] !== '' ? $wpdb->prepare('dev = %s', $row['dev']) : $wpdb->prepare("dev = '' AND inst = %s", $row['inst']); $l = (string) $wpdb->get_var('SELECT log FROM ' . cp_bdg_t() . ' WHERE ' . $who . " AND log <> '' ORDER BY id DESC LIMIT 1"); }
+	if ($l === '') { cp_el_err('Ennek a gépnek most nincs elmentett naplója.', 404); }
 	wp_send_json_success(array('log' => (string) $l));
 }
 function cp_bdg_ajax_ask() {
