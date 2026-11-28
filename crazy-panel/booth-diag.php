@@ -98,6 +98,8 @@ function cp_bdg_ajax_list() {
 		$b = function_exists('cp_booth_beat_get') ? cp_booth_beat_get($id) : null;
 		$up = cp_bdg_upd_all()[$id] ?? null;
 		$devs[] = array('id' => (string) $id, 'name' => (string) $d['name'], 'off' => !empty($d['off']), 'seen' => (int) ($d['seen'] ?? 0), 'beat' => $b ? (int) $b['t'] : 0, 'ver' => $b ? (string) $b['ver'] : '', 'req' => (int) ($req[$id] ?? 0), 'upd' => $up ? array('res' => (string) $up['res'], 'at' => (int) $up['res_at'], 'done' => (int) $up['done']) : null,
+			'deal' => $b ? (int) ($b['deal'] ?? 0) : 0, 'title' => $b ? (string) ($b['title'] ?? '') : '', 'gal' => $b && !empty($b['ev']) ? CP_BOOTH_GAL . $b['ev'] . '/' : '', 'probs' => $b ? (array) ($b['probs'] ?? array()) : array(),
+			'cam' => $b ? ($b['cam'] ?? null) : null, 'bnet' => $b ? !empty($b['net']) : null, 'queue' => $b ? (int) ($b['queue'] ?? 0) : 0, 'err' => $b && !empty($b['err']) && time() - (int) ($b['err_at'] ?? 0) < 1800 ? (string) $b['err'] : '',
 			'last' => (int) $wpdb->get_var($wpdb->prepare('SELECT MAX(at) FROM ' . cp_bdg_t() . ' WHERE dev = %s', $id)));
 	}
 	wp_send_json_success(array('rows' => $rows, 'devs' => $devs, 'anon' => (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . cp_bdg_t() . " WHERE dev = ''"), 'now' => time()));

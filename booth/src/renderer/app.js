@@ -697,6 +697,7 @@
     if (!remote() && !isStation() && B.printers && modeList().some(k => !MODES[k].clip)) {
       try { const pr = ((await B.printers()).v) || []; printList().forEach(name => { const p = name ? pr.find(x => x.name === name) : (pr.find(x => x.def || x.isDefault) || pr[0]); if (!p) { if (name) L.push(['Nyomtató nem található: ' + name, '']); return; } const st = prState(p); if (st[0] === 'bad') L.push(['Nyomtató (' + pName(p.name) + '): ' + st[1], '']); }); } catch (e) { /* */ }
     }
+    S.warnL = L.map(x => x[0]);
     diagProblems('kezdőképernyő', L.filter(x => !x[1]).map(x => x[0]));
     const w = $('[data-warn]'); w.innerHTML = L.map(x => '<span class="' + x[1] + '">⚠ ' + esc(x[0]) + '</span>').join(''); w.hidden = !L.length;
   }
@@ -923,6 +924,7 @@
     /* a hibák és a figyelmeztetések (pl. kevés AI-kredit) röviden az összegzés alatt is */
     const why = x => { const t = String(x[2]), i = t.lastIndexOf(' – '); return i > 0 ? t.slice(i + 3) : t; };
     const probs = L.filter(x => x[0] === 'bad').concat(L.filter(x => x[0] === 'mid'));
+    S.pfProbs = L.filter(x => x[0] !== 'ok').map(x => x[1] + ': ' + x[2]); S.pfAt = Date.now(); /* 2026-11-28: a panel csempéjére (beat → probs) */
     box.innerHTML = '<div class="pf-sum ' + (bad ? 'bad' : mid ? 'mid' : 'ok') + '"><p>' + (bad ? bad + ' hiba – javítsd indulás előtt' + (mid ? ', és ' + mid + ' figyelmeztetés' : '') : mid ? 'Indulhat, ' + mid + ' figyelmeztetéssel' : 'Minden rendben – indulhat a fotózás') + '</p>' +
       (probs.length ? '<ul>' + probs.map(x => '<li class="' + x[0] + '"><b>' + esc(x[1]) + ':</b> ' + esc(why(x)) + '</li>').join('') + '</ul>' : '') + '</div>' +
       L.map(x => '<div class="pf-i ' + x[0] + '"><i></i><b>' + esc(x[1]) + '</b><span>' + esc(x[2]) + '</span></div>').join('');
@@ -1194,6 +1196,7 @@
     const cam = isStation() ? null : WEB() ? (S.stream ? S.stream.getVideoTracks().some(t => t.readyState === 'live') : null) : true;
     const pp = {}; if (!remote() || isStation()) printList().forEach(n => { pp[n || 'alapértelmezett'] = paperLeft(n); });
     const body = { deal: ev.deal || 0, title: ev.title || '', ver: S.cfg.version + (S.uiVer ? '/' + S.uiVer : ''), scr: S.scr, paper: pp, queue: st.queued || 0, guests: st.guests || 0, prints: (pc && pc.total) || 0,
+      ev: ev.ev || '', probs: [...new Set([...(S.warnL || []), ...(S.pfAt && Date.now() - S.pfAt < 30 * 60000 ? S.pfProbs || [] : [])])].slice(0, 8),
       aipv: (S.aip || lsGet('cb_aip', null) || {}).v || '', upd_res: S.updRes || '', err: S.lastErr ? S.lastErr.m : '', err_at: S.lastErr ? Math.round(S.lastErr.t / 1000) : 0, cam, net: navigator.onLine, station: isStation() };
     try { const r = await call(B.beat, body); if (r && r.diag) { D.full = true; diagNow('a panel kérte'); } if (r && r.upd) remoteUpd(); if (r && r.aip && r.aip.list) { S.aip = r.aip; lsSet('cb_aip', r.aip); } if (r) remoteApply(r); } catch (e) { /* net nélkül nincs jelentés – a következő perc pótolja */ if (navigator.onLine) diagSoon('állapotjelentés: ' + e.message); }
   }

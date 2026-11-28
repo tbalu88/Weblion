@@ -475,7 +475,10 @@ add_action('rest_api_init', function () {
 		$b = array('t' => time(), 'name' => (string) $d['name'], 'deal' => $deal, 'title' => mb_substr(sanitize_text_field((string) ($j['title'] ?? '')), 0, 120),
 			'ver' => mb_substr(sanitize_text_field((string) ($j['ver'] ?? '')), 0, 40), 'scr' => mb_substr(sanitize_key((string) ($j['scr'] ?? '')), 0, 12),
 			'paper' => $paper, 'queue' => max(0, (int) ($j['queue'] ?? 0)), 'guests' => max(0, (int) ($j['guests'] ?? 0)), 'prints' => max(0, (int) ($j['prints'] ?? 0)),
-			'err' => mb_substr(sanitize_text_field((string) ($j['err'] ?? '')), 0, 160), 'err_at' => max(0, (int) ($j['err_at'] ?? 0)), 'cam' => array_key_exists('cam', $j) && $j['cam'] !== null ? (bool) $j['cam'] : null, 'net' => !empty($j['net']), 'station' => !empty($j['station']));
+			'err' => mb_substr(sanitize_text_field((string) ($j['err'] ?? '')), 0, 160), 'err_at' => max(0, (int) ($j['err_at'] ?? 0)), 'cam' => array_key_exists('cam', $j) && $j['cam'] !== null ? (bool) $j['cam'] : null, 'net' => !empty($j['net']), 'station' => !empty($j['station']),
+			/* 2026-11-28: a panel csempéjéhez – a rendezvény galéria-azonosítója és a gép Áttekintésének aktuális hibái */
+			'ev' => preg_match('/^[a-z0-9]{6,32}$/', (string) ($j['ev'] ?? '')) ? (string) $j['ev'] : '',
+			'probs' => array_values(array_slice(array_filter(array_map(function ($x) { return mb_substr(sanitize_text_field((string) $x), 0, 180); }, is_array($j['probs'] ?? null) ? $j['probs'] : array())), 0, 8)));
 		$prev = cp_booth_beat_get($d['id']);
 		set_transient('cp_bb_' . $d['id'], $b, 3 * DAY_IN_SECONDS);
 		if (function_exists('cp_blog_beat')) { cp_blog_beat($d['id'], $prev, $b); } /* v2.9.256: eseménynapló */
