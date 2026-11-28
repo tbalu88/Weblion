@@ -820,7 +820,7 @@
     $('[data-modecheck]').innerHTML = Object.keys(MODES).map(k => { const dis = (MODES[k].clip && !rec) || ((k === 'ai' || k === 'aidraw') && !aiReady()); return '<label class="mchk' + (dis ? ' dis' : '') + '"><input type="checkbox" data-m="' + k + '"' + (on.includes(k) ? ' checked' : '') + (dis ? ' disabled' : '') + '>' + svgIco(MODES[k].ico) + '<b>' + MODES[k].name + '</b><small>' + ((k === 'ai' || k === 'aidraw') && !aiReady() ? aiWhy() : MODES[k].sub) + '</small></label>'; }).join('');
   }
   function aiSelRender() {
-    const box = $('[data-aisel]'); if (!box) return; const c = aiCat(), sel = aiSelKeys(), cur = sel || ((U().ai && U().ai.styles) || []).map(x => x.k);
+    const box = $('[data-aisel]'); if (!box) return; const c = aiCat(), sel = aiSelKeys(), cur = sel || aiStyles().map(x => x.k);
     box.innerHTML = c.length ? c.map(x => '<label class="chk"><input type="checkbox" data-aik="' + esc(x.k) + '"' + (cur.includes(x.k) ? ' checked' : '') + '> ' + esc(x.label) + '</label>').join('') : '<p class="st-up">A stílusok listája a panelkapcsolat után jelenik meg (gépkulcs és internet kell).</p>';
   }
   function uiCollect() {
@@ -1234,12 +1234,12 @@
   }
   /* ---------- 6. fázis: AI-kép (a panelből kapcsolható rendezvényenként; a szerver hívja a modellt – alap: Nano Banana 2.1) */
   /* 0.16.1: miért nem választható az AI (a beállításokban kiírva) */
-  const aiWhy = () => !B.ai ? 'frissítés kell' : !(S.cfg && S.cfg.boothKey) ? 'nincs gépkulcs' : !(S.cfg.event && S.cfg.event.ev) ? 'nincs rendezvény kiválasztva' : S.remotePending ? 'a panel beállítása a kezdőképernyőn töltődik be' : 'a deal Szelfigép-beállításában kapcsolható';
+  const aiWhy = () => !B.ai ? 'frissítés kell' : !(S.cfg && S.cfg.boothKey) ? 'nincs gépkulcs' : !(S.cfg.event && S.cfg.event.ev) ? 'nincs rendezvény kiválasztva' : S.remotePending ? 'a panel beállítása a kezdőképernyőn töltődik be' : !aiCat().length ? 'a stílusok listája a panelkapcsolat után jön (internet kell)' : 'nincs kipipált AI-stílus (lent, „AI-stílusok ezen a rendezvényen”)';
   /* 2026-11-27: az AI-stílusokat a kezelő a gépen választja ki rendezvényenként (Kezelő → Módok → AI-kép); ha itt nincs választás,
      a panelben a dealen beállított stílusok érvényesek. Jogosultság a dealen nem kell (a galéria szerver visszaállításig engedi). */
   const aiCat = () => ((S.aip || lsGet('cb_aip', null) || {}).list) || [];
   const aiSelKeys = () => { const ev = S.cfg && S.cfg.event && S.cfg.event.ev, m = U().aiSel || {}; return ev && Array.isArray(m[ev]) ? m[ev] : null; };
-  const aiStyles = () => { const sel = aiSelKeys(); if (sel) { const c = aiCat(); return sel.map(k => c.find(x => x.k === k)).filter(Boolean); } const c = aiCat(); return ((U().ai && U().ai.styles) || []).map(x => Object.assign({}, x, (c.find(y => y.k === x.k) || {}).prompt ? { prompt: c.find(y => y.k === x.k).prompt } : {})); }; /* a dealen mentett stílus is a friss (felirat nélküli) promptot kapja */
+  const aiStyles = () => { const sel = aiSelKeys(); if (sel) { const c = aiCat(); return sel.map(k => c.find(x => x.k === k)).filter(Boolean); } const c = aiCat(); const dl = (U().ai && U().ai.styles) || []; if (!dl.length) return aiCat(); /* 2026-11-28: se gépi választás, se deal-beállítás → az összes stílus (nem kell a dealen bekapcsolni) */ return dl.map(x => Object.assign({}, x, (c.find(y => y.k === x.k) || {}).prompt ? { prompt: c.find(y => y.k === x.k).prompt } : {})); }; /* a dealen mentett stílus is a friss (felirat nélküli) promptot kapja */
   const aiReady = () => !!(B.ai && S.cfg && S.cfg.boothKey && aiStyles().length && S.cfg.event && S.cfg.event.ev);
   const aiWait = (scr, ms) => new Promise(res => { S.aiRes = res; clearTimeout(S.idleT); S.idleT = setTimeout(() => { if (S.scr === scr && S.aiRes) { const r = S.aiRes; S.aiRes = null; r(null); } }, ms); });
   const aiDone = v => { clearTimeout(S.idleT); const r = S.aiRes; S.aiRes = null; if (r) r(v); };
