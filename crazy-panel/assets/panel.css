@@ -28,8 +28,8 @@ a{color:var(--ot)}
 .cpx-status{color:rgba(255,255,255,.65);font-size:13px}
 .cpx-status.err{color:#FFB4AC}
 /* v2.9.22: egy fő gombstílus (sötétkék) és egy másodlagos (fehér, keretes) az egész panelen; a narancs a márka- és állapotjelzésé */
-.cpx-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 16px;border-radius:999px;border:1px solid var(--n);background:var(--n);color:#fff;font:600 14px Inter,sans-serif;cursor:pointer;text-decoration:none;transition:background .12s,border-color .12s}
-.cpx-btn:hover{background:#26304D;border-color:#26304D}
+.cpx-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 16px;border-radius:999px;border:1px solid #3A4562;background:#3A4562;color:#fff;font:600 14px Inter,sans-serif;cursor:pointer;text-decoration:none;transition:background .12s,border-color .12s}
+.cpx-btn:hover{background:#2E3752;border-color:#2E3752}
 .cpx-btn:focus-visible{outline:2px solid var(--o);outline-offset:2px}
 .cpx-btn[disabled]{background:#9AA0AE;border-color:#9AA0AE;cursor:default}
 .cpx-btn.ghost{background:#fff;border:1px solid #DCD6CC;color:var(--ink)}

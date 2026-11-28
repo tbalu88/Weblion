@@ -208,11 +208,11 @@ function cp_booth_ajax_gal_list() {
 	$list = array(); $seen = array();
 	foreach ((array) ($g['list'] ?? array()) as $x) {
 		if (!is_array($x) || empty($x['ev'])) { continue; }
-		$ev = (string) $x['ev']; $x['deal'] = $rev[$ev] ?? 0; $seen[$ev] = 1; $list[] = $x;
+		$ev = (string) $x['ev']; $seen[$ev] = 1; if ((int) ($x['n'] ?? 0) < 1) { continue; } /* 2026-11-28: csak a galériák, ahol készült kép */ $x['deal'] = $rev[$ev] ?? 0; $list[] = $x;
 	}
-	/* a dealhez már létrehozott, de még üres galériák */
+	/* a dealhez már létrehozott, de még üres galériák – 2026-11-28 óta nem listázzuk (a felhasználó kérése: csak ahol készült kép) */
 	foreach ($rev as $ev => $d) {
-		if (!isset($seen[$ev])) { $list[] = array('ev' => $ev, 'n' => 0, 'hidden' => 0, 'ai' => 0, 'video' => 0, 'first' => '', 'last' => '', 'deal' => $d, 'devices' => 0, 'evdate' => '', 'title' => '', 'has_pw' => false, 'hook' => false, 'thumbs' => array(), 'url' => CP_BOOTH_GAL . $ev . '/'); }
+		if (false && !isset($seen[$ev])) { $list[] = array('ev' => $ev, 'n' => 0, 'hidden' => 0, 'ai' => 0, 'video' => 0, 'first' => '', 'last' => '', 'deal' => $d, 'devices' => 0, 'evdate' => '', 'title' => '', 'has_pw' => false, 'hook' => false, 'thumbs' => array(), 'url' => CP_BOOTH_GAL . $ev . '/'); }
 	}
 	/* deal-adatok: cím, rendezvény dátuma, állapot, ügyfél neve és e-mail-címe (a levélíróhoz) */
 	$ids = array_values(array_unique(array_filter(array_map(function ($x) { return (int) $x['deal']; }, $list))));
