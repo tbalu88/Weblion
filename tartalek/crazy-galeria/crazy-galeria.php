@@ -287,6 +287,7 @@ function cg_page($kind, $ev, $data) {
 		. 'main{max-width:1100px;margin:0 auto;padding:16px}h1{font-size:22px;margin:4px 0 12px}.big{display:block;max-width:100%;max-height:72vh;margin:0 auto 14px;border-radius:10px;box-shadow:0 10px 30px rgba(20,28,51,.18);background:#fff}'
 		. '.btn{display:flex;align-items:center;justify-content:center;max-width:420px;margin:0 auto 10px;height:52px;border-radius:999px;background:var(--g);color:#141C33;font-weight:800;text-decoration:none;font-size:17px}.btn.ghost{background:#fff;border:1.5px solid var(--o);color:#B85A1C}'
 		. '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.grid a{position:relative;display:block;aspect-ratio:2/3;background:#e9e4dc center/cover no-repeat;border-radius:8px}.grid .pl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:18px}.mu{color:#5B6275;text-align:center}'
+		. '.rp{width:100%;cursor:pointer;font:inherit;font-weight:800}.rp[hidden]{display:none}'
 		. '.back{display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;padding:8px 14px;border-radius:999px;background:#fff;border:1.5px solid #E7E2DA;color:#1A1F2B;font-weight:700;font-size:15px;text-decoration:none}.back:hover{border-color:#E8894A}'
 		. 'footer{text-align:center;color:#5B6275;font-size:13px;padding:20px}';
 	$refresh = $kind === 'wait' ? '<meta http-equiv="refresh" content="15">' : '';
@@ -300,7 +301,9 @@ function cg_page($kind, $ev, $data) {
 		echo '<button class="btn" style="width:100%;border:0;cursor:pointer">Megnyitás</button></form>';
 	} elseif ($kind === 'photo') {
 		echo '<a class="back" href="' . esc_url(home_url('/galeria/' . $ev . '/')) . '">← Vissza a galériába</a>'; /* 2026-11-28 */
-		if (preg_match('/\.(mp4|webm)$/', $data->file)) { echo '<video class="big" src="' . esc_url($u . $data->file) . '"' . (is_file(cg_dir() . '/' . $ev . '/' . $data->photo . '.jpg') ? ' poster="' . esc_url($u . $data->photo . '.jpg') . '"' : '') . ' controls autoplay muted loop playsinline></video>'; }
+		if (preg_match('/\.(mp4|webm)$/', $data->file)) { echo '<video class="big" src="' . esc_url($u . $data->file) . '"' . (is_file(cg_dir() . '/' . $ev . '/' . $data->photo . '.jpg') ? ' poster="' . esc_url($u . $data->photo . '.jpg') . '"' : '') . ' controls autoplay muted playsinline id="v1"></video>'
+			. '<button type="button" class="btn ghost rp" id="rp" hidden onclick="var v=document.getElementById(\'v1\');v.currentTime=0;v.play();this.hidden=true">↻ Újrajátszás</button>'
+			. '<script>(function(){var v=document.getElementById("v1"),b=document.getElementById("rp");if(v&&b){v.addEventListener("ended",function(){b.hidden=false});v.addEventListener("play",function(){b.hidden=true})}})();</script>'; } /* 2026-11-28: egyszeri lejátszás + újrajátszás gomb */
 		else { echo '<img class="big" src="' . esc_url($u . $data->file) . '" alt="A fotód">'; }
 		echo '<a class="btn" href="?dl=1">Letöltés</a><a class="btn ghost" href="' . esc_url(home_url('/galeria/' . $ev . '/')) . '">A rendezvény összes fotója</a>';
 		echo '<p class="mu">Tipp: telefonon a képet hosszan nyomva is elmentheted.</p>';
