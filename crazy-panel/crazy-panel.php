@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('CP_PANEL_VER', '2.9.412');
+define('CP_PANEL_VER', '2.9.413');
 define('CP_PANEL_TRACK', 'cp_pt_');
 define('CP_PANEL_OPT', 'cp_panel_settings');
 define('CP_PANEL_SUBS', 'cp_panel_subs');
@@ -482,6 +482,9 @@ function cp_panel_norm_time($v) {
 	return $s;
 }
 
+/* 2026-11-28: egyedi kivételek (a felhasználó kérése) – ezek a deal-ek nem foglalnak gépet/kapacitást, nincs beosztás és naptárbejegyzés;
+   csak a szelfigép-szoftver (Crazy Booth rendezvénylistája) látja őket. #23907: Lamarin Kft (2026-12-11), csak szoftver. */
+function cp_soft_ids() { return array(23907); }
 function cp_panel_normalize($rows) {
 	$o = cp_panel_opts();
 	$booked = array_map('mb_strtolower', cp_panel_lines($o['booked_stages']));
@@ -497,6 +500,8 @@ function cp_panel_normalize($rows) {
 		$id = cp_panel_str(cp_panel_get($r, 'id'));
 		if ($id === '' || isset($seen[$id])) { continue; }
 		$seen[$id] = 1;
+		$soft = in_array((int) $id, cp_soft_ids(), true);
+		if ($soft && empty($GLOBALS['cp_keep_soft'])) { continue; }
 		$pl = mb_strtolower(cp_panel_str(cp_panel_get($r, 'pipeline')));
 		if ($pipeline !== '' && $pl !== '' && $pl !== $pipeline) { continue; }
 		$status = mb_strtolower(cp_panel_str(cp_panel_get($r, 'status')));
@@ -504,7 +509,7 @@ function cp_panel_normalize($rows) {
 		$stage = cp_panel_str(cp_panel_get($r, 'stage'));
 		$st = mb_strtolower($stage);
 		$state = '';
-		if ($status === 'won' || in_array($st, $booked, true)) { $state = 'booked'; }
+		if ($status === 'won' || in_array($st, $booked, true) || $soft) { $state = 'booked'; }
 		elseif (in_array($st, $pending, true)) { $state = 'pending'; }
 		else { continue; }
 		$date = cp_panel_norm_date(cp_panel_get($r, $o['f_date']));

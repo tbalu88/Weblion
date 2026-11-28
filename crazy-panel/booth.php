@@ -45,7 +45,8 @@ add_action('rest_api_init', function () {
 		$info = null; $rows = cp_sm_fetch_range($date, $date, $info);
 		if (is_wp_error($rows)) { return new WP_REST_Response(array('ok' => false, 'message' => 'A rendezvények most nem kérhetők le.'), 502); }
 		$out = array();
-		foreach (cp_panel_normalize($rows) as $e) {
+		$GLOBALS['cp_keep_soft'] = 1; $norm = cp_panel_normalize($rows); unset($GLOBALS['cp_keep_soft']); /* a kivételes (csak szoftver) deal-ek a gépen látszanak */
+		foreach ($norm as $e) {
 			if ($e['date'] !== $date || $e['state'] !== 'booked') { continue; }
 			$deal = function_exists('cp_mday_base') ? cp_mday_base($e['id']) : $e['id'];
 			$p = function_exists('cp_portal_get_by_deal') ? cp_portal_get_by_deal($deal) : null;

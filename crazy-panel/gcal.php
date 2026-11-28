@@ -106,7 +106,7 @@ function cp_gcal_deals($from, $to) {
 	global $wpdb;
 	/* v2.9.71: a többnapos deal akkor is, ha csak a 2..n. napja esik a tartományba */
 	$mor = function_exists('cp_mday_or_ids') ? cp_mday_or_ids($from, $to) : '';
-	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.status <> 'Lost' AND (d.event_d BETWEEN %s AND %s", $from, $to) . $mor . ')', ARRAY_A); /* v2.9.58: a törölt deal nem számít */
+	return (array) $wpdb->get_results($wpdb->prepare('SELECT d.id, d.title, d.stage, d.status, d.event_d, d.owner_id, d.venue, d.hours, d.start_at, c.name cn FROM ' . cp_crm_t('deals') . ' d LEFT JOIN ' . cp_crm_t('contacts') . " c ON c.id = d.contact_id WHERE d.deleted_at IS NULL AND d.status <> 'Lost'" . (function_exists('cp_soft_ids') && cp_soft_ids() ? ' AND d.id NOT IN (' . implode(',', array_map('intval', cp_soft_ids())) . ')' : '') . " AND (d.event_d BETWEEN %s AND %s", $from, $to) . $mor . ')', ARRAY_A); /* 2026-11-28: a kivételes (csak szoftver) deal-ek nem kapnak naptárbejegyzést */ /* v2.9.58: a törölt deal nem számít */
 }
 /* az esemény napi kulcsa (v2.9.71): 1) a leírásban lévő kezelői adatlap link (…?k=<deal>[:<nap>].<aláírás>, a kettőspont
    „%3A”-ként is), 2) a kontakt neve a címben, azon a napon – többnapos dealnél a nap kulcsa („<deal>:<nap>”, az 1. nap a deal) */
