@@ -69,7 +69,38 @@
     v.hidden = true; im.hidden = false;
     await call(B.liveStart);
     lvAttach(im, () => S.scr === 'live');
-    lvAltOn();
+    lvAltOn().finally(lvDiag);
+  }
+  /* 2026-11-28: élőkép-napló – a gép naplójába írja az élőkép mért fényességét és a kamera beállításait (a panelből kiolvasható).
+     A képkockát a kamerakezelő tárolt utolsó képéből veszi (nem ad parancsot a gépnek); beállításokat legfeljebb 5 percenként olvas. */
+  async function lvLuma() {
+    const r = await B.liveFrame(); if (!r || !r.ok || !r.v) return null;
+    const img = await loadImg(r.v), c = document.createElement('canvas'); c.width = 80; c.height = 54;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, 80, 54); const d = g.getImageData(0, 0, 80, 54).data;
+    let sum = 0, dark = 0, hot = 0; const n = d.length / 4;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; sum += y; if (y < 25) dark++; if (y > 245) hot++; }
+    return { y: Math.round(sum / n), dark: Math.round(dark * 100 / n), hot: Math.round(hot * 100 / n), w: img.naturalWidth, h: img.naturalHeight };
+  }
+  async function lvDiag() {
+    if (WEB() || !B.liveFrame) return;
+    clearTimeout(S.lvDgT);
+    S.lvDgT = setTimeout(async () => {
+      if (S.scr !== 'live') return;
+      try {
+        const m = []; for (let k = 0; k < 3; k++) { const x = await lvLuma().catch(() => null); if (x) m.push(x); await new Promise(r => setTimeout(r, 400)); }
+        const a = m.length ? m[m.length - 1] : null, ys = m.map(x => x.y).join('/');
+        B.log('élőkép-mérés: ' + (a ? 'fényesség ' + ys + ' (0–255) · sötét ' + a.dark + '% · beégett ' + a.hot + '% · ' + a.w + '×' + a.h : 'nincs képkocka')
+          + ' · folyam=' + (S.lvMj ? 'MJPEG' : 'képkockánként') + ' · élőkép-beáll=' + (S.lvAltOn ? String(U().lvAlt) : 'ki') + ' · képernyő-világosítás=' + (Number(U().lvBoost) || 0));
+      } catch (e) { B.log('élőkép-mérés hiba: ' + e.message); }
+      /* a kamera beállításait csak a visszaszámlálás UTÁN olvassuk (ne lassítsa az exponálást), legfeljebb 5 percenként */
+      if (!B.camProps || (S.lvDgP && Date.now() - S.lvDgP < 300000) || S.lvDgW) return;
+      S.lvDgW = true; const t0 = Date.now();
+      while (S.scr === 'live' && Date.now() - t0 < 120000) await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        if (S.scr !== 'live') { S.lvDgP = Date.now(); const P = await call(B.camProps).catch(() => null) || {}; B.log('kamera-beállítások: ' + (Object.keys(P).map(k => k + '=' + ((P[k] && P[k].cur) || '?')).join(' · ') || 'nem olvasható')); }
+      } finally { S.lvDgW = false; }
+    }, 1500);
   }
   /* 0.19.13: élőkép a tükörreflexes gépről – ha a beépített kamerakezelő fut, folyamatos képfolyam (MJPEG, egy kapcsolat,
      a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
