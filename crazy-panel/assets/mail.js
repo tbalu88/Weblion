@@ -1024,9 +1024,9 @@
 			}
 		}
 		{ const qi = box.querySelector('.ml-q'); if (!qi._qb) { qi._qb = true; qi.addEventListener('input', e => { clearTimeout(S.qt); S.qt = setTimeout(() => { S.mq = e.target.value; drawInbox(box).then(() => { const i = box.querySelector('.ml-q'); if (i && document.activeElement !== i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 350); }); } }
-		box.querySelector('[data-compose]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
+		box.querySelector('[data-compose]').addEventListener('click', () => { S.onSent = null; S.view = 'compose'; view(S.main); });
 		const gt = box.querySelector('[data-gotpl]'); if (gt) gt.addEventListener('click', () => { S.view = 'tpl'; try { localStorage.setItem('cpmail_view', 'tpl'); } catch (e) { /* privát mód */ } view(S.main); });
-		box.querySelector('[data-fab]').addEventListener('click', () => { S.view = 'compose'; view(S.main); });
+		box.querySelector('[data-fab]').addEventListener('click', () => { S.onSent = null; S.view = 'compose'; view(S.main); });
 		box.querySelector('[data-fsel]').addEventListener('change', e => { const v = e.target.value; if (v === '__demo') { S.demo = !S.demo; } else { S.folder = v; S.tg = []; } S.th = null; S.reading = false; S.lim = 100; drawInbox(box); });
 		box.querySelector('[data-sort]').addEventListener('change', e => { S.so = e.target.value; try { localStorage.setItem('cpmail_so', S.so); } catch (x) { /* privát mód */ } drawInbox(box); });
 		box.querySelectorAll('[data-th]').forEach(b => {
@@ -1130,7 +1130,7 @@
 			/* v2.9.174: válasz-piszkozat a saját levélszálában folytatódik (látszik, mire megy a válasz, és hogy a szál dealjéhez kerül) */
 			const th = Number(r.d && r.d.thread) || 0;
 			if (th > 0) { S.folder = 'inbox'; S.sel.clear(); S.icPend = { th: th, kind: 'draft', d: r.d, id: r.id }; open(th); return; }
-			S.reply = r.d; S.draftId = r.id; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else view(S.main); } catch (e) { toast(e.message, true); }
+			S.reply = r.d; S.draftId = r.id; S.onSent = null; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else view(S.main); } catch (e) { toast(e.message, true); }
 	}
 	async function drawDrafts(box) {
 		const it = box.querySelector('.ml-items'); if (!it) return;
@@ -1380,7 +1380,7 @@
 		const st = ch.state(), did = await ch.save();
 		if (IR.ch !== ch) return;
 		icClose(false, true);
-		S.reply = st; S.draftId = did || ch.did() || ''; S.cfrom = th; S.view = 'compose';
+		S.reply = st; S.draftId = did || ch.did() || ''; S.cfrom = th; S.onSent = null; S.view = 'compose';
 		if (S.main) view(S.main);
 	}
 	/* küldés után a szál helyben frissül (nincs „Betöltés…”), a lista sora is (idő, levélszám, piszkozat-jel) */
@@ -2391,7 +2391,8 @@
 				if (!r.test) { dsent = true; clearInterval(dtimer); window.removeEventListener('pagehide', dhide); }
 				toast('Levél elküldve.' + (r.warn ? ' ' + r.warn : '') + (r.pst ? ' ' + r.pst : ''), !!r.warn);
 				/* v1.84: a hívó (pl. „Ajánlat küldése” a dealen) értesítése a sikeres küldésről */
-				if (!ho && S.onSent) { const f = S.onSent; S.onSent = null; try { f(r); } catch (x) { /* a levél elment */ } }
+				/* 2026-11-28: csak ha ugyanahhoz a dealhez ment a levél, amelyikhez a hívó kérte (különben egy félbehagyott „Ajánlat küldése” a következő, más levélnél írta át a deal értékét) */
+				if (!ho && S.onSent) { const f = S.onSent, okd = S.onSentDeal && deal && Number(deal.id) === Number(S.onSentDeal); S.onSent = null; S.onSentDeal = 0; if (okd) { try { f(r); } catch (x) { /* a levél elment */ } } }
 				/* v2.9.64: a gyorsnézetben a szál helyben frissül */
 				if (ho) { if (ho.onSent) ho.onSent(r); }
 				/* v2.8.7: ha közben máshová léptél a panelben, nem ránt vissza a Levelezésbe */
@@ -2583,7 +2584,7 @@
 				/* v2.9.175: a kész piszkozat magától a levélíróba kerül, az AI-ablak bezárul; ha van mire figyelni, csak egy kis sáv marad belőle */
 				const takeIt = () => {
 					let ok = true;
-					try { if (take) ok = take(dr) !== false; else { S.reply = dr; S.view = 'compose'; view(S.main); } } /* v2.9.83: a szálpanel válaszírójába */
+					try { if (take) ok = take(dr) !== false; else { S.reply = dr; S.onSent = null; S.view = 'compose'; view(S.main); } } /* v2.9.83: a szálpanel válaszírójába */
 					catch (e) { ok = false; toast('A levélíró nem nyílt meg: ' + e.message, true); }
 					if (!ok) return false;
 					if (!notesH || !take || !host.isConnected) { host.hidden = true; host.innerHTML = ''; delete host.dataset.open; }
@@ -2846,7 +2847,7 @@
 	/* v1.35: egy levélszál megnyitása más fülről (pl. a Feladatok kártyájáról) */
 	function open(id, o) { S.view = 'inbox'; S.th = id; S.forceTh = id; S.fromDeal = o && o.deal ? { th: id, deal: o.deal } : null; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
 	/* v1.84: új levél előtöltve más fülről (címzett, tárgy, törzs, deal), küldés utáni visszahívással */
-	function compose(o) { S.reply = { to: o.to || [], cc: [], bcc: o.bcc || [], subject: o.subject || '', body: o.body || '', quote: '', thread: 0, tsubj: '', deal: o.deal || 0, dealTitle: o.dealTitle || '' }; S.onSent = o.onSent || null; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
+	function compose(o) { S.reply = { to: o.to || [], cc: [], bcc: o.bcc || [], subject: o.subject || '', body: o.body || '', quote: '', thread: 0, tsubj: '', deal: o.deal || 0, dealTitle: o.dealTitle || '' }; S.onSent = o.onSent || null; S.onSentDeal = o.deal || 0; S.view = 'compose'; if (window.CPXGo) window.CPXGo('mail'); else if (S.main) view(S.main); }
 	/* v2.9: másik fülről visszatérve a Levelezés a postafiókkal nyílik (a félbehagyott levél a Piszkozatok között van) */
 	const tabView = main => { if (S.view === 'compose' && !S.reply && !S.draftId && !(main && main.querySelector('.ml-compose'))) S.view = 'inbox'; view(main); };
 	window.CPMail = { ctx: () => { const c = presCtx(); return c ? c : (S.view === 'compose' && S.main && S.main.isConnected ? { th: 0, st: 'reply' } : null); }, view: tabView, status, open, compose, peek, peekPop, canSend: () => !!(M.send && M.send.on), refresh: async () => { S.tpls = null; if (S.main && S.main.isConnected) view(S.main); } };
