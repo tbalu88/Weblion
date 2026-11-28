@@ -108,7 +108,7 @@
 			'<p class="glr-m">' + esc(meta) + '</p>' + (x.cname ? '<p class="glr-m glr-cl">' + esc(x.cname) + '</p>' : '') +
 			'<div class="glr-a"><button type="button" class="cpx-btn ghost sm" data-ga="copy">Link másolása</button><button type="button" class="cpx-btn ghost sm" data-ga="qr">QR-kód</button><button type="button" class="cpx-btn ghost sm" data-ga="man">Kezelés</button>' +
 			(x.deal && x.cemail ? '<button type="button" class="cpx-btn ghost sm" data-ga="mail">Levél az ügyfélnek</button>' : '') +
-			(x.deal ? '<button type="button" class="glr-lnk" data-ga="deal">Deal megnyitása</button>' : '') + '</div></div></article>';
+			(x.deal ? '<button type="button" class="glr-lnk" data-ga="deal">Deal megnyitása</button>' : '') + (C.role === 'admin' ? '<button type="button" class="glr-lnk glr-del" data-ga="delall">Galéria törlése</button>' : '') + '</div></div></article>';
 	}
 	function find(el) { const c = el.closest('[data-ev]'); return c && S.d ? (S.d.list || []).find(x => x.ev === c.dataset.ev) : null; }
 	function act(e) {
@@ -122,8 +122,19 @@
 			if (window.CPCrm && window.CPCrm.galManage) window.CPCrm.galManage(x.deal || 0, x.deal ? '' : x.ev, () => load(true));
 			else toast('A kezelés a Deal-ek modullal érhető el.', true);
 		}
+		else if (a === 'delall') delAll(x, b);
 		else if (a === 'mail') mail(x);
 		else if (a === 'deal' && window.CPCrm) window.CPCrm.open(x.deal);
+	}
+	/* 2026-11-28: a teljes galéria végleges törlése (csak admin) – kétszeri megerősítéssel; a képek a vendégek linkjén is eltűnnek */
+	async function delAll(x, b) {
+		const n = x.n || 0;
+		if (!window.confirm('Biztosan törlöd a(z) „' + name(x) + '” galériát? Mind a ' + n.toLocaleString('hu-HU') + ' kép és videó VÉGLEGESEN törlődik a szerverről, a vendégek linkje és QR-kódja üres lesz. Ez nem vonható vissza.')) return;
+		const t = window.prompt('A megerősítéshez írd be: TÖRLÉS'); if (t === null) return;
+		if (t.trim().toUpperCase() !== 'TÖRLÉS') { toast('Nem törölted – a beírt szó nem egyezett.', true); return; }
+		b.disabled = true; b.textContent = 'Törlés…';
+		try { const r = await post('cp_booth_gal', Object.assign({ delall: 1 }, x.deal ? { deal: x.deal } : { ev: x.ev })); toast((r.deleted_n || 0).toLocaleString('hu-HU') + ' kép törölve – a galéria üres.'); load(true); }
+		catch (e) { b.disabled = false; b.textContent = 'Galéria törlése'; toast(e.message, true); }
 	}
 	async function copy(t, ok) {
 		try { await navigator.clipboard.writeText(t); toast(ok); return; } catch (e) { /* régebbi böngésző: tartalék */ }
@@ -222,7 +233,7 @@
 			'.glr-m{margin:0;font-size:12.5px;color:var(--mu);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}' +
 			'.glr-cl{margin-top:-4px}' +
 			'.glr-a{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}' +
-			'.glr-lnk{border:0;background:none;padding:4px 2px;font:600 12.5px Inter,sans-serif;color:var(--n);text-decoration:underline;text-underline-offset:2px;cursor:pointer}' +
+			'.glr-del{color:#B42318!important}.glr-lnk{border:0;background:none;padding:4px 2px;font:600 12.5px Inter,sans-serif;color:var(--n);text-decoration:underline;text-underline-offset:2px;cursor:pointer}' +
 			'.glr-ov{position:fixed;inset:0;z-index:10070;background:rgba(20,28,51,.4);display:flex;align-items:center;justify-content:center;padding:16px}' +
 			'.glr-dlg{background:#fff;border-radius:18px;padding:22px;width:min(420px,100%);box-shadow:0 24px 60px rgba(20,28,51,.3);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}' +
 			'.glr-dlg h3{margin:0;font:700 16px/1.3 Inter,sans-serif;overflow-wrap:anywhere}' +

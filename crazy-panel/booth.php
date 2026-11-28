@@ -151,6 +151,16 @@ function cp_booth_ajax_gal() {
 		if (!$deal || !cp_booth_gal_has($deal)) { cp_el_err('Ennek a dealnek még nincs galériája.', 404); }
 		$ev = cp_booth_gal_tok($deal);
 	}
+	/* 2026-11-28: a teljes galéria törlése (minden kép és videó véglegesen) – csak admin */
+	if (!empty($_POST['delall'])) {
+		if (!function_exists('cp_panel_is_admin') || !cp_panel_is_admin()) { cp_el_err('A galéria törlése csak adminnak engedélyezett.', 403); }
+		$g0 = cp_booth_gal_api('GET', $ev); if (is_wp_error($g0)) { cp_el_err($g0->get_error_message(), 502); }
+		$all = array_values(array_filter(array_map(function ($x) { return (string) ($x['photo'] ?? ''); }, (array) ($g0['photos'] ?? array())), function ($x) { return (bool) preg_match('/^[a-z0-9]{6,32}$/', $x); }));
+		$_POST['del'] = implode(',', $all); $_POST['delall_n'] = count($all);
+		if (!$all) { delete_transient('cp_booth_gal_list'); wp_send_json_success(array('deleted_n' => 0)); }
+		if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'gal_del', 'Teljes galéria törlése indult (' . count($all) . ' kép, ' . $ev . ')', 'deal:' . $deal, ''); }
+		delete_transient('cp_booth_gal_list');
+	}
 	/* v2.9.253: végleges törlés (tömegesen is) – a galériából és a szerverről, 500-as darabokban */
 	if (isset($_POST['del'])) {
 		$L = array_values(array_unique(array_filter(array_map('trim', explode(',', sanitize_text_field(wp_unslash((string) $_POST['del'])))), function ($x) { return (bool) preg_match('/^[a-z0-9]{6,32}$/', $x); })));
