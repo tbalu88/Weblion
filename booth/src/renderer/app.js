@@ -73,7 +73,7 @@
   /* 0.19.13: élőkép a tükörreflexes gépről – ha a beépített kamerakezelő fut, folyamatos képfolyam (MJPEG, egy kapcsolat,
      a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
   /* 2026-11-28: a tükörreflexes gép élőképe vakus / kézi beállításnál sötét lehet – csak a KÉPERNYŐN világosítjuk (a fotó nem változik) */
-  const lvBoostF = () => { const n = Number(U().lvBoost) || 0; return n ? 'brightness(' + Math.pow(2, n / 1.6).toFixed(3) + ')' : ''; };
+  const lvBoostF = () => { const n = Number(U().lvBoost) || 0; return n ? 'brightness(' + Math.pow(2, n / 1.4).toFixed(2) + ') contrast(' + (1 + n * 0.04).toFixed(2) + ') saturate(1.1)' : ''; };
   const lvBoostApply = () => { if (WEB()) return; document.querySelectorAll('img[data-lvimg]').forEach(i => { i.style.filter = lvBoostF(); }); };
   async function lvAttach(im, alive) {
     if (im) { im.setAttribute('data-lvimg', ''); im.style.filter = WEB() ? '' : lvBoostF(); }
@@ -1484,7 +1484,7 @@
         S.cp[k] = { label, values: vals, idx, kind: k === 'whitebalance' ? 'select' : 'step' };
       }
       if (S.cp.temperature) S.cp.temperature.off = !/kelvin/i.test((S.cp.whitebalance && S.cp.whitebalance.values[S.cp.whitebalance.idx]) || '');
-      { const vals = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4]; S.cp.lvBoost = { label: 'Élőkép világosítása (csak a képernyőn)', values: vals, idx: Math.max(0, vals.indexOf(Number(U().lvBoost) || 0)), kind: 'step', show: v => v ? '+' + String(v).replace('.', ',') + ' EV' : 'ki',
+      { const vals = [0, 1, 2, 3, 4, 5, 6]; S.cp = Object.assign({ lvBoost: null }, S.cp); S.cp.lvBoost = { label: 'Élőkép világosítása (csak a képernyőn)', values: vals, idx: Math.max(0, vals.indexOf(Number(U().lvBoost) || 0)), kind: 'step', show: v => v ? '+' + String(v).replace('.', ',') + ' EV' : 'ki',
         apply: async v => { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { lvBoost: v }) })); lvBoostApply(); $('[data-evmsg]').textContent = 'Mentve – csak az élőképet világosítja, a fotót nem.'; } }; }
       if (!Object.keys(S.cp).length) $('[data-evmsg]').textContent = 'A kamera nem adott beállítási értékeket (fut a digiCamControl, be van kötve a gép?).';
       else if (!P.temperature) $('[data-evmsg]').textContent = 'Kézi fehéregyensúly (Kelvin): a 0.12-es programtól.';
