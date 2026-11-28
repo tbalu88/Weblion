@@ -1268,6 +1268,7 @@
   /* ügyfélportál (portal-panel.js): címkék, „Adatlap” oszlop, részletező */
   const PORTAL = !!(C.portal && C.portal.on && window.CPPortal);
   if (PORTAL) window.CPPortal.openSablon = id => { S.sbDeal = String(id); go('sablon'); };
+  window.CPXOpenSablon = id => { S.sbDeal = String(id); go('sablon'); }; /* 2026-11-28: a Szelfigép-beállításokból */
   if (PORTAL) window.CPPortal.onChange = async () => {
     const [from, to] = monthRange(S.month);
     try {

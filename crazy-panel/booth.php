@@ -82,11 +82,32 @@ function cp_booth_tpl_get($deal) {
 	$x['path'] = cp_sb_dir() . '/' . basename($x['f']);
 	return is_file($x['path']) ? $x : null;
 }
+/* 2026-11-28: a deal szelfigép-sablonja a Szelfigép-beállításokhoz (előnézet) – a panel sablonja, különben az ügyfélportálon mentett */
+add_action('wp_ajax_cp_booth_tpl_info', function () {
+	cp_el_auth();
+	cp_tab_need(array('deals', 'sablon'));
+	$deal = (int) ($_POST['deal'] ?? 0); if (!$deal) { cp_el_err('Hibás kérés.'); }
+	$u = wp_upload_dir(null, false); $toUrl = function ($path) use ($u) { $b = wp_normalize_path($u['basedir']); $p = wp_normalize_path($path); return strpos($p, $b) === 0 ? $u['baseurl'] . substr($p, strlen($b)) : ''; };
+	$bt = cp_booth_tpl_get($deal);
+	if ($bt) { wp_send_json_success(array('url' => $toUrl($bt['path']) . '?v=' . (int) $bt['at'], 'name' => (string) $bt['name'], 'at' => wp_date('Y.m.d. H:i', (int) $bt['at']), 'by' => (string) ($bt['by'] ?? ''), 'src' => 'panel')); }
+	$p = function_exists('cp_portal_get_by_deal') ? cp_portal_get_by_deal($deal) : null;
+	$a = $p ? cp_portal_answers($p->id) : array(); $t = isset($a['photo_template']) && is_array($a['photo_template']) ? $a['photo_template'] : null;
+	if ($t && !empty($t['png']) && function_exists('cp_portal_sb_dir') && is_file(cp_portal_sb_dir() . '/' . $t['png'])) { wp_send_json_success(array('url' => $toUrl(cp_portal_sb_dir() . '/' . $t['png']), 'name' => (string) ($t['name'] ?? 'Ügyfélportálon mentett sablon'), 'at' => !empty($t['at']) ? wp_date('Y.m.d. H:i', (int) $t['at']) : '', 'by' => '', 'src' => 'portal')); }
+	wp_send_json_success(array('url' => ''));
+});
 add_action('wp_ajax_nopriv_cp_booth_tpl_save', 'cp_booth_ajax_tpl_save'); add_action('wp_ajax_cp_booth_tpl_save', 'cp_booth_ajax_tpl_save');
 function cp_booth_ajax_tpl_save() {
 	cp_el_auth();
 	cp_tab_need(array('sablon'));
 	$deal = (int) ($_POST['deal'] ?? 0);
+	/* 2026-11-28: törlés a Szelfigép-beállításokból */
+	if (!empty($_POST['del']) && $deal) {
+		$m = get_option('cp_booth_tpl', array()); if (!is_array($m)) { $m = array(); }
+		if (!empty($m[(string) $deal]['f'])) { @unlink(cp_sb_dir() . '/' . basename($m[(string) $deal]['f'])); }
+		unset($m[(string) $deal]); update_option('cp_booth_tpl', $m, false);
+		if (function_exists('cp_audit_add')) { cp_audit_add('deal', 'booth_tpl', 'Szelfigép-sablon törölve', 'deal:' . $deal, ''); }
+		wp_send_json_success(array('ok' => true));
+	}
 	$png = (string) wp_unslash($_POST['png'] ?? '');
 	if (!$deal || strncmp($png, 'data:image/png;base64,', 22) !== 0) { cp_el_err('Hibás kérés.'); }
 	$bin = base64_decode(substr($png, 22), true);

@@ -182,31 +182,63 @@
 		const v = (k, d) => (c[k] != null ? c[k] : u[k] != null ? u[k] : d);
 		const chk = (id, val, txt) => '<label class="bt-ck"><input type="checkbox" id="' + id + '"' + (val ? ' checked' : '') + '> ' + txt + '</label>';
 		const num = (id, val, txt, a, b) => '<label>' + txt + '<input type="number" id="' + id + '" min="' + a + '" max="' + b + '" value="' + esc(val) + '"></label>';
+		/* 2026-11-28: rendezett kártyák + Sablon szakasz (megnyitás a Sablonkészítőben / kész PNG feltöltése) */
+		const sec = (t, sub, body) => '<section class="bt-sec"><header><h5>' + t + '</h5>' + (sub ? '<p>' + sub + '</p>' : '') + '</header>' + body + '</section>';
 		const box = sheet(sheetHead('Szelfigép-beállítások erre a rendezvényre') + '<div class="bt-cfg">' +
-			'<p class="cpx-muted">A rendezvényre állított gépek legfeljebb egy percen belül átveszik (a gépen a kezelő utána módosíthat, amíg itt újra nem mentesz). A nyomtató, a kamera és a gépkulcs gépenként marad.</p>' +
-			'<h5>Választható módok</h5><div class="bt-mo">' + BOOTH_MODES.map(m => chk('bc-m-' + m[0], on.includes(m[0]), m[1])).join('') + '</div>' +
-			'<h5>Fotózás</h5><div class="bt-g"><label>Fotók száma (sablon nélkül)<select id="bc-shots"><option value="1"' + (v('shots', 1) < 3 ? ' selected' : '') + '>1 kép</option><option value="3"' + (v('shots', 1) >= 3 ? ' selected' : '') + '>3 képes csík</option></select></label>' +
-			num('bc-countdown', v('countdown', 3), 'Visszaszámlálás (mp)', 1, 10) + num('bc-cdNext', v('cdNext', 2), 'A további képeknél (mp)', 1, 10) + num('bc-copies', v('copies', 1), 'Példány alapból', 1, 10) + '</div>' +
-			chk('bc-bestOf', v('bestOf', false), '„3 pózból a legjobb”') + chk('bc-retake', v('retake', true), 'Egy kép újrafotózása a csíkban') + chk('bc-autoPrint', v('autoPrint', false), 'Automatikus nyomtatás') +
-			'<div class="bt-g">' + num('bc-limitPhoto', v('limitPhoto', 0), 'Nyomat képenként (0 = korlátlan)', 0, 20) + num('bc-limitEvent', v('limitEvent', 0), 'Nyomat összesen (0 = korlátlan)', 0, 5000) + '</div>' +
-			'<h5>Megosztás</h5>' + chk('bc-shareEmail', v('shareEmail', false), '„Küldés e-mailben” gomb') +
-			'<label>Név bekérése<select id="bc-askName">' + [['off', 'Nem kérjük'], ['opt', 'Nem kötelező'], ['req', 'Kötelező']].map(o => '<option value="' + o[0] + '"' + (v('askName', 'opt') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
-			chk('bc-formBefore', v('formBefore', false), 'Kérdőív a fotózás előtt') + '<label>A kérdőív saját kérdései (soronként egy, max. 3)<textarea id="bc-questions" rows="3" maxlength="300">' + esc(v('questions', '')) + '</textarea></label>' +
-			'<h5>AI-kép</h5><p class="cpx-muted">Csak akkor fut, ha fent az „AI-kép” mód is be van jelölve. Kb. 0,055 $ / kép (a WP admin „Crazy Booth gépek” oldalán beállított modellel). A vendég fotózás előtt jóváhagyja, hogy a képét külső AI dolgozza fel, és hogy elmúlt 18 éves.</p>' +
-			'<div class="bt-mo">' + AI_STYLES.map(st => chk('bc-ai-' + st[0], (ai.keys || []).includes(st[0]), st[1])).join('') + '</div>' +
-			'<div class="bt-g"><label>Saját stílus neve<input id="bc-ai-cl" maxlength="40" placeholder="pl. Rajzfilm" value="' + esc(ai.custom_label || '') + '"></label><label>Kimenet<select id="bc-ai-out"><option value="ai"' + (ai.out !== 'both' ? ' selected' : '') + '>Csak az AI-kép</option><option value="both"' + (ai.out === 'both' ? ' selected' : '') + '>AI-kép + eredeti egymás mellett</option></select></label>' + num('bc-ai-limit', ai.limit || 300, 'Keret (AI-kép a rendezvényen)', 1, 5000) + '</div>' +
-			'<label>Saját stílus promptja (angolul a legjobb; {nev}, {rendezveny}, {datum} beírható)<textarea id="bc-ai-cp" rows="3" maxlength="1500">' + esc(ai.custom || '') + '</textarea></label>' +
-			'<h5>Kezdőképernyő</h5><div class="bt-g"><label>Felirat<input id="bc-t1" maxlength="60" placeholder="Érints meg!" value="' + esc(sc.t1 || '') + '"></label><label>Alcím<input id="bc-t2" maxlength="80" placeholder="és mosolyogj a kamerába" value="' + esc(sc.t2 || '') + '"></label><label>Felső felirat<input id="bc-brand" maxlength="60" placeholder="EventCrazy logó" value="' + esc(sc.brand || '') + '"></label><label>Kiemelő szín<input type="color" id="bc-color" value="' + esc(sc.color || '#E8894A') + '"></label></div>' +
-			'<div class="gm-b"><button type="button" class="cpx-btn sm" data-bcsave>Mentés a gépekre</button>' + (cur ? '<button type="button" class="cpx-btn ghost sm" data-bcclear>Panel-beállítás törlése</button>' : '') + '</div></div>');
+			'<p class="bt-lead">A rendezvényre állított gépek legfeljebb egy percen belül átveszik. A gépen a kezelő utána módosíthat, amíg itt újra nem mentesz. A nyomtató, a kamera és a gépkulcs gépenként marad.</p>' +
+			sec('Sablon', 'A gép ezt a nyomtatási sablont használja ennél a rendezvénynél.', '<div class="bt-tpl" data-btpl><p class="cpx-muted">Betöltés…</p></div>') +
+			sec('Választható módok', 'Egy mód: érintésre azonnal indul. Több mód: a vendég választ.', '<div class="bt-mo">' + BOOTH_MODES.map(m => chk('bc-m-' + m[0], on.includes(m[0]), m[1])).join('') + '</div>') +
+			sec('Fotózás', '', '<div class="bt-g"><label>Fotók száma (sablon nélkül)<select id="bc-shots"><option value="1"' + (v('shots', 1) < 3 ? ' selected' : '') + '>1 kép</option><option value="3"' + (v('shots', 1) >= 3 ? ' selected' : '') + '>3 képes csík</option></select></label>' +
+				num('bc-countdown', v('countdown', 3), 'Visszaszámlálás (mp)', 1, 10) + num('bc-cdNext', v('cdNext', 2), 'A további képeknél (mp)', 1, 10) + num('bc-copies', v('copies', 1), 'Példány alapból', 1, 10) + '</div>' +
+				'<div class="bt-cks">' + chk('bc-bestOf', v('bestOf', false), '„3 pózból a legjobb”') + chk('bc-retake', v('retake', true), 'Egy kép újrafotózása a csíkban') + chk('bc-autoPrint', v('autoPrint', false), 'Automatikus nyomtatás') + '</div>' +
+				'<div class="bt-g">' + num('bc-limitPhoto', v('limitPhoto', 0), 'Nyomat képenként (0 = korlátlan)', 0, 20) + num('bc-limitEvent', v('limitEvent', 0), 'Nyomat összesen (0 = korlátlan)', 0, 5000) + '</div>') +
+			sec('Megosztás és vendégadat', '', '<div class="bt-cks">' + chk('bc-shareEmail', v('shareEmail', false), '„Küldés e-mailben” gomb') + chk('bc-formBefore', v('formBefore', false), 'Kérdőív a fotózás előtt') + '</div>' +
+				'<div class="bt-g"><label>Név bekérése<select id="bc-askName">' + [['off', 'Nem kérjük'], ['opt', 'Nem kötelező'], ['req', 'Kötelező']].map(o => '<option value="' + o[0] + '"' + (v('askName', 'opt') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>' +
+				'<label>A kérdőív saját kérdései (soronként egy, max. 3)<textarea id="bc-questions" rows="3" maxlength="300">' + esc(v('questions', '')) + '</textarea></label>') +
+			sec('AI-kép és AI-rajz', 'Akkor fut, ha fent az AI-kép vagy az AI-rajz mód be van jelölve. Kb. 0,055 $ / kép. Ha itt egy stílust sem jelölsz be, a gépen mind választható (a kezelő a gépen szűkítheti).',
+				'<div class="bt-mo">' + AI_STYLES.map(st => chk('bc-ai-' + st[0], (ai.keys || []).includes(st[0]), st[1])).join('') + '</div>' +
+				'<div class="bt-g"><label>Kimenet<select id="bc-ai-out"><option value="ai"' + (ai.out !== 'both' ? ' selected' : '') + '>Csak az AI-kép</option><option value="both"' + (ai.out === 'both' ? ' selected' : '') + '>AI-kép + eredeti egymás mellett</option></select></label>' + num('bc-ai-limit', ai.limit || 300, 'Keret (AI-kép a rendezvényen)', 1, 5000) + '<label>Saját stílus neve<input id="bc-ai-cl" maxlength="40" placeholder="pl. Rajzfilm" value="' + esc(ai.custom_label || '') + '"></label></div>' +
+				'<label>Saját stílus leírása (angolul a legjobb; {nev}, {rendezveny}, {datum} beírható – felirat a képen nem lesz)<textarea id="bc-ai-cp" rows="3" maxlength="1500">' + esc(ai.custom || '') + '</textarea></label>') +
+			sec('Kezdőképernyő', '', '<div class="bt-g"><label>Felirat<input id="bc-t1" maxlength="60" placeholder="Érints meg!" value="' + esc(sc.t1 || '') + '"></label><label>Alcím<input id="bc-t2" maxlength="80" placeholder="és mosolyogj a kamerába" value="' + esc(sc.t2 || '') + '"></label><label>Felső felirat<input id="bc-brand" maxlength="60" placeholder="EventCrazy logó" value="' + esc(sc.brand || '') + '"></label><label>Kiemelő szín<input type="color" id="bc-color" value="' + esc(sc.color || '#E8894A') + '"></label></div>') +
+			'<div class="gm-b bt-bar"><button type="button" class="cpx-btn sm" data-bcsave>Mentés a gépekre</button>' + (cur ? '<button type="button" class="cpx-btn ghost sm" data-bcclear>Panel-beállítás törlése</button>' : '') + '</div></div>');
 		if (!box) return;
 		box.querySelector('[data-close]').addEventListener('click', hideModal);
 		const g = id => box.querySelector('#' + id);
+		/* Sablon: előnézet, megnyitás a Sablonkészítőben, kész PNG feltöltése, törlés */
+		const tb = box.querySelector('[data-btpl]');
+		const tplDraw = async () => {
+			let t = null; try { t = await post('cp_booth_tpl_info', { deal }); } catch (e) { tb.innerHTML = '<p class="cpx-empty err">' + esc(e.message) + '</p>'; return; }
+			tb.innerHTML = '<div class="bt-tprev">' + (t && t.url ? '<img src="' + esc(t.url) + '" alt="A szelfigép sablonja">' : '<span>Nincs sablon</span>') + '</div><div class="bt-tinfo">' +
+				(t && t.url ? '<b>' + esc(t.name || 'Szelfigép-sablon') + '</b><small>Mentve: ' + esc(t.at || '') + (t.by ? ' · ' + esc(t.by) : '') + (t.src === 'portal' ? ' · az ügyfélportálon' : '') + '</small>' : '<b>Még nincs sablon</b><small>A gép az alap kerettel fotóz, amíg nem mentesz sablont.</small>') +
+				'<div class="bt-tbtn">' + (window.CPXOpenSablon ? '<button type="button" class="cpx-btn sm" data-btopen>' + (t && t.url ? 'Szerkesztés a Sablonkészítőben' : 'Sablon készítése') + '</button>' : '') +
+				'<label class="cpx-btn ghost sm bt-up">Kész PNG feltöltése<input type="file" accept="image/png" data-btfile hidden></label>' + (t && t.url && t.src !== 'portal' ? '<button type="button" class="cpx-btn ghost sm" data-btdel>Törlés</button>' : '') + '</div>' +
+				'<small class="bt-thint">PNG átlátszó fotóablakokkal (10×15 cm, 300 dpi). Ha egy fotóablak van, az AI-kép is ebbe kerül.</small><p class="bt-tmsg" aria-live="polite"></p></div>';
+			const msg = (m, bad) => { const p = tb.querySelector('.bt-tmsg'); p.textContent = m; p.classList.toggle('bad', !!bad); };
+			const ob = tb.querySelector('[data-btopen]'); if (ob) ob.addEventListener('click', () => { hideModal(); window.CPXOpenSablon(deal); });
+			tb.querySelector('[data-btfile]').addEventListener('change', async e => {
+				const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+				if (f.type !== 'image/png') { msg('Csak PNG tölthető fel (átlátszó fotóablakokkal).', true); return; }
+				if (f.size > 15 * 1048576) { msg('Túl nagy fájl (legfeljebb 15 MB).', true); return; }
+				msg('Ellenőrzés…');
+				const url = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result || '')); fr.onerror = () => res(''); fr.readAsDataURL(f); });
+				const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+				if (!img) { msg('A kép nem olvasható.', true); return; }
+				/* van-e átlátszó fotóablak (a kép legalább 3%-a átlátszó) */
+				const c = document.createElement('canvas'), k = Math.min(1, 300 / Math.max(img.width, img.height)); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+				const x2 = c.getContext('2d'); x2.drawImage(img, 0, 0, c.width, c.height); const px = x2.getImageData(0, 0, c.width, c.height).data; let tr = 0; for (let i = 3; i < px.length; i += 4) { if (px[i] < 20) tr++; }
+				if (tr / (px.length / 4) < 0.03) { msg('Ebben a PNG-ben nincs átlátszó fotóablak – a gép nem tudná, hova kerüljön a fotó. A Sablonkészítőben „Mentés a szelfigéphez” gombbal ilyet kapsz.', true); return; }
+				msg('Feltöltés…');
+				try { await post('cp_booth_tpl_save', { deal, png: url, name: f.name.replace(/\.png$/i, '') }); msg('✓ Feltöltve – a gép a következő fotózásnál ezt használja.'); tplDraw(); }
+				catch (er) { msg(er.message, true); }
+			});
+			const db = tb.querySelector('[data-btdel]'); if (db) db.addEventListener('click', async () => { if (!window.confirm('Törlöd a szelfigép sablonját ennél a rendezvénynél? A gép utána az alap kerettel fotóz (vagy az ügyfélportálon mentett sablonnal, ha van).')) return; try { await post('cp_booth_tpl_save', { deal, del: 1 }); tplDraw(); } catch (er) { msg(er.message, true); } });
+		};
+		tplDraw();
 		box.querySelector('[data-bcsave]').addEventListener('click', async () => {
 			const modes = BOOTH_MODES.map(m => m[0]).filter(k => g('bc-m-' + k).checked);
 			const o = { modes: modes.length ? modes : ['photo'], shots: Number(g('bc-shots').value), autoPrint: g('bc-autoPrint').checked, bestOf: g('bc-bestOf').checked, retake: g('bc-retake').checked, shareEmail: g('bc-shareEmail').checked, formBefore: g('bc-formBefore').checked, askName: g('bc-askName').value, questions: g('bc-questions').value, t1: g('bc-t1').value.trim(), t2: g('bc-t2').value.trim(), brand: g('bc-brand').value.trim(), color: g('bc-color').value };
 			['countdown', 'cdNext', 'copies', 'limitPhoto', 'limitEvent'].forEach(k => { o[k] = Number(g('bc-' + k).value) || 0; });
 			o.ai = { styles: AI_STYLES.map(st => st[0]).filter(k => g('bc-ai-' + k).checked), custom: g('bc-ai-cp').value.trim(), custom_label: g('bc-ai-cl').value.trim(), out: g('bc-ai-out').value, limit: Number(g('bc-ai-limit').value) || 300 };
-			if ((o.modes.includes('ai') || o.modes.includes('aidraw')) && !o.ai.styles.length && !o.ai.custom) { toast('Az AI-kép / AI-rajz módhoz válassz legalább egy stílust (vagy írj saját promptot).', true); return; }
 			try { const r = await post('cp_booth_dcfg', { deal, cfg: JSON.stringify(o) }); toast(r && r.warn ? r.warn : 'Mentve – a gépek egy percen belül átveszik.', !!(r && r.warn)); hideModal(); if (D3.ctx && D3.ctx.id === deal) openDeal(deal, D3.ctx.back, true); } catch (e) { toast(e.message, true); }
 		});
 		const cl = box.querySelector('[data-bcclear]');
