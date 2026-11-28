@@ -3,10 +3,23 @@
 (function () {
   'use strict';
   const W = 1200, H = 1800;   /* álló 4×6" */
+  /* 2026-11-28: a fotó jó minőségű kicsinyítéssel kerül az ablakba, utána enyhe élesítés (életlen maszk, 1 px, 20%) */
+  const SHARP = 0.2;
   function cover(g, im, x, y, w, h) {
     const iw = im.naturalWidth || im.videoWidth || im.width, ih = im.naturalHeight || im.videoHeight || im.height;
     const r = Math.max(w / iw, h / ih), sw = w / r, sh = h / r;
-    g.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+    const tw = Math.max(1, Math.round(w)), th = Math.max(1, Math.round(h));
+    try {
+      const c = document.createElement('canvas'); c.width = tw; c.height = th; const t = c.getContext('2d');
+      t.imageSmoothingEnabled = true; t.imageSmoothingQuality = 'high'; t.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, tw, th);
+      if (SHARP > 0) {
+        const b = document.createElement('canvas'); b.width = tw; b.height = th; const bg = b.getContext('2d'); bg.filter = 'blur(1px)'; bg.drawImage(c, 0, 0);
+        const o = t.getImageData(0, 0, tw, th), bl = bg.getImageData(0, 0, tw, th).data, d = o.data;
+        for (let i = 0; i < d.length; i += 4) { d[i] += SHARP * (d[i] - bl[i]); d[i + 1] += SHARP * (d[i + 1] - bl[i + 1]); d[i + 2] += SHARP * (d[i + 2] - bl[i + 2]); }
+        t.putImageData(o, 0, 0);
+      }
+      g.drawImage(c, x, y, w, h);
+    } catch (e) { g.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h); }
   }
   function footer(g, x, y, w, h, line1, line2) {
     g.fillStyle = '#141C33'; g.textAlign = 'center'; g.textBaseline = 'middle';
