@@ -72,7 +72,11 @@
   }
   /* 0.19.13: élőkép a tükörreflexes gépről – ha a beépített kamerakezelő fut, folyamatos képfolyam (MJPEG, egy kapcsolat,
      a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
+  /* 2026-11-28: a tükörreflexes gép élőképe vakus / kézi beállításnál sötét lehet – csak a KÉPERNYŐN világosítjuk (a fotó nem változik) */
+  const lvBoostF = () => { const n = Number(U().lvBoost) || 0; return n ? 'brightness(' + Math.pow(2, n / 1.6).toFixed(3) + ')' : ''; };
+  const lvBoostApply = () => { if (WEB()) return; document.querySelectorAll('img[data-lvimg]').forEach(i => { i.style.filter = lvBoostF(); }); };
   async function lvAttach(im, alive) {
+    if (im) { im.setAttribute('data-lvimg', ''); im.style.filter = WEB() ? '' : lvBoostF(); }
     clearTimeout(S.lvT); S.lvMj = false;
     let u = null; try { if (B.liveUrl) { const r = await B.liveUrl(); u = r && r.ok && r.v; } } catch (e) { /* régi program */ }
     if (u && alive()) {
@@ -1480,6 +1484,8 @@
         S.cp[k] = { label, values: vals, idx, kind: k === 'whitebalance' ? 'select' : 'step' };
       }
       if (S.cp.temperature) S.cp.temperature.off = !/kelvin/i.test((S.cp.whitebalance && S.cp.whitebalance.values[S.cp.whitebalance.idx]) || '');
+      { const vals = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4]; S.cp.lvBoost = { label: 'Élőkép világosítása (csak a képernyőn)', values: vals, idx: Math.max(0, vals.indexOf(Number(U().lvBoost) || 0)), kind: 'step', show: v => v ? '+' + String(v).replace('.', ',') + ' EV' : 'ki',
+        apply: async v => { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { lvBoost: v }) })); lvBoostApply(); $('[data-evmsg]').textContent = 'Mentve – csak az élőképet világosítja, a fotót nem.'; } }; }
       if (!Object.keys(S.cp).length) $('[data-evmsg]').textContent = 'A kamera nem adott beállítási értékeket (fut a digiCamControl, be van kötve a gép?).';
       else if (!P.temperature) $('[data-evmsg]').textContent = 'Kézi fehéregyensúly (Kelvin): a 0.12-es programtól.';
       camRows();
@@ -1489,7 +1495,7 @@
   function camStep(k, d) { const r = S.cp && S.cp[k]; if (!r) return; const i = r.idx + d; if (i < 0 || i >= r.values.length) return; camSet(k, i); }
   async function camSet(k, i) {
     const r = S.cp[k]; if (!r) return;
-    if (WEB()) { r.idx = i; await r.apply(r.values[i]); camRows(); return; }
+    if (WEB() || r.apply) { r.idx = i; await r.apply(r.values[i]); camRows(); return; }
     const val = r.values[i]; $('[data-evmsg]').textContent = 'Beállítás…';
     try {
       const saved = Object.assign({}, U().camProps || {});
