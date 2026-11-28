@@ -99,7 +99,10 @@ form.locked .cpp-field{background:#FBFAF8}
 .cpp-bg i.ph{display:flex;align-items:center;justify-content:center;font:800 26px "Plus Jakarta Sans",sans-serif;color:var(--mu)}
 .cpp-bg b{font-size:13px;font-weight:600;padding:6px 7px;line-height:1.25}
 .cpp-bg small{font-size:11.5px;color:var(--bad);padding:0 7px 6px}
-.cpp-bg input:checked+span{border-color:var(--o);box-shadow:0 0 0 2px var(--o)}
+.cpp-bg input:checked+span{border-color:var(--o);box-shadow:0 0 0 3px var(--o),0 6px 16px -6px rgba(232,137,74,.55)}
+.cpp-bg input:checked+span b{background:var(--o);color:#fff;flex:1}
+.cpp-bg input:checked+span::after{content:"✓";position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:var(--o);color:#fff;font:800 15px/26px Inter,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.cpp-bgnow{margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#FFF5EC;border:1px solid #F3D3B8;font-size:14.5px}.cpp-bgnow b{color:#A85617}
 .cpp-bg input:focus-visible+span{box-shadow:0 0 0 3px rgba(232,137,74,.4)}
 .cpp-bg.taken span{opacity:.7}
 .cpp-sb{display:flex;flex-direction:column;gap:10px;align-items:flex-start}

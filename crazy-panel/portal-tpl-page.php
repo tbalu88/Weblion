@@ -243,7 +243,9 @@ function cp_portal_field_html($k, $f, $val, $locked, $saved, $req, $answers, $po
 /* háttérválasztó: képes kártyák, csak az aznap szabad hátterek */
 function cp_portal_bg_html($portal, $cur, $dis) {
 	$o = cp_portal_bg_options($portal, $cur);
-	$h = '<div class="cpp-part" data-part="" data-pkind="enum"><div class="cpp-bgs" role="radiogroup" aria-label="Háttér">';
+	/* 2026-11-28: a kiválasztott háttér a lista fölött is (a felhasználó kérése: a választás legyen egyértelmű) */
+	$h = '<p class="cpp-bgnow" data-bgnow aria-live="polite">' . ($cur === '' ? 'Jelenleg nincs kiválasztva háttér.' : 'Jelenleg kiválasztva: <b>' . esc_html($cur) . '</b>') . '</p>';
+	$h .= '<div class="cpp-part" data-part="" data-pkind="enum"><div class="cpp-bgs" role="radiogroup" aria-label="Háttér">';
 	$h .= '<label class="cpp-bg none"><input type="radio" name="background" value=""' . ($cur === '' ? ' checked' : '') . $dis . '><span><i class="ph">?</i><b>Később döntök</b></span></label>';
 	foreach ($o['list'] as $b) {
 		$h .= '<label class="cpp-bg' . ($b['free'] ? '' : ' taken') . '"><input type="radio" name="background" value="' . esc_attr($b['name']) . '"' . ($b['cur'] ? ' checked' : '') . $dis . '><span>' .

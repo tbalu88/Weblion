@@ -455,4 +455,13 @@
     return 'Köszönjük! Megkaptuk az adatlapot' + (b.first ? ', és küldtünk egy visszaigazolást e-mailben.' : '.');
   });
   showFields();
+  /* 2026-11-28: a kiválasztott háttér kiírása a lista fölé */
+  document.addEventListener('change', function (e) {
+    if (!e.target || e.target.name !== 'background') return;
+    var p = document.querySelector('[data-bgnow]'); if (!p) return;
+    var v = e.target.value;
+    p.innerHTML = '';
+    if (!v) { p.textContent = 'Jelenleg nincs kiválasztva háttér.'; return; }
+    p.appendChild(document.createTextNode('Jelenleg kiválasztva: ')); var b = document.createElement('b'); b.textContent = v; p.appendChild(b);
+  });
 })();
