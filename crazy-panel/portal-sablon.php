@@ -84,7 +84,7 @@ function cp_portal_render_sablon_page($portal, $tok) {
 	echo '</head><body class="cpp-sbpage">' . cp_portal_page_top(false, $ps['back']);   /* v2.9.230: a szerkesztőből nincs Kilépés, csak „Vissza az adatlaphoz” */
 	echo '<main class="cpx-main cpp-sbmain"><div class="cpp-sbhead"><h1>Fotósablon</h1>';
 	echo '<p>Válassz sablont, írd bele a feliratot, és ha kell, tölts fel logót. Amit beállítasz, ebben a böngészőben megőrizzük. A „Sablon mentése” gombbal küldöd el nekünk.</p>';
-	if ($locked) { echo '<p class="cpp-lock">A határidő lejárt, a sablon már nem módosítható. Változás esetén írj nekünk.</p>'; }
+	if ($locked) { echo '<p class="cpp-lock">A rendezvény már lezajlott, a sablon nem módosítható. Változás esetén írj nekünk.</p>'; }
 	echo '</div><div id="cpp-sbroot"></div></main>';
 	echo '<script>window.CPX=' . wp_json_encode($cfg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';window.CPPS=' . wp_json_encode($ps, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
 	$f = __DIR__ . '/assets/sablon.js';
@@ -126,7 +126,7 @@ function cp_portal_rest_sablon_save(WP_REST_Request $req) {
 	$s = cp_portal_session();
 	$portal = $s['portal'];
 	if (cp_portal_locked($portal)) {
-		return new WP_REST_Response(array('ok' => false, 'message' => 'A határidő lejárt, a sablon már nem módosítható.'), 423);
+		return new WP_REST_Response(array('ok' => false, 'message' => 'A rendezvény már lezajlott, a sablon nem módosítható.'), 423);
 	}
 	$b = $req->get_json_params();
 	$snap = is_array($b) && isset($b['snap']) && is_array($b['snap']) ? $b['snap'] : null;
@@ -187,7 +187,7 @@ function cp_portal_rest_template_logo(WP_REST_Request $req) {
 	$s = cp_portal_session();
 	$portal = $s['portal'];
 	if (cp_portal_locked($portal)) {
-		return new WP_REST_Response(array('ok' => false, 'message' => 'A határidő lejárt, a logó már nem módosítható.'), 423);
+		return new WP_REST_Response(array('ok' => false, 'message' => 'A rendezvény már lezajlott, a logó nem módosítható.'), 423);
 	}
 	$answers = cp_portal_answers($portal->id);
 	$old = isset($answers['template_logo']) && is_array($answers['template_logo']) ? $answers['template_logo'] : null;

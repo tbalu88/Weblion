@@ -87,7 +87,7 @@ function cp_portal_rest_patch(WP_REST_Request $req) {
 function cp_portal_rest_complete() {
 	$s = cp_portal_session();
 	if (cp_portal_locked($s['portal'])) {
-		return new WP_REST_Response(array('ok' => false, 'code' => 'locked', 'message' => 'A határidő lejárt, az adatlap már nem módosítható.'), 423);
+		return new WP_REST_Response(array('ok' => false, 'code' => 'locked', 'message' => 'A rendezvény már lezajlott, az adatlap nem módosítható.'), 423);
 	}
 	$r = cp_portal_complete($s['portal']);
 	if (empty($r['ok'])) {
@@ -101,7 +101,7 @@ function cp_portal_rest_complete() {
 function cp_portal_rest_contract() {
 	$s = cp_portal_session();
 	if (cp_portal_locked($s['portal'])) {
-		return new WP_REST_Response(array('ok' => false, 'code' => 'locked', 'message' => 'A határidő lejárt, az adatlap már nem módosítható.'), 423);
+		return new WP_REST_Response(array('ok' => false, 'code' => 'locked', 'message' => 'A rendezvény már lezajlott, az adatlap nem módosítható.'), 423);
 	}
 	$r = cp_portal_contract_submit($s['portal'], 'ugyfel');
 	if (empty($r['ok'])) {

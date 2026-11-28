@@ -66,7 +66,7 @@ function cp_portal_tick() {
 		}
 
 		// zárolás jelölése a panelnek
-		if ($now >= $di['deadline'] && empty($st->locked_at)) { cp_portal_state_put($p->id, array('locked_at' => cp_portal_db_now($di['deadline']))); }
+		if ($now >= cp_portal_lock_ts($p) && empty($st->locked_at)) { cp_portal_state_put($p->id, array('locked_at' => cp_portal_db_now(cp_portal_lock_ts($p)))); } /* 2026-11-28: a rendezvény napja után zárul */
 		if (!$send) { continue; }
 
 		// emlékeztetők: csak ha hiányzik kötelező, és a portál már létezett az emlékeztető időpontjában

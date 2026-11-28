@@ -12,10 +12,13 @@ function cp_portal_flow($portal) {
 }
 
 /* le van-e zárva az ügyfél előtt (határidő után, vagy lezárt portál) */
+function cp_portal_lock_ts($portal) { $ev = (string) $portal->event_date; return preg_match('/^\d{4}-\d{2}-\d{2}$/', $ev) ? cp_portal_local_ts(cp_portal_ymd_add($ev, 1), '00:00') : PHP_INT_MAX; }
 function cp_portal_locked($portal) {
 	$di = cp_portal_deadline_info($portal);
 	if (!$di) { return false; }
-	return time() >= $di['deadline'] || $portal->status !== 'aktiv';
+	/* 2026-11-28 (a felhasználó kérése): a határidő után is kitölthető (last minute megrendelés) – csak a rendezvény napja után zárul;
+	   a határidő utáni változás továbbra is „módosítva” jelölést kap (changed_late_at) */
+	return time() >= cp_portal_lock_ts($portal) || $portal->status !== 'aktiv';
 }
 
 function cp_portal_status_of($done, $total, $changed_late) {
@@ -57,7 +60,7 @@ function cp_portal_save_field($portal, $key, $raw, $by) {
 	if (is_wp_error($v)) { return $v; }
 	$new = $v['value'];
 	if ($by === 'ugyfel' && cp_portal_locked($portal)) {
-		return new WP_Error('locked', 'A határidő lejárt, az adatlap már nem módosítható. Változás esetén írj nekünk.', array('status' => 423));
+		return new WP_Error('locked', 'A rendezvény már lezajlott, az adatlap nem módosítható. Változás esetén írj nekünk.', array('status' => 423));
 	}
 	$old = isset($answers[$key]) ? $answers[$key] : null;
 	if ($key === 'retention_consent' && $old !== null && $new !== null && !empty($old['given']) === !empty($new['given'])) {

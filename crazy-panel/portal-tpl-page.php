@@ -89,7 +89,9 @@ function cp_portal_render_form_page($portal, $tok) {
 	}
 	echo '<div class="cpp-prog"><div class="cpp-prog-t">' . ($ca > 0 ? '2. Részletek: ' : '') . '<b id="cpp-done-b">' . $bd . '</b> / ' . $bt . ' kötelező kérdés kész</div><div class="cpp-bar"><i id="cpp-bar-b" style="width:' . $pct($bd, $bt) . '%"></i></div></div>';
 	if ($payload['deadline']) {
-		echo '<p class="cpp-dl">' . ($locked ? 'A kitöltés határideje lejárt: ' : ($ca > 0 ? 'A részletek határideje: ' : 'Kérjük, töltsd ki eddig: ')) . '<b>' . esc_html($payload['deadline']['text']) . '</b></p>';
+		/* 2026-11-28: a határidő után is kitölthető – ilyenkor „minél előbb” */
+		$dlp = !empty($payload['deadline']['passed']) || (isset($portal) && function_exists('cp_portal_deadline_info') && ($dii = cp_portal_deadline_info($portal)) && time() >= $dii['deadline']);
+		echo '<p class="cpp-dl">' . ($locked ? 'A rendezvény lezajlott, az adatlap már csak olvasható.' : ($dlp ? 'A határidő (' . esc_html($payload['deadline']['text']) . ') elmúlt, de még kitöltheted – kérjük, <b>minél előbb</b>, hogy mindent időben elő tudjunk készíteni.' : ($ca > 0 ? 'A részletek határideje: ' : 'Kérjük, töltsd ki eddig: ') . '<b>' . esc_html($payload['deadline']['text']) . '</b>')) . '</p>';
 	}
 	if ($locked) {
 		$contact = sanitize_email($o['reply_to']);
