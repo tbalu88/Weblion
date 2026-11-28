@@ -69,6 +69,7 @@
     v.hidden = true; im.hidden = false;
     await call(B.liveStart);
     lvAttach(im, () => S.scr === 'live');
+    lvAltOn();
   }
   /* 0.19.13: élőkép a tükörreflexes gépről – ha a beépített kamerakezelő fut, folyamatos képfolyam (MJPEG, egy kapcsolat,
      a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
@@ -97,7 +98,7 @@
     }
   }
   function lvDetach(im) { clearTimeout(S.lvT); if (S.lvMj && im) { S.lvMj = false; im.onerror = null; im.removeAttribute('src'); } }
-  async function liveOff() { lvDetach($('[data-lvimg]')); frameGuide(false); if (!WEB()) await B.liveStop(); }
+  async function liveOff() { lvDetach($('[data-lvimg]')); frameGuide(false); if (!WEB()) { await lvAltOff(); await B.liveStop(); } }
   function mockFrame() {
     const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d');
     const gr = g.createLinearGradient(0, 0, 1500, 1000); gr.addColorStop(0, '#2F4A7A'); gr.addColorStop(1, '#E8894A'); g.fillStyle = gr; g.fillRect(0, 0, 1500, 1000);
@@ -111,7 +112,26 @@
       if (S.stream && v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; const g = c.getContext('2d'); g.filter = evFilter(); g.drawImage(v, 0, 0); g.filter = 'none';   /* a mentett kép nem tükrözött (csak az élőkép) */ return c.toDataURL('image/jpeg', 0.92); }
       return mockFrame();
     }
+    await lvAltOff();
     return call(B.capture);
+  }
+  /* 2026-11-28: élőkép-beállítás (tükörreflexes gép) – a visszaszámlálás alatt világosabb ISO / záridő, hogy a vendég lássa magát;
+     exponálás előtt visszaáll a fotó (vakus) beállítása. Alapból ki; a ☀ Kamera panelen kapcsolható. */
+  async function lvAltOn() {
+    const a = String(U().lvAlt || ''); if (WEB() || !a || S.lvAltOn || !B.camProps || !B.camSet) return;
+    const [iso, sh] = a.split('|');
+    try {
+      const P = await call(B.camProps) || {}, ci = P.iso && P.iso.cur, cs = P.shutterspeed && P.shutterspeed.cur;
+      if (!ci || !cs) return;
+      S.lvSaved = { iso: ci, shutterspeed: cs }; lsSet('cb_lvsaved', S.lvSaved); S.lvAltOn = true;
+      if ((P.iso.list || []).includes(iso)) await call(B.camSet, 'iso', iso);
+      if ((P.shutterspeed.list || []).includes(sh)) await call(B.camSet, 'shutterspeed', sh);
+    } catch (e) { B.log('élőkép-beállítás: ' + e.message); }
+  }
+  async function lvAltOff() {
+    const sv = S.lvSaved || (S.lvAltOn ? lsGet('cb_lvsaved', null) : null); if (!S.lvAltOn || !sv) return;
+    try { await call(B.camSet, 'shutterspeed', sv.shutterspeed); await call(B.camSet, 'iso', sv.iso); } catch (e) { B.log('élőkép-beállítás visszaállítása: ' + e.message); }
+    S.lvAltOn = false; S.lvSaved = null; lsSet('cb_lvsaved', null);
   }
   const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('A kép nem tölthető be')); i.src = src; });
 
@@ -1484,7 +1504,11 @@
         S.cp[k] = { label, values: vals, idx, kind: k === 'whitebalance' ? 'select' : 'step' };
       }
       if (S.cp.temperature) S.cp.temperature.off = !/kelvin/i.test((S.cp.whitebalance && S.cp.whitebalance.values[S.cp.whitebalance.idx]) || '');
-      { const vals = [0, 1, 2, 3, 4, 5, 6]; S.cp = Object.assign({ lvBoost: null }, S.cp); S.cp.lvBoost = { label: 'Élőkép világosítása (csak a képernyőn)', values: vals, idx: Math.max(0, vals.indexOf(Number(U().lvBoost) || 0)), kind: 'step', show: v => v ? '+' + String(v).replace('.', ',') + ' EV' : 'ki',
+      { const vals = [0, 1, 2, 3, 4, 5, 6]; S.cp = Object.assign({ lvAlt: null, lvBoost: null }, S.cp);
+        const LA = ['', '1600|1/30', '3200|1/30', '6400|1/30'], nm = { '': 'ki – a fotó beállításával', '1600|1/30': 'ISO 1600 · 1/30', '3200|1/30': 'ISO 3200 · 1/30', '6400|1/30': 'ISO 6400 · 1/30' };
+        S.cp.lvAlt = { label: 'Élőkép külön beállítással (exponáláskor visszaáll)', values: LA, idx: Math.max(0, LA.indexOf(String(U().lvAlt || ''))), kind: 'select', show: v => nm[v] || v,
+          apply: async v => { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { lvAlt: v }) })); $('[data-evmsg]').textContent = v ? 'Mentve – a visszaszámlálás alatt ' + nm[v] + ', exponálás előtt visszaáll a fotó beállítása. Próbáld ki egy fotóval!' : 'Kikapcsolva.'; } };
+        S.cp.lvBoost = { label: 'Élőkép világosítása (csak a képernyőn)', values: vals, idx: Math.max(0, vals.indexOf(Number(U().lvBoost) || 0)), kind: 'step', show: v => v ? '+' + String(v).replace('.', ',') + ' EV' : 'ki',
         apply: async v => { S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { lvBoost: v }) })); lvBoostApply(); $('[data-evmsg]').textContent = 'Mentve – csak az élőképet világosítja, a fotót nem.'; } }; }
       if (!Object.keys(S.cp).length) $('[data-evmsg]').textContent = 'A kamera nem adott beállítási értékeket (fut a digiCamControl, be van kötve a gép?).';
       else if (!P.temperature) $('[data-evmsg]').textContent = 'Kézi fehéregyensúly (Kelvin): a 0.12-es programtól.';
@@ -1641,5 +1665,5 @@
   window.addEventListener('error', e => diagSoon('JS-hiba: ' + (e.message || '') + ' ' + (e.filename || '').split(/[\\/]/).pop() + ':' + (e.lineno || '')));
   window.addEventListener('unhandledrejection', e => diagSoon('JS-hiba: ' + String(e.reason && e.reason.message || e.reason)));
   setTimeout(() => diagSoon('indítás'), 10000); /* az indulás utáni hibákkal együtt, egy küldésben (kb. 30 mp múlva) */
-  (async () => { S.cfg = await call(B.config); screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); { const rs = lsGet('cb_resume', null); lsSet('cb_resume', null); B.fullscreen(rs && Date.now() - rs.at < 15 * 60000 ? !!rs.fs : !!U().startFull).then(() => setTimeout(fsSync, 400)).catch(() => {}); if (rs) B.log('újraindulás frissítés után – folytatás' + (rs.fs ? ' teljes képernyőn' : '')); } /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
+  (async () => { S.cfg = await call(B.config); { const sv = lsGet('cb_lvsaved', null); if (sv && !WEB()) { S.lvAltOn = true; S.lvSaved = sv; setTimeout(() => lvAltOff().catch(() => {}), 8000); } } /* összeomlás után a fotó-beállítás visszaállítása */ screenApply().catch(() => {}); await ensureEvent(); await loadTemplate(); modeInfo(); if (isStation()) show('start'); setTimeout(warnings, 3000); if (B.uiInfo) B.uiInfo().then(r => { if (r && r.ok && r.v) S.uiVer = r.v.v; }); { const rs = lsGet('cb_resume', null); lsSet('cb_resume', null); B.fullscreen(rs && Date.now() - rs.at < 15 * 60000 ? !!rs.fs : !!U().startFull).then(() => setTimeout(fsSync, 400)).catch(() => {}); if (rs) B.log('újraindulás frissítés után – folytatás' + (rs.fs ? ' teljes képernyőn' : '')); } /* 2026-11-27: alapból ablakban indul (a felhasználó kérése); teljes képernyő: Kezelő → Gép */ evShow(); await initCam(); })().catch(e => err(e.message));
 })();
