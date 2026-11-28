@@ -74,9 +74,9 @@
      a kép azonnal megjön); különben képkockánként kérjük, a következőt rögtön az előző után (nem fix szünettel) */
   /* 2026-11-28: a tükörreflexes gép élőképe vakus / kézi beállításnál sötét lehet – csak a KÉPERNYŐN világosítjuk (a fotó nem változik) */
   const lvBoostF = () => { const n = Number(U().lvBoost) || 0; return n ? 'brightness(' + Math.pow(2, n / 1.4).toFixed(2) + ') contrast(' + (1 + n * 0.04).toFixed(2) + ') saturate(1.1)' : ''; };
-  const lvBoostApply = () => { if (WEB()) return; document.querySelectorAll('img[data-lvimg]').forEach(i => { i.style.filter = lvBoostF(); }); };
+  const lvBoostApply = () => { if (WEB()) return; document.querySelectorAll('img[data-lvb]').forEach(i => { i.style.filter = lvBoostF(); }); };
   async function lvAttach(im, alive) {
-    if (im) { im.setAttribute('data-lvimg', ''); im.style.filter = WEB() ? '' : lvBoostF(); }
+    if (im) { im.setAttribute('data-lvb', ''); im.style.filter = WEB() ? '' : lvBoostF(); } /* saját jelölés – a data-lvimg a visszaszámlálás élőképéé, azt nem szabad máshova tenni */
     clearTimeout(S.lvT); S.lvMj = false;
     let u = null; try { if (B.liveUrl) { const r = await B.liveUrl(); u = r && r.ok && r.v; } } catch (e) { /* régi program */ }
     if (u && alive()) {
