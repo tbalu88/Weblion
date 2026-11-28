@@ -1522,6 +1522,12 @@
     const near = (vals, x) => vals.reduce((bi, v, i) => Math.abs(v - x) < Math.abs(vals[bi] - x) ? i : bi, 0);
     const save = async patch => { Object.assign(W, patch); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webCam: W }) })); };
     const apply = async c => { try { await t.applyConstraints({ advanced: [c] }); $('[data-evmsg]').textContent = 'Mentve.'; } catch (x) { $('[data-evmsg]').textContent = 'A kamera nem fogadta el: ' + x.message; } };
+    /* 2026-11-28: vissza lehessen állni automatikus expozícióra (korábban egy kézi záridő / ISO után a kamera soha többé nem kompenzált) */
+    if (caps.exposureMode && caps.exposureMode.includes('continuous') && caps.exposureMode.includes('manual')) {
+      const man = !!(W.exposureTime || W.iso);
+      S.cp.expMode = { label: 'Expozíció', values: ['continuous', 'manual'], idx: man ? 1 : 0, kind: 'select', show: m => m === 'continuous' ? 'Automatikus (ajánlott)' : 'Kézi (záridő / ISO lent)',
+        apply: async m => { if (m === 'continuous') { delete W.exposureTime; delete W.iso; await apply({ exposureMode: 'continuous' }); S.cfg = Object.assign(S.cfg, await call(B.saveConfig, { ui: Object.assign({}, U(), { webCam: W }) })); } else await apply({ exposureMode: 'manual' }); webRows(); } };
+    }
     if (caps.exposureTime && caps.exposureMode && caps.exposureMode.includes('manual')) {
       const vals = rng(caps.exposureTime, 40);
       S.cp.exposureTime = { label: 'Záridő', values: vals, idx: near(vals, W.exposureTime || cur.exposureTime || vals[0]), kind: 'step', show: v => '1/' + Math.round(10000 / v),
